@@ -106,8 +106,14 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                     <div class="pf-tl-desc-op"><pf-select size="sm" [options]="descOpOptions" [value]="r.operator"
                                (valueChange)="setDescRule(name, ri, { operator: $any($event) })"></pf-select></div>
                     <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
-                           [value]="r.value" placeholder="value"
+                           [value]="r.value" [placeholder]="r.operator === 'between' ? 'from' : 'value'"
                            (input)="setDescRule(name, ri, { value: $any($event.target).value })" />
+                    @if (r.operator === 'between') {
+                      <span class="pf-tl-desc-w">and</span>
+                      <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
+                             [value]="r.value2" placeholder="to"
+                             (input)="setDescRule(name, ri, { value2: $any($event.target).value })" />
+                    }
                     <span class="pf-tl-desc-w">say</span>
                     <input type="text" class="pf-input pf-input--compact grow"
                            [value]="r.text"
@@ -118,6 +124,9 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                   </div>
+                  @if (descShadow(name)[ri]; as warn) {
+                    <p class="pf-tl-desc-warn">{{ warn }}</p>
+                  }
                 }
                 <div class="pf-tl-desc-cond pf-tl-desc-cond--else">
                   <span class="pf-tl-desc-w pf-tl-desc-w--kw">For any other result</span>
@@ -328,6 +337,8 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-tl-desc-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
       border: none; border-radius: 8px; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
     .pf-tl-desc-x:hover { color: #f87171; background: rgba(239,68,68,.08); }
+    .pf-tl-desc-warn { margin: -4px 0 8px; padding: 4px 10px 4px 12px; font-size: 11.5px; color: #fbbf24;
+      border-left: 2px solid rgba(251,191,36,.5); }
     .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
       background: var(--glass-bg); padding: 1.75rem; }
     /* ── Simple-mode blocks ── */
@@ -598,6 +609,7 @@ export class TestNotesEditorComponent implements OnInit {
   // The base description prints when the rule doesn't match. Anything richer
   // (several rules, colors, other cells) is 'custom' and never rewritten.
   readonly descOpOptions: PfSelectOption[] = [
+    { value: 'between', label: 'is between' },
     { value: '>', label: 'is above' },
     { value: '<', label: 'is below' },
     { value: '>=', label: 'is at least' },
@@ -619,22 +631,29 @@ export class TestNotesEditorComponent implements OnInit {
     const t = (r['then'] ?? {}) as { cells?: Record<string, unknown> };
     const thenKeys = Object.keys(r['then'] ?? {});
     const cellKeys = Object.keys(t.cells ?? {});
-    return !r['else'] && p['parameter'] != null && p['operator'] != null
-      && p['and'] == null && p['or'] == null
-      && thenKeys.length === 1 && thenKeys[0] === 'cells'
-      && cellKeys.length === 1 && cellKeys[0] === 'description';
+    if (r['else'] || p['parameter'] == null || p['operator'] == null || p['or'] != null) return false;
+    if (thenKeys.length !== 1 || thenKeys[0] !== 'cells'
+      || cellKeys.length !== 1 || cellKeys[0] !== 'description') return false;
+    if (p['and'] == null) return true;
+    // BETWEEN rides as { >=, and: { <= } } on the same parameter.
+    const a = p['and'] as Record<string, unknown>;
+    return p['operator'] === '>=' && a['operator'] === '<='
+      && a['parameter'] === p['parameter'] && a['and'] == null && a['or'] == null;
   }
   descCondKind(name: string): 'none' | 'ladder' | 'custom' {
     const c = this.descRowConditions(name);
     if (!c || c.length === 0) return 'none';
     return c.every(r => this.isSimpleDescRule(r)) ? 'ladder' : 'custom';
   }
-  descRules(name: string): Array<{ operator: string; value: string; text: string }> {
+  descRules(name: string): Array<{ operator: string; value: string; value2: string; text: string }> {
     return (this.descRowConditions(name) ?? []).map(r => {
-      const rr = r as { if?: { operator?: string; value?: unknown }; then?: { cells?: { description?: string } } };
+      const rr = r as { if?: { operator?: string; value?: unknown; and?: { value?: unknown } };
+                        then?: { cells?: { description?: string } } };
+      const between = rr.if?.and != null;
       return {
-        operator: String(rr.if?.operator ?? '>'),
+        operator: between ? 'between' : String(rr.if?.operator ?? '>'),
         value: rr.if?.value == null ? '' : String(rr.if.value),
+        value2: rr.if?.and?.value == null ? '' : String(rr.if.and.value),
         text: String(rr.then?.cells?.description ?? ''),
       };
     });
@@ -643,30 +662,66 @@ export class TestNotesEditorComponent implements OnInit {
     if (this.descCondKind(name) === 'ladder') {
       this.mutateDescRow(name, row => { delete (row as { conditions?: unknown }).conditions; });
     } else {
-      this.writeDescRules(name, [{ operator: '>', value: '', text: '' }]);
+      this.writeDescRules(name, [{ operator: 'between', value: '', value2: '', text: '' }]);
     }
   }
   addDescRule(name: string) {
-    this.writeDescRules(name, [...this.descRules(name), { operator: '>', value: '', text: '' }]);
+    this.writeDescRules(name, [...this.descRules(name), { operator: 'between', value: '', value2: '', text: '' }]);
   }
   removeDescRule(name: string, idx: number) {
     const rules = this.descRules(name).filter((_, i) => i !== idx);
     if (rules.length === 0) this.mutateDescRow(name, row => { delete (row as { conditions?: unknown }).conditions; });
     else this.writeDescRules(name, rules);
   }
-  setDescRule(name: string, idx: number, patch: Partial<{ operator: string; value: string; text: string }>) {
+  setDescRule(name: string, idx: number, patch: Partial<{ operator: string; value: string; value2: string; text: string }>) {
     if (this.descCondKind(name) !== 'ladder') return;
     const rules = this.descRules(name).map((r, i) => i === idx ? { ...r, ...patch } : r);
     this.writeDescRules(name, rules);
   }
-  private writeDescRules(name: string, rules: Array<{ operator: string; value: string; text: string }>) {
+  private writeDescRules(name: string, rules: Array<{ operator: string; value: string; value2: string; text: string }>) {
     const coerce = (v: string): unknown => {
       const n = parseFloat(String(v).replace(',', '.'));
       return String(v).trim() !== '' && Number.isFinite(n) && String(n) === String(v).trim() ? n : v;
     };
     this.mutateDescRow(name, row => {
-      (row as { conditions?: unknown }).conditions = rules.map(c =>
-        ({ if: { parameter: name, operator: c.operator, value: coerce(c.value) }, then: { cells: { description: c.text } } }));
+      (row as { conditions?: unknown }).conditions = rules.map(c => ({
+        if: c.operator === 'between'
+          ? { parameter: name, operator: '>=', value: coerce(c.value),
+              and: { parameter: name, operator: '<=', value: coerce(c.value2) } }
+          : { parameter: name, operator: c.operator, value: coerce(c.value) },
+        then: { cells: { description: c.text } },
+      }));
+    });
+  }
+
+  // ── Reachability check: lines run top to bottom, first match wins — a
+  //    line whose whole band is already covered by an earlier line can
+  //    NEVER print. Flag it so "above 70" before "above 80" is caught. ──
+  private descInterval(r: { operator: string; value: string; value2: string }): [number, number] | null {
+    const lo = parseFloat(String(r.value).replace(',', '.'));
+    const hi = parseFloat(String(r.value2).replace(',', '.'));
+    switch (r.operator) {
+      case 'between': return Number.isFinite(lo) && Number.isFinite(hi) ? [lo, hi] : null;
+      case '>': case '>=': return Number.isFinite(lo) ? [lo, Infinity] : null;
+      case '<': case '<=': return Number.isFinite(lo) ? [-Infinity, lo] : null;
+      case '=': case '==': return Number.isFinite(lo) ? [lo, lo] : null;
+      default: return null;   // '!=' and non-numeric — don't judge
+    }
+  }
+  /** Index → warning text for lines an earlier line fully covers. */
+  descShadow(name: string): Array<string | null> {
+    const rules = this.descRules(name);
+    const spans = rules.map(r => this.descInterval(r));
+    return rules.map((_, i) => {
+      const cur = spans[i];
+      if (!cur) return null;
+      for (let j = 0; j < i; j++) {
+        const prev = spans[j];
+        if (prev && prev[0] <= cur[0] && prev[1] >= cur[1]) {
+          return `Never used — line ${j + 1} already covers every such result. Put the narrower band first, or use “is between”.`;
+        }
+      }
+      return null;
     });
   }
   /** Find-or-synthesize the parameter's grid row (same shape setDescription
