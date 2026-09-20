@@ -950,9 +950,13 @@ export class ReceiveSamplesComponent implements OnInit {
       latestAt,
       testLabels: this.uniqueTestNames(o)
     };
-  // 24-h LEDGER (owner 2026-09-20): received orders STAY, turned green —
-  // the API window ages them out after 24 h. Newest dispatch first.
-  }).sort((a, b) => (b.latestAt ?? '').localeCompare(a.latestAt ?? '')));
+  // 24-h LEDGER (owner 2026-09-20): received orders STAY, turned green,
+  // but SINK below everything still waiting — the live work owns the top,
+  // newest dispatch first within each band. The API window ages received
+  // rows out after 24 h.
+  }).sort((a, b) =>
+    (a.state === 'received' ? 1 : 0) - (b.state === 'received' ? 1 : 0)
+    || (b.latestAt ?? '').localeCompare(a.latestAt ?? '')));
   /**
    * Sample-focused intake list: one row per TUBE, not per order. Three tubes
    * dispatched means three rows and a count of three — the whole point of the
@@ -984,11 +988,14 @@ export class ReceiveSamplesComponent implements OnInit {
       latestAt: (sm.dispatchedAt ?? sm.receivedAtLab) || null,
       testLabels: this.uniqueTestNames(o),
     }));
-  // 24-h LEDGER: newest dispatch first — a tube sent an hour after the
-  // others tops the list; received rows stay (green) until the API's
-  // 24-h window ages them out. Ties fall back to the sample number.
-  }).sort((a, b) => ((b.latestAt ?? '').localeCompare(a.latestAt ?? ''))
-      || (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })));
+  // 24-h LEDGER: pending tubes on top (newest dispatch first — a tube
+  // sent an hour after the others leads), received tubes sink to the
+  // bottom (still green, aged out by the API's 24-h window). Ties fall
+  // back to the sample number.
+  }).sort((a, b) =>
+    (a.state === 'received' ? 1 : 0) - (b.state === 'received' ? 1 : 0)
+    || (b.latestAt ?? '').localeCompare(a.latestAt ?? '')
+    || (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })));
 
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');
