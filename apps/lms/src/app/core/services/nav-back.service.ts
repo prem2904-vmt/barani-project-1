@@ -99,12 +99,22 @@ export class NavBackService {
     if (normUrl.startsWith('/pathologist/')) {
       return '/pathologist/pending-validation';
     }
+    if (normUrl.startsWith('/reports/')) {
+      return '/reports';
+    }
     if (normUrl.startsWith('/admin/')) {
       return '/admin';
     }
 
-    // Fallback: trim the last route segment
+    // Generic: the LONGEST strict prefix that is a primary root — so
+    // /reports/view/abc lands on /reports, /stores/receive on /stores —
+    // falling back to a single-segment trim for depths the root set
+    // doesn't know.
     const segments = normUrl.split('/').filter(Boolean);
+    for (let n = segments.length - 1; n >= 1; n--) {
+      const prefix = '/' + segments.slice(0, n).join('/');
+      if (this.roots.has(prefix)) return prefix;
+    }
     if (segments.length > 1) {
       return '/' + segments.slice(0, -1).join('/');
     }
@@ -113,12 +123,23 @@ export class NavBackService {
   }
 
   /**
-   * Navigate back through browser history.
+   * Hierarchical back (owner 2026-09-20): the chevron climbs the page TREE —
+   * result entry → Lab my work, test editor → Test Master — it never replays
+   * browser history, so how you ARRIVED at a page (a notification, a report
+   * link, a sibling-tube tab) can't change where back takes you.
    */
   back(): void {
     // An in-page handler (e.g. close the open chat thread) takes precedence.
     if (this.interceptor && this.interceptor()) return;
 
+    const current = this.norm(this.router.url);
+    const parent = this.getParentRoute(this.router.url);
+    if (parent && this.norm(parent) !== current) {
+      void this.router.navigateByUrl(parent);
+      return;
+    }
+    // Already at a root (or the map returned self) — history is the only
+    // sensible move left.
     if (typeof window !== 'undefined' && window.history.length > 1) {
       this.location.back();
     } else {
