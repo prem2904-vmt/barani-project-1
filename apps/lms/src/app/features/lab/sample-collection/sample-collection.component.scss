@@ -120,19 +120,49 @@
       all: unset;
       cursor: pointer;
       position: relative;
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-      align-items: center;
-      column-gap: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
       width: 100%;
       box-sizing: border-box;
-      padding: 12px 14px;
+      padding: 13px 15px;
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
       border-radius: 16px;
       overflow: hidden;
       transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
+    .pf-sc__row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .pf-sc__row--top { justify-content: flex-start; }
+    .pf-sc__row--top .pf-sc__who { flex: 1 1 auto; }
+    .pf-sc__row--bottom { justify-content: space-between; }
+
+    /* Order number + waiting badge (right edge of row 1). */
+    .pf-sc__ordwrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+    .pf-sc__ord { font-size: 10.5px; font-weight: 700;
+      font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.04em;
+      color: var(--text-tertiary); }
+    .pf-sc__wait { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+      background: rgba(148, 163, 184, 0.12); color: var(--text-tertiary);
+      border: 1px solid var(--glass-border); }
+    .pf-sc__wait[data-tone="warn"] { background: rgba(245, 158, 11, 0.14); color: var(--amber-text, #fbbf24);
+      border-color: rgba(245, 158, 11, 0.35); }
+    .pf-sc__wait[data-tone="late"] { background: rgba(248, 113, 113, 0.14); color: #f87171;
+      border-color: rgba(248, 113, 113, 0.4); }
+
+    /* Ordered-test chips (row 2, left). */
+    .pf-sc__tests { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
+    .pf-sc__test { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 8px;
+      background: rgba(148, 163, 184, 0.09); border: 1px solid var(--glass-border);
+      color: var(--text-secondary); white-space: nowrap; max-width: 180px;
+      overflow: hidden; text-overflow: ellipsis; }
+    .pf-sc__test--more { color: var(--violet-text); border-color: rgba(168, 85, 247, 0.3);
+      background: rgba(168, 85, 247, 0.08); }
+
+    /* Unsettled-bill flag: collection can proceed, dispatch will bounce. */
+    .pf-sc__hold { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 7px; color: #fbbf24;
+      background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.4); }
     .pf-sc__card:hover {
       border-color: rgba(168, 85, 247, 0.45);
       background: rgba(168, 85, 247, 0.04);

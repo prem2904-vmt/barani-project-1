@@ -657,6 +657,38 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   });
 
+  /** Unique ordered test names across the group's tubes — the card's
+   *  second line, so the collector knows WHAT they're drawing for
+   *  before opening the drawer. */
+  protected testNamesFor(g: OrderGroup): string[] {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const sm of g.samples) {
+      for (const t of sm.tests ?? []) {
+        const n = (t.test?.name ?? '').trim();
+        const k = n.toLowerCase();
+        if (n && !seen.has(k)) { seen.add(k); names.push(n); }
+      }
+    }
+    return names;
+  }
+  /** "12 min waiting" — how long since the order was raised. */
+  protected waitingLabel(g: OrderGroup): string {
+    const ms = Date.now() - new Date(g.createdAt).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return '';
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m} min waiting`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} h ${m % 60 > 0 ? (m % 60) + ' m ' : ''}waiting`;
+    return `${Math.floor(h / 24)} d waiting`;
+  }
+  /** Escalating tone for the waiting badge: >30 min amber, >60 min red. */
+  protected waitingTone(g: OrderGroup): 'ok' | 'warn' | 'late' {
+    const m = (Date.now() - new Date(g.createdAt).getTime()) / 60000;
+    return m > 60 ? 'late' : m > 30 ? 'warn' : 'ok';
+  }
+
   /** Same as groups() but filtered by the live search box. Empty input shows all. */
   readonly filteredGroups = computed<OrderGroup[]>(() => {
     const q = this.scanValue().trim().toLowerCase();
