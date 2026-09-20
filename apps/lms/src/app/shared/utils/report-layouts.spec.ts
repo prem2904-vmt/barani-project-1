@@ -375,4 +375,22 @@ describe('resolveReportLayouts', () => {
       patient: { sex: 'F' },
     });
   });
+
+  it('unwraps flagged { value } wrappers so report-time conditions can match', async () => {
+    // The snapshot stores { value, unit, range, flag } per parameter; the
+    // engine's "When the result …" lines compare against the scalar. The
+    // owner's bug (2026-09-20): wrappers reached the engine, nothing matched,
+    // the base description printed.
+    const seen: Array<Record<string, unknown>> = [];
+    const preview: PreviewFn = async (_id, values) => { seen.push(values); return { ok: true }; };
+    await resolveReportLayouts(preview, [{
+      testId: 't1',
+      result: { values: {
+        'Fasting Blood Sugar': { value: '80', unit: 'mg/dL', range: '70–99', flag: 'N' },
+        'Plain Scalar': '42',
+      } },
+    }]);
+    expect(seen[0]['Fasting Blood Sugar']).toBe('80');
+    expect(seen[0]['Plain Scalar']).toBe('42');
+  });
 });

@@ -32,6 +32,18 @@ export type PreviewFn = (
   patient?: { sex?: string | null; age?: number | null },
 ) => Promise<unknown>;
 
+/** Snapshot values are the flagged wrapper { value, unit, range, flag };
+ *  conditions compare against the SCALAR inside. Unwrap before posting so
+ *  "When the result is above 70" can actually match. */
+function scalarValues(vals: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(vals)) {
+    out[k] = v !== null && typeof v === 'object' && 'value' in (v as Record<string, unknown>)
+      ? (v as Record<string, unknown>)['value'] : v;
+  }
+  return out;
+}
+
 export async function resolveReportLayouts<T>(
   preview: PreviewFn,
   tests: readonly LayoutSnapshotTest[],
@@ -46,7 +58,7 @@ export async function resolveReportLayouts<T>(
       if (!t.testId) return;
       try {
         layouts[t.testId] = await preview(
-          t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient,
+          t.testId, scalarValues(t.result?.values ?? {}), [], patient,
         ) as T;
       } catch { /* no layout for this test — plain table */ }
     }),
