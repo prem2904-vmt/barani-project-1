@@ -259,9 +259,11 @@
                 <p class="pf-uf__hint">One result per test — everything below follows from this.</p>
               </div>
             }
-            <!-- Unit and report format are NUMERIC concepts —
-                 a dropdown-result test has no use for them. -->
-            @if (numericFields().length > 0) {
+            <!-- Unit and report format are NUMERIC, SINGLE-VALUE concepts —
+                 a dropdown-result test has no use for them, and on a
+                 multi-value test the unit is each value's own (in its batch)
+                 while a panel always prints as a results table. -->
+            @if (isSingleValue() && numericFields().length > 0) {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Unit</label>
                 <pf-select [options]="unitOptions(d.unit)" [searchable]="true"
