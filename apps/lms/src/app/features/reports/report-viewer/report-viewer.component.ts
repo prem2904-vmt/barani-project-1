@@ -15,7 +15,7 @@ import { Report, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ResolvedReportLayout, ResolvedRow } from '../../../shared/models/report-layout.model';
 import { waLink } from '../../../shared/utils/whatsapp';
-import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
+import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
@@ -212,13 +212,21 @@ function coerceCellText(raw: unknown): string {
 
       <div class="pf-rv-scroll">
       @if (report(); as r) {
-        <!-- Status strip -->
+        <!-- Status strip. Plain words, not raw enum values — "final" +
+             "pending" side by side read as a contradiction. The critical
+             alarm leads; report stage + delivery state say what they mean. -->
         <div class="pf-rv-status">
           <div class="flex items-center gap-2 flex-wrap">
-            <pf-chip tone="violet" size="sm">{{ r.type }}</pf-chip>
-            <pf-chip [tone]="deliveryTone(r.deliveryStatus)" size="sm">{{ r.deliveryStatus }}</pf-chip>
             @if (hasCritical()) {
-              <pf-chip tone="rose" size="sm">CRITICAL</pf-chip>
+              <pf-chip tone="rose" size="sm">Critical result</pf-chip>
+            }
+            <pf-chip [tone]="r.type === 'preliminary' ? 'amber' : 'violet'" size="sm">
+              {{ r.type === 'preliminary' ? 'Preliminary report' : 'Final report' }}
+            </pf-chip>
+            @if (r.deliveryStatus === 'delivered') {
+              <pf-chip tone="emerald" size="sm">Delivered to patient</pf-chip>
+            } @else {
+              <pf-chip tone="default" size="sm">Not sent yet</pf-chip>
             }
           </div>
           <p class="pf-rv-status__meta">
@@ -1255,13 +1263,6 @@ export class ReportViewerComponent implements OnInit {
     // Use the canonical public web origin, NOT window.location.origin — in the
     // native app the latter is capacitor://localhost, which a patient can't open.
     return `${environment.reportPublicBaseUrl}/reports/public/${token}`;
-  }
-
-  deliveryTone(status: string | undefined): ChipTone {
-    if (status === 'delivered') return 'emerald';
-    if (status === 'failed')    return 'rose';
-    if (status === 'pending')   return 'amber';
-    return 'default';
   }
 
   // ── Dynamic resolved layouts (one per testId) ─────────────
