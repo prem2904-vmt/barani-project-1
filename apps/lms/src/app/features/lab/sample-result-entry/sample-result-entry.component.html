@@ -426,6 +426,12 @@
                         "
                       >
                         <td class="pf-sre__gc-param">
+                          @if (printPickerEnabled(t)) {
+                            <input type="checkbox" class="pf-sre__printpick"
+                                   [checked]="isValuePrinted(t, p)"
+                                   (change)="toggleValuePrinted(t, p)"
+                                   [title]="isValuePrinted(t, p) ? 'Prints on this report — untick to keep it lab-only' : 'Lab-only for this report — tick to print'" />
+                          }
                           <span class="pf-sre__gname"
                             >{{
                               parametersFor(t).length > 1
@@ -934,6 +940,12 @@
                         "
                       >
                         <td class="pf-sre__gc-param">
+                          @if (printPickerEnabled(t)) {
+                            <input type="checkbox" class="pf-sre__printpick"
+                                   [checked]="isValuePrinted(t, p)"
+                                   (change)="toggleValuePrinted(t, p)"
+                                   [title]="isValuePrinted(t, p) ? 'Prints on this report — untick to keep it lab-only' : 'Lab-only for this report — tick to print'" />
+                          }
                           <span class="pf-sre__gidx">{{ idx + 1 }}</span>
                           <span class="pf-sre__gname"
                             >{{ p.title || p.name }}

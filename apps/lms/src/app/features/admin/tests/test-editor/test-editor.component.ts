@@ -414,6 +414,24 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.patch({ parametersJson: JSON.stringify(existing) });
   }
 
+  /** Per-REPORT value picker (owner 2026-09-20, culture-checkbox pattern):
+   *  `printPicker: true` in the Parameters wrapper puts a print checkbox on
+   *  every value row at RESULT ENTRY — the tech decides per order what
+   *  reaches that report. Dynamic counterpart to the fixed per-value
+   *  "Prints on the report" switch. */
+  readonly printPickerEnabled = computed<boolean>(() => {
+    try { return JSON.parse(this._draft().parametersJson || '{}')?.printPicker === true; }
+    catch { return false; }
+  });
+  setPrintPickerEnabled(on: boolean) {
+    const existing = (() => {
+      try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
+    })();
+    if (on) existing.printPicker = true;
+    else delete existing.printPicker;
+    this.patch({ parametersJson: JSON.stringify(existing) });
+  }
+
   private readonly _referralLabs = signal<ReferralLab[]>([]);
   readonly referralLabs = this._referralLabs.asReadonly();
   readonly referralLabOptions = computed<PfSelectOption<string>[]>(() => {

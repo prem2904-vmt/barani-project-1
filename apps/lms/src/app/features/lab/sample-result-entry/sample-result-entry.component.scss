@@ -1730,3 +1730,5 @@
   border-radius: 8px; border: none; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
 .pf-sre__attach-x:hover { color: #f87171; background: rgba(239,68,68,.08); }
 .pf-sre__attach-param { color: var(--violet-text, #a78bfa); font-weight: 700; }
+/* Per-report value picker (culture-checkbox pattern). */
+.pf-sre__printpick { margin-right: 8px; vertical-align: middle; accent-color: #a855f7; flex-shrink: 0; }

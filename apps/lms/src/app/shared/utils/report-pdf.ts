@@ -191,6 +191,9 @@ interface ReportSnapshot {
   tests?: Array<{
     /** Tech attachments marked show — printed as an images block. */
     images?: string[] | null;
+    /** Per-REPORT value picker: parameter names the tech unticked for this
+     *  order — their rows never print (bench record keeps them). */
+    hidden?: string[] | null;
     testId?: string;
     name?: string;
     department?: string;
@@ -1971,8 +1974,11 @@ function buildPanelGroup(
     const cols = [...layout!.columns, ...(layout!.departmentColumns ?? [])];
     const srcOf = (type: string): ReportColumn | undefined => cols.find(c => c.type === type);
     const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
+    const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
     for (const sec of gridSections) {
       for (const r of sec.rows ?? []) {
+        // Per-report picker: the tech unticked this value for THIS order.
+        if (!r.isMerged && r.parameterName && hiddenNames.has(r.parameterName)) continue;
         if (r.isMerged) {
           const note = (r.mergeContent ?? '').trim();
           if (note) group.rows.push({ kind: 'note', note });
@@ -2637,7 +2643,9 @@ function renderGridSection(
   t: NonNullable<ReportSnapshot['tests']>[number],
   startY: number
 ): number {
-  const rows = sec.rows ?? [];
+  const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
+  const rows = (sec.rows ?? []).filter(r =>
+    r.isMerged || !r.parameterName || !hiddenNames.has(r.parameterName));
   if (rows.length === 0) return startY;
   const bodyRows = rows.filter(r => !r.isMerged);
   let y = startY;
@@ -2956,7 +2964,9 @@ function renderLegacyTest(
   type LCell = { content: string; styles?: Record<string, unknown> };
   const tableRows: LCell[][] = [];
   const sampleTypeLine = (t.sampleType ?? '').trim();
-  const entries = values ? Object.entries(values) : [];
+  const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
+  const entries = (values ? Object.entries(values) : [])
+    .filter(([paramName]) => !hiddenNames.has(paramName));
 
   if (entries.length > 0) {
     entries.forEach(([paramName, v], i) => {

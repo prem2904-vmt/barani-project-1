@@ -680,6 +680,21 @@
                shows where the lab actually wants microscopy shots. Single-value
                tests only: each value of a multi-value test carries its own
                switch inside its batch. -->
+          <!-- Per-REPORT value picker — the culture bench's checkboxes for
+               normal tests: the tech chooses per order what prints. -->
+          <div class="pf-uf pf-uf--span">
+            <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="printPickerEnabled()">
+              <input type="checkbox" [checked]="printPickerEnabled()"
+                     (change)="setPrintPickerEnabled($any($event.target).checked)" />
+              <span>Tech picks what prints (per report)</span>
+            </label>
+            <p class="pf-hint">
+              When on, result entry shows a print checkbox beside every value — the tech decides
+              for EACH order which values reach that report. The bench record keeps everything.
+              (The per-value “Prints on the report” switch above stays the fixed default.)
+            </p>
+          </div>
+
           @if (isSingleValue()) {
             <div class="pf-uf pf-uf--span">
               <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="attachmentsEnabled()">

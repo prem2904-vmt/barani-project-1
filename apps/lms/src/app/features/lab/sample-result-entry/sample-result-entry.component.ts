@@ -1562,6 +1562,42 @@ export class SampleResultEntryComponent {
   attachCountForParam(t: { id: string }, p: { name: string }): number {
     return this.attachmentsFor(t).filter((a) => a.param === p.name).length;
   }
+
+  // ── Per-REPORT value picker (owner 2026-09-20, culture-checkbox pattern):
+  // Test Master's `printPicker: true` marker puts a print checkbox on every
+  // value row; unticked names ride order_tests.ReportHiddenJson and the
+  // report renderer drops those rows for THIS order only. ────────────────
+  private readonly _reportHidden = signal<Record<string, string[]>>({});
+  private readonly _printPickerByTest = computed<Set<string>>(() => {
+    const out = new Set<string>();
+    for (const t of this._sample()?.tests ?? []) {
+      try {
+        if (JSON.parse(t.test?.parameters || "{}")?.printPicker === true) out.add(t.id);
+      } catch { /* malformed parameters — picker stays off */ }
+    }
+    return out;
+  });
+  printPickerEnabled(t: { id: string }): boolean {
+    return this._printPickerByTest().has(t.id);
+  }
+  private reportHiddenFor(t: { id: string }): string[] {
+    const local = this._reportHidden()[t.id];
+    if (local) return local;
+    const raw = (t as { reportHiddenJson?: string | null }).reportHiddenJson;
+    if (!raw) return [];
+    try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch { return []; }
+  }
+  isValuePrinted(t: { id: string }, p: { name: string }): boolean {
+    return !this.reportHiddenFor(t).includes(p.name);
+  }
+  toggleValuePrinted(t: { id: string }, p: { name: string }) {
+    const cur = this.reportHiddenFor(t);
+    const next = cur.includes(p.name) ? cur.filter(n => n !== p.name) : [...cur, p.name];
+    this._reportHidden.update(m => ({ ...m, [t.id]: next }));
+    this.api.put(`/api/results/${t.id}/report-hidden`, { hidden: next }).subscribe({
+      error: () => this.toasts.error("Could not save the print choice — retry."),
+    });
+  }
   /** Chip prefix for a value-tagged attachment — the value's display title. */
   attachParamTitle(t: OrderTest, a: ResultAttachment): string | null {
     if (!a.param) return null;
