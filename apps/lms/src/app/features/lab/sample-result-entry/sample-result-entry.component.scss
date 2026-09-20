@@ -177,6 +177,9 @@
   padding: 8px 10px;
   background: rgba(168, 85, 247, 0.04);
 }
+.pf-sre__grow-attach td {
+  padding: 6px 10px 10px;
+}
 
 /* WORK page (non-scroll app layout). The host fills the shell's main
  area; the PAGE itself never scrolls. Scrolling happens INSIDE the
