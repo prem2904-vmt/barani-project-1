@@ -376,7 +376,9 @@
             </div>
           }
 
-          <!-- Reference ranges as sentences -->
+          <!-- Reference ranges — single-value tests only; each value of a
+               multi-value test carries its own ranges inside its batch. -->
+          @if (isSingleValue()) {
           <div class="pf-rr2">
             <div class="pf-rr2__head">
               <div>
@@ -455,36 +457,9 @@
                     below {{ d.criticalLow ?? '—' }} / above {{ d.criticalHigh ?? '—' }}{{ d.unit ? ' ' + d.unit : '' }}.</p>
                 }
               </div>
-            } @else {
-              <!-- Several numeric values (a panel): each value gets the SAME
-                   grid as a single-value test — stacked, one per value. -->
-              <div class="space-y-6 mt-1">
-                @for (p of fields(); let i = $index; track i) {
-                  @if (isNumericType(p.type)) {
-                    <div class="pf-rr-block">
-                      <div class="flex items-baseline gap-2 mb-2">
-                        <span class="text-sm font-semibold" style="color: var(--text-primary);">{{ p.label || p.name || 'Unnamed' }}</span>
-                        @if (p.unit) { <span class="text-[11px]" style="color: var(--text-tertiary);">{{ p.unit }}</span> }
-                      </div>
-                      <div class="pf-rrgrid-wrap">
-                        <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
-                          [rowData]="rangeRowsFor(i)" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
-                          [getRowId]="$any(rangeRowId)"
-                          domLayout="autoHeight" [stopEditingWhenCellsLoseFocus]="true"
-                          [singleClickEdit]="true" [popupParent]="gridPopupParent"
-                          (cellValueChanged)="onRangeCellChanged($event)"
-                          (cellClicked)="onRangeCellClicked($event)">
-                        </ag-grid-angular>
-                        <div class="pf-rt3__foot">
-                          <button type="button" class="pf-rb__add press" (click)="addRange(i)">+ Add range</button>
-                        </div>
-                      </div>
-                    </div>
-                  }
-                }
-              </div>
             }
           </div>
+          }
 
           <!-- Values recorded — hidden for the common one-value test; the
                single field is managed by "What will the tech enter?" above. -->
@@ -505,155 +480,150 @@
               <button type="button" class="pf-rr2__add" (click)="addParameter()">+ Add another value</button>
             </div>
 
-              <ul class="flex flex-col list-none p-0 m-0">
-                @for (p of fields(); let i = $index; track p.id) {
-                  @let open = expandedParamId() === p.id;
-                  <li class="pf-param2" [class.pf-param2--open]="open">
-                    <button type="button" class="pf-param2__summary" (click)="toggleParam(p.id)">
-                      <span class="pf-param2__chev" [class.pf-param2__chev--open]="open">▸</span>
-                      <span class="pf-param2__name">{{ p.label || 'Untitled parameter' }}</span>
-                      <span class="pf-param2__type">{{ p.type }}</span>
-                      @if (paramSummary(p)) { <span class="pf-param2__meta">{{ paramSummary(p) }}</span> }
-                      <span class="grow"></span>
-                      @if ((p.label ?? '').trim()) {
-                        <span class="pf-param2__state c-green">Complete</span>
-                      } @else {
-                        <span class="pf-param2__state c-amber">needs a name</span>
-                      }
-                      <span class="pf-param2__x" role="button" aria-label="Remove parameter"
-                            (click)="$event.stopPropagation(); removeField(i)">✕</span>
-                    </button>
-
-                    @if (open) {
-                      <div class="param-row__body">
-                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1.2fr_1fr] items-end">
-                          <label class="flex flex-col gap-1 min-w-0">
-                            <span class="pf-mini-lbl">Label</span>
-                            <input type="text" class="pf-input pf-input--compact" [ngModel]="p.label"
-                                   (ngModelChange)="patchField(i, { label: $event, name: deriveName($event, p.name) })" />
-                          </label>
-                          <label class="flex flex-col gap-1 min-w-0">
-                            <span class="pf-mini-lbl">Type</span>
-                            <pf-field-type-picker size="sm" [value]="p.type" (valueChange)="patchField(i, { type: $event })"></pf-field-type-picker>
-                          </label>
-                          <label class="flex flex-col gap-1 min-w-0">
-                            <span class="pf-mini-lbl">Unit</span>
-                            @if (isNumericType(p.type)) {
-                              <pf-select size="sm" [searchable]="true" [options]="unitOptions(p.unit)"
-                                         [value]="p.unit || ''" placeholder="—"
-                                         (valueChange)="patchField(i, { unit: $any($event) })"></pf-select>
-                            } @else {
-                              <input type="text" class="pf-input pf-input--compact" [ngModel]="p.unit" [disabled]="true" placeholder="—" />
-                            }
-                          </label>
-                        </div>
-
-                        @if (isNumericType(p.type)) {
-                          <div class="param-row__ranges">
-                            <div class="grid gap-2 grid-cols-2 md:grid-cols-4 mt-1">
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Critical low</span>
-                                <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.criticalLow ?? null"
-                                                  (valueChange)="patchField(i, { criticalLow: $event ?? undefined })"></pf-number-input>
-                              </label>
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Critical high</span>
-                                <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.criticalHigh ?? null"
-                                                  (valueChange)="patchField(i, { criticalHigh: $event ?? undefined })"></pf-number-input>
-                              </label>
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Plausible low</span>
-                                <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.validLow ?? null"
-                                                  (valueChange)="patchField(i, { validLow: $event ?? undefined })"></pf-number-input>
-                              </label>
-                              <label class="flex flex-col gap-0.5 min-w-0">
-                                <span class="pf-mini-lbl">Plausible high</span>
-                                <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.validHigh ?? null"
-                                                  (valueChange)="patchField(i, { validHigh: $event ?? undefined })"></pf-number-input>
-                              </label>
-                            </div>
-                          </div>
-                        }
-
-                        @if (typeHasOptions(p.type)) {
-                          <div class="flex flex-col gap-1 min-w-0">
-                            <span class="pf-mini-lbl">Option group</span>
-                            <div class="flex items-center gap-2 flex-wrap">
-                              <pf-select style="min-width: 280px; max-width: 340px;" size="sm"
-                                         [options]="ogGroupOptions()" [searchable]="true"
-                                         [value]="groupForField(i)?.code ?? ''"
-                                         placeholder="— pick an option group —"
-                                         (valueChange)="applyOptionGroup(i, $event)"></pf-select>
-                              @if (!optCustom(i)) {
-                                <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
-                                        style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                                        (click)="startCustomOption(i)">+ New option group</button>
-                              }
-                            </div>
-
-                            @if (optLocked(i) && groupForField(i); as g) {
-                              <!-- Shared vocabulary → read-only preview. Editing
-                                   the group lives in Option groups (it affects
-                                   every linked test); inline editing only ever
-                                   authors a NEW group. -->
-                              <!-- Values only — codes are plumbing, not UI. -->
-                              <div class="pf-optprev">
-                                @for (row of rowsFor(i); track $index) {
-                                  <span class="pf-optprev__chip"
-                                        [class.pf-optprev__chip--normal]="row.normal === true"
-                                        [class.pf-optprev__chip--off]="row.active === false"
-                                        [title]="row.normal === true ? 'Normal (expected) value' : (row.active === false ? 'Inactive — hidden from result entry' : '')">
-                                    {{ row.value }}
-                                  </span>
-                                }
-                              </div>
-                              <p class="text-xs" style="color: var(--text-tertiary, #64748b);">
-                                Shared group — used by {{ groupTestCount(g) }} test{{ groupTestCount(g) === 1 ? '' : 's' }}.
-                                Changing it in Option groups affects all of them, including this test.
-                              </p>
-                            } @else if (optCustom(i)) {
-                              <span class="pf-mini-lbl">New option group — applies here, becomes shared on save <span class="pf-option-count">{{ rowsFor(i).length }}</span></span>
-                              <div class="pf-otbl">
-                                <div class="pf-otbl-head pf-otbl-head--nocode"><span></span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
-                                @for (row of rowsFor(i); track $index; let ri = $index) {
-                                  <div class="pf-otbl-row pf-otbl-row--nocode">
-                                    <span class="pf-otbl-n">{{ ri + 1 }}</span>
-                                    <input type="text" class="pf-input pf-input--compact" [ngModel]="row.value"
-                                           (ngModelChange)="patchOptionRow(i, ri, { value: $event })" placeholder="Option value" />
-                                    <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
-                                           (ngModelChange)="patchOptionRow(i, ri, { normal: $event })" title="Normal (expected)" />
-                                    <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
-                                           (ngModelChange)="patchOptionRow(i, ri, { active: $event })" title="Inactive rows are hidden" />
-                                    <span class="flex">
-                                      <button type="button" class="px-1 text-sm" [disabled]="ri === 0" (click)="moveOptionRow(i, ri, -1)" title="Move up">↑</button>
-                                      <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(i).length - 1" (click)="moveOptionRow(i, ri, 1)" title="Move down">↓</button>
-                                    </span>
-                                    <button type="button" class="px-2 text-sm font-bold c-red" (click)="removeOptionRow(i, ri)" title="Remove option">✕</button>
-                                  </div>
-                                }
-                                <div>
-                                  <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
-                                          style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                                          (click)="addOptionRow(i)">+ Add option</button>
-                                </div>
-                              </div>
-                            } @else {
-                              <p class="pf-anslist__idle">Pick an option group above — or “+ New option group”.</p>
-                            }
-                          </div>
-                        }
-
-                        <div class="grid gap-2 sm:grid-cols-2">
-                          <pf-validation-editor [type]="p.type" [isRequired]="p.isRequired" [validation]="p.validation ?? null"
-                            (change)="patchValidation(i, $event)"></pf-validation-editor>
-                          <pf-condition-editor [peers]="peersFor(i)" [value]="p.showWhen ?? null"
-                            (valueChange)="patchCondition(i, $event)" (remove)="patchCondition(i, null)"></pf-condition-editor>
-                        </div>
+            <!-- One BATCH per value — a complete, self-contained editor
+                 (owner: "Haemoglobin Concentration is one batch, another
+                 value is another batch — separate entities"). Everything
+                 about a value lives inside its own card: name, kind, unit,
+                 ranges grid, safety limits, option group, print condition. -->
+            <div class="flex flex-col gap-5">
+              @for (p of fields(); let i = $index; track p.id) {
+                <div class="pf-vbatch">
+                  <div class="pf-vbatch__head">
+                    <input type="text" class="pf-input pf-input--compact pf-vbatch__name"
+                           [ngModel]="p.label" placeholder="Value name — e.g. Haemoglobin"
+                           (ngModelChange)="patchField(i, { label: $event, name: deriveName($event, p.name) })" />
+                    <pf-field-type-picker size="sm" [value]="p.type"
+                                          (valueChange)="patchField(i, { type: $event })"></pf-field-type-picker>
+                    @if (isNumericType(p.type)) {
+                      <div class="pf-vbatch__unit">
+                        <pf-select size="sm" [searchable]="true" [options]="unitOptions(p.unit)"
+                                   [value]="p.unit || ''" placeholder="— unit —"
+                                   (valueChange)="patchField(i, { unit: $any($event) })"></pf-select>
                       </div>
                     }
-                  </li>
-                }
-              </ul>
+                    <span class="grow"></span>
+                    @if ((p.label ?? '').trim()) {
+                      <span class="pf-param2__state c-green">Complete</span>
+                    } @else {
+                      <span class="pf-param2__state c-amber">needs a name</span>
+                    }
+                    @if (fields().length > 1) {
+                      <button type="button" class="pf-vbatch__x" aria-label="Remove this value"
+                              title="Remove this value" (click)="removeField(i)">✕</button>
+                    }
+                  </div>
+
+                  @if (isNumericType(p.type)) {
+                    <p class="pf-vbatch__sub">Reference ranges — prints next to the result and decides the H&nbsp;/&nbsp;L flag.</p>
+                    <div class="pf-rrgrid-wrap">
+                      <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
+                        [rowData]="rangeRowsFor(i)" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
+                        [getRowId]="$any(rangeRowId)"
+                        domLayout="autoHeight" [stopEditingWhenCellsLoseFocus]="true"
+                        [singleClickEdit]="true" [popupParent]="gridPopupParent"
+                        (cellValueChanged)="onRangeCellChanged($event)"
+                        (cellClicked)="onRangeCellClicked($event)">
+                      </ag-grid-angular>
+                      <div class="pf-rt3__foot">
+                        <button type="button" class="pf-rb__add press" (click)="addRange(i)">+ Add range</button>
+                      </div>
+                    </div>
+                    <div class="grid gap-2 grid-cols-2 md:grid-cols-4">
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Critical low</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.criticalLow ?? null"
+                                          (valueChange)="patchField(i, { criticalLow: $event ?? undefined })"></pf-number-input>
+                      </label>
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Critical high</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.criticalHigh ?? null"
+                                          (valueChange)="patchField(i, { criticalHigh: $event ?? undefined })"></pf-number-input>
+                      </label>
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Plausible low</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.validLow ?? null"
+                                          (valueChange)="patchField(i, { validLow: $event ?? undefined })"></pf-number-input>
+                      </label>
+                      <label class="flex flex-col gap-0.5 min-w-0">
+                        <span class="pf-mini-lbl">Plausible high</span>
+                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.validHigh ?? null"
+                                          (valueChange)="patchField(i, { validHigh: $event ?? undefined })"></pf-number-input>
+                      </label>
+                    </div>
+                  }
+
+                  @if (typeHasOptions(p.type)) {
+                    <div class="flex flex-col gap-1 min-w-0">
+                      <span class="pf-mini-lbl">Option group</span>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <pf-select style="min-width: 280px; max-width: 340px;" size="sm"
+                                   [options]="ogGroupOptions()" [searchable]="true"
+                                   [value]="groupForField(i)?.code ?? ''"
+                                   placeholder="— pick an option group —"
+                                   (valueChange)="applyOptionGroup(i, $event)"></pf-select>
+                        @if (!optCustom(i)) {
+                          <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
+                                  style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
+                                  (click)="startCustomOption(i)">+ New option group</button>
+                        }
+                      </div>
+
+                      @if (optLocked(i) && groupForField(i); as g) {
+                        <div class="pf-optprev">
+                          @for (row of rowsFor(i); track $index) {
+                            <span class="pf-optprev__chip"
+                                  [class.pf-optprev__chip--normal]="row.normal === true"
+                                  [class.pf-optprev__chip--off]="row.active === false"
+                                  [title]="row.normal === true ? 'Normal (expected) value' : (row.active === false ? 'Inactive — hidden from result entry' : '')">
+                              {{ row.value }}
+                            </span>
+                          }
+                        </div>
+                        <p class="text-xs" style="color: var(--text-tertiary, #64748b);">
+                          Shared group — used by {{ groupTestCount(g) }} test{{ groupTestCount(g) === 1 ? '' : 's' }}.
+                          Changing it in Option groups affects all of them, including this test.
+                        </p>
+                      } @else if (optCustom(i)) {
+                        <span class="pf-mini-lbl">New option group — applies here, becomes shared on save <span class="pf-option-count">{{ rowsFor(i).length }}</span></span>
+                        <div class="pf-otbl">
+                          <div class="pf-otbl-head pf-otbl-head--nocode"><span></span><span>Value</span><span>Normal</span><span>Active</span><span></span><span></span></div>
+                          @for (row of rowsFor(i); track $index; let ri = $index) {
+                            <div class="pf-otbl-row pf-otbl-row--nocode">
+                              <span class="pf-otbl-n">{{ ri + 1 }}</span>
+                              <input type="text" class="pf-input pf-input--compact" [ngModel]="row.value"
+                                     (ngModelChange)="patchOptionRow(i, ri, { value: $event })" placeholder="Option value" />
+                              <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
+                                     (ngModelChange)="patchOptionRow(i, ri, { normal: $event })" title="Normal (expected)" />
+                              <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
+                                     (ngModelChange)="patchOptionRow(i, ri, { active: $event })" title="Inactive rows are hidden" />
+                              <span class="flex">
+                                <button type="button" class="px-1 text-sm" [disabled]="ri === 0" (click)="moveOptionRow(i, ri, -1)" title="Move up">↑</button>
+                                <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(i).length - 1" (click)="moveOptionRow(i, ri, 1)" title="Move down">↓</button>
+                              </span>
+                              <button type="button" class="px-2 text-sm font-bold c-red" (click)="removeOptionRow(i, ri)" title="Remove option">✕</button>
+                            </div>
+                          }
+                          <div>
+                            <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
+                                    style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
+                                    (click)="addOptionRow(i)">+ Add option</button>
+                          </div>
+                        </div>
+                      } @else {
+                        <p class="pf-anslist__idle">Pick an option group above — or “+ New option group”.</p>
+                      }
+                    </div>
+                  }
+
+                  <div class="grid gap-2 sm:grid-cols-2">
+                    <pf-validation-editor [type]="p.type" [isRequired]="p.isRequired" [validation]="p.validation ?? null"
+                      (change)="patchValidation(i, $event)"></pf-validation-editor>
+                    <pf-condition-editor [peers]="peersFor(i)" [value]="p.showWhen ?? null"
+                      (valueChange)="patchCondition(i, $event)" (remove)="patchCondition(i, null)"></pf-condition-editor>
+                  </div>
+                </div>
+              }
+            </div>
             }
           </div>
 

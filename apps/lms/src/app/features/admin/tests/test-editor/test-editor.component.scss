@@ -912,3 +912,21 @@ select.pf-input--compact {
 /* Slim save-state line above the preview (the retired publish card's only
    surviving duty — the header owns the Save button). */
 .pf-savestate { font-size: 11.5px; font-weight: 600; padding: 2px 2px 0; flex: 0 0 auto; }
+
+/* ── Value batches (multi-value tests): one self-contained card per value ── */
+.pf-vbatch {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px 16px; border-radius: 14px;
+  border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.25));
+  background: var(--glass-bg, rgba(255, 255, 255, 0.02));
+}
+.pf-vbatch__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-vbatch__name { max-width: 300px; font-weight: 600; }
+.pf-vbatch__unit { min-width: 150px; }
+.pf-vbatch__sub { margin: 0; font-size: 11.5px; color: var(--text-tertiary, #94a3b8); }
+.pf-vbatch__x {
+  border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.25)); background: transparent;
+  color: var(--text-tertiary, #94a3b8); border-radius: 8px; width: 26px; height: 26px;
+  font-size: 12px; cursor: pointer;
+}
+.pf-vbatch__x:hover { color: #f87171; border-color: rgba(248, 113, 113, 0.5); }
