@@ -143,22 +143,12 @@
                 @if (!d.id) {
                   <p class="pf-hint" style="margin-top: 6px;">Save the test first — then link it into profiles here.</p>
                 } @else {
-                  @if (linkedProfiles().length > 0) {
-                    <div class="pf-lp-chips">
-                      @for (pr of linkedProfiles(); track pr.id) {
-                        <span class="pf-lp-chip">{{ pr.name }}
-                          <button type="button" class="pf-lp-chip__x" (click)="removeFromProfile(pr)"
-                                  [title]="'Remove from ' + pr.name" aria-label="Remove from this profile">✕</button>
-                        </span>
-                      }
-                    </div>
-                  }
-                  <pf-select size="sm" [searchable]="true" [options]="addableProfileOptions()"
-                             [value]="''" placeholder="+ Add to a profile…"
-                             (valueChange)="addToProfile($any($event))"></pf-select>
-                  @if (linkedProfiles().length === 0) {
-                    <p class="pf-hint" style="margin-top: 4px;">Not part of any profile yet.</p>
-                  }
+                  <!-- One dropdown: ticked = member of that profile. -->
+                  <pf-select [multiple]="true" [searchable]="true"
+                             [options]="allProfileOptions()"
+                             [values]="$any(linkedProfileIds())"
+                             placeholder="— not in any profile —"
+                             (valuesChange)="onLinkedProfilesChange($any($event))"></pf-select>
                 }
               </div>
               <div class="pf-uf">

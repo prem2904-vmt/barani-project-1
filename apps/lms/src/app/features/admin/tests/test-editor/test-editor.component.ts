@@ -1404,12 +1404,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!id) return [];
     return this._allProfiles().filter(pr => this.bundleItemIds(pr).includes(id));
   });
-  readonly addableProfileOptions = computed<PfSelectOption[]>(() => {
-    const linked = new Set(this.linkedProfiles().map(p => p.id));
-    return this._allProfiles()
-      .filter(p => !linked.has(p.id))
-      .map(p => ({ value: p.id, label: p.testCode ? `${p.name} (${p.testCode})` : p.name }));
-  });
+  /** ONE multi-select dropdown: ticked = member of that profile. Ticking
+   *  adds this test into the profile bundle, unticking removes it. */
+  readonly allProfileOptions = computed<PfSelectOption[]>(() =>
+    this._allProfiles().map(p => ({ value: p.id, label: p.testCode ? `${p.name} (${p.testCode})` : p.name })));
+  readonly linkedProfileIds = computed<string[]>(() => this.linkedProfiles().map(p => p.id));
+  onLinkedProfilesChange(ids: string[]) {
+    const next = new Set(ids);
+    const cur = new Set(this.linkedProfileIds());
+    for (const id of ids) if (!cur.has(id)) this.addToProfile(id);
+    for (const pr of this.linkedProfiles()) if (!next.has(pr.id)) this.removeFromProfile(pr);
+  }
   private patchProfileItems(pr: Test, items: Array<{ testId: string }>) {
     const raw = (pr as unknown as { parameters?: unknown }).parameters;
     let blob: Record<string, unknown> = {};
