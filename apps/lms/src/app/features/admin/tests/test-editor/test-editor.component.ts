@@ -1404,16 +1404,20 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!id) return [];
     return this._allProfiles().filter(pr => this.bundleItemIds(pr).includes(id));
   });
-  /** ONE multi-select dropdown: ticked = member of that profile. Ticking
-   *  adds this test into the profile bundle, unticking removes it. */
-  readonly allProfileOptions = computed<PfSelectOption[]>(() =>
-    this._allProfiles().map(p => ({ value: p.id, label: p.testCode ? `${p.name} (${p.testCode})` : p.name })));
+  /** Full-width tick-list under the Basics grid (owner: use the free space
+   *  below to SHOW the profiles, not hide them in a dropdown). */
   readonly linkedProfileIds = computed<string[]>(() => this.linkedProfiles().map(p => p.id));
-  onLinkedProfilesChange(ids: string[]) {
-    const next = new Set(ids);
-    const cur = new Set(this.linkedProfileIds());
-    for (const id of ids) if (!cur.has(id)) this.addToProfile(id);
-    for (const pr of this.linkedProfiles()) if (!next.has(pr.id)) this.removeFromProfile(pr);
+  readonly profSearch = signal('');
+  readonly visibleProfiles = computed<Test[]>(() => {
+    const q = this.profSearch().trim().toLowerCase();
+    const all = this._allProfiles();
+    if (!q) return all;
+    return all.filter(p => `${p.name} ${p.testCode ?? ''}`.toLowerCase().includes(q));
+  });
+  isLinkedProfile(id: string): boolean { return this.linkedProfileIds().includes(id); }
+  toggleProfileMembership(pr: Test, on: boolean) {
+    if (on) this.addToProfile(pr.id);
+    else this.removeFromProfile(pr);
   }
   private patchProfileItems(pr: Test, items: Array<{ testId: string }>) {
     const raw = (pr as unknown as { parameters?: unknown }).parameters;

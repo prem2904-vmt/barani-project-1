@@ -139,19 +139,6 @@
                        placeholder="Sub-group under the department" />
               </div>
               <div class="pf-uf">
-                <label class="pf-uf__lbl">Profiles</label>
-                @if (!d.id) {
-                  <p class="pf-hint" style="margin-top: 6px;">Save the test first — then link it into profiles here.</p>
-                } @else {
-                  <!-- One dropdown: ticked = member of that profile. -->
-                  <pf-select [multiple]="true" [searchable]="true"
-                             [options]="allProfileOptions()"
-                             [values]="$any(linkedProfileIds())"
-                             placeholder="— not in any profile —"
-                             (valuesChange)="onLinkedProfilesChange($any($event))"></pf-select>
-                }
-              </div>
-              <div class="pf-uf">
                 <label class="pf-uf__lbl">Methodology</label>
                 <input type="text" class="pf-input pf-uf__in" [ngModel]="d.methodology"
                        (ngModelChange)="patch({ methodology: $event })"
@@ -159,6 +146,43 @@
               </div>
             }
           </div>
+
+          <!-- Profiles — the tenant's profiles laid out in the free space
+               below, tickable in place. Ticked = this test is a member. -->
+          @if (d.type === 'individual') {
+            <div class="pf-profpanel">
+              <div class="pf-profpanel__head">
+                <div>
+                  <span class="pf-te2-h">Profiles</span>
+                  <p class="pf-rr2__sub">Tick the profiles this test belongs to — ordering a ticked profile includes this test.</p>
+                </div>
+                @if (d.id && allProfiles().length > 8) {
+                  <input type="search" class="pf-input pf-input--compact pf-profpanel__search"
+                         placeholder="Find a profile…" [ngModel]="profSearch()"
+                         (ngModelChange)="profSearch.set($event)" />
+                }
+              </div>
+              @if (!d.id) {
+                <p class="pf-hint">Save the test first — then link it into profiles here.</p>
+              } @else if (allProfiles().length === 0) {
+                <p class="pf-hint">No profiles in the catalogue yet.</p>
+              } @else {
+                <div class="pf-profpanel__grid">
+                  @for (pr of visibleProfiles(); track pr.id) {
+                    <label class="pf-profpanel__item" [class.pf-profpanel__item--on]="isLinkedProfile(pr.id)">
+                      <input type="checkbox" [checked]="isLinkedProfile(pr.id)"
+                             (change)="toggleProfileMembership(pr, $any($event.target).checked)" />
+                      <span class="pf-profpanel__name">{{ pr.name }}</span>
+                      @if (pr.testCode) { <span class="pf-profpanel__code">{{ pr.testCode }}</span> }
+                    </label>
+                  }
+                  @if (visibleProfiles().length === 0) {
+                    <p class="pf-hint">Nothing matches “{{ profSearch() }}”.</p>
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
       </section>
       }
