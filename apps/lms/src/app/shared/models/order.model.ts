@@ -111,6 +111,9 @@ export interface OrderTest {
   position?: number;
   status: string;
   assignedTo?: string;
+  /** Validator this entered result was auto-routed to (advisory — the
+   *  pending-validation screen lists it first for them). */
+  validatorAssignedTo?: string;
   currentResult?: string;
   resultedAt?: string;
   resultedBy?: string;

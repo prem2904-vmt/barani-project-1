@@ -2,6 +2,7 @@ import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, injec
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -120,6 +121,7 @@ interface ResultSnapshot {
                       <div class="flex items-center gap-2 flex-wrap">
                         <p class="font-semibold text-[15px] truncate" style="color: var(--text-primary);">{{ g.patientName }}</p>
                         <span class="pv-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
+                        @if (g.mine) { <pf-chip tone="violet" size="sm">Assigned to you</pf-chip> }
                         @if (g.anyCritical) { <pf-chip tone="rose" size="sm">CRITICAL</pf-chip> }
                       </div>
                       <p class="pv-grp-meta text-[11.5px] font-mono mt-0.5 truncate" style="color: var(--text-tertiary);">
@@ -293,6 +295,7 @@ interface ResultSnapshot {
 })
 export class PendingValidationComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
@@ -330,7 +333,9 @@ export class PendingValidationComponent implements OnInit {
     level: Level;
     remainingMin: number;
     anyCritical: boolean;
+    mine: boolean;
   }> {
+    const myId = this.auth.user()?.id;
     const bySample = new Map<string, Enriched[]>();
     for (const t of items) {
       const key = t.subOrder?.id
@@ -351,9 +356,12 @@ export class PendingValidationComponent implements OnInit {
         testNames: group.map(t => t.test?.name ?? 'Test').slice(0, 4),
         level: worst._level,
         remainingMin: Math.min(...group.map(t => t._remainingMin)),
-        anyCritical: group.some(t => this.isCritical(t))
+        anyCritical: group.some(t => this.isCritical(t)),
+        mine: !!myId && group.some(t => t.validatorAssignedTo === myId)
       };
-    });
+      // Mine first, rest visible (owner): tubes auto-routed to ME lead each
+      // urgency band; everything else stays right below for anyone to take.
+    }).sort((a, b) => (a.mine === b.mine ? 0 : a.mine ? -1 : 1));
   }
 
   private readonly _expanded = signal<Set<string>>(new Set());

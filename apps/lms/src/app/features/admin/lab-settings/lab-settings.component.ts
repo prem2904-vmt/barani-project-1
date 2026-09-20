@@ -23,6 +23,9 @@ interface AutoAssignConfig {
   // The API stores the eligible pool as JSON arrays of GUIDs.
   assigneeUserIdsJson?: string | null;
   autoAssignRoleIdsJson?: string | null;
+  // Validator leg: who reviews this department's submitted results.
+  validatorUserIdsJson?: string | null;
+  validatorRoleIdsJson?: string | null;
 }
 
 @Component({
@@ -333,16 +336,17 @@ interface AutoAssignConfig {
       <pf-tile tone="default" padding="lg" class="block">
         <h3 class="pf-ls__title">Auto-assign by department</h3>
         <p class="pf-ls__hint">
-          When a sample is received, each test is routed to the person — or the least-loaded member
-          of a role — you set for its department. Departments with nothing set fall into the shared
-          queue for anyone to pick up.
+          Two independent legs. <strong>Technicians</strong> — when a sample is received, each test is
+          routed to the person (or least-loaded member of a role) set for its department.
+          <strong>Validators</strong> — when a tech submits a result, it is routed to the least-loaded
+          validator the same way. Departments with nothing set fall into the shared queue.
         </p>
 
-        <!-- Master toggle for this branch -->
+        <!-- Master toggles for this branch: one per leg -->
         <div class="flex items-start justify-between gap-4 pf-ls__autoassign-master">
           <div class="min-w-0">
-            <p class="pf-ls__dept-name">Enable auto-assign for this branch</p>
-            <p class="pf-ls__hint">Off → every received test goes to the shared queue.</p>
+            <p class="pf-ls__dept-name">Auto-assign technicians</p>
+            <p class="pf-ls__hint">On receive, route each test to its department's tech pool. Off → the shared bench queue.</p>
           </div>
           <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="autoAssignEnabled()">
             <input type="checkbox" [checked]="autoAssignEnabled()"
@@ -350,11 +354,22 @@ interface AutoAssignConfig {
             <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
           </label>
         </div>
+        <div class="flex items-start justify-between gap-4 pf-ls__autoassign-master">
+          <div class="min-w-0">
+            <p class="pf-ls__dept-name">Auto-assign validators</p>
+            <p class="pf-ls__hint">On submit, route the result to its department's validator pool. Their Pending-validation screen lists it first; anyone can still validate it.</p>
+          </div>
+          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="autoAssignValidatorsEnabled()">
+            <input type="checkbox" [checked]="autoAssignValidatorsEnabled()"
+                   (change)="setAutoAssignValidatorsEnabled($any($event.target).checked)" />
+            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
+          </label>
+        </div>
 
         @if (departments().length === 0) {
           <p class="pf-ls__empty">No departments yet — add them from Branches first.</p>
         } @else {
-          <div class="pf-ls__dept-grid" [class.pf-ls__dept-grid--off]="!autoAssignEnabled()">
+          <div class="pf-ls__dept-grid" [class.pf-ls__dept-grid--off]="!autoAssignEnabled() && !autoAssignValidatorsEnabled()">
             @for (d of departments(); track d.id) {
               <div class="pf-ls__dept">
                 <div class="pf-ls__dept-head">
@@ -364,6 +379,7 @@ interface AutoAssignConfig {
                   </div>
                 </div>
 
+                <p class="pf-ls__pool" [class.pf-ls__pool--off]="!autoAssignEnabled()">Technicians — enter results</p>
                 <label class="pf-ls__label">People</label>
                 <pf-select
                   [multiple]="true"
@@ -387,6 +403,31 @@ interface AutoAssignConfig {
                 @if (autoAssignEnabled() && !assigneesFor(d.id).length && !rolesFor(d.id).length) {
                   <p class="pf-ls__warn">No one set — this department's tests go to the shared queue.</p>
                 }
+
+                <p class="pf-ls__pool" [class.pf-ls__pool--off]="!autoAssignValidatorsEnabled()">Validators — review submitted results</p>
+                <label class="pf-ls__label">People</label>
+                <pf-select
+                  [multiple]="true"
+                  [options]="allUserOptions()"
+                  [values]="validatorsFor(d.id)"
+                  placeholder="Select people…"
+                  [disabled]="!autoAssignValidatorsEnabled()"
+                  (valuesChange)="setValidators(d.id, $any($event))">
+                </pf-select>
+
+                <label class="pf-ls__label">Roles (least-loaded member gets it)</label>
+                <pf-select
+                  [multiple]="true"
+                  [options]="allRoleOptions()"
+                  [values]="validatorRolesFor(d.id)"
+                  placeholder="Select roles…"
+                  [disabled]="!autoAssignValidatorsEnabled()"
+                  (valuesChange)="setValidatorRoles(d.id, $any($event))">
+                </pf-select>
+
+                @if (autoAssignValidatorsEnabled() && !validatorsFor(d.id).length && !validatorRolesFor(d.id).length) {
+                  <p class="pf-ls__warn">No one set — this department's results wait in the shared validation queue.</p>
+                }
               </div>
             }
           </div>
@@ -409,6 +450,10 @@ interface AutoAssignConfig {
     .pf-ls__link:hover { color: var(--color-violet-300, #c4b5fd); }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
     .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: var(--amber-text); font-style: italic; }
+    /* Pool sub-headings inside a department card (Technicians / Validators). */
+    .pf-ls__pool { margin: 14px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+    .pf-ls__pool:first-of-type { margin-top: 10px; }
+    .pf-ls__pool--off { opacity: 0.45; }
 
 
     /* Payment-gate radio options */
@@ -559,8 +604,10 @@ export class LabSettingsComponent implements OnInit {
   private readonly _configs = signal<AutoAssignConfig[]>([]);
   readonly departments = this._departments.asReadonly();
 
-  // Per-branch master toggle for auto-assign.
+  // Per-branch master toggles — one per auto-assign leg (owner: two
+  // independent switches, technicians vs validators).
   protected readonly autoAssignEnabled = signal(false);
+  protected readonly autoAssignValidatorsEnabled = signal(false);
 
   readonly allowNoScan = computed(() => this.tenantState.tenant()?.allowNoScanClaim === true);
 
@@ -717,6 +764,7 @@ export class LabSettingsComponent implements OnInit {
         this.labelCodeMode.set(c?.labelCodeMode === 'both' ? 'barcode' : (c?.labelCodeMode ?? 'barcode'));
         this.requireValidation.set(c?.requireValidationForAllResults === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
+        this.autoAssignValidatorsEnabled.set(c?.autoAssignValidatorsEnabled === true);
         this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);
         this.queueFocusMode.set(c?.queueFocusMode ?? 'auto');
         this.effectiveQueueFocus.set(c?.effectiveQueueFocus ?? 'patient');
@@ -757,6 +805,16 @@ export class LabSettingsComponent implements OnInit {
     });
   }
 
+  /** Validator-leg master toggle. Off → submitted results just wait in the
+   *  shared validation queue. */
+  setAutoAssignValidatorsEnabled(v: boolean) {
+    this.autoAssignValidatorsEnabled.set(v);
+    this.api.patch('/api/tenants/branch-lab-config', { autoAssignValidatorsEnabled: v }).subscribe({
+      next: () => this.toasts.success(v ? 'Validator auto-assign on for this branch' : 'Validator auto-assign off — results wait in the shared queue'),
+      error: e => { this.autoAssignValidatorsEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+
   private parseIds(json?: string | null): string[] {
     if (!json) return [];
     try { const v = JSON.parse(json); return Array.isArray(v) ? v.map(String) : []; }
@@ -767,6 +825,12 @@ export class LabSettingsComponent implements OnInit {
   }
   rolesFor(departmentId: string): string[] {
     return this.parseIds(this._configs().find(c => c.departmentId === departmentId)?.autoAssignRoleIdsJson);
+  }
+  validatorsFor(departmentId: string): string[] {
+    return this.parseIds(this._configs().find(c => c.departmentId === departmentId)?.validatorUserIdsJson);
+  }
+  validatorRolesFor(departmentId: string): string[] {
+    return this.parseIds(this._configs().find(c => c.departmentId === departmentId)?.validatorRoleIdsJson);
   }
   userName(id: string): string {
     const u = this._users().find(x => x.id === id);
@@ -781,12 +845,20 @@ export class LabSettingsComponent implements OnInit {
   readonly allRoleOptions = computed<PfSelectOption<string>[]>(() =>
     this._roles().map(r => ({ value: r.id, label: r.name })));
 
-  /** Replace the whole selection for a department (from the multi-select). */
+  /** Replace the whole selection for a department (from the multi-select).
+   *  The PUT replaces the WHOLE config row, so every setter sends all four
+   *  pools — otherwise changing the tech pool would wipe the validators. */
   setAssignees(departmentId: string, userIds: string[]) {
-    this.upsert(departmentId, userIds ?? [], this.rolesFor(departmentId));
+    this.upsert(departmentId, { assigneeUserIds: userIds ?? [] });
   }
   setRoles(departmentId: string, roleIds: string[]) {
-    this.upsert(departmentId, this.assigneesFor(departmentId), roleIds ?? []);
+    this.upsert(departmentId, { roleIds: roleIds ?? [] });
+  }
+  setValidators(departmentId: string, userIds: string[]) {
+    this.upsert(departmentId, { validatorUserIds: userIds ?? [] });
+  }
+  setValidatorRoles(departmentId: string, roleIds: string[]) {
+    this.upsert(departmentId, { validatorRoleIds: roleIds ?? [] });
   }
   removeAssignee(departmentId: string, userId: string) {
     this.setAssignees(departmentId, this.assigneesFor(departmentId).filter(id => id !== userId));
@@ -795,14 +867,27 @@ export class LabSettingsComponent implements OnInit {
     this.setRoles(departmentId, this.rolesFor(departmentId).filter(id => id !== roleId));
   }
 
-  private upsert(departmentId: string, assigneeUserIds: string[], roleIds: string[]) {
-    this.api.put<unknown>('/api/tenants/auto-assign-configs', { departmentId, assigneeUserIds, roleIds }).subscribe({
+  private upsert(departmentId: string, change: Partial<{
+    assigneeUserIds: string[]; roleIds: string[];
+    validatorUserIds: string[]; validatorRoleIds: string[];
+  }>) {
+    const body = {
+      departmentId,
+      assigneeUserIds: change.assigneeUserIds ?? this.assigneesFor(departmentId),
+      roleIds: change.roleIds ?? this.rolesFor(departmentId),
+      validatorUserIds: change.validatorUserIds ?? this.validatorsFor(departmentId),
+      validatorRoleIds: change.validatorRoleIds ?? this.validatorRolesFor(departmentId),
+    };
+    this.api.put<unknown>('/api/tenants/auto-assign-configs', body).subscribe({
       next: () => {
         const patch: AutoAssignConfig = {
           departmentId,
-          isEnabled: assigneeUserIds.length > 0 || roleIds.length > 0,
-          assigneeUserIdsJson: JSON.stringify(assigneeUserIds),
-          autoAssignRoleIdsJson: JSON.stringify(roleIds),
+          isEnabled: body.assigneeUserIds.length > 0 || body.roleIds.length > 0
+                  || body.validatorUserIds.length > 0 || body.validatorRoleIds.length > 0,
+          assigneeUserIdsJson: JSON.stringify(body.assigneeUserIds),
+          autoAssignRoleIdsJson: JSON.stringify(body.roleIds),
+          validatorUserIdsJson: JSON.stringify(body.validatorUserIds),
+          validatorRoleIdsJson: JSON.stringify(body.validatorRoleIds),
         };
         this._configs.update(list => {
           const exists = list.some(c => c.departmentId === departmentId);
