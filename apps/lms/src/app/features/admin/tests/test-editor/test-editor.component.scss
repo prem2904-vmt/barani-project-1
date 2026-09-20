@@ -932,3 +932,13 @@ select.pf-input--compact {
 .pf-vbatch__x:hover { color: #f87171; border-color: rgba(248, 113, 113, 0.5); }
 .pf-vbatch__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pf-vbatch__attach { flex-shrink: 0; }
+
+/* ── Linked profiles (Basics) ── */
+.pf-lp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+.pf-lp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px;
+  border-radius: 9px; border: 1px solid rgba(167, 139, 250, 0.4);
+  background: rgba(124, 58, 237, 0.1); color: var(--violet-text, #a78bfa);
+  font-size: 12px; font-weight: 600; }
+.pf-lp-chip__x { border: none; background: none; padding: 0; cursor: pointer;
+  color: inherit; opacity: 0.7; font-size: 11px; }
+.pf-lp-chip__x:hover { opacity: 1; color: #f87171; }

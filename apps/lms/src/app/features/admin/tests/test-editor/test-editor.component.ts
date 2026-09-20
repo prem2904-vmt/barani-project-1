@@ -323,10 +323,59 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return (this._departments().find(d => d.id === id)?.name ?? '').trim();
   });
 
+  /** The last code WE filled — a dept re-pick may overwrite it, but never a
+   *  code the admin typed themselves. */
+  private lastAutoCode: string | null = null;
+  /** Next free code in the department's own series (CLP015 → CLP016):
+   *  the dept's most common alpha prefix, max number + 1, padded, skipping
+   *  anything already used anywhere in the tenant. */
+  private nextCodeForDept(deptId: string): string | null {
+    const all = [...this._allIndividualTests(), ...(this._allProfiles?.() ?? [])];
+    const usedEverywhere = new Set(all.map(t => (t.testCode ?? '').trim().toLowerCase()).filter(Boolean));
+    const freq = new Map<string, { count: number; width: number; max: number }>();
+    for (const t of all) {
+      if (t.departmentId !== deptId) continue;
+      const m = /^([A-Za-z]+)(\d+)$/.exec((t.testCode ?? '').trim());
+      if (!m) continue;
+      const p = m[1].toUpperCase();
+      const e = freq.get(p) ?? { count: 0, width: m[2].length, max: 0 };
+      e.count++; e.width = Math.max(e.width, m[2].length); e.max = Math.max(e.max, Number(m[2]));
+      freq.set(p, e);
+    }
+    let best: [string, { count: number; width: number; max: number }] | null = null;
+    for (const en of freq.entries()) if (!best || en[1].count > best[1].count) best = en;
+    if (!best) return null;
+    let n = best[1].max + 1;
+    let code = best[0] + String(n).padStart(best[1].width, '0');
+    while (usedEverywhere.has(code.toLowerCase())) { n++; code = best[0] + String(n).padStart(best[1].width, '0'); }
+    return code;
+  }
+
   onDeptPicked(name: string) {
     if (!name) { this.patch({ departmentId: '' }); return; }
     const id = this._departments().find(d => (d.name ?? '').trim() === name)?.id ?? '';
     this.patch({ departmentId: id });
+    // Creating a test: fill the next free code in this department's series.
+    // Only over an empty code or one WE filled — never the admin's own typing.
+    const d = this._draft();
+    if (!d.id && id && (!d.testCode.trim() || d.testCode === this.lastAutoCode)) {
+      const code = this.nextCodeForDept(id);
+      if (code) { this.patch({ testCode: code }); this.lastAutoCode = code; }
+    }
+  }
+
+  /** Test-code edit with an immediate duplicate check against the whole
+   *  loaded catalogue (case-insensitive, excluding this test itself). */
+  onTestCodeChanged(v: string) {
+    this.patch({ testCode: v });
+    const code = v.trim().toLowerCase();
+    if (!code) return;
+    const selfId = this._draft().id;
+    const dup = [...this._allIndividualTests(), ...(this._allProfiles?.() ?? [])]
+      .some(t => t.id !== selfId && (t.testCode ?? '').trim().toLowerCase() === code);
+    if (dup) {
+      this._fieldErrors.update(m => ({ ...m, testCode: `Code ${v.trim().toUpperCase()} is already in use — pick another.` }));
+    }
   }
 
   /** Culture-bench mark — the ONE marker the whole culture stack keys on:
@@ -1338,6 +1387,60 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly _allProfiles = signal<Test[]>([]);
   readonly allProfiles = this._allProfiles.asReadonly();
 
+  // ── Profile linkage (Basics · owner 2026-09-20): show WHICH profiles this
+  // test is a member of, and add/remove membership right here. Membership is
+  // the profile bundle's items[] — the real thing the order screen expands —
+  // not the free-text Profile label. ─────────────────────────────────────
+  private bundleItemIds(t: Test): string[] {
+    try {
+      const raw = (t as unknown as { parameters?: unknown }).parameters;
+      const blob = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return (((blob as Record<string, unknown>)?.['items'] ?? []) as Array<{ testId?: string }>)
+        .map(x => x.testId ?? '').filter(Boolean);
+    } catch { return []; }
+  }
+  readonly linkedProfiles = computed<Test[]>(() => {
+    const id = this._draft().id;
+    if (!id) return [];
+    return this._allProfiles().filter(pr => this.bundleItemIds(pr).includes(id));
+  });
+  readonly addableProfileOptions = computed<PfSelectOption[]>(() => {
+    const linked = new Set(this.linkedProfiles().map(p => p.id));
+    return this._allProfiles()
+      .filter(p => !linked.has(p.id))
+      .map(p => ({ value: p.id, label: p.testCode ? `${p.name} (${p.testCode})` : p.name }));
+  });
+  private patchProfileItems(pr: Test, items: Array<{ testId: string }>) {
+    const raw = (pr as unknown as { parameters?: unknown }).parameters;
+    let blob: Record<string, unknown> = {};
+    try { blob = (typeof raw === 'string' ? JSON.parse(raw) : (raw as Record<string, unknown>)) ?? {}; }
+    catch { blob = {}; }
+    blob['items'] = items;
+    const json = JSON.stringify(blob);
+    this.api.patch<Test>(`/api/tests/${pr.id}`, { parametersJson: json }).subscribe({
+      next: () => {
+        (pr as unknown as { parameters?: unknown }).parameters = json;
+        this._allProfiles.update(l => [...l]);
+        this.toasts.success(`${pr.name} updated`);
+      },
+      error: () => this.toasts.error(`Could not update ${pr.name} — try again.`),
+    });
+  }
+  addToProfile(profileId: string) {
+    const selfId = this._draft().id;
+    if (!profileId || !selfId) return;
+    const pr = this._allProfiles().find(p => p.id === profileId);
+    if (!pr) return;
+    const items = this.bundleItemIds(pr).map(testId => ({ testId }));
+    if (!items.some(x => x.testId === selfId)) items.push({ testId: selfId });
+    this.patchProfileItems(pr, items);
+  }
+  removeFromProfile(pr: Test) {
+    const selfId = this._draft().id;
+    if (!selfId) return;
+    this.patchProfileItems(pr, this.bundleItemIds(pr).filter(id => id !== selfId).map(testId => ({ testId })));
+  }
+
   readonly pickFilter = signal<'all' | 'tests' | 'profiles'>('all');
   readonly pickFilterOptions: SegmentedOption<'all' | 'tests' | 'profiles'>[] = [
     { value: 'all',      label: 'All' },
@@ -1804,6 +1907,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   saveTest() {
     const d = this._draft();
     if (!d.name.trim()) { this.toasts.warning('Name is required'); return; }
+    if (this.fieldError('testCode')) { this.toasts.warning(this.fieldError('testCode')!); return; }
 
     if (d.type === 'profile') {
       if (!d.testCode.trim()) {

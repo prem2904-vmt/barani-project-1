@@ -121,7 +121,7 @@
                 <input type="text" class="pf-input pf-uf__in"
                        [class.pf-input--error]="fieldError('testCode')"
                        [ngModel]="d.testCode"
-                       (ngModelChange)="patch({ testCode: $event })"
+                       (ngModelChange)="onTestCodeChanged($event)"
                        [placeholder]="d.type === 'profile' ? 'e.g. LIPID01' : 'e.g. CBC001'" />
                 @if (fieldError('testCode')) { <p class="pf-field-err">{{ fieldError('testCode') }}</p> }
               </div>
@@ -139,10 +139,27 @@
                        placeholder="Sub-group under the department" />
               </div>
               <div class="pf-uf">
-                <label class="pf-uf__lbl">Profile</label>
-                <input type="text" class="pf-input pf-uf__in" [ngModel]="d.profile"
-                       (ngModelChange)="patch({ profile: $event })"
-                       placeholder="e.g. LFT, Lipid Profile" />
+                <label class="pf-uf__lbl">Profiles</label>
+                @if (!d.id) {
+                  <p class="pf-hint" style="margin-top: 6px;">Save the test first — then link it into profiles here.</p>
+                } @else {
+                  @if (linkedProfiles().length > 0) {
+                    <div class="pf-lp-chips">
+                      @for (pr of linkedProfiles(); track pr.id) {
+                        <span class="pf-lp-chip">{{ pr.name }}
+                          <button type="button" class="pf-lp-chip__x" (click)="removeFromProfile(pr)"
+                                  [title]="'Remove from ' + pr.name" aria-label="Remove from this profile">✕</button>
+                        </span>
+                      }
+                    </div>
+                  }
+                  <pf-select size="sm" [searchable]="true" [options]="addableProfileOptions()"
+                             [value]="''" placeholder="+ Add to a profile…"
+                             (valueChange)="addToProfile($any($event))"></pf-select>
+                  @if (linkedProfiles().length === 0) {
+                    <p class="pf-hint" style="margin-top: 4px;">Not part of any profile yet.</p>
+                  }
+                }
               </div>
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Methodology</label>
