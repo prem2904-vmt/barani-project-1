@@ -6,6 +6,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { PatientTimelineComponent } from '../../frontdesk/patient-profile/patient-timeline.component';
 import { Consultation } from './doctor-queue.component';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 interface Vitals {
   bpSys?: number | null; bpDia?: number | null; pulse?: number | null; spo2?: number | null;
@@ -213,6 +214,7 @@ export class ConsultRoomComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly toasts = inject(ToastService);
 
   readonly c = signal<Consultation | null>(null);
@@ -347,5 +349,5 @@ export class ConsultRoomComponent implements OnInit {
     });
   }
 
-  back() { void this.router.navigate(['/doctor']); }
+  back() { this.navBack.backTo('/doctor'); }
 }

@@ -1688,7 +1688,7 @@ export class ValidateResultComponent implements OnInit {
 
   onComment(e: Event) { this._comment.set((e.target as HTMLTextAreaElement).value); }
 
-  back() { this.router.navigateByUrl('/pathologist'); }
+  back() { this.navBack.backTo('/pathologist'); }
 
   openDetail(r: ValueRow) { this._detailRow.set(r); }
   closeDetail() { this._detailRow.set(null); }

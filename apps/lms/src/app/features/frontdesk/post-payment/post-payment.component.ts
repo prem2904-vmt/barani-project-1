@@ -17,6 +17,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { waLink } from '../../../shared/utils/whatsapp';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 @Component({
   selector: 'pf-post-payment',
@@ -39,6 +40,7 @@ export class PostPaymentComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route  = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly labCfg  = inject(BranchLabConfigService);
   private readonly process = inject(ProcessWorkflowService);
   private readonly auth    = inject(AuthService);
@@ -230,7 +232,7 @@ export class PostPaymentComponent implements OnInit {
     this.toasts.success('Copied');
   }
 
-  back() { this.router.navigateByUrl('/frontdesk'); }
+  back() { this.navBack.backTo('/frontdesk'); }
 
   // ── Sidebar helpers ────────────────────────────────────────
   initials(name: string | null | undefined): string {

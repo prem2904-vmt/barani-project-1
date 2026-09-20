@@ -15,6 +15,7 @@ import { NumericDirective } from '../../../shared/directives/numeric.directive';
 import { COUNTRY_CODES, getCountryDigitLength } from '../../../shared/utils/country-codes';
 import { OPD_DEPARTMENTS, SPECIALIZATION_SUGGESTIONS } from '../../../shared/opd/medical-catalog';
 import { hasDoctorRole } from '../../../shared/opd/doctor-role';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 interface CreateResult { id: string; username: string; displayName: string; }
 
@@ -246,6 +247,7 @@ export class UserInviteComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
@@ -376,7 +378,7 @@ export class UserInviteComponent implements OnInit {
   }
 
   patch(p: Partial<CreateForm>) { this._form.update(v => ({ ...v, ...p })); }
-  back() { this.router.navigate(['/admin/users'], { queryParams: { tab: 'users' } }); }
+  back() { this.navBack.backTo('/admin/users?tab=users'); }
 
   onUsernameChange(v: string) {
     if (this._usernameError()) this._usernameError.set(null);

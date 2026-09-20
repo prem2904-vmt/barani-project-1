@@ -34,6 +34,7 @@ import { AvatarComponent } from "../../../shared/primitives/avatar.component";
 import { ScreenHeaderComponent } from "../../../shared/primitives/screen-header.component";
 import { LoadingLogoComponent } from "../../../shared/components/loading-logo/loading-logo.component";
 import { PatientSearchComponent } from "../../../shared/components/patient-search/patient-search.component";
+import { NavBackService } from '../../../core/services/nav-back.service';
 import {
   addDays,
   addMonths,
@@ -1091,6 +1092,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly locationSvc = inject(Location);
   private readonly bookingSvc = inject(AppointmentBookingService);
 
@@ -1327,8 +1329,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   }
 
   back() {
-    if (window.history.length > 1) this.locationSvc.back();
-    else this.router.navigateByUrl("/frontdesk");
+    this.navBack.backTo("/frontdesk/appointments");
   }
 
   // ── Patient ─────────────────────────────────────────────────

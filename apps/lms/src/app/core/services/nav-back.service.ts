@@ -33,6 +33,10 @@ export class NavBackService {
   ]);
 
   private readonly url = signal(this.norm(this.router.url));
+  /** The URL we navigated here FROM — lets back() POP history when the
+   *  previous entry already is the parent (no history growth), instead of
+   *  pushing a duplicate parent entry that browser-back would bounce off. */
+  private previousUrl: string | null = null;
 
   /** An optional in-page back handler. A screen whose "back" is NOT a route
    *  change (e.g. the chat thread, which closes a conversation via a signal on
@@ -62,7 +66,10 @@ export class NavBackService {
 
   constructor() {
     this.router.events.subscribe((e) => {
-      if (e instanceof NavigationEnd) this.url.set(this.norm(e.urlAfterRedirects));
+      if (e instanceof NavigationEnd) {
+        this.previousUrl = this.url();
+        this.url.set(this.norm(e.urlAfterRedirects));
+      }
     });
   }
 
@@ -90,8 +97,23 @@ export class NavBackService {
       }
       return '/admin/tests';
     }
+    if (normUrl.startsWith('/frontdesk/appointments/')) {
+      return '/frontdesk/appointments';
+    }
     if (normUrl.startsWith('/frontdesk/')) {
       return '/frontdesk';
+    }
+    // Shortlink screens (/o/:id order, /p/:id patient) live under the desk.
+    if (normUrl.startsWith('/o/') || normUrl.startsWith('/p/')) {
+      return '/frontdesk';
+    }
+    // Lab settings hub is an ADMIN surface reached from /admin, but its own
+    // children (culture settings…) parent back to the hub.
+    if (normUrl === '/lab/settings') {
+      return '/admin';
+    }
+    if (normUrl.startsWith('/lab/settings/')) {
+      return '/lab/settings';
     }
     if (normUrl.startsWith('/lab/')) {
       return '/lab/my-work';
@@ -101,6 +123,21 @@ export class NavBackService {
     }
     if (normUrl.startsWith('/reports/')) {
       return '/reports';
+    }
+    // Deep admin editors keep their intermediate level: a workflow FIELD
+    // editor returns to its workflow screen, not the admin home.
+    if (normUrl.startsWith('/admin/workflows/')) {
+      const seg = normUrl.split('/').filter(Boolean);
+      return seg.length > 3 ? `/admin/workflows/${seg[2]}` : '/admin/workflows';
+    }
+    if (normUrl.startsWith('/admin/lab-settings/')) {
+      return '/admin/lab-settings';
+    }
+    if (normUrl.startsWith('/admin/opd/')) {
+      return '/admin/opd';
+    }
+    if (normUrl.startsWith('/admin/process/')) {
+      return '/admin/process';
     }
     if (normUrl.startsWith('/admin/')) {
       return '/admin';
@@ -122,6 +159,22 @@ export class NavBackService {
     return '/admin';
   }
 
+  /** Navigate UP to a known parent with correct history semantics: POP when
+   *  we came here from that parent (no history growth — browser-back from the
+   *  parent must not bounce back down), otherwise REPLACE this entry so the
+   *  child doesn't linger behind the parent. Screens with explicit parents
+   *  (test editor → Test Master, viewer → /reports…) call this instead of
+   *  router.navigate. */
+  backTo(target: string): void {
+    const current = this.norm(this.router.url);
+    if (this.norm(target) === current) return;
+    if (this.previousUrl !== null && this.previousUrl === this.norm(target)) {
+      this.location.back();
+    } else {
+      void this.router.navigateByUrl(target, { replaceUrl: true });
+    }
+  }
+
   /**
    * Hierarchical back (owner 2026-09-20): the chevron climbs the page TREE —
    * result entry → Lab my work, test editor → Test Master — it never replays
@@ -135,7 +188,7 @@ export class NavBackService {
     const current = this.norm(this.router.url);
     const parent = this.getParentRoute(this.router.url);
     if (parent && this.norm(parent) !== current) {
-      void this.router.navigateByUrl(parent);
+      this.backTo(parent);
       return;
     }
     // Already at a root (or the map returned self) — history is the only

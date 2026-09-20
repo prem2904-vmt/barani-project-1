@@ -28,6 +28,7 @@ import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payme
 
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -52,6 +53,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly locationSvc = inject(Location);
   private readonly settings = inject(FrontdeskSettingsService);
   // Workflow is the source of truth for whether billing is a separate counter.
@@ -1782,8 +1784,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   back() {
-    if (window.history.length > 1) this.locationSvc.back();
-    else this.router.navigateByUrl('/frontdesk');
+    this.navBack.backTo('/frontdesk');
   }
 
   // ── Favourites + ref doctor handlers ────────────────────────────

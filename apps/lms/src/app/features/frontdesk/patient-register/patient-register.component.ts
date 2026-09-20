@@ -17,6 +17,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
 import { AbhaPrefillComponent, AbhaPrefillData } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValues } from '../../../shared/models/workflow.model';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 @Component({
   selector: 'pf-patient-register',
@@ -136,6 +137,7 @@ export class PatientRegisterComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly orderEntry = inject(OrderEntryService);
   private readonly route = inject(ActivatedRoute);
 
@@ -329,7 +331,7 @@ export class PatientRegisterComponent implements OnInit {
   back() {
     const pid = this.patientId();
     if (pid) {
-      this.router.navigate(['/frontdesk/patients', pid]);
+      this.navBack.backTo(`/frontdesk/patients/${pid}`);
     } else {
       this.router.navigateByUrl('/frontdesk');
     }

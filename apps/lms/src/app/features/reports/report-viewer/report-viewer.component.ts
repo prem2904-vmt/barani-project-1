@@ -19,6 +19,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 interface ReportData {
   patient?: { name?: string; age?: number; sex?: string; phone?: string };
@@ -931,6 +932,7 @@ export class ReportViewerComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly chat = inject(ChatService);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
@@ -1420,7 +1422,7 @@ export class ReportViewerComponent implements OnInit {
     this._resolved.set(next);
   }
 
-  back() { this.router.navigateByUrl('/reports'); }
+  back() { this.navBack.backTo('/reports'); }
 
   /** Print the SAME PDF the viewer shows / Download produces. Native shell:
    *  hand the file to the share sheet (it has Print). Web: open the PDF in a

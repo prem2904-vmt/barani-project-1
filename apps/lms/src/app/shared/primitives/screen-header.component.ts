@@ -104,7 +104,9 @@ export class ScreenHeaderComponent {
 
   protected onBack(): void {
     if (this.parentRoute) {
-      void this.router.navigateByUrl(this.parentRoute);
+      // Pop-or-replace via the shared service so browser-back from the
+      // parent never bounces back down to this screen.
+      this.navBack.backTo(this.parentRoute);
     } else {
       this.navBack.back();
     }

@@ -14,6 +14,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { AlphaDirective } from '../../../shared/directives/alpha.directive';
 import { NumericDirective } from '../../../shared/directives/numeric.directive';
 import { COUNTRY_CODES, getCountryDigitLength, parsePhoneNumber } from '../../../shared/utils/country-codes';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 interface EditForm {
   /** Honorific ("Dr." for doctors, etc.) — prefixes every mention of the name. */
@@ -159,6 +160,7 @@ export class UserEditComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly route = inject(ActivatedRoute);
   private readonly id = this.route.snapshot.paramMap.get('id')!;
 
@@ -322,7 +324,7 @@ export class UserEditComponent implements OnInit {
     const keys = Object.keys(p);
     if (keys.length) this._fieldError.update(fe => { const n = { ...fe }; for (const k of keys) delete n[k]; return n; });
   }
-  back() { this.router.navigate(['/admin/users'], { queryParams: { tab: 'users' } }); }
+  back() { this.navBack.backTo('/admin/users?tab=users'); }
   hasRole(id: string) { return this._form().roleIds.includes(id); }
   toggleRole(id: string) {
     this._form.update(v => ({ ...v, roleIds: v.roleIds.includes(id) ? v.roleIds.filter(r => r !== id) : [...v.roleIds, id] }));

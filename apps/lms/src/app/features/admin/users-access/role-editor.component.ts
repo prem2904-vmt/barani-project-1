@@ -421,7 +421,7 @@ export class RoleEditorComponent implements OnInit {
     });
   }
 
-  back() { this.router.navigate(['/admin/users'], { queryParams: { tab: 'roles' } }); }
+  back() { this.navBack.backTo('/admin/users?tab=roles'); }
 
   save() {
     const editing = this._editing();

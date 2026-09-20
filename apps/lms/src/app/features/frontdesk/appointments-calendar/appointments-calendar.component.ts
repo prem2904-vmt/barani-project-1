@@ -903,12 +903,7 @@ export class AppointmentsCalendarComponent {
    * they came from), but fall back to /frontdesk if the calendar was
    * opened directly via deep-link (no history to pop). */
   goBack() {
-    const hasHistory = typeof history !== 'undefined' && history.length > 1;
-    if (hasHistory) {
-      this.location.back();
-    } else {
-      this.router.navigateByUrl('/frontdesk');
-    }
+    this.navBack.backTo('/frontdesk');
   }
 
   // exposed to template

@@ -22,6 +22,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -1628,6 +1629,7 @@ export class BillingComponent implements OnInit, OnChanges {
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly location = inject(Location);
   private readonly settings = inject(FrontdeskSettingsService);
   private readonly billingEvents = inject(BillingEventsService);
@@ -2295,8 +2297,7 @@ export class BillingComponent implements OnInit, OnChanges {
    *  history is empty (deep-linked tab), fall back to /frontdesk. */
   back() {
     if (this.embedded) { this.closed.emit(); return; }
-    if (window.history.length > 1) this.location.back();
-    else this.router.navigateByUrl('/frontdesk');
+    this.navBack.backTo('/frontdesk');
   }
 
   /** Leave the collect-payment screen without taking payment. The order itself

@@ -14,6 +14,7 @@ import { CommentThreadComponent } from '../../../shared/components/comment-threa
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -609,6 +610,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
 
@@ -850,7 +852,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     return '';
   }
 
-  back() { this.router.navigate(['/lab/my-work']); }
+  back() { this.navBack.backTo('/lab/my-work'); }
 
   // ── Draft autosave (per stage, in localStorage) ─────────────────────────
   private draftKey(key: string) { return `pf.cw.draft.${this.id}.${this.selCaseId() ?? 'root'}.${key}`; }

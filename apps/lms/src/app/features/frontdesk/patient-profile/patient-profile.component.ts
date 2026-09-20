@@ -548,8 +548,7 @@ export class PatientProfileComponent implements OnInit {
   }
 
   back() {
-    if (window.history.length > 1) this.locationSvc.back();
-    else this.router.navigateByUrl('/frontdesk');
+    this.navBack.backTo('/frontdesk');
   }
 
   startOrder(p: Patient) {

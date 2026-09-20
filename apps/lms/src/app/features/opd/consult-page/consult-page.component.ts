@@ -8,6 +8,7 @@ import { Patient, formatPatientInfo } from '../../../shared/models/patient.model
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ConsultDoctor, ConsultDraft } from '../../../shared/opd/consult';
+import { NavBackService } from '../../../core/services/nav-back.service';
 
 /**
  * OPD consult screen. The separate, non-lab screen the "new order" fork routes
@@ -32,6 +33,7 @@ export class ConsultPageComponent {
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
   private readonly toasts = inject(ToastService);
 
   protected readonly formatPatient = formatPatientInfo;
@@ -106,5 +108,5 @@ export class ConsultPageComponent {
     });
   }
 
-  back() { void this.router.navigate(['/frontdesk']); }
+  back() { this.navBack.backTo('/frontdesk'); }
 }

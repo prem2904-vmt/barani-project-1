@@ -51,6 +51,7 @@ interface OgGroupLite {
   links: { testId: string }[];
 }
 import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../../shared/utils/reference-range';
+import { NavBackService } from '../../../../core/services/nav-back.service';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -188,6 +189,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
   private readonly router = inject(Router);
+  private readonly navBack = inject(NavBackService);
 
   // ── Shared option groups (Test Master → Option groups) ─────────────
   // A dropdown parameter picks its vocabulary from these; the values render
@@ -1942,7 +1944,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   back() {
     const t = this._draft().type || this.route.snapshot.queryParamMap.get('type') || 'individual';
-    this.router.navigate(['/admin/tests'], { queryParams: { type: t } });
+    this.navBack.backTo(`/admin/tests?type=${t}`);
   }
 
   saveTest() {

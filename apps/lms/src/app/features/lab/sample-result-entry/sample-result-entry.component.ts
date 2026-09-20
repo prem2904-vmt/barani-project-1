@@ -1526,7 +1526,7 @@ export class SampleResultEntryComponent {
   }
 
   back() {
-    this.router.navigate(["/lab/my-work"]);
+    this.navBack.backTo("/lab/my-work");
   }
 
   // ── Result attachments (owner's model, 2026-09-20) ───────────────────
