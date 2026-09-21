@@ -11,6 +11,7 @@ import { TenantEntitlementsService } from '../../core/services/tenant-entitlemen
 import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { DesignModeService } from '../../core/services/design-mode.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
 import { DialogService } from '../../core/services/dialog.service';
 import { ChatService } from '../../core/services/chat.service';
@@ -35,6 +36,7 @@ import { LANDINGS } from '../../core/auth/landing.guard';
 })
 export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
+  protected readonly designMode = inject(DesignModeService);
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);
   private readonly auth = inject(AuthService);

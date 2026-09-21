@@ -273,6 +273,25 @@
             }
           </button>
 
+          @if (designMode.available()) {
+            <!-- Designer capture prep for the Figma pipeline (design_mode
+                 permission). Menu stays open so the switch reads as a setting. -->
+            <button type="button" class="pf-profile-item press" (click)="designMode.toggle()"
+                    [attr.aria-pressed]="designMode.enabled()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+                <path d="M2 2l7.586 7.586"/>
+                <circle cx="11" cy="11" r="2"/>
+              </svg>
+              <span class="flex-1 text-left">Design mode</span>
+              <span class="pf-dm-pill" [class.pf-dm-pill--on]="designMode.enabled()">
+                {{ designMode.enabled() ? 'On' : 'Off' }}
+              </span>
+            </button>
+          }
+
           <div class="pf-profile-divider"></div>
 
           <!-- Multi-account (shared lab machines): tapping a profile leaves this

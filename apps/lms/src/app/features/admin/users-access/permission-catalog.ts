@@ -178,6 +178,8 @@ export const PERMISSION_INFO: Record<string, PermissionInfo> = {
     what: 'Lab-wide switches — scan mode, queue focus, spaces.' },
   manage_tenant: { group: 'setup', title: 'Organisation settings', sensitive: true,
     what: 'The organisation-level admin switch — top of the tree.' },
+  design_mode: { group: 'setup', title: 'Design mode',
+    what: 'Shows a Design-mode switch in the profile menu — freezes the screen for pixel-clean captures into Figma. Sees no extra data.' },
 
   // ── Alerts (subscriptions, not abilities) ──────────────────
   'lms.critical_value.notify': { group: 'alerts', title: 'Critical results',

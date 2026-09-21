@@ -2224,3 +2224,19 @@ html.cap-android .pf-bottom-nav:not(.pf-bottom-nav--rail) {
 body.pf-scanner-open pf-bottom-nav {
   display: none !important;
 }
+
+/* ── Design mode (designer capture prep) ─────────────────────────────
+   While the avatar-menu "Design mode" switch is ON, <html> carries this
+   class: animations/transitions freeze and the caret hides so a
+   html.to.design capture is pixel-stable — no mid-transition smears,
+   no blinking cursor baked into the Figma frame. */
+html.pf-design-mode *,
+html.pf-design-mode *::before,
+html.pf-design-mode *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
+  caret-color: transparent !important;
+}
+html.pf-design-mode {
+  scroll-behavior: auto !important;
+}

@@ -35,6 +35,8 @@ import { KeyboardService } from "../../core/services/keyboard.service";
 import { ApiService } from "../../core/services/api.service";
 import { CapacitorService } from "../../core/services/capacitor.service";
 import { BarcodeScannerModalComponent } from "../../shared/components/barcode-scanner/barcode-scanner-modal.component";
+import { DesignModeBadgeComponent } from "../../shared/components/design-mode-badge/design-mode-badge.component";
+import { DesignModeService } from "../../core/services/design-mode.service";
 import { PatientTimelineComponent } from "../../features/frontdesk/patient-profile/patient-timeline.component";
 import { PatientTimelineService } from "../../features/frontdesk/patient-profile/patient-timeline.service";
 import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
@@ -54,6 +56,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
     BarcodeScannerModalComponent,
     PatientTimelineComponent,
     SwipeBackDirective,
+    DesignModeBadgeComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -117,6 +120,12 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       <!-- Patient profile modal — globally available; opens via
            PatientProfileService.open(patientId) from anywhere. -->
       <pf-patient-profile-modal></pf-patient-profile-modal>
+
+      <!-- Design mode (designer capture prep) — badge lives at shell root so
+           it floats over every screen while the mode is on. -->
+      @if (designMode.enabled()) {
+        <pf-design-mode-badge></pf-design-mode-badge>
+      }
 
       <!-- Full-screen Patient Timeline — rendered at shell root so it covers the
            nav. A fixed element nested inside .shell-main is trapped below the
@@ -474,6 +483,7 @@ export class ShellComponent {
   readonly toasts = inject(ToastService);
   readonly scan = inject(ScanService);
   readonly patientTimeline = inject(PatientTimelineService);
+  protected readonly designMode = inject(DesignModeService);
   /** Drives the offline banner (Network plugin on native, window events on web). */
   protected readonly capacitor = inject(CapacitorService);
   /** When the soft keyboard is up the bottom-nav hides, so shell-main drops its
