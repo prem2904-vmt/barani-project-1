@@ -21,6 +21,9 @@ export interface CapturedFont {
   size: number;
   weight: number;
   color: string;
+  /** CSS background-image when the element used background-clip:text —
+   *  the importer paints the TEXT with this gradient (no box behind). */
+  gradient?: string;
   lineHeight: number | null;
   letterSpacing: number;
   align: 'left' | 'center' | 'right' | 'justified';
@@ -45,6 +48,10 @@ export interface CapturedNode {
   clips?: boolean;
   text?: string;
   font?: CapturedFont;
+  /** True when the text renders on ONE line in the browser — the importer
+   *  must auto-size instead of fixing width, or metric drift causes wraps
+   *  that never existed on screen. */
+  oneLine?: boolean;
   svg?: string;
   src?: string;
   children?: CapturedNode[];
@@ -144,7 +151,13 @@ function serialize(el: Element, vw: number, vh: number): CapturedNode | null {
   // stroked icons as true vectors.
   if (el instanceof SVGSVGElement) {
     if (base.w <= 0 || base.h <= 0) return null;
-    return { type: 'svg', name: nodeName(el), ...base, svg: el.outerHTML, opacity: px(style.opacity) };
+    // currentColor means "inherited CSS color" — resolve it NOW, or the
+    // importer guesses and faint decorative strokes turn loud and solid.
+    const svg = el.outerHTML
+      .replace(/\scurrentColor/g, ' ' + style.color)
+      .replace(/"currentColor"/g, '"' + style.color + '"')
+      .replace(/ _ng[a-z]+-[\w-]+=""/g, '');
+    return { type: 'svg', name: nodeName(el), ...base, svg, opacity: px(style.opacity) };
   }
   if (el.tagName === 'svg') {
     return null; // non-root svg edge case — handled above in browsers
@@ -185,7 +198,8 @@ function serialize(el: Element, vw: number, vh: number): CapturedNode | null {
 
   const text = directText(el);
   const bgImage = style.backgroundImage;
-  const hasGradient = bgImage.includes('gradient(');
+  const clipsText = ((style as unknown as Record<string, string>)['webkitBackgroundClip'] || style.backgroundClip) === 'text';
+  const hasGradient = bgImage.includes('gradient(') && !clipsText;
   const hasBg = isVisibleColor(style.backgroundColor);
   const hasBorder = px(style.borderTopWidth) > 0 && isVisibleColor(style.borderTopColor);
   const hasShadow = style.boxShadow !== 'none' && !!style.boxShadow;
@@ -196,13 +210,18 @@ function serialize(el: Element, vw: number, vh: number): CapturedNode | null {
   // Text-bearing element: the text becomes a child layer so a styled element
   // ("chip with a label") stays one box + one text in Figma.
   if (text) {
+    const font = fontOf(style);
+    if (clipsText && bgImage.includes('gradient(')) font.gradient = bgImage;
+    const innerH = Math.max(1, base.h - px(style.paddingTop) - px(style.paddingBottom) - px(style.borderTopWidth) - px(style.borderBottomWidth));
     children.unshift({
       type: 'text', name: text.slice(0, 40) || 'text',
       x: base.x + px(style.paddingLeft) + px(style.borderLeftWidth),
       y: base.y + px(style.paddingTop) + px(style.borderTopWidth),
       w: Math.max(1, base.w - px(style.paddingLeft) - px(style.paddingRight) - px(style.borderLeftWidth) - px(style.borderRightWidth)),
-      h: Math.max(1, base.h - px(style.paddingTop) - px(style.paddingBottom) - px(style.borderTopWidth) - px(style.borderBottomWidth)),
-      text, font: fontOf(style),
+      h: innerH,
+      text, font,
+      // On screen this fit one line — the importer must not let it wrap.
+      oneLine: innerH < font.size * 1.9,
     });
   }
 
@@ -217,6 +236,7 @@ function serialize(el: Element, vw: number, vh: number): CapturedNode | null {
         h: Math.max(1, base.h - px(style.paddingTop) - px(style.paddingBottom)),
         text: shown,
         font: el.value ? fontOf(style) : { ...fontOf(style), color: 'rgba(148, 155, 170, 0.8)' },
+        oneLine: el instanceof HTMLInputElement,
       });
     }
   }

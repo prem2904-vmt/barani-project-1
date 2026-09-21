@@ -183,18 +183,30 @@ async function buildNode(node, parent, ox, oy) {
       t.fontName = await loadFont(f.family || 'Inter', f.weight);
       t.characters = node.text || '';
       t.fontSize = f.size || 13;
-      const fill = solidFill(f.color || 'rgb(230, 230, 239)');
+      // background-clip:text gradients ride ON the text itself.
+      const grad = f.gradient ? gradientFill(f.gradient) : null;
+      const fill = grad || solidFill(f.color || 'rgb(230, 230, 239)');
       if (fill) t.fills = [fill];
       if (f.lineHeight) t.lineHeight = { value: f.lineHeight, unit: 'PIXELS' };
       if (f.letterSpacing) t.letterSpacing = { value: f.letterSpacing, unit: 'PIXELS' };
       t.textAlignHorizontal = (f.align || 'left').toUpperCase();
       t.textAlignVertical = 'CENTER';
-      t.textAutoResize = 'NONE';
       t.name = node.name;
-      t.x = node.x - ox;
-      t.y = node.y - oy;
-      t.resize(w, h);
       parent.appendChild(t);
+      if (node.oneLine) {
+        // Single line on screen: let Figma size it (font metric drift must
+        // never introduce wraps), then honor the alignment inside the slot.
+        t.textAutoResize = 'WIDTH_AND_HEIGHT';
+        const align = f.align || 'left';
+        const dx = align === 'center' ? (w - t.width) / 2 : align === 'right' ? (w - t.width) : 0;
+        t.x = node.x - ox + dx;
+        t.y = node.y - oy + (h - t.height) / 2;
+      } else {
+        t.textAutoResize = 'NONE';
+        t.x = node.x - ox;
+        t.y = node.y - oy;
+        t.resize(w, h);
+      }
       return;
     }
 
