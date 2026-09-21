@@ -1,0 +1,12 @@
+{
+  "name": "Prefrontal Capture",
+  "id": "prefrontal-capture",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["*"],
+    "reasoning": "Captures may reference image assets by URL (tenant logos, uploaded photos); the plugin fetches them to build Figma image fills."
+  }
+}

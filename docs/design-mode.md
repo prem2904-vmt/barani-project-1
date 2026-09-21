@@ -1,46 +1,62 @@
 # Design mode — capture any screen into Figma
 
-Design mode lets a designer capture **live app screens** (real data, real
-styles) straight into Figma as **editable layers** — no localhost, no
-developer in the loop. It works on any environment the designer can sign
-into (dev server included).
+Design mode captures **live app screens** (real data, real styles) into
+Figma as **editable layers** — no subscriptions, no third-party service,
+no developer in the loop. Two halves:
 
-## One-time setup (designer)
+1. **In the app** — a Design-mode switch in the avatar menu with a
+   **Capture** button that saves the visible screen as a
+   `.pfcapture.json` file (a self-contained layer tree).
+2. **In Figma** — our own **Prefrontal Capture** plugin
+   (`tools/figma-capture-plugin/`) rebuilds that file as native Figma
+   frames, rectangles, text, vectors and images.
 
-1. Ask an admin to grant your user the **Design mode** permission
-   (Admin → Users & roles → role editor → *Setup & configuration* →
-   "Design mode"). Lab Admins have it by default.
-2. Install the **html.to.design** Chrome extension
-   (chrome web store → "html.to.design").
-3. In Figma, open the **html.to.design** plugin in the file you want
-   captures to land in, and keep it open.
+Anyone with Design mode can capture (e.g. the owner on the dev server)
+and simply send the files to the designer — chat, drive, anything.
+
+## One-time setup
+
+**Whoever captures** needs the **Design mode** permission
+(Admin → Users & roles → role editor → *Setup & configuration* →
+"Design mode"). Lab Admins have it by default.
+
+**The designer** (once, ~1 minute):
+
+1. Get the `tools/figma-capture-plugin/` folder (three small files —
+   zip it from the repo or have it sent over).
+2. In the Figma **desktop app**: Menu → Plugins → Development →
+   **Import plugin from manifest…** → pick `manifest.json` from that
+   folder. "Prefrontal Capture" now appears under Plugins → Development,
+   in every file, forever. No publishing, no account tier needed.
 
 ## Capturing a screen
 
-1. In the app, open the avatar menu (top-right) → **Design mode** → On.
-   - The screen freezes for capture: animations/transitions pause, the
-     text caret hides.
-   - A small badge appears bottom-left showing the **frame name**
-     (route + breakpoint + width). Click it to copy — paste as the Figma
-     frame name so captures stay consistently named.
-2. Navigate to the screen and state you want (open panels, pick the
-   breakpoint by resizing the window — the badge shows Phone / Tablet /
-   Laptop / Wide live).
-3. Minimise the badge (— button) so it isn't in the capture.
-4. Click the **html.to.design extension** button → the screen lands in
-   Figma as editable layers.
-5. Repeat for as many screens/states as you like. Design mode stays on
-   until you switch it off (avatar menu or the ✕ on the badge).
+1. Avatar menu (top-right) → **Design mode** → On. The app freezes for
+   capture (animations pause, caret hides) and a badge appears bottom-left.
+2. Navigate to the screen/state you want. The badge live-shows the frame
+   name: `route · breakpoint width` (resize the window to switch
+   Phone / Tablet / Laptop / Wide).
+3. Hit **Capture** on the badge → a `.pfcapture.json` downloads
+   (e.g. `lab-my-work-laptop1280.pfcapture.json`). The badge itself is
+   never part of a capture.
+4. Repeat for as many screens/states/breakpoints as you like, then send
+   the files to the designer.
 
-## Frame naming convention
+## Importing in Figma
 
-`<route> · <breakpoint> <width>` — e.g. `lab/my-work · Laptop 1280`.
-This matches the existing capture pages in the Figma file.
+Open **Plugins → Development → Prefrontal Capture** and drop the file(s)
+in. Each becomes a frame named like `lab/my-work · Laptop 1280` — matching
+the existing capture pages — with editable layers: real text layers, true
+vector icons, glass blur as background-blur effects, shadows, gradients.
 
-## Notes
+## Fidelity notes (v1)
 
-- Design mode is a pure UI affordance — it grants **no extra data
-  access**. Captures show exactly what that user can already see, so use
-  a demo tenant (Micro World) when capturing patient-facing screens.
-- The permission code is `design_mode` (seeded by the backend; grantable
-  per role in the role editor).
+- Layers are **pixel-accurate but absolutely positioned** — no
+  auto-layout inference yet. Perfect as reference/redline; components
+  are rebuilt on top as before.
+- One text layer per element; mixed inline formatting inside a single
+  element collapses to that element's font.
+- Fonts must exist in Figma (Inter and JetBrains Mono are built in;
+  anything missing falls back to Inter).
+- Captures show exactly what the signed-in user sees — capture from the
+  Micro World demo tenant when patient data would be on screen.

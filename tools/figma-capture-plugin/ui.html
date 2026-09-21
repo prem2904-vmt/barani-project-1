@@ -1,0 +1,90 @@
+<style>
+  body { font: 12px/1.5 'Inter', system-ui, sans-serif; margin: 0; padding: 16px; color: #e6e6ef; background: #17171f; }
+  h1 { font-size: 13px; margin: 0 0 4px; }
+  p { margin: 0 0 12px; color: #9aa0b0; }
+  #drop {
+    border: 1.5px dashed #4b4b60; border-radius: 10px; padding: 28px 12px;
+    text-align: center; color: #9aa0b0; cursor: pointer; transition: border-color .15s ease;
+  }
+  #drop.hover { border-color: #a855f7; color: #c4b5fd; }
+  #status { margin-top: 12px; min-height: 18px; font-weight: 600; }
+  #status.ok { color: #34d399; }
+  #status.err { color: #f87171; }
+  input[type=file] { display: none; }
+</style>
+
+<h1>Prefrontal Capture</h1>
+<p>Drop a <b>.pfcapture.json</b> file (Design mode → Capture) to rebuild that screen as editable layers.</p>
+<div id="drop">Drop the capture file here<br/>or click to browse</div>
+<input type="file" id="file" accept=".json,application/json" multiple />
+<div id="status"></div>
+
+<script>
+  const drop = document.getElementById('drop');
+  const fileInput = document.getElementById('file');
+  const status = document.getElementById('status');
+
+  function setStatus(text, cls) { status.textContent = text; status.className = cls || ''; }
+
+  function dataUrlToBytes(url) {
+    const b64 = url.slice(url.indexOf(',') + 1);
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  // The plugin main thread has no atob/fetch — resolve every image node's
+  // src into raw bytes HERE (the UI iframe is a real browser context) and
+  // ship bytes across. Unfetchable images degrade to a gray placeholder.
+  async function resolveImages(node) {
+    if (node.type === 'img' && node.src) {
+      try {
+        if (node.src.startsWith('data:')) {
+          node.bytes = dataUrlToBytes(node.src);
+        } else {
+          const res = await fetch(node.src);
+          if (res.ok) node.bytes = new Uint8Array(await res.arrayBuffer());
+        }
+      } catch (e) { /* leave without bytes */ }
+      delete node.src;
+    }
+    for (const c of node.children || []) await resolveImages(c);
+  }
+
+  async function importFile(file) {
+    try {
+      setStatus('Reading ' + file.name + '…');
+      const capture = JSON.parse(await file.text());
+      if (!capture || capture.version !== 1 || !capture.root) {
+        throw new Error('Not a .pfcapture.json file');
+      }
+      setStatus('Resolving images…');
+      await resolveImages(capture.root);
+      setStatus('Building layers…');
+      parent.postMessage({ pluginMessage: { type: 'import', capture } }, '*');
+    } catch (e) {
+      setStatus(String(e.message || e), 'err');
+    }
+  }
+
+  drop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    for (const f of fileInput.files) await importFile(f);
+    fileInput.value = '';
+  });
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('hover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('hover'));
+  drop.addEventListener('drop', async e => {
+    e.preventDefault();
+    drop.classList.remove('hover');
+    for (const f of e.dataTransfer.files) await importFile(f);
+  });
+
+  onmessage = (e) => {
+    const msg = e.data.pluginMessage;
+    if (!msg) return;
+    if (msg.type === 'done') setStatus('✓ Imported "' + msg.name + '"', 'ok');
+    if (msg.type === 'error') setStatus(msg.message, 'err');
+  };
+</script>

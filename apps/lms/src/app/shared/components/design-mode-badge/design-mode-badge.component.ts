@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { DesignModeService } from '../../../core/services/design-mode.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { captureScreen, downloadCapture } from '../../utils/dom-capture';
 
 /**
  * The floating Design-mode badge (shell root). Shows the screen slug and the
@@ -13,6 +15,7 @@ import { DesignModeService } from '../../../core/services/design-mode.service';
 @Component({
   selector: 'pf-design-mode-badge',
   standalone: true,
+  host: { 'data-pf-capture-ignore': '' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (dm.minimized()) {
@@ -36,6 +39,15 @@ import { DesignModeService } from '../../../core/services/design-mode.service';
         </button>
         <span class="pf-dmb__bp">{{ breakpoint() }} · {{ width() }}px</span>
         @if (copied()) { <span class="pf-dmb__ok">Copied</span> }
+        <button type="button" class="pf-dmb__cap press" (click)="capture()"
+                aria-label="Capture this screen to a file for the Figma plugin">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <span>{{ captured() ? 'Saved' : 'Capture' }}</span>
+        </button>
         <button type="button" class="pf-dmb__btn press" (click)="dm.minimized.set(true)"
                 aria-label="Minimise badge — keep design mode on">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -79,6 +91,13 @@ import { DesignModeService } from '../../../core/services/design-mode.service';
       background: rgba(255, 255, 255, 0.08); color: var(--text-secondary);
     }
     .pf-dmb__btn:hover { background: rgba(255, 255, 255, 0.16); color: var(--text-primary); }
+    .pf-dmb__cap {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 999px; border: 0; cursor: pointer;
+      font-size: 11px; font-weight: 700; color: #fff;
+      background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #a855f7));
+    }
+    .pf-dmb__cap:hover { filter: brightness(1.1); }
     .pf-dmb__dot {
       position: fixed; left: 16px; bottom: 16px; z-index: 70;
       width: 14px; height: 14px; border-radius: 999px; border: 0; cursor: pointer;
@@ -92,10 +111,12 @@ export class DesignModeBadgeComponent {
   protected readonly dm = inject(DesignModeService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly theme = inject(ThemeService);
 
   private readonly url = signal(this.norm(this.router.url));
   protected readonly width = signal(typeof window !== 'undefined' ? window.innerWidth : 0);
   protected readonly copied = signal(false);
+  protected readonly captured = signal(false);
 
   /** Route path without params — doubles as the Figma frame name. */
   protected readonly frameName = computed(() => this.url() || 'home');
@@ -115,6 +136,21 @@ export class DesignModeBadgeComponent {
       window.addEventListener('resize', onResize);
       this.destroyRef.onDestroy(() => window.removeEventListener('resize', onResize));
     }
+  }
+
+  /** Serialize the visible screen and download it as .pfcapture.json —
+   *  the designer drops that file into the Prefrontal Capture Figma plugin
+   *  (tools/figma-capture-plugin). The badge is excluded via the host's
+   *  data-pf-capture-ignore attribute, so no need to minimise first. */
+  protected capture(): void {
+    const cap = captureScreen({
+      route: this.frameName(),
+      breakpoint: this.breakpoint(),
+      theme: this.theme.isDark() ? 'dark' : 'light',
+    });
+    downloadCapture(cap);
+    this.captured.set(true);
+    setTimeout(() => this.captured.set(false), 1600);
   }
 
   protected copyFrameName(): void {
