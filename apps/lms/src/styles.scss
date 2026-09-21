@@ -2233,7 +2233,11 @@ body.pf-scanner-open pf-bottom-nav {
 html.pf-design-mode *,
 html.pf-design-mode *::before,
 html.pf-design-mode *::after {
-  animation-play-state: paused !important;
+  /* animation: none (NOT paused): pausing froze route-entry animations at
+     their first frame — opacity 0 — leaving freshly-navigated pages
+     invisible. Removing the animation makes elements take their base
+     (final) styles: still, but fully rendered. */
+  animation: none !important;
   transition: none !important;
   caret-color: transparent !important;
 }

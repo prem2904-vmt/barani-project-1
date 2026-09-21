@@ -907,8 +907,17 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
-    // Live queue: refetch when an order is created / a tube changes (no polling).
-    this.liveQ.on('collection', 'frontdesk').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
+    // Live queue: refetch when an order is created / a tube changes (no
+    // polling) — but NEVER while the drawer is open. Our own collect /
+    // External / dispatch actions echo back as collection events, and a
+    // mid-flow refresh replaces the pending list, dropping the open order's
+    // tubes: activeGroup() goes null, the drawer unmounts (or, deep-linked,
+    // the page falls into the eternal "Opening collection…" loader). close()
+    // already refreshes, so nothing is lost by waiting.
+    this.liveQ.on('collection', 'frontdesk').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (this._openOrderId()) return;
+      this.refresh();
+    });
     // Per-branch label config (size + code) for direct-to-printer label print.
     this.labCfg.ensureLoaded();
     // Load the lab's configured container colours (best-effort — falls back to
@@ -1190,6 +1199,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       }
     } catch {
       /* drawer still shows any pending samples for this order */
+    }
+    // The loader under the drawer waits on activeGroup(). If the order has
+    // nothing collectable AND nothing merged (bad id, fully processed order),
+    // activeGroup stays null and the deep-link page would spin forever —
+    // bail back to where the user came from instead.
+    if (!this.activeGroup()) {
+      this.toasts.warning("Nothing left to collect on this order.");
+      this.close();
     }
   }
 
