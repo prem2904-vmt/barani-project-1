@@ -410,6 +410,36 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     return opts;
   });
+
+  /** Specimen AT RESULT ENTRY (micro): the toggle adds/removes a real
+   *  "Specimen" select parameter (options = the specimen master), so the
+   *  tech records the received specimen while entering results and it
+   *  prints on the report as a normal result row — no special-casing
+   *  anywhere downstream. On = the parameter exists. */
+  readonly specimenEntry = computed(() =>
+    this._fields().some(f => (f.name ?? '').trim().toLowerCase() === 'specimen'));
+
+  setSpecimenEntry(on: boolean) {
+    if (on === this.specimenEntry()) return;
+    if (on) {
+      const field: FormField = {
+        id: newFieldId(),
+        name: 'specimen',
+        label: 'Specimen',
+        type: 'select',
+        order: 0,
+        isRequired: false,
+        isConditional: false,
+        options: this._specimens().map((s, i) => ({ id: newFieldId(), order: i, value: s.name, label: s.name })),
+      };
+      this._fields.update(list => [field, ...list].map((f, i) => ({ ...f, order: i })));
+    } else {
+      this._fields.update(list => list
+        .filter(f => (f.name ?? '').trim().toLowerCase() !== 'specimen')
+        .map((f, i) => ({ ...f, order: i })));
+    }
+    this.persistFieldsToDraft();
+  }
   readonly cultureBench = computed<boolean>(() => {
     try { return JSON.parse(this._draft().parametersJson || '{}')?.microFormat === 'culture_sensitivity'; }
     catch { return false; }

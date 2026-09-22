@@ -104,6 +104,18 @@
             </div>
             @if (d.type === 'individual' && isMicroDept()) {
               <div class="pf-uf pf-uf--span">
+                <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="specimenEntry()">
+                  <input type="checkbox" [checked]="specimenEntry()"
+                         (change)="setSpecimenEntry($any($event.target).checked)" />
+                  <span>Specimen at result entry</span>
+                </label>
+                <p class="pf-hint">
+                  Adds a "Specimen" dropdown (from the Specimen master) to this
+                  test's result entry — the tech records which specimen was
+                  received, and it prints on the report.
+                </p>
+              </div>
+              <div class="pf-uf pf-uf--span">
                 <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="cultureBench()">
                   <input type="checkbox" [checked]="cultureBench()"
                          (change)="setCultureBench($any($event.target).checked)" />
