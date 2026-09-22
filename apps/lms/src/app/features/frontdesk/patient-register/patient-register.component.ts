@@ -70,7 +70,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
       }
 
       <pf-tile tone="default" padding="lg" class="block">
-        @if (config(); as cfg) {
+        @if (displayConfig(); as cfg) {
           <pf-workflow-renderer
             [config]="cfg"
             [singlePage]="true"
@@ -79,7 +79,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
             [submitting]="saving()"
             [finishLabel]="patientId() ? 'Save changes' : 'Register patient'"
             [extraActions]="patientId() ? [] : registerActions"
-            (valuesChange)="values.set($event)"
+            (valuesChange)="onValuesChange($event)"
             (extraActionClicked)="onExtraAction($event)"
             (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
         } @else {
@@ -154,6 +154,64 @@ export class PatientRegisterComponent implements OnInit {
   readonly record = this._record.asReadonly();
   readonly config = this._config.asReadonly();
   readonly saving = this._saving.asReadonly();
+
+  /** True while the Baby title is selected. */
+  private readonly isBaby = computed(() => {
+    const v = this.values();
+    const k = Object.keys(v).find(key => key.endsWith('::title'));
+    return k ? v[k] === 'Baby' : false;
+  });
+
+  /** Field names that belong in the "Contact & IDs" section. */
+  private static readonly CONTACT_FIELDS = new Set(['phone', 'email', 'abha_id', 'aadhaar_last4']);
+
+  /** The loaded config with display-only restructuring:
+   *  - the basic step splits into "Patient identity" and "Contact & IDs"
+   *    sections. The split steps KEEP the original step name, so every
+   *    storage key (`basic_info::phone`) — and therefore save/load — is
+   *    untouched; only the on-screen grouping changes.
+   *  - while Title = Baby the FIRST-NAME box itself becomes "Baby of" (the
+   *    standard infant convention — the mother's name IS the baby's identity
+   *    anchor) and the separate guardian field is dropped: one input, asked
+   *    once. Save copies the name into the guardian column too. */
+  protected readonly displayConfig = computed<WorkflowConfig | null>(() => {
+    const cfg = this._config();
+    if (!cfg) return null;
+    const baby = this.isBaby();
+
+    const relabel = (f: WorkflowConfig['steps'][number]['fields'][number]) =>
+      baby && f.name === 'first_name'
+        ? { ...f, title: 'Baby of', placeholder: "Mother's name" }
+        : f;
+
+    // Canonical identity order: the name trio fills row one, DOB and the
+    // guardian/"Baby of" pair fill row two; tenant-added extras follow.
+    const IDENTITY_ORDER = ['title', 'first_name', 'fathers_name', 'sex', 'date_of_birth', 'guardian_name', 'guardian_phone'];
+    const rank = (n: string) => {
+      const i = IDENTITY_ORDER.indexOf(n);
+      return i === -1 ? IDENTITY_ORDER.length : i;
+    };
+
+    const steps = cfg.steps.flatMap(s => {
+      const fields = s.fields
+        .filter(f => !(baby && (f.name === 'guardian_name' || f.name === 'guardian_phone')))
+        .map(relabel);
+      const contact = fields.filter(f => PatientRegisterComponent.CONTACT_FIELDS.has(f.name));
+      const identity = fields
+        .filter(f => !PatientRegisterComponent.CONTACT_FIELDS.has(f.name))
+        .sort((a, b) => rank(a.name) - rank(b.name));
+      // Split only the classic basic step, and only when both halves exist.
+      if (s.name !== 'basic_info' || contact.length === 0 || identity.length === 0) {
+        return [{ ...s, fields }];
+      }
+      return [
+        { ...s, id: `${s.id}__identity`, title: 'Patient identity', fields: identity },
+        { ...s, id: `${s.id}__contact`, title: 'Contact & IDs', fields: contact }
+      ];
+    });
+
+    return { ...cfg, steps };
+  });
 
   protected readonly patientId = signal<string | null>(null);
   protected readonly parentRoute = computed(() => {
@@ -342,6 +400,40 @@ export class PatientRegisterComponent implements OnInit {
     }
   }
 
+  /** Sex a title implies. Baby and Dr. imply nothing — never guess those. */
+  private static readonly TITLE_SEX: Record<string, string> = {
+    'Mr.': 'Male', 'Master': 'Male', 'Mrs.': 'Female', 'Ms.': 'Female'
+  };
+  /** The sex value WE auto-filled last — a manual pick must never be stomped. */
+  private _autoSex: string | null = null;
+
+  /** Picking a gendered title auto-fills Sex (one less tap for the frontdesk).
+   *  Only fills when Sex is empty or still holding our previous auto value —
+   *  an explicit manual choice always wins. */
+  protected onValuesChange(v: WorkflowFormValues) {
+    const prev = this.values();
+    this.values.set(v);
+
+    const titleKey = Object.keys(v).find(k => k.endsWith('::title'));
+    if (!titleKey) return;
+    const title = String(v[titleKey] ?? '');
+    if (title === String(prev[titleKey] ?? '')) return;   // something else changed
+
+    const inferred = PatientRegisterComponent.TITLE_SEX[title];
+    if (!inferred) return;
+    const sexKey = titleKey.replace(/::title$/, '::sex');
+    const current = v[sexKey];
+    if (current === inferred) return;
+    if (current != null && current !== '' && current !== this._autoSex) return;
+
+    this._autoSex = inferred;
+    const next = { ...v, [sexKey]: inferred };
+    this.values.set(next);
+    // The renderer owns the form state — push the filled value back through
+    // initialValues (its ngOnChanges re-applies the whole bag).
+    this.initialValues.set(next);
+  }
+
   onComplete(values: WorkflowFormValues) {
     this.savePatient(values, 'profile');
   }
@@ -373,6 +465,11 @@ export class PatientRegisterComponent implements OnInit {
     }
 
     this.applyHybridDob(body);
+    // Baby: the "Baby of" box IS the first-name field holding the mother's
+    // name — mirror it into the guardian column (the display form asks once).
+    if (body['title'] === 'Baby' && !body['guardianName'] && body['firstName']) {
+      body['guardianName'] = body['firstName'];
+    }
     // Duplicate-confirmation retry: carry the force flag to the API even
     // though it is not a form field.
     if ((values as Record<string, unknown>)['force'] === true) body['force'] = true;

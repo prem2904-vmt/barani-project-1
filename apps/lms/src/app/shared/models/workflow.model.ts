@@ -140,6 +140,8 @@ export interface WorkflowField {
   isEditable: boolean;
   width?: FieldWidth;
   showWhen?: ConditionRule[];
+  /** How multiple showWhen rules combine. Defaults to 'AND' (legacy behaviour). */
+  showWhenLogic?: ConditionLogic;
   validation?: ValidationRule[];
   options?: FieldOption[];
   dataSource?: string;

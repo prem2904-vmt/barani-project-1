@@ -73,18 +73,18 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
         }
         @case ('phone') {
           <div class="flex flex-col gap-1">
-            <div class="flex items-center gap-2">
+            <!-- One box: country code and number share a single input shell. -->
+            <div class="pf-phone" [class.pf-phone--err]="phoneError() != null">
               <pf-select
+                class="pf-phone__cc"
                 [options]="countrySelectOptions"
                 [value]="selectedCountryCode()"
                 (valueChange)="onCountryCodeChange($any($event))"
-                class="w-[110px] flex-shrink-0"
               ></pf-select>
-
+              <span class="pf-phone__sep" aria-hidden="true"></span>
               <input
                 type="tel"
-                class="pf-input flex-1 min-w-0"
-                [class.border-red-500]="phoneError() != null"
+                class="pf-phone__num"
                 [placeholder]="activePhoneRule().placeholder"
                 [ngModel]="phoneDigits()"
                 (ngModelChange)="onPhoneDigitsChange($event)"
@@ -122,17 +122,27 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
           @if (isDobField()) {
             <!-- Hybrid DOB / Age: enter an exact date OR just an age — both
                  sit together (no step switch). Age is anchored to today so it
-                 increments over time; either way the field's value is a DOB. -->
+                 increments over time; either way the field's value is a DOB.
+                 Infants: flip the unit to Months (auto-selected under 2 yrs). -->
             <div class="flex items-center gap-2 flex-wrap">
-              <input type="date" class="pf-input" style="flex:1 1 160px" [attr.max]="todayIso"
+              <input type="date" class="pf-input" style="flex:1 1 150px" [attr.max]="todayIso"
                      [ngModel]="value" (ngModelChange)="emit($event)" />
               <span class="text-xs" style="color: var(--text-tertiary);">or</span>
-              <input type="number" class="pf-input" style="flex:0 0 116px" min="0" max="150"
-                     placeholder="Age (yrs)"
-                     [ngModel]="ageFromValue()" (ngModelChange)="onHybridAge($event)" />
+              <input type="number" class="pf-input" style="flex:0 0 84px" min="0"
+                     [attr.max]="ageUnit() === 'months' ? 240 : 150"
+                     placeholder="Age"
+                     [ngModel]="hybridAgeDisplay()" (ngModelChange)="onHybridAge($event)" />
+              <div class="pf-age-unit" role="group" aria-label="Age unit">
+                <button type="button" class="pf-age-unit__btn"
+                        [class.pf-age-unit__btn--on]="ageUnit() === 'years'"
+                        (click)="setAgeUnit('years')">Yrs</button>
+                <button type="button" class="pf-age-unit__btn"
+                        [class.pf-age-unit__btn--on]="ageUnit() === 'months'"
+                        (click)="setAgeUnit('months')">Mo</button>
+              </div>
             </div>
             <p class="text-[11px]" style="color: var(--text-tertiary);">
-              Date of birth, or just an age — age is anchored to today and stays live.
+              Type either — an entered age stays current automatically.
             </p>
           } @else {
             <input type="date" class="pf-input" [ngModel]="value" (ngModelChange)="emit($event)" />
@@ -550,6 +560,99 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
         max-width: calc(50% - 4px);
       }
     }
+    /* One control height: every box a dynamic form renders — text input,
+       select trigger, phone shell, age toggle — is exactly 44px tall with
+       the same 12px radius. Mixed native heights read as clutter. */
+    :host input.pf-input { height: 44px; }
+    :host ::ng-deep .pf-dd__trigger {
+      height: 44px;
+      border-radius: 12px;
+    }
+
+    /* Phone: country code + number as ONE input shell. The embedded
+       pf-select loses its own chrome; the shell carries border/focus. */
+    .pf-phone {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: 44px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 12px;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .pf-phone:focus-within {
+      border-color: var(--input-border-focus);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+    }
+    .pf-phone--err { border-color: #ef4444; }
+    .pf-phone__cc { flex: 0 0 96px; }
+    .pf-phone__cc ::ng-deep .pf-dd__trigger {
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      height: 42px;
+      padding: 0 6px 0 12px;
+    }
+    .pf-phone__cc ::ng-deep .pf-dd__trigger:hover,
+    .pf-phone__cc ::ng-deep .pf-dd__trigger:focus,
+    .pf-phone__cc ::ng-deep .pf-dd--open .pf-dd__trigger {
+      border: none;
+      background: transparent;
+      box-shadow: none;
+    }
+    .pf-phone__sep {
+      width: 1px;
+      align-self: stretch;
+      margin: 8px 0;
+      background: var(--input-border);
+      flex-shrink: 0;
+    }
+    .pf-phone__num {
+      flex: 1;
+      min-width: 0;
+      height: 42px;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--input-text);
+      font-size: 13.5px;
+      font-family: inherit;
+      padding: 0 12px;
+    }
+    .pf-phone__num::placeholder { color: var(--input-placeholder, rgba(148, 163, 184, 0.65)); }
+
+    /* Age-unit segmented toggle (Yrs / Mo) inside the hybrid DOB field —
+       same 44px control height as every other box in the row. */
+    .pf-age-unit {
+      display: inline-flex;
+      align-items: stretch;
+      height: 44px;
+      flex-shrink: 0;
+      border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .pf-age-unit__btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary, #94a3b8);
+      background: var(--glass-bg, rgba(255, 255, 255, 0.04));
+      cursor: pointer;
+      border: none;
+      transition: background 160ms ease, color 160ms ease;
+    }
+    .pf-age-unit__btn + .pf-age-unit__btn {
+      border-left: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+    }
+    .pf-age-unit__btn--on {
+      background: var(--color-primary, #a855f7);
+      color: #fff;
+    }
+
     .pf-radio {
       appearance: none;
       -webkit-appearance: none;
@@ -758,14 +861,43 @@ export class DynamicInputComponent {
     return a < 0 || a > 150 ? null : a;
   });
 
+  /** Whole months implied by the current DOB value (for the Months unit). */
+  readonly monthsFromValue = computed<number | null>(() => {
+    const v = this._value();
+    if (!v) return null;
+    const d = new Date(String(v));
+    if (isNaN(d.getTime())) return null;
+    const now = new Date();
+    let m = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+    if (now.getDate() < d.getDate()) m--;
+    return m < 0 || m > 1800 ? null : m;
+  });
+
+  /** Age unit the user picked; null = auto (Months under 2 yrs, else Years). */
+  private readonly _ageUnit = signal<'years' | 'months' | null>(null);
+  readonly ageUnit = computed<'years' | 'months'>(() => {
+    const chosen = this._ageUnit();
+    if (chosen) return chosen;
+    const m = this.monthsFromValue();
+    return m !== null && m < 24 ? 'months' : 'years';
+  });
+
+  setAgeUnit(u: 'years' | 'months') { this._ageUnit.set(u); }
+
+  /** The number shown in the age box, in the active unit. */
+  readonly hybridAgeDisplay = computed<number | null>(() =>
+    this.ageUnit() === 'months' ? this.monthsFromValue() : this.ageFromValue());
+
   /** Age typed in the hybrid → synthesize a DOB anchored to today (so the age
    *  increments over time) and emit it as the field's value (a DOB). */
   onHybridAge(raw: unknown) {
     if (raw == null || `${raw}` === '') { this.emit(null); return; }
     const age = Math.floor(Number(raw));
-    if (!Number.isFinite(age) || age < 0 || age > 150) return;
+    const months = this.ageUnit() === 'months';
+    if (!Number.isFinite(age) || age < 0 || age > (months ? 240 : 150)) return;
     const d = new Date(); d.setHours(0, 0, 0, 0);
-    d.setFullYear(d.getFullYear() - age);
+    if (months) d.setMonth(d.getMonth() - age);
+    else d.setFullYear(d.getFullYear() - age);
     this.emit(d.toISOString().slice(0, 10)); // yyyy-MM-dd for <input type=date>
   }
 

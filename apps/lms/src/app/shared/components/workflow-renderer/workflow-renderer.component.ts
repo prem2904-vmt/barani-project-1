@@ -15,6 +15,7 @@ import {
 import { TestParameter } from '../../models/test.model';
 import { DynamicInputComponent } from '../dynamic-input/dynamic-input.component';
 import { validateFieldValue } from '../../forms/validate';
+import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 
 export interface WorkflowRendererResources {
   /** When a field has type 'test_parameters', these drive the per-parameter inputs. */
@@ -31,30 +32,25 @@ export interface WorkflowStepCompleteEvent {
 @Component({
   selector: 'pf-workflow-renderer',
   standalone: true,
-  imports: [DynamicInputComponent, NgTemplateOutlet],
+  imports: [DynamicInputComponent, NgTemplateOutlet, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let cfg = config();
     @if (!cfg || visibleSteps().length === 0) {
       <div class="pf-card text-sm text-slate-500">Nothing to render.</div>
     } @else if (singlePage()) {
-      <!-- SINGLE-PAGE: the first step's fields are always shown; any later steps
-           are revealed inline by "Add more"; a single Submit finishes (no Next). -->
-      <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: visibleSteps()[0] }"></ng-container>
-
-      @if (moreSteps().length > 0) {
-        @if (showMore()) {
-          @for (s of moreSteps(); track s.id) {
-            <div class="mt-6">
-              <h3 class="text-sm font-semibold text-slate-900 mb-3">{{ s.title }}</h3>
-              <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
-            </div>
-          }
-        }
-        <button type="button" class="mt-4 inline-flex items-center gap-1 text-sm font-semibold"
-                style="color: var(--color-primary, #7c3aed);" (click)="toggleMore()">
-          {{ showMore() ? '− Show fewer fields' : '+ Add more details' }}
-        </button>
+      <!-- SINGLE-PAGE: every step is a visible, titled section (no hidden
+           "Add more" reveal — configured extra fields must be discoverable).
+           One shared header vocabulary; a single Submit finishes (no Next). -->
+      @for (s of visibleSteps(); track s.id; let first = $first) {
+        <div [class.mt-8]="!first">
+          <div class="flex items-center gap-3 mb-4">
+            <h3 class="text-[11px] font-bold uppercase tracking-[0.14em] shrink-0"
+                style="color: var(--text-tertiary, #64748b);">{{ s.title }}</h3>
+            <span class="flex-1 h-px" style="background: var(--glass-border, rgba(148,163,184,0.25));"></span>
+          </div>
+          <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
+        </div>
       }
 
       @if (validationError(); as err) {
@@ -122,19 +118,22 @@ export interface WorkflowStepCompleteEvent {
       </div>
     }
 
-    <!-- One field grid, reused by both single-page and stepped modes. -->
+    <!-- One field grid, reused by both single-page and stepped modes. The
+         single-page form runs full-bleed, so it steps up to three columns on
+         wide viewports — two viewport-wide inputs read as stretched, three
+         stay proportioned. Stepped mode (drawers, narrower hosts) keeps two. -->
     <ng-template #stepFields let-step>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div [class]="gridClass()">
         @for (f of visibleFields(step); track f.id) {
           @if (f.type === 'test_parameters') {
             @if (testParamFields().length === 0) {
-              <div class="md:col-span-2 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              <div [class]="widthClass('full') + ' rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500'">
                 No parameters configured on this test.
               </div>
             } @else {
-              <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div [class]="widthClass('full') + ' grid grid-cols-1 md:grid-cols-2 gap-4'">
                 @for (p of testParamFields(); track p.name) {
-                  <div [class]="widthClass('full')">
+                  <div class="md:col-span-2">
                     <pf-dynamic-input
                       [field]="testParamConfig(p)"
                       [value]="valueFor(step, p.name)"
@@ -145,7 +144,7 @@ export interface WorkflowStepCompleteEvent {
               </div>
             }
           } @else if (f.type === 'tube_collection') {
-            <div class="md:col-span-2 space-y-2">
+            <div [class]="widthClass('full') + ' space-y-2'">
               @if (tubes().length === 0) {
                 <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-xs text-slate-500 text-center">
                   No tubes in context. Scan a barcode in the previous step to populate.
@@ -167,6 +166,33 @@ export interface WorkflowStepCompleteEvent {
                 }
               }
             </div>
+          } @else if (isGroupedIdentityField(step, f)) {
+            <!-- the honorific renders as a prefix inside the first-name cell — skip. -->
+          } @else if (isNameRow(step, f)) {
+            <!-- First name with the Title honorific as a compact prefix in the
+                 SAME box row: [Mr. ▾ | First name]. Everything else (Last name,
+                 Sex, …) stays a normal equal-width grid cell, so every box edge
+                 on the form lines up. -->
+            <div [class]="widthClass(f.width)">
+              <div class="flex flex-col gap-1.5">
+                <label class="pf-label">
+                  {{ f.title }}
+                  @if (f.isRequired) { <span class="text-red-500">*</span> }
+                </label>
+                <div class="flex items-center gap-2">
+                  @if (groupTitleField(step); as tf) {
+                    <pf-select class="w-[104px] flex-shrink-0"
+                      [options]="fieldSelectOptions(tf)"
+                      [value]="valueFor(step, tf.name)"
+                      [placeholder]="tf.title"
+                      (valueChange)="setValue(step, tf.name, $event)"></pf-select>
+                  }
+                  <input type="text" class="pf-input flex-1 min-w-0" [placeholder]="f.placeholder ?? ''"
+                         [value]="textValue(step, f.name)"
+                         (input)="setValue(step, f.name, $any($event.target).value)" />
+                </div>
+              </div>
+            </div>
           } @else {
             <div [class]="widthClass(f.width)">
               <pf-dynamic-input
@@ -177,13 +203,23 @@ export interface WorkflowStepCompleteEvent {
             </div>
           }
         } @empty {
-          <div class="md:col-span-2 text-sm text-slate-500 py-6 text-center">
+          <div [class]="widthClass('full') + ' text-sm text-slate-500 py-6 text-center'">
             This step has no fields.
           </div>
         }
       </div>
     </ng-template>
-  `
+  `,
+  styles: [`
+    /* Same 44px control height / 12px radius the dynamic inputs use — the
+       renderer's own raw inputs and the title-prefix select must not sit a
+       few pixels off from their neighbours. */
+    :host input.pf-input { height: 44px; }
+    :host ::ng-deep .pf-dd__trigger {
+      height: 44px;
+      border-radius: 12px;
+    }
+  `]
 })
 export class WorkflowRendererComponent implements OnChanges {
   readonly config = input<WorkflowConfig | null>(null);
@@ -221,15 +257,7 @@ export class WorkflowRendererComponent implements OnChanges {
 
   readonly isLastStep = computed(() => this.currentIndex() >= this.visibleSteps().length - 1);
 
-  // ── single-page mode ───────────────────────────────────────────
-  /** Steps after the first — revealed inline by "Add more". */
-  readonly moreSteps = computed<WorkflowStep[]>(() => this.visibleSteps().slice(1));
-  private readonly _showMore = signal(false);
-  readonly showMore = this._showMore.asReadonly();
-  toggleMore(): void { this._showMore.update(v => !v); }
-
-  /** Validate required fields across ALL steps (single-page has no per-step gate).
-   *  Auto-expands "Add more" if a missing required field is in a later step. */
+  /** Validate required fields across ALL steps (single-page has no per-step gate). */
   private validateAll(): boolean {
     const steps = this.visibleSteps();
     for (let i = 0; i < steps.length; i++) {
@@ -238,7 +266,6 @@ export class WorkflowRendererComponent implements OnChanges {
         const v = this.valueFor(steps[i], f.name);
         const err = validateFieldValue(f, v);
         if (err) {
-          if (i > 0) this._showMore.set(true);
           this._validationError.set(`${f.title}: ${err}`);
           return false;
         }
@@ -276,7 +303,33 @@ export class WorkflowRendererComponent implements OnChanges {
   // ── rendering helpers ──────────────────────────────────────────
 
   visibleFields(step: WorkflowStep): WorkflowField[] {
-    return step.fields.filter(f => this.evaluateRules(f.showWhen ?? [], 'AND'));
+    return step.fields.filter(f => this.evaluateRules(f.showWhen ?? [], f.showWhenLogic ?? 'AND'));
+  }
+
+  // ── honorific prefix inside the first-name cell ────────────────
+  /** The step's honorific field, if it can ride inside the first-name box. */
+  groupTitleField(step: WorkflowStep): WorkflowField | null {
+    if (!step.fields.some(f => f.name === 'first_name')) return null;
+    return this.visibleFields(step).find(f => f.name === 'title' && (f.options?.length ?? 0) > 0) ?? null;
+  }
+
+  /** first_name hosts the honorific prefix when a title field shares its step. */
+  isNameRow(step: WorkflowStep, f: WorkflowField): boolean {
+    return f.name === 'first_name' && !!this.groupTitleField(step);
+  }
+
+  /** The title is skipped in the grid — it renders inside the first-name cell. */
+  isGroupedIdentityField(step: WorkflowStep, f: WorkflowField): boolean {
+    return f === this.groupTitleField(step);
+  }
+
+  fieldSelectOptions(f: WorkflowField): PfSelectOption<unknown>[] {
+    return (f.options ?? []).map(o => ({ value: o.value, label: o.label, hint: o.sublabel }));
+  }
+
+  textValue(step: WorkflowStep, fieldName: string): string {
+    const v = this.valueFor(step, fieldName);
+    return v === null || v === undefined ? '' : String(v);
   }
 
   fieldConfig(f: WorkflowField) {
@@ -294,13 +347,19 @@ export class WorkflowRendererComponent implements OnChanges {
     return DynamicInputComponent.fromParameter(p);
   }
 
+  /** Field grid: single-page (full-bleed pages) steps up to 3 columns at xl;
+   *  stepped mode (drawers and narrower hosts) stays at 2. */
+  readonly gridClass = computed(() => this.singlePage()
+    ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'
+    : 'grid grid-cols-1 md:grid-cols-2 gap-4');
+
   widthClass(width: string | undefined): string {
     switch (width) {
       case 'half':    return 'md:col-span-1';
-      case 'third':   return 'md:col-span-1'; // simplified — real 3-col layout is a follow-up
+      case 'third':   return 'md:col-span-1';
       case 'quarter': return 'md:col-span-1';
       case 'full':
-      default:        return 'md:col-span-2';
+      default:        return this.singlePage() ? 'md:col-span-2 xl:col-span-3' : 'md:col-span-2';
     }
   }
 
