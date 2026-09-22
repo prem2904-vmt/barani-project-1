@@ -1,5 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, effect, inject, input, signal } from '@angular/core';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, effect, inject, input, signal, viewChild } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
@@ -40,12 +39,18 @@ export interface PreviewProfileMember {
         <p class="pf-pdfprev__empty">Pick a test to preview its printed report.</p>
       } @else if (error()) {
         <p class="pf-pdfprev__err">{{ error() }}</p>
-      } @else if (previewUrl(); as url) {
-        <iframe class="pf-pdfprev__frame" [src]="url" title="Report preview"></iframe>
+      } @else if (hasUrl()) {
+        <!-- The blob URL is loaded via contentWindow.location.replace(), NEVER
+             a [src] rebind: mutating a live iframe's src pushes a browser
+             session-history entry per render, so after a few live-preview
+             refreshes the page's Back button needed 2-3 clicks (each popping a
+             revoked blob → WebKitBlobResource errors). replace() swaps the
+             document with no history growth. -->
+        <iframe #frame class="pf-pdfprev__frame" title="Report preview"></iframe>
       } @else {
         <p class="pf-pdfprev__empty">Rendering…</p>
       }
-      @if (rendering() && previewUrl()) {
+      @if (rendering() && hasUrl()) {
         <span class="pf-pdfprev__spin">Rendering…</span>
       }
     </div>
@@ -124,12 +129,12 @@ export class ReportPdfPreviewComponent implements OnDestroy {
   private readonly api = inject(ApiService);
   private readonly layout = inject(ReportLayoutService);
   private readonly platform = inject(PlatformService);
-  private readonly sanitizer = inject(DomSanitizer);
 
   protected readonly rendering = signal(false);
   protected readonly error = signal('');
   private readonly _url = signal<string | null>(null);
-  protected readonly previewUrl = signal<SafeResourceUrl | null>(null);
+  protected readonly hasUrl = signal(false);
+  private readonly frame = viewChild<ElementRef<HTMLIFrameElement>>('frame');
 
   /** Tenant report template (letterhead, colors, signatures) — the preview
    *  must carry the real chrome or it isn't the exact output. */
@@ -155,6 +160,15 @@ export class ReportPdfPreviewComponent implements OnDestroy {
       this.rendering.set(true);
       this.renderTimer = setTimeout(() => void this.render(), 300);
     });
+    // Load the blob into the frame once both exist — history-free (see the
+    // template note). Re-runs whenever the URL or the frame's presence flips.
+    effect(() => {
+      const el = this.frame()?.nativeElement;
+      const url = this._url();
+      if (el && url) {
+        el.contentWindow?.location.replace(url + '#view=FitH&toolbar=0');
+      }
+    });
   }
 
   ngOnDestroy() {
@@ -167,7 +181,7 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     const prev = this._url();
     if (prev) URL.revokeObjectURL(prev);
     this._url.set(raw);
-    this.previewUrl.set(raw ? this.sanitizer.bypassSecurityTrustResourceUrl(raw + '#view=FitH&toolbar=0') : null);
+    this.hasUrl.set(raw !== null);
   }
 
   /** Plausible sample values for a list of parameter names — mirrors the old
