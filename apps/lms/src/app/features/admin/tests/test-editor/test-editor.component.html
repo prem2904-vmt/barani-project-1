@@ -214,9 +214,20 @@
             </div>
             @if (d.type === 'individual') {
               <div class="pf-uf">
-                <label class="pf-uf__lbl">Sample type</label>
-                <input type="text" class="pf-input pf-uf__in" [ngModel]="d.sampleType"
-                       (ngModelChange)="patch({ sampleType: $event })" placeholder="e.g. Serum" />
+                <label class="pf-uf__lbl">{{ isMicroDept() ? 'Specimen' : 'Sample type' }}</label>
+                @if (isMicroDept()) {
+                  <!-- Microbiology picks from the specimen master (blood, urine,
+                       pus …) — the same vocabulary the culture stack uses. -->
+                  <pf-select class="pf-uf__in"
+                             [searchable]="true"
+                             [options]="specimenOptions()"
+                             [value]="d.sampleType || null"
+                             placeholder="— Select specimen —"
+                             (valueChange)="patch({ sampleType: $any($event) ?? '' })"></pf-select>
+                } @else {
+                  <input type="text" class="pf-input pf-uf__in" [ngModel]="d.sampleType"
+                         (ngModelChange)="patch({ sampleType: $event })" placeholder="e.g. Serum" />
+                }
               </div>
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Sample volume (mL)</label>

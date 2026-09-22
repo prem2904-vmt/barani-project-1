@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
@@ -386,6 +386,30 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
    *  the culture validation cockpit, and prints the culture report section.
    *  Offered only for Microbiology tests. */
   readonly isMicroDept = computed<boolean>(() => /micro/i.test(this.selectedDeptName()));
+
+  /** Specimen master (blood, urine, pus, …) — for Microbiology tests the
+   *  Sample-type field becomes a dropdown of these instead of free text, so
+   *  every micro test picks from the same specimen vocabulary the culture
+   *  stack uses. Lazy: fetched once, the first time a micro test is edited. */
+  private readonly _specimens = signal<Array<{ code: string; name: string; container: string | null }>>([]);
+  private specimensRequested = false;
+  private readonly loadSpecimensForMicro = effect(() => {
+    if (!this.isMicroDept() || this.specimensRequested) return;
+    this.specimensRequested = true;
+    this.api.get<Array<{ code: string; name: string; container: string | null }>>('/api/microbiology/specimens')
+      .subscribe({ next: l => this._specimens.set(l ?? []), error: () => { /* free-entry fallback below */ } });
+  });
+  readonly specimenOptions = computed<PfSelectOption<string>[]>(() => {
+    const opts: PfSelectOption<string>[] = this._specimens().map(s => ({
+      value: s.name, label: s.name, hint: s.container ?? undefined
+    }));
+    // Never lose a stored value that isn't in the master (legacy free text).
+    const current = (this._draft().sampleType ?? '').trim();
+    if (current && !opts.some(o => o.value.toLowerCase() === current.toLowerCase())) {
+      opts.unshift({ value: current, label: current });
+    }
+    return opts;
+  });
   readonly cultureBench = computed<boolean>(() => {
     try { return JSON.parse(this._draft().parametersJson || '{}')?.microFormat === 'culture_sensitivity'; }
     catch { return false; }
