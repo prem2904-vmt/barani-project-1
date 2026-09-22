@@ -139,6 +139,13 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                 }
                 @case ('culture_ast') {
                   <p class="rsd__note">Organisms and their antibiotic results from the culture bench, with the S / R / M legend. The bench's own checkboxes choose which rows print.</p>
+                  <!-- The exact legend the PDF prints under the AST tables. -->
+                  <div class="rsd__legend">
+                    <p>S - Sensitive (clinically effective at standard therapeutic dose)</p>
+                    <p>R - Resistant (clinically ineffective at standard or increased dose)</p>
+                    <p>M - Intermediate (may be effective at higher dose or in concentrated body sites)</p>
+                    <p>Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.</p>
+                  </div>
                 }
                 @case ('image') {
                   <p class="rsd__note">Photos the tech marks “show” at result entry print here.
@@ -272,6 +279,12 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
     .rsd__srclbl { font-size: 12px; color: var(--text-tertiary); }
     .rsd__srcrow pf-select { min-width: 260px; }
     .rsd__note { margin: 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+    .rsd__legend {
+      margin-top: 8px; padding: 8px 10px;
+      border: 1px dashed var(--glass-border);
+      border-radius: 8px;
+    }
+    .rsd__legend p { margin: 0; font-size: 11.5px; line-height: 1.6; color: var(--text-tertiary); }
 
     /* If / else, one readable line. */
     .rsd__when { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;

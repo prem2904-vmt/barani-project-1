@@ -260,6 +260,13 @@ interface ReportSnapshot {
 // below — 0 in letterpad mode (no header is drawn).
 const A4 = { w: 595.28, h: 841.89 };
 const MARGIN_X = 30;
+
+/** True when a sampleType names a CONCRETE specimen. Catalogue mapping
+ *  placeholders ("As per Test–Specimen Mapping", "As applicable") mean no
+ *  specimen was chosen for the test — they must never print as one. */
+function isConcreteSpecimen(s: string): boolean {
+  return s.length > 0 && !/^as\s+(per|applicable)/i.test(s);
+}
 /** Barcode height in points. 26pt ≈ 9.2mm: tall enough to scan reliably at
  *  counter range, while leaving room for the three timestamp lines inside the
  *  80pt header block. (12mm would be ideal in isolation but crowds the block.)
@@ -1402,7 +1409,7 @@ function drawPatientBlockThreeCol(
   const specimens = Array.from(new Set(
     (snap.tests ?? [])
       .map(t => (t.sampleType ?? '').trim())
-      .filter(s => s.length > 0)
+      .filter(isConcreteSpecimen)
   ));
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
@@ -1566,7 +1573,7 @@ function drawPatientItem(
     case 'branch':
       return drawPatientLabelled(doc, 'Centre: ', snap.order?.branchName, x, y);
     case 'specimen': {
-      const specimens = Array.from(new Set((snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(s => s)));
+      const specimens = Array.from(new Set((snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)));
       doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(BLUE);
       doc.text('Specimen(s) :', x, y); y += 12;
       if (specimens.length) {
@@ -1628,7 +1635,7 @@ function drawPatientBlockFourCol(
     snap.patient?.sex ?? ''
   ].filter(Boolean).join(' / ');
   const specimens = Array.from(new Set(
-    (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(s => s.length > 0)
+    (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)
   )).join(', ');
 
   doc.setFillColor('#f8fafc');
@@ -1691,7 +1698,7 @@ function drawPatientBlockStacked(
     snap.patient?.sex ?? ''
   ].filter(Boolean).join(' / ');
   const specimens = Array.from(new Set(
-    (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(s => s.length > 0)
+    (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)
   )).join(', ');
 
   const rows: { label: string; value: string }[] = [];
@@ -2707,7 +2714,8 @@ function renderGridSection(
   ];
 
   // Prefer the snapshot's sampleType; fall back to the layout's.
-  const sampleTypeLine = ((t.sampleType ?? layout.sampleType) ?? '').trim();
+  const rawSampleTypeLine = ((t.sampleType ?? layout.sampleType) ?? '').trim();
+  const sampleTypeLine = isConcreteSpecimen(rawSampleTypeLine) ? rawSampleTypeLine : '';
 
   const body: RowCell[][] = rows.map((r): RowCell[] => {
     if (r.isMerged) {
@@ -2963,7 +2971,8 @@ function renderLegacyTest(
   const values = t.result?.['values'] as Record<string, { value?: unknown; flag?: string; range?: string; unit?: string }> | undefined;
   type LCell = { content: string; styles?: Record<string, unknown> };
   const tableRows: LCell[][] = [];
-  const sampleTypeLine = (t.sampleType ?? '').trim();
+  const rawSampleType = (t.sampleType ?? '').trim();
+  const sampleTypeLine = isConcreteSpecimen(rawSampleType) ? rawSampleType : '';
   const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
   const entries = (values ? Object.entries(values) : [])
     .filter(([paramName]) => !hiddenNames.has(paramName));
@@ -3022,6 +3031,7 @@ function renderLegacyTest(
 // ──────────────────────────────────────────────────────────────
 
 interface PdfAst { name?: string; interpretation?: string }
+
 interface PdfOrganism { name?: string; antibiotics?: PdfAst[] }
 interface PdfStageSnap {
   key?: string; label?: string; caseLabel?: string | null;
@@ -3044,6 +3054,14 @@ function renderCultureSection(
   if (y > A4.h - MARGIN_BOTTOM - 90) { y = newPage(doc, practice); }
 
   drawTestHeading(doc, t.name ?? 'Culture & Sensitivity', y);
+  // Sample ID rides the heading line right-aligned — the same tie-back every
+  // other department block prints, which the culture section was missing.
+  if ((t.sampleId ?? '').trim()) {
+    doc.setFont(PDF_FONT, 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(TEXT_DIM);
+    doc.text(`Sample ID: ${t.sampleId}`, A4.w - MARGIN_X, y + 14, { align: 'right' });
+  }
   // 34, not 26: the heading's hairline sits at y+22 and the first label's
   // cap-height reached up into it ("SPECIMEN:" printed struck-through).
   y += 34;
@@ -3090,10 +3108,20 @@ function renderCultureSection(
   const organismNames = organisms.map(({ o }, n) => `${n + 1}. ${orgLabel(o, n)}`).join('   ');
   const hasAstOrganisms = (c.organisms ?? []).some(o => (o.name ?? '').trim());
 
+  /** The specimen actually SELECTED for this case. Falls back to the test's
+   *  own specimen only when it's a concrete one — an unselected specimen
+   *  must not print at all (see isConcreteSpecimen). */
+  const specimenText = (): string => {
+    const chosen = (c.specimen ?? '').trim();
+    if (chosen) return chosen;
+    const fromTest = (t.sampleType ?? '').trim();
+    return isConcreteSpecimen(fromTest) ? fromTest : '';
+  };
+
   /** Text for one culture data source — '' means "skip the line". */
   const sourceText = (src: string): string => {
     switch (src) {
-      case 'specimen':    return (c.specimen || (t.sampleType ?? '')) ?? '';
+      case 'specimen':    return specimenText();
       case 'gramStain':   return isRowHidden('gramStain') ? '' : ((c.gramStain ?? '').trim() || stageText('gram'));
       case 'growth':      return stageText('growth');
       case 'id':          return stageText('id', { skipOrganisms: hasAstOrganisms });
@@ -3208,7 +3236,8 @@ function renderCultureSection(
   //    Note: the legacy values.gramStain line and the bench gram STAGE line
   //    are printed independently (pre-layout behaviour, spec-locked) — the
   //    either/or collapse in sourceText('gramStain') is layout-mode only. ──
-  line('Specimen', sourceText('specimen'));
+  const specimenLine = sourceText('specimen');
+  if (specimenLine) line('Specimen', specimenLine);
   if (!isRowHidden('gramStain') && (c.gramStain ?? '').trim()) line('Gram stain', c.gramStain ?? '');
   const colony = sourceText('colonyCount');
   if (colony) line('Colony count', colony);

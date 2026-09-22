@@ -26,7 +26,8 @@ interface StageSnap {
 
 function renderCulture(values: CultureValues, hidden?: string[], stages?: StageSnap[],
                        deptSignatures?: Array<{ department?: string; signatures?: Array<{ name?: string; title?: string }> }>,
-                       layoutSections?: Array<Record<string, unknown>>): string {
+                       layoutSections?: Array<Record<string, unknown>>,
+                       extra?: { sampleType?: string | null; sampleId?: string }): string {
   const snap = {
     patient: { displayName: 'Test Patient', age: 30, sex: 'M' },
     order: { id: 'o1', orderNumber: 'LAB-2609-000001', createdAt: '2026-09-19T00:00:00Z' },
@@ -38,7 +39,8 @@ function renderCulture(values: CultureValues, hidden?: string[], stages?: StageS
       packageTestId: null,
       packageType: null,
       department: 'Microbiology',
-      sampleType: 'Urine',
+      sampleType: extra && 'sampleType' in extra ? extra.sampleType : 'Urine',
+      ...(extra?.sampleId ? { sampleId: extra.sampleId } : {}),
       result: { microFormat: 'culture_sensitivity', values,
                 ...(hidden ? { hidden } : {}), ...(stages ? { stages } : {}) },
     }],
@@ -161,5 +163,47 @@ describe('culture report-row visibility', () => {
     expect(text).not.toContain('RESISTPATVAL');
     expect(text).toContain('COLONYVAL');
     expect(text).toContain('CLINNOTEVAL');
+  });
+});
+
+describe('culture specimen line & sample id (owner, 2026-09-22)', () => {
+  it('prints the case-selected specimen', () => {
+    const text = renderCulture({ ...VALUES, specimen: 'SPECIMENVAL' });
+    expect(text).toContain('SPECIMENVAL');
+  });
+
+  it('falls back to a CONCRETE test specimen when none was selected', () => {
+    const text = renderCulture({ ...VALUES, specimen: undefined }, undefined, undefined, undefined, undefined,
+      { sampleType: 'Sputum' });
+    expect(text).toContain('SPECIMEN');
+    expect(text).toContain('Sputum');
+  });
+
+  it('omits the SPECIMEN line entirely when nothing was selected and the test carries only a mapping placeholder', () => {
+    const text = renderCulture({ ...VALUES, specimen: undefined }, undefined, undefined, undefined, undefined,
+      { sampleType: 'As per Test-Specimen Mapping' });
+    expect(text).not.toContain('SPECIMEN');
+    expect(text).not.toContain('As per Test');
+  });
+
+  it('omits the SPECIMEN line in LAYOUT mode too', () => {
+    const sections = [
+      { id: 's1', type: 'culture_line', content: 'specimen', isVisible: true },
+      { id: 'a1', type: 'culture_ast', isVisible: true },
+    ];
+    const text = renderCulture({ ...VALUES, specimen: undefined }, undefined, undefined, undefined, sections,
+      { sampleType: 'As applicable' });
+    expect(text).not.toContain('SPECIMEN');
+    expect(text).toContain('Amikacin');   // rest of the section still prints
+  });
+
+  it('prints the tube Sample ID on the culture heading like every other department block', () => {
+    const text = renderCulture(VALUES, undefined, undefined, undefined, undefined, { sampleId: '26042' });
+    expect(text).toContain('Sample ID: 26042');
+  });
+
+  it('no sample id in the snapshot → no Sample ID text', () => {
+    const text = renderCulture(VALUES);
+    expect(text).not.toContain('Sample ID:');
   });
 });

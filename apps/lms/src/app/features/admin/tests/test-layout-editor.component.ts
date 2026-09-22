@@ -444,6 +444,14 @@ const OPERATORS = [
               }
               @if (s.type === 'culture_ast') {
                 <p class="pf-le-tip">Per-organism antimicrobial tables + the S/R/M legend. Content comes from the bench AST stage — the bench's row checkboxes still hide individual antibiotics or organisms.</p>
+                <!-- The exact legend the PDF prints under the AST tables — shown
+                     here so the print-order surface carries the full picture. -->
+                <div class="pf-le-legend">
+                  <p>S - Sensitive (clinically effective at standard therapeutic dose)</p>
+                  <p>R - Resistant (clinically ineffective at standard or increased dose)</p>
+                  <p>M - Intermediate (may be effective at higher dose or in concentrated body sites)</p>
+                  <p>Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.</p>
+                </div>
               }
 
               <!-- ── CHART SECTION ── -->
@@ -1331,6 +1339,18 @@ const OPERATORS = [
     .pf-le-cond-block__hdr {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 8px;
+    }
+
+    .pf-le-legend {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border: 1px dashed var(--glass-border, rgba(148,163,184,0.3));
+      border-radius: 8px;
+    }
+    .pf-le-legend p {
+      margin: 0;
+      font-size: 11px; line-height: 1.6;
+      color: var(--text-tertiary, #94a3b8);
     }
 
     .pf-le-tip {
