@@ -287,21 +287,17 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
      * would notice, and there are none. */
       .pf-chrome {
         position: sticky;
-        /* The body element in styles.scss already absorbs
-           env(safe-area-inset-top) globally for Capacitor's full-bleed
-           WebView, so we DON'T add it again here — that was the source
-           of the ~60px extra empty space on iPad. Plain 8px sticky
-           offset is enough. */
-        top: 8px;
+        /* Designer navbar (Figma 446-113): a FLUSH full-width bar — no
+           floating-pill margin, radius, or gap; content (the hero band)
+           sits directly against its bottom edge. */
+        top: 0;
         z-index: 40;
         flex-shrink: 0;
-        /* Tight 4px gap below the status bar — the body already owns
-           the safe-area-inset-top, so the chrome just needs a hair of
-           breathing room, not a big margin. */
-        margin: 4px 16px 0;
-        border-radius: 24px;
+        margin: 0;
+        border-radius: 0;
         background: var(--header-bg);
-        border: 1px solid var(--header-border);
+        border: none;
+        border-bottom: 1px solid var(--header-border);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
       }

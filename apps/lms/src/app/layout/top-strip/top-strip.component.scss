@@ -2,9 +2,10 @@
  * inside it can adopt a consistent vertical rhythm. Padding + children
  * (44px pills) = 64px exact. */
 .pf-topstrip-bar {
-  min-height: 64px;
-  padding: 10px 16px 10px 12px;
-  gap: 8px;
+  /* Designer bar: 53px, 20px side padding (Figma 446-113). */
+  min-height: 53px;
+  padding: 6px 20px;
+  gap: 12px;
 }
 @media (max-width: 639px) {
   /* On mobile, reduce padding and gap so brand + tenant + bell + avatar

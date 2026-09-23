@@ -18,3 +18,125 @@
 }
 @media (min-width: 768px) { .pf-page__header { --pf-hb-bleed: 2rem; } }
 @media (min-width: 1024px) { .pf-page__header { --pf-hb-bleed: 2.5rem; } }
+
+/* ══ Designer light skin — exact card & row anatomy (Figma 446-113) ══
+   Values pulled from the frame's design context, applied to the live
+   widgets' class hooks. Light theme only; dark keeps the glass look. */
+:host-context(.light) {
+  /* Page: the frame's white → blush vertical gradient. */
+  .pf-page {
+    background: linear-gradient(to top, #fcf8fe 0%, #fff8ff 55%, #ffffff 100%);
+    min-height: 100vh;
+  }
+
+  /* Panels: white/80 r20 with the violet-tinted hairline shadow + the
+     designer's wave footer riding the card bottom. */
+  .pf-appt-split__pane {
+    background: rgba(255, 255, 255, 0.8);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 1px 2px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(124, 58, 237, 0.15);
+    position: relative;
+  }
+  .pf-appt-split__pane::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0; height: 80px;
+    background: url('/design/card-wave-left.svg') no-repeat bottom center / 100% 80px;
+    border-radius: 0 0 20px 20px;
+    pointer-events: none;
+  }
+
+  /* Header strip: #f8f8f8, 49px, hairline. */
+  .pf-appt-split__hdr {
+    background: #f8f8f8;
+    border-bottom: 1px solid #fbf9fe;
+    min-height: 49px;
+    border-radius: 20px 20px 0 0;
+  }
+  .pf-appt-split__link--left-icon {
+    background: #eee1fd;
+    border: 1px solid #ecd8ff;
+    border-radius: 8px;
+    width: 28px; height: 28px;
+    color: #7c3aed;
+  }
+
+  /* Section tabs (APPOINTMENTS · IN PROGRESS · COMPLETED · PAYMENTS DUE):
+     quiet capitalized 12px; active = white pill w/ #ecd8ff hairline,
+     violet text; counts in JetBrains Mono chips. */
+  .pf-tabs__btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    padding: 5px 12px;
+    font-size: 12px; font-weight: 500; letter-spacing: 0.69px;
+    color: #6b7280;
+    text-transform: capitalize;
+  }
+  .pf-tabs__btn--on {
+    background: #ffffff;
+    border-color: #ecd8ff;
+    color: #8749ee;
+  }
+  .pf-tabs__count {
+    background: #ffffff;
+    border: 1px solid #f0f1f3;
+    border-radius: 9999px;
+    padding: 1px 7px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.69px;
+    color: #6b7280;
+  }
+  .pf-tabs__btn--on .pf-tabs__count { background: #f8f2ff; border-color: transparent; color: #7c3aed; }
+
+  /* Date-range strip (Yesterday · Today · Tomorrow · Custom). */
+  .pf-hdr-date-pills { background: #ffffff; border-radius: 20px; padding: 2px; }
+  .pf-hdr-date-pill {
+    background: transparent; border: none; border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; color: #4c4a63;
+  }
+  .pf-hdr-date-pill--on {
+    background: #ffffff; border-radius: 10px; color: #7c3aed; font-weight: 500;
+    box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+  }
+
+  /* Day strip: 73×40 white shadow tiles; active = violet text + #eee1fd ring. */
+  .pf-daystrip__day {
+    background: #ffffff; border: 1px solid transparent; border-radius: 12px;
+    min-width: 73px; height: 40px;
+    box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+  }
+  .pf-daystrip__dow { font-size: 12px; letter-spacing: 0.76px; text-transform: uppercase; color: #9ca3af; }
+  .pf-daystrip__n { font-size: 14px; font-weight: 500; color: #6b7280; }
+  .pf-daystrip__day--on { border-color: #eee1fd; }
+  .pf-daystrip__day--on .pf-daystrip__dow,
+  .pf-daystrip__day--on .pf-daystrip__n { color: #7c3aed; }
+
+  /* Rows: #fbf9fe r12 soft-shadow cards; 12px medium names; the design
+     carries a plain 20px select circle, no avatar. */
+  .pf-card {
+    background: #fbf9fe;
+    border: none; border-radius: 12px;
+    box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
+  }
+  .pf-card__name { font-size: 12px; font-weight: 500; color: #4b5563; }
+  .pf-card__meta { font-size: 12px; color: #6b7280; }
+  .pf-card pf-avatar { display: none; }
+  .pf-card__sel {
+    width: 20px; height: 20px;
+    border: 1px solid #9ca3af;
+    background: rgba(246, 244, 252, 0.55);
+  }
+
+  /* Row action buttons → the frame's violet-outline "Collect →" anatomy. */
+  .pf-ghostbtn {
+    background: #ffffff;
+    border: 1px solid #7c3aed;
+    border-radius: 8px;
+    color: #7c3aed;
+    height: 24px; padding: 0 12px;
+    font-size: 12px; font-weight: 600;
+  }
+  .pf-ghostbtn:hover { background: #f8f2ff; }
+}
