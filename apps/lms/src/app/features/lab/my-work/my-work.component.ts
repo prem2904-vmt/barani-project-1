@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -2213,10 +2214,35 @@ const COUNTERS: CounterSpec[] = [
 })
 export class MyWorkComponent implements OnInit {
   private readonly api = inject(ApiService);
+  /** Bottom-bar draft shelf: tubes with saved-but-unsubmitted results. */
+  private readonly draftShelf = inject(DraftShelfService);
+  private readonly _draftShelfSync = effect(() => {
+    const bySample = new Map<string, { barcode: string; patient: string; draft: boolean; allDone: boolean }>();
+    for (const t of this._rows()) {
+      const sid = t.subOrder?.id ?? t.id;
+      const e = bySample.get(sid) ?? {
+        barcode: t.subOrder?.barcode ?? sid,
+        patient: t.subOrder?.order?.patient?.displayName ?? '',
+        draft: false, allDone: true,
+      };
+      if (t.status === 'in_progress' && !!t.currentResult) e.draft = true;
+      if (t.status !== 'entered' && t.status !== 'validated') e.allDone = false;
+      bySample.set(sid, e);
+    }
+    this.draftShelf.publish(this, Array.from(bySample.entries())
+      .filter(([, e]) => e.draft && !e.allDone)
+      .map(([sid, e]) => ({
+        id: 'lab:' + sid,
+        label: e.barcode,
+        sub: e.patient,
+        link: ['/lab/sample', sid] as const,
+      })));
+  });
   /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
   readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly _draftShelfCleanup = (() => { this.destroyRef.onDestroy(() => this.draftShelf.clear(this)); return true; })();
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);

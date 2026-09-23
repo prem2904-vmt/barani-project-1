@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { DraftShelfService } from '../../core/services/draft-shelf.service';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
@@ -36,6 +37,9 @@ import { LANDINGS } from '../../core/auth/landing.guard';
 })
 export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
+  /** Bottom-bar draft shelf (published by the active work screen). */
+  protected readonly draftShelf = inject(DraftShelfService);
+  readonly draftsOpen = signal(false);
   protected readonly designMode = inject(DesignModeService);
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);

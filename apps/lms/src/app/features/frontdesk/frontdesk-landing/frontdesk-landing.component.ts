@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { ThemeService } from '../../../core/services/theme.service';
+import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
@@ -154,6 +155,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  /** Bottom-bar draft shelf: publish this screen's parked order drafts. */
+  private readonly draftShelf = inject(DraftShelfService);
+  private readonly _draftShelfSync = effect(() => {
+    this.draftShelf.publish(this, this.draftOrders().map(d => ({
+      id: 'fd:' + d.patientId,
+      label: d.patient?.displayName || 'Patient',
+      sub: d.testIds.length + (d.testIds.length === 1 ? ' test' : ' tests'),
+      link: '/frontdesk/order',
+      queryParams: { patientId: d.patientId },
+    })));
+  });
   private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
   private readonly sanitizer = inject(DomSanitizer);
@@ -1128,6 +1140,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       .subscribe(() => this.hydrateApsFromUrl());
   }
   ngOnDestroy() {
+    this.draftShelf.clear(this);
     if (this.pollHandle) clearInterval(this.pollHandle);
     if (this.seriesClock) { clearInterval(this.seriesClock); this.seriesClock = null; }
     this.closeInvoicePreview();
