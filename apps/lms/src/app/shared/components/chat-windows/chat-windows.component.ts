@@ -5,6 +5,9 @@ import { ChatService } from '../../../core/services/chat.service';
 import { ChatWindowsService } from '../../../core/services/chat-windows.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { SignalingService } from '../../../core/services/signaling.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { WebrtcService } from '../../../core/services/webrtc.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { Conversation } from '../../models/chat.model';
 import { conversationInitials, conversationTitle } from '../../models/conversation-name';
@@ -32,6 +35,17 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
             <header class="pf-cw__hdr">
               <span class="pf-cw__init">{{ initials(c) }}</span>
               <span class="pf-cw__name">{{ title(c) }}</span>
+              @if (peerOf(c); as peer) {
+                <button type="button" class="pf-cw__icon press"
+                        [disabled]="!isOnline(peer) || webrtc.inCall()"
+                        [title]="!isOnline(peer) ? 'Offline' : webrtc.inCall() ? 'Already in a call' : 'Voice call'"
+                        (click)="call(c); $event.stopPropagation()" aria-label="Voice call">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/>
+                  </svg>
+                </button>
+              }
               <button type="button" class="pf-cw__icon press" (click)="windowsSvc.minimize(c.id); $event.stopPropagation()"
                       aria-label="Minimize chat">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -148,7 +162,8 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       background: transparent; border: none; cursor: pointer;
       color: var(--text-secondary);
     }
-    .pf-cw__icon:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .pf-cw__icon:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+    .pf-cw__icon:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .pf-cw__init {
       display: inline-flex; align-items: center; justify-content: center;
@@ -248,6 +263,9 @@ export class ChatWindowsComponent {
   private readonly auth = inject(AuthService);
   private readonly process = inject(ProcessWorkflowService);
   private readonly entitlements = inject(TenantEntitlementsService);
+  protected readonly webrtc = inject(WebrtcService);
+  private readonly signaling = inject(SignalingService);
+  private readonly toasts = inject(ToastService);
 
   /** Chat only exists when the workflow says Messages is part of this
    *  tenant's process — same rule the bar's Messages icon uses. */
@@ -275,6 +293,31 @@ export class ChatWindowsComponent {
   }
 
   protected title(c: Conversation): string { return conversationTitle(c, this.meId()); }
+
+  /** The other participant of a 1:1 thread — groups have no call target. */
+  protected peerOf(c: Conversation): { userId: string; displayName: string } | null {
+    if (c.isGroup) return null;
+    const me = this.meId();
+    return c.participants?.find(p => p.userId !== me) ?? null;
+  }
+
+  protected isOnline(peer: { userId: string }): boolean {
+    return this.signaling.onlineUserIds().has(peer.userId);
+  }
+
+  /** Voice call the thread's peer — same path the people drawer uses, so
+   *  the existing global call overlay takes over from here. */
+  protected async call(c: Conversation): Promise<void> {
+    const peer = this.peerOf(c);
+    if (!peer) return;
+    if (!this.isOnline(peer)) { this.toasts.info(`${peer.displayName} is offline.`); return; }
+    try {
+      await this.webrtc.startCall(peer.userId, 'admin_internal');
+      this.toasts.info(`Ringing ${peer.displayName}…`);
+    } catch (err) {
+      this.toasts.error((err as Error).message ?? 'Could not start call.');
+    }
+  }
   protected initials(c: Conversation): string { return conversationInitials(c, this.meId()); }
 
   protected send(conversationId: string, box: HTMLInputElement): void {
