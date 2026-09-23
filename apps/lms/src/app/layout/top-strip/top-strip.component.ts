@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ChatDockService } from '../../core/services/chat-dock.service';
 import { ChatWindowsService } from '../../core/services/chat-windows.service';
+import { DirectoryService, DirectoryUser } from '../../core/services/directory.service';
+import { MessagesPanelService } from '../../core/services/messages-panel.service';
 import { conversationInitials, conversationTitle } from '../../shared/models/conversation-name';
 import { Conversation } from '../../shared/models/chat.model';
 import { DraftShelfService } from '../../core/services/draft-shelf.service';
@@ -58,8 +60,61 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  people/chat drawer; the Messages PAGE leaves the nav. */
   protected readonly peopleDrawer = inject(PeopleDrawerService);
   protected readonly chatDock = inject(ChatDockService);
-  /** Messages dropdown (bell-style panel) open state. */
-  readonly msgsOpen = signal(false);
+  protected readonly directory = inject(DirectoryService);
+  /** Messages panel open state — shared so the windows' compose button
+   *  can raise the same list. */
+  protected readonly msgsPanel = inject(MessagesPanelService);
+  /** Free-text filter across conversations + tenant people. */
+  readonly msgQuery = signal('');
+
+  /** Everyone in the tenant I can start a chat with, minus the people I
+   *  already have a 1:1 thread with (those show under Recent). */
+  readonly msgPeople = computed(() => {
+    const q = this.msgQuery().trim().toLowerCase();
+    const inThreads = new Set(this.chat.conversations()
+      .filter(c => !c.isGroup)
+      .flatMap(c => c.participants?.map(p => p.displayName.toLowerCase()) ?? []));
+    return this.directory.others()
+      .filter(u => !inThreads.has(u.displayName.toLowerCase()))
+      .filter(u => !q || u.displayName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  });
+
+  /** Existing conversations, filtered by the same query. */
+  readonly msgConversations = computed(() => {
+    const q = this.msgQuery().trim().toLowerCase();
+    const list = this.chat.conversations();
+    return q ? list.filter(c => this.convoTitle(c).toLowerCase().includes(q)) : list;
+  });
+
+  /** Initials for a directory person — same rule as conversations. */
+  personInitials(u: DirectoryUser): string {
+    const words = (u.displayName || '?').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    const first = words[0][0] ?? '';
+    const last = words.length > 1 ? (words[words.length - 1][0] ?? '') : '';
+    return (first + last).toUpperCase() || '?';
+  }
+
+  /** Start (or reopen) a 1:1 thread with a tenant person. */
+  async openPerson(u: DirectoryUser): Promise<void> {
+    this.msgsPanel.close();
+    try {
+      const convId = await this.chat.openDirectConversation(u.id);
+      this.chatDock.add(convId);
+      if (this.themeService.isNewDesign() && this.chatWindows.capacity() > 0) {
+        this.chatWindows.openWindow(convId);
+        void this.chat.loadThread(convId);
+      } else {
+        this.peopleDrawer.openIt();
+      }
+    } catch { /* toast already surfaced by the API layer */ }
+  }
+
+  /** Open the Messages panel and make sure the people list is loaded. */
+  toggleMsgs(): void {
+    this.msgsPanel.toggle();
+    if (this.msgsPanel.open()) void this.directory.load();
+  }
 
   private readonly chatWindows = inject(ChatWindowsService);
   private meId(): string { return this.auth.user()?.authId ?? this.auth.user()?.id ?? ''; }
@@ -82,7 +137,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
    */
   openConvo(c: Conversation): void {
     this.chatDock.add(c.id);
-    this.msgsOpen.set(false);
+    this.msgsPanel.close();
     if (this.themeService.isNewDesign() && this.chatWindows.capacity() > 0) {
       this.chatWindows.openWindow(c.id);
       void this.chat.loadThread(c.id);

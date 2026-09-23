@@ -1440,3 +1440,26 @@ a.pf-ts-tenant:hover {
   .pf-chatdock__name { display: none; }
   .pf-chatdock__chip { padding: 0 6px 0 2px; }
 }
+
+/* Messages panel: search + section labels for the people list. */
+.pf-msgs-pop__search {
+  display: flex; align-items: center; gap: 8px;
+  margin: 2px 6px 6px;
+  padding: 0 10px; height: 32px;
+  border-radius: 9999px;
+  background: var(--bg-input, transparent);
+  border: 1px solid var(--input-border, var(--border-muted));
+  color: var(--text-muted);
+}
+.pf-msgs-pop__search input {
+  flex: 1; min-width: 0;
+  border: none; outline: none; background: transparent;
+  font-size: 12.5px; font-family: inherit; color: var(--text-primary);
+}
+.pf-msgs-pop__sect {
+  margin: 6px 12px 2px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}

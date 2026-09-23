@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ChatWindowsService } from '../../../core/services/chat-windows.service';
+import { MessagesPanelService } from '../../../core/services/messages-panel.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { Conversation } from '../../models/chat.model';
 import { conversationInitials, conversationTitle } from '../../models/conversation-name';
@@ -23,7 +24,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
   imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (theme.isNewDesign() && windows().length + heads().length > 0) {
+    @if (theme.isNewDesign()) {
       <div class="pf-cw">
         @for (c of windows(); track c.id) {
           <section class="pf-cw__win" (click)="windowsSvc.focus(c.id)">
@@ -75,19 +76,28 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
           </section>
         }
 
-        @if (heads().length) {
-          <div class="pf-cw__rail">
-            @for (c of heads(); track c.id) {
-              <button type="button" class="pf-cw__head press" (click)="windowsSvc.openWindow(c.id)"
-                      [title]="title(c)" [attr.aria-label]="'Open chat with ' + title(c)">
-                <span class="pf-cw__init">{{ initials(c) }}</span>
-                @if (c.unreadCount > 0) {
-                  <span class="pf-cw__head-badge">{{ c.unreadCount > 9 ? '9+' : c.unreadCount }}</span>
-                }
-              </button>
+      </div>
+
+      <!-- Head rail — minimized chats stacked VERTICALLY at the right
+           edge (the owner's Facebook reference), newest on top, with the
+           compose button pinned at the bottom. -->
+      <div class="pf-cw__rail">
+        @for (c of heads(); track c.id) {
+          <button type="button" class="pf-cw__head press" (click)="windowsSvc.openWindow(c.id)"
+                  [title]="title(c)" [attr.aria-label]="'Open chat with ' + title(c)">
+            <span class="pf-cw__init">{{ initials(c) }}</span>
+            @if (c.unreadCount > 0) {
+              <span class="pf-cw__head-badge">{{ c.unreadCount > 9 ? '9+' : c.unreadCount }}</span>
             }
-          </div>
+          </button>
         }
+        <button type="button" class="pf-cw__head pf-cw__compose press" (click)="msgsPanel.show()"
+                title="New message" aria-label="New message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+          </svg>
+        </button>
       </div>
     }
   `,
@@ -95,7 +105,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     /* Dock: bottom-right, above the app bar when it's docked there. */
     .pf-cw {
       position: fixed;
-      right: 16px;
+      right: 76px;                 /* clear of the head rail */
       bottom: calc(var(--pf-botbar-h, 0px) + 12px);
       z-index: 48;
       display: flex;
@@ -104,7 +114,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       pointer-events: none;
     }
     .pf-cw > * { pointer-events: auto; }
-    @media (max-width: 767px) { .pf-cw { display: none; } }
+    @media (max-width: 767px) { .pf-cw, .pf-cw__rail { display: none !important; } }
 
     .pf-cw__win {
       width: 330px;
@@ -198,8 +208,19 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     }
     .pf-cw__send:hover { background: rgba(124, 58, 237, 0.1); }
 
-    /* Minimized heads rail — stacked at the right edge. */
-    .pf-cw__rail { display: flex; flex-direction: column-reverse; gap: 8px; }
+    /* Minimized heads rail — a fixed vertical column hugging the right
+       edge; heads stack upward, compose sits at the bottom. */
+    .pf-cw__rail {
+      position: fixed;
+      right: 14px;
+      bottom: calc(var(--pf-botbar-h, 0px) + 12px);
+      z-index: 48;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .pf-cw__compose { color: var(--text-secondary); }
+    .pf-cw__compose:hover { color: #7c3aed; border-color: rgba(124, 58, 237, 0.55); }
     .pf-cw__head {
       position: relative;
       width: 44px; height: 44px; border-radius: 9999px;
@@ -224,6 +245,7 @@ export class ChatWindowsComponent {
   protected readonly theme = inject(ThemeService);
   protected readonly chat = inject(ChatService);
   protected readonly windowsSvc = inject(ChatWindowsService);
+  protected readonly msgsPanel = inject(MessagesPanelService);
   private readonly auth = inject(AuthService);
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
 
