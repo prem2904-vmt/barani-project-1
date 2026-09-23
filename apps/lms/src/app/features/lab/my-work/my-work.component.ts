@@ -64,7 +64,7 @@ const COUNTERS: CounterSpec[] = [
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-5 md:px-8 lg:px-10 pt-4 pb-3">
+    <section class="pf-mw-page px-5 md:px-8 lg:px-10 pt-4 pb-3">
 
       <!-- Common hero search (designer band): intake receive — scan or type
            a sample ID and Enter receives it into the lab. New design only;

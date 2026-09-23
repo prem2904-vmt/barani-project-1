@@ -239,6 +239,31 @@
   --seg-track: rgba(124, 58, 237, 0.08);
 }
 
+/* NEW design: the hero band rides flush under the navbar on EVERY band
+   screen (owner: same seamless seam we fixed on frontdesk). Each wrapper
+   zeroes its top padding and hands the band its horizontal padding as
+   the full-bleed amount. Classic keeps the original breathing room. */
+:root.design-new .pf-mw-page,
+:root.design-new .pf-sc-page,
+:root.design-new .pf-rs-page,
+:root.design-new .pv-page {
+  padding-top: 0 !important;
+}
+:root.design-new .pf-mw-page { --pf-hb-bleed: 1.25rem; }
+:root.design-new .pf-sc-page,
+:root.design-new .pf-rs-page,
+:root.design-new .pv-page { --pf-hb-bleed: 1rem; }
+@media (min-width: 768px) {
+  :root.design-new .pf-mw-page,
+  :root.design-new .pf-sc-page,
+  :root.design-new .pf-rs-page,
+  :root.design-new .pv-page { --pf-hb-bleed: 2rem; }
+}
+@media (min-width: 1024px) {
+  :root.design-new .pf-mw-page,
+  :root.design-new .pf-sc-page { --pf-hb-bleed: 2.5rem; }
+}
+
 /* NEW design, light theme — designer avatar anatomy (Figma 452-3):
    flat soft-violet disc with violet initials, replacing the saturated
    per-name gradient (which is inline style, hence the !important). */

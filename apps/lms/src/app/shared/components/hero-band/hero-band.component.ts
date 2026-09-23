@@ -31,8 +31,17 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     <div class="pf-hb">
       <div class="pf-hb__band">
         <div class="pf-hb__tenant">
-          <span class="pf-hb__avatar" aria-hidden="true">{{ tenantInitial() }}</span>
-          <span class="pf-hb__name">{{ tenantName() }}</span>
+          <!-- Real tenant branding (same resolution as the classic bar chip):
+               admin-uploaded logo when branding allows it, initial disc
+               otherwise; name honors brandingName + mode. -->
+          @if (showLogo() && tenantLogo()) {
+            <img class="pf-hb__logo" [src]="tenantLogo()!" [alt]="tenantName()" />
+          } @else {
+            <span class="pf-hb__avatar" aria-hidden="true">{{ tenantInitial() }}</span>
+          }
+          @if (showName()) {
+            <span class="pf-hb__name">{{ brandingName() || tenantName() }}</span>
+          }
         </div>
         <div class="pf-hb__actions"><ng-content select="[band-actions]"></ng-content></div>
       </div>
@@ -81,6 +90,11 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     }
 
     .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .pf-hb__logo {
+      height: 30px; width: auto; max-width: 150px; flex-shrink: 0;
+      object-fit: contain; border-radius: 6px;
+      background: rgba(255, 255, 255, 0.8); padding: 2px 4px;
+    }
     .pf-hb__avatar {
       display: inline-flex; align-items: center; justify-content: center;
       width: 26px; height: 26px; border-radius: 9999px; flex-shrink: 0;
@@ -164,5 +178,14 @@ export class HeroBandComponent {
 
   readonly tenantName = computed(() =>
     this.tenantState.tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
-  readonly tenantInitial = computed(() => (this.tenantName().trim()[0] ?? 'P').toUpperCase());
+
+  /* Branding resolution — mirrors the classic bar's tenant chip: mode
+     defaults to 'both'; brandingName falls back to the official name. */
+  private readonly brandingMode = computed(() => this.tenantState.tenant()?.brandingMode ?? 'both');
+  readonly tenantLogo = computed(() => this.tenantState.tenant()?.logoUrl || null);
+  readonly brandingName = computed(() => this.tenantState.tenant()?.brandingName?.trim() || null);
+  readonly showLogo = computed(() => this.brandingMode() === 'logo' || this.brandingMode() === 'both');
+  readonly showName = computed(() => this.brandingMode() === 'name' || this.brandingMode() === 'both');
+  readonly tenantInitial = computed(() =>
+    ((this.brandingName() || this.tenantName()).trim()[0] ?? 'P').toUpperCase());
 }

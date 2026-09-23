@@ -30,6 +30,11 @@ import { NavBackService } from "../../core/services/nav-back.service";
     @media (hover: hover) {
       .pf-hdr-back:hover { background: var(--glass-bg, rgba(255, 255, 255, 0.06)); }
     }
+    /* NEW design (designer system): the hero band + navbar carry the page
+       context, so the big screen titles disappear app-wide. display:none
+       keeps the projected content mounted; back chip + actions stay. */
+    :host-context(.design-new) h1,
+    :host-context(.design-new) .pf-hdr-subtitle { display: none; }
   `],
   template: `
     <!-- Title and actions share one row on every width. The title sits in its
@@ -75,7 +80,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
         <!--
         @if (subtitle) {
           <p
-            class="mt-1.5 md:mt-2 text-[14px] md:text-[15px] max-w-[720px]"
+            class="pf-hdr-subtitle mt-1.5 md:mt-2 text-[14px] md:text-[15px] max-w-[720px]"
             style="color: var(--text-secondary);"
           >
             {{ subtitle }}

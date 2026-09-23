@@ -7,6 +7,7 @@ import {
   signal,
 } from "@angular/core";
 import { DatePipe } from "@angular/common";
+import { ThemeService } from '../../core/services/theme.service';
 import { RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
 import { ApiService } from "../../core/services/api.service";
@@ -61,6 +62,9 @@ interface KpiCard {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-ov">
+      @if (!theme.isNewDesign()) {
+      <!-- NEW design drops the big page titles app-wide (the navbar carries
+           the context); classic keeps its greeting header. -->
       <header class="pf-ov__hdr">
         <div class="pf-ov__hdr-l">
           <p class="pf-ov__eyebrow">{{ today | date: "EEEE, MMM d" }}</p>
@@ -69,6 +73,7 @@ interface KpiCard {
           </h1>
         </div>
       </header>
+      }
 
       <!-- Admin search: one box that jumps to any config screen (item 140). -->
       <label class="pf-ov__search">
@@ -869,6 +874,8 @@ interface KpiCard {
 })
 export class AdminOverviewComponent implements OnInit {
   private readonly api = inject(ApiService);
+  /** Design gate: new design hides the big overview title. */
+  readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
 
