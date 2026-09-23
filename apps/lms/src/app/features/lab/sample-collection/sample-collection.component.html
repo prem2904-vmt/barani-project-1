@@ -112,10 +112,13 @@
                   @if (g.paymentHold) {
                     <span class="pf-sc__hold" title="Bill not settled — dispatch is blocked until it's paid">Unpaid</span>
                   }
-                  <!-- Waiting days stacked ABOVE the tube colours (owner): the
-                       days are what you track, the colours read as one shaded
-                       line under them. `display: contents` keeps classic's
-                       single row exactly as it was. -->
+                  <!-- The tube colours become the LINE ALONG THE TOP of the
+                       status block (owner) — a loading bar split evenly by
+                       vial: two tubes read 50/50, three read thirds. The
+                       waiting status sits under it as a dot + word, the
+                       frontdesk pattern. DOM order stays wait-then-rack so
+                       classic's single row (display: contents) is untouched;
+                       the new design flips it with column-reverse. -->
                   <div class="pf-sc__status">
                     @if (waitingLabel(g)) {
                       <span class="pf-sc__wait" [attr.data-tone]="waitingTone(g)">{{ waitingLabel(g) }}</span>
