@@ -42,24 +42,9 @@
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
     <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
 
-      <!-- Primary nav — Frontdesk … Messages. Moved to the RIGHT (icon-first:
-           active item shows its label, others expand on hover). Hidden below xl
-           so the bottom-nav is the only nav on mobile/iPad. -->
-      <nav class="pf-topnav-center hidden xl:flex">
-        @for (n of primary(); track n.id) {
-        <a [routerLink]="n.href" routerLinkActive="pf-topnav-active" [routerLinkActiveOptions]="{ exact: !!n.exact }"
-          class="pf-topnav-btn press" [title]="n.label" [attr.aria-label]="n.label">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
-            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            @for (p of n.iconPath; track p) {
-            <path [attr.d]="p" />
-            }
-          </svg>
-          <span>{{ n.label }}</span>
-        </a>
-        }
-      </nav>
-
+      <!-- Designer navbar (Figma 446-113): the bar carries ONLY branch pill,
+           bell and avatar. The work-area nav moved into the avatar menu
+           (below) until the designer draws a navigation treatment. -->
       @if (tenantLoaded()) {
         <!-- Branch selector — kept on the top strip so route context stays
              visible without a second navbar. md+ only. Hidden entirely (with its
@@ -111,27 +96,6 @@
         }
       }
 
-      <!-- Admin (settings) — icon button next to the bell. Only renders
-           for users with at least one manage_* permission so reception
-           / lab techs don't see it. Replaces the previous top-nav
-           "Admin" tab to keep the main bar focused on workflows. -->
-      @if (showAdmin()) {
-        <!-- Desktop only (≥1280px). On mobile + iPad the bottom-nav
-             already shows an Admin button, so duplicating it in the
-             top strip would just be visual noise. The top-strip nav
-             itself is also hidden below xl, so this aligns with that
-             cutoff and keeps the right cluster clean on touch
-             viewports. -->
-        <a routerLink="/admin" routerLinkActive="pf-icon-btn--active"
-           class="pf-icon-btn pf-icon-btn--xl-only press" aria-label="Admin settings" title="Admin">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
-          </svg>
-        </a>
-      }
-
       <pf-notification-bell></pf-notification-bell>
 
       <!-- Profile avatar — click to open name / role / logout -->
@@ -163,6 +127,32 @@
             </div>
           </header>
 
+          <div class="pf-profile-divider"></div>
+
+          <!-- Work areas — desktop navigation lives here now that the bar
+               mimics the designer's minimal navbar (no top nav pills). -->
+          @for (n of primary(); track n.id) {
+            <a [routerLink]="n.href" routerLinkActive="pf-profile-item--active"
+               [routerLinkActiveOptions]="{ exact: !!n.exact }"
+               class="pf-profile-item press" (click)="closeProfile()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                @for (p of n.iconPath; track p) { <path [attr.d]="p" /> }
+              </svg>
+              {{ n.label }}
+            </a>
+          }
+          @if (showAdmin()) {
+            <a routerLink="/admin" routerLinkActive="pf-profile-item--active"
+               class="pf-profile-item press" (click)="closeProfile()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
+              </svg>
+              Admin
+            </a>
+          }
           <div class="pf-profile-divider"></div>
 
           <!-- Presence status — current status row; tap to expand the 7
