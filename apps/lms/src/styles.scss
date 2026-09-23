@@ -2588,3 +2588,37 @@ html.pf-design-mode {
   }
   .pf-rq-iconbtn:hover { background: rgba(139, 92, 246, 0.14) !important; }
 }
+
+/* ══ NEW design: SECTION EYEBROWS on the theme font (owner).
+   "PENDING COLLECTION · 12 PATIENTS" and its siblings were wide-tracked
+   monospace caps — a different product's voice. They keep the caps but
+   move to the app font at the designer's tracking (~0.06em), so they sit
+   with the rest of the type ramp. Mono stays where it means something
+   (sample ids, counts, codes). Classic untouched. ══ */
+:root.design-new {
+  /* Named eyebrows across the daily screens. */
+  .pf-sc__section,
+  .pf-mw-pane__title,
+  .pf-cardpeek__h,
+  .pf-pane-hidden-row__lbl,
+  .pf-scan__label,
+  .pf-rej__label,
+  .pf-drawer__progress-lbl,
+  .pf-head__eyebrow,
+  .pf-ov__eyebrow,
+  .pf-brand-pop__eyebrow,
+  .pf-ts-branch__pop-eyebrow,
+  .pf-msgs-pop__head,
+  .pf-msgs-pop__sect,
+  .pf-profile-eyebrow,
+  /* Tailwind-composed eyebrows (text-[11px] font-mono uppercase tracking-…). */
+  [class*="tracking-[0.16em]"],
+  [class*="tracking-[0.18em]"],
+  [class*="tracking-[0.2em]"],
+  .font-mono.uppercase {
+    font-family: inherit !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.06em !important;
+  }
+}
