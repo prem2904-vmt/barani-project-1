@@ -122,11 +122,35 @@
   }
   .pf-card__name { font-size: 12px; font-weight: 500; color: #4b5563; }
   .pf-card__meta { font-size: 12px; color: #6b7280; }
+  /* Design carries no avatar — remove it AND its grid track, or every
+     child shifts into the empty 40px column (the collapsed-row bug). */
   .pf-card pf-avatar { display: none; }
+  .pf-card--ip,
+  .pf-card--token-layout { grid-template-columns: 22px 1fr auto auto; }
+  @container (max-width: 420px) {
+    .pf-card--ip,
+    .pf-card--token-layout { grid-template-columns: 1fr; }
+  }
   .pf-card__sel {
     width: 20px; height: 20px;
     border: 1px solid #9ca3af;
     background: rgba(246, 244, 252, 0.55);
+  }
+
+  /* Active date pill: the incumbent style painted its label white (it sat
+     on a violet fill) — force the designer's violet on white. */
+  .pf-hdr-date-pill--on,
+  .pf-hdr-date-pill--on * { color: #7c3aed !important; }
+
+  /* Department chips → the frame's quiet outline chip (status dot kept). */
+  .pf-card__dept {
+    background: #faf8fd !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 20px;
+    color: #6d6b84 !important;
+    font-family: 'Inter', inherit;
+    font-weight: 400;
+    letter-spacing: 0.42px;
   }
 
   /* Row action buttons → the frame's violet-outline "Collect →" anatomy. */
