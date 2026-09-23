@@ -8,6 +8,12 @@
       placeholder="Search by patient, MRN, phone, or order/report id…"
       [value]="query()"
       (valueChange)="setQuery($event)">
+      <ng-container band-tools>
+        <!-- Filters live INSIDE the search bar (owner): one control strip,
+             and the dots + counts legend the row colours right there. -->
+        <pf-segmented [options]="filterOptions()" [value]="filter()" size="sm"
+                      (valueChange)="setFilter($event)"></pf-segmented>
+      </ng-container>
       <ng-container band-actions>
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()">Refresh</button>
         <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="promptGenerate()">Generate</button>
@@ -138,7 +144,8 @@
     </div>
 
     <div class="mb-5">
-      <pf-segmented [options]="filterOptions()" [value]="filter()" size="md" (valueChange)="setFilter($event)">
+      <pf-segmented class="pf-classic-only" [options]="filterOptions()" [value]="filter()" size="md"
+                    (valueChange)="setFilter($event)">
       </pf-segmented>
 
       <!-- Phone-only (<=640px): the scrolling pill row becomes an

@@ -155,7 +155,9 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 
     .pf-hb__tools { display: flex; align-items: center; flex-shrink: 0; }
     /* Tool buttons (projected): divider before the group when present. */
-    .pf-hb__tools:not(:empty) { border-left: 1px solid #e5e7eb; margin-left: 4px; padding-left: 8px; gap: 2px; }
+    .pf-hb__tools:not(:empty) { border-left: 1px solid #e5e7eb; margin-left: 4px; padding-left: 8px; gap: 6px; }
+    /* Filter strips ride in here too — keep them from stretching the pill. */
+    .pf-hb__tools pf-segmented { flex-shrink: 0; }
     :host-context(.dark) .pf-hb__tools:not(:empty),
     :host-context([data-theme='dark']) .pf-hb__tools:not(:empty) {
       border-left-color: var(--glass-border, rgba(255, 255, 255, 0.12));

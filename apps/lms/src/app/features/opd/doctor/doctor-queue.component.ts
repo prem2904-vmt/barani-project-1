@@ -51,6 +51,18 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
         placeholder="Search patient…"
         [value]="query()"
         (valueChange)="query.set($event)">
+        <ng-container band-tools>
+          <!-- Queue filters live INSIDE the search bar (owner). -->
+          <div class="dq-pills dq-pills--band" role="group" aria-label="Filter queue">
+            @for (f of filters; track f.key) {
+              <button type="button" class="dq-pill press" [class.dq-pill--on]="filter() === f.key"
+                      (click)="filter.set(f.key)">
+                {{ f.label }}
+                @if (f.key !== 'all') { <span class="dq-pill__n">{{ countOf(f.key) }}</span> }
+              </button>
+            }
+          </div>
+        </ng-container>
         <ng-container band-actions>
           <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="load()">Refresh</button>
         </ng-container>
@@ -67,7 +79,7 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
             Refresh
           </button>
         </div>
-        <div class="dq-pills" role="group" aria-label="Filter queue">
+        <div class="dq-pills pf-classic-only" role="group" aria-label="Filter queue">
           @for (f of filters; track f.key) {
             <button type="button" class="dq-pill press" [class.dq-pill--on]="filter() === f.key" (click)="filter.set(f.key)">
               {{ f.label }}
@@ -121,6 +133,8 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
     .dq-head { display: flex; align-items: center; gap: 12px; padding: 6px 0 4px; }
     .dq-title { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
     .dq-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-secondary); }
+    .dq-pills--band { margin: 0; flex-wrap: nowrap; }
+    .dq-pills--band .dq-pill { height: 28px; padding: 0 10px; font-size: 12px; }
     .dq-refresh { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px;
       border-radius: 9999px; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary);
       font-size: 12.5px; font-weight: 600; cursor: pointer; }
