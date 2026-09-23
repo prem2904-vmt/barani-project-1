@@ -91,7 +91,7 @@
                stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             @for (p of n.iconPath; track p) { <path [attr.d]="p" /> }
           </svg>
-          {{ n.label }}
+          <span class="pf-topnav-link__lbl">{{ n.label }}</span>
         </a>
       }
       @if (showAdmin()) {
@@ -102,7 +102,7 @@
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
           </svg>
-          Admin
+          <span class="pf-topnav-link__lbl">Admin</span>
         </a>
       }
     </nav>

@@ -1175,3 +1175,28 @@ a.pf-ts-tenant:hover {
   top: auto !important;
   bottom: calc(100% + 10px) !important;
 }
+
+/* Bottom-navbar experiment on tablet/phone: the centered nav can't float
+   absolutely (it would overlap brand + utilities) — it joins the flex row
+   and scrolls horizontally if cramped; labels drop on phones. */
+@media (max-width: 1279px) {
+  :host-context(.design-new.nav-bottom) .pf-topnav-center {
+    display: flex !important;
+    position: static;
+    transform: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  :host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
+}
+@media (max-width: 767px) {
+  :host-context(.design-new.nav-bottom) .pf-topnav-link { padding: 6px 9px; }
+  :host-context(.design-new.nav-bottom) .pf-topnav-link__lbl { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-topnav-link svg { width: 18px; height: 18px; }
+  /* Squeeze the ends so the pages get the room. */
+  :host-context(.design-new.nav-bottom) .pf-brand-text,
+  :host-context(.design-new.nav-bottom) .pf-brand-pulse { display: none; }
+}

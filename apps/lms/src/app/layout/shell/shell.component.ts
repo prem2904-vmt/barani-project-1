@@ -496,7 +496,28 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
           transform: translateX(0) scale(1);
         }
       }
-    `,
+    
+      /* ── Bottom-navbar experiment, ALL viewports (owner: same thing on
+         iPad and mobile; new design only, classic untouched). Placed
+         last so it out-cascades the ≤1279px display:none rules. ── */
+      :host-context(.design-new.nav-bottom) .pf-chrome {
+        display: block !important;
+        position: fixed;
+        left: 0; right: 0; bottom: 0; top: auto;
+        margin: 0;
+        border-radius: 0;
+        border: none;
+        border-top: 1px solid var(--header-border);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        z-index: 40;
+      }
+      /* One bottom surface only: the phone pill / iPad rail steps aside. */
+      :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }
+      :host-context(.design-new.nav-bottom) .shell-main {
+        padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+        padding-left: 0 !important;
+      }
+`,
   ],
 })
 export class ShellComponent {
