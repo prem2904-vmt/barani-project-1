@@ -27,9 +27,13 @@
           fill="url(#pfBrandGradient)" />
       </svg>
 
-      <!-- Designer navbar (Figma 446-113): clean glyph + wordmark only —
-           the pulse squiggle and LMS subtitle are gone, and the tenant no
-           longer rides the bar (it lives in each screen's hero band). -->
+      <!-- Designer navbar (Figma 446-113): glyph + heartbeat + wordmark —
+           the LMS subtitle stays gone, and the tenant no longer rides the
+           bar (it lives in each screen's hero band). -->
+      <svg class="pf-brand-pulse" viewBox="0 0 56 24" fill="none" aria-hidden="true">
+        <path class="pf-brand-pulse-path" d="M0,12 L8,12 L16,3 L24,21 L32,8 L38,16 L44,12 L56,12" />
+      </svg>
+
       <span class="pf-brand-text">
         <span class="pf-brand-name">PREFRONTAL</span>
       </span>
@@ -42,11 +46,24 @@
       @for (n of primary(); track n.id) {
         <a [routerLink]="n.href" routerLinkActive="pf-topnav-link--on"
            [routerLinkActiveOptions]="{ exact: !!n.exact }"
-           class="pf-topnav-link press">{{ n.label }}</a>
+           class="pf-topnav-link press">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            @for (p of n.iconPath; track p) { <path [attr.d]="p" /> }
+          </svg>
+          {{ n.label }}
+        </a>
       }
       @if (showAdmin()) {
         <a routerLink="/admin" routerLinkActive="pf-topnav-link--on"
-           class="pf-topnav-link press">Admin</a>
+           class="pf-topnav-link press">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
+          </svg>
+          Admin
+        </a>
       }
     </nav>
 
@@ -239,6 +256,22 @@
             </svg>
             <span>Switch to dark</span>
             }
+          </button>
+
+          <!-- Design version: New = the designer redesign, Classic = the
+               previous look for people who don't want the change yet.
+               Menu stays open so the switch reads as a setting. -->
+          <button type="button" class="pf-profile-item press" (click)="themeService.toggleDesign()"
+                  [attr.aria-pressed]="themeService.isNewDesign()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>
+              <path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z"/>
+            </svg>
+            <span class="flex-1 text-left">Design</span>
+            <span class="pf-dm-pill" [class.pf-dm-pill--on]="themeService.isNewDesign()">
+              {{ themeService.isNewDesign() ? 'New' : 'Classic' }}
+            </span>
           </button>
 
           @if (designMode.available()) {

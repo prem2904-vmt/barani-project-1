@@ -287,19 +287,28 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
      * would notice, and there are none. */
       .pf-chrome {
         position: sticky;
-        /* Designer navbar (Figma 446-113): a FLUSH full-width bar — no
-           floating-pill margin, radius, or gap; content (the hero band)
-           sits directly against its bottom edge. */
-        top: 0;
+        /* CLASSIC design (base): the floating glass pill. The body element
+           in styles.scss already absorbs env(safe-area-inset-top) globally
+           for Capacitor's full-bleed WebView, so no extra offset here. */
+        top: 8px;
         z-index: 40;
         flex-shrink: 0;
-        margin: 0;
-        border-radius: 0;
+        margin: 4px 16px 0;
+        border-radius: 24px;
         background: var(--header-bg);
-        border: none;
-        border-bottom: 1px solid var(--header-border);
+        border: 1px solid var(--header-border);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
+      }
+      /* NEW design (Figma 446-113): a FLUSH full-width bar — no
+         floating-pill margin, radius, or gap; content (the hero band)
+         sits directly against its bottom edge. */
+      :host-context(.design-new) .pf-chrome {
+        top: 0;
+        margin: 0;
+        border-radius: 0;
+        border: none;
+        border-bottom: 1px solid var(--header-border);
       }
 
       /* Phone + iPad (≤1279px): drop the top chrome entirely.

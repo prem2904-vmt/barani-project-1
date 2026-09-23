@@ -1,4 +1,5 @@
 import { DatePipe } from "@angular/common";
+import { ThemeService } from '../../../core/services/theme.service';
 import { DestroyRef,
   ChangeDetectionStrategy,
   Component,
@@ -351,6 +352,8 @@ interface OrderGroup {
 })
 export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);

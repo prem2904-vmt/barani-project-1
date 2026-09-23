@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { ThemeService } from '../../../core/services/theme.service';
 import { DestroyRef, ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -49,7 +50,9 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       @if (!embedded) {
         <div class="pf-rs-chrome">
           <!-- Common hero search (designer band): scan or type a barcode,
-               Enter receives it. Camera docks as a tool on the bar. -->
+               Enter receives it. Camera docks as a tool on the bar.
+               New design only; classic keeps its violet scan tile below. -->
+          @if (theme.isNewDesign()) {
           <pf-hero-band
             placeholder="Scan or type a barcode (e.g. HAEM260800001)…"
             [value]="scanValue()"
@@ -67,6 +70,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
               </button>
             </ng-container>
           </pf-hero-band>
+          }
           <pf-kpi-strip screen="receive_samples"></pf-kpi-strip>
           <pf-screen-header
             eyebrow="Lab intake"
@@ -91,13 +95,54 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
       <!-- Standalone intake: the hero band above is the scan/receive field;
            only the manual-entry affordance remains here. (Embedded: the
-           parent pane header hosts a camera-icon shortcut instead.) -->
+           parent pane header hosts a camera-icon shortcut instead.)
+           Classic design keeps its original violet scan tile. -->
       @if (!embedded) {
-      <div class="manual-toggle mb-4">
-        <button type="button" class="manual-link" (click)="toggleManual()">
-          @if (manualMode()) { ✕ Close manual entry } @else { Or enter manually → }
-        </button>
-      </div>
+        @if (theme.isNewDesign()) {
+        <div class="manual-toggle mb-4">
+          <button type="button" class="manual-link" (click)="toggleManual()">
+            @if (manualMode()) { ✕ Close manual entry } @else { Or enter manually → }
+          </button>
+        </div>
+        } @else {
+        <pf-tile tone="violet" padding="lg" class="block mb-6">
+          <label class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2 block"
+                 style="color: var(--text-muted);">Scan barcode</label>
+          <div class="flex gap-2 pf-rs-scanrow">
+            <div class="scan-field">
+              <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
+              </svg>
+              <input type="text"
+                     placeholder="HAEM260800001"
+                     [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
+                     (keydown.enter)="receiveByBarcode()"
+                     autofocus />
+            </div>
+            <pf-touch-btn size="md" variant="primary"
+                          [disabled]="!scanValue() || busy()"
+                          (pressed)="receiveByBarcode()">
+              Receive
+              <span icon-right aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14"/>
+                  <path d="m12 5 7 7-7 7"/>
+                </svg>
+              </span>
+            </pf-touch-btn>
+          </div>
+
+          <div class="manual-toggle">
+            <button type="button" class="manual-link" (click)="toggleManual()">
+              @if (manualMode()) { ✕ Close manual entry } @else { Or enter manually → }
+            </button>
+          </div>
+        </pf-tile>
+        }
       }
 
       <!-- ─── Package intake (PKG-XXXX) — hidden when embedded ─────
@@ -885,6 +930,8 @@ export class ReceiveSamplesComponent implements OnInit {
   @Input() embedded = false;
   readonly sampleReceived = output<void>();
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);

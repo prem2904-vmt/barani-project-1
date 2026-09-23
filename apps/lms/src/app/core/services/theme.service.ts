@@ -3,8 +3,12 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type ResolvedTheme = 'dark' | 'light';
+/** 'new' = the designer port (Figma 452-3); 'classic' = the pre-port look
+ *  kept around so long-time users don't feel the change. */
+export type DesignVersion = 'new' | 'classic';
 
 const STORAGE_KEY = 'pf-theme';
+const DESIGN_KEY = 'pf-design';
 const MEDIA_QUERY = '(prefers-color-scheme: light)';
 
 @Injectable({ providedIn: 'root' })
@@ -19,6 +23,10 @@ export class ThemeService {
   readonly resolved = this._resolved.asReadonly();
   readonly isDark = computed(() => this._resolved() === 'dark');
 
+  private readonly _design = signal<DesignVersion>(this.readStoredDesign());
+  readonly design = this._design.asReadonly();
+  readonly isNewDesign = computed(() => this._design() === 'new');
+
   private readonly _mediaListener = (e: MediaQueryListEvent) => {
     if (this._mode() === 'system') {
       this.apply(e.matches ? 'light' : 'dark');
@@ -27,6 +35,7 @@ export class ThemeService {
 
   constructor() {
     this.apply(this._resolved());
+    this.applyDesign(this._design());
     const mq = this.mediaQuery();
     if (mq && typeof mq.addEventListener === 'function') {
       mq.addEventListener('change', this._mediaListener);
@@ -46,6 +55,31 @@ export class ThemeService {
 
   clearOverride(): void {
     this.setMode('system');
+  }
+
+  setDesign(version: DesignVersion): void {
+    this._design.set(version);
+    try { this.win?.localStorage.setItem(DESIGN_KEY, version); } catch { /* ignore */ }
+    this.applyDesign(version);
+  }
+
+  toggleDesign(): void {
+    this.setDesign(this._design() === 'new' ? 'classic' : 'new');
+  }
+
+  private applyDesign(version: DesignVersion): void {
+    const root = this.doc.documentElement;
+    root.classList.toggle('design-new', version === 'new');
+    root.classList.toggle('design-classic', version === 'classic');
+    root.setAttribute('data-design', version);
+  }
+
+  private readStoredDesign(): DesignVersion {
+    try {
+      const raw = this.win?.localStorage.getItem(DESIGN_KEY);
+      if (raw === 'new' || raw === 'classic') return raw;
+    } catch { /* ignore */ }
+    return 'new';
   }
 
   private resolve(mode: ThemeMode): ResolvedTheme {

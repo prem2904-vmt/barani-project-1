@@ -1,4 +1,5 @@
 import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ThemeService } from '../../../core/services/theme.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -51,11 +52,13 @@ interface ResultSnapshot {
   template: `
     <section class="pv-page px-4 md:px-8 pt-6">
       <!-- Common hero search (designer band): filters the validation queue
-           by patient, sample ID, or test name. -->
+           by patient, sample ID, or test name. New design only. -->
+      @if (theme.isNewDesign()) {
       <pf-hero-band
         placeholder="Search patient · sample ID · test…"
         [value]="query()"
         (valueChange)="query.set($event)"></pf-hero-band>
+      }
       <div class="pv-head">
         <pf-kpi-strip screen="pathologist"></pf-kpi-strip>
         <pf-screen-header
@@ -303,6 +306,8 @@ interface ResultSnapshot {
 })
 export class PendingValidationComponent implements OnInit {
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);

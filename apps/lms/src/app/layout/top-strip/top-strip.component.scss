@@ -1107,6 +1107,9 @@ a.pf-ts-tenant:hover {
   gap: 2px;
 }
 .pf-topnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border-radius: 9999px;
   font-size: 13px;
@@ -1116,6 +1119,7 @@ a.pf-ts-tenant:hover {
   white-space: nowrap;
   transition: background 140ms ease, color 140ms ease;
 }
+.pf-topnav-link svg { flex-shrink: 0; opacity: 0.85; }
 .pf-topnav-link:hover { color: var(--text-primary); background: var(--bg-hover); }
 .pf-topnav-link--on { color: #7c3aed; background: rgba(124, 58, 237, 0.10); }
 :root.dark .pf-topnav-link--on,

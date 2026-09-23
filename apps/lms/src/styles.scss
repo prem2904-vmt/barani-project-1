@@ -239,6 +239,54 @@
   --seg-track: rgba(124, 58, 237, 0.08);
 }
 
+/* CLASSIC design, light theme — the pre-designer lavender palette, kept
+   verbatim so users who switch to Classic (avatar menu) see the app they
+   know. New-design light stays the neutral designer world above. */
+:root.light.design-classic {
+  --bg-primary: #e3dfed;
+  --bg-secondary: #e8e4f1;
+  --bg-tertiary: #ece8f4;
+  --bg-card: rgba(244, 242, 250, 0.62);
+  --bg-card-solid: #f4f2fa;
+  --bg-input: #f7f6fc;
+  --bg-hover: rgba(124, 58, 237, 0.07);
+  --bg-active: rgba(124, 58, 237, 0.12);
+
+  --surface-1: rgba(244, 242, 250, 0.55);
+  --surface-2: rgba(247, 245, 252, 0.68);
+  --surface-3: #e9e5f2;
+  --surface-elevated: rgba(248, 246, 253, 0.78);
+
+  --text-primary: #262536;
+  --text-secondary: #4c4a63;
+  --text-tertiary: #6d6b84;
+  --text-muted: #9997b0;
+
+  --border-primary: rgba(124, 58, 237, 0.2);
+  --border-secondary: rgba(124, 58, 237, 0.11);
+  --border-muted: #d8d3e8;
+  --border-input: #cec8e0;
+
+  --input-bg: #f7f6fc;
+  --input-border: #d4cee6;
+  --input-text: #262536;
+  --input-placeholder: #9997b0;
+
+  --card-bg: rgba(244, 242, 250, 0.64);
+  --card-border: rgba(124, 58, 237, 0.13);
+
+  --header-bg: rgba(231, 227, 242, 0.82);
+  --header-border: rgba(124, 58, 237, 0.11);
+
+  --scrollbar-track: #e0dbee;
+  --scrollbar-thumb: #bbb2d4;
+  --scrollbar-thumb-hover: #988dc0;
+
+  --glass-bg: rgba(246, 244, 252, 0.55);
+  --glass-bg-hover: rgba(248, 246, 253, 0.62);
+  --glass-border: rgba(124, 58, 237, 0.15);
+}
+
 /* =============================================================
    GLOBAL BASE
    ============================================================= */

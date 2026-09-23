@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { ThemeService } from '../../../core/services/theme.service';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
@@ -144,6 +145,8 @@ interface SeriesSheetGroup {
 })
 export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);

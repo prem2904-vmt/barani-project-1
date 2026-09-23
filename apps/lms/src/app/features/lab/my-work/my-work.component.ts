@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { ThemeService } from '../../../core/services/theme.service';
 import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { buildReportBlobUrl } from '../../../shared/utils/report-blob';
@@ -66,7 +67,9 @@ const COUNTERS: CounterSpec[] = [
     <section class="px-5 md:px-8 lg:px-10 pt-4 pb-3">
 
       <!-- Common hero search (designer band): intake receive — scan or type
-           a sample ID and Enter receives it into the lab. -->
+           a sample ID and Enter receives it into the lab. New design only;
+           classic keeps its original header/scan row below. -->
+      @if (theme.isNewDesign()) {
       <pf-hero-band
         [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
         [value]="intakeScanInput()"
@@ -86,6 +89,7 @@ const COUNTERS: CounterSpec[] = [
           }
         </ng-container>
       </pf-hero-band>
+      }
 
       <!-- KPI strip: not on phone (status lives in the header Stats popover). -->
       @if (!isPhone()) {
@@ -2202,6 +2206,8 @@ const COUNTERS: CounterSpec[] = [
 })
 export class MyWorkComponent implements OnInit {
   private readonly api = inject(ApiService);
+  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
