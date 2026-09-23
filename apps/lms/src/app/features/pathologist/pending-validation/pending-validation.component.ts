@@ -57,7 +57,11 @@ interface ResultSnapshot {
       <pf-hero-band
         placeholder="Search patient · sample ID · test…"
         [value]="query()"
-        (valueChange)="query.set($event)"></pf-hero-band>
+        (valueChange)="query.set($event)">
+        <ng-container band-actions>
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="refresh()">Refresh</button>
+        </ng-container>
+      </pf-hero-band>
       }
       <div class="pv-head">
         <pf-kpi-strip screen="pathologist"></pf-kpi-strip>
@@ -65,7 +69,7 @@ interface ResultSnapshot {
           eyebrow="Validation queue"
           title="Pending validation"
           subtitle="Review entered results. Validate, reject, or reassign to another pathologist.">
-          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()" aria-label="Refresh">
+          <pf-touch-btn actions size="sm" variant="secondary" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>

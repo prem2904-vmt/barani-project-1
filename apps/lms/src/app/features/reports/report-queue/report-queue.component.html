@@ -1,9 +1,23 @@
 <section class="pf-rq-page px-4 md:px-8 pt-6">
   <div class="pf-rq-chrome">
+    @if (theme.isNewDesign()) {
+    <!-- Common hero search (designer band): filters the delivery queue by
+         patient/MRN/phone/order/report id — same behaviour as the inline
+         search box it replaces. Generate + Refresh ride as band actions. -->
+    <pf-hero-band
+      placeholder="Search by patient, MRN, phone, or order/report id…"
+      [value]="query()"
+      (valueChange)="setQuery($event)">
+      <ng-container band-actions>
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()">Refresh</button>
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="promptGenerate()">Generate</button>
+      </ng-container>
+    </pf-hero-band>
+    }
     <pf-kpi-strip screen="report_queue"></pf-kpi-strip>
     <pf-screen-header eyebrow="Delivery queue" title="Report queue"
       subtitle="Validated orders ready to deliver to patients and referring doctors.">
-      <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+      <pf-touch-btn actions size="sm" variant="secondary" class="pf-classic-only" (pressed)="refresh()">
         <span icon-left aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -66,7 +80,7 @@
         }
       </div>
 
-      <pf-touch-btn actions size="sm" variant="primary" (pressed)="promptGenerate()" aria-label="Generate">
+      <pf-touch-btn actions size="sm" variant="primary" class="pf-classic-only" (pressed)="promptGenerate()" aria-label="Generate">
         <span icon-left aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -107,7 +121,7 @@
     </div>
 
     <div class="mb-4">
-      <div class="pf-results-search">
+      <div class="pf-results-search pf-classic-only">
         <svg class="pf-results-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="7" />

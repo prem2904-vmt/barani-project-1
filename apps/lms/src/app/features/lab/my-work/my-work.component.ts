@@ -70,14 +70,21 @@ const COUNTERS: CounterSpec[] = [
            a sample ID and Enter receives it into the lab. New design only;
            classic keeps its original header/scan row below. -->
       @if (theme.isNewDesign()) {
+      <!-- The ONE search bar (owner): behaves like the page's scan bar —
+           Enter opens result entry for the sample. Intake-receive keeps
+           its own box inside the Lab Intake pane. Refresh rides the band
+           as the screen's primary action. -->
       <pf-hero-band
         [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
-        [value]="intakeScanInput()"
-        (valueChange)="intakeScanInput.set($event)"
-        (submitted)="intakeReceive()">
+        [value]="scan()"
+        (valueChange)="setScan($event)"
+        (submitted)="scanSubmit()">
+        <ng-container band-actions>
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="refresh()">Refresh</button>
+        </ng-container>
         <ng-container band-tools>
           @if (!scanSvc.manualEntry()) {
-          <button type="button" class="pf-hb-tool press" (click)="openIntakeScanner()"
+          <button type="button" class="pf-hb-tool press" (click)="openBarSearchScanner()"
                   title="Scan with camera" aria-label="Scan with camera">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -137,7 +144,7 @@ const COUNTERS: CounterSpec[] = [
             </div>
           }
         </div>
-        <pf-touch-btn actions variant="secondary" size="sm" (pressed)="refresh()" aria-label="Refresh">
+        <pf-touch-btn actions variant="secondary" size="sm" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
             <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
             <path d="M21 3v5h-5"/>
@@ -173,7 +180,7 @@ const COUNTERS: CounterSpec[] = [
 
       <!-- Scan bar — primary entry point. Clean compact pill, camera
            shortcut on the right, manual-entry inline link below. -->
-      <div class="pf-scan-row">
+      <div class="pf-scan-row pf-classic-only">
         <div class="pf-scan">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="pf-scan__icon" aria-hidden="true">
             <path d="M3 5v14M6 5v14M9 5v14M12 5v14M15 5v14M18 5v14M21 5v14"/>

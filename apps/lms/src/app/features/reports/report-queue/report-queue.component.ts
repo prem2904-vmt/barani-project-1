@@ -1,4 +1,6 @@
 import { CommonModule, DatePipe } from "@angular/common";
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { firstValueFrom } from "rxjs";
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { DestroyRef,
@@ -85,6 +87,7 @@ interface PrelimOrder {
     TouchButtonComponent,
     EditResultDialogComponent,
     KpiStripComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./report-queue.component.html",
@@ -95,6 +98,8 @@ export class ReportQueueComponent implements OnInit {
     return formatPatientInfo(p);
   }
   private readonly api = inject(ApiService);
+  /** Design gate: the hero band renders in the NEW design only. */
+  readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
