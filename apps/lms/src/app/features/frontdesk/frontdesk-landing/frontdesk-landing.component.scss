@@ -33,7 +33,10 @@
   /* Panels: white/80 r20 with the violet-tinted hairline shadow + the
      designer's wave footer riding the card bottom. */
   .pf-appt-split__pane {
-    background: rgba(255, 255, 255, 0.8);
+    /* 0.8 let the pink blob layer bleed through and the pane bottoms
+       read as "ended early" — the frame's panels stay clean white with
+       the colour wash only OUTSIDE them. */
+    background: rgba(255, 255, 255, 0.92);
     border: none;
     border-radius: 20px;
     box-shadow: 0 1px 2px rgba(124, 58, 237, 0.06), 0 1px 3px rgba(124, 58, 237, 0.15);

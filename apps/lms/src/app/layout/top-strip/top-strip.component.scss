@@ -1121,6 +1121,18 @@ a.pf-ts-tenant:hover {
 }
 .pf-topnav-link svg { flex-shrink: 0; opacity: 0.85; }
 
+/* NEW design light: designer avatar anatomy on the bar's profile button
+   (Figma 452-3) — soft violet disc, violet initials, no glow. */
+:host-context(.light.design-new) .pf-avatar-circle {
+  background: #eee1fd;
+  color: #7c3aed;
+  border: 1px solid #ecd8ff;
+  box-shadow: none;
+}
+:host-context(.light.design-new) .pf-avatar-btn:hover .pf-avatar-circle {
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.18);
+}
+
 /* CLASSIC right-cluster nav wrapper — the old inline layout (the icon-first
    pf-topnav-btn styles above are shared). Display stays Tailwind-owned. */
 .pf-topnav-classic {
