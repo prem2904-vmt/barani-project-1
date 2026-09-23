@@ -8,6 +8,7 @@ import {
 } from "@angular/core";
 import { DatePipe } from "@angular/common";
 import { ThemeService } from '../../core/services/theme.service';
+import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
 import { ApiService } from "../../core/services/api.service";
@@ -58,10 +59,18 @@ interface KpiCard {
 @Component({
   selector: "pf-admin-overview",
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-ov">
+      @if (theme.isNewDesign()) {
+      <!-- Common hero search (designer band): the admin settings jump-box —
+           same q()/setQ pipeline as the inline box it replaces. -->
+      <pf-hero-band
+        placeholder="Search settings & pages — users, billing, inventory, referral…"
+        [value]="q()"
+        (valueChange)="setQ($event)"></pf-hero-band>
+      }
       @if (!theme.isNewDesign()) {
       <!-- NEW design drops the big page titles app-wide (the navbar carries
            the context); classic keeps its greeting header. -->
@@ -76,7 +85,7 @@ interface KpiCard {
       }
 
       <!-- Admin search: one box that jumps to any config screen (item 140). -->
-      <label class="pf-ov__search">
+      <label class="pf-ov__search pf-classic-only">
         <svg
           class="pf-ov__search-ic"
           width="17"

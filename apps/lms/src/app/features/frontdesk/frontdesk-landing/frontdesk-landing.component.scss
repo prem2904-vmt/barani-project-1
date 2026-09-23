@@ -224,3 +224,142 @@
   .pf-page__header,
   .pf-page__body { position: relative; z-index: 1; }
 }
+
+/* ══ Designer DARK skin (new design) — same anatomy as the light frame,
+   mapped onto the dark palette: near-black violet page, soft dark panes
+   with violet hairlines, quiet tabs, dot-word statuses, outline actions.
+   Mirrors the .light.design-new block so both themes share one design
+   language. ══ */
+:host-context(.dark.design-new) {
+  .pf-page {
+    background: linear-gradient(to top, #14101f 0%, #171221 55%, #0f0d17 100%);
+    min-height: 100vh;
+  }
+
+  .pf-appt-split__pane {
+    background: rgba(255, 255, 255, 0.045);
+    border: none;
+    border-radius: 20px;
+    box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.14), 0 12px 34px rgba(0, 0, 0, 0.35);
+    position: relative;
+  }
+  .pf-appt-split__hdr {
+    background: rgba(255, 255, 255, 0.035);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    min-height: 49px;
+    border-radius: 20px 20px 0 0;
+  }
+  .pf-appt-split__link--left-icon {
+    background: rgba(139, 92, 246, 0.16);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 8px;
+    width: 28px; height: 28px;
+    color: #c4b5fd;
+  }
+
+  .pf-tabs__btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    padding: 5px 12px;
+    font-size: 12px; font-weight: 500; letter-spacing: 0.69px;
+    color: #9ca3af;
+  }
+  .pf-tabs__btn--on {
+    background: rgba(139, 92, 246, 0.14);
+    border-color: rgba(168, 85, 247, 0.35);
+    color: #c4b5fd;
+  }
+  .pf-tabs__count {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+    padding: 1px 7px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.69px;
+    color: #9ca3af;
+  }
+  .pf-tabs__btn--on .pf-tabs__count { background: rgba(139, 92, 246, 0.22); border-color: transparent; color: #ddd6fe; }
+
+  .pf-hdr-date-pills { background: rgba(255, 255, 255, 0.05); border-radius: 20px; padding: 2px; }
+  .pf-hdr-date-pill {
+    background: transparent; border: none; border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; color: #9ca3af;
+  }
+  .pf-hdr-date-pill--on,
+  .pf-hdr-date-pill--on * { color: #c4b5fd !important; }
+  .pf-hdr-date-pill--on {
+    background: rgba(139, 92, 246, 0.18); border-radius: 10px; font-weight: 500;
+    box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.3);
+  }
+
+  .pf-daystrip__day {
+    background: rgba(255, 255, 255, 0.05); border: 1px solid transparent; border-radius: 12px;
+    min-width: 73px; height: 40px;
+    box-shadow: none;
+  }
+  .pf-daystrip__dow { font-size: 12px; letter-spacing: 0.76px; text-transform: uppercase; color: #6b7280; }
+  .pf-daystrip__n { font-size: 14px; font-weight: 500; color: #9ca3af; }
+  .pf-daystrip__day--on { border-color: rgba(168, 85, 247, 0.4); }
+  .pf-daystrip__day--on .pf-daystrip__dow,
+  .pf-daystrip__day--on .pf-daystrip__n { color: #c4b5fd; }
+
+  /* Rows: same no-avatar anatomy as the light frame. */
+  .pf-card {
+    background: rgba(255, 255, 255, 0.045);
+    border: none; border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  .pf-card__name { font-size: 12px; font-weight: 500; color: #d1d5db; }
+  .pf-card__meta { font-size: 12px; color: #9ca3af; }
+  .pf-card pf-avatar { display: none; }
+  .pf-card--ip,
+  .pf-card--token-layout { grid-template-columns: 22px 1fr auto auto; }
+  @container (max-width: 420px) {
+    .pf-card--ip,
+    .pf-card--token-layout { grid-template-columns: 1fr; }
+  }
+  .pf-card__sel {
+    width: 20px; height: 20px;
+    border: 1px solid #6b7280;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .pf-card__dept {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.09) !important;
+    border-radius: 20px;
+    color: #a5a3b8 !important;
+    font-weight: 400;
+    letter-spacing: 0.42px;
+  }
+
+  .pf-ghostbtn {
+    background: transparent;
+    border: 1px solid rgba(167, 139, 250, 0.65);
+    border-radius: 8px;
+    color: #c4b5fd;
+    height: 24px; padding: 0 12px;
+    font-size: 12px; font-weight: 600;
+  }
+  .pf-ghostbtn:hover { background: rgba(139, 92, 246, 0.14); }
+  .pf-ghostbtn:not(.pf-ghostbtn--series)::after { content: ' →'; }
+
+  /* Same flush seam + stacked right column as light. */
+  .pf-page__header { padding-top: 0 !important; }
+  .pf-head:not(:has(*)) { display: none; }
+  .pf-card__foot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 6px;
+  }
+}
+
+/* Status words: brighter tones on dark so they read against the panes. */
+:host-context(.dark) .pf-statusword[data-tone='emerald'] { color: #a3e635; }
+:host-context(.dark) .pf-statusword[data-tone='amber']   { color: #facc15; }
+:host-context(.dark) .pf-statusword[data-tone='sky'],
+:host-context(.dark) .pf-statusword[data-tone='blue']    { color: #38bdf8; }
+:host-context(.dark) .pf-statusword[data-tone='violet']  { color: #a78bfa; }
+:host-context(.dark) .pf-statusword[data-tone='rose']    { color: #f87171; }

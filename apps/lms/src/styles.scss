@@ -287,8 +287,13 @@
 :root.design-new .pf-sc-page,
 :root.design-new .pf-rs-page,
 :root.design-new .pf-rq-page,
+:root.design-new .pf-ov,
 :root.design-new .pv-page {
   padding-top: 0 !important;
+}
+:root.design-new .pf-ov { --pf-hb-bleed: 1rem; max-width: none !important; }
+@media (min-width: 768px) {
+  :root.design-new .pf-ov { --pf-hb-bleed: 2.5rem; }
 }
 :root.design-new .pf-mw-page { --pf-hb-bleed: 1.25rem; }
 :root.design-new .pf-sc-page,
@@ -2414,4 +2419,45 @@ html.pf-design-mode {
   top: auto;
   bottom: calc(100% + 10px);
   margin-top: 0;
+}
+
+/* ══ NEW design, DARK theme — the same designer discipline mapped onto
+   the dark palette (holistic pass): quiet violet toggles, outline
+   Receive actions, soft-violet avatars. Gradient stays reserved for the
+   ONE primary button per screen. ══ */
+:root.dark.design-new pf-segmented .seg-item.is-selected,
+:root.dark.design-new .pf-mw-tab--on {
+  background: rgba(139, 92, 246, 0.16) !important;
+  color: #c4b5fd !important;
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.35) !important;
+}
+:root.dark.design-new .pf-mw-tab--on .pf-mw-tab__count {
+  background: rgba(139, 92, 246, 0.25) !important;
+  color: #ddd6fe !important;
+}
+:root.dark.design-new .pf-mw-scan__btn,
+:root.dark.design-new .pf-rs-row__btn {
+  background: transparent !important;
+  border: 1px solid rgba(167, 139, 250, 0.65) !important;
+  color: #c4b5fd !important;
+  box-shadow: none !important;
+}
+:root.dark.design-new .pf-mw-scan__btn:hover:not(:disabled),
+:root.dark.design-new .pf-rs-row__btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.14) !important;
+  filter: none !important;
+}
+:root.dark.design-new .pf-mw-scan__btn:disabled,
+:root.dark.design-new .pf-rs-row__btn:disabled {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #6b7280 !important;
+}
+
+/* Avatars in dark-new: soft violet disc, violet-tinted initials —
+   the dark twin of the light designer disc. */
+:root.dark.design-new pf-avatar .root {
+  background: rgba(139, 92, 246, 0.18) !important;
+  color: #c4b5fd !important;
+  text-shadow: none !important;
+  border: 1px solid rgba(168, 85, 247, 0.3);
 }

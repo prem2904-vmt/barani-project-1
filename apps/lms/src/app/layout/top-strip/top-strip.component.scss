@@ -1196,7 +1196,15 @@ a.pf-ts-tenant:hover {
   :host-context(.design-new.nav-bottom) .pf-topnav-link { padding: 6px 9px; }
   :host-context(.design-new.nav-bottom) .pf-topnav-link__lbl { display: none; }
   :host-context(.design-new.nav-bottom) .pf-topnav-link svg { width: 18px; height: 18px; }
-  /* Squeeze the ends so the pages get the room. */
-  :host-context(.design-new.nav-bottom) .pf-brand-text,
-  :host-context(.design-new.nav-bottom) .pf-brand-pulse { display: none; }
+  /* On shrink the brand disappears ENTIRELY (glyph + wordmark + heartbeat)
+     — the user's initials avatar is the only identity badge left. */
+  :host-context(.design-new.nav-bottom) .pf-brand-lockup { display: none; }
+}
+
+/* Dark-new: the bar avatar matches the soft-violet disc language. */
+:host-context(.dark.design-new) .pf-avatar-circle {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: none;
 }
