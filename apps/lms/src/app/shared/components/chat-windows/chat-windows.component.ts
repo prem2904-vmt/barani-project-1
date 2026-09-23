@@ -4,6 +4,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ChatWindowsService } from '../../../core/services/chat-windows.service';
 import { ThemeService } from '../../../core/services/theme.service';
+import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { Conversation } from '../../models/chat.model';
 import { conversationInitials, conversationTitle } from '../../models/conversation-name';
 
@@ -23,7 +25,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
   imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (theme.isNewDesign()) {
+    @if (theme.isNewDesign() && messagesOn()) {
       <div class="pf-cw">
         @for (c of windows(); track c.id) {
           <section class="pf-cw__win" (click)="windowsSvc.focus(c.id)">
@@ -238,6 +240,13 @@ export class ChatWindowsComponent {
   protected readonly chat = inject(ChatService);
   protected readonly windowsSvc = inject(ChatWindowsService);
   private readonly auth = inject(AuthService);
+  private readonly process = inject(ProcessWorkflowService);
+  private readonly entitlements = inject(TenantEntitlementsService);
+
+  /** Chat only exists when the workflow says Messages is part of this
+   *  tenant's process — same rule the bar's Messages icon uses. */
+  protected readonly messagesOn = computed(() =>
+    this.entitlements.moduleEnabled('messages') && this.process.isEnabled('messages'));
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
 
   protected readonly meId = computed(() =>

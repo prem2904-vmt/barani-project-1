@@ -136,7 +136,14 @@ export class TopStripComponent implements OnInit, OnDestroy {
     void this.chat.openConversation(c.id);
     this.peopleDrawer.openIt();
   }
-  readonly messagesModuleOn = computed(() => this.entitlements.moduleEnabled('messages'));
+  /**
+   * Chat surfaces (bar icon, panel, floating windows) exist ONLY when the
+   * ACTIVE WORKFLOW includes Messages — the admin's /admin/process work
+   * areas decide, not merely whether the tenant is licensed for it. The
+   * nav pipeline already applies the module entitlement via gateModules.
+   */
+  readonly messagesModuleOn = computed(() =>
+    this.navAll().some(i => i.id === 'messages') && this.process.isEnabled('messages'));
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
   protected readonly chat = inject(ChatService);
@@ -182,8 +189,12 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // The live nav is built from the active workflow's WORK-AREAS (the admin's
   // names + order, role-gated), each opening its REAL screen. Falls back to the
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
+  /** Work areas the admin's workflow grants me, before design tweaks. */
+  private readonly navAll = computed(() => this.gateModules(this.withCollection(
+    this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV)))));
+
   readonly primary = computed(() => {
-    let items = this.gateModules(this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV))));
+    let items = this.navAll();
     // NEW design: Messages is a chat surface (bar icon -> drawer), not a page.
     if (this.themeService.isNewDesign()) items = items.filter(i => i.id !== 'messages');
     // OPD: doctors get their Consult Room — but only once the OPD module is
