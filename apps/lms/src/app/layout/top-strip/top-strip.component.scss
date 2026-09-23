@@ -1256,10 +1256,18 @@ a.pf-ts-tenant:hover {
   gap: 6px;
   min-width: 0;
   flex: 0 1 auto;
+}
+/* Chips scroll here; the +N popover lives OUTSIDE this clipper so the
+   upward dropdown isn't swallowed by the scroll container. */
+.pf-draftshelf__scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.pf-draftshelf::-webkit-scrollbar { display: none; }
+.pf-draftshelf__scroll::-webkit-scrollbar { display: none; }
 :host-context(.design-new.nav-bottom) .pf-draftshelf { display: flex; }
 /* Phones: no room — the shelf is a tablet/web affordance. */
 @media (max-width: 767px) {
