@@ -2467,3 +2467,24 @@ html.pf-design-mode {
   text-shadow: none !important;
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
+
+/* ══ NEW design TYPE RAMP (owner: one font standard app-wide, the
+   frontdesk's sleek scale — nothing more, nothing less).
+   Primary row text 12.5px/500 · secondary 11.5-12px · ids mono 13/600.
+   !important because component-scoped styles otherwise win. ══ */
+:root.design-new {
+  /* Tailwind-styled queue names (Lab benches, Validate rows). */
+  .text-\[15px\].font-semibold {
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+  }
+  /* Lab sample ids (queue cards). */
+  .pf-tq__id { font-size: 13px !important; }
+  /* Collect queue names + metas. */
+  .pf-sc__who-name { font-size: 12.5px !important; font-weight: 500 !important; }
+  /* Receive rows. */
+  .pf-rs-row__name,
+  .pf-rs-row__name-main { font-size: 12.5px !important; font-weight: 500 !important; }
+  /* Report queue rows reuse Tailwind names (covered above); their metas
+     already sit at 11-12px mono. */
+}

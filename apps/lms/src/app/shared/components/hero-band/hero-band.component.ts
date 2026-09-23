@@ -156,8 +156,25 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       border-left-color: var(--glass-border, rgba(255, 255, 255, 0.12));
     }
 
-    /* Frontdesk projects its own pf-patient-search — let it fill the pill. */
+    /* Frontdesk projects its own pf-patient-search — let it fill the pill
+       and FLATTEN its chrome: the pill is the one and only box, so the
+       inner field drops its own border/background/focus ring (owner: it
+       read as a text box inside a search bar). */
     .pf-hb__search ::ng-deep [band-search] { flex: 1; min-width: 0; }
+    .pf-hb__search ::ng-deep [band-search] .pulse { display: none; }
+    .pf-hb__search ::ng-deep [band-search] .field,
+    .pf-hb__search ::ng-deep [band-search] .field.field-focused {
+      border: none !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      border-radius: 0;
+      min-height: 0;
+      height: 100%;
+    }
+    .pf-hb__search ::ng-deep [band-search] .field input {
+      font-size: 14px;
+      font-weight: 500;
+    }
 
     @media (max-width: 640px) {
       .pf-hb__band { padding-inline: 14px; min-height: 64px; }
