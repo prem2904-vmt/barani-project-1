@@ -1346,3 +1346,97 @@ a.pf-ts-tenant:hover {
   color: var(--text-muted);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
+
+/* ── Messages dropdown (bell-style panel; auto-flips upward when the
+   bar is docked via the -pop catch-all). ── */
+.pf-msgs-bd { position: fixed; inset: 0; z-index: 39; }
+.pf-msgs-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 300px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  z-index: 40;
+}
+.pf-msgs-pop__head {
+  padding: 8px 12px 6px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.pf-msgs-pop__empty { padding: 12px; font-size: 12.5px; color: var(--text-muted); }
+.pf-msgs-pop__item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 10px; border-radius: 10px;
+  background: transparent; border: none; cursor: pointer; text-align: left;
+}
+.pf-msgs-pop__item:hover { background: var(--bg-hover); }
+.pf-msgs-pop__init,
+.pf-chatdock__init {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9999px; flex-shrink: 0;
+  background: #eee1fd; color: #7c3aed; border: 1px solid #ecd8ff;
+  font-size: 11px; font-weight: 600;
+}
+:root.dark .pf-msgs-pop__init,
+:root.dark .pf-chatdock__init {
+  background: rgba(139, 92, 246, 0.18); color: #c4b5fd; border-color: rgba(168, 85, 247, 0.3);
+}
+.pf-msgs-pop__body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.pf-msgs-pop__name { font-size: 12.5px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-msgs-pop__last { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-msgs-pop__unread {
+  flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9999px; background: var(--gradient-primary); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 18px; text-align: center;
+}
+.pf-msgs-pop__all {
+  display: block; width: 100%; margin-top: 4px; padding: 8px;
+  border: none; border-top: 1px solid var(--border-muted);
+  background: transparent; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: #7c3aed; text-align: center;
+}
+:root.dark .pf-msgs-pop__all { color: #c4b5fd; }
+
+/* ── Chat dock chips (bottom bar, like drafts; initials-only on shrink). ── */
+.pf-chatdock { display: none; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; }
+:host-context(.design-new.nav-bottom) .pf-chatdock { display: flex; }
+@media (max-width: 767px) {
+  :host-context(.design-new.nav-bottom) .pf-chatdock { display: none; }
+}
+.pf-chatdock__chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 8px 0 2px; border-radius: 9999px;
+  background: var(--bg-card-solid, #fff);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  color: var(--text-secondary);
+  font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+.pf-chatdock__chip:hover { background: rgba(124, 58, 237, 0.08); border-color: #7c3aed; }
+.pf-chatdock__init { width: 24px; height: 24px; font-size: 10px; }
+.pf-chatdock__name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
+.pf-chatdock__unread {
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 9999px;
+  background: var(--gradient-primary); color: #fff;
+  font-size: 9.5px; font-weight: 700; line-height: 16px; text-align: center;
+}
+.pf-chatdock__x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 9999px;
+  color: var(--text-muted); font-size: 12px; line-height: 1;
+}
+.pf-chatdock__x:hover { background: var(--bg-hover); color: var(--text-primary); }
+/* Shrink (<1280): initials only — "Shugandhan Arulvelan" → "SA". */
+@media (max-width: 1279px) {
+  .pf-chatdock__name { display: none; }
+  .pf-chatdock__chip { padding: 0 6px 0 2px; }
+}

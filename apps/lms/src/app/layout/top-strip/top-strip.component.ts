@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
+import { ChatDockService } from '../../core/services/chat-dock.service';
+import { Conversation } from '../../shared/models/chat.model';
 import { DraftShelfService } from '../../core/services/draft-shelf.service';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -53,6 +55,40 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Facebook-style chat entry (new design): icon after the bell opens the
    *  people/chat drawer; the Messages PAGE leaves the nav. */
   protected readonly peopleDrawer = inject(PeopleDrawerService);
+  protected readonly chatDock = inject(ChatDockService);
+  /** Messages dropdown (bell-style panel) open state. */
+  readonly msgsOpen = signal(false);
+
+  /** 1:1 → the OTHER participant's name; groups → the group name. */
+  convoTitle(c: Conversation): string {
+    if (c.name) return c.name;
+    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+    const peer = c.participants?.find(p => p.userId !== me);
+    return peer?.displayName || 'Conversation';
+  }
+
+  /** "Shugandhan Arulvelan" → "SA" (first letters of first + last word). */
+  convoInitials(c: Conversation): string {
+    const words = this.convoTitle(c).trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    const first = words[0][0] ?? '';
+    const last = words.length > 1 ? (words[words.length - 1][0] ?? '') : '';
+    return (first + last).toUpperCase() || '?';
+  }
+
+  /** Docked conversations, resolved from the live list (dead ids drop out). */
+  readonly dockedConvos = computed(() => {
+    const byId = new Map(this.chat.conversations().map(c => [c.id, c] as const));
+    return this.chatDock.ids().map(id => byId.get(id)).filter((c): c is Conversation => !!c);
+  });
+
+  /** Open a conversation: focus the chat window (drawer), pin its chip. */
+  openConvo(c: Conversation): void {
+    void this.chat.openConversation(c.id);
+    this.peopleDrawer.openIt();
+    this.chatDock.add(c.id);
+    this.msgsOpen.set(false);
+  }
   readonly messagesModuleOn = computed(() => this.entitlements.moduleEnabled('messages'));
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
