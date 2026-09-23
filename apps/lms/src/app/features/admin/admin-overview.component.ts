@@ -81,6 +81,8 @@ interface KpiCard {
           </div>
                   <!-- Reload is ALWAYS the last tool in the bar (owner): same
                place on every screen. -->
+          <!-- Reload is ALWAYS the LAST tool in the bar (owner): same
+               position on every screen. -->
           <button type="button" class="pf-hb-tool press" (click)="load()"
                   title="Refresh" aria-label="Refresh">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
