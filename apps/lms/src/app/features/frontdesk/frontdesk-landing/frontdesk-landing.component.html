@@ -75,11 +75,8 @@
          primary actions, and the common hero search overlapping its edge.
          Patient search (with suggestions + advanced modal) is projected;
          cart and scan ride as tools at the search bar's right edge. -->
-    <pf-hero-band [customSearch]="true">
+    <pf-hero-band class="pf-fd-band" [customSearch]="true">
       <ng-container band-actions>
-        @if (showAppt()) {
-        <a routerLink="/frontdesk/appointments/new" class="pf-hb-btn pf-hb-btn--ghost press">Book appointment</a>
-        }
         @if (showRegister()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openRegister()">New Patient</button>
         }

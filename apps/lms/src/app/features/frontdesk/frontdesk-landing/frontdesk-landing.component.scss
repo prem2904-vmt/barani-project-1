@@ -8,3 +8,13 @@
 @use './styles/drawers-modals';
 @use './styles/mobile';
 @use './styles/flatpickr';
+
+/* ── Designer hero band: full-bleed (Figma 446-113) ─────────────────
+   The band escapes the header's page padding so its gradient runs
+   edge-to-edge like the design; the search pill stays inset. */
+.pf-page__header {
+  --pf-hb-bleed: 1rem;
+  padding-top: 0;
+}
+@media (min-width: 768px) { .pf-page__header { --pf-hb-bleed: 2rem; } }
+@media (min-width: 1024px) { .pf-page__header { --pf-hb-bleed: 2.5rem; } }

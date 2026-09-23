@@ -61,37 +61,39 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     </div>
   `,
   styles: [`
-    /* ── Band ── */
-    .pf-hb { margin: 0 0 18px; }
+    /* ── Band — exact Figma 446-113 values. Full-bleed when the host sets
+       --pf-hb-bleed to its page padding. ── */
+    .pf-hb { margin: 0 calc(-1 * var(--pf-hb-bleed, 0px)) 18px; }
     .pf-hb__band {
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
-      min-height: 76px;
-      padding: 14px 20px calc(14px + 26px);  /* bottom holds room for the overlap */
-      border-radius: 16px 16px 0 0;
-      background: linear-gradient(100deg, #cda6e5 0%, #eec9e6 46%, #cf8fe9 78%, #a855f7 100%);
+      min-height: 108px;
+      padding: 14px 20px calc(14px + 33px);  /* bottom holds room for the overlap */
+      background-color: #ffffff;
+      background-image: linear-gradient(90deg, rgba(125, 28, 182, 0.35) 0%, rgba(173, 75, 201, 0.35) 37%,
+                                        rgba(175, 34, 201, 0.35) 68%, rgba(162, 25, 110, 0.35) 100%);
     }
     :host-context(.dark) .pf-hb__band,
     :host-context([data-theme='dark']) .pf-hb__band {
-      background: linear-gradient(100deg, rgba(124, 58, 237, 0.34) 0%, rgba(168, 85, 247, 0.16) 46%,
-                                  rgba(192, 88, 235, 0.20) 78%, rgba(124, 58, 237, 0.38) 100%);
-      border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.10));
-      border-bottom: none;
+      background-color: transparent;
+      background-image: linear-gradient(90deg, rgba(125, 28, 182, 0.35) 0%, rgba(173, 75, 201, 0.30) 37%,
+                                        rgba(175, 34, 201, 0.28) 68%, rgba(162, 25, 110, 0.32) 100%);
+      border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.10));
     }
 
-    .pf-hb__tenant { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .pf-hb__avatar {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 30px; height: 30px; border-radius: 9999px; flex-shrink: 0;
-      background: #ffffff; color: #111928;
-      font-size: 13px; font-weight: 800;
+      width: 26px; height: 26px; border-radius: 9999px; flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.8); color: #1f2937;
+      font-size: 14px; font-weight: 400;
     }
     :host-context(.dark) .pf-hb__avatar,
     :host-context([data-theme='dark']) .pf-hb__avatar {
       background: rgba(255, 255, 255, 0.14); color: var(--text-primary, #e5e7eb);
     }
     .pf-hb__name {
-      font-size: 16.5px; font-weight: 700; letter-spacing: -0.01em;
-      color: #111928;
+      font-size: 18px; font-weight: 400;
+      color: #1f2937;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     :host-context(.dark) .pf-hb__name,
@@ -99,16 +101,16 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 
     .pf-hb__actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
-    /* ── Search pill overlapping the band's bottom edge ── */
-    .pf-hb__searchrow { padding: 0 20px; margin-top: -26px; }
+    /* ── Search pill overlapping the band's bottom edge (53px, r20) ── */
+    .pf-hb__searchrow { padding: 0 20px; margin-top: -33px; }
     .pf-hb__search {
       display: flex; align-items: center; gap: 10px;
-      height: 52px; max-width: 1120px; margin-inline: auto;
-      padding: 0 8px 0 18px;
-      border-radius: 9999px;
+      height: 53px; max-width: 1123px; margin-inline: auto;
+      padding: 0 12px 0 20px;
+      border-radius: 20px;
       background: #ffffff;
-      border: 1px solid #e5e7eb;
-      box-shadow: 0 10px 28px rgba(17, 25, 40, 0.10);
+      border: none;
+      box-shadow: 0 1px 1px rgba(124, 58, 237, 0.06), 0 1px 1.5px rgba(124, 58, 237, 0.15);
     }
     :host-context(.dark) .pf-hb__search,
     :host-context([data-theme='dark']) .pf-hb__search {
@@ -116,11 +118,11 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       border-color: var(--glass-border, rgba(255, 255, 255, 0.12));
       box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
     }
-    .pf-hb__glass { color: #9ca3af; flex-shrink: 0; }
+    .pf-hb__glass { color: #5c7185; flex-shrink: 0; }
     .pf-hb__input {
       flex: 1; min-width: 0; height: 100%;
       border: none; outline: none; background: transparent;
-      font-size: 14px; font-family: inherit;
+      font-size: 14px; font-weight: 500; font-family: inherit;
       color: #111928;
     }
     :host-context(.dark) .pf-hb__input,

@@ -93,10 +93,11 @@
   margin-left: -2px;
 }
 .pf-brand-name {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  /* Designer wordmark (Figma 446-113): 18px regular, pink→violet sweep. */
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  background: linear-gradient(90deg, #d547c6 0%, #8b49ed 47%, #8749ef 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
