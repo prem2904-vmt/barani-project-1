@@ -219,9 +219,10 @@
        TOP, the waiting status as dot + word underneath. column-reverse
        does the flipping so the DOM order classic depends on never moves. */
     .pf-sc__status { display: contents; }
+    /* With the line lifted to the card edge, the block is just the status. */
     :host-context(.design-new) .pf-sc__status {
-      display: flex; flex-direction: column-reverse; align-items: stretch;
-      gap: 5px; width: 96px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: flex-end;
+      flex-shrink: 0;
     }
     /* Status reads like frontdesk: a dot and the words, no chip, no fill. */
     :host-context(.design-new) .pf-sc__wait,
@@ -239,13 +240,15 @@
     :host-context(.design-new) .pf-sc__wait[data-tone="warn"]::before { background: #f59e0b; }
     :host-context(.design-new) .pf-sc__wait[data-tone="late"]::before { background: #f87171; }
 
-    /* The line along the top: one loading bar the width of the status
-       block, split EVENLY by vial — two tubes read 50/50, three read
-       thirds (owner). No track, no chrome; just the colours. */
+    /* The line runs the WHOLE width of the card along its top edge (owner),
+       split EVENLY by vial — one tube fills it, two read 50/50, three read
+       thirds. Lifted out of the status stack so it spans the card, not just
+       the block. No track, no chrome; just the colours. */
     :host-context(.design-new) .pf-sc__rack {
-      display: flex; width: 100%; max-width: none; gap: 2px;
+      position: absolute; top: 0; left: 0; right: 0;
+      display: flex; width: auto; max-width: none; gap: 2px;
       padding: 0; border: none; background: none; border-radius: 0;
-      overflow: visible;
+      overflow: visible; pointer-events: none;
     }
     :host-context(.design-new) .pf-sc__chip {
       flex: 1 1 0; width: auto; min-width: 0; height: 2.5px;
