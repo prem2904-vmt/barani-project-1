@@ -2488,3 +2488,41 @@ html.pf-design-mode {
   /* Report queue rows reuse Tailwind names (covered above); their metas
      already sit at 11-12px mono. */
 }
+
+/* ══ NEW design: the frontdesk ROW ANATOMY, applied everywhere (owner).
+   The in-progress tile set the standard — no avatar/icon column, quiet
+   12.5px names, subtle metas. Queue rows across Results, Collect, Lab
+   intake, My Work and Validate now read the same way. Grids that held a
+   fixed avatar track are re-templated so nothing collapses (the
+   frontdesk lesson). Classic + dark-classic untouched. ══ */
+:root.design-new {
+  /* Avatars/thumbnails leave every queue row. */
+  .pf-sc__card pf-avatar,
+  .pf-rs-row pf-avatar,
+  .pf-rq-row .pf-report-icon,
+  .pf-tq__main pf-avatar,
+  .pv-page pf-avatar,
+  pf-tile pf-avatar { display: none !important; }
+
+  /* Collect cards: [avatar | text | tail] → [text | tail]. */
+  .pf-sc__card { grid-template-columns: minmax(0, 1fr) auto !important; }
+  /* Lab-intake / receive rows: drop the fixed 32px avatar track. */
+  .pf-rs-row { grid-template-columns: minmax(0, 1fr) auto !important; }
+
+  /* Row titles: the frontdesk 12.5/500, not 15px semibold. */
+  .pf-rq-row .text-\[15px\],
+  .pf-sc__who-name,
+  .pf-rs-row__name,
+  .pf-rs-row__name-main {
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+  }
+  /* Secondary lines stay quiet. */
+  .pf-rq-row__meta,
+  .pf-sc__who-meta,
+  .pf-rs-row__name-sub { font-size: 11.5px !important; }
+
+  /* Rows themselves: slimmer padding — the space was the point. */
+  .pf-rq-row { padding: 9px 12px 9px 14px !important; }
+  .pf-sc__card { padding-top: 10px !important; padding-bottom: 10px !important; }
+}
