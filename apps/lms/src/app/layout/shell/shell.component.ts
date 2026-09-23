@@ -154,7 +154,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
            bottom-nav pill or sit on top of action buttons (Next, Submit)
            which usually live at the bottom of the page. -->
       <div
-        class="pointer-events-none fixed top-20 right-4 flex flex-col gap-3 z-[60] sm:top-24 md:top-auto md:right-auto md:bottom-8 md:left-1/2 md:-translate-x-1/2 md:items-center"
+        class="pf-toasts pointer-events-none fixed top-20 right-4 flex flex-col gap-3 z-[60] sm:top-24 md:top-auto md:right-auto md:bottom-8 md:left-1/2 md:-translate-x-1/2 md:items-center"
       >
         @for (t of toasts.toasts(); track t.id) {
           <div
@@ -514,8 +514,14 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       /* One bottom surface only: the phone pill / iPad rail steps aside. */
       :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }
       :host-context(.design-new.nav-bottom) .shell-main {
-        padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(var(--pf-botbar-h, 58px) + 12px) !important;
         padding-left: 0 !important;
+      }
+      /* Toasts clear the docked bar (md+ anchors them bottom-center). */
+      @media (min-width: 768px) {
+        :host-context(.design-new.nav-bottom) .pf-toasts {
+          bottom: calc(var(--pf-botbar-h, 58px) + 16px) !important;
+        }
       }
 `,
   ],

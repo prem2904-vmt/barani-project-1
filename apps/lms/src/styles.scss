@@ -275,6 +275,12 @@
   color: #9ca3af !important;
 }
 
+/* Bottom-navbar experiment: one source of truth for the docked bar's
+   height so every surface can clear it (pages, toasts, drawers...). */
+:root.design-new.nav-bottom {
+  --pf-botbar-h: calc(58px + env(safe-area-inset-bottom, 0px));
+}
+
 /* NEW design: elements that belong to the CLASSIC layout only (duplicate
    search rows, header Refresh buttons that moved into the band, ...). */
 :root.design-new .pf-classic-only { display: none !important; }

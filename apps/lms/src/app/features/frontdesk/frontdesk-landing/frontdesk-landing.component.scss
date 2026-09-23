@@ -27,7 +27,7 @@
   /* Page: the frame's white → blush vertical gradient. */
   .pf-page {
     background: linear-gradient(to top, #fcf8fe 0%, #fff8ff 55%, #ffffff 100%);
-    min-height: 100vh;
+    min-height: calc(100dvh - var(--pf-botbar-h, 0px));
   }
 
   /* Panels: white/80 r20 with the violet-tinted hairline shadow + the
@@ -203,20 +203,9 @@
      actions (the series Status button keeps its clock icon instead). */
   .pf-ghostbtn:not(.pf-ghostbtn--series)::after { content: ' →'; }
 
-  /* The frame's blurred colour blobs behind the panels — her actual
-     assets, blurred like the cover layer. Content stacks above. */
+  /* Blob tint REMOVED (owner: the page-wide wash wasn't nice) — the
+     band gradient + subtle blush page gradient carry the colour now. */
   .pf-page { position: relative; overflow-x: clip; }
-  .pf-page::before {
-    content: '';
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background:
-      url('/design/blob-pink.svg')   no-repeat right -220px bottom -80px / 780px auto,
-      url('/design/blob-blue.svg')   no-repeat right -160px bottom -380px / 1400px auto,
-      url('/design/blob-orange.svg') no-repeat right -200px top 220px / 980px auto,
-      url('/design/blob-red.svg')    no-repeat left -46px top -60px / 366px auto;
-    filter: blur(100px) saturate(1.05);
-    opacity: 0.45;
-  }
   /* Lift ONLY the flow content above the blob layer. A blanket
      `.pf-page > *` also forced the fixed drawers/backdrops to
      position: relative, dumping the order drawer into the page flow
@@ -233,7 +222,7 @@
 :host-context(.dark.design-new) {
   .pf-page {
     background: linear-gradient(to top, #14101f 0%, #171221 55%, #0f0d17 100%);
-    min-height: 100vh;
+    min-height: calc(100dvh - var(--pf-botbar-h, 0px));
   }
 
   .pf-appt-split__pane {
