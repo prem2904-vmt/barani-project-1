@@ -59,6 +59,7 @@ import {
   sortForCollection,
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
+import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -345,6 +346,7 @@ interface OrderGroup {
     TouchButtonComponent,
     KpiStripComponent,
     LabelCardComponent,
+    ScanIconComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./sample-collection.component.html",

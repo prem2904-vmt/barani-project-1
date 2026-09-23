@@ -23,10 +23,7 @@
           @if (!scan.manualEntry()) {
           <button type="button" class="pf-hb-tool press" (click)="openScanner()"
                   title="Scan with camera" aria-label="Open camera scanner">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2M21 7V5a2 2 0 0 0-2-2h-2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2"/>
-              <path d="M6 8v8M9 8v8M12 8v8M15 8v8M18 8v8"/>
-            </svg>
+            <pf-scan-icon [size]="18" />
           </button>
           }
         </ng-container>
@@ -73,10 +70,7 @@
         @if (!scan.manualEntry() && !theme.isNewDesign()) {
         <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
                 title="Scan with camera" aria-label="Open camera scanner">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 7V5a2 2 0 0 1 2-2h2M21 7V5a2 2 0 0 0-2-2h-2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2"/>
-            <path d="M6 8v8M9 8v8M12 8v8M15 8v8M18 8v8"/>
-          </svg>
+          <pf-scan-icon [size]="24" />
         </button>
         }
         <div class="pf-scan__body">

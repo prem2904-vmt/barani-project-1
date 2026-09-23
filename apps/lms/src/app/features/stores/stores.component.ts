@@ -9,6 +9,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { BarcodeDisplayComponent } from '../../shared/components/barcode-display/barcode-display.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { printLabelOnly } from '../../shared/utils/print-label';
+import { ScanIconComponent } from '../../shared/components/icons/scan-icon.component';
 
 interface InvItem { id: string; sku: string; barcode?: string; name: string; category?: string; uom: string; onHand: number; lowStock: boolean; reorderLevel: number; }
 type StockStatus = 'all' | 'ok' | 'low' | 'out';
@@ -30,7 +31,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
 @Component({
   selector: 'pf-stores',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, BarcodeScannerModalComponent],
+  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wrap">
@@ -126,7 +127,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
         <!-- One scan / search box, shared by every action -->
         <div class="scanbar">
           <div class="scanfield">
-            <svg class="scanfield__ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg>
+            <pf-scan-icon class="scanfield__ic" [size]="18" />
             <input #scan class="scanfield__in" autocomplete="off" spellcheck="false"
                    [ngModel]="term()" (ngModelChange)="term.set($event)"
                    (keyup.enter)="resolve(term())"

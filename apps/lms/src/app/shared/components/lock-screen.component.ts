@@ -70,6 +70,21 @@ import { PinDotsComponent } from './pin-dots.component';
       --violet-text: #c084fc;
       --red-text: #fca5a5;
     }
+    /* Light theme (owner): the lock was hard-coded dark, so locking a
+       light-mode session threw the whole screen into night. Same anatomy,
+       light skin — every colour here comes from the tokens above. */
+    :host-context(html.light) .pf-lk-root,
+    :host-context([data-theme='light']) .pf-lk-root {
+      --text-primary: #111928;
+      --text-secondary: #4b5563;
+      --text-muted: #6b7280;
+      --bg-card-solid: #ffffff;
+      /* Carries the card border AND the empty PIN dots — 0.10 left the
+         dots almost invisible on white. */
+      --glass-border: rgba(17, 25, 40, 0.16);
+      --violet-text: #7c3aed;
+      --red-text: #b91c1c;
+    }
     :host-context(html.cap-native) .pf-lk-root {
       top: calc(-1 * max(env(safe-area-inset-top, 0px), 50px));
     }
@@ -85,6 +100,12 @@ import { PinDotsComponent } from './pin-dots.component';
         rgba(5, 5, 15, 0.96);
       backdrop-filter: blur(20px) saturate(1.2);
       -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    }
+    :host-context(html.light) .pf-lk-backdrop,
+    :host-context([data-theme='light']) .pf-lk-backdrop {
+      background:
+        radial-gradient(1200px 800px at 50% 100%, rgba(124, 58, 237, 0.14), transparent 60%),
+        rgba(243, 243, 249, 0.97);
     }
 
     /* ── Profile picker (OTT style) ── */
@@ -141,6 +162,11 @@ import { PinDotsComponent } from './pin-dots.component';
       border-radius: 20px; background: var(--bg-card-solid);
       border: 1px solid var(--glass-border);
       box-shadow: 0 1px 0 0 rgba(255,255,255,.04) inset, 0 30px 70px rgba(0,0,0,.55);
+    }
+    /* A 55%-black drop shadow reads as dirt on a light page. */
+    :host-context(html.light) .pf-lk-card,
+    :host-context([data-theme='light']) .pf-lk-card {
+      box-shadow: 0 18px 44px rgba(17, 25, 40, 0.14), 0 2px 6px rgba(17, 25, 40, 0.06);
     }
     .pf-lk-back {
       align-self: flex-start;

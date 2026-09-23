@@ -5,13 +5,14 @@ import { AvatarComponent } from '../../primitives/avatar.component';
 import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
 import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner-modal.component';
 import { extractAbhaNumber } from '../abha-wizard/abha-prefill.component';
+import { ScanIconComponent } from '../icons/scan-icon.component';
 
 type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
 @Component({
   selector: 'pf-patient-search',
   standalone: true,
-  imports: [AvatarComponent, LoadingLogoComponent, BarcodeScannerModalComponent],
+  imports: [AvatarComponent, LoadingLogoComponent, BarcodeScannerModalComponent, ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (scanning()) {
@@ -56,10 +57,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
         @if (enableScan) {
           <button type="button" class="field-scan" aria-label="Scan patient ABHA / QR"
                   (mousedown)="openScanner(); $event.preventDefault()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
-              <rect x="7" y="7" width="4" height="4" rx="0.5"/><path d="M14 7h3M14 11h3M7 14h10M7 17h6"/>
-            </svg>
+            <pf-scan-icon [size]="18" />
           </button>
         }
         <!-- Trailing-action slot. Projected actions sit at the right edge of

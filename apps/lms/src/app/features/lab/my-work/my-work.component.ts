@@ -35,6 +35,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
+import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 /** Sticky "keep Lab Intake open" choice (new design only). */
@@ -64,8 +65,8 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, SegmentedComponent
-  ],
+    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, SegmentedComponent,
+    ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-mw-page px-5 md:px-8 lg:px-10 pt-4 pb-3">
@@ -89,12 +90,7 @@ const COUNTERS: CounterSpec[] = [
           @if (!scanSvc.manualEntry()) {
           <button type="button" class="pf-hb-tool press" (click)="openBarSearchScanner()"
                   title="Scan with camera" aria-label="Scan with camera">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3" y="7" width="18" height="13" rx="2"/>
-              <path d="M8 7 10 4h4l2 3"/>
-              <circle cx="12" cy="13" r="3.5"/>
-            </svg>
+            <pf-scan-icon [size]="18" />
           </button>
           }
         </ng-container>
@@ -218,11 +214,7 @@ const COUNTERS: CounterSpec[] = [
                   class="pf-scan__camera press"
                   (click)="openBarSearchScanner()"
                   aria-label="Scan with camera">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="7" width="18" height="13" rx="2"/>
-              <path d="M8 7 10 4h4l2 3"/>
-              <circle cx="12" cy="13" r="3.5"/>
-            </svg>
+            <pf-scan-icon [size]="18" />
           </button>
           }
         </div>
@@ -324,12 +316,7 @@ const COUNTERS: CounterSpec[] = [
              the whole width back; one click brings intake back (owner). -->
         <button type="button" class="pf-mw-rail press" (click)="expandIntake()"
                 title="Open Lab Intake" aria-label="Open Lab Intake">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
-            <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-            <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
-          </svg>
+          <pf-scan-icon [size]="16" />
           <span class="pf-mw-rail__label">Lab Intake</span>
         </button>
         } @else {
@@ -378,15 +365,7 @@ const COUNTERS: CounterSpec[] = [
                   </svg>
                 }
               </button>
-              <svg class="pf-mw-scan__icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-                   aria-hidden="true">
-                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
-                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
-                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
-                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-                <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
-              </svg>
+              <pf-scan-icon class="pf-mw-scan__icon" [size]="14" />
               <input #intakeSearchField type="text" class="pf-mw-scan__input"
                      [placeholder]="(scanSvc.manualEntry() ? 'Enter ' : 'Scan or type ') + sampleIdExample()"
                      [value]="intakeScanInput()"
@@ -395,12 +374,7 @@ const COUNTERS: CounterSpec[] = [
               @if (!scanSvc.manualEntry()) {
               <button type="button" class="pf-mw-scan__cam press" (click)="openIntakeScanner()"
                       title="Scan with camera" aria-label="Scan with camera">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="7" width="18" height="13" rx="2"/>
-                  <path d="M8 7 10 4h4l2 3"/>
-                  <circle cx="12" cy="13" r="3.5"/>
-                </svg>
+                <pf-scan-icon [size]="14" />
               </button>
               }
               <button type="button" class="pf-mw-scan__btn press"
@@ -1681,6 +1655,12 @@ const COUNTERS: CounterSpec[] = [
     }
     .pf-tq:hover { border-color: rgba(255,255,255,0.14); box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 6px 20px rgba(0,0,0,0.26); }
     .pf-tq--done { opacity: 0.6; }
+    /* Completed tubes are READ-ONLY, not dead (owner): the 0.6 fade made the
+       sample ID and patient line hard to read on a tab people actually use
+       to look things up. The green cap stripe and the Validated/Submitted
+       tag carry "done" instead. New design only — classic keeps the fade. */
+    :host-context(.design-new) .pf-tq--done { opacity: 1; }
+    :host-context(.design-new) .pf-tq--done .pf-tq__tag { color: #0f9d6f; }
     .pf-tq--rejected { border-color: rgba(242, 85, 90, 0.34); }
 
     /* Cap stripe = priority. */

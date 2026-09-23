@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, input, output, sign
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../models/api-response.model';
 import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner-modal.component';
+import { ScanIconComponent } from '../icons/scan-icon.component';
 
 /**
  * Pull a 14-digit ABHA number out of a scanned/pasted string — the ABHA card QR
@@ -44,7 +45,7 @@ export interface AbhaPrefillData {
 @Component({
   selector: 'pf-abha-prefill',
   standalone: true,
-  imports: [BarcodeScannerModalComponent],
+  imports: [BarcodeScannerModalComponent, ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (scanning()) {
@@ -72,7 +73,7 @@ export interface AbhaPrefillData {
                 <input class="pf-abp__input" inputmode="numeric" maxlength="14" placeholder="12-digit Aadhaar"
                        [value]="aadhaar()" (input)="aadhaar.set(digits($any($event.target).value, 12))" />
                 <button type="button" class="pf-abp__scan" (click)="openScanner()" aria-label="Scan Aadhaar QR">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx="0.5"/><path d="M14 7h3M14 11h3M7 14h10M7 17h6"/></svg>
+                  <pf-scan-icon [size]="18" />
                 </button>
               </div>
               @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
@@ -84,7 +85,7 @@ export interface AbhaPrefillData {
                 <input class="pf-abp__input" inputmode="numeric" maxlength="17" placeholder="14-digit ABHA"
                        [value]="abha()" (input)="abha.set(digits($any($event.target).value, 14))" />
                 <button type="button" class="pf-abp__scan" (click)="openScanner()" aria-label="Scan ABHA QR">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="4" height="4" rx="0.5"/><path d="M14 7h3M14 11h3M7 14h10M7 17h6"/></svg>
+                  <pf-scan-icon [size]="18" />
                 </button>
               </div>
               @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }

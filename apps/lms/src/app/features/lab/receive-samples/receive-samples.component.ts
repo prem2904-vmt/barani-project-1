@@ -23,6 +23,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
+import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 
 const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
@@ -40,8 +41,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     TouchButtonComponent,
     KpiStripComponent,
     BarcodeScannerModalComponent,
-    HeroBandComponent
-  ],
+    HeroBandComponent,
+    ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.pt-6]="!embedded" [class.pb-10]="!embedded"
@@ -63,12 +64,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             <ng-container band-inline>
               <button type="button" class="pf-hb-tool press" (click)="openBarcodeScanner()"
                       title="Scan with camera" aria-label="Scan with camera">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <rect x="3" y="7" width="18" height="13" rx="2"/>
-                  <path d="M8 7 10 4h4l2 3"/>
-                  <circle cx="12" cy="13" r="3.5"/>
-                </svg>
+                <pf-scan-icon [size]="18" />
               </button>
             </ng-container>
           </pf-hero-band>
@@ -112,13 +108,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                  style="color: var(--text-muted);">Scan barcode</label>
           <div class="flex gap-2 pf-rs-scanrow">
             <div class="scan-field">
-              <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
-                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
-                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
-                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
-                <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
-              </svg>
+              <pf-scan-icon class="scan-icon" [size]="18" />
               <input type="text"
                      placeholder="HAEM260800001"
                      [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
