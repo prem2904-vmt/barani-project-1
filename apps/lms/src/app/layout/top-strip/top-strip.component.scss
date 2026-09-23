@@ -1170,8 +1170,9 @@ a.pf-ts-tenant:hover {
    flips to open UPWARD when the bar docks at the bottom edge. ── */
 :host-context(.design-new.nav-bottom) .pf-brand-pop,
 :host-context(.design-new.nav-bottom) .pf-profile-pop,
-:host-context(.design-new.nav-bottom) .pf-ts-branch-pop,
-:host-context(.design-new.nav-bottom) [class*='-pop'] {
+:host-context(.design-new.nav-bottom) .pf-ts-branch__pop,
+:host-context(.design-new.nav-bottom) [class*='-pop'],
+:host-context(.design-new.nav-bottom) [class*='__pop'] {
   top: auto !important;
   bottom: calc(100% + 10px) !important;
 }
