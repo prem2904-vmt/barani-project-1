@@ -319,6 +319,23 @@
             </span>
           </button>
 
+          @if (themeService.isNewDesign()) {
+          <!-- EXPERIMENT: bottom navbar preview — pages left, chat dock
+               right. Lets the owner feel the layout before committing. -->
+          <button type="button" class="pf-profile-item press" (click)="themeService.toggleBottomNav()"
+                  [attr.aria-pressed]="themeService.bottomNav()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <path d="M3 15h18"/>
+            </svg>
+            <span class="flex-1 text-left">Bottom bar</span>
+            <span class="pf-dm-pill" [class.pf-dm-pill--on]="themeService.bottomNav()">
+              {{ themeService.bottomNav() ? 'On' : 'Off' }}
+            </span>
+          </button>
+          }
+
           @if (designMode.available()) {
             <!-- Designer capture prep for the Figma pipeline (design_mode
                  permission). Menu stays open so the switch reads as a setting. -->

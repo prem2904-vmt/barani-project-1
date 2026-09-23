@@ -17,6 +17,7 @@ import { AmbientBgComponent } from "../../shared/components/ambient-bg/ambient-b
 import { DialogHostComponent } from "../../shared/components/dialog-host/dialog-host.component";
 import { BottomNavComponent } from "../bottom-nav/bottom-nav.component";
 import { TopStripComponent } from "../top-strip/top-strip.component";
+import { ThemeService } from "../../core/services/theme.service";
 import { PatientProfileModalComponent } from "../../shared/components/patient-profile-modal/patient-profile-modal.component";
 import { CallOverlayComponent } from "../../shared/components/call-overlay/call-overlay.component";
 import { PeopleDrawerComponent } from "../../shared/components/people-drawer/people-drawer.component";
@@ -300,6 +301,20 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
       }
+      /* ── Bottom-navbar EXPERIMENT (desktop, new design, opt-in via
+         avatar menu → "Bottom bar"): the REAL top bar — brand, pages,
+         branch, bell, avatar — docks to the bottom edge instead. ── */
+      :host-context(.design-new.nav-bottom) .pf-chrome {
+        position: fixed;
+        left: 0; right: 0; bottom: 0; top: auto;
+        border-top: 1px solid var(--header-border);
+        border-bottom: none;
+      }
+      /* Content clears the docked bar; the band now starts at the very top. */
+      :host-context(.design-new.nav-bottom) .shell-main {
+        padding-bottom: 70px !important;
+      }
+
       /* NEW design (Figma 446-113): a FLUSH full-width bar — no
          floating-pill margin, radius, or gap; content (the hero band)
          sits directly against its bottom edge. */
@@ -486,6 +501,8 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 })
 export class ShellComponent {
   readonly toasts = inject(ToastService);
+  /** Bottom-bar experiment (new design, opt-in via avatar menu). */
+  protected readonly theme = inject(ThemeService);
   readonly scan = inject(ScanService);
   readonly patientTimeline = inject(PatientTimelineService);
   protected readonly designMode = inject(DesignModeService);

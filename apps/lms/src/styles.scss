@@ -2408,3 +2408,10 @@ html.pf-design-mode *::after {
 html.pf-design-mode {
   scroll-behavior: auto !important;
 }
+
+/* Bottom-navbar experiment: the bell panel flips upward too. */
+:root.design-new.nav-bottom .pf-bell-panel {
+  top: auto;
+  bottom: calc(100% + 10px);
+  margin-top: 0;
+}

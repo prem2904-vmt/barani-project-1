@@ -27,6 +27,11 @@ export class ThemeService {
   readonly design = this._design.asReadonly();
   readonly isNewDesign = computed(() => this._design() === 'new');
 
+  /** EXPERIMENT (owner preview): bottom navbar — pages left, chat dock
+   *  right. New design only; off by default. */
+  private readonly _bottomNav = signal<boolean>(this.readStoredBottomNav());
+  readonly bottomNav = this._bottomNav.asReadonly();
+
   private readonly _mediaListener = (e: MediaQueryListEvent) => {
     if (this._mode() === 'system') {
       this.apply(e.matches ? 'light' : 'dark');
@@ -72,6 +77,19 @@ export class ThemeService {
     root.classList.toggle('design-new', version === 'new');
     root.classList.toggle('design-classic', version === 'classic');
     root.setAttribute('data-design', version);
+    // Bottom-nav experiment rides the same boot path.
+    root.classList.toggle('nav-bottom', this._bottomNav());
+  }
+
+  toggleBottomNav(): void {
+    const next = !this._bottomNav();
+    this._bottomNav.set(next);
+    try { this.win?.localStorage.setItem('pf-bottom-nav', next ? '1' : '0'); } catch { /* ignore */ }
+    this.doc.documentElement.classList.toggle('nav-bottom', next);
+  }
+
+  private readStoredBottomNav(): boolean {
+    try { return this.win?.localStorage.getItem('pf-bottom-nav') === '1'; } catch { return false; }
   }
 
   private readStoredDesign(): DesignVersion {
