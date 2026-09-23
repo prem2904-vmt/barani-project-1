@@ -3,7 +3,6 @@ import { DatePipe } from '@angular/common';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ChatWindowsService } from '../../../core/services/chat-windows.service';
-import { MessagesPanelService } from '../../../core/services/messages-panel.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { Conversation } from '../../models/chat.model';
 import { conversationInitials, conversationTitle } from '../../models/conversation-name';
@@ -79,33 +78,28 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       </div>
 
       <!-- Head rail — minimized chats stacked VERTICALLY at the right
-           edge (the owner's Facebook reference), newest on top, with the
-           compose button pinned at the bottom. -->
-      <div class="pf-cw__rail">
-        @for (c of heads(); track c.id) {
-          <button type="button" class="pf-cw__head press" (click)="windowsSvc.openWindow(c.id)"
-                  [title]="title(c)" [attr.aria-label]="'Open chat with ' + title(c)">
-            <span class="pf-cw__init">{{ initials(c) }}</span>
-            @if (c.unreadCount > 0) {
-              <span class="pf-cw__head-badge">{{ c.unreadCount > 9 ? '9+' : c.unreadCount }}</span>
-            }
-          </button>
-        }
-        <button type="button" class="pf-cw__head pf-cw__compose press" (click)="msgsPanel.show()"
-                title="New message" aria-label="New message">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-          </svg>
-        </button>
-      </div>
+           edge (the owner's Facebook reference). NO compose button here:
+           new messages start from the navbar's Messages icon only. -->
+      @if (heads().length) {
+        <div class="pf-cw__rail">
+          @for (c of heads(); track c.id) {
+            <button type="button" class="pf-cw__head press" (click)="windowsSvc.openWindow(c.id)"
+                    [title]="title(c)" [attr.aria-label]="'Open chat with ' + title(c)">
+              <span class="pf-cw__init">{{ initials(c) }}</span>
+              @if (c.unreadCount > 0) {
+                <span class="pf-cw__head-badge">{{ c.unreadCount > 9 ? '9+' : c.unreadCount }}</span>
+              }
+            </button>
+          }
+        </div>
+      }
     }
   `,
   styles: [`
     /* Dock: bottom-right, above the app bar when it's docked there. */
     .pf-cw {
       position: fixed;
-      right: 76px;                 /* clear of the head rail */
+      right: 72px;                 /* clear of the head rail */
       bottom: calc(var(--pf-botbar-h, 0px) + 12px);
       z-index: 48;
       display: flex;
@@ -219,8 +213,6 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       flex-direction: column;
       gap: 10px;
     }
-    .pf-cw__compose { color: var(--text-secondary); }
-    .pf-cw__compose:hover { color: #7c3aed; border-color: rgba(124, 58, 237, 0.55); }
     .pf-cw__head {
       position: relative;
       width: 44px; height: 44px; border-radius: 9999px;
@@ -245,7 +237,6 @@ export class ChatWindowsComponent {
   protected readonly theme = inject(ThemeService);
   protected readonly chat = inject(ChatService);
   protected readonly windowsSvc = inject(ChatWindowsService);
-  protected readonly msgsPanel = inject(MessagesPanelService);
   private readonly auth = inject(AuthService);
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
 
