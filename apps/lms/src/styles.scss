@@ -2532,11 +2532,9 @@ html.pf-design-mode {
    the dot + coloured word; row actions become the violet-outline
    "Download →" button. Classic untouched. ══ */
 :root.design-new {
-  /* Results rows carry NO status badge: the KPI strip above already
-     counts Completed / Partial / Delivered / Failed, and each row's
-     coloured accent bar repeats the state. The row is just patient +
-     when + actions. */
-  .pf-rq-row__badge { display: none !important; }
+  /* Results rows keep their status — the KPI strip can be switched off
+     per screen, and the accent bar alone is too subtle to name a state.
+     It renders as the frontdesk dot + word (rule below), not a pill. */
 
   /* Status chips inside queue rows → dot + word. The chip already
      carries the right tone COLOUR, so we only drop the pill and prefix
