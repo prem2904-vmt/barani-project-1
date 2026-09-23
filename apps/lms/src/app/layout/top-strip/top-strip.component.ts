@@ -145,7 +145,16 @@ export class TopStripComponent implements OnInit, OnDestroy {
    * nav pipeline already applies the module entitlement via gateModules.
    */
   readonly messagesModuleOn = computed(() =>
-    this.navAll().some(i => i.id === 'messages') && this.process.isEnabled('messages'));
+    this.navAll().some(i => TopStripComponent.isMessagesItem(i)) && this.process.isEnabled('messages'));
+
+  /**
+   * Is this nav entry the Messages work area? Workflow-built items are
+   * keyed by WORK-AREA id (a uuid), not the literal 'messages' — the
+   * route is the only reliable discriminator.
+   */
+  private static isMessagesItem(i: NavItem): boolean {
+    return i.id === 'messages' || i.href === '/messages' || i.href.startsWith('/messages/');
+  }
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
   protected readonly chat = inject(ChatService);
@@ -197,8 +206,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   readonly primary = computed(() => {
     let items = this.navAll();
-    // NEW design: Messages is a chat surface (bar icon -> drawer), not a page.
-    if (this.themeService.isNewDesign()) items = items.filter(i => i.id !== 'messages');
+    // NEW design: Messages is a chat surface (bar icon → panel + floating
+    // windows), never a page — drop its work area from the nav.
+    if (this.themeService.isNewDesign()) items = items.filter(i => !TopStripComponent.isMessagesItem(i));
     // OPD: doctors get their Consult Room — but only once the OPD module is
     // actually usable (tenant entitlement, or the dev preview flag). Keeps the
     // in-progress consult build invisible on shared environments.
