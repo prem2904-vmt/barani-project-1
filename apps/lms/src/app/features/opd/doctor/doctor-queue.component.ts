@@ -1,4 +1,6 @@
 import { DatePipe } from '@angular/common';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -38,12 +40,24 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
 @Component({
   selector: 'pf-doctor-queue',
   standalone: true,
-  imports: [DatePipe, LoadingLogoComponent],
+  imports: [DatePipe, LoadingLogoComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-page">
+    <section class="pf-page dq-page">
+      @if (theme.isNewDesign()) {
+      <!-- Common hero search (designer band): filters the consult queue
+           by patient; Refresh rides as the screen's primary action. -->
+      <pf-hero-band
+        placeholder="Search patient…"
+        [value]="query()"
+        (valueChange)="query.set($event)">
+        <ng-container band-actions>
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="load()">Refresh</button>
+        </ng-container>
+      </pf-hero-band>
+      }
       <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
-        <div class="dq-head">
+        <div class="dq-head" [class.pf-classic-only]="true">
           <div class="min-w-0">
             <h1 class="dq-title">Consult room</h1>
             <p class="dq-sub">{{ today | date:'EEEE, MMM d' }} · {{ counts().waiting }} waiting · {{ counts().done }} seen</p>
@@ -145,6 +159,8 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
   `]
 })
 export class DoctorQueueComponent implements OnInit {
+  /** Design gate: the band + title rules are new-design only. */
+  readonly theme = inject(ThemeService);
   private readonly api = inject(ApiService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
@@ -162,10 +178,15 @@ export class DoctorQueueComponent implements OnInit {
   readonly loading = signal(true);
   private readonly _rows = signal<Consultation[]>([]);
 
+  /** Band search — patient name, same contract as the other queues. */
+  readonly query = signal('');
+
   readonly visible = computed(() => {
     const f = this.filter();
+    const q = this.query().trim().toLowerCase();
     const rows = this._rows();
-    return f === 'all' ? rows.filter(r => r.status !== 'cancelled') : rows.filter(r => r.status === f);
+    const byStatus = f === 'all' ? rows.filter(r => r.status !== 'cancelled') : rows.filter(r => r.status === f);
+    return q ? byStatus.filter(r => (r.patientName ?? '').toLowerCase().includes(q)) : byStatus;
   });
   readonly counts = computed(() => ({
     waiting: this._rows().filter(r => r.status === 'waiting').length,

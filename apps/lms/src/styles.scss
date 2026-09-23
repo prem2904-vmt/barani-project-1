@@ -294,8 +294,14 @@
 :root.design-new .pf-rs-page,
 :root.design-new .pf-rq-page,
 :root.design-new .pf-ov,
+:root.design-new .dq-page,
 :root.design-new .pv-page {
   padding-top: 0 !important;
+}
+:root.design-new .dq-page { --pf-hb-bleed: 1rem; }
+:root.design-new .dq-page .pf-page__header { padding-top: 0 !important; }
+@media (min-width: 1024px) {
+  :root.design-new .dq-page { --pf-hb-bleed: 2.5rem; }
 }
 :root.design-new .pf-ov { --pf-hb-bleed: 1rem; max-width: none !important; }
 @media (min-width: 768px) {
