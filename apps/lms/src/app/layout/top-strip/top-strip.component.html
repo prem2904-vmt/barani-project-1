@@ -153,25 +153,6 @@
     </div>
     }
 
-    @if (themeService.isNewDesign() && themeService.bottomNav() && messagesModuleOn() && dockedConvos().length) {
-    <!-- Chat dock (owner): opened conversations ride the bar like draft
-         chips — click to jump back into the thread. Full name on web,
-         initials ("SA") on shrink. -->
-    <div class="pf-chatdock" role="group" aria-label="Open chats">
-      <span class="pf-draftshelf__rule" aria-hidden="true"></span>
-      @for (c of dockedConvos(); track c.id) {
-        <button type="button" class="pf-chatdock__chip press" (click)="openConvo(c)"
-                [title]="'Chat — ' + convoTitle(c)">
-          <span class="pf-chatdock__init">{{ convoInitials(c) }}</span>
-          <span class="pf-chatdock__name">{{ convoTitle(c) }}</span>
-          @if (c.unreadCount > 0) { <span class="pf-chatdock__unread">{{ c.unreadCount }}</span> }
-          <span class="pf-chatdock__x" (click)="chatDock.remove(c.id); $event.stopPropagation()"
-                title="Remove from dock" aria-label="Remove from dock">×</span>
-        </button>
-      }
-    </div>
-    }
-
     <!-- Spacer pushes the nav + right cluster to the far edge -->
     <div class="pf-ts-spacer flex-1 min-w-0"></div>
 

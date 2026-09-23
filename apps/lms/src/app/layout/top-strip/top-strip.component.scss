@@ -1380,15 +1380,13 @@ a.pf-ts-tenant:hover {
   background: transparent; border: none; cursor: pointer; text-align: left;
 }
 .pf-msgs-pop__item:hover { background: var(--bg-hover); }
-.pf-msgs-pop__init,
-.pf-chatdock__init {
+.pf-msgs-pop__init {
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; border-radius: 9999px; flex-shrink: 0;
   background: #eee1fd; color: #7c3aed; border: 1px solid #ecd8ff;
   font-size: 11px; font-weight: 600;
 }
-:root.dark .pf-msgs-pop__init,
-:root.dark .pf-chatdock__init {
+:root.dark .pf-msgs-pop__init {
   background: rgba(139, 92, 246, 0.18); color: #c4b5fd; border-color: rgba(168, 85, 247, 0.3);
 }
 .pf-msgs-pop__body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
@@ -1406,40 +1404,6 @@ a.pf-ts-tenant:hover {
   font-size: 12px; font-weight: 600; color: #7c3aed; text-align: center;
 }
 :root.dark .pf-msgs-pop__all { color: #c4b5fd; }
-
-/* ── Chat dock chips (bottom bar, like drafts; initials-only on shrink). ── */
-.pf-chatdock { display: none; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; }
-:host-context(.design-new.nav-bottom) .pf-chatdock { display: flex; }
-@media (max-width: 767px) {
-  :host-context(.design-new.nav-bottom) .pf-chatdock { display: none; }
-}
-.pf-chatdock__chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 30px; padding: 0 8px 0 2px; border-radius: 9999px;
-  background: var(--bg-card-solid, #fff);
-  border: 1px solid rgba(124, 58, 237, 0.35);
-  color: var(--text-secondary);
-  font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap;
-}
-.pf-chatdock__chip:hover { background: rgba(124, 58, 237, 0.08); border-color: #7c3aed; }
-.pf-chatdock__init { width: 24px; height: 24px; font-size: 10px; }
-.pf-chatdock__name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); }
-.pf-chatdock__unread {
-  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 9999px;
-  background: var(--gradient-primary); color: #fff;
-  font-size: 9.5px; font-weight: 700; line-height: 16px; text-align: center;
-}
-.pf-chatdock__x {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; border-radius: 9999px;
-  color: var(--text-muted); font-size: 12px; line-height: 1;
-}
-.pf-chatdock__x:hover { background: var(--bg-hover); color: var(--text-primary); }
-/* Shrink (<1280): initials only — "Shugandhan Arulvelan" → "SA". */
-@media (max-width: 1279px) {
-  .pf-chatdock__name { display: none; }
-  .pf-chatdock__chip { padding: 0 6px 0 2px; }
-}
 
 /* Messages panel: search + section labels for the people list. */
 .pf-msgs-pop__search {

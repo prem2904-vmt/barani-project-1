@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
-import { ChatDockService } from '../../core/services/chat-dock.service';
 import { ChatWindowsService } from '../../core/services/chat-windows.service';
 import { DirectoryService, DirectoryUser } from '../../core/services/directory.service';
 import { MessagesPanelService } from '../../core/services/messages-panel.service';
@@ -59,7 +58,6 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Facebook-style chat entry (new design): icon after the bell opens the
    *  people/chat drawer; the Messages PAGE leaves the nav. */
   protected readonly peopleDrawer = inject(PeopleDrawerService);
-  protected readonly chatDock = inject(ChatDockService);
   protected readonly directory = inject(DirectoryService);
   /** Messages panel open state — shared so the windows' compose button
    *  can raise the same list. */
@@ -100,7 +98,6 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.msgsPanel.close();
     try {
       const convId = await this.chat.openDirectConversation(u.id);
-      this.chatDock.add(convId);
       if (this.themeService.isNewDesign() && this.chatWindows.capacity() > 0) {
         this.chatWindows.openWindow(convId);
         void this.chat.loadThread(convId);
@@ -123,12 +120,6 @@ export class TopStripComponent implements OnInit, OnDestroy {
   convoTitle(c: Conversation): string { return conversationTitle(c, this.meId()); }
   convoInitials(c: Conversation): string { return conversationInitials(c, this.meId()); }
 
-  /** Docked conversations, resolved from the live list (dead ids drop out). */
-  readonly dockedConvos = computed(() => {
-    const byId = new Map(this.chat.conversations().map(c => [c.id, c] as const));
-    return this.chatDock.ids().map(id => byId.get(id)).filter((c): c is Conversation => !!c);
-  });
-
   /**
    * Open a conversation. Desktop/tablet in the new design get a floating
    * Messenger-style WINDOW (several at once); phones — where a 330px
@@ -136,7 +127,6 @@ export class TopStripComponent implements OnInit, OnDestroy {
    * Either way the bar keeps a chip for the thread.
    */
   openConvo(c: Conversation): void {
-    this.chatDock.add(c.id);
     this.msgsPanel.close();
     if (this.themeService.isNewDesign() && this.chatWindows.capacity() > 0) {
       this.chatWindows.openWindow(c.id);
