@@ -138,7 +138,7 @@
     </div>
 
     <div class="mb-5">
-      <pf-segmented [options]="filterOptions" [value]="filter()" size="md" (valueChange)="setFilter($event)">
+      <pf-segmented [options]="filterOptions()" [value]="filter()" size="md" (valueChange)="setFilter($event)">
       </pf-segmented>
 
       <!-- Phone-only (<=640px): the scrolling pill row becomes an

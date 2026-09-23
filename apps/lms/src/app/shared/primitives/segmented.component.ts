@@ -6,6 +6,11 @@ export interface SegmentedOption<T = string> {
   /** Greyed out + unclickable; `hint` explains why (shown as tooltip). */
   disabled?: boolean;
   hint?: string;
+  /** Optional state colour — rendered as a leading dot, so the toggle
+   *  doubles as the legend for colour-coded rows. */
+  dot?: string;
+  /** Optional count shown after the label. */
+  count?: number;
 }
 
 export type SegmentedSize = 'sm' | 'md';
@@ -22,7 +27,9 @@ export type SegmentedSize = 'sm' | 'md';
                 [disabled]="opt.disabled ?? false"
                 [title]="opt.hint || ''"
                 (click)="select(opt.value)">
+          @if (opt.dot) { <span class="seg-dot" [style.background]="opt.dot" aria-hidden="true"></span> }
           {{ opt.label }}
+          @if (opt.count !== undefined) { <span class="seg-count">{{ opt.count }}</span> }
         </button>
       }
     </div>
@@ -49,6 +56,13 @@ export type SegmentedSize = 'sm' | 'md';
       color: var(--text-tertiary);
       transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.08s ease;
       cursor: pointer;
+    }
+    .seg-item { gap: 7px; }
+    .seg-dot { width: 7px; height: 7px; border-radius: 9999px; flex-shrink: 0; }
+    .seg-count {
+      font-size: 11px; font-weight: 600;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      opacity: 0.8;
     }
     .seg-item:active:not(:disabled) { transform: scale(0.97); }
     .seg-item:hover:not(:disabled)  { color: var(--text-primary); }

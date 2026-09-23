@@ -113,13 +113,18 @@ export class ReportQueueComponent implements OnInit {
   // (the technical name stays 'pending' for backwards compatibility;
   // the user-facing label reflects the semantic — these are completed
   // work products, not unfinished work).
-  readonly filterOptions: SegmentedOption<Filter>[] = [
-    { value: "all", label: "All" },
-    { value: "pending", label: "Completed" },
-    { value: "partial", label: "Partial" },
-    { value: "delivered", label: "Delivered" },
-    { value: "failed", label: "Failed" },
-  ];
+  /**
+   * The filter toggle IS the status legend (owner): each state carries
+   * its colour dot and live count, so the rows themselves don't have to
+   * repeat the word — their accent bar is enough.
+   */
+  readonly filterOptions = computed<SegmentedOption<Filter>[]>(() => [
+    { value: "all", label: "All", dot: "#a78bfa", count: this.items().length },
+    { value: "pending", label: "Completed", dot: "#f59e0b", count: this.counts().pending },
+    { value: "partial", label: "Partial", dot: "#38bdf8", count: this.partialOrders().length },
+    { value: "delivered", label: "Delivered", dot: "#10b981", count: this.counts().delivered },
+    { value: "failed", label: "Failed", dot: "#f43f5e", count: this.counts().failed },
+  ]);
 
   // Default to 'pending' (Completed) — the queue's primary purpose is
   // showing what's done and waiting for handover.
@@ -147,7 +152,7 @@ export class ReportQueueComponent implements OnInit {
 
   readonly activeFilterLabel = computed(
     () =>
-      this.filterOptions.find((o) => o.value === this._filter())?.label ??
+      this.filterOptions().find((o) => o.value === this._filter())?.label ??
       "All",
   );
   setFilter(f: Filter) {
