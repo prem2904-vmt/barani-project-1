@@ -142,58 +142,56 @@
    LIGHT THEME
    ============================================================= */
 :root.light {
-  /* Eye-comfortable light — NO pure white anywhere (pure #fff + near-black text
-     is maximal luminance/contrast and fatigues the eye on modern high-nit
-     screens; UX guidance = off-white surfaces, dark-not-black text, comfortable
-     not-maximal contrast). Every surface is a soft lavender-tinted off-white at
-     a moderate luminance, lifted off a slightly deeper lavender page; text is a
-     deep indigo-slate. Keeps the lavender identity + frosted-glass depth. */
-  --bg-primary: #e3dfed;
-  --bg-secondary: #e8e4f1;
-  --bg-tertiary: #ece8f4;
-  --bg-card: rgba(244, 242, 250, 0.62);
-  --bg-card-solid: #f4f2fa;
-  --bg-input: #f7f6fc;
-  --bg-hover: rgba(124, 58, 237, 0.07);
-  --bg-active: rgba(124, 58, 237, 0.12);
+  /* Designer light world (Figma "Prefrontal LMS — Design System", 446-113):
+     whisper-lavender page, PURE WHITE cards, neutral gray text ramp
+     (#111928 → #9CA3AF) and #E5E7EB hairlines. The violet identity comes
+     from the hero band, primaries, and states — not from tinted surfaces. */
+  --bg-primary: #f3f1f8;
+  --bg-secondary: #f6f4fa;
+  --bg-tertiary: #f8f7fc;
+  --bg-card: rgba(255, 255, 255, 0.86);
+  --bg-card-solid: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: rgba(124, 58, 237, 0.06);
+  --bg-active: rgba(124, 58, 237, 0.11);
 
-  --surface-1: rgba(244, 242, 250, 0.55);
-  --surface-2: rgba(247, 245, 252, 0.68);
-  --surface-3: #e9e5f2;
-  --surface-elevated: rgba(248, 246, 253, 0.78);
+  --surface-1: rgba(255, 255, 255, 0.72);
+  --surface-2: rgba(255, 255, 255, 0.85);
+  --surface-3: #f0f1f3;
+  --surface-elevated: #ffffff;
 
-  --text-primary: #262536;
-  --text-secondary: #4c4a63;
-  --text-tertiary: #6d6b84;
-  --text-muted: #9997b0;
+  --text-primary: #111928;
+  --text-secondary: #374151;
+  --text-tertiary: #6b7280;
+  --text-muted: #9ca3af;
   --text-inverse: #ffffff;
 
-  --border-primary: rgba(124, 58, 237, 0.2);
-  --border-secondary: rgba(124, 58, 237, 0.11);
-  --border-muted: #d8d3e8;
-  --border-input: #cec8e0;
+  --border-primary: rgba(124, 58, 237, 0.18);
+  --border-secondary: rgba(17, 25, 40, 0.07);
+  --border-muted: #e5e7eb;
+  --border-input: #d1d5db;
 
   --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
   --shadow-md: 0 4px 14px rgba(76, 29, 149, 0.08);
   --shadow-lg: 0 14px 34px rgba(76, 29, 149, 0.11);
   --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.14);
 
-  --input-bg: #f7f6fc;
-  --input-border: #d4cee6;
+  --input-bg: #ffffff;
+  --input-border: #d1d5db;
   --input-border-focus: var(--color-violet-500);
-  --input-text: #262536;
-  --input-placeholder: #9997b0;
+  --input-text: #111928;
+  --input-placeholder: #9ca3af;
 
-  --card-bg: rgba(244, 242, 250, 0.64);
-  --card-border: rgba(124, 58, 237, 0.13);
+  --card-bg: rgba(255, 255, 255, 0.88);
+  --card-border: #e5e7eb;
   --card-hover-border: rgba(124, 58, 237, 0.38);
 
-  --header-bg: rgba(231, 227, 242, 0.82);
-  --header-border: rgba(124, 58, 237, 0.11);
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --header-border: #e5e7eb;
 
-  --scrollbar-track: #e0dbee;
-  --scrollbar-thumb: #bbb2d4;
-  --scrollbar-thumb-hover: #988dc0;
+  --scrollbar-track: #eceef2;
+  --scrollbar-thumb: #cdd2da;
+  --scrollbar-thumb-hover: #aab1bd;
 
   --success-bg: rgba(16, 185, 129, 0.1);
   --success-text: #059669;
@@ -212,9 +210,9 @@
      edge — not the glary near-opaque white of before. */
   /* Glass base is a soft lavender off-white (not pure white) so frosted panels
      read calm, not glary. */
-  --glass-bg: rgba(246, 244, 252, 0.55);
-  --glass-bg-hover: rgba(248, 246, 253, 0.62);
-  --glass-border: rgba(124, 58, 237, 0.15);
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-bg-hover: rgba(255, 255, 255, 0.8);
+  --glass-border: #e5e7eb;
   --glass-border-hover: rgba(124, 58, 237, 0.26);
   --glass-blur: 20px;
   --glass-shadow: 0 8px 28px rgba(76, 29, 149, 0.08);

@@ -1,18 +1,9 @@
 <section class="pf-page">
 
-  <!-- ── Compact header ─────────────────────────────────────── -->
+  <!-- ── Compact header — the hero band IS the header (designer system:
+          no greeting row; the band sits straight under the navbar). ── -->
   <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
     <div class="pf-head">
-      <!-- Greeting block — a date eyebrow above the greeting gives the
-           left side enough visual weight to balance the action buttons
-           on the right. -->
-      <div class="pf-head__greet">
-        <p class="pf-head__eyebrow">{{ today | date:'EEEE · d MMM' }}</p>
-        <h1 class="pf-head__title" [attr.title]="'Good day, ' + firstName()">
-          Good day, <span class="pf-head__name">{{ firstName() }}</span>
-        </h1>
-      </div>
-
       @if(false){
       <!-- Compact ops alerts: ready-for-delivery + stragglers follow-up.
            Sit inline with the page header so they're persistently visible
