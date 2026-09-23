@@ -30,6 +30,7 @@ import { OrderSample, OrderTest, logicalTestCount } from '../../../shared/models
 import { formatPatientInfo, formatPatientMeta } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
@@ -58,11 +59,33 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent
+    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-5 md:px-8 lg:px-10 pt-4 pb-3">
+
+      <!-- Common hero search (designer band): intake receive — scan or type
+           a sample ID and Enter receives it into the lab. -->
+      <pf-hero-band
+        [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
+        [value]="intakeScanInput()"
+        (valueChange)="intakeScanInput.set($event)"
+        (submitted)="intakeReceive()">
+        <ng-container band-tools>
+          @if (!scanSvc.manualEntry()) {
+          <button type="button" class="pf-hb-tool press" (click)="openIntakeScanner()"
+                  title="Scan with camera" aria-label="Scan with camera">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="7" width="18" height="13" rx="2"/>
+              <path d="M8 7 10 4h4l2 3"/>
+              <circle cx="12" cy="13" r="3.5"/>
+            </svg>
+          </button>
+          }
+        </ng-container>
+      </pf-hero-band>
 
       <!-- KPI strip: not on phone (status lives in the header Stats popover). -->
       @if (!isPhone()) {

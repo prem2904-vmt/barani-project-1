@@ -37,6 +37,7 @@ import {
 import { BarcodeScannerModalComponent } from "../../../shared/components/barcode-scanner/barcode-scanner-modal.component";
 import { LoadingLogoComponent } from "../../../shared/components/loading-logo/loading-logo.component";
 import { AvatarComponent } from "../../../shared/primitives/avatar.component";
+import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
 import { ScreenHeaderComponent } from "../../../shared/primitives/screen-header.component";
 import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
@@ -336,6 +337,7 @@ interface OrderGroup {
     FormsModule,
     DatePipe,
     AvatarComponent,
+    HeroBandComponent,
     BarcodeScannerModalComponent,
     LoadingLogoComponent,
     ScreenHeaderComponent,

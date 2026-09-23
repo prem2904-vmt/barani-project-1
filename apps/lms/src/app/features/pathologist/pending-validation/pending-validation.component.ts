@@ -19,6 +19,7 @@ import { SkeletonComponent } from '../../../shared/primitives/skeleton.component
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 
 type Tab = 'mine' | 'all';
 type Level = 'urgent' | 'high' | 'normal';
@@ -43,11 +44,18 @@ interface ResultSnapshot {
     SkeletonComponent,
     TileComponent,
     TouchButtonComponent,
-    KpiStripComponent
+    KpiStripComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pv-page px-4 md:px-8 pt-6">
+      <!-- Common hero search (designer band): filters the validation queue
+           by patient, sample ID, or test name. -->
+      <pf-hero-band
+        placeholder="Search patient · sample ID · test…"
+        [value]="query()"
+        (valueChange)="query.set($event)"></pf-hero-band>
       <div class="pv-head">
         <pf-kpi-strip screen="pathologist"></pf-kpi-strip>
         <pf-screen-header
@@ -378,8 +386,16 @@ export class PendingValidationComponent implements OnInit {
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
 
+  /** Hero-band query — filters the queue by patient, sample ID, or test. */
+  readonly query = signal('');
+
   readonly buckets = computed(() => {
-    const enriched: Enriched[] = this._rows().map(t => {
+    const q = this.query().trim().toLowerCase();
+    const visible = !q ? this._rows() : this._rows().filter(t =>
+      (t.subOrder?.order?.patient?.displayName ?? '').toLowerCase().includes(q) ||
+      (t.subOrder?.barcode ?? '').toLowerCase().includes(q) ||
+      (t.test?.name ?? '').toLowerCase().includes(q));
+    const enriched: Enriched[] = visible.map(t => {
       const ral = t.subOrder?.receivedAtLab;
       const budget = (t.test?.tatHours ?? 0) * 60;
       const elapsed = ral ? (Date.now() - new Date(ral).getTime()) / 60000 : 0;

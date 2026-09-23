@@ -28,24 +28,40 @@
       }
 
       @if (!deepLinkMode()) {
+      <!-- Common hero search (designer band): live-filters the pending list
+           while typing; Enter runs the exact barcode/sample lookup. The
+           camera scanner docks as a tool at the bar's right edge. Hidden
+           when EMBEDDED in My Work — that page hosts its own band. -->
+      @if (!embedded) {
+      <pf-hero-band
+        [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
+        [value]="scanValue()"
+        (valueChange)="onSearchInput($event)"
+        (submitted)="runSearch()">
+        <ng-container band-tools>
+          @if (!scan.manualEntry()) {
+          <button type="button" class="pf-hb-tool press" (click)="openScanner()"
+                  title="Scan with camera" aria-label="Open camera scanner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2M21 7V5a2 2 0 0 0-2-2h-2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2"/>
+              <path d="M6 8v8M9 8v8M12 8v8M15 8v8M18 8v8"/>
+            </svg>
+          </button>
+          }
+        </ng-container>
+      </pf-hero-band>
+      } @else {
+      <!-- Embedded pane keeps a plain filter box (My Work's band is above). -->
       <div class="pf-scan">
-        @if (!scan.manualEntry()) {
-        <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
-                title="Scan with camera" aria-label="Open camera scanner">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 7V5a2 2 0 0 1 2-2h2M21 7V5a2 2 0 0 0-2-2h-2M3 17v2a2 2 0 0 0 2 2h2M21 17v2a2 2 0 0 1-2 2h-2"/>
-            <path d="M6 8v8M9 8v8M12 8v8M15 8v8M18 8v8"/>
-          </svg>
-        </button>
-        }
         <div class="pf-scan__body">
           <label class="pf-scan__label">{{ scan.manualEntry() ? 'Find patient or enter sample number' : 'Find patient or scan' }}</label>
           <input type="text" class="pf-scan__input"
                  [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
                  [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
-                 (keydown.enter)="runSearch()" autofocus aria-label="Search" />
+                 (keydown.enter)="runSearch()" aria-label="Search" />
         </div>
       </div>
+      }
 
       @if (scannerOpen()) {
         <pf-barcode-scanner-modal

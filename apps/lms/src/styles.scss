@@ -892,6 +892,47 @@ pf-shell main>router-outlet+* {
   cursor: not-allowed;
 }
 
+/* ── Hero-band companions (designer system, Figma 446-113) ──────────
+   Buttons that live INSIDE pf-hero-band's projected slots. Global because
+   projected content can't be styled from the band component itself. */
+.pf-hb-tool {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 9999px;
+  color: #5c7185; background: transparent; border: none; cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+.pf-hb-tool:hover { background: #f0f1f3; color: #111928; }
+.dark .pf-hb-tool, [data-theme='dark'] .pf-hb-tool { color: var(--text-secondary); }
+.dark .pf-hb-tool:hover, [data-theme='dark'] .pf-hb-tool:hover {
+  background: rgba(255, 255, 255, 0.08); color: var(--text-primary);
+}
+
+.pf-hb-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 38px; padding: 0 18px; border-radius: 10px;
+  font-size: 13.5px; font-weight: 700; font-family: inherit;
+  cursor: pointer; border: 1px solid transparent; text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.pf-hb-btn--primary {
+  background: linear-gradient(120deg, #7c3aed, #a855f7);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
+}
+.pf-hb-btn--primary:hover { background: linear-gradient(120deg, #6d28d9, #9333ea); }
+.pf-hb-btn--ghost {
+  background: rgba(255, 255, 255, 0.65); color: #111928;
+  border-color: rgba(17, 25, 40, 0.14);
+}
+.pf-hb-btn--ghost:hover { background: #ffffff; }
+.dark .pf-hb-btn--ghost, [data-theme='dark'] .pf-hb-btn--ghost {
+  background: rgba(255, 255, 255, 0.08); color: var(--text-primary);
+  border-color: var(--glass-border, rgba(255, 255, 255, 0.16));
+}
+.dark .pf-hb-btn--ghost:hover, [data-theme='dark'] .pf-hb-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .pf-input {
   display: block;
   width: 100%;
