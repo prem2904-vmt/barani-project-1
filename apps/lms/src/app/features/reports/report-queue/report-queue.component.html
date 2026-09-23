@@ -379,10 +379,16 @@
             }
           </div>
           <p class="pf-rq-row__meta text-[12px] mt-0.5 truncate" style="color: var(--text-tertiary);">
+            @if (theme.isNewDesign()) {
+            <!-- Crisp like the frontdesk row: the status word already says
+                 partial/final, so the meta is just when it was made. -->
+            {{ r.createdAt | date: "short" }}
+            } @else {
             @if (patient?.phone; as phone) {
             {{ phone }}
             } · {{ r.type }} ·
             generated {{ r.createdAt | date: "short" }}
+            }
           </p>
         </div>
 

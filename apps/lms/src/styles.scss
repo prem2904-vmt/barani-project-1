@@ -2535,9 +2535,9 @@ html.pf-design-mode {
   /* Status chips inside queue rows → dot + word. The chip already
      carries the right tone COLOUR, so we only drop the pill and prefix
      a currentColor dot. */
-  .pf-rq-row pf-chip .chip,
-  .pv-page pf-chip .chip,
-  .pf-card pf-chip .chip {
+  .pf-rq-row pf-chip button,
+  .pv-page pf-chip button,
+  .pf-card pf-chip button {
     background: transparent !important;
     border-color: transparent !important;
     padding: 0 !important;
@@ -2546,9 +2546,9 @@ html.pf-design-mode {
     font-weight: 500 !important;
     letter-spacing: 0;
   }
-  .pf-rq-row pf-chip .chip::before,
-  .pv-page pf-chip .chip::before,
-  .pf-card pf-chip .chip::before {
+  .pf-rq-row pf-chip button::before,
+  .pv-page pf-chip button::before,
+  .pf-card pf-chip button::before {
     content: '';
     width: 6px; height: 6px;
     border-radius: 9999px;
