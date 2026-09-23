@@ -97,9 +97,14 @@ const COUNTERS: CounterSpec[] = [
         <ng-container band-tools>
           <!-- Every filter on the screen lives INSIDE the search bar (owner):
                the workbench tabs are a filter over the same queue, so they
-               belong here next to the other tools, not as a second strip. -->
+               belong here next to the other tools, not as a second strip.
+               Phones already have the .pf-mtabs strip below, which is the
+               better phone control — rendering both would be two tab rows
+               stacked on a 390px screen. -->
+          @if (!isPhone()) {
           <pf-segmented [options]="tabOptions()" [value]="tab()" size="sm"
                         (valueChange)="setTab($any($event))"></pf-segmented>
+          }
         </ng-container>
         <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
@@ -273,12 +278,15 @@ const COUNTERS: CounterSpec[] = [
           Done
           <span class="pf-mtab__count">{{ countFor('completed') }}</span>
         </button>
-        @if (showCulturePane()) {
+        @if (showCulturePane() || cultureAsTab()) {
           <button type="button" role="tab" class="pf-mtab press"
                   [class.pf-mtab--on]="mobileTab() === 'culture'"
                   [attr.aria-selected]="mobileTab() === 'culture'"
                   (click)="setMobileTab('culture')">
-            Culture Bench
+            <!-- Five tabs have to share ~390px, so the new design uses the
+                 short label it already uses in the band. Classic keeps its
+                 original wording. -->
+            <span class="pf-mtab__label">{{ cultureAsTab() ? 'Culture' : 'Culture Bench' }}</span>
             <span class="pf-mtab__count">{{ cultureCount() }}</span>
           </button>
         }
@@ -408,7 +416,7 @@ const COUNTERS: CounterSpec[] = [
              the My Work / Queue tabs (hidden under Intake). -->
         <section class="pf-mw-pane"
                  [class.pf-mw-pane--solo]="!leftPaneOpen() && !showCulturePane()"
-                 [class.pf-mobile-hide]="mobileTab() === 'intake' || mobileTab() === 'culture'">
+                 [class.pf-mobile-hide]="mobileTab() === 'intake' || (mobileTab() === 'culture' && !cultureAsTab())">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
               <!-- New design drives these from the search bar's segmented
@@ -2184,6 +2192,20 @@ const COUNTERS: CounterSpec[] = [
         color: #fff;
         box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
       }
+      /* Primary-colour discipline (owner), which we had only enforced in
+         light mode: the gradient belongs to the ONE primary action on a
+         screen, never to a tab. Quiet violet in both themes. */
+      :host-context(.design-new) .pf-mtab--on {
+        background: rgba(124, 58, 237, 0.15);
+        background-image: none;
+        color: var(--violet-text, #a78bfa);
+        box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.30);
+      }
+      /* Five tabs share ~390px once Culture is in play — never let a label
+         bleed out of its pill. */
+      .pf-mtab__label {
+        min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
       .pf-mtab__count {
         font-family: 'JetBrains Mono', ui-monospace, monospace;
         font-size: 10.5px;
@@ -2603,7 +2625,9 @@ export class MyWorkComponent implements OnInit {
     if (t === 'mywork') this.setTab('my_work');
     else if (t === 'queue') this.setTab('service_queue');
     else if (t === 'completed') this.setTab('completed');
-    // 'culture' is a standalone pane, not a queue tab — no setTab.
+    // Classic: 'culture' is a standalone pane, so no setTab. New design:
+    // the bench is a workbench tab, so the phone tab must select it.
+    else if (t === 'culture' && this.cultureAsTab()) this.setTab('culture');
   }
 
   private readonly _counter = signal<CounterSpec['id']>('all');

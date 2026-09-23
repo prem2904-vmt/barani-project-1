@@ -190,6 +190,29 @@ import { PinDotsComponent } from './pin-dots.component';
       font-size: 12px; color: var(--text-muted); text-decoration: underline;
       min-height: 34px; position: relative;
     }
+
+    /* ── Phone (<=640px) ────────────────────────────────────────
+       The picker was sized for a lab monitor: 84px avatars with 26px
+       gutters fit two-per-row on a 390px screen and pushed the rest
+       below the fold. Tighten it so a full team is reachable without
+       scrolling, and respect the notch. */
+    @media (max-width: 640px) {
+      .pf-lk-root {
+        padding: max(16px, env(safe-area-inset-top)) 16px
+                 max(16px, env(safe-area-inset-bottom));
+      }
+      .pf-lk-picker { gap: 18px; width: 100%; }
+      .pf-lk-heading { font-size: 20px; text-align: center; }
+      /* dvh, not vh — mobile browser chrome shows and hides. */
+      .pf-lk-tiles { gap: 14px; max-height: 56dvh; }
+      .pf-lk-tile { width: 96px; gap: 7px; padding: 6px; }
+      .pf-lk-tile-avatar { width: 64px; height: 64px; border-radius: 18px; font-size: 22px; }
+      .pf-lk-tile-name { max-width: 92px; font-size: 12.5px; }
+      /* Hover-scale is meaningless on touch and fights the tap highlight. */
+      .pf-lk-tile:hover { transform: none; }
+      .pf-lk-card { max-width: 100%; padding: 20px 18px; }
+      .pf-lk-back, .pf-lk-alt { min-height: 44px; }
+    }
   `]
 })
 export class LockScreenComponent {

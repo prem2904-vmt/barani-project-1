@@ -29,7 +29,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (theme.isNewDesign() && messagesOn()) {
-      <div class="pf-cw">
+      <div class="pf-cw" [class.pf-cw--railed]="heads().length > 0">
         @for (c of windows(); track c.id) {
           <section class="pf-cw__win" (click)="windowsSvc.focus(c.id)">
             <header class="pf-cw__hdr">
@@ -130,6 +130,26 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       .pf-cw { left: 8px; right: 8px; }
       .pf-cw__win { width: 100%; height: min(70dvh, 460px); }
       .pf-cw__rail { right: 8px; bottom: calc(var(--pf-botbar-h, 0px) + 12px); }
+    }
+
+    /* ── Phone (<=640px) ────────────────────────────────────────
+       The sheet is full-width here, so a VERTICAL rail hugging the right
+       edge would sit on top of the conversation. Lay the heads out as a
+       horizontal strip docked to the bar and float the sheet above it. */
+    @media (max-width: 640px) {
+      .pf-cw__rail {
+        left: 8px; right: 8px;
+        flex-direction: row; justify-content: flex-end; align-items: center;
+        gap: 8px;
+        overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+      }
+      .pf-cw__rail::-webkit-scrollbar { display: none; }
+      .pf-cw--railed { bottom: calc(var(--pf-botbar-h, 0px) + 12px + 56px); }
+      .pf-cw--railed .pf-cw__win { height: min(64dvh, 420px); }
+      /* Composer input at 16px or iOS zooms the page when it focuses. */
+      .pf-cw__input { font-size: 16px; }
+      /* Blur is expensive on phones; the sheet is opaque enough already. */
+      .pf-cw__win { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
     }
 
     .pf-cw__win {

@@ -48,6 +48,11 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 
       <div class="pf-hb__searchrow">
         <div class="pf-hb__search">
+          <!-- The field (icon + input + scan icons) is one unit. On
+               tablet/desktop it is display:contents, i.e. INVISIBLE to
+               layout — the pill renders exactly as before. On phones it
+               becomes the pill so the filters can drop to their own row. -->
+          <div class="pf-hb__field">
           @if (customSearch()) {
             <ng-content select="[band-search]"></ng-content>
           } @else {
@@ -67,6 +72,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
                typing, not a tool sitting next to the bar. -->
           <div class="pf-hb__inline">
             <ng-content select="[band-inline]"></ng-content>
+          </div>
           </div>
           <div class="pf-hb__tools">
             <ng-content select="[band-tools]"></ng-content>
@@ -192,10 +198,89 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       font-weight: 500;
     }
 
+    /* Tablet/desktop: the field wrapper does not exist as far as layout is
+       concerned, so the pill is byte-for-byte what it always was. */
+    .pf-hb__field { display: contents; }
+
+    /* ════════ PHONE (<=640px) ════════════════════════════════════
+       The pill was designed for a monitor. On a 390px screen it now also
+       carries a filter strip with dots + counts, which would crush the
+       input to nothing. So on phones the search row becomes a stack:
+
+         ┌ field pill ─────────────── [scan] ┐
+         └───────────────────────────────────┘
+          ‹ All · Completed · Partial · … ›     ← own scrollable row
+
+       Nothing here touches >=641px. */
     @media (max-width: 640px) {
-      .pf-hb__band { padding-inline: 14px; min-height: 64px; }
-      .pf-hb__searchrow { padding-inline: 8px; }
+      .pf-hb__band { padding-inline: 14px; min-height: 60px; }
+      .pf-hb__searchrow { padding-inline: 10px; }
       .pf-hb__name { font-size: 15px; }
+      /* Logo + name must yield to the action buttons, never push them off. */
+      .pf-hb__tenant { gap: 8px; }
+      .pf-hb__logo { height: 24px; max-width: 108px; }
+      .pf-hb__actions { gap: 6px; }
+
+      /* The row becomes a column; the pill moves onto .pf-hb__field. */
+      .pf-hb__search,
+      :host-context(.dark) .pf-hb__search,
+      :host-context([data-theme='dark']) .pf-hb__search {
+        display: flex; flex-direction: column; align-items: stretch;
+        gap: 8px; height: auto; padding: 0;
+        border-radius: 0; background: transparent; box-shadow: none;
+      }
+      .pf-hb__field {
+        display: flex; align-items: center; gap: 10px;
+        min-height: 50px; padding: 0 8px 0 16px;
+        border-radius: 16px;
+        background: #ffffff;
+        box-shadow: 0 1px 1px rgba(124, 58, 237, 0.06), 0 1px 1.5px rgba(124, 58, 237, 0.15);
+      }
+      :host-context(.dark) .pf-hb__field,
+      :host-context([data-theme='dark']) .pf-hb__field {
+        background: var(--bg-card-solid, #14141f);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      }
+      /* 16px or iOS zooms the page on focus. */
+      .pf-hb__input { font-size: 16px; }
+      .pf-hb__search ::ng-deep [band-search] .field input { font-size: 16px; }
+
+      /* Filters get their own scrollable row under the pill: no divider,
+         no clipping, and the scrollbar stays out of the way. */
+      .pf-hb__tools,
+      .pf-hb__tools:not(:empty),
+      :host-context(.dark) .pf-hb__tools:not(:empty),
+      :host-context([data-theme='dark']) .pf-hb__tools:not(:empty) {
+        width: 100%; margin: 0; padding: 2px 2px 0;
+        border-left: none; gap: 8px;
+        overflow-x: auto; overflow-y: visible;
+        scrollbar-width: none; -webkit-overflow-scrolling: touch;
+      }
+      .pf-hb__tools::-webkit-scrollbar { display: none; }
+      .pf-hb__tools:empty { display: none; }
+      /* Projected strips (segmented, admin's date range, the doctor queue's
+         pills) must scroll as a unit, never compress. They carry the
+         CONSUMER's encapsulation attribute, so this needs ::ng-deep. */
+      .pf-hb__tools ::ng-deep pf-segmented,
+      .pf-hb__tools ::ng-deep .pf-ov__filter--band,
+      .pf-hb__tools ::ng-deep .dq-pills--band { flex-shrink: 0; }
+      .pf-hb__tools ::ng-deep .pf-ov__range,
+      .pf-hb__tools ::ng-deep .dq-pill { flex-shrink: 0; height: 36px; }
+
+      /* Tap targets. These are projected from the screens, so ::ng-deep. */
+      .pf-hb__inline ::ng-deep .pf-hb-tool,
+      .pf-hb__tools ::ng-deep .pf-hb-tool { width: 44px; height: 44px; }
+      /* Refresh goes icon-only: the label is a bare text node, so zero the
+         font-size on the button and let the sized <svg> carry it. Keeps the
+         primary action and the tenant name on screen together. */
+      .pf-hb__actions ::ng-deep .pf-hb-btn--ghost {
+        font-size: 0; gap: 0; padding: 0 11px; min-width: 44px; height: 38px;
+      }
+      .pf-hb__actions ::ng-deep .pf-hb-btn { height: 38px; padding-inline: 14px; }
+    }
+    /* Very narrow phones: the tenant name is the first thing to go. */
+    @media (max-width: 360px) {
+      .pf-hb__name { display: none; }
     }
   `]
 })
