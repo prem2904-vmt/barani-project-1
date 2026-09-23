@@ -164,3 +164,38 @@
   }
   .pf-ghostbtn:hover { background: #f8f2ff; }
 }
+
+/* Status as dot + colored word (Figma 452-3) — both themes. */
+.pf-statusword {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; line-height: 16px;
+  white-space: nowrap;
+}
+.pf-statusword__dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; flex-shrink: 0; }
+.pf-statusword[data-tone='emerald'] { color: #65a30d; }
+.pf-statusword[data-tone='amber']   { color: #d4ae05; }
+.pf-statusword[data-tone='sky'],
+.pf-statusword[data-tone='blue']    { color: #0076a5; }
+.pf-statusword[data-tone='violet']  { color: #7c3aed; }
+.pf-statusword[data-tone='rose']    { color: #dc2626; }
+
+:host-context(.light) {
+  /* No air between the navbar and the band (Figma 452-3). */
+  .pf-page__header { padding-top: 0 !important; }
+
+  /* The frame's blurred colour blobs behind the panels — her actual
+     assets, blurred like the cover layer. Content stacks above. */
+  .pf-page { position: relative; overflow-x: clip; }
+  .pf-page::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      url('/design/blob-pink.svg')   no-repeat right -220px bottom -80px / 780px auto,
+      url('/design/blob-blue.svg')   no-repeat right -160px bottom -380px / 1400px auto,
+      url('/design/blob-orange.svg') no-repeat right -200px top 220px / 980px auto,
+      url('/design/blob-red.svg')    no-repeat left -46px top -60px / 366px auto;
+    filter: blur(100px) saturate(1.05);
+    opacity: 0.45;
+  }
+  .pf-page > * { position: relative; z-index: 1; }
+}

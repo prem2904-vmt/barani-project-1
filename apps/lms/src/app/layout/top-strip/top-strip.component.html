@@ -35,6 +35,21 @@
       </span>
     </a>
 
+    <!-- Work areas — STATIC, centered in the bar (owner: every page link
+         always visible, not tucked into the avatar menu). Quiet text pills
+         in the designer vocabulary; active = violet on soft violet. -->
+    <nav class="pf-topnav-center hidden xl:flex" aria-label="Work areas">
+      @for (n of primary(); track n.id) {
+        <a [routerLink]="n.href" routerLinkActive="pf-topnav-link--on"
+           [routerLinkActiveOptions]="{ exact: !!n.exact }"
+           class="pf-topnav-link press">{{ n.label }}</a>
+      }
+      @if (showAdmin()) {
+        <a routerLink="/admin" routerLinkActive="pf-topnav-link--on"
+           class="pf-topnav-link press">Admin</a>
+      }
+    </nav>
+
     <!-- Spacer pushes the nav + right cluster to the far edge -->
     <div class="pf-ts-spacer flex-1 min-w-0"></div>
 

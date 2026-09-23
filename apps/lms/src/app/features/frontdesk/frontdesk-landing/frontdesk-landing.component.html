@@ -749,7 +749,10 @@
                       }
                     </div>
                     <div class="pf-card__foot" (click)="$event.stopPropagation()">
-                      <pf-chip [tone]="orderTone(o)" size="sm">{{ effectiveStatusLabel(o) }}</pf-chip>
+                      <!-- Designer status anatomy (Figma 452-3): dot + colored word. -->
+                      <span class="pf-statusword" [attr.data-tone]="orderTone(o)">
+                        <span class="pf-statusword__dot" aria-hidden="true"></span>{{ effectiveStatusLabel(o) }}
+                      </span>
                       <div class="pf-card__actions">
                         <!-- Bill is still offered on an unbilled order (incl. pay-later,
                                     which stays 'created'); Collect shows alongside it since
