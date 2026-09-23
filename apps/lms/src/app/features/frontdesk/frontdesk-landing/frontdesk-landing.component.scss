@@ -214,5 +214,10 @@
     filter: blur(100px) saturate(1.05);
     opacity: 0.45;
   }
-  .pf-page > * { position: relative; z-index: 1; }
+  /* Lift ONLY the flow content above the blob layer. A blanket
+     `.pf-page > *` also forced the fixed drawers/backdrops to
+     position: relative, dumping the order drawer into the page flow
+     at the bottom-left — never touch overlay children here. */
+  .pf-page__header,
+  .pf-page__body { position: relative; z-index: 1; }
 }

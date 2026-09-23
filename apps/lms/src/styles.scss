@@ -239,6 +239,16 @@
   --seg-track: rgba(124, 58, 237, 0.08);
 }
 
+/* NEW design, light theme — designer avatar anatomy (Figma 452-3):
+   flat soft-violet disc with violet initials, replacing the saturated
+   per-name gradient (which is inline style, hence the !important). */
+:root.light.design-new pf-avatar .root {
+  background: #eee1fd !important;
+  color: #7c3aed !important;
+  text-shadow: none !important;
+  border: 1px solid #ecd8ff;
+}
+
 /* CLASSIC design, light theme — the pre-designer lavender palette, kept
    verbatim so users who switch to Classic (avatar menu) see the app they
    know. New-design light stays the neutral designer world above. */
