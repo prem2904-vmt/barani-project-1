@@ -98,7 +98,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.msgsPanel.close();
     try {
       const convId = await this.chat.openDirectConversation(u.id);
-      if (this.themeService.isNewDesign() && this.chatWindows.capacity() > 0) {
+      if (this.themeService.isNewDesign()) {
         this.chatWindows.openWindow(convId);
         void this.chat.loadThread(convId);
       } else {
@@ -128,7 +128,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
    */
   openConvo(c: Conversation): void {
     this.msgsPanel.close();
-    if (this.themeService.isNewDesign() && this.chatWindows.capacity() > 0) {
+    if (this.themeService.isNewDesign()) {
+      // NEW design has no Messages SCREEN — chat lives in floating
+      // windows only (phones get a single full-width one).
       this.chatWindows.openWindow(c.id);
       void this.chat.loadThread(c.id);
       return;

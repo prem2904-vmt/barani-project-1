@@ -110,7 +110,13 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       pointer-events: none;
     }
     .pf-cw > * { pointer-events: auto; }
-    @media (max-width: 767px) { .pf-cw, .pf-cw__rail { display: none !important; } }
+    /* Phones: one full-width sheet docked above the bar — there is no
+       Messages screen in this design, so chat has to live here. */
+    @media (max-width: 767px) {
+      .pf-cw { left: 8px; right: 8px; }
+      .pf-cw__win { width: 100%; height: min(70dvh, 460px); }
+      .pf-cw__rail { right: 8px; bottom: calc(var(--pf-botbar-h, 0px) + 12px); }
+    }
 
     .pf-cw__win {
       width: 330px;

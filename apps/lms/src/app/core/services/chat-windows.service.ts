@@ -37,7 +37,9 @@ export class ChatWindowsService {
 
   readonly capacity = computed(() => {
     const w = this._width();
-    if (w < 768) return 0;                       // phones: drawer instead
+    // Phones: exactly ONE window (full-width sheet) — the new design has
+    // no Messages screen to fall back to.
+    if (w < 768) return 1;
     return Math.max(1, Math.min(3, Math.floor((w - RAIL) / (WIN_W + GAP))));
   });
 
@@ -53,7 +55,6 @@ export class ChatWindowsService {
     this._minimized.update(ids => ids.filter(i => i !== conversationId));
     if (this._open().includes(conversationId)) return;
     const cap = this.capacity();
-    if (cap === 0) return;                       // caller falls back to the drawer
     if (this._open().length >= cap) this.evictLru();
     this._open.update(ids => [...ids, conversationId]);
   }
