@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { DraftShelfService } from '../../core/services/draft-shelf.service';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -49,6 +50,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly entitlements = inject(TenantEntitlementsService);
+  /** Facebook-style chat entry (new design): icon after the bell opens the
+   *  people/chat drawer; the Messages PAGE leaves the nav. */
+  protected readonly peopleDrawer = inject(PeopleDrawerService);
+  readonly messagesModuleOn = computed(() => this.entitlements.moduleEnabled('messages'));
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
   protected readonly chat = inject(ChatService);
@@ -95,7 +100,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // names + order, role-gated), each opening its REAL screen. Falls back to the
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
   readonly primary = computed(() => {
-    const items = this.gateModules(this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV))));
+    let items = this.gateModules(this.withCollection(this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV))));
+    // NEW design: Messages is a chat surface (bar icon -> drawer), not a page.
+    if (this.themeService.isNewDesign()) items = items.filter(i => i.id !== 'messages');
     // OPD: doctors get their Consult Room — but only once the OPD module is
     // actually usable (tenant entitlement, or the dev preview flag). Keeps the
     // in-progress consult build invisible on shared environments.

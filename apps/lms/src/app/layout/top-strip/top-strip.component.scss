@@ -1317,3 +1317,32 @@ a.pf-ts-tenant:hover {
   color: var(--text-secondary);
 }
 .pf-draftshelf__pop-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Chat entry (new design): messenger icon after the bell + unread badge. */
+.pf-chat-btn__badge {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.45), 0 0 0 2px var(--header-bg);
+}
+
+/* Avatar-menu section label (Branch, ...). */
+.pf-profile-eyebrow {
+  margin: 6px 12px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
