@@ -69,7 +69,18 @@ interface KpiCard {
       <pf-hero-band
         placeholder="Search settings & pages — users, billing, inventory, referral…"
         [value]="q()"
-        (valueChange)="setQ($event)"></pf-hero-band>
+        (valueChange)="setQ($event)">
+        <ng-container band-tools>
+          <!-- Date range rides in the search bar (owner) — one control
+               strip instead of a separate filter row. -->
+          <div class="pf-ov__filter pf-ov__filter--band" role="tablist" aria-label="Date range">
+            @for (r of ranges; track r.key) {
+              <button type="button" class="pf-ov__range" [class.pf-ov__range--on]="range() === r.key"
+                      (click)="setRange(r.key)">{{ r.label }}</button>
+            }
+          </div>
+        </ng-container>
+      </pf-hero-band>
       }
       @if (!theme.isNewDesign()) {
       <!-- NEW design drops the big page titles app-wide (the navbar carries
@@ -171,7 +182,7 @@ interface KpiCard {
         </div>
       } @else {
         <!-- Date filter -->
-        <div class="pf-ov__filter" role="tablist" aria-label="Date range">
+        <div class="pf-ov__filter pf-classic-only" role="tablist" aria-label="Date range">
           <!-- Desktop / iPad: segmented pills. -->
           @for (r of ranges; track r.key) {
             <button
@@ -487,6 +498,8 @@ interface KpiCard {
       }
 
       /* ── Date filter ── */
+      .pf-ov__filter--band { margin: 0 !important; flex-wrap: nowrap; }
+      .pf-ov__filter--band .pf-ov__range { height: 28px; padding: 0 10px; font-size: 12px; }
       .pf-ov__filter {
         display: flex;
         align-items: center;

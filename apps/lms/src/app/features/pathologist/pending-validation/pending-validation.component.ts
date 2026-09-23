@@ -58,8 +58,18 @@ interface ResultSnapshot {
         placeholder="Search patient · sample ID · test…"
         [value]="query()"
         (valueChange)="query.set($event)">
-        <ng-container band-actions>
-          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="refresh()">Refresh</button>
+        <ng-container band-tools>
+          <!-- Queue scope toggle rides in the search bar (owner). -->
+          <pf-segmented [options]="tabOptions" [value]="tab()" size="sm"
+                        (valueChange)="setTab($event)"></pf-segmented>
+          <button type="button" class="pf-hb-tool press" (click)="refresh()"
+                  title="Refresh" aria-label="Refresh">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+            </svg>
+          </button>
         </ng-container>
       </pf-hero-band>
       }
@@ -82,7 +92,7 @@ interface ResultSnapshot {
           </pf-touch-btn>
         </pf-screen-header>
 
-        <div class="mb-5">
+        <div class="mb-5 pf-classic-only">
           <pf-segmented
             [options]="tabOptions"
             [value]="tab()"
