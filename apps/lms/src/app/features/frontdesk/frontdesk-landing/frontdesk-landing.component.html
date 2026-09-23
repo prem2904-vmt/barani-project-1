@@ -716,17 +716,28 @@
                     <div class="min-w-0 flex-1">
                       <p class="pf-card__name">
                         {{ formatPatient(d.patient) }}
+                        @if (!theme.isNewDesign()) {
                         <span class="pf-draft-tag">Draft</span>
+                        }
                       </p>
                       <p class="pf-card__meta">
                         {{ d.testIds.length }} test{{ d.testIds.length === 1 ? '' : 's' }}
                         · Saved {{ d.savedAt | date:'MMM d, h:mm a' }}
                       </p>
                     </div>
-                    <div class="pf-card__actions" (click)="$event.stopPropagation()">
-                      <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
-                        (click)="resumeDraft(d)">Resume</button>
-                      <button type="button" class="pf-ghostbtn press" (click)="discardDraft(d, $event)">Discard</button>
+                    <div class="pf-card__foot" (click)="$event.stopPropagation()">
+                      @if (theme.isNewDesign()) {
+                      <!-- Same status anatomy as every other row: dot + word,
+                           stacked above the actions. -->
+                      <span class="pf-statusword" data-tone="amber">
+                        <span class="pf-statusword__dot" aria-hidden="true"></span>Draft
+                      </span>
+                      }
+                      <div class="pf-card__actions">
+                        <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
+                          (click)="resumeDraft(d)">Resume</button>
+                        <button type="button" class="pf-ghostbtn press" (click)="discardDraft(d, $event)">Discard</button>
+                      </div>
                     </div>
                   </div>
                 </li>

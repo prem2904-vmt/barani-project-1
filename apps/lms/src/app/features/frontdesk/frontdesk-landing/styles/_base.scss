@@ -459,6 +459,14 @@
     border-bottom-left-radius: 14px;
     border-bottom-right-radius: 14px;
   }
+  /* The drafts strip is a SIBLING list above the orders list — without
+     this it also gets flex:1 and stretches to half the pane, leaving a
+     dead gap under a single draft card. It hugs its content instead. */
+  .pf-appt-split__pane > .pf-cards--drafts {
+    flex: 0 0 auto;
+    overflow: visible;
+    padding-bottom: 0;
+  }
 
   .pf-appt-split__pane > .pf-empty-tile {
     margin: 0;
@@ -557,4 +565,4 @@
   }
 }
 
-
+
