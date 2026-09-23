@@ -1,6 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { ThemeService } from '../../../core/services/theme.service';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { buildReportBlobUrl } from '../../../shared/utils/report-blob';
@@ -61,7 +62,7 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent
+    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, SegmentedComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -81,8 +82,11 @@ const COUNTERS: CounterSpec[] = [
         (valueChange)="setScan($event)"
         (submitted)="scanSubmit()">
         <ng-container band-tools>
-                  <!-- Reload is ALWAYS the last tool in the bar (owner): same
-               place on every screen. -->
+          <!-- Every filter on the screen lives INSIDE the search bar (owner):
+               the workbench tabs are a filter over the same queue, so they
+               belong here next to the other tools, not as a second strip. -->
+          <pf-segmented [options]="tabOptions()" [value]="tab()" size="sm"
+                        (valueChange)="setTab($any($event))"></pf-segmented>
           @if (!scanSvc.manualEntry()) {
           <button type="button" class="pf-hb-tool press" (click)="openBarSearchScanner()"
                   title="Scan with camera" aria-label="Scan with camera">
@@ -388,6 +392,12 @@ const COUNTERS: CounterSpec[] = [
                  [class.pf-mobile-hide]="mobileTab() === 'intake' || mobileTab() === 'culture'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
+              <!-- New design drives these from the search bar's segmented
+                   control; the header just names what you're looking at.
+                   Classic keeps the tab strip here. -->
+              @if (theme.isNewDesign()) {
+                <span class="pf-mw-pane__title">{{ tabLabel() }}</span>
+              } @else {
               <button type="button" role="tab" class="pf-mw-tab press"
                       [class.pf-mw-tab--on]="tab() === 'service_queue'"
                       [attr.aria-selected]="tab() === 'service_queue'"
@@ -410,17 +420,6 @@ const COUNTERS: CounterSpec[] = [
                       (click)="setTab('completed')">
                 Completed
                 <span class="pf-mw-tab__count">{{ countFor('completed') }}</span>
-              </button>
-              <!-- Culture bench as a tab (new design): the third pane folded in
-                   so the workbench keeps two columns. Classic still gets it as
-                   its own pane beside the queue. -->
-              @if (cultureAsTab()) {
-              <button type="button" role="tab" class="pf-mw-tab press"
-                      [class.pf-mw-tab--on]="tab() === 'culture'"
-                      [attr.aria-selected]="tab() === 'culture'"
-                      (click)="setTab('culture')">
-                Culture
-                <span class="pf-mw-tab__count">{{ cultureCount() }}</span>
               </button>
               }
               <!-- Supervisor view: also show tubes other techs already claimed,
@@ -2301,6 +2300,24 @@ export class MyWorkComponent implements OnInit {
   /** Live count for the Culture pill (fed by the culture panel on load). */
   readonly cultureCount = signal(0);
 
+  /** The workbench tabs as the search bar's filter strip (new design). The
+   *  dots double as the legend for the queue's own colour coding. */
+  readonly tabOptions = computed<SegmentedOption<Tab>[]>(() => {
+    const opts: SegmentedOption<Tab>[] = [
+      { value: 'service_queue', label: 'Queue', dot: '#a78bfa', count: this.countFor('service_queue') },
+      { value: 'my_work', label: 'My Work', dot: '#f59e0b', count: this.countFor('my_work') },
+      { value: 'completed', label: 'Completed', dot: '#10b981', count: this.countFor('completed') },
+    ];
+    if (this.cultureAsTab()) {
+      opts.push({ value: 'culture', label: 'Culture', dot: '#38bdf8', count: this.cultureCount() });
+    }
+    return opts;
+  });
+  /** Pane title in the new design — the bar owns the switching, the header
+   *  just says which list is on screen. */
+  readonly tabLabel = computed(() =>
+    this.tabOptions().find(o => o.value === this.tab())?.label ?? 'Queue');
+
   /** Collect-in-lab: sample collection is placed in the lab work-area, so the
    *  tube is drawn at the bench. The left pane becomes a Collect step (draw +
    *  print label) instead of Lab Intake, and collection auto-receives into the
@@ -2319,10 +2336,6 @@ export class MyWorkComponent implements OnInit {
   // Rejected tab dropped — re-entry rows now show inline in My Work
   // with their rejection reason in the tube tile, so the tech sees WHY
   // the pathologist sent it back without switching tabs.
-  readonly tabOptions = [
-    { value: 'my_work'       as Tab, label: 'My Work' },
-    { value: 'service_queue' as Tab, label: 'Queue' }
-  ];
 
   /** ViewChild ref to the embedded Lab Intake component so the pane
    *  header's inline scan bar can trigger the camera scanner OR pass a
