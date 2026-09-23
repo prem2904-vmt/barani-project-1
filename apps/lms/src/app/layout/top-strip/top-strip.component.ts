@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ChatDockService } from '../../core/services/chat-dock.service';
+import { ChatWindowsService } from '../../core/services/chat-windows.service';
+import { conversationInitials, conversationTitle } from '../../shared/models/conversation-name';
 import { Conversation } from '../../shared/models/chat.model';
 import { DraftShelfService } from '../../core/services/draft-shelf.service';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
@@ -59,22 +61,12 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Messages dropdown (bell-style panel) open state. */
   readonly msgsOpen = signal(false);
 
-  /** 1:1 → the OTHER participant's name; groups → the group name. */
-  convoTitle(c: Conversation): string {
-    if (c.name) return c.name;
-    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
-    const peer = c.participants?.find(p => p.userId !== me);
-    return peer?.displayName || 'Conversation';
-  }
+  private readonly chatWindows = inject(ChatWindowsService);
+  private meId(): string { return this.auth.user()?.authId ?? this.auth.user()?.id ?? ''; }
 
-  /** "Shugandhan Arulvelan" → "SA" (first letters of first + last word). */
-  convoInitials(c: Conversation): string {
-    const words = this.convoTitle(c).trim().split(/\s+/).filter(Boolean);
-    if (!words.length) return '?';
-    const first = words[0][0] ?? '';
-    const last = words.length > 1 ? (words[words.length - 1][0] ?? '') : '';
-    return (first + last).toUpperCase() || '?';
-  }
+  /** Shared with the floating windows so both label a thread identically. */
+  convoTitle(c: Conversation): string { return conversationTitle(c, this.meId()); }
+  convoInitials(c: Conversation): string { return conversationInitials(c, this.meId()); }
 
   /** Docked conversations, resolved from the live list (dead ids drop out). */
   readonly dockedConvos = computed(() => {
@@ -82,12 +74,22 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return this.chatDock.ids().map(id => byId.get(id)).filter((c): c is Conversation => !!c);
   });
 
-  /** Open a conversation: focus the chat window (drawer), pin its chip. */
+  /**
+   * Open a conversation. Desktop/tablet in the new design get a floating
+   * Messenger-style WINDOW (several at once); phones — where a 330px
+   * window has nowhere to live — fall back to the people drawer.
+   * Either way the bar keeps a chip for the thread.
+   */
   openConvo(c: Conversation): void {
-    void this.chat.openConversation(c.id);
-    this.peopleDrawer.openIt();
     this.chatDock.add(c.id);
     this.msgsOpen.set(false);
+    if (this.themeService.isNewDesign() && this.chatWindows.capacity() > 0) {
+      this.chatWindows.openWindow(c.id);
+      void this.chat.loadThread(c.id);
+      return;
+    }
+    void this.chat.openConversation(c.id);
+    this.peopleDrawer.openIt();
   }
   readonly messagesModuleOn = computed(() => this.entitlements.moduleEnabled('messages'));
   private readonly router = inject(Router);

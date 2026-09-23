@@ -21,6 +21,7 @@ import { ThemeService } from "../../core/services/theme.service";
 import { PatientProfileModalComponent } from "../../shared/components/patient-profile-modal/patient-profile-modal.component";
 import { CallOverlayComponent } from "../../shared/components/call-overlay/call-overlay.component";
 import { PeopleDrawerComponent } from "../../shared/components/people-drawer/people-drawer.component";
+import { ChatWindowsComponent } from "../../shared/components/chat-windows/chat-windows.component";
 import { SignalingService } from "../../core/services/signaling.service";
 import { ChatService } from "../../core/services/chat.service";
 import { ChatNotifyService } from "../../core/services/chat-notify.service";
@@ -54,6 +55,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
     PatientProfileModalComponent,
     CallOverlayComponent,
     PeopleDrawerComponent,
+    ChatWindowsComponent,
     BarcodeScannerModalComponent,
     PatientTimelineComponent,
     SwipeBackDirective,
@@ -116,6 +118,10 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 
         <!-- Tenant people drawer: contacts + 1:1 chat + call entry. -->
         <pf-people-drawer></pf-people-drawer>
+
+        <!-- Messenger-style floating chat windows (new design, >=768px).
+             Phones/classic keep the drawer above as the chat surface. -->
+        <pf-chat-windows></pf-chat-windows>
       }
 
       <!-- Patient profile modal — globally available; opens via

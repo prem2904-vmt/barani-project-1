@@ -51,6 +51,13 @@ export class ChatService implements OnDestroy {
    * "Seen / Seen by X" line under my own bubbles.
    */
   readonly readReceipts = signal<Map<string, Map<string, string>>>(new Map());
+  /**
+   * Per-conversation message store. The floating chat windows show
+   * SEVERAL threads at once, so they can't share the single
+   * `activeMessages` store the drawer / messages page use. Filled by
+   * loadThread() and kept live by onMessageReceived().
+   */
+  readonly threads = signal<Map<string, ChatMessage[]>>(new Map());
   readonly loadingHistory = signal(false);
   /** True while older messages are being fetched (top of scroller). */
   readonly loadingOlder = signal(false);
@@ -265,6 +272,51 @@ export class ChatService implements OnDestroy {
     }
   }
 
+  /** Messages of one thread from the per-conversation store. */
+  messagesFor(conversationId: string): ChatMessage[] {
+    return this.threads().get(conversationId) ?? [];
+  }
+
+  private setThread(conversationId: string, rows: ChatMessage[]): void {
+    this.threads.update(m => new Map(m).set(conversationId, rows));
+  }
+
+  /** Append (or reconcile an optimistic row) in the per-conversation store. */
+  private pushToThread(conversationId: string, msg: ChatMessage, me: string): void {
+    const map = this.threads();
+    const rows = map.get(conversationId);
+    if (!rows) return;                       // thread not open in a window
+    const idx = msg.fromUserId === me
+      ? rows.findIndex(x => x.pending && x.body === msg.body && x.fromUserId === me)
+      : -1;
+    const next = idx >= 0 ? rows.map((x, i) => i === idx ? msg : x) : [...rows, msg];
+    this.setThread(conversationId, next);
+  }
+
+  /**
+   * Load a thread into the per-conversation store WITHOUT hijacking the
+   * single "active" conversation — this is what floating windows use, so
+   * several threads stay live side by side. Also marks it read.
+   */
+  async loadThread(conversationId: string): Promise<void> {
+    await this.connect();
+    if (!this.threads().has(conversationId)) {
+      const rows = await firstValueFrom(this.api.get<ChatMessage[]>(
+        `/api/chat/conversations/${conversationId}/messages?skip=0&take=${this.pageSize}`
+      )) ?? [];
+      this.setThread(conversationId, rows);
+    }
+    try { await this.connection!.invoke('MarkConversationRead', conversationId); } catch { /* offline ok */ }
+    this.conversations.update(list =>
+      list.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c)
+    );
+  }
+
+  /** Drop a thread's cached messages (window closed for good). */
+  forgetThread(conversationId: string): void {
+    this.threads.update(m => { const next = new Map(m); next.delete(conversationId); return next; });
+  }
+
   /**
    * Fetch the next page of older messages and prepend them. Caller is
    * responsible for preserving scroll position (capture scrollHeight
@@ -353,6 +405,10 @@ export class ChatService implements OnDestroy {
     };
     if (this.activeConversationId() === conversationId) {
       this.activeMessages.update(list => [...list, optimistic]);
+    }
+    // Same optimistic row for a floating window showing this thread.
+    if (this.threads().has(conversationId)) {
+      this.setThread(conversationId, [...this.messagesFor(conversationId), optimistic]);
     }
 
     try {
@@ -504,6 +560,9 @@ export class ChatService implements OnDestroy {
       // I'm reading this conversation — mark read so badge stays at 0.
       void this.connection?.invoke('MarkConversationRead', m.conversationId);
     }
+
+    // Mirror into the per-conversation store (floating chat windows).
+    this.pushToThread(m.conversationId, m, me);
 
     // Update / insert conversation summary.
     this.conversations.update(list => {
