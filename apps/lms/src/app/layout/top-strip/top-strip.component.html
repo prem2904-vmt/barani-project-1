@@ -27,48 +27,13 @@
           fill="url(#pfBrandGradient)" />
       </svg>
 
-      <svg class="pf-brand-pulse" viewBox="0 0 56 24" fill="none" aria-hidden="true">
-        <path class="pf-brand-pulse-path" d="M0,12 L8,12 L16,3 L24,21 L32,8 L38,16 L44,12 L56,12" />
-      </svg>
-
+      <!-- Designer navbar (Figma 446-113): clean glyph + wordmark only —
+           the pulse squiggle and LMS subtitle are gone, and the tenant no
+           longer rides the bar (it lives in each screen's hero band). -->
       <span class="pf-brand-text">
         <span class="pf-brand-name">PREFRONTAL</span>
-        <span class="pf-brand-sub">Lab Management System</span>
       </span>
     </a>
-
-    <!-- Pipe separator + client/tenant logo — clean branding immediately after
-         the PF brand on the LEFT (logo + name always shown). -->
-    @if (tenantLoaded()) {
-      <span class="pf-ts-sep hidden sm:inline-block" aria-hidden="true"></span>
-      @if (showAdmin()) {
-        <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex"
-           [class.pf-ts-tenant--empty]="!hasBrand()"
-           [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
-          @if (showLogo() && tenantLogo()) {
-            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
-          } @else {
-            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
-          }
-          @if (showName()) {
-            <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
-          }
-        </a>
-      } @else {
-        <div class="pf-ts-tenant hidden sm:inline-flex cursor-default select-none"
-             [class.pf-ts-tenant--empty]="!hasBrand()"
-             [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
-          @if (showLogo() && tenantLogo()) {
-            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
-          } @else {
-            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
-          }
-          @if (showName()) {
-            <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
-          }
-        </div>
-      }
-    }
 
     <!-- Spacer pushes the nav + right cluster to the far edge -->
     <div class="pf-ts-spacer flex-1 min-w-0"></div>
@@ -100,8 +65,6 @@
              visible without a second navbar. md+ only. Hidden entirely (with its
              separator) for single-branch tenants (OPS-9) — nothing to switch. -->
         @if (canSwitchBranch()) {
-        <!-- Pipe separator before the branch picker. -->
-        <span class="pf-ts-sep hidden md:inline-block" aria-hidden="true"></span>
         <div class="relative hidden md:block">
           <button type="button" class="pf-ts-branch press"
                   [class.pf-ts-branch--open]="branchOpen()"
