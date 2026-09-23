@@ -62,6 +62,12 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
                    (input)="valueChange.emit($any($event.target).value)"
                    (keydown.enter)="submitted.emit($any($event.target).value)" />
           }
+          <!-- Anything that FEEDS the search (camera scan, voice, ⌘K) rides
+               inside the field, BEFORE the divider (owner) — it's part of
+               typing, not a tool sitting next to the bar. -->
+          <div class="pf-hb__inline">
+            <ng-content select="[band-inline]"></ng-content>
+          </div>
           <div class="pf-hb__tools">
             <ng-content select="[band-tools]"></ng-content>
           </div>
@@ -153,6 +159,9 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     :host-context([data-theme='dark']) .pf-hb__input { color: var(--text-primary, #e5e7eb); }
     .pf-hb__input::placeholder { color: #9ca3af; }
 
+    /* Search-feeding icons: inside the field, no divider of their own. */
+    .pf-hb__inline { display: flex; align-items: center; flex-shrink: 0; }
+    .pf-hb__inline:not(:empty) { gap: 4px; margin-right: 2px; }
     .pf-hb__tools { display: flex; align-items: center; flex-shrink: 0; }
     /* Tool buttons (projected): divider before the group when present. */
     .pf-hb__tools:not(:empty) { border-left: 1px solid #e5e7eb; margin-left: 4px; padding-left: 8px; gap: 6px; }

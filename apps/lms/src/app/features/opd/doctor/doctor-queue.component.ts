@@ -62,20 +62,18 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
               </button>
             }
           </div>
-                  <!-- Reload is ALWAYS the last tool in the bar (owner): same
-               place on every screen. -->
-          <!-- Reload is ALWAYS the LAST tool in the bar (owner): same
-               position on every screen. -->
-          <button type="button" class="pf-hb-tool press" (click)="load()"
-                  title="Refresh" aria-label="Refresh">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        </ng-container>
+        <!-- Refresh is a quiet button on the band, not a bar icon (owner):
+             it's the least-used control on the screen. -->
+        <ng-container band-actions>
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="load()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
               <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
             </svg>
+            Refresh
           </button>
-        </ng-container>
-        <ng-container band-tools>
         </ng-container>
       </pf-hero-band>
       }

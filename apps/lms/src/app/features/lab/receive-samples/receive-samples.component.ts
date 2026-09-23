@@ -58,7 +58,9 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             [value]="scanValue()"
             (valueChange)="scanValue.set($event)"
             (submitted)="receiveByBarcode()">
-            <ng-container band-tools>
+            <!-- The camera FEEDS this field, so it sits inside it, before the
+                 divider (owner) — scanning is just another way to type. -->
+            <ng-container band-inline>
               <button type="button" class="pf-hb-tool press" (click)="openBarcodeScanner()"
                       title="Scan with camera" aria-label="Scan with camera">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"

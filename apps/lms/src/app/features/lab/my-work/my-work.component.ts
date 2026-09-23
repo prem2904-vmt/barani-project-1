@@ -37,6 +37,8 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
+/** Sticky "keep Lab Intake open" choice (new design only). */
+const INTAKE_PIN_KEY = 'pf-lms.my-work.intake-pinned';
 
 type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed' | 'culture';
 type Level = 'urgent' | 'high' | 'normal';
@@ -81,12 +83,9 @@ const COUNTERS: CounterSpec[] = [
         [value]="scan()"
         (valueChange)="setScan($event)"
         (submitted)="scanSubmit()">
-        <ng-container band-tools>
-          <!-- Every filter on the screen lives INSIDE the search bar (owner):
-               the workbench tabs are a filter over the same queue, so they
-               belong here next to the other tools, not as a second strip. -->
-          <pf-segmented [options]="tabOptions()" [value]="tab()" size="sm"
-                        (valueChange)="setTab($any($event))"></pf-segmented>
+        <!-- The camera FEEDS this field, so it sits inside it, before the
+             divider (owner) — scanning is just another way to type. -->
+        <ng-container band-inline>
           @if (!scanSvc.manualEntry()) {
           <button type="button" class="pf-hb-tool press" (click)="openBarSearchScanner()"
                   title="Scan with camera" aria-label="Scan with camera">
@@ -98,15 +97,24 @@ const COUNTERS: CounterSpec[] = [
             </svg>
           </button>
           }
-          <!-- Reload is ALWAYS the LAST tool in the bar (owner): same
-               position on every screen. -->
-          <button type="button" class="pf-hb-tool press" (click)="refresh()"
-                  title="Refresh" aria-label="Refresh">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        </ng-container>
+        <ng-container band-tools>
+          <!-- Every filter on the screen lives INSIDE the search bar (owner):
+               the workbench tabs are a filter over the same queue, so they
+               belong here next to the other tools, not as a second strip. -->
+          <pf-segmented [options]="tabOptions()" [value]="tab()" size="sm"
+                        (valueChange)="setTab($any($event))"></pf-segmented>
+        </ng-container>
+        <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
+             it's the least-used control on the screen. -->
+        <ng-container band-actions>
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
               <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
             </svg>
+            Refresh
           </button>
         </ng-container>
       </pf-hero-band>
@@ -311,10 +319,44 @@ const COUNTERS: CounterSpec[] = [
              manual-typing input, camera shortcut, and a Receive button.
              Hits Enter or clicks Receive to intake. The camera button opens
              the same scanner the standalone /lab/receive page uses. -->
+        @if (!intakeOpen()) {
+        <!-- Collapsed: a labelled rail. Techs who never receive samples get
+             the whole width back; one click brings intake back (owner). -->
+        <button type="button" class="pf-mw-rail press" (click)="expandIntake()"
+                title="Open Lab Intake" aria-label="Open Lab Intake">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+            <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+            <path d="M7 8v8M11 8v8M15 8v8M19 8v3"/>
+          </svg>
+          <span class="pf-mw-rail__label">Lab Intake</span>
+        </button>
+        } @else {
         <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
             <span class="pf-mw-pane__title">Lab Intake</span>
+            <!-- Pin = keep it open next time; chevron = back to the rail. -->
+            @if (theme.isNewDesign() && !isPhone()) {
+            <button type="button" class="pf-mw-pin press" [class.pf-mw-pin--on]="intakePinned()"
+                    (click)="toggleIntakePin()"
+                    [title]="intakePinned() ? 'Unpin Lab Intake' : 'Keep Lab Intake open'"
+                    [attr.aria-pressed]="intakePinned()"
+                    [attr.aria-label]="intakePinned() ? 'Unpin Lab Intake' : 'Keep Lab Intake open'">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"/><path d="M12 15v5"/>
+              </svg>
+            </button>
+            <button type="button" class="pf-mw-pin press" (click)="collapseIntake()"
+                    title="Hide Lab Intake" aria-label="Hide Lab Intake">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m14 6-6 6 6 6"/>
+              </svg>
+            </button>
+            }
             <div class="pf-mw-scan" [class.pf-intake-open]="intakeSearchOpen()">
               <!-- Phone-only (<=640px) magnifier: collapses the cramped inline
                    search to an icon by default; tapping expands the full-width
@@ -371,8 +413,10 @@ const COUNTERS: CounterSpec[] = [
           </div>
         </section>
         }
+        }
 
-        <!-- Drag handle -->
+        <!-- Drag handle — only when the left column actually holds a pane. -->
+        @if (leftPaneOpen()) {
         <div class="pf-mw-handle" role="separator" aria-orientation="vertical"
              aria-label="Resize Lab Intake / Workbench"
              [attr.aria-valuenow]="mwSplitPct()" aria-valuemin="20" aria-valuemax="80" tabindex="0"
@@ -384,11 +428,12 @@ const COUNTERS: CounterSpec[] = [
           <span class="pf-mw-handle__grip" aria-hidden="true"></span>
         </div>
         }
+        }
 
         <!-- RIGHT: tabbed My Work + Queue. On phones this pane shows under
              the My Work / Queue tabs (hidden under Intake). -->
         <section class="pf-mw-pane"
-                 [class.pf-mw-pane--solo]="!showLeftPane() && !showCulturePane()"
+                 [class.pf-mw-pane--solo]="!leftPaneOpen() && !showCulturePane()"
                  [class.pf-mobile-hide]="mobileTab() === 'intake' || mobileTab() === 'culture'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
@@ -1004,9 +1049,37 @@ const COUNTERS: CounterSpec[] = [
       background: var(--glass-bg);
       overflow: hidden;
     }
-    /* Lab Intake disabled → the work pane is the only pane; fill the whole row
-       (overrides the desktop :first-of-type 33% width). */
+    /* Lab Intake disabled or collapsed to its rail → the work pane fills the
+       whole row (overrides the desktop :first-of-type 33% width). */
     .pf-mw-pane--solo { flex: 1 1 100% !important; max-width: 100% !important; }
+
+    /* Collapsed Lab Intake. Stacked layouts (<1024px) get a slim horizontal
+       strip; desktop turns it into a vertical spine beside the workbench. */
+    .pf-mw-rail {
+      flex: 0 0 auto;
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 14px;
+      border: 1px solid var(--glass-border); border-radius: 14px;
+      background: var(--glass-bg); color: var(--text-tertiary);
+      cursor: pointer; transition: color 160ms ease, border-color 160ms ease;
+    }
+    .pf-mw-rail:hover { color: var(--text-primary); border-color: rgba(124, 58, 237, 0.35); }
+    .pf-mw-rail__label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    /* Pin / hide controls in the intake header. */
+    .pf-mw-pin {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+      border: 1px solid transparent; background: transparent;
+      color: var(--text-tertiary); cursor: pointer;
+      transition: background 160ms ease, color 160ms ease;
+    }
+    .pf-mw-pin:hover { background: rgba(124, 58, 237, 0.10); color: var(--text-primary); }
+    .pf-mw-pin--on {
+      color: #7c3aed; background: rgba(124, 58, 237, 0.10);
+      box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.26);
+    }
     .pf-mw-pane__hdr {
       display: flex;
       align-items: center;
@@ -1191,6 +1264,12 @@ const COUNTERS: CounterSpec[] = [
         flex: 1;
         min-height: 0;
       }
+      /* Collapsed intake becomes a vertical spine on the left. */
+      .pf-mw-rail {
+        flex-direction: column; align-self: stretch;
+        width: 42px; padding: 14px 0; margin-right: 10px; gap: 12px;
+      }
+      .pf-mw-rail__label { writing-mode: vertical-rl; text-orientation: mixed; }
       .pf-mw-pane:first-of-type {
         flex: 0 0 33%;
         min-width: 0;
@@ -2317,6 +2396,37 @@ export class MyWorkComponent implements OnInit {
    *  just says which list is on screen. */
   readonly tabLabel = computed(() =>
     this.tabOptions().find(o => o.value === this.tab())?.label ?? 'Queue');
+
+  // ── Lab Intake: rail ⇄ open, with a pin ──────────────────────────
+  // Most techs never receive samples, so a permanent intake column is
+  // wasted width (owner). New design collapses it to a labelled rail;
+  // one click opens it for this visit, the pin makes that stick.
+  // Classic and phones are untouched — there the pane is always open.
+  private readonly _intakePinned = signal<boolean>(this.readIntakePin());
+  readonly intakePinned = this._intakePinned.asReadonly();
+  private readonly _intakeExpanded = signal<boolean>(this.readIntakePin());
+  readonly intakeOpen = computed(() =>
+    !this.theme.isNewDesign() || this.isPhone() || this._intakeExpanded());
+  /** The left column takes space when Collect is there OR intake is open. */
+  readonly leftPaneOpen = computed(() => this.showCollect() || this.intakeOpen());
+
+  private readIntakePin(): boolean {
+    try { return localStorage.getItem(INTAKE_PIN_KEY) === '1'; } catch { return false; }
+  }
+  expandIntake(): void { this._intakeExpanded.set(true); }
+  collapseIntake(): void {
+    this._intakeExpanded.set(false);
+    this._intakePinned.set(false);
+    try { localStorage.removeItem(INTAKE_PIN_KEY); } catch { /* ignore */ }
+  }
+  toggleIntakePin(): void {
+    const on = !this._intakePinned();
+    this._intakePinned.set(on);
+    try {
+      if (on) localStorage.setItem(INTAKE_PIN_KEY, '1');
+      else localStorage.removeItem(INTAKE_PIN_KEY);
+    } catch { /* ignore */ }
+  }
 
   /** Collect-in-lab: sample collection is placed in the lab work-area, so the
    *  tube is drawn at the bench. The left pane becomes a Collect step (draw +

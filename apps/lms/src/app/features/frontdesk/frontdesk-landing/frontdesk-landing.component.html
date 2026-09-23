@@ -178,6 +178,11 @@
           </svg>
         </button>
         }
+      </ng-container>
+
+      <!-- Scanning a patient's QR FEEDS this search, so it lives inside the
+           field, before the divider (owner) — not out with the tools. -->
+      <ng-container band-inline>
         <button type="button" class="pf-hb-tool press" (click)="openQrScanner()" aria-label="Scan QR code" title="Scan QR">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
