@@ -212,6 +212,34 @@
     }
 
     .pf-sc__card-tail { display: inline-flex; align-items: center; gap: 8px; }
+
+    /* ── Status stack (new design) ───────────────────────────────
+       Classic keeps one row, so the wrapper is transparent there. In the
+       new design the waiting-days pill sits ON TOP and the tube colours
+       become one shaded line beneath it (owner) — the days are what you
+       track down the list, the colours are the shade under them. */
+    .pf-sc__status { display: contents; }
+    :host-context(.design-new) .pf-sc__status {
+      display: flex; flex-direction: column; align-items: stretch;
+      gap: 5px; min-width: 88px; flex-shrink: 0;
+    }
+    /* Uniform width across rows so the eye can run straight down the days. */
+    :host-context(.design-new) .pf-sc__wait { text-align: center; }
+    :host-context(.design-new) .pf-sc__rack {
+      display: flex; width: 100%; max-width: none; gap: 3px;
+      padding: 0; border: none; background: none; border-radius: 0;
+      overflow: visible;
+    }
+    /* A line, not a square: every tube takes an equal share of the bar, so
+       one vial reads as a full stripe and four read as four segments. */
+    :host-context(.design-new) .pf-sc__chip {
+      flex: 1 1 0; width: auto; min-width: 0; height: 5px;
+      border-radius: 999px; box-shadow: none;
+    }
+    :host-context(.design-new) .pf-sc__chip--done { opacity: 0.26; }
+    :host-context(.design-new) .pf-sc__chip--out {
+      width: auto; box-shadow: 0 0 0 1.5px #ec4899;
+    }
     .pf-sc__count {
       font-size: 10.5px; font-weight: 700;
       font-family: 'JetBrains Mono', ui-monospace, monospace;

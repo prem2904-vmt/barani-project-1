@@ -112,18 +112,24 @@
                   @if (g.paymentHold) {
                     <span class="pf-sc__hold" title="Bill not settled — dispatch is blocked until it's paid">Unpaid</span>
                   }
-                  @if (waitingLabel(g)) {
-                    <span class="pf-sc__wait" [attr.data-tone]="waitingTone(g)">{{ waitingLabel(g) }}</span>
-                  }
-                  <div class="pf-sc__rack" [attr.aria-label]="g.totalVials + ' vials'"
-                       [title]="g.collected > 0 ? g.collected + ' of ' + g.totalVials + ' collected' : g.totalVials + ' vials'">
-                    @for (s of g.samples; track s.id) {
-                      <span class="pf-sc__chip"
-                            [style.background]="tube(s).color"
-                            [class.pf-sc__chip--done]="s.status !== 'pending'"
-                            [class.pf-sc__chip--out]="!!s.outsourcedVendorId"
-                            [title]="s.outsourcedVendorId ? (tube(s).label + ' · Outsourced') : tube(s).label"></span>
+                  <!-- Waiting days stacked ABOVE the tube colours (owner): the
+                       days are what you track, the colours read as one shaded
+                       line under them. `display: contents` keeps classic's
+                       single row exactly as it was. -->
+                  <div class="pf-sc__status">
+                    @if (waitingLabel(g)) {
+                      <span class="pf-sc__wait" [attr.data-tone]="waitingTone(g)">{{ waitingLabel(g) }}</span>
                     }
+                    <div class="pf-sc__rack" [attr.aria-label]="g.totalVials + ' vials'"
+                         [title]="g.collected > 0 ? g.collected + ' of ' + g.totalVials + ' collected' : g.totalVials + ' vials'">
+                      @for (s of g.samples; track s.id) {
+                        <span class="pf-sc__chip"
+                              [style.background]="tube(s).color"
+                              [class.pf-sc__chip--done]="s.status !== 'pending'"
+                              [class.pf-sc__chip--out]="!!s.outsourcedVendorId"
+                              [title]="s.outsourcedVendorId ? (tube(s).label + ' · Outsourced') : tube(s).label"></span>
+                      }
+                    </div>
                   </div>
                   <svg class="pf-sc__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="m9 18 6-6-6-6"/>
