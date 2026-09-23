@@ -1,4 +1,7 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { NavigationEnd, Router } from '@angular/router';
+import { filter } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 /** One resumable draft rendered as a chip on the bottom bar's shelf. */
 export interface DraftChip {
@@ -13,34 +16,53 @@ export interface DraftChip {
   queryParams?: Record<string, string>;
 }
 
+/** Work areas that can own a draft list. */
+export type DraftArea = 'frontdesk' | 'lab' | 'collect' | 'validate' | 'results';
+
 /**
  * Draft shelf — the bottom bar's "work you left unfinished" section
  * (owner idea: pages | divider | drafts, one click back into a draft).
  *
- * PUBLISHER model: the shelf never fetches. The ACTIVE work screen
+ * AREA-scoped (owner): the shelf sticks for the whole WORK AREA, not one
+ * component — opening a test from Lab keeps you in /lab/*, so the lab
+ * drafts stay on the bar; they disappear only when you leave the area
+ * entirely (e.g. jump to Frontdesk, whose own drafts then take over).
+ *
+ * PUBLISHER model: the shelf never fetches. Each area's landing screen
  * pushes its own drafts (frontdesk → parked order drafts, lab → tubes
- * with saved-but-unsubmitted results) and clears them on destroy, so
- * the shelf is contextual by construction and can never drift from
- * what the page itself shows. No publisher on screen → no shelf.
+ * with saved-but-unsubmitted results); the list persists in the map and
+ * refreshes whenever the publisher screen is next visited.
  */
 @Injectable({ providedIn: 'root' })
 export class DraftShelfService {
-  private readonly _items = signal<DraftChip[]>([]);
-  readonly items = this._items.asReadonly();
-  private owner: object | null = null;
+  private readonly router = inject(Router);
 
-  /** Replace the shelf with `items`; `owner` claims it (last writer wins). */
-  publish(owner: object, items: DraftChip[]): void {
-    this.owner = owner;
-    this._items.set(items);
+  private readonly _byArea = signal<Partial<Record<DraftArea, DraftChip[]>>>({});
+  private readonly _area = signal<DraftArea | null>(DraftShelfService.areaOf(this.router.url));
+
+  /** Drafts for the work area the user is currently inside. */
+  readonly items = computed<DraftChip[]>(() => {
+    const area = this._area();
+    return area ? (this._byArea()[area] ?? []) : [];
+  });
+
+  constructor() {
+    this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd), takeUntilDestroyed())
+      .subscribe(e => this._area.set(DraftShelfService.areaOf(e.urlAfterRedirects || e.url)));
   }
 
-  /** Clear the shelf — but only if `owner` still holds it (a screen being
-   *  destroyed must not wipe the next screen's freshly published list). */
-  clear(owner: object): void {
-    if (this.owner === owner) {
-      this.owner = null;
-      this._items.set([]);
-    }
+  /** Replace `area`'s draft list (last writer wins). */
+  publish(area: DraftArea, items: DraftChip[]): void {
+    this._byArea.update(m => ({ ...m, [area]: items }));
+  }
+
+  private static areaOf(url: string): DraftArea | null {
+    if (url.startsWith('/frontdesk')) return 'frontdesk';
+    if (url.startsWith('/lab')) return 'lab';
+    if (url.startsWith('/sample-collection')) return 'collect';
+    if (url.startsWith('/pathologist')) return 'validate';
+    if (url.startsWith('/reports')) return 'results';
+    return null;
   }
 }

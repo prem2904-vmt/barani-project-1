@@ -2229,7 +2229,7 @@ export class MyWorkComponent implements OnInit {
       if (t.status !== 'entered' && t.status !== 'validated') e.allDone = false;
       bySample.set(sid, e);
     }
-    this.draftShelf.publish(this, Array.from(bySample.entries())
+    this.draftShelf.publish('lab', Array.from(bySample.entries())
       .filter(([, e]) => e.draft && !e.allDone)
       .map(([sid, e]) => ({
         id: 'lab:' + sid,
@@ -2242,7 +2242,6 @@ export class MyWorkComponent implements OnInit {
   readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly _draftShelfCleanup = (() => { this.destroyRef.onDestroy(() => this.draftShelf.clear(this)); return true; })();
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);

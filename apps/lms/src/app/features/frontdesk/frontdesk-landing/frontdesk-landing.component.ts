@@ -158,7 +158,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Bottom-bar draft shelf: publish this screen's parked order drafts. */
   private readonly draftShelf = inject(DraftShelfService);
   private readonly _draftShelfSync = effect(() => {
-    this.draftShelf.publish(this, this.draftOrders().map(d => ({
+    this.draftShelf.publish('frontdesk', this.draftOrders().map(d => ({
       id: 'fd:' + d.patientId,
       label: d.patient?.displayName || 'Patient',
       sub: d.testIds.length + (d.testIds.length === 1 ? ' test' : ' tests'),
@@ -1140,7 +1140,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       .subscribe(() => this.hydrateApsFromUrl());
   }
   ngOnDestroy() {
-    this.draftShelf.clear(this);
     if (this.pollHandle) clearInterval(this.pollHandle);
     if (this.seriesClock) { clearInterval(this.seriesClock); this.seriesClock = null; }
     this.closeInvoicePreview();
