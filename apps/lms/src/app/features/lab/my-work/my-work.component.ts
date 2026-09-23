@@ -37,7 +37,7 @@ import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-pane
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 
-type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed';
+type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed' | 'culture';
 type Level = 'urgent' | 'high' | 'normal';
 type Bucket = { level: Level; items: Enriched[] };
 type Enriched = OrderTest & { _level: Level; _remainingMin: number };
@@ -269,7 +269,7 @@ const COUNTERS: CounterSpec[] = [
           Done
           <span class="pf-mtab__count">{{ countFor('completed') }}</span>
         </button>
-        @if (showCulture()) {
+        @if (showCulturePane()) {
           <button type="button" role="tab" class="pf-mtab press"
                   [class.pf-mtab--on]="mobileTab() === 'culture'"
                   [attr.aria-selected]="mobileTab() === 'culture'"
@@ -384,7 +384,7 @@ const COUNTERS: CounterSpec[] = [
         <!-- RIGHT: tabbed My Work + Queue. On phones this pane shows under
              the My Work / Queue tabs (hidden under Intake). -->
         <section class="pf-mw-pane"
-                 [class.pf-mw-pane--solo]="!showLeftPane() && !showCulture()"
+                 [class.pf-mw-pane--solo]="!showLeftPane() && !showCulturePane()"
                  [class.pf-mobile-hide]="mobileTab() === 'intake' || mobileTab() === 'culture'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--tabs">
             <div class="pf-mw-tabs" role="tablist" aria-label="Workbench tabs">
@@ -411,6 +411,18 @@ const COUNTERS: CounterSpec[] = [
                 Completed
                 <span class="pf-mw-tab__count">{{ countFor('completed') }}</span>
               </button>
+              <!-- Culture bench as a tab (new design): the third pane folded in
+                   so the workbench keeps two columns. Classic still gets it as
+                   its own pane beside the queue. -->
+              @if (cultureAsTab()) {
+              <button type="button" role="tab" class="pf-mw-tab press"
+                      [class.pf-mw-tab--on]="tab() === 'culture'"
+                      [attr.aria-selected]="tab() === 'culture'"
+                      (click)="setTab('culture')">
+                Culture
+                <span class="pf-mw-tab__count">{{ cultureCount() }}</span>
+              </button>
+              }
               <!-- Supervisor view: also show tubes other techs already claimed,
                    so stuck work (tech on leave) can be found and delegated. -->
               @if (tab() === 'service_queue') {
@@ -422,13 +434,25 @@ const COUNTERS: CounterSpec[] = [
               }
             </div>
             <p class="pf-mw-pane__meta">
+              @if (tab() === 'culture') {
+                {{ cultureCount() }} cases
+              } @else {
               <!-- Sample-focused branches count TUBES — the unit of work on this
                    screen in that mode — not the tests inside them. -->
               {{ labCfg.sampleFocused() ? sampleCountIn(rows()) + ' samples' : rows().length + ' items' }}
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
+              }
             </p>
           </header>
           <div class="pf-mw-pane__body">
+      <!-- Kept mounted (not @if'd) so the bench keeps feeding its count to the
+           tab pill even while another tab is showing. -->
+      @if (cultureAsTab()) {
+        <div class="pf-mw-culturetab" [class.pf-mw-culturetab--off]="tab() !== 'culture'">
+          <pf-culture-panel (countChange)="cultureCount.set($event)"></pf-culture-panel>
+        </div>
+      }
+      @if (tab() !== 'culture') {
       @if (tab() === 'completed') {
       <!-- ── Completed: this tech's finished tubes, newest first ──────
            Read-only history with ONE action: Edit re-opens the whole tube
@@ -858,6 +882,7 @@ const COUNTERS: CounterSpec[] = [
         </pf-tile>
       }
       }
+      }
           </div>
         </section>
 
@@ -865,7 +890,7 @@ const COUNTERS: CounterSpec[] = [
              bench, persistent beside the queue (not a tab). Additive; only
              rendered when the Lab microbiology feature is on AND the user holds
              culture_workbench. On phones it's the "Culture Bench" mobile tab. -->
-        @if (showCulture()) {
+        @if (showCulturePane()) {
         <!-- Its own resize handle (desktop only; hidden on phones). -->
         <div class="pf-mw-handle" role="separator" aria-orientation="vertical"
              aria-label="Resize Culture Bench"
@@ -1003,6 +1028,10 @@ const COUNTERS: CounterSpec[] = [
       text-transform: uppercase;
       color: var(--text-secondary);
     }
+    /* Culture-as-tab (new design). Stays mounted while other tabs show so
+     * the bench keeps reporting its case count to the tab pill. */
+    .pf-mw-culturetab { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+    .pf-mw-culturetab--off { display: none; }
     /* Culture pane header count chip. */
     .pf-mw-culture__count {
       margin-left: auto; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px;
@@ -2264,6 +2293,11 @@ export class MyWorkComponent implements OnInit {
    *  on AND the user must hold culture_workbench. A regular tech never sees it. */
   readonly showCulture = computed(() =>
     this.entitlements.featureOn('lab', 'microbiology') && this.auth.hasPermission('culture_workbench'));
+  /** New design folds the bench into the workbench tab strip so the screen
+   *  keeps two columns instead of three. Classic keeps the third pane. */
+  readonly cultureAsTab = computed(() => this.showCulture() && this.theme.isNewDesign());
+  /** Classic-only standalone third pane. */
+  readonly showCulturePane = computed(() => this.showCulture() && !this.theme.isNewDesign());
   /** Live count for the Culture pill (fed by the culture panel on load). */
   readonly cultureCount = signal(0);
 
@@ -2539,7 +2573,7 @@ export class MyWorkComponent implements OnInit {
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
 
-  private readonly _counts = signal<Record<Tab, number>>({ intake: 0, my_work: 0, service_queue: 0, rejected: 0, completed: 0 });
+  private readonly _counts = signal<Record<Tab, number>>({ intake: 0, my_work: 0, service_queue: 0, rejected: 0, completed: 0, culture: 0 });
   countFor(t: Tab): number { return this._counts()[t]; }
 
   // ── Completed tab ────────────────────────────────────────────
@@ -2818,6 +2852,8 @@ export class MyWorkComponent implements OnInit {
     // Intake tab embeds the ReceiveSamplesComponent which manages its own
     // data; nothing to fetch here.
     if (this._tab() === 'intake') { this._loading.set(false); return; }
+    // The culture bench loads its own cases; it has no queue endpoint.
+    if (this._tab() === 'culture') { this._loading.set(false); return; }
     // Completed keeps its own list + endpoint; loading it here would
     // overwrite the queue rows the other tabs render from.
     if (this._tab() === 'completed') { this._loading.set(false); this.loadCompleted(); return; }
