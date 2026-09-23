@@ -1192,6 +1192,23 @@ a.pf-ts-tenant:hover {
   }
   :host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
 }
+/* ── Bottom-bar layout (all widths): a plain self-aligning flex row —
+   [pf glyph][pages, LEFT-aligned][spacer][branch][bell][avatar]. The
+   absolute centering is a TOP-bar trick; docked at the bottom the nav
+   simply flows after the brand and the bar lays itself out. ── */
+:host-context(.design-new.nav-bottom) .pf-topnav-center {
+  display: flex !important;
+  position: static;
+  transform: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+  margin-left: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+:host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
+
 /* On shrink (iPad AND phone, <1280px): ICONS ONLY across the whole bar —
    pf glyph without wordmark/heartbeat, page links without labels, branch
    pill as just the pin. Names come back only at full desktop width. */

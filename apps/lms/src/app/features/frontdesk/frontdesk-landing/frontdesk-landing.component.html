@@ -161,19 +161,10 @@
       </ng-container>
 
       <div band-search>
-        <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…" (picked)="openProfile($event)">
-          <button trailing type="button" class="pf-adv-search-icon press" (click)="openAdvancedSearch()"
-            [attr.aria-label]="'Open advanced patient search (Cmd+K)'" title="Advanced search · ⌘K">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="4" y1="6" x2="20" y2="6" />
-              <line x1="7" y1="12" x2="20" y2="12" />
-              <line x1="10" y1="18" x2="20" y2="18" />
-              <circle cx="4" cy="12" r="1.4" fill="currentColor" />
-              <circle cx="7" cy="18" r="1.4" fill="currentColor" />
-            </svg>
-          </button>
-        </pf-patient-search>
+        <!-- Plain pill like every other band (owner) — the typeahead IS
+             the frontdesk search; the special advanced-search trigger is
+             gone (⌘K still opens it via the keyboard shortcut). -->
+        <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…" (picked)="openProfile($event)"></pf-patient-search>
       </div>
 
       <ng-container band-tools>
