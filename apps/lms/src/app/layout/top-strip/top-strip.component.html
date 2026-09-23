@@ -206,6 +206,24 @@
         <button type="button" class="pf-avatar-btn press" (click)="toggleProfile()" [attr.aria-expanded]="profileOpen()"
           [attr.aria-label]="'Profile menu — ' + userName()">
           <span class="pf-avatar-circle">{{ initials() }}</span>
+          <!-- Shrink + bottom bar: the pf glyph IS the user badge — it swaps
+               in for the initials disc (CSS toggles which one shows). -->
+          <svg class="pf-avatar-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true">
+            <defs>
+              <linearGradient id="pfAvatarGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#7c3aed" />
+                <stop offset="50%" stop-color="#a855f7" />
+                <stop offset="100%" stop-color="#ec4899" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
+              fill="url(#pfAvatarGradient)" />
+            <path
+              d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
+              fill="url(#pfAvatarGradient)" />
+          </svg>
           <!-- My presence status — small colored dot pinned bottom-right of
                the avatar (solid / white-dash for DND-grade / hollow for Away). -->
           <span class="pf-status-dot pf-avatar-status"

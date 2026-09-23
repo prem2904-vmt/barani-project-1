@@ -1212,6 +1212,9 @@ a.pf-ts-tenant:hover {
 /* On shrink (iPad AND phone, <1280px): ICONS ONLY across the whole bar —
    pf glyph without wordmark/heartbeat, page links without labels, branch
    pill as just the pin. Names come back only at full desktop width. */
+/* iPad (768–1279) + phone: ICONS ONLY — same layout as web on iPad
+   (left-aligned, separate user badge) but every name drops: page labels,
+   brand wordmark/heartbeat, branch name. Just icons. */
 @media (max-width: 1279px) {
   :host-context(.design-new.nav-bottom) .pf-topnav-link { padding: 6px 9px; }
   :host-context(.design-new.nav-bottom) .pf-topnav-link__lbl { display: none; }
@@ -1221,6 +1224,21 @@ a.pf-ts-tenant:hover {
   :host-context(.design-new.nav-bottom) .pf-ts-branch__name,
   :host-context(.design-new.nav-bottom) .pf-ts-branch__chev { display: none; }
 }
+
+/* Phone only (<768): tighter still — the pf glyph BECOMES the user badge
+   (same button, same profile menu; brand lockup + initials disc go) and
+   the whole bar centers as one group. iPad keeps the web layout. */
+@media (max-width: 767px) {
+  :host-context(.design-new.nav-bottom) .pf-brand-lockup { display: none !important; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-circle { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-glyph { display: block; }
+  :host-context(.design-new.nav-bottom) .pf-topstrip-bar { justify-content: center; }
+  :host-context(.design-new.nav-bottom) .pf-ts-spacer { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-topnav-center { flex: 0 1 auto; margin-left: 0; }
+}
+
+/* The glyph-as-avatar: hidden by default, shown on shrink (rule above). */
+.pf-avatar-glyph { display: none; width: 30px; height: auto; }
 
 /* Dark-new: the bar avatar matches the soft-violet disc language. */
 :host-context(.dark.design-new) .pf-avatar-circle {
