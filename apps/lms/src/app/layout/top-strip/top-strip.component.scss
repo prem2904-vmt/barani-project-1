@@ -1192,13 +1192,17 @@ a.pf-ts-tenant:hover {
   }
   :host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
 }
-@media (max-width: 767px) {
+/* On shrink (iPad AND phone, <1280px): ICONS ONLY across the whole bar —
+   pf glyph without wordmark/heartbeat, page links without labels, branch
+   pill as just the pin. Names come back only at full desktop width. */
+@media (max-width: 1279px) {
   :host-context(.design-new.nav-bottom) .pf-topnav-link { padding: 6px 9px; }
   :host-context(.design-new.nav-bottom) .pf-topnav-link__lbl { display: none; }
   :host-context(.design-new.nav-bottom) .pf-topnav-link svg { width: 18px; height: 18px; }
-  /* On shrink the brand disappears ENTIRELY (glyph + wordmark + heartbeat)
-     — the user's initials avatar is the only identity badge left. */
-  :host-context(.design-new.nav-bottom) .pf-brand-lockup { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-brand-text,
+  :host-context(.design-new.nav-bottom) .pf-brand-pulse { display: none !important; }
+  :host-context(.design-new.nav-bottom) .pf-ts-branch__name,
+  :host-context(.design-new.nav-bottom) .pf-ts-branch__chev { display: none; }
 }
 
 /* Dark-new: the bar avatar matches the soft-violet disc language. */

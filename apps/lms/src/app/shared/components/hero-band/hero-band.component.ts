@@ -83,10 +83,15 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     }
     :host-context(.dark) .pf-hb__band,
     :host-context([data-theme='dark']) .pf-hb__band {
-      background-color: transparent;
-      background-image: linear-gradient(90deg, rgba(125, 28, 182, 0.35) 0%, rgba(173, 75, 201, 0.30) 37%,
-                                        rgba(175, 34, 201, 0.28) 68%, rgba(162, 25, 110, 0.32) 100%);
-      border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.10));
+      /* Owner: the light gradient wasn't "adding up" in dark — give the
+         band a real violet presence on a deep base instead of a faint
+         wash over transparent. */
+      background-color: #1b1426;
+      background-image:
+        linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(10, 8, 16, 0.55) 100%),
+        linear-gradient(90deg, rgba(125, 28, 182, 0.55) 0%, rgba(173, 75, 201, 0.42) 37%,
+                        rgba(175, 34, 201, 0.40) 68%, rgba(162, 25, 110, 0.5) 100%);
+      border-bottom: 1px solid rgba(168, 85, 247, 0.22);
     }
 
     .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }
