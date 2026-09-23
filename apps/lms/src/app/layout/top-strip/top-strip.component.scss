@@ -1120,6 +1120,34 @@ a.pf-ts-tenant:hover {
   transition: background 140ms ease, color 140ms ease;
 }
 .pf-topnav-link svg { flex-shrink: 0; opacity: 0.85; }
+
+/* CLASSIC right-cluster nav wrapper — the old inline layout (the icon-first
+   pf-topnav-btn styles above are shared). Display stays Tailwind-owned. */
+.pf-topnav-classic {
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* CLASSIC bar rhythm — the pre-designer 64px pill (44px children + padding). */
+:host-context(.design-classic) .pf-topstrip-bar {
+  min-height: 64px;
+  padding: 10px 16px 10px 12px;
+  gap: 8px;
+}
+
+/* CLASSIC brand wordmark — the pre-designer 13/15px bold tracked lockup. */
+:host-context(.design-classic) .pf-brand-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+@media (min-width: 640px) {
+  :host-context(.design-classic) .pf-brand-name { font-size: 15px; }
+}
 .pf-topnav-link:hover { color: var(--text-primary); background: var(--bg-hover); }
 .pf-topnav-link--on { color: #7c3aed; background: rgba(124, 58, 237, 0.10); }
 :root.dark .pf-topnav-link--on,

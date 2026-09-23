@@ -36,12 +36,52 @@
 
       <span class="pf-brand-text">
         <span class="pf-brand-name">PREFRONTAL</span>
+        @if (!themeService.isNewDesign()) {
+        <span class="pf-brand-sub">Lab Management System</span>
+        }
       </span>
     </a>
 
+    @if (!themeService.isNewDesign() && tenantLoaded()) {
+      <!-- CLASSIC: pipe separator + tenant chip right after the PF brand —
+           "PREFRONTAL | Micro World". New design carries the tenant on each
+           screen's hero band instead. -->
+      <span class="pf-ts-sep hidden sm:inline-block" aria-hidden="true"></span>
+      @if (showAdmin()) {
+        <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex"
+           [class.pf-ts-tenant--empty]="!hasBrand()"
+           [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
+          @if (showLogo() && tenantLogo()) {
+            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+          } @else {
+            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
+          }
+          @if (showName()) {
+            <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
+          }
+        </a>
+      } @else {
+        <div class="pf-ts-tenant hidden sm:inline-flex cursor-default select-none"
+             [class.pf-ts-tenant--empty]="!hasBrand()"
+             [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
+          @if (showLogo() && tenantLogo()) {
+            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+          } @else {
+            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
+          }
+          @if (showName()) {
+            <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
+          }
+        </div>
+      }
+    }
+
     <!-- Work areas — STATIC, centered in the bar (owner: every page link
          always visible, not tucked into the avatar menu). Quiet text pills
-         in the designer vocabulary; active = violet on soft violet. -->
+         in the designer vocabulary; active = violet on soft violet.
+         New design only — classic keeps its icon-first auto-hide nav in
+         the right cluster below. -->
+    @if (themeService.isNewDesign()) {
     <nav class="pf-topnav-center hidden xl:flex" aria-label="Work areas">
       @for (n of primary(); track n.id) {
         <a [routerLink]="n.href" routerLinkActive="pf-topnav-link--on"
@@ -66,6 +106,7 @@
         </a>
       }
     </nav>
+    }
 
     <!-- Spacer pushes the nav + right cluster to the far edge -->
     <div class="pf-ts-spacer flex-1 min-w-0"></div>
@@ -73,6 +114,36 @@
     <!-- Right cluster — flex-shrink-0 so bell + avatar never overflow the pill.
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
     <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
+
+      @if (!themeService.isNewDesign()) {
+      <!-- CLASSIC primary nav — icon-first hybrid on the right: the active
+           item shows its label, the others slide theirs out on hover. -->
+      <nav class="pf-topnav-classic hidden xl:flex" aria-label="Work areas">
+        @for (n of primary(); track n.id) {
+        <a [routerLink]="n.href" routerLinkActive="pf-topnav-active" [routerLinkActiveOptions]="{ exact: !!n.exact }"
+          class="pf-topnav-btn press" [title]="n.label" [attr.aria-label]="n.label">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
+            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            @for (p of n.iconPath; track p) {
+            <path [attr.d]="p" />
+            }
+          </svg>
+          <span>{{ n.label }}</span>
+        </a>
+        }
+        @if (showAdmin()) {
+        <a routerLink="/admin" routerLinkActive="pf-topnav-active"
+          class="pf-topnav-btn press" title="Admin" aria-label="Admin">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
+            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
+          </svg>
+          <span>Admin</span>
+        </a>
+        }
+      </nav>
+      }
 
       <!-- Designer navbar (Figma 446-113): the bar carries ONLY branch pill,
            bell and avatar. The work-area nav moved into the avatar menu
