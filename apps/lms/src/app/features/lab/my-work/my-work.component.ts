@@ -2192,15 +2192,10 @@ const COUNTERS: CounterSpec[] = [
         color: #fff;
         box-shadow: 0 4px 12px rgba(124, 58, 237, 0.32);
       }
-      /* Primary-colour discipline (owner), which we had only enforced in
-         light mode: the gradient belongs to the ONE primary action on a
-         screen, never to a tab. Quiet violet in both themes. */
-      :host-context(.design-new) .pf-mtab--on {
-        background: rgba(124, 58, 237, 0.15);
-        background-image: none;
-        color: var(--violet-text, #a78bfa);
-        box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.30);
-      }
+      /* NB: the gradient on .pf-mtab--on is already quieted in BOTH themes
+         by the global primary-colour rule in styles.scss
+         (:root.{light,dark}.design-new button[class*="--on"]), which
+         outranks anything scoped here. Classic still gets the gradient. */
       /* Five tabs share ~390px once Culture is in play — never let a label
          bleed out of its pill. */
       .pf-mtab__label {

@@ -87,15 +87,10 @@ export type SegmentedSize = 'sm' | 'md';
       /* Comfortable thumb target; sm was 32px. */
       .sz-sm .seg-item { height: 40px; padding: 0 14px; font-size: 12.5px; }
       .sz-md .seg-item { height: 42px; }
-      /* Primary-colour discipline (owner): the gradient belongs to the one
-         primary action on a screen, not to a filter. Light mode was already
-         quieted globally; this covers dark, where the gradient survived. */
-      :host-context(.design-new) .seg-item.is-selected {
-        background: rgba(124, 58, 237, 0.16);
-        background-image: none;
-        color: var(--violet-text, #a78bfa);
-        box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.32);
-      }
+      /* NB: the selected pill's gradient is already quieted in BOTH themes
+         by the global primary-colour rule in styles.scss
+         (:root.{light,dark}.design-new button[class*="is-selected"]).
+         Nothing to do here. */
       /* Blur is the costliest GPU op on weak phones. */
       .bar { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
     }

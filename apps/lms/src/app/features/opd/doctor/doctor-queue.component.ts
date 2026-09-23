@@ -176,6 +176,34 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
     .dq-card__status[data-status='in_consult'] { color: var(--violet-text, #c4b5fd); border-color: rgba(168, 85, 247, 0.4); }
     :root.dark .dq-card__status[data-status='waiting'] { color: #fbbf24; }
 
+    /* ── Phone (<=640px) ────────────────────────────────────────
+       This screen had no phone rules at all. The grid already collapses
+       to one column (300px min track), so the work is inside the row:
+       a 52px token plus a bordered status pill left the patient name
+       about 180px on a 390px screen. */
+    @media (max-width: 640px) {
+      :host-context(.design-new) .dq-card {
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        gap: 10px; padding: 11px 12px; border-radius: 14px;
+      }
+      :host-context(.design-new) .dq-card__token {
+        width: 40px; height: 40px; border-radius: 12px; font-size: 17px;
+      }
+      :host-context(.design-new) .dq-card__name { font-size: 13.5px; font-weight: 600; }
+      /* Status as dot + word — the frontdesk anatomy the owner set as the
+         house pattern. Drops the pill chrome and ~50px of width. */
+      :host-context(.design-new) .dq-card__status {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 0; border: none; background: none; border-radius: 0;
+        font-size: 11px; font-weight: 500;
+        letter-spacing: 0; text-transform: none;
+      }
+      :host-context(.design-new) .dq-card__status::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%;
+        background: currentColor; flex-shrink: 0;
+      }
+    }
+
     .dq-empty { padding: 60px 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
     .dq-empty__big { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-secondary); }
     .dq-empty__sub { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
