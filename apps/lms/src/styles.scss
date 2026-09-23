@@ -239,6 +239,42 @@
   --seg-track: rgba(124, 58, 237, 0.08);
 }
 
+/* NEW design, light: TOGGLES wear the designer's quiet anatomy — the
+   primary gradient belongs to the ONE primary button per screen (band).
+   Active toggle = white pill + #ecd8ff ring + violet text, exactly like
+   the frontdesk section tabs; counts go mono-on-soft-violet. !important
+   beats the component-scoped gradient styles. */
+:root.light.design-new pf-segmented .seg-item.is-selected,
+:root.light.design-new .pf-mw-tab--on {
+  background: #ffffff !important;
+  color: #8749ee !important;
+  box-shadow: inset 0 0 0 1px #ecd8ff, 0 1px 1.5px rgba(16, 24, 40, 0.08) !important;
+}
+:root.light.design-new .pf-mw-tab--on .pf-mw-tab__count {
+  background: #f8f2ff !important;
+  color: #7c3aed !important;
+}
+
+/* Receive actions (lab intake header + queue rows) follow the frame's
+   row-action anatomy — violet outline, not the filled gradient. */
+:root.light.design-new .pf-mw-scan__btn,
+:root.light.design-new .pf-rs-row__btn {
+  background: #ffffff !important;
+  border: 1px solid #7c3aed !important;
+  color: #7c3aed !important;
+  box-shadow: none !important;
+}
+:root.light.design-new .pf-mw-scan__btn:hover:not(:disabled),
+:root.light.design-new .pf-rs-row__btn:hover:not(:disabled) {
+  background: #f8f2ff !important;
+  filter: none !important;
+}
+:root.light.design-new .pf-mw-scan__btn:disabled,
+:root.light.design-new .pf-rs-row__btn:disabled {
+  border-color: #d1d5db !important;
+  color: #9ca3af !important;
+}
+
 /* NEW design: elements that belong to the CLASSIC layout only (duplicate
    search rows, header Refresh buttons that moved into the band, ...). */
 :root.design-new .pf-classic-only { display: none !important; }
