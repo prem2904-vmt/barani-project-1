@@ -72,15 +72,15 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
   styles: [`
     /* ── Band — exact Figma 446-113 values. Full-bleed when the host sets
        --pf-hb-bleed to its page padding. ── */
-    .pf-hb { margin: 0 calc(-1 * var(--pf-hb-bleed, 0px)) 14px; }
+    .pf-hb { margin: 0 calc(-1 * var(--pf-hb-bleed, 0px)) 12px; }
     .pf-hb__band {
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
       /* Tightened (owner): the tenant row and the search pill were ~27px
          apart on a 108px band — that empty gap gave the page nothing. Now the
          band hugs its content (~10px of air above the pill) and hands the
          reclaimed height back to the screen. */
-      min-height: 84px;
-      padding: 10px 20px calc(10px + 33px);  /* bottom holds room for the overlap */
+      min-height: 72px;
+      padding: 8px 20px calc(8px + 33px);  /* bottom holds room for the overlap */
       background-color: #ffffff;
       background-image: linear-gradient(90deg, rgba(125, 28, 182, 0.35) 0%, rgba(173, 75, 201, 0.35) 37%,
                                         rgba(175, 34, 201, 0.35) 68%, rgba(162, 25, 110, 0.35) 100%);
@@ -100,9 +100,10 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 
     .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .pf-hb__logo {
-      height: 30px; width: auto; max-width: 150px; flex-shrink: 0;
-      object-fit: contain; border-radius: 6px;
-      background: rgba(255, 255, 255, 0.8); padding: 2px 4px;
+      /* The tenant uploads a PNG with transparency — no backing plate
+         (owner); it sits directly on the band gradient. */
+      height: 28px; width: auto; max-width: 150px; flex-shrink: 0;
+      object-fit: contain;
     }
     .pf-hb__avatar {
       display: inline-flex; align-items: center; justify-content: center;
