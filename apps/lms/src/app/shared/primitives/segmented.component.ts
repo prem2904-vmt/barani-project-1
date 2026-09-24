@@ -103,7 +103,10 @@ export type SegmentedSize = 'sm' | 'md';
          a 390px row. The icon carries the option's dot colour so the legend
          still reads, and the count stays because that is the useful part. */
       .seg-ico { display: block; }
-      .seg-lbl { display: none; }
+      /* ONLY swap the word out when there is an icon to swap in. Hiding
+         every label left icon-less strips (Validate's My queue / All
+         pathologists) rendering as blank pills. */
+      .seg-item:has(.seg-ico) .seg-lbl { display: none; }
       .seg-item:has(.seg-ico) .seg-dot { display: none; }
       .seg-item:has(.seg-ico) { padding: 0 12px; gap: 6px; }
       /* Comfortable thumb target; sm was 32px. */
