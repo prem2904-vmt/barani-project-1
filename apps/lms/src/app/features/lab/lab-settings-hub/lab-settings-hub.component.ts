@@ -1,6 +1,9 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
 
 interface LabTile {
   title: string;
@@ -19,18 +22,24 @@ interface LabTile {
 @Component({
   selector: 'pf-lab-settings-hub',
   standalone: true,
-  imports: [RouterLink, ScreenHeaderComponent],
+  imports: [RouterLink, ScreenHeaderComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the hub's search filters its tiles. -->
+        <pf-hero-band [back]="true" placeholder="Search lab settings — tests, report, referral, KPIs…"
+                      [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Lab"
         title="Lab Settings"
         subtitle="Everything specific to your lab — catalog, report layout, lab settings, referrals, alerts.">
       </pf-screen-header>
 
+      <div class="pf-band-body">
       <div class="pf-lsh">
-        @for (t of tiles; track t.href) {
+        @for (t of visibleTiles(); track t.href) {
           <a [routerLink]="t.href" class="pf-lsh__tile press">
             <span class="pf-lsh__ic">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -48,6 +57,10 @@ interface LabTile {
             </svg>
           </a>
         }
+      </div>
+      @if (!visibleTiles().length) {
+        <p class="pf-band-empty">No lab settings match "{{ q() }}".</p>
+      }
       </div>
     </section>
   `,
@@ -88,6 +101,11 @@ interface LabTile {
   `],
 })
 export class LabSettingsHubComponent {
+  protected readonly theme = inject(ThemeService);
+  /** Band pill search over the tiles (title + subtitle). */
+  readonly q = signal('');
+  readonly visibleTiles = computed(() => bandFilter(this.tiles, this.q(), (t) => [t.title, t.subtitle]));
+
   readonly tiles: LabTile[] = [
     { title: 'Tests & Packages', href: '/admin/tests',
       subtitle: 'Tests, parameters, reference ranges, packages',

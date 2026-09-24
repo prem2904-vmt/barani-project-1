@@ -1,6 +1,9 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
 
 interface OpdTile {
   title: string;
@@ -17,18 +20,24 @@ interface OpdTile {
 @Component({
   selector: 'pf-opd-admin',
   standalone: true,
-  imports: [RouterLink, ScreenHeaderComponent],
+  imports: [RouterLink, ScreenHeaderComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the hub's search filters its tiles. -->
+        <pf-hero-band [back]="true" placeholder="Search OPD settings — doctors, fees, follow-up…"
+                      [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="OPD"
         title="OPD Settings"
         subtitle="Outpatient department configuration — doctors, consultation fees and follow-up policy.">
       </pf-screen-header>
 
+      <div class="pf-band-body">
       <div class="pf-lsh">
-        @for (t of tiles; track t.href) {
+        @for (t of visibleTiles(); track t.href) {
           <a [routerLink]="t.href" class="pf-lsh__tile press">
             <span class="pf-lsh__ic">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -46,6 +55,10 @@ interface OpdTile {
             </svg>
           </a>
         }
+      </div>
+      @if (!visibleTiles().length) {
+        <p class="pf-band-empty">No OPD settings match "{{ q() }}".</p>
+      }
       </div>
     </section>
   `,
@@ -84,6 +97,11 @@ interface OpdTile {
   `],
 })
 export class OpdAdminComponent {
+  protected readonly theme = inject(ThemeService);
+  /** Band pill search over the tiles (title + subtitle). */
+  readonly q = signal('');
+  readonly visibleTiles = computed(() => bandFilter(this.tiles, this.q(), (t) => [t.title, t.subtitle]));
+
   readonly tiles: OpdTile[] = [
     { title: 'Doctors', href: '/admin/opd/doctors',
       subtitle: 'Consultation fee per doctor, department & specialisation',
