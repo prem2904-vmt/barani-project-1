@@ -43,6 +43,10 @@ export class LockService {
     // A fresh credential sign-in clears any stale idle-lock (raised by
     // AuthService.signIn) — the person just proved who they are.
     window.addEventListener('pf:fresh-signin', () => this.clearAfterSwitch());
+    // Signing out ends the lock outright. AuthService already removed the
+    // persisted key; this drops the in-memory flag so the next sign-in on
+    // this tab isn't met by the previous session's PIN gate.
+    window.addEventListener('pf:signed-out', () => this.clearAfterSwitch());
     // Manual lock shortcuts. Browsers NEVER deliver bare ⌘L (address bar), so
     // the working combos are: Ctrl+L (free on every platform, incl. macOS) and
     // ⌘⇧L (delivered + overridable in Safari/Chrome, unlike bare ⌘L). Matching

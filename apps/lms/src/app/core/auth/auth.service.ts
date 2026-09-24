@@ -437,6 +437,14 @@ export class AuthService {
     this.persistSession(null);   // clear our stored tokens
     this._session.set(null);
     this._user.set(null);
+    // Signing out ENDS the idle lock. Leaving pf.lockedAt behind meant the
+    // next person to sign in on this device was met by the PIN screen for a
+    // lock that belonged to the session they just ended (owner: "if it's
+    // sign out the pin is not needed, it just needs to sign in"). Cleared
+    // here rather than in LockService to avoid an AuthService <-> LockService
+    // DI cycle; the event lets a live LockService drop its in-memory flag too.
+    try { localStorage.removeItem('pf.lockedAt'); } catch { /* */ }
+    try { window.dispatchEvent(new Event('pf:signed-out')); } catch { /* SSR/native */ }
     try { await supabase.auth.signOut(); } catch { /* SDK may hang on native — already cleared locally */ }
   }
 
