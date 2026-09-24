@@ -11,6 +11,9 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandMatch } from '../../../shared/utils/band-search';
 
 /** A physical lab space within a branch; departments are assigned to one. */
 interface LabSpace { id: string; branchId: string; name: string; code?: string | null; order: number; }
@@ -31,12 +34,33 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     ChipComponent,
     ScreenHeaderComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): search branches, sub-branches and departments;
+             "Add branch" rides the band's actions. -->
+        <pf-hero-band [back]="true" placeholder="Search branches, sub-branches, departments…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="toggleNewBranch()"
+                    [attr.aria-label]="newBranchOpen() ? 'Cancel new branch' : 'Add branch'">
+              @if (newBranchOpen()) {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              }
+              {{ newBranchOpen() ? 'Cancel' : 'Add branch' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Branches & Departments"
         subtitle="Manage collection sites, sub-branches, and their lab departments.">
@@ -51,6 +75,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-band-body">
       @if (newBranchOpen()) {
         <pf-tile tone="violet" padding="lg" class="block mb-4">
           <h3 class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
@@ -78,9 +103,11 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
             <p class="text-[14px]" style="color: var(--text-secondary);">No branches yet.</p>
           </div>
         </pf-tile>
+      } @else if (visibleBranches().length === 0) {
+        <p class="pf-band-empty">No branches match "{{ q() }}".</p>
       } @else {
         <div class="space-y-2.5">
-          @for (b of branches(); track b.id) {
+          @for (b of visibleBranches(); track b.id) {
             <pf-tile tone="default" padding="none" class="block">
               <button type="button"
                       class="pf-branch-toggle"
@@ -336,6 +363,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
           }
         </div>
       }
+      </div>
     </section>
   `,
   styles: [`
@@ -716,6 +744,22 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
 export class BranchesComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill search. A branch shows when it — or one of its sub-branches,
+   *  or a department on its board — matches. Departments are tenant-global,
+   *  so a department hit keeps every branch (each board shows it). */
+  readonly q = signal('');
+  readonly visibleBranches = computed(() => {
+    const q = this.q();
+    const all = this._branches();
+    if (!q.trim()) return all;
+    const deptHit = this._departments().some(d => bandMatch(q, d.name, d.code));
+    if (deptHit) return all;
+    return all.filter(b =>
+      bandMatch(q, b.name, b.code, b.city, b.state)
+      || this._subBranches().some(sb => sb.branchId === b.id && bandMatch(q, sb.name, sb.code, sb.city, sb.type)));
+  });
 
   private readonly _branches = signal<Branch[]>([]);
   private readonly _subBranches = signal<SubBranch[]>([]);
