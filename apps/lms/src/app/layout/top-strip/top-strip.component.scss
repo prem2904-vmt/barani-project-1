@@ -1295,7 +1295,16 @@ a.pf-ts-tenant:hover {
   /* Comfortable thumb target for the badge itself. */
   :host-context(.design-new.nav-bottom) .pf-avatar-btn {
     flex-shrink: 0; min-width: 44px; min-height: 44px;
+    padding: 0;
     display: inline-flex; align-items: center; justify-content: center;
+  }
+  /* The glyph is a tall mark (228x292), so the default width:30px/height:auto
+     draws it ~38px high — towering over the 18px work-area icons beside it
+     (owner: the logo isn't shrinking to the bar). Drive it from HEIGHT so
+     the aspect ratio sets the width, and match the icon row optically.
+     The 44px tap target is on the button, not the mark. */
+  :host-context(.design-new.nav-bottom) .pf-avatar-glyph {
+    height: 22px; width: auto;
   }
 }
 

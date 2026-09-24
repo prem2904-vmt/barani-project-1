@@ -8,6 +8,9 @@
       placeholder="Search by patient, MRN, phone, or order/report id…"
       [value]="query()"
       (valueChange)="setQuery($event)">
+      <!-- Stats rides inside the field (owner): it was floating alone and
+           centred on its own row between the search bar and the list. -->
+      <ng-container band-inline [ngTemplateOutlet]="rqStatsBtn"></ng-container>
       <ng-container band-tools>
         <!-- Filters live INSIDE the search bar (owner): one control strip,
              and the dots + counts legend the row colours right there. -->
@@ -55,55 +58,9 @@
         <span class="pf-rq-btn-label">Refresh</span>
       </pf-touch-btn>
 
-      <!-- Phone-only (<=640px): a compact status icon between Refresh and
-         Generate. Tapping opens a small popover with the same count
-         breakdown the old .pf-rq-stats-m summary showed. Same signals,
-         no business logic. -->
-      <div actions class="pf-rq-statbtn-m">
-        <button type="button" class="pf-rq-statbtn" [class.is-open]="statsOpen()" [attr.aria-expanded]="statsOpen()"
-          aria-label="Queue stats" aria-controls="pf-rq-statpop" (click)="toggleStats()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="18" y1="20" x2="18" y2="10" />
-            <line x1="12" y1="20" x2="12" y2="4" />
-            <line x1="6" y1="20" x2="6" y2="14" />
-          </svg>
-        </button>
-        @if (statsOpen()) {
-        <div class="pf-rq-statpop__backdrop" aria-hidden="true" (click)="toggleStats()"></div>
-        <div class="pf-rq-statpop" id="pf-rq-statpop" role="dialog" aria-label="Queue stats">
-          <span class="pf-rq-stat" data-color="violet">
-            <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-            <span class="pf-rq-stat__label">Total</span>
-            <span class="pf-rq-stat__value">{{ items().length }}</span>
-          </span>
-          <span class="pf-rq-stat" data-color="amber">
-            <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-            <span class="pf-rq-stat__label">Completed</span>
-            <span class="pf-rq-stat__value">{{ counts().pending }}</span>
-          </span>
-          <span class="pf-rq-stat" data-color="sky">
-            <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-            <span class="pf-rq-stat__label">Partial</span>
-            <span class="pf-rq-stat__value">{{
-              partialOrders().length
-              }}</span>
-          </span>
-          <span class="pf-rq-stat" data-color="emerald">
-            <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-            <span class="pf-rq-stat__label">Delivered</span>
-            <span class="pf-rq-stat__value">{{
-              counts().delivered
-              }}</span>
-          </span>
-          <span class="pf-rq-stat" data-color="rose">
-            <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-            <span class="pf-rq-stat__label">Failed</span>
-            <span class="pf-rq-stat__value">{{ counts().failed }}</span>
-          </span>
-        </div>
-        }
-      </div>
+      @if (!theme.isNewDesign()) {
+      <ng-container actions [ngTemplateOutlet]="rqStatsBtn"></ng-container>
+      }
 
       <pf-touch-btn actions size="sm" variant="primary" class="pf-classic-only" (pressed)="promptGenerate()" aria-label="Generate">
         <span icon-left aria-hidden="true">
@@ -506,3 +463,54 @@
   </pf-edit-result-dialog>
   }
 </section>
+
+      <!-- One definition, rendered in ONE place at a time: classic puts it
+           in the header actions, the new design puts it in the search bar
+           (owner: it was floating alone on its own row). -->
+      <ng-template #rqStatsBtn>
+        <div class="pf-rq-statbtn-m">
+          <button type="button" class="pf-rq-statbtn" [class.is-open]="statsOpen()" [attr.aria-expanded]="statsOpen()"
+            aria-label="Queue stats" aria-controls="pf-rq-statpop" (click)="toggleStats()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+          </button>
+          @if (statsOpen()) {
+          <div class="pf-rq-statpop__backdrop" aria-hidden="true" (click)="toggleStats()"></div>
+          <div class="pf-rq-statpop" id="pf-rq-statpop" role="dialog" aria-label="Queue stats">
+            <span class="pf-rq-stat" data-color="violet">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Total</span>
+              <span class="pf-rq-stat__value">{{ items().length }}</span>
+            </span>
+            <span class="pf-rq-stat" data-color="amber">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Completed</span>
+              <span class="pf-rq-stat__value">{{ counts().pending }}</span>
+            </span>
+            <span class="pf-rq-stat" data-color="sky">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Partial</span>
+              <span class="pf-rq-stat__value">{{
+                partialOrders().length
+                }}</span>
+            </span>
+            <span class="pf-rq-stat" data-color="emerald">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Delivered</span>
+              <span class="pf-rq-stat__value">{{
+                counts().delivered
+                }}</span>
+            </span>
+            <span class="pf-rq-stat" data-color="rose">
+              <span class="pf-rq-stat__dot" aria-hidden="true"></span>
+              <span class="pf-rq-stat__label">Failed</span>
+              <span class="pf-rq-stat__value">{{ counts().failed }}</span>
+            </span>
+          </div>
+          }
+        </div>
+      </ng-template>
