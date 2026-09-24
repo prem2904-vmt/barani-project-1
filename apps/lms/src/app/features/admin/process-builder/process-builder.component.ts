@@ -7,6 +7,10 @@ import { ApiService } from '../../../core/services/api.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandMatch } from '../../../shared/utils/band-search';
 import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, isRepeatable, actionHome, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
@@ -22,12 +26,47 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
 @Component({
   selector: 'pf-process-builder',
   standalone: true,
-  imports: [FormsModule, DragDropModule],
+  imports: [FormsModule, DragDropModule, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pb px-4 md:px-8 lg:px-10 pt-6 pb-12">
-      <!-- Toolbar -->
-      <header class="pb-bar">
+    <section class="pb pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-12">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): search the Available-actions palette; branch
+             scope + workflow pickers ride in the pill; New / Duplicate /
+             Set active / Save are the band actions. -->
+        <pf-hero-band [back]="true" placeholder="Search actions to place — collect, validate, print…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-tools>
+            @if (branches().length > 0) {
+              <pf-select class="pb-bandsel" size="sm" [options]="scopeOptions()" [value]="scope() ?? ''"
+                         [searchable]="branches().length > 8"
+                         (valueChange)="setScope($event || null)" aria-label="Branch this workflow applies to"></pf-select>
+            }
+            <pf-select class="pb-bandsel" size="sm" [options]="workflowOptions()" [value]="currentId() ?? ''"
+                       placeholder="New draft" (valueChange)="selectWorkflow($event)" aria-label="Workflow"></pf-select>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="newWorkflow()" title="New workflow" aria-label="New workflow">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              New
+            </button>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!currentId()" (click)="duplicate()" title="Duplicate" aria-label="Duplicate">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
+              Duplicate
+            </button>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!currentId() || isActive()" (click)="activate()" title="Set active" aria-label="Set active">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Set active
+            </button>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()" (click)="save()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+              {{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <!-- Toolbar (classic) -->
+      <header class="pb-bar pf-classic-only">
         <div class="min-w-0">
           <p class="pb-eyebrow">Admin · Process workflow</p>
           <div class="flex items-center gap-2">
@@ -60,20 +99,23 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
         </div>
       </header>
 
+      <div class="pf-band-body">
       <div class="pb-name-row">
         <input class="pb-name" [ngModel]="name()" (ngModelChange)="name.set($event); dirty.set(true)" placeholder="Workflow name" />
         @if (isActive()) { <span class="pb-active">● Active — drives the live navigation</span> }
         @if (dirty()) { <span class="pb-dirty">Unsaved changes</span> }
       </div>
-      <p class="pb-hint">Configuring <strong class="pb-scope-tag">{{ branchName(scope()) }}</strong> · work-area names become the navigation · 🔒 actions are locked to their area</p>
+      <p class="pb-hint pf-classic-only">Configuring <strong class="pb-scope-tag">{{ branchName(scope()) }}</strong> · work-area names become the navigation · <svg class="pb-hint-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> actions are locked to their area</p>
 
       <div cdkDropListGroup class="pb-board">
         <!-- Palette -->
         <aside class="pb-palette">
           <div class="pb-palette-hd">Available actions<br /><span>drag into a work-area</span></div>
           <div cdkDropList id="palette" [cdkDropListData]="palette()" (cdkDropListDropped)="dropToPalette($event)" class="pb-palette-list">
+            <!-- Band search HIDES non-matches (class, not a filtered array) so
+                 the drop list's indices still map 1:1 onto palette(). -->
             @for (a of palette(); track a.type) {
-              <div class="pb-chip" cdkDrag>
+              <div class="pb-chip" cdkDrag [class.pb-chip--hidden]="!paletteMatch(a)">
                 <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   @for (p of a.iconPath; track $index) { <path [attr.d]="p" /> }
                 </svg>
@@ -82,6 +124,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
               </div>
             }
             @if (palette().length === 0) { <div class="pb-empty">All actions placed.</div> }
+            @else if (q().trim() && paletteMatchCount() === 0) { <div class="pb-empty">No actions match "{{ q() }}".</div> }
           </div>
         </aside>
 
@@ -173,10 +216,15 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
           }
         }
       </div>
+      </div>
     </section>
   `,
   styles: [`
     .pb { position: relative; }
+    .pb-chip--hidden { display: none !important; }
+    .pb-hint-lock { display: inline-block; vertical-align: -1px; }
+    .pb-bandsel { display: block; min-width: 180px; max-width: 240px; }
+    @media (max-width: 640px) { .pb-bandsel { min-width: 150px; } }
     .pb::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 320px; pointer-events: none;
       background: radial-gradient(900px 320px at 18% -10%, rgba(124,58,237,0.10), transparent 70%); z-index: 0; }
     .pb > * { position: relative; z-index: 1; }
@@ -419,6 +467,12 @@ export class ProcessBuilderComponent implements OnInit {
   private readonly dialog = inject(DialogService);
   private readonly api = inject(ApiService);
   protected readonly navBack = inject(NavBackService);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill search over the Available-actions palette (label / type). */
+  readonly q = signal('');
+  paletteMatch(a: ActionCatalogEntry): boolean { return bandMatch(this.q(), a.label, a.type, a.hint); }
+  readonly paletteMatchCount = computed(() => this.palette().filter(a => this.paletteMatch(a)).length);
 
   readonly roles = signal<string[]>(KNOWN_ROLES);
   readonly roleMenuLane = signal(-1);
@@ -449,6 +503,13 @@ export class ProcessBuilderComponent implements OnInit {
 
   /** Workflows in the currently-selected branch scope. */
   readonly scopedWorkflows = computed(() => this.workflows().filter(w => (w.branchId ?? null) === this.scope()));
+  /** Pill pickers ('' = the tenant-wide default scope). */
+  readonly scopeOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: 'All branches (default)' },
+    ...this.branches().map(b => ({ value: b.id, label: b.name })),
+  ]);
+  readonly workflowOptions = computed<PfSelectOption<string>[]>(() =>
+    this.scopedWorkflows().map(w => ({ value: w.id, label: w.isActive ? `${w.name} · active` : w.name })));
   readonly isActive = computed(() => this.workflows().find(w => w.id === this.currentId())?.isActive ?? false);
   /** OURS, not the lab's: shipped, read-only, refreshed by every deploy. Saving
    *  it forks into a tenant-owned copy (the API enforces this), so the button

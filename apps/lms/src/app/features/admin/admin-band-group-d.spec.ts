@@ -1,6 +1,7 @@
 import { renderBandPage } from './admin-band.spec-helpers';
 import { NotificationsConfigComponent } from './notifications-config/notifications-config.component';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder.component';
+import { ProcessBuilderComponent } from './process-builder/process-builder.component';
 
 /**
  * Group D admin pages on the band pill: notifications, workflows list,
@@ -72,5 +73,54 @@ describe('Admin band — Workflow forms list', () => {
     p.type('xyz');
     expect(names(p.el)).toEqual([]);
     expect(p.el.querySelector('.pf-band-empty')).not.toBeNull();
+  });
+});
+
+describe('Admin band — Process builder', () => {
+  const wfs = [
+    { id: 'w1', name: 'Main', isActive: true, branchId: null, configJson: '{"categories":[],"actions":[]}' },
+    { id: 'w2', name: 'Evening', isActive: false, branchId: null, configJson: '{"categories":[],"actions":[]}' },
+  ];
+  const make = () => renderBandPage(ProcessBuilderComponent, {
+    getFor: (u) => (u.startsWith('/api/process-workflows') ? wfs : u === '/api/tenants/branches' ? [{ id: 'b1', name: 'Anna Nagar' }] : []),
+  });
+  const visibleChips = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll('.pb-palette-list .pb-chip:not(.pb-chip--hidden)')).map((c) => c.textContent?.trim());
+
+  it('band + body; the custom title bar and hint are classic-only (no emoji lock)', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.body()).not.toBeNull();
+    expect(p.el.querySelector('.pb-bar')?.classList.contains('pf-classic-only')).toBe(true);
+    const hint = p.el.querySelector('.pb-hint')!;
+    expect(hint.classList.contains('pf-classic-only')).toBe(true);
+    expect(hint.textContent).not.toContain('🔒');
+    expect(hint.querySelector('svg')).not.toBeNull();
+  });
+
+  it('pill search HIDES non-matching palette chips (palette array untouched for drag indices)', () => {
+    const p = make();
+    const total = p.cmp.palette().length;
+    expect(visibleChips(p.el).length).toBe(total);
+    p.type('register patient');
+    expect(visibleChips(p.el).length).toBe(1);
+    expect(visibleChips(p.el)[0]).toContain('Register Patient');
+    expect(p.cmp.palette().length).toBe(total);
+    expect(p.el.querySelectorAll('.pb-palette-list .pb-chip').length).toBe(total);
+    p.type('zzz');
+    expect(p.el.querySelector('.pb-palette-list .pb-empty')?.textContent).toContain('No actions match');
+  });
+
+  it('pickers in the pill (pf-select, no native select in the new design); actions in the band', () => {
+    const p = make();
+    const tools = p.tools()!;
+    expect(tools.querySelectorAll('pf-select').length).toBe(2);
+    expect(tools.querySelector('select')).toBeNull();
+    expect(p.cmp.scopeOptions().map((o: any) => o.label)).toEqual(['All branches (default)', 'Anna Nagar']);
+    expect(p.cmp.workflowOptions().map((o: any) => o.label)).toEqual(['Main · active', 'Evening']);
+    const labels = p.actions().map((b) => b.textContent?.trim());
+    expect(labels).toEqual(['New', 'Duplicate', 'Set active', 'Save']);
+    p.cmp.selectWorkflow('w2');
+    expect(p.cmp.currentId()).toBe('w2');
   });
 });
