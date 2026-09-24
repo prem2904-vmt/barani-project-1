@@ -878,8 +878,11 @@
 /* Menus — anchored to their split, opening downward, above the rows. */
 .pf-rq-menu__bd { position: fixed; inset: 0; z-index: 30; }
 .pf-rq-menu {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 31;
-  min-width: 176px; padding: 6px;
+  /* Fixed, with coordinates measured from the button that opened it: the
+     scrolling list would clip an absolutely-positioned menu, and a bottom
+     sheet opened nowhere near the tap (owner). */
+  position: fixed; z-index: 31;
+  width: 200px; padding: 6px;
   display: flex; flex-direction: column;
   border-radius: 12px;
   background: var(--bg-card-solid, rgba(20, 22, 30, 0.98));
@@ -908,31 +911,24 @@
   .pf-rq-split .pf-rq-act { flex: 1 1 auto; }
   .pf-rq-act--more { width: 100%; }
   .pf-rq-caret { min-height: 44px; flex: 0 0 34px; }
-  .pf-rq-menu { left: 0; right: auto; min-width: 200px; }
 }
 
-/* ── Phone polish on the Results screen (owner) ──────────────────────
-   1. The row menus were anchored popovers and ran off the screen edge —
-      "Open lab re…", "Regenerate" were clipped. On a phone they become a
-      sheet pinned above the bar, which cannot be clipped by anything.
-   2. Dead space under the filters: the classic search (.mb-4) and the
-      classic filter strip (.mb-5) are BOTH empty in the new design, but
-      their Tailwind margins still reserved ~36px of nothing.
-   Nothing here applies >=641px, and classic keeps both wrappers. */
+/* ── Phone: close the gap between the filters and the first row ──────
+   Everything between the band and the list is EMPTY in the new design but
+   was still taking vertical space (owner): the classic search (.mb-4) and
+   classic filter strip (.mb-5) held Tailwind margins, and the screen
+   header renders a title that the new design hides — leaving its padding
+   behind. Collapse the lot so the list starts right under the filters.
+   Nothing here applies >=641px, and classic keeps all of it. */
 @media (max-width: 640px) {
   :host-context(.design-new) .pf-rq-chrome > .mb-4,
   :host-context(.design-new) .pf-rq-chrome > .mb-5 { display: none; }
+  /* Title-less in the new design; its actions moved into the band. */
+  :host-context(.design-new) .pf-rq-chrome pf-screen-header { display: none; }
+  /* An assignment-less KPI strip still reserves its margin. */
+  :host-context(.design-new) .pf-rq-chrome pf-kpi-strip:empty { display: none; }
+  :host-context(.design-new) .pf-rq-chrome { padding-bottom: 0; }
 
-  .pf-rq-menu {
-    position: fixed;
-    left: 10px; right: 10px; top: auto;
-    bottom: calc(var(--pf-botbar-h, 58px) + 12px);
-    min-width: 0;
-    padding: 8px;
-    border-radius: 16px;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
-  }
-  .pf-rq-menu__item { min-height: 48px; font-size: 14px; padding: 12px 14px; }
-  /* A real scrim, so it reads as a sheet rather than a stray white box. */
-  .pf-rq-menu__bd { background: rgba(0, 0, 0, 0.38); }
+  .pf-rq-menu__item { min-height: 46px; font-size: 14px; padding: 11px 12px; }
+  .pf-rq-menu__bd { background: rgba(0, 0, 0, 0.32); }
 }

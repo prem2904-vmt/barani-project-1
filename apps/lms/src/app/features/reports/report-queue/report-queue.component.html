@@ -414,14 +414,14 @@
               </svg>
               <span class="pf-rq-act__lbl">Share</span>
             </button>
-            <button type="button" class="pf-rq-caret press" (click)="toggleShare(r.id)"
+            <button type="button" class="pf-rq-caret press" (click)="toggleShare(r.id, $event)"
                     [attr.aria-expanded]="shareFor() === r.id" aria-label="Choose how to share">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </button>
             @if (shareFor() === r.id) {
               <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleShare(r.id)"></div>
-              <div class="pf-rq-menu" role="menu">
+              <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
                 <button type="button" class="pf-rq-menu__item press" role="menuitem"
                         (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">WhatsApp</button>
                 <button type="button" class="pf-rq-menu__item press" role="menuitem"
@@ -432,7 +432,7 @@
 
           <!-- Everything that changes the report rather than sends it. -->
           <div class="pf-rq-split">
-            <button type="button" class="pf-rq-act pf-rq-act--more press" (click)="toggleMore(r.id)"
+            <button type="button" class="pf-rq-act pf-rq-act--more press" (click)="toggleMore(r.id, $event)"
                     [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
@@ -440,7 +440,7 @@
             </button>
             @if (moreFor() === r.id) {
               <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleMore(r.id)"></div>
-              <div class="pf-rq-menu" role="menu">
+              <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
                 @if (r.orderId) {
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
                           (click)="viewLabResults(r); toggleMore(r.id)">Open lab results</button>

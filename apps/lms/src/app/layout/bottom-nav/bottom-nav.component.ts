@@ -17,6 +17,7 @@ import { DialogService } from '../../core/services/dialog.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { DesignModeService } from '../../core/services/design-mode.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
@@ -44,6 +45,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   /** Theme + people drawer are now reachable from the bottom-nav More
    *  popover instead of the top chrome (which is hidden on mobile). */
   protected readonly theme = inject(ThemeService);
+  /** Design version / bottom-bar / capture toggles. The top chrome is
+   *  hidden below 1280px, so when the bar sits at the TOP this popover is
+   *  the ONLY place these live on phone and iPad (owner). */
+  protected readonly designMode = inject(DesignModeService);
   protected readonly peopleDrawer = inject(PeopleDrawerService);
   /** Teams-style presence — my status dot on the account button + the
    *  status picker row in the account popover. */

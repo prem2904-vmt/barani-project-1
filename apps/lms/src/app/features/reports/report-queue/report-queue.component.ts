@@ -186,17 +186,41 @@ export class ReportQueueComponent implements OnInit {
    *  other. Presentational only. */
   private readonly _moreFor = signal<string | null>(null);
   readonly moreFor = this._moreFor.asReadonly();
-  toggleMore(id: string) {
+  toggleMore(id: string, ev?: Event) {
     this._shareFor.set(null);
     this._moreFor.update((cur) => (cur === id ? null : id));
+    if (this._moreFor() && ev) this.anchorMenu(ev, 3);
+  }
+
+  /** Where the open menu should sit, in viewport coordinates.
+   *
+   *  The menus used to be absolutely positioned inside the row, which the
+   *  scrolling list clipped, and then a bottom sheet, which opened nowhere
+   *  near the finger (owner). Fixed + measured from the button's own rect
+   *  puts it exactly under what was tapped, and nothing can clip it. */
+  readonly menuPos = signal<{ top: number; left: number }>({ top: 0, left: 0 });
+  private anchorMenu(ev: Event, items: number) {
+    const el = ev.currentTarget as HTMLElement | null;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const W = 200;
+    const H = items * 44 + 16;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // Right-align to the button, then clamp inside the viewport.
+    const left = Math.min(Math.max(8, r.right - W), Math.max(8, vw - W - 8));
+    // Below by default; flip above when there isn't room (last rows).
+    const top = r.bottom + 6 + H > vh ? Math.max(8, r.top - 6 - H) : r.bottom + 6;
+    this.menuPos.set({ top, left });
   }
 
   /** Which row has its share-channel menu open (the split button's caret). */
   private readonly _shareFor = signal<string | null>(null);
   readonly shareFor = this._shareFor.asReadonly();
-  toggleShare(id: string) {
+  toggleShare(id: string, ev?: Event) {
     this._moreFor.set(null);
     this._shareFor.update((cur) => (cur === id ? null : id));
+    if (this._shareFor() && ev) this.anchorMenu(ev, 2);
   }
 
   /** Read the value off the phone filter <select> (drives the same
