@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { AuthService } from '../../../core/auth/auth.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 
 /**
@@ -19,6 +20,14 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
  * `[band-actions]` = right-side primary buttons; `[band-tools]` = icon
  * buttons docked at the search bar's right edge (scan, cart, …).
  *
+ * Admin sub-pages (owner, "band pill everywhere"):
+ *   • `back` — a back chevron at the band's top-left, since the page's own
+ *     title/header (which used to carry it) is gone. `backTo` names the
+ *     parent route; without it NavBackService pops history.
+ *   • `tabsOnly` — a page with NO search but with sections puts those
+ *     sections in the pill as tabs: no search field, the projected
+ *     `[band-tools]` (a pf-segmented) spans the whole pill.
+ *
  * Light theme follows the designer's world (lavender→violet gradient, white
  * pill search); dark theme maps the same anatomy onto the existing glass
  * vocabulary — same bones, theme-native skin.
@@ -31,6 +40,14 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     <div class="pf-hb">
       <div class="pf-hb__band">
         <div class="pf-hb__tenant">
+          @if (back() && navBack.showBack()) {
+            <button type="button" class="pf-hb__back press" (click)="goBack()" aria-label="Go back" title="Back">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m15 18-6-6 6-6"/>
+              </svg>
+            </button>
+          }
           <!-- Real tenant branding (same resolution as the classic bar chip):
                admin-uploaded logo when branding allows it, initial disc
                otherwise; name honors brandingName + mode. -->
@@ -47,11 +64,12 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       </div>
 
       <div class="pf-hb__searchrow">
-        <div class="pf-hb__search">
+        <div class="pf-hb__search" [class.pf-hb__search--tabs]="tabsOnly()">
           <!-- The field (icon + input + scan icons) is one unit. On
                tablet/desktop it is display:contents, i.e. INVISIBLE to
                layout — the pill renders exactly as before. On phones it
                becomes the pill so the filters can drop to their own row. -->
+          @if (!tabsOnly()) {
           <div class="pf-hb__field">
           @if (customSearch()) {
             <ng-content select="[band-search]"></ng-content>
@@ -74,6 +92,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
             <ng-content select="[band-inline]"></ng-content>
           </div>
           </div>
+          }
           <div class="pf-hb__tools">
             <ng-content select="[band-tools]"></ng-content>
           </div>
@@ -132,6 +151,34 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     :host-context([data-theme='dark']) .pf-hb__name { color: var(--text-primary, #e5e7eb); }
 
     .pf-hb__actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+    /* Back chevron (admin sub-pages): bare chevron, generous tap target,
+       pulled toward the edge like the native back affordance. */
+    .pf-hb__back {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; margin-left: -8px; flex-shrink: 0;
+      border-radius: 10px; border: 0; background: transparent; cursor: pointer;
+      color: #1f2937; -webkit-tap-highlight-color: transparent;
+      transition: background 160ms ease;
+    }
+    .pf-hb__back:hover { background: rgba(124, 58, 237, 0.08); }
+    :host-context(.dark) .pf-hb__back,
+    :host-context([data-theme='dark']) .pf-hb__back { color: var(--text-primary, #e5e7eb); }
+    :host-context(.dark) .pf-hb__back:hover,
+    :host-context([data-theme='dark']) .pf-hb__back:hover { background: rgba(255, 255, 255, 0.08); }
+
+    /* Tabs-only pill: no search field, the tools own the whole pill and the
+       section switch is spread evenly across it (owner). */
+    .pf-hb__search--tabs { padding-left: 12px; }
+    .pf-hb__search--tabs .pf-hb__tools,
+    .pf-hb__search--tabs .pf-hb__tools:not(:empty),
+    :host-context(.dark) .pf-hb__search--tabs .pf-hb__tools:not(:empty),
+    :host-context([data-theme='dark']) .pf-hb__search--tabs .pf-hb__tools:not(:empty) {
+      flex: 1 1 auto; min-width: 0; border-left: 0; margin-left: 0; padding-left: 0;
+    }
+    .pf-hb__search--tabs .pf-hb__tools ::ng-deep pf-segmented.pf-hb-tabs { flex: 1 1 auto; min-width: 0; }
+    .pf-hb__search--tabs .pf-hb__tools ::ng-deep pf-segmented.pf-hb-tabs .bar { display: flex; width: 100%; }
+    .pf-hb__search--tabs .pf-hb__tools ::ng-deep pf-segmented.pf-hb-tabs .seg-item { flex: 1 1 0; white-space: nowrap; }
 
     /* ── Search pill overlapping the band's bottom edge (53px, r20) ── */
     .pf-hb__searchrow { padding: 0 20px; margin-top: -33px; }
@@ -264,6 +311,12 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       .pf-hb__tools ::ng-deep pf-segmented,
       .pf-hb__tools ::ng-deep .pf-ov__filter--band,
       .pf-hb__tools ::ng-deep .dq-pills--band { flex-shrink: 0; margin-inline: auto; }
+      /* Tabs-only pill on a phone: the tabs keep their natural width and
+         the row scrolls, rather than squeezing every label into 390px. */
+      .pf-hb__search--tabs .pf-hb__tools ::ng-deep pf-segmented.pf-hb-tabs,
+      .pf-hb__search--tabs .pf-hb__tools ::ng-deep pf-segmented.pf-hb-tabs .bar { width: auto; flex: 0 0 auto; }
+      .pf-hb__search--tabs .pf-hb__tools ::ng-deep pf-segmented.pf-hb-tabs .seg-item { flex: 0 0 auto; }
+      .pf-hb__back { margin-left: -6px; }
       .pf-hb__tools ::ng-deep .pf-ov__range,
       .pf-hb__tools ::ng-deep .dq-pill { flex-shrink: 0; height: 36px; }
 
@@ -294,6 +347,22 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 export class HeroBandComponent {
   private readonly auth = inject(AuthService);
   private readonly tenantState = inject(TenantStateService);
+  protected readonly navBack = inject(NavBackService);
+
+  /** Show the back chevron at the band's top-left (admin sub-pages). It only
+   *  renders on secondary routes (NavBackService.showBack). */
+  readonly back = input<boolean>(false);
+  /** Parent route for the back chevron; without it, history pops. */
+  readonly backTo = input<string | null>(null);
+  /** Pill without a search field: the projected [band-tools] (section tabs)
+   *  span the whole pill. */
+  readonly tabsOnly = input<boolean>(false);
+
+  goBack(): void {
+    const to = this.backTo();
+    if (to) this.navBack.backTo(to);
+    else this.navBack.back();
+  }
 
   /** Placeholder for the built-in search input. */
   readonly placeholder = input<string>('Search');
