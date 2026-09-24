@@ -1339,33 +1339,13 @@ a.pf-ts-tenant:hover {
 }
 .pf-draftshelf__scroll::-webkit-scrollbar { display: none; }
 :host-context(.design-new.nav-bottom) .pf-draftshelf { display: flex; }
-/* The compact phone button is the <=640px form; hidden everywhere else. */
-.pf-draftshelf__phone { display: none; }
-/* 641–767px (small tablets / large phones in portrait): still no room for
-   three chips, and the phone button is out of scope here, so keep the
-   original hide. */
-@media (min-width: 641px) and (max-width: 767px) {
+/* Phones: no room — the shelf is a tablet/web affordance (owner: on a
+   phone bar it just gets clumsy). It briefly had a compact phone chip;
+   that was removed at the owner's call. */
+@media (max-width: 767px) {
   :host-context(.design-new.nav-bottom) .pf-draftshelf { display: none; }
 }
-/* Phones: the shelf comes back as ONE chip — a pencil and the draft
-   count — that opens the same popover. Three chips never fit a phone bar,
-   but losing drafts entirely on phone was worse. */
-@media (max-width: 640px) {
-  :host-context(.design-new.nav-bottom) .pf-draftshelf { display: flex; }
-  .pf-draftshelf__scroll { display: none; }
-  .pf-draftshelf__rule { margin: 0 2px 0 6px; }
-  .pf-draftshelf__phone {
-    display: inline-flex; align-items: center; gap: 5px;
-    height: 32px; min-width: 44px; padding: 0 10px;
-    border-radius: 9999px;
-    border: 1px solid rgba(124, 58, 237, 0.34);
-    background: rgba(124, 58, 237, 0.08);
-    color: #7c3aed;
-    font-size: 12px; font-weight: 700; font-family: inherit;
-    cursor: pointer;
-  }
-  .pf-draftshelf__pop { max-width: min(280px, calc(100vw - 24px)); }
-}
+
 .pf-draftshelf__rule {
   width: 1px; height: 22px; flex-shrink: 0;
   background: var(--border-muted, #e5e7eb);
