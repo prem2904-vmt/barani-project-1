@@ -80,9 +80,11 @@ export interface PriceRow {
             placeholder="All departments"
             (valueChange)="selectedDeptId.set($event)">
           </pf-select>
-          <input type="text" class="pf-input pf-pricing__search"
-                 placeholder="Search test name…"
-                 [ngModel]="search()" (ngModelChange)="search.set($event)" />
+          @if (bandQuery() === null) {
+            <input type="text" class="pf-input pf-pricing__search"
+                   placeholder="Search test name…"
+                   [ngModel]="search()" (ngModelChange)="search.set($event)" />
+          }
           <span class="text-[12px] ml-auto" style="color: var(--text-tertiary);">
             {{ filtered().length }} test{{ filtered().length === 1 ? '' : 's' }}
             @if (notPricedCount() > 0) { · {{ notPricedCount() }} not priced yet }
@@ -259,6 +261,9 @@ export class PricingComponent implements OnInit {
   readonly loading = signal(true);
   readonly saving = signal(false);
   readonly search = signal('');
+  /** Bound by a host that owns the search (Test Master's band pill); it
+   *  replaces the search box here. null = standalone page. */
+  readonly bandQuery = input<string | null>(null);
   readonly selectedDeptId = signal<string>('');
   readonly pct = signal<number>(10);
 
@@ -291,7 +296,7 @@ export class PricingComponent implements OnInit {
   ]);
 
   readonly filtered = computed<PriceRow[]>(() => {
-    const s = this.search().trim().toLowerCase();
+    const s = (this.bandQuery() ?? this.search()).trim().toLowerCase();
     const dept = this.selectedDeptId();
     return this._rows().filter(r =>
       (!dept || r.deptId === dept) &&

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, ValueGetterParams } from 'ag-grid-community';
@@ -66,8 +66,10 @@ interface EdModel {
   template: `
     <div class="pf-mm">
       <div class="pf-mm__bar">
-        <input type="text" class="pf-mm__search" [placeholder]="'Search ' + label(section()) + '…'"
-               [ngModel]="query()" (ngModelChange)="query.set($event)" />
+        @if (bandQuery() === null) {
+          <input type="text" class="pf-mm__search" [placeholder]="'Search ' + label(section()) + '…'"
+                 [ngModel]="query()" (ngModelChange)="query.set($event)" />
+        }
         <span class="pf-mm__count">{{ shownCount() }} of {{ totalCount() }} {{ label(section()) }}</span>
         <span class="pf-mm__spacer"></span>
         <span class="pf-mm__hint">Lab edits overlay the standards — used by the Culture bench (MIC200 C&amp;S)</span>
@@ -384,6 +386,9 @@ export class MicroMastersPanelComponent implements OnInit {
 
   readonly section = signal<MasterKey>('specimens');
   readonly query = signal('');
+  /** Bound by a host that owns the search (Test Master's band pill); it
+   *  replaces this panel's own search box. null = standalone. */
+  readonly bandQuery = input<string | null>(null);
   readonly specimens = signal<MicroSpecimen[]>([]);
   readonly organisms = signal<MicroOrganism[]>([]);
   readonly antibiotics = signal<MicroAntibiotic[]>([]);
@@ -411,7 +416,7 @@ export class MicroMastersPanelComponent implements OnInit {
 
   /** Rows of the active master, filtered by the search box over every column. */
   readonly rows = computed<unknown[]>(() => {
-    const q = this.query().trim().toLowerCase();
+    const q = (this.bandQuery() ?? this.query()).trim().toLowerCase();
     const all: unknown[] = this.section() === 'specimens' ? this.specimens()
       : this.section() === 'organisms' ? this.organisms()
       : this.section() === 'antibiotics' ? this.antibiotics()

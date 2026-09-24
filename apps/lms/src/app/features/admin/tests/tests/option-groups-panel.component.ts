@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -46,11 +46,15 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
   template: `
     <div class="pf-og">
       <div class="pf-og__bar">
-        <input type="text" class="pf-og__search" placeholder="Search values, tests, parameters…"
-               [ngModel]="query()" (ngModelChange)="query.set($event)" />
+        @if (bandQuery() === null) {
+          <input type="text" class="pf-og__search" placeholder="Search values, tests, parameters…"
+                 [ngModel]="query()" (ngModelChange)="query.set($event)" />
+        }
         <span class="pf-og__count">{{ rows().length }} option group{{ rows().length === 1 ? '' : 's' }}</span>
         <span class="pf-og__spacer"></span>
-        <button type="button" class="pf-og__new press" (click)="startCreate()">+ New option group</button>
+        @if (bandQuery() === null) {
+          <button type="button" class="pf-og__new press" (click)="startCreate()">+ New option group</button>
+        }
       </div>
 
       <div class="pf-og__cols">
@@ -271,6 +275,11 @@ export class OptionGroupsPanelComponent implements OnInit {
 
   readonly saving = signal(false);
   readonly query = signal('');
+  /** Bound by a host that owns the search (Test Master's band pill): it
+   *  replaces this panel's own search box and "+ New" button (the band
+   *  carries both). null = standalone, the panel shows its own. */
+  readonly bandQuery = input<string | null>(null);
+  private readonly effectiveQuery = computed(() => this.bandQuery() ?? this.query());
   readonly groups = signal<OgGroup[]>([]);
   readonly selected = signal<OgGroup | null>(null);
   readonly editing = signal(false);
@@ -292,7 +301,7 @@ export class OptionGroupsPanelComponent implements OnInit {
   ];
 
   readonly rows = computed<OgGridRow[]>(() => {
-    const q = this.query().trim().toLowerCase();
+    const q = this.effectiveQuery().trim().toLowerCase();
     return this.groups()
       .filter(g => !q
         || g.name.toLowerCase().includes(q)

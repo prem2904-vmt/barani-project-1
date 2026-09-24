@@ -44,6 +44,8 @@ import { compareTestCodes } from '../../../../shared/utils/test-code';
 import { pendingProposalIds } from '../../../../shared/utils/catalog-proposals';
 import { CatalogProposal } from '../../../../shared/models/test.model';
 import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.component';
+import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
 // (ViewChild refs let the header Create button drive the active panel)
 
 // AG Grid v33+ requires explicit module registration (once per app).
@@ -97,6 +99,9 @@ export type TestRow = Test & {
   _expanded?: boolean;
 };
 
+/** Views the band pill's switch can select. */
+type TmView = TestType | 'og' | 'micro' | 'pricing';
+
 @Component({
   selector: 'pf-tests',
   standalone: true,
@@ -109,6 +114,8 @@ export type TestRow = Test & {
     MicroMastersPanelComponent,
     PricingComponent,
     CatalogProposalsPanelComponent,
+    HeroBandComponent,
+    SegmentedComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './tests.component.html',
@@ -119,7 +126,7 @@ export class TestsComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly toasts = inject(ToastService);
-  private readonly theme = inject(ThemeService);
+  protected readonly theme = inject(ThemeService);
   private readonly dialog = inject(DialogService);
   private readonly pricing = inject(TestPricingService);
 
@@ -787,9 +794,51 @@ export class TestsComponent implements OnInit {
     this.gridApi = e.api;
   }
 
-  openOgView() { this.microView.set(false); this.pricingView.set(false); this.ogView.set(true); }
-  openMicroView() { this.ogView.set(false); this.pricingView.set(false); this.microView.set(true); }
-  openPricingView() { this.ogView.set(false); this.microView.set(false); this.pricingView.set(true); }
+  openOgView() { this.panelQuery.set(''); this.microView.set(false); this.pricingView.set(false); this.ogView.set(true); }
+  openMicroView() { this.panelQuery.set(''); this.ogView.set(false); this.pricingView.set(false); this.microView.set(true); }
+  openPricingView() { this.panelQuery.set(''); this.ogView.set(false); this.microView.set(false); this.pricingView.set(true); }
+
+  // ── Band pill (owner, "band pill everywhere") ──────────────────────────
+  /** The ONE view switch in the pill: the three catalogue types plus the
+   *  side views that replace the grid. */
+  readonly viewOptions: SegmentedOption<TmView>[] = [
+    { value: 'individual', label: 'Individual' },
+    { value: 'profile', label: 'Profiles' },
+    { value: 'package', label: 'Packages' },
+    { value: 'og', label: 'Option groups' },
+    { value: 'micro', label: 'Microbiology' },
+    { value: 'pricing', label: 'Pricing' },
+  ];
+  readonly view = computed<TmView>(() =>
+    this.ogView() ? 'og' : this.microView() ? 'micro' : this.pricingView() ? 'pricing' : this._type());
+  /** True while the tests/profiles/packages grid (not a side view) shows. */
+  readonly gridView = computed(() => !this.ogView() && !this.microView() && !this.pricingView());
+  setView(v: TmView) {
+    if (v === 'og') this.openOgView();
+    else if (v === 'micro') this.openMicroView();
+    else if (v === 'pricing') this.openPricingView();
+    else this.setType(v);
+  }
+  /** Search text for the side views (option groups / microbiology / pricing):
+   *  the band search drives the open panel's own filter. */
+  readonly panelQuery = signal('');
+  readonly bandValue = computed(() => (this.gridView() ? this.search() : this.panelQuery()));
+  readonly bandPlaceholder = computed(() => {
+    switch (this.view()) {
+      case 'og': return 'Search option groups — values, tests, parameters…';
+      case 'micro': return 'Search microbiology masters…';
+      case 'pricing': return 'Search test name…';
+      case 'profile': return 'Search profiles…';
+      case 'package': return 'Search packages…';
+      default: return 'Search tests — name, code, short name…';
+    }
+  });
+  onBandSearch(v: string) {
+    if (this.gridView()) this.search.set(v ?? '');
+    else this.panelQuery.set(v ?? '');
+  }
+  /** Band action for the option-groups view (its own "+ New" moved up here). */
+  newOptionGroup() { this.ogPanel?.startCreate(); }
 
   setType(t: TestType) {
     this.ogView.set(false);

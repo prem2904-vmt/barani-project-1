@@ -154,3 +154,45 @@
     min-width: 0 !important; min-height: 0 !important;
   }
 }
+
+/* ── Band pill (new design) ─────────────────────────────────────────── */
+/* "Inactive (n)" chip inside the pill: quiet until on. */
+.pf-tm-inactive-chip {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  height: 32px; padding: 0 12px; border-radius: 9999px; white-space: nowrap;
+  font-size: 12px; font-weight: 500; font-family: inherit; cursor: pointer;
+  color: var(--text-tertiary); background: transparent;
+  border: 1px solid var(--glass-border);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.pf-tm-inactive-chip:hover { color: var(--text-primary); }
+.pf-tm-inactive-chip--on {
+  color: var(--violet-text); border-color: rgba(168, 85, 247, 0.45);
+  background: rgba(168, 85, 247, 0.10);
+}
+.pf-tm-bandseg { flex-shrink: 0; }
+
+/* Grid view fills the band body: the proposals strip takes what it needs,
+   the rail + grid take the rest and scroll inside themselves. */
+:host-context(.design-new) .pf-band-body--fill.pf-tm-body > .pf-tm-panels {
+  flex: 1 1 auto; min-height: 0; align-items: stretch;
+}
+:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-side {
+  position: static; display: flex; flex-direction: column; min-height: 0;
+}
+:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-panels--collapsed .pf-tm-side { display: none; }
+:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-dept-list { flex: 1 1 auto; min-height: 0; max-height: none; }
+:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-main {
+  display: flex; flex-direction: column; min-height: 0;
+}
+:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-grid {
+  flex: 1 1 auto; height: auto; min-height: 320px;
+}
+/* ≤900px the rail stacks above the grid — that can't fit one screen, so the
+   body scrolls again and the grid gets a fixed, thumb-friendly height. */
+@media (max-width: 900px) {
+  :host-context(.design-new) .pf-band-body--fill.pf-tm-body { overflow-y: auto !important; }
+  :host-context(.design-new) .pf-band-body--fill.pf-tm-body > .pf-tm-panels { flex: 0 0 auto; }
+  :host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-dept-list { max-height: 260px; }
+  :host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-grid { flex: none; height: 70dvh; min-height: 360px; }
+}

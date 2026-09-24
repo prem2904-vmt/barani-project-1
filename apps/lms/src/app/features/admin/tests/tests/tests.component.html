@@ -1,5 +1,80 @@
-<section class="pf-tm px-4 md:px-8 pt-6 pb-10">
-  <pf-screen-header
+<section class="pf-tm pf-band-page px-4 md:px-8 pt-6 pb-10">
+  @if (theme.isNewDesign()) {
+    <!-- Band pill (owner): the search, the view switch and "Show inactive"
+         ride inside the pill; the page's buttons sit top-right on the band.
+         In a side view (option groups / microbiology / pricing) the same
+         search drives that panel. -->
+    <pf-hero-band [back]="true" [placeholder]="bandPlaceholder()"
+                  [value]="bandValue()" (valueChange)="onBandSearch($event)">
+      <ng-container band-tools>
+        <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions" [value]="view()"
+                      (valueChange)="setView($event)"></pf-segmented>
+        @if (gridView() && (inactiveCount() > 0 || showInactive())) {
+          <button type="button" class="pf-tm-inactive-chip press" [class.pf-tm-inactive-chip--on]="showInactive()"
+                  [attr.aria-pressed]="showInactive()" (click)="showInactive.set(!showInactive())"
+                  title="Show inactive tests">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              @if (showInactive()) {
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
+              } @else {
+                <path d="M17.9 17.9A10.4 10.4 0 0 1 12 19c-6.5 0-10-7-10-7a18.4 18.4 0 0 1 5.1-5.9M9.9 5.2A9.1 9.1 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.2 3.2M14.1 14.2a3 3 0 1 1-4.2-4.2M2 2l20 20"/>
+              }
+            </svg>
+            Inactive ({{ inactiveCount() }})
+          </button>
+        }
+      </ng-container>
+      <ng-container band-actions>
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="restoring()"
+                (click)="restoreDefaults()" title="Restore to default" aria-label="Restore to default">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+          </svg>
+          {{ restoring() ? 'Restoring…' : 'Restore to default' }}
+        </button>
+        @if (dirtyCount() > 0) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="saving()"
+                  (click)="discardChanges()" title="Discard changes" aria-label="Discard changes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
+            Discard
+          </button>
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
+                  (click)="saveAll()" title="Save changes" aria-label="Save changes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
+            </svg>
+            Save changes ({{ dirtyCount() }})
+          </button>
+        }
+        @if (ogView()) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="newOptionGroup()"
+                  title="New option group" aria-label="New option group">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14"/><path d="M5 12h14"/>
+            </svg>
+            New option group
+          </button>
+        } @else {
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openCreate()"
+                  title="Create" aria-label="Create">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14"/><path d="M5 12h14"/>
+            </svg>
+            Create
+          </button>
+        }
+      </ng-container>
+    </pf-hero-band>
+  }
+  <pf-screen-header class="pf-classic-only"
     eyebrow="Admin"
     title="Test Master"
     subtitle="Tests, profiles and packages from the Admin Test Master — edit one to keep your own version, price it inline.">
@@ -23,7 +98,7 @@
   </pf-screen-header>
 
   <!-- View switch -->
-  <div class="pf-tm-tabs mb-4">
+  <div class="pf-tm-tabs mb-4 pf-classic-only">
     @for (v of views; track v.value) {
       <button type="button"
               class="pf-tm-tab"
@@ -59,17 +134,20 @@
     }
   </div>
 
+  <!-- Everything under the band: the grid view FILLS the body (the grid
+       scrolls itself); the side views scroll the body. -->
+  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView()">
   @if (ogView()) {
     <!-- Shared option-group vocabularies, derived live from this tenant's
          tests — edit once, changes every linked parameter. -->
-    <pf-option-groups-panel></pf-option-groups-panel>
+    <pf-option-groups-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"></pf-option-groups-panel>
   } @else if (microView()) {
     <!-- Culture reference masters: specimens, antibiotics, CLSI breakpoints. -->
-    <pf-micro-masters-panel></pf-micro-masters-panel>
+    <pf-micro-masters-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"></pf-micro-masters-panel>
   } @else if (pricingView()) {
     <!-- The per-tenant pricing table: the ONE place prices live (₹1 default,
          per-branch when the tenant runs branch isolation). -->
-    <pf-pricing [embedded]="true"></pf-pricing>
+    <pf-pricing [embedded]="true" [bandQuery]="theme.isNewDesign() ? panelQuery() : null"></pf-pricing>
   } @else {
   <!-- Test Master updates for tests this lab changed (one per copy, branch
        copies named) — Accept all / Dismiss all. Hidden when none wait. -->
@@ -141,7 +219,7 @@
           <span class="pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
         </div>
 
-        <div class="pf-tm-search">
+        <div class="pf-tm-search pf-classic-only">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
           </svg>
@@ -171,4 +249,5 @@
     </div>
   </div>
   }
+  </div>
 </section>
