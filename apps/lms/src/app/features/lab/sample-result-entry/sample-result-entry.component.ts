@@ -14,7 +14,7 @@ import {
   normalizeSex,
   selectReferenceRange,
 } from "../../../shared/utils/reference-range";
-import { qualitativeOptionsFor } from "../../../shared/utils/qualitative";
+import { choiceOptionsFor, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
 import {
   CalcContext,
   CalcDef,
@@ -840,51 +840,19 @@ export class SampleResultEntryComponent {
     }
   }
 
+  /** Render kind — the SHARED resolver (also used by the Test Master
+   *  editor) so a parameter can never be a dropdown here and free text
+   *  there. */
   inputKindFor(
     p: TestParameter,
   ): "number" | "textarea" | "select" | "checkbox" | "date" | "text" {
-    switch (p.type as string) {
-      case "numeric":
-      case "numeric_with_range":
-      case "number":
-      case "decimal":
-      case "float":
-      case "integer":
-      case "int":
-        return "number";
-      case "textarea":
-        return "textarea";
-      case "select":
-      case "radio":
-      case "button_select":
-      // "options"/"choice": what the option-group mapper and the CP/urine
-      // option-table catalogs write (owner's bug: Urine Urobilinogen had a
-      // full option group but rendered as a free text box).
-      case "options":
-      case "choice":
-        return "select";
-      case "yesno":
-      case "toggle":
-        return "checkbox";
-      case "date":
-        return "date";
-      default:
-        // A parameter that CARRIES options is a dropdown no matter what its
-        // type string says; qualitative positive/negative-ish parameters
-        // get a dropdown too. Never a free text box for a curated list.
-        if ((p.optionRows?.length ?? 0) > 0 || (p.options?.length ?? 0) > 0) return "select";
-        return qualitativeOptionsFor(p) ? "select" : "text";
-    }
+    return resolveParamEntryKind(p);
   }
 
-  /** Options for a select parameter. Qualitative detection may supply a
-   *  default Positive/Negative-style pair when the schema has none. */
+  /** Options for a select parameter: the test's own option table (active
+   *  rows) wins; qualitative detection may supply a default pair. */
   selectOptionsFor(p: TestParameter): string[] {
-    // The test's OWN embedded option table wins (active rows in order);
-    // legacy parameters fall back to their plain options list.
-    const rows = (p.optionRows ?? []).filter(r => r.active !== false && (r.value ?? '').trim());
-    if (rows.length) return rows.map(r => r.value);
-    return qualitativeOptionsFor(p) ?? p.options ?? [];
+    return choiceOptionsFor(p);
   }
 
   /** Grid vs form view — grid is the default (mirrors report PDF columns).

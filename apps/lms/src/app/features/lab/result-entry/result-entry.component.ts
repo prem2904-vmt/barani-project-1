@@ -17,6 +17,7 @@ import { EditResultDialogComponent } from '../../../shared/components/edit-resul
 import { AuthService } from '../../../core/auth/auth.service';
 import { flagAgainst, formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
+import { choiceOptionsFor, fieldIsStaleForChoice, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
 import { CalcContext, ageYearsFromDob, evaluateCalc, parseCalc } from '../../../shared/utils/calculation';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
@@ -3250,13 +3251,17 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     // Widened: catalog data carries type strings ('options', 'choice') the
     // FormFieldType union doesn't know.
     const t = (field?.type ?? p.type) as string;
+    // A stale fields[] twin (plain text/number) next to a parameter the
+    // server mapped to an option list: the parameter wins — same rule as the
+    // Test Master editor (shared resolver).
+    if (field && fieldIsStaleForChoice(field.type, p)) return 'dropdown';
     switch (t) {
       case 'numeric':
       case 'numeric_with_range':
       case 'number':          return 'numeric';
       // Qualitative positive/negative-ish parameters (by options OR type)
       // render as a dropdown, never a free text box.
-      case 'text':            return qualitativeOptionsFor(p) ? 'dropdown' : 'text';
+      case 'text':            return resolveParamEntryKind(p) === 'select' ? 'dropdown' : 'text';
       case 'textarea':        return 'textarea';
       case 'voice-text':      return 'voice-text';
       case 'phone':           return 'phone';
@@ -3299,8 +3304,16 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       case 'recursive':
       case 'recursivePages':  return 'stub';
       default:
-        if ((p.optionRows?.length ?? 0) > 0 || (p.options?.length ?? 0) > 0) return 'dropdown';
-        return qualitativeOptionsFor(p) ? 'dropdown' : 'text';
+        // 'dropdown' / 'qualitative' / capitalised spellings / unknown types
+        // carrying options — the shared resolver decides.
+        switch (resolveParamEntryKind(p)) {
+          case 'select':   return 'dropdown';
+          case 'number':   return 'numeric';
+          case 'textarea': return 'textarea';
+          case 'date':     return 'date';
+          case 'checkbox': return 'yesno';
+          default:         return 'text';
+        }
     }
   }
 
@@ -3313,7 +3326,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   /** Dropdown options: the schema's own list, or the qualitative default
    *  pair when only the type marks the field qualitative. */
   optionsFor(p: TestParameter): string[] {
-    return qualitativeOptionsFor(p) ?? p.options ?? [];
+    return choiceOptionsFor(p);
   }
 
   refLabel(p: TestParameter): string {

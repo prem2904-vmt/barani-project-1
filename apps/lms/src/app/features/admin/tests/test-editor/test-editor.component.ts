@@ -9,7 +9,7 @@ import { ReportColumn } from '../../../../shared/models/report-layout.model';
 import { ColumnsEditorState, ReportColumnsEditorComponent } from '../../report-template/report-columns-editor.component';
 import { PreviewProfileMember, ReportPdfPreviewComponent } from '../../report-template/report-pdf-preview.component';
 import { Department } from '../../../../shared/models/tenant.model';
-import { Test, TestOptionRow, TestParameter, TestParametersBlob } from '../../../../shared/models/test.model';
+import { Test, TestOptionRow, TestParameter } from '../../../../shared/models/test.model';
 import { ReferralLab } from '../../../../shared/models/referral-lab.model';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import {
@@ -22,7 +22,6 @@ import {
   ValidationEditorComponent,
   ValidationPatch,
   hasOptions as registryHasOptions,
-  getFieldType
 } from '../../../../shared/forms';
 import { parseCalc, lintExpr, evaluateCalc, CALC_CONSTANT_DEFAULTS, CalcDef } from '../../../../shared/utils/calculation';
 import { NumberInputComponent } from '../../../../shared/primitives/number-input.component';
@@ -33,6 +32,7 @@ import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, Mo
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../tests/tests.component';
 import { RangeSelectEditorComponent, RangeSelectOption } from './range-select-editor.component';
+import { fieldToParam, loadEditorFields, newFieldId } from './editor-fields';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
@@ -88,27 +88,7 @@ export interface DraftTest {
   outsourcedDepartmentId: string;
 }
 
-const LEGACY_TYPE_MAP: Record<string, FormFieldType> = {
-  numeric: 'number',
-  text: 'text',
-  options: 'select',
-  multiline: 'textarea'
-};
-const FORWARD_TYPE_MAP: Partial<Record<FormFieldType, string>> = {
-  number: 'numeric',
-  text: 'text',
-  select: 'options',
-  multiselect: 'options',
-  radio: 'options',
-  checkbox: 'options',
-  textarea: 'multiline',
-  date: 'text',
-  time: 'text'
-};
 
-function newFieldId(): string {
-  return `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-}
 
 /** One row in a repetitive profile's authored series. */
 export interface MemberRow {
@@ -1730,50 +1710,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadParameters(draftJson: string): FormField[] {
-    if (!draftJson) return [];
-    try {
-      const blob = JSON.parse(draftJson) as TestParametersBlob & { fields?: FormField[] };
-      if (Array.isArray(blob.fields)) return blob.fields;
-      return (blob.parameters ?? []).map((p, i) => this.legacyToField(p, i));
-    } catch { return []; }
+    return loadEditorFields(draftJson);
   }
 
-  private legacyToField(p: TestParameter, order: number): FormField {
-    // Prefer a legacy alias (numeric→number, options→select, …); otherwise keep
-    // the stored type when it is already a valid registry type (e.g. CP/micro
-    // params saved as "select" carry optionRows and must render the option
-    // table — mapping an unknown type to "text" would silently hide it).
-    const type = LEGACY_TYPE_MAP[p.type]
-      ?? (getFieldType(p.type as FormFieldType) ? (p.type as FormFieldType) : 'text');
-    return {
-      id: p.id || newFieldId(),
-      name: p.name,
-      // Catalogue parameters often carry only `name`; falling back keeps the
-      // editor from titling every seeded dropdown "Untitled parameter".
-      label: p.title || p.name,
-      type,
-      order,
-      isRequired: false,
-      isConditional: false,
-      unit: p.unit,
-      referenceRanges: p.referenceRanges ?? null,
-      criticalLow: p.criticalLow ?? null,
-      criticalHigh: p.criticalHigh ?? null,
-      validLow: p.validLow ?? null,
-      validHigh: p.validHigh ?? null,
-      normalValue: p.normalValue ?? null,
-      optionRows: p.optionRows ?? null,
-      optionGroupName: p.optionGroupName ?? null,
-      attachments: p.attachments === true || undefined,
-      printOnReport: p.printOnReport === false ? false : undefined,
-      options: p.options?.map((label, i) => ({
-        id: `opt_${i}_${(label || '').replace(/[^a-z0-9]/gi, '').slice(0, 8)}`,
-        label: label ?? '',
-        value: label ?? '',
-        order: i
-      })) ?? null
-    };
-  }
 
   /** The parameter's embedded option rows for editing. Older tests carry
    *  only options[]/normalValue — synthesize rows from those so every
@@ -1859,25 +1798,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private fieldToLegacy(f: FormField): TestParameter {
-    const legacyType = (FORWARD_TYPE_MAP[f.type] ?? 'text') as TestParameter['type'];
-    return {
-      id: f.id,
-      name: f.name,
-      title: f.label,
-      type: legacyType,
-      unit: f.unit ?? undefined,
-      options: f.options?.map(o => o.label) ?? undefined,
-      optionRows: f.optionRows ?? undefined,
-      optionGroupName: f.optionGroupName ?? undefined,
-      attachments: f.attachments === true || undefined,
-      printOnReport: f.printOnReport === false ? false : undefined,
-      referenceRanges: (f.referenceRanges ?? undefined) as TestParameter['referenceRanges'],
-      normalValue: f.normalValue ?? undefined,
-      criticalLow: f.criticalLow ?? undefined,
-      criticalHigh: f.criticalHigh ?? undefined,
-      validLow: f.validLow ?? undefined,
-      validHigh: f.validHigh ?? undefined
-    };
+    return fieldToParam(f);
   }
 
   private persistFieldsToDraft() {
