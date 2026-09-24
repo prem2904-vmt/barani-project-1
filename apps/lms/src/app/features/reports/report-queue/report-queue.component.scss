@@ -835,47 +835,74 @@
   :host-context(.design-new) pf-segmented.pf-rq-bandseg { display: inline-flex; }
 }
 
-/* ── Phone (<=640px), NEW design: three actions out, the rest folded ──
-   Seven icon buttons per row is a wall on a 390px screen (owner). The
-   three DELIVERY actions — view on screen, WhatsApp, print — are what
-   this queue exists for, so they stay out. Everything else (open the
-   lab results, edit, regenerate, download) folds behind a "more" dot
-   button and drops as a labelled list, which also gets the labels back.
-   One definition of each button, just relocated. Nothing >=641px. */
+/* ── Row actions: View · Share ▾ · More ────────────────────────────
+   Seven icon buttons per row read as a wall (owner). Three controls
+   now, and the SAME three on web, iPad and phone so the screen behaves
+   identically wherever it is opened. The split button's face sends the
+   usual way; its caret picks another channel. */
+.pf-rq-acts {
+  display: flex; align-items: center; gap: 6px;
+  margin-left: auto; flex-shrink: 0;
+}
+.pf-rq-act {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 36px; padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  font-size: 12.5px; font-weight: 500; font-family: inherit;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.pf-rq-act:hover { background: rgba(168, 85, 247, 0.12); color: var(--text-primary); }
+.pf-rq-act--more { padding: 0 9px; }
+
+/* Split: face + caret read as one control. */
+.pf-rq-split { position: relative; display: inline-flex; align-items: center; }
+.pf-rq-split .pf-rq-act--face {
+  border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none;
+}
+.pf-rq-caret {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 36px; width: 30px; padding: 0;
+  border: 1px solid var(--glass-border);
+  border-top-left-radius: 0; border-bottom-left-radius: 0;
+  border-top-right-radius: 9px; border-bottom-right-radius: 9px;
+  background: var(--glass-bg); color: var(--text-tertiary); cursor: pointer;
+}
+.pf-rq-caret:hover { background: rgba(168, 85, 247, 0.12); color: var(--text-primary); }
+.pf-rq-acts--share .pf-rq-caret,
+.pf-rq-acts--more .pf-rq-act--more { color: var(--violet-text, #a78bfa); }
+
+/* Menus — anchored to their split, opening downward, above the rows. */
+.pf-rq-menu__bd { position: fixed; inset: 0; z-index: 30; }
+.pf-rq-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 31;
+  min-width: 176px; padding: 6px;
+  display: flex; flex-direction: column;
+  border-radius: 12px;
+  background: var(--bg-card-solid, rgba(20, 22, 30, 0.98));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+}
+.pf-rq-menu__item {
+  text-align: left; padding: 9px 10px; min-height: 40px;
+  border: none; background: transparent; border-radius: 8px;
+  color: var(--text-secondary); font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.pf-rq-menu__item:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Phone: the row is narrow, so the labels go and the controls square up
+   into thumb-sized targets. The structure is identical - only the text
+   drops - so the screen still behaves the same way. */
 @media (max-width: 640px) {
-  :host-context(.design-new) .pf-rq-actions {
-    position: relative;
-    flex-wrap: nowrap;
-    overflow: visible;                 /* base sets hidden — would clip the menu */
-  }
-  /* Non-core buttons are out of the row until the menu opens. */
-  :host-context(.design-new) .pf-rq-iconbtn:not(.pf-rq-iconbtn--core) { display: none; }
-
-  :host-context(.design-new) .pf-rq-more {
-    order: 99;                          /* always the last cell */
-    flex: 0 0 44px;
-    display: inline-flex; align-items: center; justify-content: center;
-    min-height: 44px;
-    border: none; background: transparent;
-    color: var(--text-tertiary); cursor: pointer;
-  }
-  :host-context(.design-new) .pf-rq-actions--open .pf-rq-more { color: var(--violet-text, #a78bfa); }
-
-  /* Open: the hidden buttons become a labelled menu above the row. */
-  :host-context(.design-new) .pf-rq-actions--open .pf-rq-iconbtn:not(.pf-rq-iconbtn--core) {
-    display: flex; align-items: center; gap: 10px;
-    position: static;
-    width: 100%; flex: 1 0 100%;
-    justify-content: flex-start;
-    padding: 0 14px; min-height: 44px;
-    font-size: 13px;
-  }
-  :host-context(.design-new) .pf-rq-actions--open {
-    flex-wrap: wrap;
-    background: var(--bg-card-solid, rgba(20, 22, 30, 0.98));
-  }
-  /* Labels are hidden on phone for the core row; show them in the menu. */
-  :host-context(.design-new) .pf-rq-actions--open .pf-rq-iconbtn:not(.pf-rq-iconbtn--core) span {
-    display: inline; font-size: 13px;
-  }
+  .pf-rq-acts { width: 100%; margin-left: 0; gap: 8px; }
+  .pf-rq-act__lbl { display: none; }
+  .pf-rq-act { flex: 1 1 0; min-height: 44px; padding: 0; }
+  .pf-rq-split { flex: 1 1 0; }
+  .pf-rq-split .pf-rq-act--face { flex: 1 1 auto; }
+  .pf-rq-caret { min-height: 44px; }
+  .pf-rq-act--more { flex: 0 0 48px; }
+  .pf-rq-menu { left: 0; right: auto; min-width: 200px; }
 }

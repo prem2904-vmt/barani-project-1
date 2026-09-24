@@ -11,6 +11,11 @@ export interface SegmentedOption<T = string> {
   dot?: string;
   /** Optional count shown after the label. */
   count?: number;
+  /** Optional SVG path data. When present, PHONES show the icon instead of
+   *  the label (owner: the filters should be icons on mobile) — the label
+   *  still drives the tooltip and the accessible name. Tinted with `dot`,
+   *  so the colour legend survives the words going away. */
+  iconPath?: string[];
 }
 
 export type SegmentedSize = 'sm' | 'md';
@@ -25,10 +30,18 @@ export type SegmentedSize = 'sm' | 'md';
         <button type="button"
                 [class]="itemClasses(opt.value)"
                 [disabled]="opt.disabled ?? false"
-                [title]="opt.hint || ''"
+                [title]="opt.hint || opt.label"
+                [attr.aria-label]="opt.label"
                 (click)="select(opt.value)">
+          @if (opt.iconPath?.length) {
+            <svg class="seg-ico" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round" [style.color]="opt.dot || null" aria-hidden="true">
+              @for (d of opt.iconPath!; track d) { <path [attr.d]="d"/> }
+            </svg>
+          }
           @if (opt.dot) { <span class="seg-dot" [style.background]="opt.dot" aria-hidden="true"></span> }
-          {{ opt.label }}
+          <span class="seg-lbl">{{ opt.label }}</span>
           @if (opt.count !== undefined) { <span class="seg-count">{{ opt.count }}</span> }
         </button>
       }
@@ -58,6 +71,8 @@ export type SegmentedSize = 'sm' | 'md';
       cursor: pointer;
     }
     .seg-item { gap: 7px; }
+    /* Words on web/iPad; the icon only takes over on phones (below). */
+    .seg-ico { display: none; flex-shrink: 0; }
     .seg-dot { width: 7px; height: 7px; border-radius: 9999px; flex-shrink: 0; }
     .seg-count {
       font-size: 11px; font-weight: 600;
@@ -84,6 +99,13 @@ export type SegmentedSize = 'sm' | 'md';
       :host { flex-shrink: 0; max-width: none; }
       .bar { flex-wrap: nowrap; }
       .seg-item { flex-shrink: 0; white-space: nowrap; }
+      /* Icons replace the words on phones — five labelled chips do not fit
+         a 390px row. The icon carries the option's dot colour so the legend
+         still reads, and the count stays because that is the useful part. */
+      .seg-ico { display: block; }
+      .seg-lbl { display: none; }
+      .seg-item:has(.seg-ico) .seg-dot { display: none; }
+      .seg-item:has(.seg-ico) { padding: 0 12px; gap: 6px; }
       /* Comfortable thumb target; sm was 32px. */
       .sz-sm .seg-item { height: 40px; padding: 0 14px; font-size: 12.5px; }
       .sz-md .seg-item { height: 42px; }

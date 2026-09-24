@@ -375,87 +375,77 @@
           </p>
         </div>
 
-        <div class="pf-rq-actions" [class.pf-rq-actions--open]="moreFor() === r.id">
-          <!-- Phone: seven icons per row is a wall. The three delivery
-               actions stay out; everything else folds behind this (owner).
-               Hidden >=641px, where all seven fit comfortably. -->
-          <button type="button" class="pf-rq-more press" (click)="toggleMore(r.id)"
-                  [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+        <!-- Three controls, not seven (owner): View · Share ▾ · More.
+             Same at EVERY width - web, iPad and phone - so the screen reads
+             the same way wherever you open it. -->
+        <div class="pf-rq-acts" [class.pf-rq-acts--share]="shareFor() === r.id"
+             [class.pf-rq-acts--more]="moreFor() === r.id">
+
+          <button type="button" class="pf-rq-act press" title="View on screen" (click)="view(r)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
             </svg>
+            <span class="pf-rq-act__lbl">View</span>
           </button>
-          @if (r.orderId) {
-          <!-- Open the bench's result-entry screen READ-ONLY — inspect what
-               was entered (values, notes, attachments) without touching it. -->
-          <button type="button" class="pf-rq-iconbtn" title="View the lab results (read-only)" (click)="viewLabResults(r)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            <span>Results</span>
-          </button>
-          }
-          @if (canEditResult() && r.orderId) {
-          <!-- Pull the finished results back for correction (department picker
-               + tech routing + reason live in the shared dialog). -->
-          <button type="button" class="pf-rq-iconbtn" title="Edit results" (click)="openEditDialog(r)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-            </svg>
-            <span>Edit</span>
-          </button>
-          }
-          @if (r.orderId) {
-          <!-- Rebuild the report from the current admin template (OPS-59). -->
-          <button type="button" class="pf-rq-iconbtn" title="Regenerate from the latest template" (click)="regenerate(r)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-              <path d="M3 21v-5h5" />
-            </svg>
-            <span>Regenerate</span>
-          </button>
-          }
-          <button type="button" class="pf-rq-iconbtn" title="Download PDF" (click)="downloadPdf(r)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            <span>Download</span>
-          </button>
-          <button type="button" class="pf-rq-iconbtn pf-rq-iconbtn--core" title="View on screen" (click)="view(r)">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            <span>View</span>
-          </button>
-          <button type="button" class="pf-rq-iconbtn pf-rq-iconbtn--wa pf-rq-iconbtn--core" title="Send via WhatsApp"
-            (click)="deliver(r, 'whatsapp')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M19.05 4.91A9.82 9.82 0 0 0 12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.91-7.01Zm-7.01 15.24h-.01a8.23 8.23 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.23 8.23 0 0 1-1.26-4.38c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.23-8.22 8.23Z" />
-            </svg>
-            <span>WhatsApp</span>
-          </button>
-          <button type="button" class="pf-rq-iconbtn pf-rq-iconbtn--core" title="Print" (click)="deliver(r, 'print')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9" />
-              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-              <rect x="6" y="14" width="12" height="8" />
-            </svg>
-            <span>Print</span>
-          </button>
+
+          <!-- Split button: the face sends it the usual way (WhatsApp opens
+               pre-filled - the send is still the user's), the caret picks a
+               different channel. -->
+          <div class="pf-rq-split">
+            <button type="button" class="pf-rq-act pf-rq-act--face press" title="Send via WhatsApp"
+                    (click)="deliver(r, 'whatsapp')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/>
+                <path d="M12 15V3"/><path d="m8 7 4-4 4 4"/>
+              </svg>
+              <span class="pf-rq-act__lbl">Share</span>
+            </button>
+            <button type="button" class="pf-rq-caret press" (click)="toggleShare(r.id)"
+                    [attr.aria-expanded]="shareFor() === r.id" aria-label="Choose how to share">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            @if (shareFor() === r.id) {
+              <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleShare(r.id)"></div>
+              <div class="pf-rq-menu" role="menu">
+                <button type="button" class="pf-rq-menu__item press" role="menuitem"
+                        (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">WhatsApp</button>
+                <button type="button" class="pf-rq-menu__item press" role="menuitem"
+                        (click)="deliver(r, 'print'); toggleShare(r.id)">Print</button>
+                <button type="button" class="pf-rq-menu__item press" role="menuitem"
+                        (click)="downloadPdf(r); toggleShare(r.id)">Download PDF</button>
+              </div>
+            }
+          </div>
+
+          <!-- Everything that changes the report rather than sends it. -->
+          <div class="pf-rq-split">
+            <button type="button" class="pf-rq-act pf-rq-act--more press" (click)="toggleMore(r.id)"
+                    [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+              </svg>
+            </button>
+            @if (moreFor() === r.id) {
+              <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleMore(r.id)"></div>
+              <div class="pf-rq-menu" role="menu">
+                @if (r.orderId) {
+                  <button type="button" class="pf-rq-menu__item press" role="menuitem"
+                          (click)="viewLabResults(r); toggleMore(r.id)">Open lab results</button>
+                }
+                @if (canEditResult() && r.orderId) {
+                  <button type="button" class="pf-rq-menu__item press" role="menuitem"
+                          (click)="openEditDialog(r); toggleMore(r.id)">Edit results</button>
+                }
+                @if (r.orderId) {
+                  <button type="button" class="pf-rq-menu__item press" role="menuitem"
+                          (click)="regenerate(r); toggleMore(r.id)">Regenerate</button>
+                }
+              </div>
+            }
+          </div>
         </div>
       </div>
       }

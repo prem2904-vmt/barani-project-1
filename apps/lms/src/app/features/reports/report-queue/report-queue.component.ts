@@ -119,11 +119,19 @@ export class ReportQueueComponent implements OnInit {
    * repeat the word — their accent bar is enough.
    */
   readonly filterOptions = computed<SegmentedOption<Filter>[]>(() => [
-    { value: "all", label: "All", dot: "#a78bfa", count: this.items().length },
-    { value: "pending", label: "Completed", dot: "#f59e0b", count: this.counts().pending },
-    { value: "partial", label: "Partial", dot: "#38bdf8", count: this.partialOrders().length },
-    { value: "delivered", label: "Delivered", dot: "#10b981", count: this.counts().delivered },
-    { value: "failed", label: "Failed", dot: "#f43f5e", count: this.counts().failed },
+    // Icons mirror the ones the old phone-only filter row used, so the
+    // vocabulary is unchanged — they just moved into the search bar and
+    // only replace the words on phones.
+    { value: "all", label: "All", dot: "#a78bfa", count: this.items().length,
+      iconPath: ["M4 6h16", "M4 12h16", "M4 18h16"] },
+    { value: "pending", label: "Completed", dot: "#f59e0b", count: this.counts().pending,
+      iconPath: ["M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4 12 14.01l-3-3"] },
+    { value: "partial", label: "Partial", dot: "#38bdf8", count: this.partialOrders().length,
+      iconPath: ["M12 2v10l7 3", "M12 22a10 10 0 1 1 0-20"] },
+    { value: "delivered", label: "Delivered", dot: "#10b981", count: this.counts().delivered,
+      iconPath: ["m22 2-7 20-4-9-9-4Z", "M22 2 11 13"] },
+    { value: "failed", label: "Failed", dot: "#f43f5e", count: this.counts().failed,
+      iconPath: ["M10 10l4 4m0-4l-4 4", "M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Z"] },
   ]);
 
   // Default to 'pending' (Completed) — the queue's primary purpose is
@@ -167,14 +175,23 @@ export class ReportQueueComponent implements OnInit {
     this._statsOpen.update((v) => !v);
   }
 
-  /** Phone-only: which row has its overflow actions open. Seven icons per
-   *  row is a wall on a 390px screen, so the three delivery actions stay
-   *  out and the rest fold behind a "more" button (owner). One row at a
-   *  time — opening another closes the last. Presentational only. */
+  /** Which row has its "more" menu open — edit / regenerate / open lab
+   *  results. Seven icons per row read as a wall at every width, so the row
+   *  is View · Share ▾ · More (owner). One row at a time; opening either
+   *  menu closes the other. Presentational only. */
   private readonly _moreFor = signal<string | null>(null);
   readonly moreFor = this._moreFor.asReadonly();
   toggleMore(id: string) {
+    this._shareFor.set(null);
     this._moreFor.update((cur) => (cur === id ? null : id));
+  }
+
+  /** Which row has its share-channel menu open (the split button's caret). */
+  private readonly _shareFor = signal<string | null>(null);
+  readonly shareFor = this._shareFor.asReadonly();
+  toggleShare(id: string) {
+    this._moreFor.set(null);
+    this._shareFor.update((cur) => (cur === id ? null : id));
   }
 
   /** Read the value off the phone filter <select> (drives the same
