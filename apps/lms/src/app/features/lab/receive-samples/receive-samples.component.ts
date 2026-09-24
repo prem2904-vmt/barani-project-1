@@ -343,7 +343,18 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                   </span>
                 } @else {
                   <button type="button" class="pf-rs-row__btn press" [disabled]="busy()"
-                          (click)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)">Receive</button>
+                          (click)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
+                          aria-label="Receive" title="Receive">
+                    <!-- Phones show only the tray icon; the CSS zeroes the
+                         label's font-size and the sized <svg> carries it. -->
+                    <svg class="pf-rs-row__btn-ico" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true">
+                      <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>
+                      <path d="M12 3v11"/><path d="m8 10 4 4 4-4"/>
+                    </svg>
+                    Receive
+                  </button>
                 }
               </li>
             } @else {
@@ -647,6 +658,16 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       transition: filter 0.15s ease, transform 0.06s ease;
     }
     .pf-rs-row__btn:hover { filter: brightness(1.08); }
+    .pf-rs-row__btn-ico { display: none; }
+    /* Phone: icon-only (owner). The word costs a third of the row on a
+       390px screen, and the tray icon says the same thing. */
+    @media (max-width: 640px) {
+      :host-context(.design-new) .pf-rs-row__btn {
+        font-size: 0; gap: 0; padding: 0; width: 46px; min-width: 46px;
+        display: inline-flex; align-items: center; justify-content: center;
+      }
+      :host-context(.design-new) .pf-rs-row__btn-ico { display: block; }
+    }
     .pf-rs-row__btn:active { transform: scale(0.98); }
     .pf-rs-row__btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .pf-rs-row__chip {

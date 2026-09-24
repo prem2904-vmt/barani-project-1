@@ -592,10 +592,12 @@ const COUNTERS: CounterSpec[] = [
                   </div>
                   <p class="pf-tq__sub">
                     <span class="pf-tq__who">{{ tube.patientName }}</span>
-                    @if (tube.patientMeta) {
-                      <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
-                    }
-                    <span class="pf-tq__sep">·</span>{{ tube.deptName || 'Tube' }}
+                    <span class="pf-tq__extra">
+                      @if (tube.patientMeta) {
+                        <span class="pf-tq__sep">·</span>{{ tube.patientMeta }}
+                      }
+                      <span class="pf-tq__sep">·</span>{{ tube.deptName || 'Tube' }}
+                    </span>
                   </p>
                   <p class="pf-tq__note pf-done__tests">{{ tube.testNames }}</p>
                 </div>
@@ -2269,6 +2271,16 @@ const COUNTERS: CounterSpec[] = [
          by the global primary-colour rule in styles.scss
          (:root.{light,dark}.design-new button[class*="--on"]), which
          outranks anything scoped here. Classic still gets the gradient. */
+      /* ── Completed cards: sample ID + name, nothing else (owner) ──
+         On a phone the card was carrying the ID, the status word, the
+         patient, their age/sex, the department, the full test names, the
+         completed timestamp AND a test count. Sample ID and who it belongs
+         to is what you scan a finished list for; the rest is desk detail.
+         The print / edit actions stay. Classic and >=641px keep it all. */
+      :host-context(.design-new) .pf-tq--done .pf-tq__extra,
+      :host-context(.design-new) .pf-tq--done .pf-done__tests,
+      :host-context(.design-new) .pf-tq--done .pf-tq__stat { display: none; }
+
       /* Classic keeps the words; the new design shows the icon instead
          (owner: five labels do not fit a 390px phone). */
       .pf-mtab__ico { display: none; flex-shrink: 0; }
