@@ -13,6 +13,12 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
+
+type VendorStatus = 'all' | 'active' | 'inactive';
 
 interface VendorRow {
   id: string;
@@ -70,12 +76,36 @@ const EMPTY_DRAFT: NewVendorDraft = {
   imports: [
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ChipComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent,
-    LoadingLogoComponent
+    LoadingLogoComponent, HeroBandComponent, SegmentedComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): vendor search + status filter; "Add vendor"
+             rides the band's actions. -->
+        <pf-hero-band [back]="true" placeholder="Search vendors — name, code, contact, GSTIN…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-tools>
+            <pf-segmented size="sm" [options]="statusOptions()" [value]="status()"
+                          (valueChange)="status.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="toggleNewVendor()"
+                    [attr.aria-label]="newVendorOpen() ? 'Cancel new vendor' : 'Add vendor'">
+              @if (newVendorOpen()) {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              }
+              {{ newVendorOpen() ? 'Cancel' : 'Add vendor' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Vendor Credit Wallets"
         subtitle="Pre-loaded credit accounts for partner hospitals & aggregators. Reception charges bills against these wallets from the billing screen.">
@@ -89,6 +119,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-band-body">
       @if (newVendorOpen()) {
         <pf-tile tone="violet" padding="lg" class="block mb-4">
           <h3 class="pf-section-title mb-3">New vendor</h3>
@@ -148,9 +179,11 @@ const EMPTY_DRAFT: NewVendorDraft = {
             No vendors yet. Add your first partner hospital or aggregator to start tracking B2B credit.
           </p>
         </pf-tile>
+      } @else if (visibleVendors().length === 0) {
+        <p class="pf-band-empty">No vendors match{{ q() ? ' "' + q() + '"' : ' this filter' }}.</p>
       } @else {
         <div class="space-y-3">
-          @for (v of vendors(); track v.id) {
+          @for (v of visibleVendors(); track v.id) {
             <pf-tile tone="default" padding="lg" class="block">
               <div class="flex items-start justify-between gap-4 flex-wrap">
                 <div class="min-w-0 flex-1">
@@ -296,6 +329,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
           }
         </div>
       }
+      </div>
     </section>
   `,
   styles: [`
@@ -522,6 +556,25 @@ export class VendorsComponent implements OnInit {
   private readonly toasts = inject(ToastService);
 
   protected readonly vendors = signal<VendorRow[]>([]);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill: free-text search + Active / Inactive status filter. */
+  readonly q = signal('');
+  readonly status = signal<VendorStatus>('all');
+  readonly statusOptions = computed<SegmentedOption<VendorStatus>[]>(() => {
+    const all = this.vendors();
+    const active = all.filter(v => v.isActive).length;
+    return [
+      { value: 'all', label: 'All', count: all.length },
+      { value: 'active', label: 'Active', count: active },
+      { value: 'inactive', label: 'Inactive', count: all.length - active },
+    ];
+  });
+  readonly visibleVendors = computed(() => {
+    const st = this.status();
+    const rows = this.vendors().filter(v => st === 'all' || (st === 'active' ? v.isActive : !v.isActive));
+    return bandFilter(rows, this.q(), v => [v.name, v.code, v.contactName, v.contactPhone, v.contactEmail, v.gstin, v.address]);
+  });
   protected readonly loading = signal<boolean>(true);
   protected readonly saving = signal<boolean>(false);
   protected readonly newVendorOpen = signal<boolean>(false);

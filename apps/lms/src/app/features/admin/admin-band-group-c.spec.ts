@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { renderBandPage } from './admin-band.spec-helpers';
 import { BranchesComponent } from './branches/branches.component';
+import { VendorsComponent } from './vendors/vendors.component';
 
 /**
  * Admin band — list pages (group C): each gets a page-specific pill search,
@@ -58,6 +59,46 @@ describe('Admin band — Branches', () => {
   it('no match → empty state', () => {
     const p = render();
     p.type('zzz');
+    expect(names(p.el).length).toBe(0);
+    expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+  });
+});
+
+describe('Admin band — Vendors', () => {
+  const vendors = [
+    { id: 'v1', name: 'Apollo Hospital', code: 'APOLLO', contactName: 'Ravi', isActive: true, totalCredit: 0, usedCredit: 0, balance: 0, outstanding: 0, createdAt: '2026-01-01' },
+    { id: 'v2', name: 'Kauvery Clinic', code: 'KAUV', contactName: 'Meena', isActive: true, totalCredit: 0, usedCredit: 0, balance: 0, outstanding: 0, createdAt: '2026-01-01' },
+    { id: 'v3', name: 'Old Partner', code: 'OLD', isActive: false, totalCredit: 0, usedCredit: 0, balance: 0, outstanding: 0, createdAt: '2026-01-01' },
+  ];
+  const render = () => renderBandPage(VendorsComponent, {
+    getFor: (url) => url.startsWith('/api/vendors') && !url.includes('/transactions') ? vendors : [],
+    providers: [provideHttpClient()],
+  });
+  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-vendor__name')).map(n => text(n));
+
+  it('band present, header classic-only, status filter inside the pill', () => {
+    const p = render();
+    expect(p.band()).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.tools()!.querySelector('pf-segmented')).not.toBeNull();
+    expect(names(p.el).length).toBe(3);
+  });
+
+  it('"Add vendor" in the band opens the form', () => {
+    const p = render();
+    p.actions().find(b => /Add vendor/.test(b.textContent ?? ''))!.click();
+    p.f.detectChanges();
+    expect(text(p.body())).toContain('New vendor');
+  });
+
+  it('pill search + status filter narrow the list; empty state', () => {
+    const p = render();
+    p.type('kauv');
+    expect(names(p.el)).toEqual(['Kauvery Clinic']);
+    p.type('');
+    p.cmp.status.set('inactive'); p.f.detectChanges();
+    expect(names(p.el)).toEqual(['Old Partner']);
+    p.type('apollo');
     expect(names(p.el).length).toBe(0);
     expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
   });
