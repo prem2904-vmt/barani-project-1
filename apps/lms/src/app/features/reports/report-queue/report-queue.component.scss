@@ -834,3 +834,48 @@
      .pf-classic-only, so it stays hidden here). */
   :host-context(.design-new) pf-segmented.pf-rq-bandseg { display: inline-flex; }
 }
+
+/* ── Phone (<=640px), NEW design: three actions out, the rest folded ──
+   Seven icon buttons per row is a wall on a 390px screen (owner). The
+   three DELIVERY actions — view on screen, WhatsApp, print — are what
+   this queue exists for, so they stay out. Everything else (open the
+   lab results, edit, regenerate, download) folds behind a "more" dot
+   button and drops as a labelled list, which also gets the labels back.
+   One definition of each button, just relocated. Nothing >=641px. */
+@media (max-width: 640px) {
+  :host-context(.design-new) .pf-rq-actions {
+    position: relative;
+    flex-wrap: nowrap;
+    overflow: visible;                 /* base sets hidden — would clip the menu */
+  }
+  /* Non-core buttons are out of the row until the menu opens. */
+  :host-context(.design-new) .pf-rq-iconbtn:not(.pf-rq-iconbtn--core) { display: none; }
+
+  :host-context(.design-new) .pf-rq-more {
+    order: 99;                          /* always the last cell */
+    flex: 0 0 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px;
+    border: none; background: transparent;
+    color: var(--text-tertiary); cursor: pointer;
+  }
+  :host-context(.design-new) .pf-rq-actions--open .pf-rq-more { color: var(--violet-text, #a78bfa); }
+
+  /* Open: the hidden buttons become a labelled menu above the row. */
+  :host-context(.design-new) .pf-rq-actions--open .pf-rq-iconbtn:not(.pf-rq-iconbtn--core) {
+    display: flex; align-items: center; gap: 10px;
+    position: static;
+    width: 100%; flex: 1 0 100%;
+    justify-content: flex-start;
+    padding: 0 14px; min-height: 44px;
+    font-size: 13px;
+  }
+  :host-context(.design-new) .pf-rq-actions--open {
+    flex-wrap: wrap;
+    background: var(--bg-card-solid, rgba(20, 22, 30, 0.98));
+  }
+  /* Labels are hidden on phone for the core row; show them in the menu. */
+  :host-context(.design-new) .pf-rq-actions--open .pf-rq-iconbtn:not(.pf-rq-iconbtn--core) span {
+    display: inline; font-size: 13px;
+  }
+}

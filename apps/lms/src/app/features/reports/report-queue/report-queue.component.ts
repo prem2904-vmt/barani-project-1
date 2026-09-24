@@ -167,6 +167,16 @@ export class ReportQueueComponent implements OnInit {
     this._statsOpen.update((v) => !v);
   }
 
+  /** Phone-only: which row has its overflow actions open. Seven icons per
+   *  row is a wall on a 390px screen, so the three delivery actions stay
+   *  out and the rest fold behind a "more" button (owner). One row at a
+   *  time — opening another closes the last. Presentational only. */
+  private readonly _moreFor = signal<string | null>(null);
+  readonly moreFor = this._moreFor.asReadonly();
+  toggleMore(id: string) {
+    this._moreFor.update((cur) => (cur === id ? null : id));
+  }
+
   /** Read the value off the phone filter <select> (drives the same
    *  filter signal the desktop pills drive). */
   asFilter(ev: Event): Filter {

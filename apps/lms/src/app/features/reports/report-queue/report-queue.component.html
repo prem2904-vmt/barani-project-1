@@ -375,7 +375,16 @@
           </p>
         </div>
 
-        <div class="pf-rq-actions">
+        <div class="pf-rq-actions" [class.pf-rq-actions--open]="moreFor() === r.id">
+          <!-- Phone: seven icons per row is a wall. The three delivery
+               actions stay out; everything else folds behind this (owner).
+               Hidden >=641px, where all seven fit comfortably. -->
+          <button type="button" class="pf-rq-more press" (click)="toggleMore(r.id)"
+                  [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+            </svg>
+          </button>
           @if (r.orderId) {
           <!-- Open the bench's result-entry screen READ-ONLY — inspect what
                was entered (values, notes, attachments) without touching it. -->
@@ -422,7 +431,7 @@
             </svg>
             <span>Download</span>
           </button>
-          <button type="button" class="pf-rq-iconbtn" title="View on screen" (click)="view(r)">
+          <button type="button" class="pf-rq-iconbtn pf-rq-iconbtn--core" title="View on screen" (click)="view(r)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
               <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -430,7 +439,7 @@
             </svg>
             <span>View</span>
           </button>
-          <button type="button" class="pf-rq-iconbtn pf-rq-iconbtn--wa" title="Send via WhatsApp"
+          <button type="button" class="pf-rq-iconbtn pf-rq-iconbtn--wa pf-rq-iconbtn--core" title="Send via WhatsApp"
             (click)="deliver(r, 'whatsapp')">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
               <path
@@ -438,7 +447,7 @@
             </svg>
             <span>WhatsApp</span>
           </button>
-          <button type="button" class="pf-rq-iconbtn" title="Print" (click)="deliver(r, 'print')">
+          <button type="button" class="pf-rq-iconbtn pf-rq-iconbtn--core" title="Print" (click)="deliver(r, 'print')">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6 9 6 2 18 2 18 9" />
