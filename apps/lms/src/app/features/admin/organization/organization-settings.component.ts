@@ -7,21 +7,40 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+
+/** Band pill tabs — one per independently-saved identity setting. */
+export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 
 
 @Component({
   selector: 'pf-organization-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): no search here — the cards become tabs in a
+             tabs-only pill. Each card keeps its own Save (they save
+             independent things), so the band has no page-level action. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Organization & Identity"
         subtitle="Patient ID format and tenant data tools.">
       </pf-screen-header>
 
+      <div class="pf-band-body">
+      @if (showSec('identity')) {
       <!-- Organization display NAME — distinct from the login handle below.
            The page used to show only the handle, so "arun-labs" read as if
            it were the organization's name (UAT item 16). -->
@@ -45,7 +64,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
           </button>
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('identity')) {
       <!-- Organization login handle (tenant "username") — OPS-13 -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Organization login handle</h3>
@@ -66,7 +87,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
           </button>
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('patient')) {
       <!-- Patient ID format -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
@@ -150,7 +173,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
           {{ pidSaving() ? 'Saving…' : 'Save format' }}
         </button>
       </pf-tile>
+      }
 
+      @if (showSec('sample')) {
       <!-- Sample ID format (prefix = space code) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="min-w-0">
@@ -204,7 +229,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
           </button>
         }
       </pf-tile>
+      }
 
+      @if (showSec('order')) {
       <!-- Order ID format (prefix = module code) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="min-w-0">
@@ -258,7 +285,8 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
           </button>
         }
       </pf-tile>
-
+      }
+      </div>
     </section>
   `,
   styles: [`
@@ -330,6 +358,19 @@ export class OrganizationSettingsComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill tabs (new design). Classic shows every card, as before. */
+  readonly tabOptions: SegmentedOption<OrgSettingsTab>[] = [
+    { value: 'identity', label: 'Identity' },
+    { value: 'patient', label: 'Patient ID' },
+    { value: 'sample', label: 'Sample ID' },
+    { value: 'order', label: 'Order ID' },
+  ];
+  readonly tab = signal<OrgSettingsTab>('identity');
+  showSec(key: OrgSettingsTab): boolean {
+    return !this.theme.isNewDesign() || this.tab() === key;
+  }
 
   // ── Organization display name ──
   protected readonly orgName = signal('');
