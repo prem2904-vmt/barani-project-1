@@ -175,31 +175,77 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
                   </div>
                 }
               </div>
-              <input #box type="text" class="pf-cw__input"
-                     [placeholder]="uploading() ? 'Uploading…' : 'Write a message…'"
-                     [attr.aria-label]="'Message ' + title(c)"
-                     (focus)="windowsSvc.focus(c.id)"
-                     (keydown.enter)="send(c.id, box)" />
-              <!-- Voice message — the page has had this; the window had not
-                   (owner). Same recorder, same upload, auto-sends on stop. -->
-              <button type="button" class="pf-cw__send press"
-                      [class.is-rec]="recordingFor() === c.id"
-                      (click)="toggleRecord(c.id)"
-                      [title]="recordingFor() === c.id ? 'Stop and send (' + recordSecs() + 's)' : 'Record a voice message'"
-                      [attr.aria-label]="recordingFor() === c.id ? 'Stop recording and send' : 'Record a voice message'">
+              <!-- WhatsApp-style field: the mic lives INSIDE the pill (owner).
+                   Tap mic → recording row with timer; tap stop → a preview you
+                   can play back or discard. Nothing leaves until Send / Enter. -->
+              <div class="pf-cw__field" [class.is-rec]="recordingFor() === c.id"
+                   [class.is-draft]="voiceDraft()?.convId === c.id">
                 @if (recordingFor() === c.id) {
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <rect x="6" y="6" width="12" height="12" rx="2"/>
-                  </svg>
-                } @else {
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <rect x="9" y="2" width="6" height="12" rx="3"/>
-                    <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/>
-                  </svg>
+                  <span class="pf-cw__recdot" aria-hidden="true"></span>
+                  <span class="pf-cw__rectime">{{ fmtSecs(recordSecs()) }}</span>
+                  <span class="pf-cw__rechint">Recording…</span>
+                  <button type="button" class="pf-cw__fieldbtn press" (click)="cancelRecording()"
+                          title="Discard" aria-label="Discard recording">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+                    </svg>
+                  </button>
+                  <button type="button" class="pf-cw__fieldbtn pf-cw__fieldbtn--stop press"
+                          (click)="finishRecording(sendBtn)" title="Stop" aria-label="Stop recording">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <rect x="6" y="6" width="12" height="12" rx="2"/>
+                    </svg>
+                  </button>
+                } @else if (voiceDraft()?.convId === c.id) {
+                  <button type="button" class="pf-cw__fieldbtn pf-cw__fieldbtn--play press"
+                          (click)="togglePlay(aud)" [attr.aria-label]="playing() ? 'Pause' : 'Play'">
+                    @if (playing()) {
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>
+                      </svg>
+                    } @else {
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M7 4.5v15l13-7.5z"/>
+                      </svg>
+                    }
+                  </button>
+                  <audio #aud [src]="voiceDraft()!.url" preload="metadata"
+                         (timeupdate)="playPos.set(aud.currentTime)"
+                         (ended)="playing.set(false); playPos.set(0)"></audio>
+                  <span class="pf-cw__track" aria-hidden="true">
+                    <span class="pf-cw__track-fill"
+                          [style.width.%]="(playPos() / voiceDraft()!.secs) * 100"></span>
+                  </span>
+                  <span class="pf-cw__rectime">{{ fmtSecs(playing() || playPos() > 0 ? playPos() : voiceDraft()!.secs) }}</span>
+                  <button type="button" class="pf-cw__fieldbtn press" (click)="discardDraft()"
+                          title="Discard" aria-label="Discard voice note">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+                    </svg>
+                  </button>
                 }
-              </button>
-              <button type="button" class="pf-cw__send press" (click)="send(c.id, box)" aria-label="Send">
+                <input #box type="text" class="pf-cw__input"
+                       [hidden]="recordingFor() === c.id || voiceDraft()?.convId === c.id"
+                       [placeholder]="uploading() ? 'Uploading…' : 'Write a message…'"
+                       [attr.aria-label]="'Message ' + title(c)"
+                       (focus)="windowsSvc.focus(c.id)"
+                       (keydown.enter)="send(c.id, box)" />
+                @if (recordingFor() !== c.id && voiceDraft()?.convId !== c.id) {
+                  <button type="button" class="pf-cw__fieldbtn press"
+                          (click)="startRecording(c.id)" [disabled]="!!recordingFor() || uploading()"
+                          title="Record a voice message" aria-label="Record a voice message">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="9" y="2" width="6" height="12" rx="3"/>
+                      <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/>
+                    </svg>
+                  </button>
+                }
+              </div>
+              <button #sendBtn type="button" class="pf-cw__send press" (click)="send(c.id, box)"
+                      [disabled]="recordingFor() === c.id || uploading()" aria-label="Send">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="m22 2-7 20-4-9-9-4Z"/>
@@ -273,6 +319,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       .pf-cw--railed .pf-cw__win { height: min(64dvh, 420px); }
       /* Composer input at 16px or iOS zooms the page when it focuses. */
       .pf-cw__input { font-size: 16px; }
+      .pf-cw__field { height: 40px; }
       /* Blur is expensive on phones; the sheet is opaque enough already. */
       .pf-cw__win { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
     }
@@ -352,21 +399,54 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       padding: 8px;
       border-top: 1px solid var(--border-muted);
     }
-    .pf-cw__input {
+    /* The pill is the field; input + mic (or recorder / preview) sit inside. */
+    .pf-cw__field {
       flex: 1; min-width: 0; height: 34px;
-      padding: 0 12px; border-radius: 9999px;
+      display: flex; align-items: center; gap: 6px;
+      padding: 0 3px 0 12px; border-radius: 9999px;
       background: var(--bg-input, transparent);
       border: 1px solid var(--input-border, var(--border-muted));
+    }
+    .pf-cw__field:focus-within { border-color: #7c3aed; }
+    .pf-cw__field.is-draft { padding-left: 3px; }
+    .pf-cw__input {
+      flex: 1; min-width: 0; height: 100%;
+      padding: 0; border: 0; background: transparent;
       color: var(--text-primary);
       font-size: 12.5px; font-family: inherit;
       outline: none;
     }
-    .pf-cw__input:focus { border-color: #7c3aed; }
+    .pf-cw__input[hidden] { display: none; }
+    .pf-cw__fieldbtn {
+      width: 28px; height: 28px; border-radius: 9999px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 0; color: var(--text-muted);
+      cursor: pointer; min-width: 28px !important; min-height: 28px !important;
+    }
+    .pf-cw__fieldbtn:hover:not(:disabled) { color: #7c3aed; background: rgba(124, 58, 237, 0.1); }
+    .pf-cw__fieldbtn:disabled { opacity: 0.4; cursor: default; }
+    .pf-cw__fieldbtn--stop { color: #f87171; }
+    .pf-cw__fieldbtn--play { background: #7c3aed; color: #fff; }
+    .pf-cw__fieldbtn--play:hover:not(:disabled) { background: #6d28d9; color: #fff; }
+    .pf-cw__recdot {
+      width: 8px; height: 8px; border-radius: 9999px; background: #ef4444; flex-shrink: 0;
+      animation: pf-cw-rec 1.1s ease-in-out infinite;
+    }
+    .pf-cw__rectime {
+      font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-primary);
+      flex-shrink: 0;
+    }
+    .pf-cw__rechint { flex: 1; min-width: 0; font-size: 12px; color: var(--text-muted); }
+    .pf-cw__track {
+      flex: 1; min-width: 0; height: 3px; border-radius: 9999px;
+      background: var(--border-muted); overflow: hidden;
+    }
+    .pf-cw__track-fill { display: block; height: 100%; background: #7c3aed; transition: width .2s linear; }
+    .pf-cw__send:disabled { opacity: 0.4; cursor: default; }
     .pf-cw__file { display: none; }
     .pf-cw__icon.is-fav { color: #fbbf24; }
-    .pf-cw__send.is-rec { color: #f87171; animation: pf-cw-rec 1.1s ease-in-out infinite; }
-    @keyframes pf-cw-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-    @media (prefers-reduced-motion: reduce) { .pf-cw__send.is-rec { animation: none; } }
+    @keyframes pf-cw-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    @media (prefers-reduced-motion: reduce) { .pf-cw__recdot { animation: none; } }
     .pf-cw__head-fav {
       position: absolute; bottom: -1px; right: -1px;
       width: 14px; height: 14px; border-radius: 9999px;
@@ -629,23 +709,34 @@ export class ChatWindowsComponent {
   /** Which window is recording (null = none). Only one at a time. */
   protected readonly recordingFor = signal<string | null>(null);
   protected readonly recordSecs = signal(0);
+  /** A stopped recording waiting for Send — previewable, discardable. */
+  protected readonly voiceDraft = signal<{ convId: string; file: File; url: string; secs: number } | null>(null);
+  protected readonly playing = signal(false);
+  protected readonly playPos = signal(0);
   private mediaRecorder: MediaRecorder | null = null;
   private recordStream: MediaStream | null = null;
   private recordChunks: Blob[] = [];
   private recordTimer: ReturnType<typeof setInterval> | null = null;
   private recordStartedAt = 0;
+  private keepRecording = false;
+
+  protected fmtSecs(v: number): string {
+    const t = Math.max(0, Math.floor(v));
+    return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  }
 
   /**
-   * Tap to start, tap again to stop and send — the same contract the
-   * Messages page uses, including the 60-second hard cap. Sends straight
-   * away on stop: a voice note is rarely something you sit on.
+   * WhatsApp contract (owner): tap the mic inside the field to start, tap
+   * stop to get a preview, then Send / Enter. Nothing is sent on stop.
+   * 60-second hard cap stops into the preview, never auto-sends.
    */
-  protected async toggleRecord(conversationId: string): Promise<void> {
-    if (this.recordingFor()) { this.stopRecording(true); return; }
+  protected async startRecording(conversationId: string): Promise<void> {
+    if (this.recordingFor()) return;
     if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined') {
       this.toasts.error("Voice messages aren't supported on this browser.");
       return;
     }
+    this.discardDraft();
     try {
       this.recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -658,44 +749,74 @@ export class ChatWindowsComponent {
       this.mediaRecorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) this.recordChunks.push(e.data);
       };
-      this.mediaRecorder.onstop = () => void this.finalizeRecording(conversationId);
+      this.mediaRecorder.onstop = () => this.makeDraft(conversationId);
       this.mediaRecorder.start();
       this.recordStartedAt = Date.now();
       this.recordSecs.set(0);
       this.recordingFor.set(conversationId);
       this.recordTimer = setInterval(() => {
         const elapsed = Date.now() - this.recordStartedAt;
-        this.recordSecs.set(Math.round(elapsed / 1000));
-        if (elapsed >= 60000) this.stopRecording(true);   // hard cap
+        this.recordSecs.set(Math.floor(elapsed / 1000));
+        if (elapsed >= 60000) this.stopRecording(true);   // hard cap → preview
       }, 200);
     } catch {
       this.toasts.error('Microphone permission denied.');
     }
   }
 
-  private stopRecording(send: boolean): void {
+  /** Stop into the preview and hand focus to Send so Enter sends it. */
+  protected finishRecording(sendBtn: HTMLButtonElement): void {
+    this.stopRecording(true);
+    setTimeout(() => sendBtn.focus(), 60);
+  }
+
+  protected cancelRecording(): void { this.stopRecording(false); }
+
+  private stopRecording(keep: boolean): void {
     if (!this.recordingFor()) return;
+    this.keepRecording = keep;
     this.recordingFor.set(null);
     if (this.recordTimer) { clearInterval(this.recordTimer); this.recordTimer = null; }
     try { this.mediaRecorder?.stop(); } catch { /* already stopped */ }
     this.recordStream?.getTracks().forEach((t) => t.stop());
     this.recordStream = null;
-    if (!send) this.recordChunks = [];
   }
 
-  private async finalizeRecording(conversationId: string): Promise<void> {
-    if (this.recordChunks.length === 0) return;
+  private makeDraft(conversationId: string): void {
+    const chunks = this.recordChunks;
+    this.recordChunks = [];
+    if (!this.keepRecording || chunks.length === 0) return;
     const secs = Math.max(1, Math.round((Date.now() - this.recordStartedAt) / 1000));
     const mime = this.mediaRecorder?.mimeType?.split(';')[0] ?? 'audio/webm';
     const ext = mime === 'audio/mp4' ? 'm4a' : 'webm';
-    const file = new File([new Blob(this.recordChunks, { type: mime })],
-                          `voice-${secs}s.${ext}`, { type: mime });
-    this.recordChunks = [];
+    const file = new File([new Blob(chunks, { type: mime })], `voice-${secs}s.${ext}`, { type: mime });
+    this.playing.set(false);
+    this.playPos.set(0);
+    this.voiceDraft.set({ convId: conversationId, file, url: URL.createObjectURL(file), secs });
+  }
+
+  protected togglePlay(aud: HTMLAudioElement): void {
+    if (aud.paused) { void aud.play(); this.playing.set(true); }
+    else { aud.pause(); this.playing.set(false); }
+  }
+
+  protected discardDraft(): void {
+    const d = this.voiceDraft();
+    if (d) URL.revokeObjectURL(d.url);
+    this.voiceDraft.set(null);
+    this.playing.set(false);
+    this.playPos.set(0);
+  }
+
+  private async sendDraft(): Promise<void> {
+    const d = this.voiceDraft();
+    if (!d) return;
+    this.discardDraft();
     this.uploading.set(true);
     try {
-      const up = await this.chat.uploadAttachment(file);
-      await this.chat.sendMessage(conversationId, '', null, up);
-      this.windowsSvc.focus(conversationId);
+      const up = await this.chat.uploadAttachment(d.file);
+      await this.chat.sendMessage(d.convId, '', null, up);
+      this.windowsSvc.focus(d.convId);
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
     } finally {
@@ -735,6 +856,7 @@ export class ChatWindowsComponent {
   }
 
   protected send(conversationId: string, box: HTMLInputElement): void {
+    if (this.voiceDraft()?.convId === conversationId) { void this.sendDraft(); return; }
     const body = box.value.trim();
     if (!body) return;
     box.value = '';
@@ -743,6 +865,8 @@ export class ChatWindowsComponent {
   }
 
   protected closeWindow(conversationId: string): void {
+    if (this.recordingFor() === conversationId) this.stopRecording(false);
+    if (this.voiceDraft()?.convId === conversationId) this.discardDraft();
     this.windowsSvc.close(conversationId);
     this.chat.forgetThread(conversationId);
   }
