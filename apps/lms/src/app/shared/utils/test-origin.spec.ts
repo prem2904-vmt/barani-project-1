@@ -1,5 +1,5 @@
 import {
-  canRevertToMaster, isCloneMode, originHint, originLabel, originOf, restoreDefaultsMessage, restoreDefaultsSummary,
+  branchCopies, branchCopiesNote, canRevertToMaster, isCloneMode, originHint, originLabel, originOf, restoreDefaultsMessage, restoreDefaultsSummary,
   revertToMasterPath, ORIGIN_ICON_PATHS,
 } from './test-origin';
 
@@ -56,5 +56,14 @@ describe('test origin', () => {
     expect(restoreDefaultsSummary({ deleted: 2, parked: 1, cloned: 0, mode: 'reference' })).toBe('Restored — 3 lab copies removed; prices kept.');
     expect(restoreDefaultsSummary({ deleted: 0, parked: 0, cloned: 0, mode: 'reference' })).toContain('Nothing to restore');
     expect(restoreDefaultsSummary({ deleted: 4, parked: 1, cloned: 500 })).toContain('500 default tests loaded');
+  });
+
+  it('branch copies (isolation): names every branch with its own copy; the viewed copy is not repeated', () => {
+    expect(branchCopies({ branchCopies: [' Alwarpet ', '', 'Chennai'] })).toEqual(['Alwarpet', 'Chennai']);
+    expect(branchCopies({})).toEqual([]);
+    expect(branchCopiesNote({ origin: 'master', branchCopies: ['Alwarpet'] })).toBe('Changed at Alwarpet');
+    expect(branchCopiesNote({ origin: 'branch', branchCopies: ['Alwarpet', 'Chennai'] }, 'alwarpet')).toBe('Changed at Chennai');
+    expect(branchCopiesNote({ origin: 'branch', branchCopies: ['Alwarpet'] }, 'Alwarpet')).toBe('');
+    expect(branchCopiesNote({ origin: 'master', branchCopies: null })).toBe('');
   });
 });

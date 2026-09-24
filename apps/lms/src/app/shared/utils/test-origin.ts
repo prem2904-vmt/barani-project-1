@@ -89,6 +89,28 @@ export function originHint(t: OriginLike | null | undefined): string {
   return (isCloneMode(t) ? CLONE_HINTS : HINTS)[o];
 }
 
+/** Names of the branches that keep their OWN copy of this test (server wire
+ *  field `branchCopies`, branch isolation only). */
+export function branchCopies(t: { branchCopies?: readonly string[] | null } | null | undefined): string[] {
+  return (t?.branchCopies ?? []).map(n => (n ?? '').toString().trim()).filter(n => n.length > 0);
+}
+
+/** "Changed at Alwarpet, Chennai" — shown next to the origin badge so a view
+ *  from another branch (or the tenant-wide view) still says the test is
+ *  customised somewhere. '' when no branch keeps a copy, or when the only copy
+ *  is the one being viewed (its badge already says "Branch"). */
+export function branchCopiesNote(
+  t: ({ branchCopies?: readonly string[] | null } & OriginLike) | null | undefined,
+  viewingBranch?: string | null,
+): string {
+  const names = branchCopies(t);
+  if (names.length === 0) return '';
+  const others = originOf(t) === 'branch' && viewingBranch
+    ? names.filter(n => n.toLowerCase() !== viewingBranch.trim().toLowerCase())
+    : names;
+  return others.length === 0 ? '' : `Changed at ${others.join(', ')}`;
+}
+
 /** Only a lab's copy of a master test can go back to the master — and only
  *  once the lab reads the Admin Test Master (not in clone mode). */
 export function canRevertToMaster(t: OriginLike | null | undefined): boolean {
