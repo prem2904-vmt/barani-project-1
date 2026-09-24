@@ -7,6 +7,11 @@ import { AuthService } from '../../core/auth/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { signatureFileToPng } from '../../shared/utils/signature-image';
+import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
+import { ThemeService } from '../../core/services/theme.service';
+
+type SigTab = 'signature' | 'registration';
 
 /**
  * "My signature" — a per-user digital signature the user draws once and reuses
@@ -17,13 +22,47 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
 @Component({
   selector: 'pf-my-signature',
   standalone: true,
-  imports: [CommonModule, ScreenHeaderComponent, SignaturePadComponent],
+  imports: [CommonModule, ScreenHeaderComponent, SignaturePadComponent, HeroBandComponent, SegmentedComponent],
   template: `
-    <div class="mx-auto w-full max-w-2xl px-4 py-4">
-      <pf-screen-header title="My signature"
+    <!-- Hidden picker at the template root so the band's Upload action and
+         the classic in-card buttons can both open it. -->
+    <input #file type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
+           (change)="onFileChosen($event)" />
+
+    <section class="pf-band-page mx-auto w-full max-w-2xl px-4 py-4">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): two real sections -> pill tabs; each tab's
+             actions (Draw / Upload / Remove, or Save) ride on the band. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            @if (tab() === 'signature' && !uploadPreview()) {
+              @if (current()) {
+                <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="busy()" (click)="remove()"
+                        aria-label="Remove" title="Remove signature"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Remove</button>
+              }
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="processing()" (click)="file.click()"
+                      aria-label="Upload image" title="Upload image"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M4 21h16"/></svg>{{ processing() ? 'Processing…' : 'Upload image' }}</button>
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="pad.set(true)"
+                      [attr.aria-label]="current() ? 'Re-draw' : 'Draw signature'" [title]="current() ? 'Re-draw' : 'Draw signature'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>{{ current() ? 'Re-draw' : 'Draw signature' }}</button>
+            } @else if (tab() === 'registration') {
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
+                      [disabled]="busy() || regId().trim() === savedRegId()" (click)="saveRegId()"
+                      aria-label="Save" title="Save registration ID"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Save</button>
+            }
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only" title="My signature"
         subtitle="Draw your signature — or upload a photo of it (we remove the paper background automatically). Saved to your account and printed wherever you sign (cash bills, reports).">
       </pf-screen-header>
 
+      <div class="pf-band-body">
+      <div class="pf-sig-col">
+      @if (showSec('signature')) {
       <div class="pf-sig-tile">
         <p class="pf-sig-eyebrow">Your signature</p>
 
@@ -41,7 +80,7 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
           <div class="pf-sig-preview">
             <img [src]="current()!" alt="Your signature" />
           </div>
-          <div class="pf-sig-row">
+          <div class="pf-sig-row pf-classic-only">
             <button type="button" class="pf-sig-cta" (click)="pad.set(true)">Re-draw</button>
             <button type="button" class="pf-sig-cta" [disabled]="processing()" (click)="file.click()">
               {{ processing() ? 'Processing…' : 'Upload image' }}
@@ -53,20 +92,19 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
             <p>No signature yet.</p>
             <p class="pf-sig-muted">Draw one — or upload a photo/scan of your signature on paper and we'll cut the background out.</p>
           </div>
-          <div class="pf-sig-row">
+          <div class="pf-sig-row pf-classic-only">
             <button type="button" class="pf-sig-cta pf-sig-cta--primary" style="margin-top: 0;" (click)="pad.set(true)">Draw signature</button>
             <button type="button" class="pf-sig-cta" [disabled]="processing()" (click)="file.click()">
               {{ processing() ? 'Processing…' : 'Upload image' }}
             </button>
           </div>
         }
-
-        <input #file type="file" accept="image/png,image/jpeg,image/webp" class="hidden"
-               (change)="onFileChosen($event)" />
       </div>
+      }
 
       <!-- Medical registration ID — shown beside your name on entry screens
            (dash until set) and printed under your signature on reports. -->
+      @if (showSec('registration')) {
       <div class="pf-sig-tile">
         <p class="pf-sig-eyebrow">Registration ID</p>
         <p class="pf-sig-muted" style="margin-bottom: 10px;">
@@ -76,11 +114,14 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
         <div class="pf-sig-row" style="margin-top: 0;">
           <input type="text" class="pf-sig-input" maxlength="64" placeholder="e.g. TN-12345"
                  [value]="regId()" (input)="regId.set($any($event.target).value)" />
-          <button type="button" class="pf-sig-cta pf-sig-cta--primary" style="margin-top: 0;"
+          <button type="button" class="pf-sig-cta pf-sig-cta--primary pf-classic-only" style="margin-top: 0;"
                   [disabled]="busy() || regId().trim() === savedRegId()" (click)="saveRegId()">Save</button>
         </div>
       </div>
-    </div>
+      }
+      </div>
+      </div>
+    </section>
 
     @if (pad()) {
       <pf-signature-pad [initialDataUrl]="current() ?? null"
@@ -88,6 +129,8 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
     }
   `,
   styles: [`
+    :host-context(.design-new) .pf-sig-col { max-width: 42rem; margin-inline: auto; width: 100%; }
+    :host-context(.design-new) .pf-sig-tile:first-child { margin-top: 0; }
     .pf-sig-tile { margin-top: 14px; padding: 18px; border-radius: 16px;
       background: var(--glass-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border, rgba(148,163,184,0.16)); }
     .pf-sig-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
@@ -112,7 +155,17 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
   `],
 })
 export class MySignatureComponent {
+  protected readonly theme = inject(ThemeService);
   private readonly api = inject(ApiService);
+
+  /** Band pill tabs (new design): signature vs registration ID. */
+  readonly tabOptions: SegmentedOption<SigTab>[] = [
+    { value: 'signature', label: 'Signature' },
+    { value: 'registration', label: 'Registration ID' },
+  ];
+  readonly tab = signal<SigTab>('signature');
+  /** Classic shows both sections; the new design shows the pill's tab. */
+  showSec(k: SigTab): boolean { return !this.theme.isNewDesign() || this.tab() === k; }
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
 

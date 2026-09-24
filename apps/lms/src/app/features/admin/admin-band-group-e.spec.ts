@@ -4,6 +4,8 @@ import { renderBandPage } from './admin-band.spec-helpers';
 import { LabelPrinterComponent } from './label-printer/label-printer.component';
 import { PrinterService } from '../../core/printer/printer.service';
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { MySignatureComponent } from '../user-signature/my-signature.component';
+import { AuthService } from '../../core/auth/auth.service';
 import { FinanceHubComponent } from '../finance/finance-hub.component';
 import { DailyStatementComponent } from '../finance/daily-statement.component';
 import { TatBoardComponent } from '../dashboard/tat-board/tat-board.component';
@@ -211,5 +213,49 @@ describe('Admin band — Printing (/printing)', () => {
     expect(p.body()!.querySelector('.pf-nudge')).not.toBeNull();
     expect(p.body()!.querySelector('.pf-nudge svg')).not.toBeNull();
     expect(p.body()!.querySelector('.pf-prev')).toBeNull();
+  });
+});
+
+describe('Admin band — My signature (/signature)', () => {
+  const make = (sig: string | null = null) => {
+    const auth = {
+      user: signal<any>({ tenantName: 'Micro World', signatureDataUrl: sig, registrationId: 'TN-1' }),
+      setRegistrationIdLocal: vi.fn(), setSignatureLocal: vi.fn(),
+    };
+    const p = renderBandPage(MySignatureComponent, { providers: [{ provide: AuthService, useValue: auth }] });
+    return { ...p, auth };
+  };
+  const labels = (p: ReturnType<typeof make>) => p.actions().map((b) => b.getAttribute('aria-label'));
+
+  it('tabs-only pill, header classic-only; no signature → Upload + Draw on the band', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.bandInput()).toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(labels(p)).toEqual(['Upload image', 'Draw signature']);
+  });
+
+  it('with a signature → Remove / Upload / Re-draw; Remove calls the API', () => {
+    const p = make('data:image/png;base64,xx');
+    expect(labels(p)).toEqual(['Remove', 'Upload image', 'Re-draw']);
+    p.actions()[0].click();
+    expect(p.api.delete).toHaveBeenCalledWith('/api/auth/me/signature');
+  });
+
+  it('Registration ID tab swaps the section and its Save rides on the band', () => {
+    const p = make();
+    expect(p.body()!.querySelector('.pf-sig-input')).toBeNull();
+    segBtn(p.tools(), 'Registration ID')!.click();
+    p.f.detectChanges();
+    const input = p.body()!.querySelector<HTMLInputElement>('.pf-sig-input')!;
+    expect(input).not.toBeNull();
+    const save = () => p.actions().find((b) => b.getAttribute('aria-label') === 'Save') as HTMLButtonElement;
+    expect(save().disabled).toBe(true);
+    input.value = 'TN-2';
+    input.dispatchEvent(new Event('input'));
+    p.f.detectChanges();
+    expect(save().disabled).toBe(false);
+    save().click();
+    expect(p.api.put).toHaveBeenCalledWith('/api/auth/me/registration-id', { registrationId: 'TN-2' });
   });
 });
