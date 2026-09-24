@@ -1,6 +1,11 @@
+import { signal } from '@angular/core';
+import { of } from 'rxjs';
+import { vi } from 'vitest';
 import { renderBandPage } from './admin-band.spec-helpers';
 import { ReportTemplateComponent } from './report-template/report-template.component';
 import { BillingConfigComponent } from './billing-config/billing-config.component';
+import { SetupWizardComponent } from './setup-wizard/setup-wizard.component';
+import { TenantStateService } from '../../core/services/tenant-state.service';
 
 /**
  * Admin band — pages with NO search but with sections (Report designer,
@@ -82,3 +87,34 @@ describe('Admin band — Billing config (/admin/billing)', () => {
   });
 });
 
+describe('Admin band — Branding (/setup)', () => {
+  const tenant = signal<any>({ id: 't1', name: 'Micro World', brandingMode: 'both', brandingName: 'MW', logoUrl: '' });
+  const make = () => {
+    const tenantState = { tenant, ensureLoaded: vi.fn(), update: vi.fn() };
+    const p = renderBandPage(SetupWizardComponent, {
+      providers: [{ provide: TenantStateService, useValue: tenantState }],
+    });
+    p.api.patch.mockImplementation(() => of({ id: 't1' }) as any);
+    return { ...p, tenantState };
+  };
+
+  it('"What to show" is the tabs-only pill; header and in-page switch are classic-only', () => {
+    const p = make();
+    expect(p.bandInput()).toBeNull();
+    expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label'))).toEqual(['Both', 'Logo only', 'Name only']);
+    expect(p.headerIsClassicOnly()).toBe(true);
+  });
+
+  it('switching the pill changes the mode; Save (band) enables when dirty and patches the tenant', async () => {
+    const p = make();
+    const save = () => p.actions().find((b) => b.textContent?.includes('Save'))! as HTMLButtonElement;
+    expect(save().disabled).toBe(true);
+    tabByLabel(p.el, 'Name only').click();
+    p.f.detectChanges();
+    expect(p.cmp.branding().brandingMode).toBe('name');
+    expect(save().disabled).toBe(false);
+    save().click();
+    await Promise.resolve();
+    expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/current', expect.objectContaining({ brandingMode: 'name' }));
+  });
+});

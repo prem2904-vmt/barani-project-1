@@ -10,6 +10,8 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 
 const BRANDING_LOGO_MAX_BYTES = 100 * 1024;
 const BRANDING_NAME_MAX = 30;
@@ -33,18 +35,44 @@ interface BrandingDraft {
     ScreenHeaderComponent,
     SegmentedComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): "What to show" (Both / Logo only / Name only) is the
+             page's one switch and decides which fields the form shows, so it
+             owns the pill (tabs-only); Save rides the band. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="brandingModeOptions"
+                          [value]="branding().brandingMode"
+                          (valueChange)="updateBranding({ brandingMode: $event })"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
+                    [disabled]="saving() || !dirty()" (click)="save()"
+                    aria-label="Save branding" title="Save branding">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save branding' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
 
-      <pf-screen-header
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Branding"
         title="Lab branding"
         subtitle="The logo and short name shown in the top bar. Everything else about your lab is managed under Admin.">
       </pf-screen-header>
 
+      <div class="pf-band-body">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-2">
         <pf-tile tone="default" padding="lg" class="lg:col-span-2 block">
           <h2 class="section-title">Top-navigation branding</h2>
@@ -52,7 +80,7 @@ interface BrandingDraft {
             What appears in the header pill next to your user avatar. All three fields are optional.
           </p>
 
-          <div class="mt-5">
+          <div class="mt-5 pf-classic-only">
             <label class="pf-label">What to show</label>
             <pf-segmented size="md"
                            [options]="brandingModeOptions"
@@ -146,13 +174,14 @@ interface BrandingDraft {
         </pf-tile>
       </div>
 
-      <!-- Save -->
-      <div class="mt-6 flex items-center justify-end">
+      <!-- Save (classic; the new design's Save rides the band) -->
+      <div class="mt-6 flex items-center justify-end pf-classic-only">
         <pf-touch-btn size="md" variant="primary"
                        [disabled]="saving() || !dirty()"
                        (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save branding' }}
         </pf-touch-btn>
+      </div>
       </div>
     </section>
   `,
@@ -303,6 +332,7 @@ export class SetupWizardComponent {
   private readonly api = inject(ApiService);
   private readonly tenantState = inject(TenantStateService);
   private readonly toasts = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
 
   @ViewChild('logoInput') logoInput?: ElementRef<HTMLInputElement>;
 
