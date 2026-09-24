@@ -25,6 +25,9 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ConditionBuilderComponent } from './condition-builder.component';
 import { WorkflowBuilderService } from './workflow-builder.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
 
 interface HistoryRow {
   id: string;
@@ -49,27 +52,37 @@ interface HistoryRow {
     TileComponent,
     ToggleComponent,
     TouchButtonComponent,
-    LoadingLogoComponent
+    LoadingLogoComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!screenName()) {
-      <section class="px-4 md:px-8 pt-6 pb-10">
-        <pf-screen-header
+      <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+        @if (theme.isNewDesign()) {
+          <!-- Band pill (owner): search the screen forms (LIST mode only; the
+               one-screen editor below is exempt and keeps its header). -->
+          <pf-hero-band [back]="true" placeholder="Search forms — patient register, order create…"
+                        [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
+        }
+        <pf-screen-header class="pf-classic-only"
           eyebrow="Admin"
           title="Workflow Builder"
           subtitle="Every LMS screen is driven by one of these configs. Edit a workflow to reshape its steps and fields.">
         </pf-screen-header>
 
+        <div class="pf-band-body">
         @if (screens().length === 0) {
           <pf-tile tone="default" padding="xl">
             <div class="text-center py-6">
               <p class="text-[14px]" style="color: var(--text-secondary);">No workflows yet.</p>
             </div>
           </pf-tile>
+        } @else if (visibleScreens().length === 0) {
+          <p class="pf-band-empty">No forms match "{{ q() }}".</p>
         } @else {
           <div class="space-y-2.5">
-            @for (r of screens(); track r.screenName) {
+            @for (r of visibleScreens(); track r.screenName) {
               <pf-tile [tone]="r.status === 'published' ? 'default' : 'amber'" padding="md">
                 <div class="pf-wf-row flex items-center gap-3 flex-wrap md:flex-nowrap" (click)="openBuilder(r.screenName)">
                   <div class="pf-wf-icon">
@@ -99,6 +112,7 @@ interface HistoryRow {
             }
           </div>
         }
+        </div>
       </section>
     }
 
@@ -910,6 +924,11 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
 
   private readonly _screens = signal<WorkflowConfigRecord[]>([]);
   readonly screens = this._screens.asReadonly();
+  protected readonly theme = inject(ThemeService);
+  /** Band pill search over the screen forms (name, status). */
+  readonly q = signal('');
+  readonly visibleScreens = computed(() =>
+    bandFilter(this._screens(), this.q(), r => [r.screenName, this.prettify(r.screenName), r.status]));
 
   readonly screenName = signal<string | null>(null);
 

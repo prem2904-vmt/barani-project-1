@@ -1,5 +1,6 @@
 import { renderBandPage } from './admin-band.spec-helpers';
 import { NotificationsConfigComponent } from './notifications-config/notifications-config.component';
+import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder.component';
 
 /**
  * Group D admin pages on the band pill: notifications, workflows list,
@@ -43,5 +44,33 @@ describe('Admin band — Notifications', () => {
     p.cmp.setModuleFilter('billing');
     p.f.detectChanges();
     expect(labels(p.el)).toEqual(['Refund issued']);
+  });
+});
+
+describe('Admin band — Workflow forms list', () => {
+  const recs = [
+    { screenName: 'patient_register', status: 'published', version: 3, configJson: '{"steps":[]}' },
+    { screenName: 'order_create', status: 'draft', version: 1, configJson: '{"steps":[]}' },
+  ];
+  const make = () => renderBandPage(WorkflowBuilderComponent, { getFor: (u) => (u === '/api/workflows/' ? recs : []) });
+  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-wf-name')).map((p) => p.textContent?.trim());
+
+  it('list mode: band + body, header classic-only', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.body()).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+  });
+
+  it('pill search filters the forms, with an empty state', () => {
+    const p = make();
+    expect(names(p.el)).toEqual(['Patient Register', 'Order Create']);
+    p.type('order');
+    expect(names(p.el)).toEqual(['Order Create']);
+    p.type('draft');
+    expect(names(p.el)).toEqual(['Order Create']);
+    p.type('xyz');
+    expect(names(p.el)).toEqual([]);
+    expect(p.el.querySelector('.pf-band-empty')).not.toBeNull();
   });
 });
