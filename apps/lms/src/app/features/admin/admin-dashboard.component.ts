@@ -4,6 +4,9 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { NavBackService } from '../../core/services/nav-back.service';
+import { ThemeService } from '../../core/services/theme.service';
+import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
 
 interface SeedSummary {
   tenants: number;
@@ -59,11 +62,22 @@ interface Category {
 @Component({
   selector: 'pf-admin-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-admin-page">
-      <header class="pf-admin-hdr">
+    <section class="pf-admin-page pf-band-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the settings search, and the category switch
+             inside the pill so any category is one tap away. -->
+        <pf-hero-band [back]="true" placeholder="Search settings — inventory, invoice, patient ID…"
+                      [value]="q()" (valueChange)="setQ($event)">
+          <ng-container band-tools>
+            <pf-segmented class="pf-admin-catseg" size="sm" [options]="categoryOptions" [value]="active()"
+                          (valueChange)="pickCategory($event)"></pf-segmented>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <header class="pf-admin-hdr pf-classic-only">
         <div class="pf-admin-hdr__left">
           <p class="pf-admin-hdr__eyebrow">{{ today | date:'EEEE, MMM d' }}</p>
           <div class="flex items-center gap-1.5">
@@ -82,6 +96,7 @@ interface Category {
         </div>
       </header>
 
+      <div class="pf-band-body">
       <div class="pf-admin-layout">
         <!-- Category is chosen on the Overview screen and deep-linked via ?cat=;
              the left category rail was redundant with those cards, so this hub
@@ -185,6 +200,7 @@ interface Category {
             </aside>
           }
         </div>
+      </div>
       </div>
     </section>
   `,
@@ -716,6 +732,16 @@ export class AdminDashboardComponent implements OnInit {
     this.categories.find(c => c.id === this._active())
   );
   select(id: string) { this._active.set(id); }
+
+  protected readonly theme = inject(ThemeService);
+  /** Category switch in the band pill (short labels; icons on phones). */
+  readonly categoryOptions: SegmentedOption<string>[] = this.categories.map(c => ({
+    value: c.id,
+    label: ({ people: 'People & Access', org: 'Branches & Org', finance: 'Billing & Finance', automation: 'Platform' } as Record<string, string>)[c.id] ?? c.label,
+    iconPath: [c.iconPath, ...(c.iconExtra ? [c.iconExtra] : [])],
+  }));
+  /** Picking a category from the pill leaves search mode so the pick shows. */
+  pickCategory(id: string) { this._q.set(''); this._active.set(id); }
 
   // Admin-wide tile search: flatten every category's tiles and match on title,
   // subtitle, and category label so a setting is one keystroke away.

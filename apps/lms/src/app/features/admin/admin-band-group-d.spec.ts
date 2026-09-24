@@ -6,6 +6,7 @@ import { KpiConfigComponent } from './kpis/kpi-config.component';
 import { AuditLogComponent } from './audit-log/audit-log.component';
 import { DoctorsAdminComponent } from '../opd/admin/doctors-admin.component';
 import { AdminModulesComponent } from './modules/modules.component';
+import { AdminDashboardComponent } from './admin-dashboard.component';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { of } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
@@ -299,5 +300,39 @@ describe('Admin band — Modules', () => {
     p.cmp.status.set('off');
     p.f.detectChanges();
     expect(titles(p.el)).not.toContain('Lab (Diagnostics)');
+  });
+});
+
+describe('Admin band — Settings hub (/admin/manage)', () => {
+  const make = () => renderBandPage(AdminDashboardComponent, { getFor: (u) => (u === '/api/_seed/summary' ? { permissions: 40, workflows: 3 } : []) });
+  const tileTitles = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-admin-tile__title')).map((t) => t.textContent?.trim());
+
+  it('band + body; the custom header (title, subtitle, search box) is classic-only', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.body()).not.toBeNull();
+    expect(p.el.querySelector('.pf-admin-hdr')?.classList.contains('pf-classic-only')).toBe(true);
+    expect(p.tools()!.querySelector('pf-segmented')).not.toBeNull();
+  });
+
+  it('category switch in the pill swaps the tiles', () => {
+    const p = make();
+    expect(tileTitles(p.el)).toContain('Users & Access');
+    expect(p.cmp.categoryOptions.map((o: any) => o.label)).toEqual(['People & Access', 'Branches & Org', 'Billing & Finance', 'Platform']);
+    p.cmp.pickCategory('finance');
+    p.f.detectChanges();
+    expect(tileTitles(p.el)).toContain('Billing Config');
+    expect(tileTitles(p.el)).not.toContain('Users & Access');
+  });
+
+  it('pill search finds settings across every category; picking a category leaves search', () => {
+    const p = make();
+    p.type('vendor');
+    expect(tileTitles(p.el)).toEqual(expect.arrayContaining(['Vendor Credit Wallets']));
+    expect(tileTitles(p.el)).not.toContain('Users & Access');
+    p.cmp.pickCategory('people');
+    p.f.detectChanges();
+    expect(p.cmp.q()).toBe('');
+    expect(tileTitles(p.el)).toContain('Users & Access');
   });
 });
