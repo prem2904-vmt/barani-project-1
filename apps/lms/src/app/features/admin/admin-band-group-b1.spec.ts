@@ -1,5 +1,6 @@
 import { renderBandPage } from './admin-band.spec-helpers';
 import { ReportTemplateComponent } from './report-template/report-template.component';
+import { BillingConfigComponent } from './billing-config/billing-config.component';
 
 /**
  * Admin band — pages with NO search but with sections (Report designer,
@@ -49,6 +50,35 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(save).toBeTruthy();
     save.click();
     expect(p.api.post).toHaveBeenCalledWith('/api/config/report-template', expect.objectContaining({ labName: 'Micro World Labs' }));
+  });
+});
+
+describe('Admin band — Billing config (/admin/billing)', () => {
+  const make = () => renderBandPage(BillingConfigComponent, {
+    getFor: (url) => url === '/api/config/billing' ? { tenantId: 't1', gstEnabled: false, invoicePrefix: 'INV' }
+      : url === '/api/config/invoice-template' ? {}
+      : [],
+  });
+
+  it('GST / Discounts / Invoice are the tabs-only pill; the in-page switch is classic-only', () => {
+    const p = make();
+    expect(p.bandInput()).toBeNull();
+    expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label'))).toEqual(['GST Setup', 'Discounts', 'Invoice']);
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.body()?.querySelector(':scope > .pf-classic-only pf-segmented')).not.toBeNull();
+  });
+
+  it('clicking a pill tab switches the section', () => {
+    const p = make();
+    tabByLabel(p.el, 'Discounts').click();
+    p.f.detectChanges();
+    expect(p.cmp.tab()).toBe('discounts');
+  });
+
+  it('Save sits in the band actions and posts the billing config', () => {
+    const p = make();
+    p.actions().find((b) => b.textContent?.includes('Save'))!.click();
+    expect(p.api.post).toHaveBeenCalledWith('/api/config/billing', expect.objectContaining({ invoicePrefix: 'INV' }));
   });
 });
 

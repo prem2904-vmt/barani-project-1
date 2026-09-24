@@ -17,6 +17,8 @@ import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ImageUploadComponent } from '../report-template/image-upload.component';
 import { environment } from '../../../../environments/environment';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 
 type Tab = 'gst' | 'discounts' | 'invoice';
 type GstScope = 'branch' | 'region' | 'tenant';
@@ -60,12 +62,34 @@ interface GstRow {
     TileComponent,
     ToggleComponent,
     TouchButtonComponent,
-    ImageUploadComponent
+    ImageUploadComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): GST / Discounts / Invoice are the pill's tabs
+             (tabs-only pill); Save rides the band. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions"
+                          [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="saveConfig()"
+                    aria-label="Save billing config" title="Save billing config">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
+              </svg>
+              Save
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Billing Config"
         subtitle="GST, discounts, and invoice numbering.">
@@ -81,7 +105,8 @@ interface GstRow {
         </pf-touch-btn>
       </pf-screen-header>
 
-      <div class="mb-5">
+      <div class="pf-band-body">
+      <div class="mb-5 pf-classic-only">
         <pf-segmented
           [options]="tabOptions"
           [value]="tab()"
@@ -358,11 +383,8 @@ interface GstRow {
             <div><label class="pf-label">Phone</label><input type="tel" class="pf-input" [ngModel]="tpl().phone" (ngModelChange)="patchTpl({ phone: $event })"/></div>
             <div><label class="pf-label">Email</label><input type="email" autocapitalize="none" class="pf-input" [ngModel]="tpl().email" (ngModelChange)="patchTpl({ email: $event })"/></div>
             <div><label class="pf-label">Document type</label>
-              <select class="pf-input" [ngModel]="tpl().documentMode" (ngModelChange)="patchTpl({ documentMode: $event })">
-                <option value="auto">Auto (by tax)</option>
-                <option value="tax_invoice">Tax Invoice</option>
-                <option value="bill_of_supply">Bill of Supply</option>
-              </select>
+              <pf-select [options]="documentModeOptions" [value]="tpl().documentMode ?? 'auto'"
+                         (valueChange)="patchTpl({ documentMode: $event })"></pf-select>
             </div>
             <div><label class="pf-label">Accent colour</label><input class="pf-input" type="color" [ngModel]="tpl().accentColor || '#1B3A6B'" (ngModelChange)="patchTpl({ accentColor: $event })" style="height:38px;padding:4px"/></div>
             <div><label class="pf-label">Signatory label</label><input class="pf-input" [ngModel]="tpl().signatureLabel" (ngModelChange)="patchTpl({ signatureLabel: $event })" placeholder="Authorised Signatory"/></div>
@@ -406,6 +428,7 @@ interface GstRow {
         </pf-tile>
         </div>
       }
+      </div>
     </section>
   `,
   styles: [`
@@ -545,6 +568,14 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly sanitizer = inject(DomSanitizer);
+  protected readonly theme = inject(ThemeService);
+
+  /** Invoice document type (was a native select). */
+  readonly documentModeOptions: PfSelectOption<string>[] = [
+    { value: 'auto',           label: 'Auto (by tax)' },
+    { value: 'tax_invoice',    label: 'Tax Invoice' },
+    { value: 'bill_of_supply', label: 'Bill of Supply' },
+  ];
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     { value: 'gst',       label: 'GST Setup' },
