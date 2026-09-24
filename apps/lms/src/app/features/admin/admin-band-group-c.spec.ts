@@ -1,9 +1,11 @@
+import './jsdom-path2d.spec-helpers';
 import { provideHttpClient } from '@angular/common/http';
 import { renderBandPage } from './admin-band.spec-helpers';
 import { BranchesComponent } from './branches/branches.component';
 import { VendorsComponent } from './vendors/vendors.component';
 import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
 import { ReferringNetworkComponent } from './referring-network/referring-network.component';
+import { InventoryComponent } from './inventory/inventory.component';
 
 /**
  * Admin band — list pages (group C): each gets a page-specific pill search,
@@ -182,5 +184,63 @@ describe('Admin band — Referring network', () => {
     p.type('zzz');
     expect(names(p.el).length).toBe(0);
     expect(text(p.body())).toContain('No hospitals match');
+  });
+});
+
+describe('Admin band — Inventory', () => {
+  const items = [
+    { id: 'i1', sku: 'EDTA-3', name: 'EDTA tube 3ml', category: 'consumable', uom: 'piece', reorderLevel: 100, nearExpiryDays: 30, isActive: true, onHand: 500, lowStock: false },
+    { id: 'i2', sku: 'GLU-R', name: 'Glucose reagent', category: 'reagent', uom: 'ml', reorderLevel: 50, nearExpiryDays: 30, isActive: true, onHand: 20, lowStock: true },
+  ];
+  const render = async () => {
+    const p = renderBandPage(InventoryComponent, {
+      getFor: (url) => url === '/api/inventory/items' ? items
+        : url === '/api/inventory/alerts' ? { lowStock: [], expiring: [] }
+          : url === '/api/tests/' ? [{ id: 't1', name: 'CBC' }, { id: 't2', name: 'Glucose' }]
+            : [],
+    });
+    await p.f.whenStable();
+    p.f.detectChanges();
+    return p;
+  };
+  const rows = (el: HTMLElement) => Array.from(el.querySelectorAll('tbody tr td:first-child b')).map(b => text(b));
+
+  it('band present, custom header classic-only, tabs + category filter in the pill', async () => {
+    const p = await render();
+    expect(p.band()).not.toBeNull();
+    expect(p.el.querySelector('h1')!.closest('.pf-classic-only')).not.toBeNull();
+    expect(p.tools()!.querySelector('pf-segmented')).not.toBeNull();
+    expect(p.tools()!.querySelector('pf-select')).not.toBeNull();
+    expect(rows(p.el).length).toBe(2);
+  });
+
+  it('"New item" in the band opens the item form', async () => {
+    const p = await render();
+    p.actions().find(b => /New item/.test(b.textContent ?? ''))!.click();
+    p.f.detectChanges();
+    expect(text(p.body())).toContain('New item');
+    expect(p.body()!.querySelector('select')).toBeNull();
+  });
+
+  it('pill search + category narrow the items; empty state', async () => {
+    const p = await render();
+    p.type('edta');
+    expect(rows(p.el)).toEqual(['EDTA tube 3ml']);
+    p.type('');
+    p.cmp.category.set('reagent'); p.f.detectChanges();
+    expect(rows(p.el)).toEqual(['Glucose reagent']);
+    p.type('edta');
+    expect(rows(p.el).length).toBe(0);
+    expect(text(p.body())).toContain('No items match');
+  });
+
+  it('Test consumables tab: tabs-only pill with the test picker; items table hidden', async () => {
+    const p = await render();
+    p.cmp.setTab('bom'); p.f.detectChanges();
+    expect(p.bandInput()).toBeNull();
+    expect(p.el.querySelector('.pf-hb__search--tabs')).not.toBeNull();
+    expect(p.tools()!.querySelector('.pf-inv-bandsel--test')).not.toBeNull();
+    expect(p.body()!.querySelector('table')).toBeNull();
+    expect(text(p.body())).toContain('Per-test consumables');
   });
 });

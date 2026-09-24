@@ -8,6 +8,13 @@ import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
+
+type InvTab = 'items' | 'bom';
 
 type LabelMode = 'both' | 'barcode' | 'qr';
 
@@ -25,11 +32,48 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 @Component({
   selector: 'pf-inventory',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent],
+  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl">
-      <div class="flex items-center justify-between gap-3 mb-5">
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10 max-w-6xl">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): Items / Test consumables switch. Items: item
+             search + category filter in the pill, "New item" in the band.
+             Test consumables: the test picker rides the pill (no free-text
+             search), "Save consumables" in the band. -->
+        <pf-hero-band [back]="true" [tabsOnly]="tab() === 'bom'"
+                      placeholder="Search items — name, SKU, unit…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-tools>
+            <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+            @if (tab() === 'items') {
+              <pf-select class="pf-inv-bandsel" size="sm" [options]="categoryFilterOptions" [value]="category()"
+                         (valueChange)="category.set($event)" aria-label="Category"></pf-select>
+            } @else {
+              <pf-select class="pf-inv-bandsel pf-inv-bandsel--test" size="sm" [options]="testOptions()" [value]="bomTestId()"
+                         [searchable]="true" placeholder="Pick a test…"
+                         (valueChange)="selectTest($event)" aria-label="Test"></pf-select>
+            }
+          </ng-container>
+          <ng-container band-actions>
+            @if (tab() === 'items') {
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="startNew()" aria-label="New item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                New item
+              </button>
+            } @else if (bomTestId()) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="bomSaving()" (click)="saveBom()"
+                      aria-label="Save consumables">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                {{ bomSaving() ? 'Saving…' : 'Save consumables' }}
+              </button>
+            }
+          </ng-container>
+        </pf-hero-band>
+      }
+      <div class="pf-classic-only flex items-center justify-between gap-3 mb-5">
         <div>
           <div class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--violet-400)">Admin · Lab</div>
           <div class="flex items-center gap-2">
@@ -45,6 +89,8 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
         <button class="px-4 py-2 rounded-xl text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" (click)="startNew()">New item</button>
       </div>
 
+      <div class="pf-band-body">
+      @if (showItems()) {
       <!-- Alerts -->
       @if (lowStock().length || expiring().length) {
         <div class="grid md:grid-cols-2 gap-3 mb-5">
@@ -75,9 +121,8 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
               @if (itemError()?.field==='name') { <span class="fld-err">{{ itemError()!.message }}</span> }
             </label>
             <label class="block"><span class="lbl">Category</span>
-              <select class="inp" [ngModel]="form().category" (ngModelChange)="setF('category',$event)">
-                @for (c of categories; track c) { <option [value]="c">{{ c }}</option> }
-              </select>
+              <pf-select [options]="categoryOptions" [value]="form().category ?? 'consumable'"
+                         (valueChange)="setF('category',$event)" aria-label="Category"></pf-select>
             </label>
             <label class="block"><span class="lbl">Unit (UoM)</span><input class="inp" [ngModel]="form().uom" (ngModelChange)="setF('uom',$event)" placeholder="piece"/></label>
             <label class="block"><span class="lbl">Reorder level</span><input class="inp" type="number" [ngModel]="form().reorderLevel" (ngModelChange)="setF('reorderLevel',+$event)"/></label>
@@ -101,7 +146,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
               <th class="text-right p-3">On hand</th><th class="text-right p-3">Reorder</th><th class="p-3"></th>
             </tr></thead>
             <tbody>
-              @for (it of items(); track it.id) {
+              @for (it of visibleItems(); track it.id) {
                 <tr style="border-top:1px solid var(--glass-border)">
                   <td class="p-3"><b>{{ it.name }}</b> <span class="font-mono text-xs" style="color:var(--text-muted)">{{ it.sku }}</span>
                     @if (it.lowStock) { <span class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:rgba(245,158,11,.15);color:var(--amber,#f59e0b)">low</span> }
@@ -158,48 +203,62 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                           @if (b.expired) { <span class="ml-1 text-[10px]" style="color:var(--red)">expired</span> }</span>
                         <span class="flex items-center gap-3 font-mono">
                           <span>{{ b.qtyOnHand | number:'1.0-2' }}</span>
-                          <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, -1)">−</button>
-                          <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, 1)">＋</button>
+                          <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, -1)" aria-label="Decrease">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+                          </button>
+                          <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, 1)" aria-label="Increase">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                          </button>
                         </span>
                       </div>
                     } @empty { <p class="text-sm" style="color:var(--text-muted)">No batches yet — receive stock.</p> }
                   </td></tr>
                 }
               } @empty {
-                <tr><td colspan="5" class="p-6 text-center" style="color:var(--text-muted)">No items yet. Add your first SKU.</td></tr>
+                <tr><td colspan="5" class="p-6 text-center" style="color:var(--text-muted)">
+                  @if (items().length) { <span class="pf-band-empty-inline">No items match{{ q() ? ' "' + q() + '"' : ' this category' }}.</span> }
+                  @else { No items yet. Add your first SKU. }
+                </td></tr>
               }
             </tbody>
           </table>
         </div>
       }
+      }
 
       <!-- Per-test consumables (BOM) — drives auto-deduction at collection -->
-      <div class="mt-8 p-4 rounded-xl border" style="background:var(--glass-bg);border-color:var(--glass-border)">
+      @if (showBom()) {
+      <div class="pf-inv-bom p-4 rounded-xl border" style="background:var(--glass-bg);border-color:var(--glass-border)">
         <div class="text-sm font-bold mb-1" style="color:var(--text-primary)">Per-test consumables</div>
         <p class="text-sm mb-3" style="color:var(--text-tertiary)">Map which items a test consumes. These are auto-deducted (FEFO) from this branch's stock when a sample is collected.</p>
-        <select class="inp" style="max-width:340px" [ngModel]="bomTestId()" (ngModelChange)="selectTest($event)">
-          <option value="">Select a test…</option>
-          @for (t of tests(); track t.id) { <option [value]="t.id">{{ t.name }}</option> }
-        </select>
+        <!-- New design: the test picker rides the band pill. -->
+        <pf-select class="pf-classic-only block" style="max-width:340px" [options]="testOptions()" [value]="bomTestId()"
+                   [searchable]="true" placeholder="Select a test…" (valueChange)="selectTest($event)"
+                   aria-label="Test"></pf-select>
+        @if (theme.isNewDesign() && !bomTestId()) {
+          <p class="text-sm" style="color:var(--text-muted)">Pick a test in the bar above to edit what it consumes.</p>
+        }
 
         @if (bomTestId()) {
           <div class="mt-3 space-y-2" style="max-width:560px">
             @for (line of bomLines(); track $index) {
               <div class="flex items-center gap-2 bom-line">
-                <select class="inp bom-line__item" [ngModel]="line.itemId" (ngModelChange)="setLine($index,'itemId',$event)">
-                  <option value="">Item…</option>
-                  @for (it of items(); track it.id) { <option [value]="it.id">{{ it.name }} ({{ it.uom }})</option> }
-                </select>
+                <pf-select class="bom-line__item" [options]="itemOptions()" [value]="line.itemId" [searchable]="true"
+                           placeholder="Item…" (valueChange)="setLine($index,'itemId',$event)" aria-label="Item"></pf-select>
                 <input class="inp bom-line__qty" style="width:110px" type="number" min="0" step="0.001" [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index,'qtyPerTest',+$event)" placeholder="qty/test"/>
-                <button class="text-sm px-2 iconbtn" style="color:var(--red)" (click)="removeLine($index)">✕</button>
+                <button class="text-sm px-2 iconbtn" style="color:var(--red)" (click)="removeLine($index)" aria-label="Remove item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
               </div>
             }
             <div class="flex gap-2 pt-1">
               <button class="text-xs font-semibold touch-link" style="color:var(--violet-400)" (click)="addLine()">+ Add item</button>
             </div>
-            <button class="mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="bomSaving()" (click)="saveBom()">{{ bomSaving() ? 'Saving…' : 'Save consumables' }}</button>
+            <button class="pf-classic-only mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="bomSaving()" (click)="saveBom()">{{ bomSaving() ? 'Saving…' : 'Save consumables' }}</button>
           </div>
         }
+      </div>
+      }
       </div>
     </section>
   `,
@@ -220,6 +279,16 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
     .label-wrap { margin:4px 0 14px; padding:14px; border-radius:12px; border:1px solid var(--glass-border-hover); background:var(--bg-card-solid); }
     .label-wrap__head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
     .label-print { display:inline-block; padding:12px; border-radius:12px; background:#fff; }
+
+    /* Classic stacks the two sections; new design shows one per pill tab. */
+    .pf-inv-bom { margin-top: 2rem; }
+    :host-context(.design-new) .pf-inv-bom { margin-top: 0; }
+    .pf-inv-bandsel { flex-shrink: 0; width: 160px; }
+    .pf-inv-bandsel--test { width: 260px; }
+    @media (max-width: 640px) {
+      .pf-inv-bandsel { width: 150px; }
+      .pf-inv-bandsel--test { width: 220px; }
+    }
 
     .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
@@ -288,7 +357,32 @@ export class InventoryComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   protected readonly navBack = inject(NavBackService);
+  protected readonly theme = inject(ThemeService);
   readonly categories = CATEGORIES;
+  readonly categoryOptions: PfSelectOption[] = CATEGORIES.map(c => ({ value: c, label: c[0].toUpperCase() + c.slice(1) }));
+
+  // ── Band pill ────────────────────────────────────────────────
+  /** Items vs Test consumables (new design shows one at a time). */
+  readonly tab = signal<InvTab>('items');
+  readonly tabOptions: SegmentedOption<InvTab>[] = [
+    { value: 'items', label: 'Items' },
+    { value: 'bom', label: 'Test consumables' },
+  ];
+  setTab(t: InvTab) { this.tab.set(t); }
+  readonly showItems = computed(() => !this.theme.isNewDesign() || this.tab() === 'items');
+  readonly showBom = computed(() => !this.theme.isNewDesign() || this.tab() === 'bom');
+  /** Item search + category filter ('' = all categories). */
+  readonly q = signal('');
+  readonly category = signal('');
+  readonly categoryFilterOptions: PfSelectOption[] = [{ value: '', label: 'All categories' }, ...this.categoryOptions];
+  readonly visibleItems = computed(() => {
+    const cat = this.category();
+    const rows = cat ? this.items().filter(i => i.category === cat) : this.items();
+    return bandFilter(rows, this.q(), i => [i.name, i.sku, i.category, i.uom]);
+  });
+  readonly testOptions = computed<PfSelectOption[]>(() => this.tests().map(t => ({ value: t.id, label: t.name })));
+  readonly itemOptions = computed<PfSelectOption[]>(() =>
+    this.items().map(it => ({ value: it.id, label: `${it.name} (${it.uom})` })));
 
   readonly items = signal<InvItem[]>([]);
   readonly batches = signal<InvBatch[]>([]);
