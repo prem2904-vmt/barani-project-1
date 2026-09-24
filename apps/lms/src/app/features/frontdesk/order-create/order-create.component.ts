@@ -1,5 +1,5 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, HostListener, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { TrendTest } from '../../../shared/utils/trend-chart';
 import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -12,21 +12,23 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
-import { Patient, formatPatientInfo } from '../../../shared/models/patient.model';
+import { Patient, formatPatientInfo, patientDisplayName } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { PriceFlagComponent } from '../../../shared/primitives/price-flag.component';
 import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, taxSlabOf } from '../../../shared/utils/test-pricing';
-import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
+import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
+import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
+import { SCOPE_PLACEHOLDERS, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES } from './unified-search';
 
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
@@ -45,7 +47,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, PriceFlagComponent, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, PriceFlagComponent, HeroBandComponent, BarcodeScannerModalComponent, ScanIconComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -65,7 +67,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
-  readonly patientSearch = viewChild<PatientSearchComponent>('patientSearch');
+  /** The unified search pill (tiles + input + urgent) — outside-click target. */
+  readonly pillEl = viewChild<ElementRef<HTMLElement>>('pill');
+  /** The live payment pane — its Confirm is rendered in the billing card's
+   *  pinned footer (designer panel), so the host reads its label/state. */
+  readonly payPanel = viewChild(InlinePaymentPanelComponent);
+  /** The billing card's scroll body — the pill's cart icon scrolls it into view. */
+  readonly billCard = viewChild<ElementRef<HTMLElement>>('billCard');
 
   focusSearchInput() {
     setTimeout(() => {
@@ -106,6 +114,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly trendEligible = signal<TrendTest[]>([]);
   readonly trendogramOn = signal(false);
   readonly trendogramDuration = signal<string>('5');
+  /** Duration choices (pf-select — no native <select>). */
+  readonly trendDurationOpts: PfSelectOption[] = [
+    { value: '5', label: 'Last 5 tests' },
+    { value: '10', label: 'Last 10 tests' },
+    { value: '3m', label: 'Last 3 months' },
+    { value: '6m', label: 'Last 6 months' },
+    { value: 'all', label: 'All time' },
+  ];
   /** Explicit per-chart picks from the popup; null = auto (one per test). */
   readonly trendogramCharts = signal<Array<{ testId: string; parameter: string }> | null>(null);
   readonly trendPopupOpen = signal(false);
@@ -132,14 +148,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  /** TRUE desktop/web only: wide AND a fine pointer (mouse). This is where the
-   *  keyboard-first search dropdown makes sense and the catalog grid stays
-   *  browse-only. A TOUCH device — phone OR iPad (pointer: coarse) — never gets
-   *  the dropdown; there the list/grid just filters as you type (one search). */
-  private static readonly WEB_MQ = '(min-width: 1024px) and (pointer: fine)';
-  readonly isWide = signal(typeof window !== 'undefined' && window.matchMedia(OrderCreateComponent.WEB_MQ).matches);
-  private readonly _wideMql = typeof window !== 'undefined' ? window.matchMedia(OrderCreateComponent.WEB_MQ) : null;
-  private readonly _onWideChange = (e: MediaQueryListEvent) => this.isWide.set(e.matches);
+  /** lg+ (iPad-landscape and up): the billing card is a persistent right
+   *  column. Below it, the same card opens as the checkout drawer. Only ONE
+   *  of the two is ever rendered, so the pay pane (and its pinned Confirm)
+   *  exists exactly once. */
+  private static readonly LG_MQ = '(min-width: 1024px)';
+  private readonly _lgMql = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(OrderCreateComponent.LG_MQ) : null;
+  readonly isLg = signal(!!this._lgMql?.matches);
+  private readonly _onLgChange = (e: MediaQueryListEvent) => this.isLg.set(e.matches);
   private readonly _onVisibleResync = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') this.loadOrderableTests();
   };
@@ -242,24 +258,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return !!this.viewOrderId() && !!bill && bill.balance > 0;
   });
 
-  readonly pageTitle = computed(() => {
-    // if (this.isReadOnly()) {
-    //   const bill = this.currentBill();
-    //   if (bill && bill.balance <= 0) return 'Order Settled';
-    //   return 'Pending Payment';
-    // }
-    return 'Order & Payments';
-  });
-
-  readonly pageSubtitle = computed(() => {
-    if (this.isReadOnly()) {
-      const bill = this.currentBill();
-      if (bill && bill.balance <= 0) return 'This order is settled and payment is recorded.';
-      return 'Collect outstanding payment balance.';
-    }
-    return 'Pick tests, set priority, review cart.';
-  });
-
   readonly refundDue = computed(() => {
     const bill = this.currentBill();
     if (!bill) return 0;
@@ -297,21 +295,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Per-user recent test ids, fetched from /api/test-picker/recent. */
   readonly recentIds = signal<string[]>([]);
 
-  // ── Ref-hospital + ref-doctor field state ─────────────────────────
-  // On tablet/phone the patient search + referring hospital + referring doctor
-  // don't fit one row, so referring is collapsed behind a toggle: tapping the
-  // building icon expands the two referring inputs (full width) and shrinks the
-  // patient field for the moment. Desktop (lg+) always shows all three.
-  readonly refFieldsOpen = signal(false);
-  toggleRefFields() { this.refFieldsOpen.update(v => !v); }
-
+  // ── Ref-hospital + ref-doctor state ───────────────────────────────
+  // Both are picked through the unified search pill's Doctor / Hospital
+  // tiles (see the "Unified search" section). The value is free text — the
+  // backend stores the name — so a new doctor/hospital is simply typed.
   readonly refHospitalName = signal<string>('');
-  readonly refHospitalOpen = signal(false);
   readonly refHospitalSuggestions = signal<string[]>([]);
   private refHospitalDebounce: ReturnType<typeof setTimeout> | null = null;
 
   readonly refDoctorName = signal<string>('');
-  readonly refDoctorOpen = signal(false);
   readonly refDoctorSuggestions = signal<string[]>([]);
   private refDoctorDebounce: ReturnType<typeof setTimeout> | null = null;
 
@@ -351,7 +343,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly hasDraft = this._hasDraft.asReadonly();
 
   readonly patient = this._patient.asReadonly();
-  readonly isChangingPatient = signal(false);
   protected readonly formatPatient = formatPatientInfo;
   readonly saving = this._saving.asReadonly();
   readonly selected = this._selected.asReadonly();
@@ -428,21 +419,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** True when the test id is in the user's favourites. */
   isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
-  /** Full-catalogue matches for the current query (individual + profile +
-   *  package) — drives the desktop keyboard dropdown, independent of the browse
-   *  grid so the grid can stay put while the dropdown searches. */
-  readonly searchMatches = computed(() => {
-    const q = this._query().trim();
-    return q ? this.filterTestList(this._tests(), q) : [];
-  });
-
   readonly filteredTests = computed(() => {
     const q = this._query().trim();
-    // DESKTOP/WEB (≥1024): the catalog grid is BROWSE-ONLY — the keyboard
-    // dropdown owns search, so the grid never reshuffles and competes with it
-    // (design 1d: "the catalog below never reshuffles while searching").
-    // PHONE/TABLET: no dropdown, so the grid itself narrows to the matches.
-    if (q && !this.isWide()) return this.filterTestList(this._tests(), q);
+    // Unified search (Option A): with the Tests scope, typing filters the
+    // catalogue IN THE PAGE on every device — tests, profiles and packages,
+    // narrowed by the department chip too. ↑/↓ + ⏎ walk the matches in place
+    // (see searchResults), so the keyboard-first quick add survives.
+    if (q) return this.filterByDept(this.filterTestList(this._tests(), q));
     return this.filterByDept(this.individualTests());
   });
 
@@ -773,16 +756,16 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   ngAfterViewInit() {
     const hasPatientId = this.route.snapshot.queryParamMap.has('patientId');
     const hasEditOrderId = this.route.snapshot.queryParamMap.has('editOrderId');
-    if (!hasPatientId && !hasEditOrderId && !this.patient()) {
-      setTimeout(() => {
-        this.patientSearch()?.focus();
-      }, 0);
+    // No patient yet → open the pill on the Patient tile so reception can
+    // type straight away (the old screen focused its patient box).
+    if (!hasPatientId && !hasEditOrderId && !this.route.snapshot.queryParamMap.has('orderId') && !this.patient()) {
+      setTimeout(() => this.selectScope('patient'), 0);
     }
   }
 
   ngOnInit() {
     this.loadSpecimens();
-    this._wideMql?.addEventListener('change', this._onWideChange);
+    this._lgMql?.addEventListener?.('change', this._onLgChange);
     this.labCfg.ensureLoaded();
     // Only active tests are orderable — a disabled department's tests (cascaded
     // to inactive) must not appear in the picker.
@@ -1074,12 +1057,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
 
-  // ── Keyboard-first search dropdown ──────────────────────────────
-  /** Top matches for the current query, shown in a dropdown under the search
-   *  field for instant keyboard add. Empty when the field is empty. */
+  // ── Keyboard-first quick add (Tests scope) ──────────────────────
+  /** The in-page matches for the current query, in the order the catalogue
+   *  shows them (department groups, code order) — ↑/↓ walk this list and ⏎
+   *  adds the highlighted row. Empty when the field is empty. */
   readonly searchResults = computed<Test[]>(() =>
-    this.isWide() && this._query().trim() ? this.searchMatches().slice(0, 7) : []);
-  /** Highlighted dropdown row (driven by ↑/↓ and hover); Enter adds it. */
+    this._query().trim() ? this.filteredTestsByDept().flatMap(g => g.tests) : []);
+  /** Id of the highlighted in-page match (null when not searching). */
+  readonly activeTestId = computed<string | null>(() => {
+    const list = this.searchResults();
+    return list.length ? list[Math.min(this.activeResult(), list.length - 1)].id : null;
+  });
+  /** Highlighted match (driven by ↑/↓ and hover); Enter adds it. */
   readonly activeResult = signal(0);
 
   onSearchArrow(e: Event, dir: number): void {
@@ -1090,6 +1079,16 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     e.preventDefault();
     e.stopPropagation();
     this.activeResult.update(i => Math.max(0, Math.min(n - 1, i + dir)));
+    this.revealActiveTest();
+  }
+  /** Keep the highlighted in-page match visible inside the catalogue pane. */
+  private revealActiveTest(): void {
+    const id = this.activeTestId();
+    if (!id || typeof document === 'undefined') return;
+    setTimeout(() => {
+      const el = document.querySelector(`[data-test-row="${id}"]`) as HTMLElement | null;
+      el?.scrollIntoView?.({ block: 'nearest' });
+    }, 0);
   }
   onSearchEnter(e: Event): void {
     const list = this.searchResults();
@@ -1226,18 +1225,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return parsePackageMembers(pkg.parameters).length;
   }
 
-  // Canonical flow: Home → patient history → New order (lands here with
-  // ?patientId=). "Change" on the attached patient tile bounces back to
-  // Home so the user can pick a different one from their records.
-  changePatient() {
-    this.isChangingPatient.set(true);
-  }
-  cancelChangePatient() {
-    this.isChangingPatient.set(false);
-  }
+  // "Change patient" = click the pill's Patient tile and pick another one;
+  // the × on the tile detaches the patient (clearPatient).
   attachPatient(p: Patient) {
     if (!p) return;
-    this.isChangingPatient.set(false);
     this.router.navigate([], { queryParams: { patientId: p.id }, queryParamsHandling: 'merge' });
     this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${p.id}`).subscribe({
       next: res => {
@@ -1390,7 +1381,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         collectionType: 'walkin',
         testIds: this._selected(),
         specimens: this.specimenPayload(),
-        metadataJson: appointmentId ? JSON.stringify({ appointmentId }) : null
+        // Same metadata as submit(): the appointment link AND the Trendogram
+        // choice from the billing card (it was dropped on this path before).
+        metadataJson: this.buildOrderMetadata(appointmentId)
       }));
       const targetAmount = this.total();
       const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', {
@@ -1566,10 +1559,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.refDoctorName.set('');
     this.refDoctorSuggestions.set([]);
     this.refDoctorError.set(null);
+    this.setPriority('Normal');
     this.router.navigateByUrl('/frontdesk/order');
-    setTimeout(() => {
-      this.patientSearch()?.focus();
-    }, 0);
+    setTimeout(() => this.selectScope('patient'), 0);
   }
 
   printPaidInvoice() { void this.emitPaidInvoice('print'); }
@@ -1715,7 +1707,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.invoicePreviewUrl.set(null);
   }
   ngOnDestroy() {
-    this._wideMql?.removeEventListener('change', this._onWideChange);
+    this._lgMql?.removeEventListener?.('change', this._onLgChange);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this._onVisibleResync);
     this.closeInvoicePreview();
   }
@@ -1852,25 +1844,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ── Ref hospital ─────────────────────────────────────────────────
 
-  onRefHospitalInput(value: string): void {
-    this.refHospitalName.set(value);
-    this.refHospitalError.set(null);
-    this.refHospitalOpen.set(true);
-    if (this.refHospitalDebounce) clearTimeout(this.refHospitalDebounce);
-    this.refHospitalDebounce = setTimeout(() => {
-      const q = value.trim();
-      this.api.get<string[]>(`/api/test-picker/hospitals${q ? `?q=${encodeURIComponent(q)}` : ''}`).subscribe({
-        next: names => this.refHospitalSuggestions.set(names ?? []),
-        error: () => this.refHospitalSuggestions.set([])
-      });
-    }, 200);
-  }
-
+  /** Pick (or clear, with '') the referring hospital. Changing it wipes the
+   *  doctor, since the doctor list is filtered by hospital. */
   pickRefHospital(name: string): void {
     const prev = this.refHospitalName();
     this.refHospitalName.set(name);
     this.refHospitalError.set(null);
-    this.refHospitalOpen.set(false);
     // Hospital changed — wipe the doctor since it might be from a different hospital.
     if (name !== prev) {
       this.refDoctorName.set('');
@@ -1878,43 +1857,31 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  onRefHospitalBlur(): void { setTimeout(() => this.refHospitalOpen.set(false), 150); }
-  onRefHospitalFocus(): void {
-    if (this.refHospitalSuggestions().length === 0) {
-      this.api.get<string[]>('/api/test-picker/hospitals').subscribe({
+  /** Debounced hospital lookup for the Hospital scope. */
+  private searchHospitals(q: string, immediate = false): void {
+    if (this.refHospitalDebounce) clearTimeout(this.refHospitalDebounce);
+    const run = () => {
+      const t = q.trim();
+      this.api.get<string[]>(`/api/test-picker/hospitals${t ? `?q=${encodeURIComponent(t)}` : ''}`).subscribe({
         next: names => this.refHospitalSuggestions.set(names ?? []),
-        error: () => undefined
+        error: () => this.refHospitalSuggestions.set([])
       });
-    }
-    this.refHospitalOpen.set(true);
+    };
+    if (immediate) run(); else this.refHospitalDebounce = setTimeout(run, 200);
   }
 
   // ── Ref doctor (filtered by hospital when one is picked) ──────────
 
-  /** Reception types in the ref-doctor input — fetch suggestions debounced. */
-  onRefDoctorInput(value: string): void {
-    this.refDoctorName.set(value);
-    this.refDoctorError.set(null);
-    this.refDoctorOpen.set(true);
-    if (this.refDoctorDebounce) clearTimeout(this.refDoctorDebounce);
-    this.refDoctorDebounce = setTimeout(() => this.fetchDoctorSuggestions(value), 200);
-  }
-
   pickRefDoctor(name: string): void {
     this.refDoctorName.set(name);
     this.refDoctorError.set(null);
-    this.refDoctorOpen.set(false);
   }
 
-  onRefDoctorBlur(): void {
-    // Delay so a click on a suggestion fires before the popover hides.
-    setTimeout(() => this.refDoctorOpen.set(false), 150);
-  }
-
-  onRefDoctorFocus(): void {
-    // Show recent suggestions when the field is focused, even on empty input.
-    if (this.refDoctorSuggestions().length === 0) this.fetchDoctorSuggestions('');
-    this.refDoctorOpen.set(true);
+  /** Debounced doctor lookup for the Doctor scope. */
+  private searchDoctors(q: string, immediate = false): void {
+    if (this.refDoctorDebounce) clearTimeout(this.refDoctorDebounce);
+    if (immediate) this.fetchDoctorSuggestions(q);
+    else this.refDoctorDebounce = setTimeout(() => this.fetchDoctorSuggestions(q), 200);
   }
 
   private fetchDoctorSuggestions(q: string): void {
@@ -1926,6 +1893,273 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.api.get<string[]>(`/api/test-picker/doctors${qs ? `?${qs}` : ''}`).subscribe({
       next: names => this.refDoctorSuggestions.set(names ?? []),
       error: () => this.refDoctorSuggestions.set([])
+    });
+  }
+
+  // ══ Unified search pill (Option A) ═══════════════════════════════
+  // One pill in the hero band: scope tiles (Tests / Patient / Doctor /
+  // Hospital) + ONE input + Urgent chip + cart + scan. Replaces the old
+  // patient box, the two referral boxes, the test search box and the
+  // Normal/Urgent switch. Each scope is driven by the same endpoint the old
+  // box used; the Tests scope is the old test search (setQuery).
+
+  protected readonly scopes = SEARCH_SCOPES;
+  protected readonly scopeLabels = SCOPE_LABELS;
+  /** Which thing the single input is searching right now. */
+  readonly scope = signal<SearchScope>('tests');
+  /** Typed text for the Patient / Doctor / Hospital scopes (Tests uses query()). */
+  readonly scopeQuery = signal('');
+  /** The dropdown of matches under the pill (never for Tests). */
+  readonly scopeOpen = signal(false);
+  /** Keyboard-highlighted dropdown row. */
+  readonly scopeHighlight = signal(0);
+  /** Phone: the compact scope picker menu (the tiles collapse into it). */
+  readonly scopeMenuOpen = signal(false);
+
+  /** What the input shows: the test query in Tests scope, else the scope text. */
+  readonly pillValue = computed(() => this.scope() === 'tests' ? this._query() : this.scopeQuery());
+  readonly pillPlaceholder = computed(() => SCOPE_PLACEHOLDERS[this.scope()]);
+
+  /** Can this tile be opened? Patient locks once the order exists; the
+   *  referral tiles follow the OPS-58 rule (create, or "Edit referral"). */
+  scopeEnabled(k: SearchScope): boolean {
+    switch (k) {
+      case 'tests': return !this.orderLocked();
+      case 'patient': return !this.isReadOnly() && !this.paidOrderId() && !this.editOrderId();
+      default: return this.referralInteractive() && !this.paidOrderId();
+    }
+  }
+
+  /** The chosen value shown ON a tile ('' when empty). */
+  tilePick(k: SearchScope): string {
+    switch (k) {
+      case 'patient': return patientDisplayName(this._patient());
+      case 'doctor': return this.refDoctorName().trim();
+      case 'hospital': return this.refHospitalName().trim();
+      default: return '';
+    }
+  }
+  tileLabel(k: SearchScope): string { return this.tilePick(k) || SCOPE_LABELS[k]; }
+  /** Long form for the tile tooltip / aria (patient age/sex/MRN). */
+  tileTitle(k: SearchScope): string {
+    if (k === 'patient' && this._patient()) return formatPatientInfo(this._patient());
+    const v = this.tilePick(k);
+    return v ? `${SCOPE_LABELS[k]}: ${v}` : SCOPE_LABELS[k];
+  }
+  /** × on a filled tile — shown when it is filled, not active, and editable. */
+  tileClearable(k: SearchScope): boolean {
+    return k !== 'tests' && !!this.tilePick(k) && this.scope() !== k && this.scopeEnabled(k);
+  }
+
+  /** Click a tile: make it the active scope. Patient/Doctor/Hospital open
+   *  their dropdown of matches below the pill; Tests closes it. */
+  selectScope(k: SearchScope): void {
+    this.scopeMenuOpen.set(false);
+    if (!this.scopeEnabled(k)) return;
+    this.scope.set(k);
+    this.scopeQuery.set('');
+    this.scopeHighlight.set(0);
+    this.scopeOpen.set(k !== 'tests');
+    if (k === 'patient') { this.patientResults.set([]); this.patientLoading.set(false); }
+    if (k === 'doctor') this.searchDoctors('', true);
+    if (k === 'hospital') this.searchHospitals('', true);
+    this.focusSearchInput();
+  }
+
+  /** Close the dropdown and go back to searching tests (Esc / outside click). */
+  closeScope(): void {
+    this.scopeOpen.set(false);
+    this.scopeMenuOpen.set(false);
+    this.scopeQuery.set('');
+    this.scope.set('tests');
+  }
+
+  /** × on a tile. */
+  clearScope(k: SearchScope, ev?: Event): void {
+    ev?.stopPropagation();
+    if (!this.scopeEnabled(k)) return;
+    if (k === 'patient') this.clearPatient();
+    else if (k === 'doctor') this.pickRefDoctor('');
+    else if (k === 'hospital') this.pickRefHospital('');
+  }
+
+  /** Detach the patient (the × on the Patient tile). The cart is kept — the
+   *  receptionist may have picked tests first. */
+  clearPatient(): void {
+    if (!this._patient()) return;
+    this._patient.set(null);
+    this._hasDraft.set(false);
+    this.router.navigate?.([], { queryParams: { patientId: null }, queryParamsHandling: 'merge' });
+  }
+
+  /** The single input's (input) handler. */
+  onPillInput(v: string): void {
+    const k = this.scope();
+    if (k === 'tests') { this.setQuery(v); return; }
+    this.scopeQuery.set(v);
+    this.scopeOpen.set(true);
+    this.scopeHighlight.set(0);
+    if (k === 'patient') this.searchPatients(v);
+    else if (k === 'doctor') { this.refDoctorError.set(null); this.searchDoctors(v); }
+    else if (k === 'hospital') { this.refHospitalError.set(null); this.searchHospitals(v); }
+  }
+  onPillFocus(): void { if (this.scope() !== 'tests') this.scopeOpen.set(true); }
+
+  onPillArrow(e: Event, dir: number): void {
+    if (this.scope() === 'tests') { this.onSearchArrow(e, dir); return; }
+    const n = this.scopeRows().length;
+    if (!n) return;
+    e.preventDefault();
+    this.scopeOpen.set(true);
+    this.scopeHighlight.update(i => (i + dir + n) % n);
+  }
+  onPillEnter(e: Event): void {
+    if (this.scope() === 'tests') { this.onSearchEnter(e); return; }
+    const rows = this.scopeRows();
+    if (!rows.length) return;
+    e.preventDefault();
+    this.pickScopeRow(rows[Math.min(this.scopeHighlight(), rows.length - 1)]);
+  }
+  onPillEscape(): void {
+    if (this.scope() === 'tests') this.setQuery('');
+    else this.closeScope();
+  }
+
+  /** Close the dropdown / phone menu on a click outside the pill. */
+  @HostListener('document:pointerdown', ['$event'])
+  onDocPointerDown(ev: Event): void {
+    if (!this.scopeOpen() && !this.scopeMenuOpen()) return;
+    const host = this.pillEl()?.nativeElement;
+    if (host && ev.target instanceof Node && host.contains(ev.target)) return;
+    this.closeScope();
+  }
+
+  // Patient scope — the same endpoint + ABHA rules as pf-patient-search.
+  readonly patientResults = signal<Patient[]>([]);
+  readonly patientLoading = signal(false);
+  private patientTimer?: ReturnType<typeof setTimeout>;
+  private searchPatients(v: string): void {
+    clearTimeout(this.patientTimer);
+    const q = v.trim();
+    if (q.length < 2) { this.patientResults.set([]); this.patientLoading.set(false); return; }
+    this.patientLoading.set(true);
+    this.patientTimer = setTimeout(() => {
+      this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(q)}&limit=10`).subscribe({
+        next: list => { this.patientResults.set(list ?? []); this.patientLoading.set(false); },
+        error: () => { this.patientResults.set([]); this.patientLoading.set(false); }
+      });
+    }, 220);
+  }
+
+  /** Dropdown rows for the active scope (the typed "add as new" row is last). */
+  readonly scopeRows = computed<ScopeRow[]>(() => {
+    const k = this.scope();
+    const q = this.scopeQuery().trim();
+    if (k === 'patient') {
+      return this.patientResults().map(p => ({
+        key: p.id, kind: 'match' as const, title: patientDisplayName(p),
+        meta: [
+          [p.age != null ? `${p.age}` : '', (p.sex ?? '').charAt(0).toUpperCase()].filter(Boolean).join('/'),
+          p.mrn, p.phone,
+        ].filter(Boolean).join(' · '),
+      }));
+    }
+    if (k === 'doctor' || k === 'hospital') {
+      const names = k === 'doctor' ? this.refDoctorSuggestions() : this.refHospitalSuggestions();
+      const hosp = this.refHospitalName().trim();
+      const meta = k === 'doctor' ? (hosp ? `Refers from ${hosp}` : 'Referring doctor') : 'Referring hospital';
+      const rows: ScopeRow[] = names.map(n => ({ key: n, kind: 'match' as const, title: n, meta }));
+      if (q && !names.some(n => n.trim().toLowerCase() === q.toLowerCase())) {
+        rows.push({ key: '__new__', kind: 'new', title: q, meta: `Add as a new ${k === 'doctor' ? 'referring doctor' : 'referring hospital'}` });
+      }
+      return rows;
+    }
+    return [];
+  });
+  /** Dropdown header, e.g. "DOCTOR · 3 MATCHES". */
+  readonly scopeTitle = computed(() => {
+    const n = this.scopeRows().filter(r => r.kind === 'match').length;
+    return `${SCOPE_LABELS[this.scope()].toUpperCase()} · ${n} MATCH${n === 1 ? '' : 'ES'}`;
+  });
+  /** Status line for the Patient scope (hint / searching / nothing found). */
+  readonly patientStatus = computed<'hint' | 'loading' | 'empty' | null>(() => {
+    if (this.scope() !== 'patient') return null;
+    const q = this.scopeQuery().trim();
+    if (q.length < 2) return 'hint';
+    if (this.patientLoading()) return 'loading';
+    return this.patientResults().length ? null : 'empty';
+  });
+
+  /** Pick a dropdown row: fill that tile, return the scope to Tests. */
+  pickScopeRow(row: ScopeRow): void {
+    const k = this.scope();
+    if (k === 'patient') {
+      const p = this.patientResults().find(x => x.id === row.key);
+      if (p) this.attachPatient(p);
+    } else if (k === 'doctor') {
+      this.pickRefDoctor(row.title.trim());
+    } else if (k === 'hospital') {
+      this.pickRefHospital(row.title.trim());
+    }
+    this.scope.set('tests');
+    this.scopeQuery.set('');
+    this.scopeOpen.set(false);
+    this.scopeHighlight.set(0);
+    this.focusSearchInput();
+  }
+
+  // Patient extras: register a new patient / edit the attached one — the
+  // existing registration screen (workflow + permission gated).
+  readonly canRegisterPatient = computed(() =>
+    this.process.isEnabled?.('patient_registration') !== false && this.auth.hasPermission('register_patient'));
+  newPatient(): void { this.router.navigate(['/frontdesk/patients/new']); }
+  editPatient(): void {
+    const p = this._patient();
+    if (p) this.router.navigate(['/frontdesk/patients/new'], { queryParams: { patientId: p.id } });
+  }
+
+  /** Urgent chip in the pill — the same order-priority field the old
+   *  Normal/Urgent switch set. */
+  toggleUrgent(): void {
+    if (this.isReadOnly()) return;
+    this.setPriority(this._priority() === 'Urgent' ? 'Normal' : 'Urgent');
+  }
+
+  /** Cart icon in the pill: the billing card is on screen at lg+ (bring it
+   *  into view), below that it opens the checkout drawer. */
+  openCartFromPill(): void {
+    this.closeScope();
+    if (this.isLg()) this.billCard()?.nativeElement?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    else this.toggleCart();
+  }
+
+  // Scan icon in the pill: look a patient up by ABHA QR / number (the same
+  // rules pf-patient-search's scanner used): confident match → attach it,
+  // otherwise show the matches in the Patient dropdown.
+  readonly scanning = signal(false);
+  openScanner(): void { if (this.scopeEnabled('patient')) this.scanning.set(true); }
+  onScanned(text: string): void {
+    this.scanning.set(false);
+    const abha = extractAbhaNumber(text || '');
+    const term = abha || (text || '').trim();
+    if (!term) return;
+    this.selectScope('patient');
+    this.scopeQuery.set(term);
+    this.patientLoading.set(true);
+    this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(term)}&limit=10`).subscribe({
+      next: list => {
+        this.patientLoading.set(false);
+        const arr = list ?? [];
+        const exact = abha ? arr.find(p => (p.abhaId || '').replace(/\D/g, '') === abha) : undefined;
+        const hit = exact ?? (arr.length === 1 ? arr[0] : undefined);
+        if (hit) {
+          this.patientResults.set([hit]);
+          this.pickScopeRow({ key: hit.id, kind: 'match', title: patientDisplayName(hit), meta: '' });
+          return;
+        }
+        this.patientResults.set(arr);
+      },
+      error: () => { this.patientLoading.set(false); this.patientResults.set([]); }
     });
   }
 }
