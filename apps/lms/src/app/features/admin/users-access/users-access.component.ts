@@ -21,6 +21,7 @@ import { Role, User, userDisplayName } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { PresenceService } from '../../../core/services/presence.service';
@@ -59,11 +60,52 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
     ScreenHeaderComponent,
     SegmentedComponent,
     TouchButtonComponent,
+    HeroBandComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the search and the Users / Roles switch ride
+             inside the pill; Create user / Create role sits top-right. -->
+        <pf-hero-band [back]="true"
+                      [placeholder]="tab() === 'users' ? 'Search users — name, username, email…' : 'Search roles…'"
+                      [value]="search()" (valueChange)="onSearch($event)">
+          <span band-inline class="pf-ua-count">
+            @if (tab() === 'users') {
+              {{ filteredUsers().length }} user{{ filteredUsers().length === 1 ? '' : 's' }}
+            } @else {
+              {{ filteredRoles().length }} role{{ filteredRoles().length === 1 ? '' : 's' }}
+            }
+          </span>
+          <ng-container band-tools>
+            <pf-segmented size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="setTab($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            @if (tab() === 'users') {
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openInvite()"
+                      title="Create user" aria-label="Create user">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                Create user
+              </button>
+            } @else {
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openNewRole()"
+                      title="Create role" aria-label="Create role">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                Create role
+              </button>
+            }
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Users & Access"
         subtitle="Create users, assign roles, and control permissions across your branches.">
@@ -90,7 +132,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         }
       </pf-screen-header>
 
-      <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+      <div class="pf-classic-only flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div class="pf-tabbar">
           <pf-segmented
             [options]="tabOptions"
@@ -113,8 +155,10 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         </div>
       </div>
 
+      <!-- The grid fills the band body and scrolls itself (no page scroll). -->
+      <div class="pf-band-body pf-band-body--fill">
       @if (tab() === 'users') {
-        <div class="w-full h-[calc(100vh-240px)] min-h-[420px] rounded-2xl overflow-hidden border shadow-sm"
+        <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
              style="border-color: var(--border-color, rgba(0,0,0,0.1));">
           <ag-grid-angular
             style="width: 100%; height: 100%;"
@@ -127,7 +171,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
           </ag-grid-angular>
         </div>
       } @else {
-        <div class="w-full h-[calc(100vh-240px)] min-h-[420px] rounded-2xl overflow-hidden border shadow-sm"
+        <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
              style="border-color: var(--border-color, rgba(0,0,0,0.1));">
           <ag-grid-angular
             style="width: 100%; height: 100%;"
@@ -140,10 +184,19 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
           </ag-grid-angular>
         </div>
       }
+      </div>
     </section>
   `,
   styles: [`
+    /* Classic: the grid sizes off the viewport; new design: it fills the band body. */
+    .pf-ua-grid { height: calc(100vh - 240px); min-height: 420px; }
+    :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; }
+    .pf-ua-count {
+      font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      color: var(--text-muted); white-space: nowrap; padding: 0 6px;
+    }
     @media (max-width: 640px) {
+      .pf-ua-count { display: none; }
       :host input.pf-input { font-size: 16px; }
       :host .pf-tabbar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
@@ -154,7 +207,7 @@ export class UsersAccessComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly theme = inject(ThemeService);
+  protected readonly theme = inject(ThemeService);
   private readonly webrtc = inject(WebrtcService);
   private readonly signaling = inject(SignalingService);
   private readonly presence = inject(PresenceService);
