@@ -516,6 +516,22 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         border-top: 1px solid var(--header-border);
         padding-bottom: env(safe-area-inset-bottom, 0px);
         z-index: 40;
+        /* The docked bar carries the SAME sweep as the hero band (owner),
+           mirrored so the violet end sits on the same side — the two read
+           as one frame around the page instead of a tinted top and a flat
+           grey floor. Stops match hero-band.component.ts; keep them in
+           step if either moves. */
+        background-color: #ffffff;
+        background-image: linear-gradient(90deg, rgba(125, 28, 182, 0.18) 0%, rgba(173, 75, 201, 0.18) 37%,
+                                          rgba(175, 34, 201, 0.18) 68%, rgba(162, 25, 110, 0.18) 100%);
+      }
+      :host-context(.dark.design-new.nav-bottom) .pf-chrome {
+        background-color: #1a1424;
+        background-image:
+          linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(10, 8, 16, 0.38) 100%),
+          linear-gradient(90deg, rgba(125, 28, 182, 0.34) 0%, rgba(173, 75, 201, 0.26) 37%,
+                          rgba(175, 34, 201, 0.25) 68%, rgba(162, 25, 110, 0.32) 100%);
+        border-top-color: rgba(168, 85, 247, 0.22);
       }
       /* One bottom surface only: the phone pill / iPad rail steps aside. */
       :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }
