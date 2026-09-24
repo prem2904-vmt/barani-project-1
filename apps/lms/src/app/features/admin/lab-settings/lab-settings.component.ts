@@ -14,6 +14,12 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+
+/** Band pill tabs — the 13 section cards grouped by what they govern. */
+export type LabSettingsTab = 'collection' | 'queues' | 'rules';
 
 interface AutoAssignConfig {
   id?: string;
@@ -31,16 +37,27 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): no search here — the section cards are grouped into
+             tabs in a tabs-only pill. Every change autosaves, so no actions. -->
+        <pf-hero-band [back]="true" backTo="/lab/settings" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Lab"
         title="Lab settings"
         subtitle="Control how samples are auto-assigned to techs and whether supervisors can claim without a scan.">
       </pf-screen-header>
 
+      <div class="pf-band-body">
       <!-- This page has no Save button by design: every change persists the
            moment you make it (OPS-15). Make that explicit so it doesn't read as
            unsaved. -->
@@ -50,6 +67,7 @@ interface AutoAssignConfig {
         <span>Changes are saved automatically</span>
       </div>
 
+      @if (showSec('collection')) {
       <!-- Counters & collection — now driven by the Workflow (single source) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Counters &amp; collection</h3>
@@ -68,7 +86,9 @@ interface AutoAssignConfig {
           <button type="button" class="text-[12px] font-semibold text-violet-400 hover:text-violet-300" (click)="goWorkflow()">Edit in Workflow →</button>
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('collection')) {
       <!-- Sample identification mode (tenant-wide) — governs the lab screens. -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Sample identification</h3>
@@ -90,7 +110,9 @@ interface AutoAssignConfig {
           }
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('queues')) {
       <!-- Queue focus (per-branch) — how the lab worklists group work. -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Queue focus</h3>
@@ -123,7 +145,9 @@ interface AutoAssignConfig {
           </button>
         }
       </pf-tile>
+      }
 
+      @if (showSec('queues')) {
       <!-- Lab structure (per-branch): integrated / standalone / auto -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Lab structure</h3>
@@ -154,7 +178,9 @@ interface AutoAssignConfig {
           leave it blank for no prefix.
         </p>
       </pf-tile>
+      }
 
+      @if (showSec('collection')) {
       <!-- Sample ID — short sample barcode number width (tenant-wide) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Sample ID</h3>
@@ -176,7 +202,9 @@ interface AutoAssignConfig {
           </p>
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('rules')) {
       <!-- Calculation constants (tenant-wide) — feed calculated results. -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Calculation constants</h3>
@@ -210,7 +238,9 @@ interface AutoAssignConfig {
           </label>
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('rules')) {
       <!-- No-scan override (tenant-wide) -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
@@ -230,7 +260,9 @@ interface AutoAssignConfig {
           </label>
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('rules')) {
       <!-- Inventory master switch — only when the tenant is entitled to the
            inventory module, so an admin can't turn on a module they don't have. -->
       @if (entitlements.moduleEnabled('inventory')) {
@@ -251,7 +283,9 @@ interface AutoAssignConfig {
         </div>
       </pf-tile>
       }
+      }
 
+      @if (showSec('rules')) {
       <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow. -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-ls__title">Require full payment to progress</h3>
@@ -272,7 +306,9 @@ interface AutoAssignConfig {
           }
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('collection')) {
       <!-- Specimen label CODE — an org-wide policy. Label SIZE + printer + darkness
            are per-station (a user's Print settings), never stored in the cloud. -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
@@ -297,7 +333,9 @@ interface AutoAssignConfig {
         </div>
 
       </pf-tile>
+      }
 
+      @if (showSec('rules')) {
       <!-- Require validation for all results -->
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <div class="flex items-start justify-between gap-4">
@@ -314,7 +352,9 @@ interface AutoAssignConfig {
           </label>
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('rules')) {
       <!-- Front-desk Payments-due tab visibility -->
       <pf-tile tone="default" padding="lg" class="block">
         <div class="flex items-start justify-between gap-4">
@@ -331,7 +371,9 @@ interface AutoAssignConfig {
           </label>
         </div>
       </pf-tile>
+      }
 
+      @if (showSec('queues')) {
       <!-- Auto-assign per department -->
       <pf-tile tone="default" padding="lg" class="block">
         <h3 class="pf-ls__title">Auto-assign by department</h3>
@@ -433,6 +475,8 @@ interface AutoAssignConfig {
           </div>
         }
       </pf-tile>
+      }
+      </div>
     </section>
   `,
   styles: [`
@@ -597,6 +641,18 @@ export class LabSettingsComponent implements OnInit {
   protected readonly entitlements = inject(TenantEntitlementsService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill tabs (new design). Classic shows every card, as before. */
+  readonly tabOptions: SegmentedOption<LabSettingsTab>[] = [
+    { value: 'collection', label: 'Collection & IDs' },
+    { value: 'queues', label: 'Queues & assignment' },
+    { value: 'rules', label: 'Rules & gates' },
+  ];
+  readonly tab = signal<LabSettingsTab>('collection');
+  showSec(key: LabSettingsTab): boolean {
+    return !this.theme.isNewDesign() || this.tab() === key;
+  }
 
   private readonly _departments = signal<Department[]>([]);
   private readonly _roles = signal<Role[]>([]);
