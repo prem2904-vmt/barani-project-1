@@ -663,8 +663,14 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
        390px screen, and the tray icon says the same thing. */
     @media (max-width: 640px) {
       :host-context(.design-new) .pf-rs-row__btn {
-        font-size: 0; gap: 0; padding: 0; width: 46px; min-width: 46px;
+        font-size: 0; gap: 0; padding: 0;
+        /* A ROUNDED SQUARE, not a circle: the pill radius it inherits turns
+           a label-less button into a big ring that outweighs the two lines
+           of text beside it. Matches the row-action shape used elsewhere. */
+        width: 40px; min-width: 40px; height: 40px;
+        border-radius: 12px;
         display: inline-flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
       }
       :host-context(.design-new) .pf-rs-row__btn-ico { display: block; }
     }
