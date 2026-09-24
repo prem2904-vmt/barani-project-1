@@ -16,6 +16,8 @@ import { Patient, formatPatientInfo } from '../../../shared/models/patient.model
 import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { PriceFlagComponent } from '../../../shared/primitives/price-flag.component';
+import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, taxSlabOf } from '../../../shared/utils/test-pricing';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -43,7 +45,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, PriceFlagComponent, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -145,7 +147,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.api.get<Test[]>('/api/tests/?activeOnly=true').subscribe({
       // Belt and braces: even if a stale cache or future endpoint slips an
       // inactive row through, it never reaches the picker.
-      next: l => this._tests.set((l ?? []).filter(t => t.isActive !== false)),
+      // A test the tenant/branch doesn't offer (pricing table `is_offered`
+      // = false) is not orderable either — ordering it would 409.
+      next: l => this._tests.set((l ?? []).filter(t => t.isActive !== false && isOffered(t))),
       error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
     });
   }
@@ -324,6 +328,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  falls back to a toast so nothing fails silently. */
   private surfaceMutationError(e: unknown): void {
     const err = ApiError.from(e);
+    if (isNotOfferedError(err)) {
+      this.toasts.error('One of these tests is not offered at this branch any more. Remove it and try again.');
+      this.loadOrderableTests();
+      return;
+    }
     switch (err.field) {
       case 'refHospitalName': this.refHospitalError.set(err.message); return;
       case 'refDoctorName':   this.refDoctorError.set(err.message);   return;
@@ -605,24 +614,46 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return '';
   }
 
-  readonly subtotal = computed(() => {
+  /** Price shown and totalled for a test: the DTO's effective price for the
+   *  acting branch (pricing table), ₹1 when nobody has priced it. */
+  priceOf(t: Test | null | undefined): number { return effectivePrice(t); }
+  /** Still at the ₹1 default → the "₹1 · not priced yet" marker. */
+  notPriced(t: Test | null | undefined): boolean { return isPriceDefault(t); }
+  isNotPriced(id: string): boolean { return isPriceDefault(this._tests().find(x => x.id === id)); }
+
+  /** The billed lines of the cart: every selected test except a member that a
+   *  package/profile in the cart already covers (billed within that package,
+   *  #38–44). */
+  private readonly billedLines = computed<Test[]>(() => {
     const all = this._tests();
     const covered = this.coveredMemberIds();
-    return this._selected()
-      .map(id => {
-        const t = all.find(x => x.id === id);
-        if (!t) return 0;
-        // A member individual test covered by a package/profile in the cart is
-        // billed within that package — don't double-charge it (#38–44).
-        if (t.type !== 'package' && covered.has(id)) return 0;
-        return t.price ?? 0;
-      })
-      .reduce((a, b) => a + b, 0);
+    const out: Test[] = [];
+    for (const id of this._selected()) {
+      const t = all.find(x => x.id === id);
+      if (!t) continue;
+      if (t.type !== 'package' && covered.has(id)) continue;
+      out.push(t);
+    }
+    return out;
   });
+
+  readonly subtotal = computed(() =>
+    this.billedLines().reduce((a, t) => a + effectivePrice(t), 0));
   /** Tenant GST master switch — when off, the cart shows no tax (mirrors the
    *  backend bill, which bills at a zero slab → Bill of Supply). */
   readonly gstEnabled = signal(true);
-  readonly gst = computed(() => this.gstEnabled() ? Math.round(this.subtotal() * 0.18) : 0);
+  /** GST preview = Σ per line at that test's own `taxSlab` (the bill's rule),
+   *  not a flat rate. */
+  readonly gst = computed(() => {
+    if (!this.gstEnabled()) return 0;
+    const sum = this.billedLines().reduce((a, t) => a + lineGst(effectivePrice(t), taxSlabOf(t)), 0);
+    return Math.round(sum * 100) / 100;
+  });
+  /** "GST · 5%" when every taxed line shares one slab, else plain "GST". */
+  readonly gstLabel = computed(() => {
+    const slabs = new Set(this.billedLines().map(t => taxSlabOf(t)).filter(x => x > 0));
+    return slabs.size === 1 ? `GST · ${[...slabs][0]}%` : 'GST';
+  });
 
   // ── Discount (cart preview; carried into billing) ──────────────
   /** Admin "Allow discounts" switch — hides the field entirely when off. */
@@ -722,9 +753,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       const allCovered = covered.every(id => memberSet.has(id));
       if (!allCovered) continue;
       const individualSum = covered
-        .map(id => all.find(t => t.id === id)?.price ?? 0)
+        .map(id => effectivePrice(all.find(t => t.id === id)))
         .reduce((a, b) => a + b, 0);
-      const savings = Math.max(0, individualSum - pkg.price);
+      const savings = Math.max(0, individualSum - effectivePrice(pkg));
       out.push({
         package: pkg,
         coveredIds: covered,
@@ -734,7 +765,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
     // Cheapest-first per the user's preference: low value → high value.
-    return out.sort((a, b) => a.package.price - b.package.price);
+    return out.sort((a, b) => effectivePrice(a.package) - effectivePrice(b.package));
   });
 
   ngAfterViewInit() {

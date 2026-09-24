@@ -52,6 +52,9 @@ interface OgGroupLite {
 }
 import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../../shared/utils/reference-range';
 import { NavBackService } from '../../../../core/services/nav-back.service';
+import { TestPricingService } from '../../../../core/services/test-pricing.service';
+import { PriceFlagComponent } from '../../../../shared/primitives/price-flag.component';
+import { DEFAULT_TEST_PRICE, NOT_PRICED_LABEL, effectivePrice, isPriceDefault } from '../../../../shared/utils/test-pricing';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -107,7 +110,7 @@ function makeEmptyDraft(): DraftTest {
     name: '',
     type: 'individual',
     flow: 'direct',
-    price: 0,
+    price: DEFAULT_TEST_PRICE,
     taxSlab: 0,
     departmentId: '',
     tatHours: 24,
@@ -151,7 +154,8 @@ function makeEmptyDraft(): DraftTest {
     TestConsumablesComponent,
     DragDropModule,
     ReportColumnsEditorComponent,
-    ReportPdfPreviewComponent
+    ReportPdfPreviewComponent,
+    PriceFlagComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-editor.component.html',
@@ -166,6 +170,20 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
+  private readonly pricing = inject(TestPricingService);
+
+  /** The price as loaded from the pricing table (effective for the acting
+   *  branch). A save writes the price ONLY when the draft differs from this,
+   *  through the bulk price endpoint — the test save never carries it. New
+   *  test = the ₹1 default. */
+  private readonly _savedPrice = signal<{ price: number; taxSlab: number; isDefault: boolean }>(
+    { price: DEFAULT_TEST_PRICE, taxSlab: 0, isDefault: true });
+  /** Still at the ₹1 default and not being changed → "₹1 · not priced yet". */
+  readonly priceIsDefault = computed(() => {
+    const sp = this._savedPrice();
+    const d = this._draft();
+    return sp.isDefault && Number(d.price) === sp.price && Number(d.taxSlab) === sp.taxSlab;
+  });
 
   // ── Shared option groups (Test Master → Option groups) ─────────────
   // A dropdown parameter picks its vocabulary from these; the values render
@@ -948,7 +966,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       const sample = [(d.sampleType ?? '').trim(), tube].filter(Boolean).join(' · ');
       chips.push({ k: 'Sample', v: sample || '—', sec: 'pricing' });
     }
-    chips.push({ k: 'Price', v: '₹' + (d.price ?? 0).toFixed(2), sec: 'pricing' });
+    chips.push({ k: 'Price', v: this.priceIsDefault() ? NOT_PRICED_LABEL : '₹' + (d.price ?? 0).toFixed(2), sec: 'pricing' });
     chips.push({ k: 'TAT', v: (d.tatHours ?? 0) + ' hrs', sec: 'pricing' });
     if (d.type === 'individual') {
       chips.push({ k: 'Fasting', v: d.fastingRequired ? 'Yes' : 'No', sec: 'pricing' });
@@ -1535,9 +1553,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return m;
   });
 
+  /** A member's effective price (₹1 when nobody priced it). */
+  priceOf(t: Test): number { return effectivePrice(t); }
+  isDefaultPriced(t: Test): boolean { return isPriceDefault(t); }
+
   readonly packageMembersTotal = computed(() => {
     const by = this._memberById();
-    return this.packageItems().reduce((s, id) => s + (by.get(id)?.price ?? 0), 0);
+    return this.packageItems().reduce((s, id) => s + (by.has(id) ? effectivePrice(by.get(id)) : 0), 0);
   });
 
   readonly filteredPackageCatalogByDept = computed(() => {
@@ -1593,6 +1615,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly parentRoute = computed(() => '/admin/tests?type=' + (this.draft().type || 'individual'));
 
   ngOnInit() {
+    this.pricing.ensureLoaded();
     this.loadOptionGroups();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
@@ -1629,6 +1652,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private hydrateFrom(t: Test) {
+    this._savedPrice.set({ price: effectivePrice(t), taxSlab: Number(t.taxSlab) || 0, isDefault: isPriceDefault(t) });
     try {
       this._calcInfo.set(t.calculation ? JSON.parse(t.calculation) : null);
     } catch {
@@ -1636,7 +1660,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this._draft.set({
       id: t.id, name: t.name, type: t.type, flow: t.flow,
-      price: t.price, taxSlab: t.taxSlab,
+      price: effectivePrice(t), taxSlab: Number(t.taxSlab) || 0,
       departmentId: t.departmentId ?? '', tatHours: t.tatHours,
       sampleType: t.sampleType ?? '', tubeColor: t.tubeColor ?? '',
       testCode: t.testCode ?? '', shortName: t.shortName ?? '', section: t.section ?? '',
@@ -1944,9 +1968,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
           : undefined);
 
     const outsourced = d.type !== 'package' && !!d.outsourcedVendorId;
+    // No price / tax here: the pricing table owns them (saved separately
+    // below through the bulk price endpoint, only when changed).
     const body = {
       name: d.name, type: d.type, flow: d.flow,
-      price: d.price, taxSlab: d.taxSlab,
       departmentId: d.type === 'package' ? undefined : (d.departmentId || undefined),
       tatHours: d.tatHours, sampleType: d.type === 'package' ? undefined : (d.sampleType || undefined),
       tubeColor: d.type === 'package' ? undefined : d.tubeColor,
@@ -1972,20 +1997,44 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this._saving.set(true);
     if (d.id) {
       this.api.patch<Test>(`/api/tests/${d.id}`, body).subscribe({
-        next: () => { this._saving.set(false); this.dirty.set(false); this.toasts.success('Saved'); },
+        next: () => this.savePriceThen(d.id!, d, () => this.toasts.success('Saved')),
         error: e => this.handleSaveError(e)
       });
     } else {
       this.api.post<Test>('/api/tests/', body).subscribe({
-        next: t => {
-          this._saving.set(false); this.dirty.set(false); this.toasts.success('Created');
+        next: t => this.savePriceThen(t.id, d, () => {
+          this.toasts.success('Created');
           // Stay in the editor — future saves are updates on the new id.
           this.router.navigate(['/admin/tests', t.id, 'edit'],
             { queryParams: { type: d.type }, replaceUrl: true });
-        },
+        }),
         error: e => this.handleSaveError(e)
       });
     }
+  }
+
+  /** Second half of a save: write the price to the pricing table (bulk
+   *  endpoint, acting branch when isolation is ON) when it changed, then
+   *  finish. A price failure keeps the editor dirty and marks the field —
+   *  the test content is already saved. */
+  private savePriceThen(testId: string, d: DraftTest, done: () => void) {
+    const sp = this._savedPrice();
+    const price = Math.max(0, Number(d.price) || 0);
+    const taxSlab = Math.max(0, Number(d.taxSlab) || 0);
+    const finish = () => { this._saving.set(false); this.dirty.set(false); done(); };
+    if (price === sp.price && taxSlab === sp.taxSlab) { finish(); return; }
+    this.pricing.save([{ testId, price, taxSlab }]).subscribe({
+      next: () => {
+        this._savedPrice.set({ price, taxSlab, isDefault: false });
+        finish();
+      },
+      error: e => {
+        this._saving.set(false);
+        const msg = ApiError.from(e).message;
+        this._fieldErrors.update(m => ({ ...m, price: msg }));
+        this.toasts.error(`Test saved, but the price was not: ${msg}`);
+      }
+    });
   }
 
   private handleSaveError(e: unknown) {

@@ -3,7 +3,7 @@ import { TubeColorEditorComponent } from '../tube-color-editor.component';
 import { PfSelectOption } from '../../../../shared/primitives/select.component';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { Observable, forkJoin } from 'rxjs';
 import {
   AllCommunityModule,
   ColDef,
@@ -32,6 +32,10 @@ import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-head
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { OptionGroupsPanelComponent } from './option-groups-panel.component';
 import { MicroMastersPanelComponent } from './micro-masters-panel.component';
+import { PricingComponent } from '../../pricing/pricing.component';
+import { TestPricingService } from '../../../../core/services/test-pricing.service';
+import { notOfferedElement, priceFlagElement } from '../../../../shared/primitives/price-flag.component';
+import { isOffered, isPriceDefault } from '../../../../shared/utils/test-pricing';
 // (ViewChild refs let the header Create button drive the active panel)
 
 // AG Grid v33+ requires explicit module registration (once per app).
@@ -95,6 +99,7 @@ export type TestRow = Test & {
     TouchButtonComponent,
     OptionGroupsPanelComponent,
     MicroMastersPanelComponent,
+    PricingComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './tests.component.html',
@@ -107,6 +112,7 @@ export class TestsComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly theme = inject(ThemeService);
   private readonly dialog = inject(DialogService);
+  private readonly pricing = inject(TestPricingService);
 
   readonly views: { value: TestType; label: string }[] = [
     { value: 'individual', label: 'Individual' },
@@ -118,6 +124,9 @@ export class TestsComponent implements OnInit {
   readonly ogView = signal(false);
   /** Microbiology view — specimen/antibiotic/CLSI masters replace the grid. */
   readonly microView = signal(false);
+  /** Pricing view — the per-tenant pricing table (bulk edit, branch picker
+   *  when isolation is ON) replaces the grid. */
+  readonly pricingView = signal(false);
   @ViewChild(MicroMastersPanelComponent) private microPanel?: MicroMastersPanelComponent;
   @ViewChild(OptionGroupsPanelComponent) private ogPanel?: OptionGroupsPanelComponent;
   private readonly _type = signal<TestType>('individual');
@@ -147,6 +156,7 @@ export class TestsComponent implements OnInit {
       next: r => {
         this.restoring.set(false);
         this._dirty.set(new Map());
+        this._priceDirty.set(new Map());
         this.toasts.success(`Catalogue restored — ${r.cloned} default tests loaded (${r.deleted} removed, ${r.parked} archived).`);
         this.loadTests();
         this.loadDepartments();
@@ -162,7 +172,11 @@ export class TestsComponent implements OnInit {
   /** Pending edits keyed by the row's REAL test id (`data.id`), each a map of
    *  `{ field: newValue }` merged across cells. Flushed by `saveAll()`. */
   private readonly _dirty = signal<Map<string, Record<string, unknown>>>(new Map());
-  readonly dirtyCount = computed(() => this._dirty().size);
+  /** Pending PRICE edits (testId → ₹). Prices never ride the test PATCH: they
+   *  flush through the pricing table's bulk endpoint (single source). */
+  private readonly _priceDirty = signal<Map<string, number>>(new Map());
+  readonly dirtyCount = computed(() =>
+    new Set([...this._dirty().keys(), ...this._priceDirty().keys()]).size);
 
   /** Effective (pending-edit-aware) trimmed test code for a row. */
   private effectiveCode(t: Test): string {
@@ -233,7 +247,9 @@ export class TestsComponent implements OnInit {
   /** Stable row identity keeps expansion state + row animation coherent. */
   readonly getRowId = (p: GetRowIdParams<TestRow>) => p.data._key ?? p.data.id;
 
-  protected getRowStyle = (): RowStyle | undefined => undefined;
+  /** A test this tenant/branch doesn't offer stays listed, greyed out. */
+  protected getRowStyle = (p: RowClassParams<TestRow>): RowStyle | undefined =>
+    p.data && !isOffered(p.data) ? { opacity: '0.55' } : undefined;
 
   private gridApi?: GridApi<TestRow>;
 
@@ -406,7 +422,7 @@ export class TestsComponent implements OnInit {
             return tColor ? `Container: ${tColor.label}` : undefined;
           },
         },
-        { headerName: 'Name', field: 'name', editable: true, minWidth: 180, flex: 2, pinned: 'left' },
+        { headerName: 'Name', field: 'name', editable: true, minWidth: 180, flex: 2, pinned: 'left', cellRenderer: this.plainNameRenderer },
         { headerName: 'Short', field: 'shortName', editable: true, minWidth: 120 },
         { headerName: 'Section', field: 'section', editable: true, minWidth: 130 },
         {
@@ -531,15 +547,50 @@ export class TestsComponent implements OnInit {
     return wrap;
   };
 
+  /** Price cell = the acting branch's EFFECTIVE price from the pricing
+   *  table. Edits are held in `_priceDirty` and flushed through the bulk
+   *  price endpoint — never the test row (a price is not a test change). A
+   *  test still at the ₹1 default shows the "₹1 · not priced yet" pill. */
   private priceColDef(editable: boolean): ColDef<TestRow> {
     return {
-      headerName: 'Price (₹)', field: 'price', editable, minWidth: 110, maxWidth: 150,
+      headerName: 'Price (₹)', field: 'price', editable, minWidth: 150, maxWidth: 190,
       cellEditor: 'agNumberCellEditor',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) ? Math.max(0, n) : p.oldValue; },
       valueFormatter: p => (p.value == null ? '' : '₹' + Number(p.value).toLocaleString('en-IN')),
       cellStyle: { fontWeight: '600' },
+      cellClassRules: { 'pf-not-priced': p => this.showsDefaultPrice(p.data) },
+      cellRenderer: this.priceCellRenderer,
     };
   }
+
+  /** Still at the ₹1 default AND not being edited right now. */
+  showsDefaultPrice(t?: TestRow): boolean {
+    return !!t && isPriceDefault(t) && !this._priceDirty().has(t.id);
+  }
+
+  private priceCellRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;height:100%;min-width:0;';
+    if (!params.data) return wrap;
+    if (this.showsDefaultPrice(params.data)) {
+      wrap.appendChild(priceFlagElement());
+    } else {
+      wrap.textContent = params.valueFormatted ?? String(params.value ?? '');
+    }
+    return wrap;
+  };
+
+  /** Individual-view name cell: the name plus a quiet "Not offered here" tag. */
+  private plainNameRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:8px;height:100%;min-width:0;';
+    const name = document.createElement('span');
+    name.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    name.textContent = params.value ?? params.data?.name ?? '';
+    wrap.appendChild(name);
+    if (params.data && !isOffered(params.data)) wrap.appendChild(notOfferedElement());
+    return wrap;
+  };
 
   private kindLabel(t?: TestRow): string {
     if (!t) return '';
@@ -627,6 +678,7 @@ export class TestsComponent implements OnInit {
     label.className = 'pf-tm-tree-name' + (data?._hasChildren ? ' pf-tm-tree-name--bundle' : '');
     label.textContent = data?.name ?? '';
     wrap.appendChild(label);
+    if (data && !isOffered(data)) wrap.appendChild(notOfferedElement());
     return wrap;
   };
 
@@ -639,21 +691,25 @@ export class TestsComponent implements OnInit {
       // Deep link from the test editor's "Edit group…" prompt.
       if (params['view'] === 'option-groups') this.ogView.set(true);
       if (params['view'] === 'microbiology') this.microView.set(true);
+      if (params['view'] === 'pricing') this.pricingView.set(true);
     });
     this.loadTests();
     this.loadDepartments();
+    this.pricing.ensureLoaded();
   }
 
   onGridReady(e: GridReadyEvent<TestRow>) {
     this.gridApi = e.api;
   }
 
-  openOgView() { this.microView.set(false); this.ogView.set(true); }
-  openMicroView() { this.ogView.set(false); this.microView.set(true); }
+  openOgView() { this.microView.set(false); this.pricingView.set(false); this.ogView.set(true); }
+  openMicroView() { this.ogView.set(false); this.pricingView.set(false); this.microView.set(true); }
+  openPricingView() { this.ogView.set(false); this.microView.set(false); this.pricingView.set(true); }
 
   setType(t: TestType) {
     this.ogView.set(false);
     this.microView.set(false);
+    this.pricingView.set(false);
     this._type.set(t);
     this._selectedDept.set(null);
     this.router.navigate([], {
@@ -731,7 +787,13 @@ export class TestsComponent implements OnInit {
     if (e.newValue === e.oldValue) return;
 
     const id = e.data.id;
-    const value = field === 'price' || field === 'tatHours' ? Number(e.newValue) : e.newValue;
+    if (field === 'price') {
+      const n = Number(e.newValue);
+      this._priceDirty.update(prev => new Map(prev).set(id, Number.isFinite(n) ? Math.max(0, n) : 0));
+      this.gridApi?.refreshCells({ columns: ['price'], force: true });
+      return;
+    }
+    const value = field === 'tatHours' ? Number(e.newValue) : e.newValue;
 
     this._dirty.update(prev => {
       const next = new Map(prev);
@@ -747,7 +809,8 @@ export class TestsComponent implements OnInit {
   saveAll() {
     if (this.saving()) return;
     const dirty = this._dirty();
-    if (dirty.size === 0) return;
+    const prices = this._priceDirty();
+    if (dirty.size === 0 && prices.size === 0) return;
 
     const seen = new Map<string, string>();
     for (const t of this._tests()) {
@@ -764,13 +827,20 @@ export class TestsComponent implements OnInit {
     }
 
     const entries = [...dirty.entries()];
-    const count = entries.length;
+    const count = this.dirtyCount();
+    // Content edits PATCH the test; price edits go to the pricing table in ONE
+    // bulk call (acting branch when isolation is ON) — never on the test row.
+    const calls: Observable<unknown>[] = entries.map(([id, fields]) => this.api.patch<Test>(`/api/tests/${id}`, fields));
+    if (prices.size > 0) {
+      calls.push(this.pricing.save([...prices.entries()].map(([testId, price]) => ({ testId, price }))));
+    }
     this.saving.set(true);
-    forkJoin(entries.map(([id, fields]) => this.api.patch<Test>(`/api/tests/${id}`, fields))).subscribe({
+    forkJoin(calls).subscribe({
       next: () => {
         this.saving.set(false);
         this.toasts.success(`Saved ${count} change${count === 1 ? '' : 's'}`);
         this._dirty.set(new Map());
+        this._priceDirty.set(new Map());
         this.loadTests();
       },
       error: e => {
@@ -782,6 +852,7 @@ export class TestsComponent implements OnInit {
 
   discardChanges() {
     this._dirty.set(new Map());
+    this._priceDirty.set(new Map());
     this.loadTests();
   }
 

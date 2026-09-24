@@ -28,6 +28,7 @@ import { Patient, patientDisplayName, formatPatientInfo } from "../../models/pat
 import { Appointment } from "../../models/appointment.model";
 import { Test } from "../../models/test.model";
 import { filterTestList, matchTestSearch } from "../../utils/test-search";
+import { isOffered } from "../../utils/test-pricing";
 import { AvatarComponent } from "../../primitives/avatar.component";
 import { PatientSearchComponent } from "../patient-search/patient-search.component";
 import { LoadingLogoComponent } from "../loading-logo/loading-logo.component";
@@ -590,7 +591,8 @@ export class AppointmentBookingModalComponent {
    *  active tests by name. Limited to 25 hits so the list stays a
    *  scannable strip rather than a wall. */
   readonly filteredTests = computed<Test[]>(() => {
-    const active = this._tests().filter((t) => t.isActive);
+    // Not offered at this branch (pricing table) → not bookable either.
+    const active = this._tests().filter((t) => t.isActive && isOffered(t));
     return filterTestList(active, this.testQuery()).slice(0, 25);
   });
   /** Resolved Test objects for the chips above the picker. */

@@ -9,11 +9,13 @@ import { ReportLayoutService } from '../../../../core/services/report-layout.ser
 import { AuthService } from '../../../../core/auth/auth.service';
 import { NavBackService } from '../../../../core/services/nav-back.service';
 import { ThemeService } from '../../../../core/services/theme.service';
+import { TestPricingService } from '../../../../core/services/test-pricing.service';
 
 /**
  * Test Master single-source — Stage 1 safety net for the TEST EDITOR's
- * load → save round-trip. TODAY one PATCH /api/tests/{id} carries price/tax,
- * the flat unit + adultReferenceRange (derived from a single band), the
+ * load → save round-trip. One PATCH /api/tests/{id} carries the content —
+ * NOT price/tax (phase 2: those go to the pricing table through
+ * TestPricingService → PATCH /api/tests/prices/bulk, only when changed) — the flat unit + adultReferenceRange (derived from a single band), the
  * TEST-LEVEL critical pair ("test-wide alarm"), the test-level methodology
  * and the sampleType column — all on the tenant's own test row.
  */
@@ -31,7 +33,7 @@ const baseTest = (over: any = {}) => ({
   ...over,
 });
 
-function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts?: any[]; patchErr?: any } = {}) {
+function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts?: any[]; patchErr?: any; priceErr?: any } = {}) {
   const id = opts.id === undefined ? 't1' : opts.id;
   const api = {
     get: vi.fn((url: string) => {
@@ -51,8 +53,13 @@ function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts
     getTestLayout: vi.fn(async () => ({ sections: [], configured: false })),
   };
   const router = { navigate: vi.fn() };
+  const pricing = {
+    save: vi.fn(() => (opts.priceErr ? throwError(() => opts.priceErr) : of({}))),
+    ensureLoaded: vi.fn(), isolationOn: () => false,
+  };
   TestBed.configureTestingModule({
     providers: [
+      { provide: TestPricingService, useValue: pricing },
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: toasts },
       { provide: ReportLayoutService, useValue: layout },
@@ -66,7 +73,7 @@ function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts
   });
   const c = TestBed.runInInjectionContext(() => new TestEditorComponent()) as any;
   c.ngOnInit();
-  return { c, api, toasts, router };
+  return { c, api, toasts, router, pricing };
 }
 
 const lastPatchBody = (api: any) => api.patch.mock.calls.at(-1)[1];
@@ -82,12 +89,13 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
     expect(c.fields().map((f: any) => f.name)).toEqual(['sodium']);
   });
 
-  it('save PATCHes /api/tests/{id} with price, tax, methodology, sampleType, unit', () => {
-    const { c, api } = make();
+  it('save PATCHes /api/tests/{id} with methodology, sampleType, unit (no price) — unchanged price writes nothing', () => {
+    const { c, api, pricing } = make();
     c.saveTest();
     expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', expect.anything());
+    expect(pricing.save).not.toHaveBeenCalled();
     expect(lastPatchBody(api)).toMatchObject({
-      price: 250, taxSlab: 0, methodology: 'ISE',
+      methodology: 'ISE',
       sampleType: 'Serum', unit: 'mmol/L', resultType: 'numeric', reportFormat: 'tabular', testCode: 'BIO019',
     });
   });
@@ -114,11 +122,11 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
     expect(body.sampleType).toBe('Serum');       // the column is the specimen
   });
 
-  it('a package save drops sampleType/methodology/criticals/unit but still sends price', () => {
+  it('a package save drops sampleType/methodology/criticals/unit (and price)', () => {
     const { c, api } = make({ test: baseTest({ type: 'package', parameters: JSON.stringify({ items: [{ testId: 'a' }] }) }) });
     c.saveTest();
     const body = lastPatchBody(api);
-    expect(body.price).toBe(250);
+    expect(body.price).toBeUndefined();
     expect(body.sampleType).toBeUndefined();
     expect(body.methodology).toBeUndefined();
     expect(body.criticalLow).toBeUndefined();
@@ -138,11 +146,11 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
     expect(c.entryKind()).toBe('number');
   });
 
-  it('a server price error lands as a field error, not a toast', () => {
-    const { c, toasts } = make({ patchErr: { error: { message: 'Price must be ≥ 0', field: 'price' } } });
+  it('a server field error on the content save lands as a field error, not a toast', () => {
+    const { c, toasts } = make({ patchErr: { error: { message: 'Name taken', field: 'name' } } });
     c.saveTest();
     expect(toasts.error).not.toHaveBeenCalled();
-    expect(c.fieldError('price')).toBeTruthy();
+    expect(c.fieldError('name')).toBeTruthy();
   });
 });
 
@@ -173,12 +181,14 @@ describe('TestEditor codes (CURRENT)', () => {
 });
 
 describe('TestEditor — TARGET behaviour', () => {
-  it.skip('TARGET phase 2: the test save carries NO price/discount/tax (pricing table owns it)', () => {
+  it('TARGET phase 2: the test save carries NO price/discount/tax (pricing table owns it)', () => {
     const { c, api } = make();
+    c.patch({ price: 400, taxSlab: 5 });
     c.saveTest();
     const body = lastPatchBody(api);
     expect(body.price).toBeUndefined();
     expect(body.taxSlab).toBeUndefined();
+    expect(body.discount).toBeUndefined();
   });
 
   it('TARGET phase 0/6: no test-level critical pair — criticals live on bands/params only', () => {
@@ -228,5 +238,62 @@ describe('TestEditor — TARGET behaviour', () => {
   it.skip('TARGET phase 3: summary shows the origin badge (master | customised | branch | local)', () => {
     const { c } = make({ test: baseTest({ origin: 'customised' }) });
     expect(c.metaChips().find((x: any) => x.k === 'Origin')?.v).toBe('Customised');
+  });
+});
+
+describe('TestEditor — price via the pricing table (phase 2)', () => {
+  it('a changed price saves the test first, then ONE bulk price write (price + tax)', () => {
+    const { c, api, pricing, toasts } = make();
+    c.patch({ price: 400, taxSlab: 5 });
+    c.saveTest();
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 400, taxSlab: 5 }]);
+    expect(toasts.success).toHaveBeenCalledWith('Saved');
+    expect(c.dirty()).toBe(false);
+  });
+
+  it('a new test posts content, then prices the NEW id only when the price left the ₹1 default', () => {
+    const { c, api, pricing } = make({ id: null });
+    expect(c._draft().price).toBe(1);
+    c.patch({ name: 'Ferritin', price: 650 });
+    c.saveTest();
+    expect(api.post).toHaveBeenCalledWith('/api/tests/', expect.not.objectContaining({ price: expect.anything() }));
+    expect(pricing.save).toHaveBeenCalledWith([{ testId: 'new1', price: 650, taxSlab: 0 }]);
+  });
+
+  it('a new test left at ₹1 writes no price (stays "not priced yet")', () => {
+    const { c, pricing } = make({ id: null });
+    c.patch({ name: 'Ferritin' });
+    c.saveTest();
+    expect(pricing.save).not.toHaveBeenCalled();
+  });
+
+  it('a price-write failure keeps the editor dirty, marks the price field and says the test itself saved', () => {
+    const { c, toasts } = make({ priceErr: { error: { message: 'invalid_branch' } } });
+    c.patch({ price: 999 });
+    c.saveTest();
+    expect(c.fieldError('price')).toBe('invalid_branch');
+    expect(toasts.error).toHaveBeenCalledWith(expect.stringContaining('Test saved, but the price was not'));
+    expect(c.dirty()).toBe(true);
+  });
+
+  it('a test still at the default shows the "₹1 · not priced yet" chip until the price changes', () => {
+    const { c } = make({ test: baseTest({ price: 1, priceIsDefault: true }) });
+    expect(c.priceIsDefault()).toBe(true);
+    expect(c.metaChips().find((x: any) => x.k === 'Price').v).toBe('₹1 · not priced yet');
+    c.patch({ price: 120 });
+    expect(c.priceIsDefault()).toBe(false);
+    expect(c.metaChips().find((x: any) => x.k === 'Price').v).toBe('₹120.00');
+  });
+
+  it('package "sum of parts" totals member effective prices (₹1 for unpriced members)', () => {
+    const { c } = make({
+      test: baseTest({ type: 'package', parameters: JSON.stringify({ items: [{ testId: 'a' }, { testId: 'b' }] }) }),
+      individuals: [
+        { id: 'a', type: 'individual', name: 'A', price: 200, priceIsDefault: false },
+        { id: 'b', type: 'individual', name: 'B', price: 1, priceIsDefault: true },
+      ],
+    });
+    expect(c.packageMembersTotal()).toBe(201);
   });
 });

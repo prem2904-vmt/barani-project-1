@@ -26,6 +26,9 @@ import {
   formatPatientInfo,
 } from "../../../shared/models/patient.model";
 import { Test } from "../../../shared/models/test.model";
+import { effectivePrice, isOffered, isPriceDefault } from "../../../shared/utils/test-pricing";
+import { PriceFlagComponent } from "../../../shared/primitives/price-flag.component";
+import { CurrencyInrPipe } from "../../../shared/pipes/currency-inr.pipe";
 import {
   filterTestList,
   matchTestSearch,
@@ -75,6 +78,8 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
     ScreenHeaderComponent,
     LoadingLogoComponent,
     PatientSearchComponent,
+    PriceFlagComponent,
+    CurrencyInrPipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -736,7 +741,10 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                     class="flex flex-col gap-1 mt-1 text-[10px] text-[var(--text-muted)] font-mono w-full text-right font-semibold overflow-y-auto flex-1 min-h-0"
                   >
                     @for (t of selectedTests(); track t.id) {
-                      <div>{{ t.name }} (₹{{ t.price }})</div>
+                      <div class="inline-flex items-center justify-end gap-1.5">
+                        <span>{{ t.name }}</span>
+                        @if (isPriceDefault(t)) { <pf-price-flag /> } @else { <span>({{ priceOf(t) | inr }})</span> }
+                      </div>
                     }
                   </div>
                   <div
@@ -744,7 +752,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                   >
                     Total Price:
                     <span class="text-gradient"
-                      >₹{{ selectedTestsTotal() }}</span
+                      >{{ selectedTestsTotal() | inr }}</span
                     >
                   </div>
                 } @else {
@@ -1170,7 +1178,8 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   });
 
   readonly filteredTests = computed<Test[]>(() => {
-    const active = this._tests().filter((t) => t.isActive);
+    // Not offered at this branch (pricing table) → not bookable either.
+    const active = this._tests().filter((t) => t.isActive && isOffered(t));
     return filterTestList(active, this.testQuery()).slice(0, 25);
   });
 
@@ -1180,8 +1189,14 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   });
 
   readonly selectedTestsTotal = computed<number>(() =>
-    this.selectedTests().reduce((sum, t) => sum + (Number(t.price) || 0), 0),
+    this.selectedTests().reduce((sum, t) => sum + effectivePrice(t), 0),
   );
+
+  /** The acting branch's price for a test (₹1 when nobody has priced it). */
+  priceOf(t: Test): number { return effectivePrice(t); }
+  /** Still at the ₹1 default → "₹1 · not priced yet". */
+  isPriceDefault(t: Test): boolean { return isPriceDefault(t); }
+  isNotPriced(id: string): boolean { return isPriceDefault(this._tests().find(t => t.id === id)); }
 
   readonly headerSubtitle = computed(() => {
     const d = this.selectedDate();

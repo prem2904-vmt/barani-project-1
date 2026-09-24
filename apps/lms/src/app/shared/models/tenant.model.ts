@@ -30,6 +30,9 @@ export interface Tenant {
    * formulas (INR reagent properties, RPI anchor). Absent keys fall back to
    * the shipped defaults in shared/utils/calculation. */
   calcConstants?: string | null;
+  /** Per-branch isolation (strict mode). ON → operational data and test
+   *  prices are per branch; OFF → shared across the tenant's branches. */
+  branchIsolationEnabled?: boolean;
   deploymentType: string;
   isActive: boolean;
   isOnboarded: boolean;

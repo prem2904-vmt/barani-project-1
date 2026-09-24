@@ -11,28 +11,47 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { ToggleComponent } from '../../../shared/primitives/toggle.component';
+import { PriceFlagComponent } from '../../../shared/primitives/price-flag.component';
+import { AuthService } from '../../../core/auth/auth.service';
+import { TestPricingService } from '../../../core/services/test-pricing.service';
+import {
+  PriceWriteItem, TENANT_PRICE_SCOPE, effectivePrice, isOffered, isPriceDefault, priceListUrl,
+} from '../../../shared/utils/test-pricing';
 
-interface PriceRow {
+export interface PriceRow {
   id: string;
   name: string;
   deptName: string;
   deptId: string;
+  /** Saved effective price for the viewed scope (₹1 when never priced). */
   orig: number;
+  /** Still at the ₹1 default (nobody priced it for this scope). */
+  notPriced: boolean;
+  /** Saved "offered here" flag for the viewed scope. */
+  offered: boolean;
 }
 
 /**
- * Admin test-PRICING screen. A flat, filterable list of every test with an
- * inline-editable price, plus a bulk percentage increase scoped to whatever is
- * currently filtered (a department and/or a search). The page itself never
- * scrolls — only the rows region does (reverts to natural page scroll on phone).
+ * Admin test-PRICING screen — the per-tenant pricing table (Test Master
+ * single source, phase 2). A flat, filterable list of every test with an
+ * inline-editable price and an "Offered here" switch, plus a bulk percentage
+ * change scoped to whatever is currently filtered. The page itself never
+ * scrolls — only the rows region does (natural page scroll on phone).
  *
- * Backend: reuses GET /api/tests (price + department) and commits all edits
- * (inline + bulk %) through PATCH /api/tests/prices/bulk. No new endpoint.
+ * Prices live ONLY in the pricing table: every test starts at the ₹1 default
+ * (flagged "₹1 · not priced yet") until priced here. Reads come from
+ * GET /api/tests (the DTO carries the effective price + `priceIsDefault` +
+ * `isOffered`); writes go through PATCH /api/tests/prices/bulk only.
+ *
+ * Branch isolation ON → a branch picker: each branch has its own prices, and
+ * "All branches" edits the tenant default every branch inherits. Isolation
+ * OFF → no picker, one tenant price.
  */
 @Component({
   selector: 'pf-pricing',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, ToggleComponent, PriceFlagComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-pricing" [class.pf-pricing--embedded]="embedded()">
@@ -47,6 +66,14 @@ interface PriceRow {
 
         <!-- Filters -->
         <div class="flex flex-wrap items-center gap-3 mb-3">
+          @if (isolationOn()) {
+            <pf-select class="pf-pricing__branch"
+              [options]="branchOptions()"
+              [value]="scopeValue()"
+              placeholder="Branch"
+              (valueChange)="setScope($event)">
+            </pf-select>
+          }
           <pf-select class="pf-pricing__dept"
             [options]="deptOptions()"
             [value]="selectedDeptId()"
@@ -58,6 +85,7 @@ interface PriceRow {
                  [ngModel]="search()" (ngModelChange)="search.set($event)" />
           <span class="text-[12px] ml-auto" style="color: var(--text-tertiary);">
             {{ filtered().length }} test{{ filtered().length === 1 ? '' : 's' }}
+            @if (notPricedCount() > 0) { · {{ notPricedCount() }} not priced yet }
           </span>
         </div>
 
@@ -91,14 +119,27 @@ interface PriceRow {
         } @else {
           <div class="pf-pricing__head">
             <span class="grow">Test</span>
+            <span class="pf-pricing__offer-h">Offered</span>
             <span class="pf-pricing__price-h">Price (₹)</span>
           </div>
           <ul class="pf-pricing__list">
             @for (r of filtered(); track r.id) {
-              <li class="pf-pricing__row" [class.pf-pricing__row--dirty]="isDirty(r.id)">
+              <li class="pf-pricing__row" [class.pf-pricing__row--dirty]="isDirty(r.id)"
+                  [class.pf-pricing__row--off]="!offeredNow(r.id)">
                 <div class="grow min-w-0">
                   <p class="font-semibold text-[14.5px] truncate" style="color: var(--text-primary);">{{ r.name }}</p>
-                  <p class="text-[12px] truncate" style="color: var(--text-tertiary);">{{ r.deptName || 'No department' }}</p>
+                  <p class="pf-pricing__meta text-[12px]" style="color: var(--text-tertiary);">
+                    <span class="truncate">{{ r.deptName || 'No department' }}</span>
+                    @if (!offeredNow(r.id)) {
+                      <span class="pf-price-flag pf-price-flag--off">Not offered here</span>
+                    } @else if (showsNotPriced(r.id)) {
+                      <pf-price-flag />
+                    }
+                  </p>
+                </div>
+                <div class="pf-pricing__offer">
+                  <pf-toggle size="sm" [checked]="offeredNow(r.id)" (checkedChange)="setOffered(r.id, $event)"
+                             [attr.aria-label]="'Offered here: ' + r.name"></pf-toggle>
                 </div>
                 <div class="pf-pricing__price">
                   <span class="text-[13px]" style="color: var(--text-tertiary);">₹</span>
@@ -145,6 +186,11 @@ interface PriceRow {
     .pf-pricing--embedded .pf-pricing__savebar { position: sticky; bottom: 0; border-radius: 12px; }
 
     .pf-pricing__dept { width: 240px; max-width: 100%; display: inline-block; }
+    .pf-pricing__branch { width: 220px; max-width: 100%; display: inline-block; }
+    .pf-pricing__meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .pf-pricing__offer-h { width: 64px; text-align: center; }
+    .pf-pricing__offer { width: 64px; flex: 0 0 auto; display: flex; justify-content: center; }
+    .pf-pricing__row--off { opacity: 0.6; }
     .pf-pricing__search { width: 260px; max-width: 100%; }
 
     .pf-pricing__bulk {
@@ -186,7 +232,7 @@ interface PriceRow {
     @media (max-width: 640px) {
       .pf-pricing { height: auto; overflow: visible; }
       .pf-pricing__scroll { flex: 0 1 auto; overflow-y: visible; }
-      .pf-pricing__dept, .pf-pricing__search { width: 100%; }
+      .pf-pricing__dept, .pf-pricing__search, .pf-pricing__branch { width: 100%; }
       .pf-pricing__savebar {
         position: sticky;
         bottom: calc(var(--tab-nav-total-height, 0px));
@@ -203,6 +249,8 @@ interface PriceRow {
 export class PricingComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly auth = inject(AuthService);
+  private readonly pricing = inject(TestPricingService);
 
   /** When rendered inside another screen (e.g. the Tests "Pricing" tab) hide the
    *  own header and flow naturally instead of the fixed-page / inner-scroll. */
@@ -217,6 +265,23 @@ export class PricingComponent implements OnInit {
   private readonly _rows = signal<PriceRow[]>([]);
   /** testId → current (possibly edited) price. */
   readonly edits = signal<Record<string, number>>({});
+  /** testId → edited "offered here" flag (only rows the user flipped). */
+  readonly offeredEdits = signal<Record<string, boolean>>({});
+
+  /** Tenant runs branch isolation → prices are per branch (picker shown). */
+  readonly isolationOn = this.pricing.isolationOn;
+  /** Viewed pricing scope when isolation is ON: '' = the acting branch,
+   *  a branch id, or TENANT_PRICE_SCOPE ("All branches" = tenant default). */
+  readonly scope = signal<string>('');
+
+  readonly branchOptions = computed<PfSelectOption[]>(() => [
+    { value: TENANT_PRICE_SCOPE, label: 'All branches', hint: 'Tenant default' },
+    ...((this.auth.user?.()?.branches ?? []).map(b => ({ value: b.id, label: b.name }))),
+  ]);
+  /** The picker's shown value ('' resolves to the acting branch). */
+  readonly scopeValue = computed(() => this.scope() || (this.auth.activeBranchId?.() ?? TENANT_PRICE_SCOPE));
+
+  readonly notPricedCount = computed(() => this.filtered().filter(r => this.showsNotPriced(r.id)).length);
 
   private readonly _departments = signal<Department[]>([]);
 
@@ -236,7 +301,9 @@ export class PricingComponent implements OnInit {
 
   readonly dirtyCount = computed(() => {
     const e = this.edits();
-    return this._rows().reduce((n, r) => n + (this.round2(e[r.id]) !== this.round2(r.orig) ? 1 : 0), 0);
+    const o = this.offeredEdits();
+    return this._rows().reduce((n, r) =>
+      n + (this.round2(e[r.id]) !== this.round2(r.orig) || (r.id in o && o[r.id] !== r.offered) ? 1 : 0), 0);
   });
 
   scopeLabel(): string {
@@ -246,10 +313,45 @@ export class PricingComponent implements OnInit {
   }
 
   isDirty(id: string): boolean {
-    return this.round2(this.edits()[id]) !== this.round2(this._rows().find(r => r.id === id)?.orig ?? 0);
+    const row = this._rows().find(r => r.id === id);
+    if (!row) return false;
+    const o = this.offeredEdits();
+    return this.round2(this.edits()[id]) !== this.round2(row.orig) || (id in o && o[id] !== row.offered);
+  }
+
+  /** Offered here, including an unsaved flip. */
+  offeredNow(id: string): boolean {
+    const o = this.offeredEdits();
+    return id in o ? o[id] : (this._rows().find(r => r.id === id)?.offered ?? true);
+  }
+
+  /** "₹1 · not priced yet" until the price is edited away from the default. */
+  showsNotPriced(id: string): boolean {
+    const row = this._rows().find(r => r.id === id);
+    return !!row && row.notPriced && this.round2(this.edits()[id]) === this.round2(row.orig);
+  }
+
+  setOffered(id: string, on: boolean) {
+    this.offeredEdits.update(o => ({ ...o, [id]: !!on }));
+  }
+
+  /** Switch the viewed branch (isolation ON). Unsaved edits are dropped. */
+  setScope(v: string) {
+    if ((v ?? '') === this.scopeValue()) return;
+    this.scope.set(v ?? '');
+    this.load();
+  }
+
+  /** Branch the save writes: explicit branch when isolation is ON (the acting
+   *  branch for ''), null for "All branches" and whenever isolation is OFF. */
+  private writeBranchId(): string | null {
+    if (!this.isolationOn()) return null;
+    const v = this.scopeValue();
+    return v && v !== TENANT_PRICE_SCOPE ? v : null;
   }
 
   ngOnInit() {
+    this.pricing.ensureLoaded();
     this.load();
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: list => this._departments.set(list ?? []),
@@ -259,17 +361,23 @@ export class PricingComponent implements OnInit {
 
   private load() {
     this.loading.set(true);
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    // Isolation ON + a picked scope reads that scope's view; otherwise the
+    // plain list (acting branch / tenant price).
+    const url = this.isolationOn() && this.scope() ? priceListUrl(this.scope()) : priceListUrl();
+    this.api.get<Test[]>(url).subscribe({
       next: list => {
         const rows: PriceRow[] = (list ?? []).map(t => ({
           id: t.id,
           name: t.name,
           deptName: t.department?.name ?? '',
           deptId: t.department?.id ?? t.departmentId ?? '',
-          orig: Number(t.price ?? 0),
+          orig: effectivePrice(t),
+          notPriced: isPriceDefault(t),
+          offered: isOffered(t),
         })).sort((a, b) => (a.deptName || '~').localeCompare(b.deptName || '~') || a.name.localeCompare(b.name));
         this._rows.set(rows);
         this.edits.set(Object.fromEntries(rows.map(r => [r.id, r.orig])));
+        this.offeredEdits.set({});
         this.loading.set(false);
       },
       error: () => { this.loading.set(false); this.toasts.error('Failed to load tests'); },
@@ -297,22 +405,39 @@ export class PricingComponent implements OnInit {
 
   discard() {
     this.edits.set(Object.fromEntries(this._rows().map(r => [r.id, r.orig])));
+    this.offeredEdits.set({});
   }
 
   async save() {
     const e = this.edits();
-    const updates = this._rows()
-      .filter(r => this.round2(e[r.id]) !== this.round2(r.orig))
-      .map(r => ({ testId: r.id, price: this.round2(e[r.id]) }));
+    const o = this.offeredEdits();
+    const updates: PriceWriteItem[] = [];
+    for (const r of this._rows()) {
+      const priceChanged = this.round2(e[r.id]) !== this.round2(r.orig);
+      const offeredChanged = r.id in o && o[r.id] !== r.offered;
+      if (!priceChanged && !offeredChanged) continue;
+      const u: PriceWriteItem = { testId: r.id };
+      if (priceChanged) u.price = this.round2(e[r.id]);
+      if (offeredChanged) u.isOffered = o[r.id];
+      updates.push(u);
+    }
     if (updates.length === 0) return;
     this.saving.set(true);
     try {
-      await firstValueFrom(this.api.patch('/api/tests/prices/bulk', { updates }));
-      // Commit: new originals become the saved prices.
+      await firstValueFrom(this.pricing.save(updates, this.writeBranchId()));
+      // Commit: new originals become the saved values (a priced row is no
+      // longer at the default).
       this._rows.update(rows => rows.map(r => {
         const u = updates.find(x => x.testId === r.id);
-        return u ? { ...r, orig: u.price } : r;
+        if (!u) return r;
+        return {
+          ...r,
+          orig: u.price ?? r.orig,
+          notPriced: u.price != null ? false : r.notPriced,
+          offered: u.isOffered ?? r.offered,
+        };
       }));
+      this.offeredEdits.set({});
       this.toasts.success(`Updated ${updates.length} price${updates.length === 1 ? '' : 's'}`);
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);

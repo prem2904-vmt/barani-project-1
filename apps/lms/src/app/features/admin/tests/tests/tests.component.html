@@ -27,7 +27,7 @@
     @for (v of views; track v.value) {
       <button type="button"
               class="pf-tm-tab"
-              [class.pf-tm-tab--active]="!ogView() && !microView() && type() === v.value"
+              [class.pf-tm-tab--active]="!ogView() && !microView() && !pricingView() && type() === v.value"
               (click)="setType(v.value)">
         {{ v.label }}
       </button>
@@ -43,6 +43,12 @@
             [class.pf-tm-tab--active]="microView()"
             (click)="openMicroView()">
       Microbiology
+    </button>
+    <button type="button"
+            class="pf-tm-tab"
+            [class.pf-tm-tab--active]="pricingView()"
+            (click)="openPricingView()">
+      Pricing
     </button>
     @if (inactiveCount() > 0 || showInactive()) {
       <label class="pf-tm-inactive-toggle">
@@ -60,6 +66,10 @@
   } @else if (microView()) {
     <!-- Culture reference masters: specimens, antibiotics, CLSI breakpoints. -->
     <pf-micro-masters-panel></pf-micro-masters-panel>
+  } @else if (pricingView()) {
+    <!-- The per-tenant pricing table: the ONE place prices live (₹1 default,
+         per-branch when the tenant runs branch isolation). -->
+    <pf-pricing [embedded]="true"></pf-pricing>
   } @else {
   <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()">
     <!-- ── LEFT: departments ─────────────────────────────── -->

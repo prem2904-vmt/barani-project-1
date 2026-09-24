@@ -17,9 +17,17 @@ export interface Test {
   type: "individual" | "profile" | "package";
   flow: "direct" | "approval";
   hsnSacCode?: string;
+  /** EFFECTIVE price / discount / GST slab for the acting branch, derived
+   *  from the per-tenant pricing table (never stored on the test row). */
   taxSlab: number;
   price: number;
   discount: number;
+  /** True = nobody has priced this test yet: it bills at the ₹1 default and
+   *  shows the "₹1 · not priced yet" marker. */
+  priceIsDefault?: boolean;
+  /** False = not offered at this tenant/branch: hidden from ordering
+   *  (ordering it anyway → 409 `not_offered`). Absent = offered. */
+  isOffered?: boolean;
   parameters?: string;
   conditions?: string;
   sampleType?: string;

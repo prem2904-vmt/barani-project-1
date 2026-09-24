@@ -301,7 +301,7 @@
               <span class="pf-search-dd__code">{{ shortCode(t) }}</span>
               <span class="pf-search-dd__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</span>
               @if (t.tatHours) { <span class="pf-search-dd__tat">TAT {{ t.tatHours }}h</span> }
-              <span class="pf-search-dd__price">{{ t.price | inr }}</span>
+              <span class="pf-search-dd__price">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
               <span class="pf-search-dd__add" [class.pf-search-dd__add--on]="isSelected(t.id)">
                 {{ isSelected(t.id) ? '✓ Added' : (i === activeResult() ? '⏎ Add' : '+ Add') }}
               </span>
@@ -361,7 +361,7 @@
                 <p class="font-semibold text-sm truncate" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
                 <p class="text-xs text-muted mt-0.5">{{ t.department?.name ?? 'General' }}</p>
               </div>
-              <span class="font-bold text-sm text-purple-400 shrink-0 ml-4">{{ t.price | inr }}</span>
+              <span class="font-bold text-sm text-purple-400 shrink-0 ml-4">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
             </div>
             }
             }
@@ -474,7 +474,7 @@
             </div>
             <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
             <div class="pf-rail-card__price-row">
-              <span class="pf-rail-card__price">{{ t.price | inr }}</span>
+              <span class="pf-rail-card__price">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
               @if (t.tatHours) {
               <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
               }
@@ -511,7 +511,7 @@
             </div>
             <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
             <div class="pf-rail-card__price-row">
-              <span class="pf-rail-card__price">{{ t.price | inr }}</span>
+              <span class="pf-rail-card__price">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
               @if (t.tatHours) {
               <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
               }
@@ -543,7 +543,7 @@
             </div>
             <p class="pf-rail-card__name" [title]="testDisplayName(pkg)">{{ testDisplayName(pkg) }}</p>
             <div class="pf-rail-card__price-row">
-              <span class="pf-rail-card__price">{{ pkg.price | inr }}</span>
+              <span class="pf-rail-card__price">@if (notPriced(pkg)) {<pf-price-flag />} @else { {{ priceOf(pkg) | inr }} }</span>
               @if (pkg.tatHours) {
               <span class="pf-rail-card__tat">TAT {{ pkg.tatHours }}h</span>
               } @else {
@@ -584,7 +584,7 @@
                 </div>
                 <p class="pf-rail-card__name" [title]="testDisplayName(p)">{{ testDisplayName(p) }}</p>
                 <div class="pf-rail-card__price-row">
-                  <span class="pf-rail-card__price">{{ p.price | inr }}</span>
+                  <span class="pf-rail-card__price">@if (notPriced(p)) {<pf-price-flag />} @else { {{ priceOf(p) | inr }} }</span>
                   @if (p.tatHours) {
                   <span class="pf-rail-card__tat">TAT {{ p.tatHours }}h</span>
                   } @else {
@@ -637,7 +637,7 @@
                 </div>
                 <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
                 <div class="pf-rail-card__price-row">
-                  <span class="pf-rail-card__price">{{ t.price | inr }}</span>
+                  <span class="pf-rail-card__price">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
                   @if (t.tatHours) {
                   <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
                   }
@@ -791,7 +791,7 @@
         <span class="pf-cart-amount pf-cart-amount--included"
           [title]="'Covered by ' + coveringPackageName(t.id) + ' — not billed separately'">Included</span>
         } @else {
-        <span class="pf-cart-amount">{{ t.price | inr }}</span>
+        <span class="pf-cart-amount">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
         }
         @if (!paidOrderId() && !isReadOnly()) {
         @if (isCollected(t.id)) {
@@ -835,7 +835,7 @@
               Includes {{ s.memberCount }} test{{ s.memberCount === 1 ? '' : 's' }}
               <span class="pf-pkg-suggest__sep">·</span>
               <span class="pf-pkg-suggest__strike">{{ s.individualSum | inr }}</span>
-              <span class="pf-pkg-suggest__price">{{ s.package.price | inr }}</span>
+              <span class="pf-pkg-suggest__price">@if (notPriced(s.package)) {<pf-price-flag />} @else { {{ priceOf(s.package) | inr }} }</span>
             </p>
           </div>
           @if (s.savings > 0) {
@@ -894,7 +894,7 @@
       </div>
       @if (gstEnabled()) {
       <div class="pf-cart-line">
-        <span>GST · 18%</span>
+        <span>{{ gstLabel() }}</span>
         <span class="tabular-nums">{{ gst() | inr }}</span>
       </div>
       }

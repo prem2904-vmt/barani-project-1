@@ -10,9 +10,10 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
 
 /**
- * Test Master single-source — Stage 1 safety net for booking price display.
- * TODAY: "Total Price" = Σ Number(t.price) of the pre-selected tests, and
- * each line renders `{{ t.name }} (₹{{ t.price }})` straight off the test row.
+ * Test Master single source — phase 2: booking price display.
+ * "Total Price" = Σ effective DTO price (pricing table) of the selected tests;
+ * a test nobody priced is ₹1 and shows "₹1 · not priced yet"; a test that
+ * isn't offered here is not in the picker.
  */
 function make(tests: any[]) {
   const stub = {};
@@ -33,18 +34,18 @@ function make(tests: any[]) {
   return c;
 }
 
-describe('BookAppointment price display (CURRENT: t.price)', () => {
+describe('BookAppointment price display (pricing-table DTO)', () => {
   const tests = [
     { id: 'a', name: 'CBC', price: 300, isActive: true },
     { id: 'b', name: 'ESR', price: '120', isActive: true },
-    { id: 'c', name: 'NEW', price: null, isActive: true },
+    { id: 'c', name: 'NEW', price: 1, priceIsDefault: true, isActive: true },
   ];
 
-  it('selectedTestsTotal = Σ Number(t.price); null/NaN count as 0', () => {
+  it('selectedTestsTotal = Σ effective price (a ₹1 default counts as ₹1)', () => {
     const c = make(tests);
     c.toggleTest('a'); c.toggleTest('b'); c.toggleTest('c');
     expect(c.selectedTests().map((t: any) => t.id)).toEqual(['a', 'b', 'c']);
-    expect(c.selectedTestsTotal()).toBe(420);
+    expect(c.selectedTestsTotal()).toBe(421);
   });
 
   it('toggleTest twice removes the test from the total', () => {
@@ -53,10 +54,18 @@ describe('BookAppointment price display (CURRENT: t.price)', () => {
     expect(c.selectedTestsTotal()).toBe(0);
   });
 
-  it.skip('TARGET phase 2: an unpriced test shows ₹1 with the "not priced yet" flag and totals at ₹1', () => {
+  it('an unpriced test shows ₹1 with the "not priced yet" flag and totals at ₹1', () => {
     const c = make([{ id: 'n', name: 'NEW', isActive: true }]);
     c.toggleTest('n');
     expect(c.selectedTestsTotal()).toBe(1);
     expect(c.isNotPriced('n')).toBe(true);
+    expect(c.isNotPriced('zz')).toBe(false);
+  });
+
+  it('tests not offered here are hidden from the picker', () => {
+    const c = make([...tests, { id: 'x', name: 'CBX', price: 50, isActive: true, isOffered: false }]);
+    const ids = c.filteredTests().map((t: any) => t.id);
+    expect(ids).toContain('a');
+    expect(ids).not.toContain('x');
   });
 });

@@ -7,13 +7,16 @@ import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { DialogService } from '../../../../core/services/dialog.service';
+import { TestPricingService } from '../../../../core/services/test-pricing.service';
 
 /**
  * Test Master single-source — Stage 1 safety net for the Test Master GRID.
- * TODAY the grid edits the tenant's own test rows in place: price, unit and
- * the FLAT reference range are typed cells (flat columns win over params for
- * single-band tests), edits batch into per-row PATCH /api/tests/{id}, and a
- * department toggle PATCHes /api/tenants/departments/{id}.
+ * TODAY the grid edits the tenant's own test rows in place: unit and the
+ * FLAT reference range are typed cells (flat columns win over params for
+ * single-band tests), content edits batch into per-row PATCH /api/tests/{id},
+ * and a department toggle PATCHes /api/tenants/departments/{id}.
+ * Phase 2: the PRICE cell shows the pricing-table price and writes ONLY
+ * through the bulk price endpoint (TestPricingService), never the test row.
  */
 function make(tests: any[] = [], depts: any[] = []) {
   if (!window.matchMedia) {
@@ -25,9 +28,11 @@ function make(tests: any[] = [], depts: any[] = []) {
     post: vi.fn(() => of({})),
   };
   const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
+  const pricing = { save: vi.fn(() => of({})), ensureLoaded: vi.fn(), isolationOn: () => false };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
+      { provide: TestPricingService, useValue: pricing },
       { provide: ToastService, useValue: toasts },
       { provide: ThemeService, useValue: { isDark: () => false } },
       { provide: DialogService, useValue: { confirm: async () => false } },
@@ -37,7 +42,7 @@ function make(tests: any[] = [], depts: any[] = []) {
   });
   const c = TestBed.runInInjectionContext(() => new TestsComponent()) as any;
   c.ngOnInit();
-  return { c, api, toasts };
+  return { c, api, toasts, pricing };
 }
 
 const params = (p: any[]) => JSON.stringify({ parameters: p });
@@ -50,7 +55,7 @@ const hb = (over: any = {}) => ({
 const col = (c: any, id: string) => c.colDefs().find((d: any) => (d.colId ?? d.field) === id);
 
 describe('Test Master grid — price / unit / range cells (CURRENT)', () => {
-  it('individual view exposes EDITABLE price and unit cells bound to the test row', () => {
+  it('individual view exposes EDITABLE price (pricing-table value) and unit cells', () => {
     const { c } = make([hb()]);
     expect(col(c, 'price').editable).toBe(true);
     expect(col(c, 'price').field).toBe('price');
@@ -85,13 +90,16 @@ describe('Test Master grid — price / unit / range cells (CURRENT)', () => {
     expect(v).toContain('12–15');
   });
 
-  it('cell edits batch per row id (price/tatHours coerced to numbers) and flush as PATCH /api/tests/{id}', () => {
-    const { c, api } = make([hb()]);
+  it('content edits batch per row id (tatHours coerced) and flush as PATCH /api/tests/{id} — price never rides along', () => {
+    const { c, api, pricing } = make([hb()]);
     c.onCellValueChanged({ colDef: { field: 'price' }, newValue: '200', oldValue: 150, data: { id: 't1' } });
     c.onCellValueChanged({ colDef: { field: 'unit' }, newValue: 'g/L', oldValue: 'g/dL', data: { id: 't1' } });
+    c.onCellValueChanged({ colDef: { field: 'tatHours' }, newValue: '8', oldValue: 6, data: { id: 't1' } });
     expect(c.dirtyCount()).toBe(1);
     c.saveAll();
-    expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { price: 200, unit: 'g/L' });
+    expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { unit: 'g/L', tatHours: 8 });
+    expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 200 }]);
+    expect(c.dirtyCount()).toBe(0);
   });
 
   it('saveAll refuses duplicate codes (case-insensitive) and sends nothing', () => {
@@ -144,12 +152,16 @@ describe('Test Master grid — TARGET behaviour', () => {
     expect(rr.valueGetter({ data: hb({ adultReferenceRange: '11–16' }) })).toContain('12–17');
   });
 
-  it.skip('TARGET phase 2: price cell edits the tenant pricing table (never a test override) and flags ₹1 defaults', () => {
-    const { c, api } = make([hb({ price: 1, priceIsDefault: true })]);
+  it('TARGET phase 2: price cell edits the tenant pricing table (never a test override) and flags ₹1 defaults', () => {
+    const { c, api, pricing } = make([hb({ price: 1, priceIsDefault: true })]);
+    const rule = col(c, 'price').cellClassRules?.['pf-not-priced'];
+    expect(rule).toBeDefined();
+    expect(rule({ data: c.rowData()[0] })).toBe(true);
     c.onCellValueChanged({ colDef: { field: 'price' }, newValue: '200', oldValue: 1, data: { id: 't1' } });
+    expect(rule({ data: c.rowData()[0] })).toBe(false);   // being priced → no flag
     c.saveAll();
-    expect(api.patch).not.toHaveBeenCalledWith('/api/tests/t1', expect.objectContaining({ price: 200 }));
-    expect(col(c, 'price').cellClassRules?.['pf-not-priced']).toBeDefined();
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 200 }]);
   });
 
   it.skip('TARGET phase 1/5: tenant cannot type the reserved master code shape ^[A-Z]{3}[0-9]+$ (BIO019); tenant codes carry a hyphen (MW-0001)', () => {
@@ -170,5 +182,55 @@ describe('Test Master grid — TARGET behaviour', () => {
   it.skip('TARGET phase 5: a pending master change shows as a proposal on the overridden row', () => {
     const { c } = make([hb({ origin: 'customised', pendingProposal: { id: 'p1' } })]);
     expect(c.pendingProposalCount()).toBe(1);
+  });
+});
+
+describe('Test Master grid — pricing table (phase 2)', () => {
+  it('the price cell renders the "₹1 · not priced yet" pill for a default row, the ₹ value otherwise', () => {
+    const { c } = make([hb({ price: 1, priceIsDefault: true }), hb({ id: 't2', testCode: 'HEM013', price: 150, priceIsDefault: false })]);
+    const renderer = col(c, 'price').cellRenderer;
+    const def = renderer({ data: c.rowData().find((r: any) => r.id === 't1'), value: 1, valueFormatted: '₹1' });
+    expect(def.textContent).toContain('₹1 · not priced yet');
+    expect(def.querySelector('svg')).not.toBeNull();       // SVG icon, not emoji
+    const priced = renderer({ data: c.rowData().find((r: any) => r.id === 't2'), value: 150, valueFormatted: '₹150' });
+    expect(priced.textContent).toBe('₹150');
+  });
+
+  it('price-only edits save through ONE bulk call, no test PATCH', () => {
+    const { c, api, pricing } = make([hb(), hb({ id: 't2', testCode: 'X2' })]);
+    c.onCellValueChanged({ colDef: { field: 'price' }, newValue: '210', oldValue: 150, data: { id: 't1' } });
+    c.onCellValueChanged({ colDef: { field: 'price' }, newValue: '-3', oldValue: 150, data: { id: 't2' } });
+    expect(c.dirtyCount()).toBe(2);
+    c.saveAll();
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(pricing.save).toHaveBeenCalledTimes(1);
+    expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 210 }, { testId: 't2', price: 0 }]);
+  });
+
+  it('discard drops pending price edits too', () => {
+    const { c, pricing } = make([hb()]);
+    c.onCellValueChanged({ colDef: { field: 'price' }, newValue: '210', oldValue: 150, data: { id: 't1' } });
+    c.discardChanges();
+    expect(c.dirtyCount()).toBe(0);
+    c.saveAll();
+    expect(pricing.save).not.toHaveBeenCalled();
+  });
+
+  it('a test not offered here stays listed, greyed, with a "Not offered here" tag', () => {
+    const { c } = make([hb({ isOffered: false }), hb({ id: 't2', testCode: 'X2' })]);
+    expect(c.rowData().map((r: any) => r.id)).toEqual(['t1', 't2']);
+    const off = c.rowData()[0];
+    expect(c.getRowStyle({ data: off })).toEqual({ opacity: '0.55' });
+    expect(c.getRowStyle({ data: c.rowData()[1] })).toBeUndefined();
+    const nameCell = col(c, 'name').cellRenderer({ data: off, value: off.name });
+    expect(nameCell.textContent).toContain('Not offered here');
+  });
+
+  it('the Pricing tab swaps the grid for the pricing table', () => {
+    const { c } = make([hb()]);
+    c.openPricingView();
+    expect(c.pricingView()).toBe(true);
+    c.setType('profile');
+    expect(c.pricingView()).toBe(false);
   });
 });
