@@ -382,3 +382,63 @@ describe('TestEditor — copy-on-write (phases 3 + 5)', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 });
+
+describe('TestEditor — profile member order + code-wise picker (QA 2026-09-24)', () => {
+  const members = [
+    { id: 'a', type: 'individual', name: 'Albumin', testCode: 'BIO010', department: { name: 'Biochemistry' } },
+    { id: 'b', type: 'individual', name: 'Bilirubin', testCode: 'BIO002', department: { name: 'Biochemistry' } },
+    { id: 'c', type: 'individual', name: 'Creatinine', testCode: 'BIO1000', department: { name: 'Biochemistry' } },
+    { id: 'd', type: 'individual', name: 'Globulin', testCode: 'BIO2', department: { name: 'Biochemistry' } },
+  ];
+  const profile = (ids: string[]) =>
+    baseTest({ type: 'profile', parameters: JSON.stringify({ items: ids.map(testId => ({ testId })) }) });
+
+  it('an existing profile keeps its STORED member order (no re-sort on load)', () => {
+    const { c } = make({ test: profile(['c', 'a', 'b']), individuals: members });
+    expect(c.orderedMembers().map((m: any) => m.id)).toEqual(['c', 'a', 'b']);
+    expect(c.orderedMembers()[0]).toMatchObject({ name: 'Creatinine', code: 'BIO1000' });
+  });
+
+  it('up/down arrows reorder, and the save persists that order in items[]', () => {
+    const { c, api } = make({ test: profile(['c', 'a', 'b']), individuals: members });
+    c.moveMember(0, 1);          // c ↓  → a, c, b
+    c.moveMember(2, -1);         // b ↑  → a, b, c
+    c.moveMember(0, -1);         // top can't go up — no-op
+    c.moveMember(2, 1);          // bottom can't go down — no-op
+    expect(c.orderedMembers().map((m: any) => m.id)).toEqual(['a', 'b', 'c']);
+    c.saveTest();
+    expect(JSON.parse(lastPatchBody(api).parametersJson))
+      .toEqual({ items: [{ testId: 'a' }, { testId: 'b' }, { testId: 'c' }] });
+  });
+
+  it('drag-and-drop moves a member to the dropped slot', () => {
+    const { c } = make({ test: profile(['a', 'b', 'c']), individuals: members });
+    c.dropMember({ previousIndex: 2, currentIndex: 0 });
+    expect(c.orderedMembers().map((m: any) => m.id)).toEqual(['c', 'a', 'b']);
+    c.dropMember({ previousIndex: 1, currentIndex: 1 });
+    expect(c.orderedMembers().map((m: any) => m.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('a newly ticked member lands at the end of the order', () => {
+    const { c } = make({ test: profile(['b']), individuals: members });
+    c.togglePackageMember('a');
+    expect(c.orderedMembers().map((m: any) => m.id)).toEqual(['b', 'a']);
+  });
+
+  it('the member picker is arranged code-wise (natural number order, name breaks ties)', () => {
+    const { c } = make({ test: profile(['a']), individuals: members });
+    const groups = c.filteredPackageCatalogByDept();
+    const dept = groups.find((g: any) => g.department === 'Biochemistry');
+    // BIO002 and BIO2 tie on number → name breaks the tie; then BIO010, BIO1000.
+    expect(dept.tests.map((t: any) => t.testCode)).toEqual(['BIO002', 'BIO2', 'BIO010', 'BIO1000']);
+    const selected = groups.find((g: any) => g.department === 'Selected');
+    expect(selected.tests.map((t: any) => t.id)).toEqual(['a']);
+  });
+
+  it('the picker search also matches a test code', () => {
+    const { c } = make({ test: profile([]), individuals: members });
+    c.packageQuery.set('bio01');
+    const all = c.filteredPackageCatalogByDept().flatMap((g: any) => g.tests.map((t: any) => t.testCode));
+    expect(all).toEqual(['BIO010']);
+  });
+});

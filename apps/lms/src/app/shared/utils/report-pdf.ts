@@ -719,10 +719,14 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
       profileObs.set(pkg, arr);
     }
     let merged = byPkg.get(pkg);
+    if (merged && g.sampleId && !merged.sampleIds?.includes(g.sampleId)) {
+      (merged.sampleIds ??= []).push(g.sampleId);
+    }
     if (!merged) {
       // Method varies per member — a single method claim on the profile band
       // would be wrong, so the merged panel carries none.
-      merged = { ...g, testName: pkgName || g.testName, method: undefined, methodLine: undefined, rows: [] };
+      merged = { ...g, testName: pkgName || g.testName, method: undefined, methodLine: undefined, rows: [],
+        sampleIds: g.sampleId ? [g.sampleId] : [] };
       // Column cascade for the BLOCK: the PROFILE's own override wins for
       // the whole block; a member's override never leaks into it — the
       // block falls back to the member's department columns instead.
@@ -1987,6 +1991,9 @@ interface PanelGroup {
   inScope?: boolean;
   /** The tube's sample ID — surfaced on the department band. */
   sampleId?: string;
+  /** Every tube a compiled PROFILE block spans (its members can sit in
+   *  different tubes — e.g. EDTA + fluoride + serum). The band prints them all. */
+  sampleIds?: string[];
   rows: PanelRowData[];
 }
 
@@ -2157,6 +2164,14 @@ function renderScopeHeading(
   return y + 23;
 }
 
+/** Distinct sample IDs a department block prints on its band, in first-seen
+ *  order: every tube behind its groups — a compiled profile contributes ALL
+ *  the tubes its members were drawn in, not just its first member's. */
+export function departmentSampleIds(groups: { sampleId?: string; sampleIds?: string[] }[]): string[] {
+  const ids = groups.flatMap(g => g.sampleIds?.length ? g.sampleIds : (g.sampleId ? [g.sampleId] : []));
+  return [...new Set(ids.map(s => s.trim()).filter(Boolean))];
+}
+
 /** Render panel groups grouped into per-DEPARTMENT sections — each department's
  *  tests render in their own block under THAT department's column layout (with
  *  its merges), so one report can show different columns per department. */
@@ -2191,7 +2206,7 @@ function renderContinuousTable(
     // admin opted into department banding or page breaks). The department's
     // sample ID(s) print right-aligned on the same band.
     if (dept && (multiDept || theme.groupByDepartment || theme.departmentPageBreak)) {
-      const ids = [...new Set(dg.map(g => g.sampleId).filter((s): s is string => !!s))];
+      const ids = departmentSampleIds(dg);
       const right = ids.length ? `Sample ID: ${ids.join(', ')}` : null;
       y = renderScopeHeading(doc, dept.toUpperCase(), y + 4, practice, right);
     }

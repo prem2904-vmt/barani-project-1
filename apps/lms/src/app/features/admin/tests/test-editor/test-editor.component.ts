@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
+import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../../core/services/report-layout.service';
@@ -61,6 +61,7 @@ import {
 } from '../../../../shared/utils/test-origin';
 import {
   CODE_RANGE_EXHAUSTED_ERROR, CODE_READONLY_ERROR, CODE_READONLY_HINT, DEPARTMENT_REQUIRED_ERROR, codeDisplay,
+  compareTestsByCode,
 } from '../../../../shared/utils/test-code';
 import { DialogService } from '../../../../core/services/dialog.service';
 
@@ -1553,13 +1554,15 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     const groups = new Map<string, Test[]>();
     for (const t of source) {
-      if (q && !t.name.toLowerCase().includes(q) && !(t.department?.name ?? '').toLowerCase().includes(q)) continue;
+      if (q && !t.name.toLowerCase().includes(q) && !(t.testCode ?? '').toLowerCase().includes(q)
+        && !(t.department?.name ?? '').toLowerCase().includes(q)) continue;
       const key = t.type === 'profile' ? 'Profiles' : (t.department?.name?.trim() || '(No department)');
       const arr = groups.get(key);
       if (arr) arr.push(t); else groups.set(key, [t]);
     }
     const out = Array.from(groups.entries())
-      .map(([department, tests]) => ({ department, tests: tests.slice().sort((a, b) => a.name.localeCompare(b.name)) }))
+      // Arranged code-wise (QA 2026-09-24): natural test-code order, name last.
+      .map(([department, tests]) => ({ department, tests: tests.slice().sort(compareTestsByCode) }))
       .sort((a, b) => {
         if (a.department === 'Profiles') return 1;
         if (b.department === 'Profiles') return -1;
@@ -1570,11 +1573,40 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (chosen.size > 0) {
       const picked = this.pickerSource()
         .filter(t => chosen.has(t.id))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .sort(compareTestsByCode);
       if (picked.length > 0) out.unshift({ department: SELECTED_GROUP, tests: picked });
     }
     return out;
   });
+
+  // ── Member ORDER (QA 2026-09-24) — a profile prints its members in the
+  // order they are stored (items[]), on result entry and on the report. The
+  // editor lets the lab arrange that order: drag a row, or step it up/down.
+  // Existing profiles keep their stored order as the starting point.
+  readonly orderedMembers = computed<{ id: string; name: string; code: string }[]>(() => {
+    const byId = this._memberById();
+    return this._packageItems().map(id => {
+      const t = byId.get(id);
+      return { id, name: t?.name ?? '(unknown test)', code: t?.testCode ?? '' };
+    });
+  });
+
+  /** Step a member one place up (-1) or down (+1). */
+  moveMember(index: number, delta: -1 | 1) {
+    const to = index + delta;
+    const items = this._packageItems();
+    if (index < 0 || index >= items.length || to < 0 || to >= items.length) return;
+    const next = items.slice();
+    moveItemInArray(next, index, to);
+    this._packageItems.set(next);
+  }
+
+  dropMember(ev: CdkDragDrop<unknown>) {
+    if (ev.previousIndex === ev.currentIndex) return;
+    const next = this._packageItems().slice();
+    moveItemInArray(next, ev.previousIndex, ev.currentIndex);
+    this._packageItems.set(next);
+  }
 
   isInPackage(id: string): boolean { return this.packageItems().includes(id); }
   togglePackageMember(id: string) {

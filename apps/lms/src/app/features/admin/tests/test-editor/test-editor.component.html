@@ -882,11 +882,38 @@
             }
           }
 
+          @if (d.type === 'profile' && !repetitiveActive() && orderedMembers().length > 0) {
+            <div class="pf-tp pf-member-order">
+              <div class="pf-tp__hdr">
+                <span class="pf-tp__badge">Order</span>
+                <span class="pf-tp__count">Result entry and the report list the members in this order — drag a row or use the arrows.</span>
+              </div>
+              <ul class="pf-tp__list" cdkDropList (cdkDropListDropped)="dropMember($event)">
+                @for (m of orderedMembers(); track m.id; let i = $index; let first = $first; let last = $last) {
+                  <li class="pf-tp-row" cdkDrag cdkDragLockAxis="y">
+                    <span class="pf-tp-row__grip" cdkDragHandle aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
+                    </span>
+                    <span class="pf-member-order__pos">{{ i + 1 }}</span>
+                    <span class="pf-tp-row__name">{{ m.name }}</span>
+                    @if (m.code) { <code class="pf-member-order__code">{{ m.code }}</code> }
+                    <button type="button" class="pf-tp-row__btn press" [disabled]="first" [attr.aria-label]="'Move ' + m.name + ' up'" title="Move up" (click)="moveMember(i, -1)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="pf-tp-row__btn press" [disabled]="last" [attr.aria-label]="'Move ' + m.name + ' down'" title="Move down" (click)="moveMember(i, 1)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
           <div class="pf-picker-toolbar">
             @if (d.type === 'package') {
               <pf-segmented [options]="pickFilterOptions" [value]="pickFilter()" size="sm" (valueChange)="pickFilter.set($event)"></pf-segmented>
             }
-            <input type="text" class="pf-input pf-picker-search" placeholder="Search by name or department…"
+            <input type="text" class="pf-input pf-picker-search" placeholder="Search by name, code or department…"
                    [ngModel]="packageQuery()" (ngModelChange)="packageQuery.set($event)" />
           </div>
 

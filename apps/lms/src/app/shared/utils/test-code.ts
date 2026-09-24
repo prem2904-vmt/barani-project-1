@@ -43,15 +43,33 @@ export function parseTestCode(code: string | null | undefined): { prefix: string
   return m ? { prefix: m[1], n: Number(m[2]) } : null;
 }
 
-/** Natural order: prefix, then number (BIO002 < BIO010 < BIO901 < BIO1000);
+/** (prefix, number) for NATURAL ordering — any letters + optional separator
+ *  + digits (BIO2, BIO019, MW-0001), wider than the 9-series shape so older
+ *  codes still sort by number (BIO2 < BIO10), not character by character. */
+function naturalCodeKey(code: string | null | undefined): { prefix: string; n: number } | null {
+  const m = /^([A-Z]{1,6})[-_ ]?([0-9]{1,6})$/.exec((code ?? '').trim().toUpperCase());
+  return m ? { prefix: m[1], n: Number(m[2]) } : null;
+}
+
+/** Natural order: prefix, then number (BIO2 < BIO010 < BIO901 < BIO1000);
  *  codes of any other shape after, alphabetically; blanks last. */
 export function compareTestCodes(a: string | null | undefined, b: string | null | undefined): number {
-  const pa = parseTestCode(a);
-  const pb = parseTestCode(b);
+  const pa = naturalCodeKey(a);
+  const pb = naturalCodeKey(b);
   if (pa && pb) return pa.prefix === pb.prefix ? pa.n - pb.n : (pa.prefix < pb.prefix ? -1 : 1);
   if (pa || pb) return pa ? -1 : 1;
   const sa = (a ?? '').trim().toLowerCase();
   const sb = (b ?? '').trim().toLowerCase();
   if (!sa || !sb) return sa ? -1 : sb ? 1 : 0;
   return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+
+/** Test lists arranged "code wise" (the Test Master grid, the profile /
+ *  package member picker): natural code order, then name for equal or
+ *  missing codes. */
+export function compareTestsByCode(
+  a: { testCode?: string | null; name?: string | null },
+  b: { testCode?: string | null; name?: string | null },
+): number {
+  return compareTestCodes(a.testCode, b.testCode) || (a.name ?? '').localeCompare(b.name ?? '');
 }
