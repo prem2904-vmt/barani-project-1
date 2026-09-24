@@ -1001,12 +1001,26 @@ a.pf-ts-tenant:hover {
   .pf-ts-tenant__name { font-size: 12.5px !important; max-width: 14ch !important; overflow: hidden; text-overflow: ellipsis; }
 
   /* Branch picker, people icon, bell, profile avatar — hide on phone.
-     Users get to /more, notifications and profile via the bottom-nav. */
+     Users get to /more, notifications and profile via the bottom-nav.
+     NB: only true when pf-bottom-nav is the phone chrome. See the
+     nav-bottom exemption directly below. */
   .pf-ts-branch,
   .pf-icon-btn,
   pf-notification-bell,
   .pf-avatar-btn {
     display: none !important;
+  }
+
+  /* ── nav-bottom: put the bell and the user badge BACK ──────────────
+     The rule above dates from when pf-bottom-nav owned the phone chrome
+     and genuinely carried notifications + profile. In nav-bottom mode
+     pf-bottom-nav is display:none and THIS bar is the only chrome on
+     screen, so that rule was stripping the user badge with nothing left
+     to reach it by — which is why branch switching, Classic/New and
+     design mode all appeared to be missing on mobile (owner). */
+  :host-context(.design-new.nav-bottom) pf-notification-bell,
+  :host-context(.design-new.nav-bottom) .pf-avatar-btn {
+    display: inline-flex !important;
   }
 }
 
