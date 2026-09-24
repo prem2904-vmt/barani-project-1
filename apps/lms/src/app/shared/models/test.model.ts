@@ -79,6 +79,10 @@ export interface TestParameter {
   id: string;
   name: string;
   title: string;
+  /** What the tech enters. New saves write the editor's own vocabulary
+   *  ('numeric' for numbers, 'select', 'radio', 'textarea', 'yesno', …);
+   *  older catalogues also carry 'options', 'multiline', 'qualitative',
+   *  'choice', … — always decide through `resolveParamEntryKind`. */
   type:
     | "numeric"
     | "text"
@@ -90,7 +94,9 @@ export interface TestParameter {
     | "yesno"
     | "toggle"
     | "date"
-    | "numeric_with_range";
+    | "numeric_with_range"
+    | import("../forms/form-field.model").FormFieldType
+    | (string & {});
   unit?: string;
   options?: string[];
   /** This test's OWN option table (per-test by design — no shared
@@ -116,6 +122,26 @@ export interface TestParameter {
   attachments?: boolean;
   /** Per-value print switch: false = recorded at the bench, never printed. */
   printOnReport?: boolean;
+
+  // ── Editor / entry-form properties (optional; readers that don't care
+  // ignore them). These used to live ONLY on a parallel `fields[]` array —
+  // `parameters[]` is now the single list of a test's result fields.
+  isRequired?: boolean;
+  isConditional?: boolean;
+  /** Show this value only when the rule holds (rules reference parameter ids). */
+  showWhen?: import("../forms/form-field.model").ShowWhen | null;
+  validation?: import("../forms/form-field.model").ValidationConfig | null;
+  placeholder?: string | null;
+  helperText?: string | null;
+  icon?: string | null;
+  width?: import("../forms/form-field.model").FormFieldWidth;
+  defaultValue?: unknown;
+  defaultUnit?: import("../forms/form-field.model").DurationUnitType | null;
+  imageGalleryConfig?: import("../forms/form-field.model").ImageGalleryConfig | null;
+  scribblePadConfig?: import("../forms/form-field.model").ScribblePadConfig | null;
+  sizeConfig?: import("../forms/form-field.model").SizeConfig | null;
+  measureConfig?: import("../forms/form-field.model").MeasureConfig | null;
+  disabled?: boolean;
 }
 
 export interface TestParametersBlob {
@@ -125,10 +151,9 @@ export interface TestParametersBlob {
    *  structured culture entry + report; others render generically. */
   microFormat?: string;
   parameters: TestParameter[];
-  // New-format parallel array produced by the test editor. Carries richer
-  // per-field metadata (id, showWhen, conditional links) that the legacy
-  // TestParameter shape can't express. Renderers should prefer this when
-  // present and fall back to `parameters` otherwise.
+  /** @deprecated LEGACY ONLY — a parallel editor copy older saves wrote next
+   *  to `parameters`. Never write it; `readParameters` folds it into the
+   *  parameters on read and the next save drops it. */
   fields?: import("../forms/form-field.model").FormField[];
 }
 

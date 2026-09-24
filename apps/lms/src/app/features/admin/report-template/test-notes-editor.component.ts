@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal, output } from '@angular/core';
+import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
+import type { TestParametersBlob } from '../../../shared/models/test.model';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -561,9 +563,8 @@ export class TestNotesEditorComponent implements OnInit {
     const raw = (t as unknown as { parameters?: unknown })?.parameters;
     if (!raw) return this.gridParamNames();
     try {
-      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
-      const list = (obj['parameters'] ?? obj['fields']) as Array<{ name?: string; label?: string }> | undefined;
-      const names = (list ?? []).map(p => (p.name || p.label || '').trim()).filter(Boolean);
+      const blob = typeof raw === 'string' ? parseParametersBlob(raw) : raw as TestParametersBlob;
+      const names = readParameters(blob).map(p => (p.name || p.title || '').trim()).filter(Boolean);
       return names.length ? names : this.gridParamNames();
     } catch { return this.gridParamNames(); }
   }
@@ -765,9 +766,8 @@ export class TestNotesEditorComponent implements OnInit {
     const raw = (t as unknown as { parameters?: unknown })?.parameters;
     if (!raw) return [];
     try {
-      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
-      const list = (obj['parameters'] ?? obj['fields']) as Array<{ name?: string; label?: string }> | undefined;
-      return (list ?? []).map(p => (p.name || p.label || '').trim()).filter(Boolean);
+      const blob = typeof raw === 'string' ? parseParametersBlob(raw) : raw as TestParametersBlob;
+      return readParameters(blob).map(p => (p.name || p.title || '').trim()).filter(Boolean);
     } catch { return []; }
   }
 

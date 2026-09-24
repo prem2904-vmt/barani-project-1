@@ -9,7 +9,7 @@ import { ReportColumn } from '../../../../shared/models/report-layout.model';
 import { ColumnsEditorState, ReportColumnsEditorComponent } from '../../report-template/report-columns-editor.component';
 import { PreviewProfileMember, ReportPdfPreviewComponent } from '../../report-template/report-pdf-preview.component';
 import { Department } from '../../../../shared/models/tenant.model';
-import { Test, TestOptionRow, TestParameter } from '../../../../shared/models/test.model';
+import { Test, TestOptionRow } from '../../../../shared/models/test.model';
 import { ReferralLab } from '../../../../shared/models/referral-lab.model';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import {
@@ -32,7 +32,7 @@ import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, Mo
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../tests/tests.component';
 import { RangeSelectEditorComponent, RangeSelectOption } from './range-select-editor.component';
-import { fieldToParam, loadEditorFields, newFieldId } from './editor-fields';
+import { hasLegacyFields, loadEditorFields, newFieldId, writeParameters } from '../../../../shared/utils/test-parameters';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
@@ -1797,26 +1797,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return prefix + String(max + 1).padStart(width, '0');
   }
 
-  private fieldToLegacy(f: FormField): TestParameter {
-    return fieldToParam(f);
-  }
-
+  /** The editor's value list → `parameters[]` (the ONE stored list; no
+   *  `fields[]` twin is ever written). */
   private persistFieldsToDraft() {
-    const fields = this._fields();
-    const cleanFields = fields.map(f => {
-      const { _optionsDraft, ...rest } = f as FormField & { _optionsDraft?: string };
-      void _optionsDraft;
-      return rest as FormField;
-    });
-    const existing = (() => {
-      try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
-    })();
-    const blob = {
-      ...existing,
-      parameters: cleanFields.map(f => this.fieldToLegacy(f)),
-      fields: cleanFields
-    };
-    this.patch({ parametersJson: JSON.stringify(blob) });
+    this.patch({ parametersJson: writeParameters(this._draft().parametersJson, this._fields()) });
   }
 
   addParameter() {
@@ -1953,7 +1937,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
               items: this.normalizeRows(this._memberRows()).map(r => ({ testId: r.testId, offsetMin: r.offsetMin }))
             })
           : JSON.stringify({ items: this._packageItems().map(id => ({ testId: id })) }))
-      : (d.parametersJson || undefined);
+      // A legacy blob still carrying the old `fields[]` twin is normalised to
+      // the single parameters[] list on this save (props folded on load).
+      : (d.parametersJson
+          ? (hasLegacyFields(d.parametersJson) ? writeParameters(d.parametersJson, this._fields()) : d.parametersJson)
+          : undefined);
 
     const outsourced = d.type !== 'package' && !!d.outsourcedVendorId;
     const body = {

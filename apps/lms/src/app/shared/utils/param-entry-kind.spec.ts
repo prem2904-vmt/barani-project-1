@@ -42,6 +42,7 @@ describe('resolveParamEntryKind — every stored dropdown shape', () => {
     expect(resolveParamEntryKind({ type: 'multiline' })).toBe('textarea');
     expect(resolveParamEntryKind({ type: 'date' })).toBe('date');
     expect(resolveParamEntryKind({ type: 'yesno' })).toBe('checkbox');
+    expect(resolveParamEntryKind({ type: 'checkbox' })).toBe('checkbox');
   });
 
   it('plain text stays free text', () => {

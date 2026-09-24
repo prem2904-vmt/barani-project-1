@@ -17,7 +17,8 @@ import { EditResultDialogComponent } from '../../../shared/components/edit-resul
 import { AuthService } from '../../../core/auth/auth.service';
 import { flagAgainst, formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
-import { choiceOptionsFor, fieldIsStaleForChoice, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
+import { choiceOptionsFor, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
+import { paramToField, readParameters } from '../../../shared/utils/test-parameters';
 import { CalcContext, ageYearsFromDob, evaluateCalc, parseCalc } from '../../../shared/utils/calculation';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
@@ -2906,7 +2907,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     try { return JSON.parse(raw) as TestParametersBlob; } catch { return null; }
   });
   readonly allParameters = computed<TestParameter[]>(() => {
-    const params = this._paramsBlob()?.parameters ?? [];
+    // The ONE list (legacy `fields[]` twins folded in by the shared reader).
+    const params = readParameters(this._paramsBlob());
     // A non-culture test with no configured parameter schema would otherwise
     // dead-end at "No parameter schema — this test has no inputs" and be
     // impossible to fill. Fall back to a single generic "Result" field so the
@@ -2929,9 +2931,10 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (m?.noGrowth) return true;
     return (m?.organisms ?? []).some(o => (o.name ?? '').trim().length > 0);
   });
-  // FormField[] parallel to `parameters`, carries showWhen + richer type.
-  // Older tests without the new editor saved only `parameters`, so this may be empty.
-  private readonly _fields = computed<FormField[]>(() => this._paramsBlob()?.fields ?? []);
+  // Form view of the SAME parameters (rich type, showWhen, validation) —
+  // derived, never a second stored list.
+  private readonly _fields = computed<FormField[]>(() =>
+    readParameters(this._paramsBlob()).map((p, i) => paramToField(p, i)));
   private readonly _fieldByName = computed<Map<string, FormField>>(() => {
     const map = new Map<string, FormField>();
     for (const f of this._fields()) map.set(f.name, f);
@@ -3251,10 +3254,6 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     // Widened: catalog data carries type strings ('options', 'choice') the
     // FormFieldType union doesn't know.
     const t = (field?.type ?? p.type) as string;
-    // A stale fields[] twin (plain text/number) next to a parameter the
-    // server mapped to an option list: the parameter wins — same rule as the
-    // Test Master editor (shared resolver).
-    if (field && fieldIsStaleForChoice(field.type, p)) return 'dropdown';
     switch (t) {
       case 'numeric':
       case 'numeric_with_range':

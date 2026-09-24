@@ -43,7 +43,7 @@ const CHOICE_TYPES = new Set([
   'buttonselect', 'multiselect', 'imageselect',
 ]);
 const TEXTAREA_TYPES = new Set(['textarea', 'multiline']);
-const CHECKBOX_TYPES = new Set(['yesno', 'toggle']);
+const CHECKBOX_TYPES = new Set(['yesno', 'toggle', 'checkbox']);
 
 /** True when the parameter carries its own curated answer list. */
 export function hasOwnOptions(p: ParamKindInput): boolean {

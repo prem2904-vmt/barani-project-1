@@ -15,6 +15,7 @@ import {
   selectReferenceRange,
 } from "../../../shared/utils/reference-range";
 import { choiceOptionsFor, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
+import { readParameters } from "../../../shared/utils/test-parameters";
 import {
   CalcContext,
   CalcDef,
@@ -730,7 +731,7 @@ export class SampleResultEntryComponent {
         if (raw) {
           try {
             const blob = JSON.parse(raw) as TestParametersBlob;
-            params = blob.parameters ?? [];
+            params = readParameters(blob);
             isCulture = blob.microFormat === "culture_sensitivity";
           } catch {
             params = [];
