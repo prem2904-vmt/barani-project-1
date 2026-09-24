@@ -31,6 +31,16 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     <div class="pf-hb">
       <div class="pf-hb__band">
         <div class="pf-hb__tenant">
+          <!-- Opt-in back chevron (secondary screens that drop their page
+               title, e.g. Order & Payments): top-left, before the tenant. -->
+          @if (showBack()) {
+            <button type="button" class="pf-hb__back press" (click)="back.emit()" aria-label="Go back">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m15 18-6-6 6-6"/>
+              </svg>
+            </button>
+          }
           <!-- Real tenant branding (same resolution as the classic bar chip):
                admin-uploaded logo when branding allows it, initial disc
                otherwise; name honors brandingName + mode. -->
@@ -107,6 +117,17 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     }
 
     .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .pf-hb__back {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; margin-left: -8px; flex-shrink: 0;
+      border: 0; border-radius: 9999px; background: transparent; cursor: pointer;
+      color: #1f2937; transition: background 160ms ease;
+    }
+    .pf-hb__back:hover { background: rgba(255, 255, 255, 0.7); }
+    :host-context(.dark) .pf-hb__back,
+    :host-context([data-theme='dark']) .pf-hb__back { color: var(--text-primary, #e5e7eb); }
+    :host-context(.dark) .pf-hb__back:hover,
+    :host-context([data-theme='dark']) .pf-hb__back:hover { background: rgba(255, 255, 255, 0.1); }
     .pf-hb__logo {
       /* The tenant uploads a PNG with transparency — no backing plate
          (owner); it sits directly on the band gradient. */
@@ -214,6 +235,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       .pf-hb__name { font-size: 15px; }
       /* Logo + name must yield to the action buttons, never push them off. */
       .pf-hb__tenant { gap: 8px; }
+      .pf-hb__back { width: 40px; height: 40px; }
       .pf-hb__logo { height: 24px; max-width: 108px; }
       .pf-hb__actions { gap: 6px; }
 
@@ -301,6 +323,11 @@ export class HeroBandComponent {
   readonly value = input<string>('');
   /** True when the host projects its own search control via [band-search]. */
   readonly customSearch = input<boolean>(false);
+  /** Show a back chevron top-left (before the tenant). Off by default, so
+   *  every existing band screen is unchanged. */
+  readonly showBack = input<boolean>(false);
+  /** The back chevron was pressed. */
+  readonly back = output<void>();
 
   readonly valueChange = output<string>();
   /** Enter pressed in the built-in input (intake screens receive-on-enter). */
