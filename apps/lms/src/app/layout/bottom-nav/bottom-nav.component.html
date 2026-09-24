@@ -321,6 +321,7 @@
            phone and iPad entirely (owner). This popover is the one place
            that is always reachable, so they belong here too. Same services,
            same state: flipping one here flips it everywhere. -->
+      @if (theme.switchesEnabled) {
       <button type="button" role="menuitem" class="pf-more-item press"
               (click)="theme.toggleDesign()" [attr.aria-pressed]="theme.isNewDesign()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -341,6 +342,7 @@
           <span>Bottom bar</span>
           <span class="pf-more-item__val">{{ theme.bottomNav() ? 'On' : 'Off' }}</span>
         </button>
+      }
       }
       @if (designMode.available()) {
         <button type="button" role="menuitem" class="pf-more-item press"

@@ -11,6 +11,14 @@ const STORAGE_KEY = 'pf-theme';
 const DESIGN_KEY = 'pf-design';
 const MEDIA_QUERY = '(prefers-color-scheme: light)';
 
+/**
+ * UI switches lock (owner, 2026-09-24): everyone runs the NEW design with the
+ * BOTTOM bar. The Classic/New switch, the Bottom-bar switch and Design mode
+ * (capture) are hidden and stored preferences are ignored. Classic's code is
+ * untouched — flip this to true to bring the switches back.
+ */
+export const UI_SWITCHES_ENABLED = false;
+
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   private readonly doc = inject(DOCUMENT);
@@ -31,6 +39,9 @@ export class ThemeService {
    *  right. New design only; off by default. */
   private readonly _bottomNav = signal<boolean>(this.readStoredBottomNav());
   readonly bottomNav = this._bottomNav.asReadonly();
+
+  /** Whether the design / bottom-bar switches are offered at all. */
+  readonly switchesEnabled = UI_SWITCHES_ENABLED;
 
   private readonly _mediaListener = (e: MediaQueryListEvent) => {
     if (this._mode() === 'system') {
@@ -89,10 +100,12 @@ export class ThemeService {
   }
 
   private readStoredBottomNav(): boolean {
+    if (!UI_SWITCHES_ENABLED) return true;
     try { return this.win?.localStorage.getItem('pf-bottom-nav') === '1'; } catch { return false; }
   }
 
   private readStoredDesign(): DesignVersion {
+    if (!UI_SWITCHES_ENABLED) return 'new';
     try {
       const raw = this.win?.localStorage.getItem(DESIGN_KEY);
       if (raw === 'new' || raw === 'classic') return raw;

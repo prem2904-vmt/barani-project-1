@@ -1,5 +1,6 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from '../auth/auth.service';
+import { UI_SWITCHES_ENABLED } from './theme.service';
 
 /**
  * Design mode — designer tooling for the code→Figma pipeline.
@@ -22,7 +23,8 @@ export class DesignModeService {
   private readonly auth = inject(AuthService);
 
   /** Whether the signed-in user may use design mode at all. */
-  readonly available = computed(() => this.auth.hasPermission('design_mode'));
+  /** Off while the UI switches are locked (theme.service UI_SWITCHES_ENABLED). */
+  readonly available = computed(() => UI_SWITCHES_ENABLED && this.auth.hasPermission('design_mode'));
 
   private readonly _enabled = signal(this.restore());
   readonly enabled = computed(() => this._enabled() && this.available());

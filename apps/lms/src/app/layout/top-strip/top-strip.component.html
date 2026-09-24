@@ -465,6 +465,7 @@
           <!-- Design version: New = the designer redesign, Classic = the
                previous look for people who don't want the change yet.
                Menu stays open so the switch reads as a setting. -->
+          @if (themeService.switchesEnabled) {
           <button type="button" class="pf-profile-item press" (click)="themeService.toggleDesign()"
                   [attr.aria-pressed]="themeService.isNewDesign()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -495,6 +496,7 @@
           </button>
           }
 
+          }
           @if (designMode.available()) {
             <!-- Designer capture prep for the Figma pipeline (design_mode
                  permission). Menu stays open so the switch reads as a setting. -->
