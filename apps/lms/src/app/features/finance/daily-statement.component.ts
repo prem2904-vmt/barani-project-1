@@ -9,6 +9,9 @@ import { NumberInputComponent } from '../../shared/primitives/number-input.compo
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
+import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../core/services/theme.service';
+import { bandFilter } from '../../shared/utils/band-search';
 
 interface ModeTotal { mode: string; count: number; total: number; }
 
@@ -76,19 +79,51 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
     NumberInputComponent,
     ScreenHeaderComponent,
     TileComponent,
-    TouchButtonComponent
+    TouchButtonComponent,
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): the pill searches the recent closures; business day
+             + shift ride inside it; Close day is the band's primary action. -->
+        <pf-hero-band [back]="true" placeholder="Search closures — date or shift…"
+                      [value]="closureQ()" (valueChange)="closureQ.set($event)">
+          <ng-container band-tools>
+            <div class="pf-ds-band" role="group" aria-label="Business day and shift">
+              <input type="date" class="pf-ds-band__in" aria-label="Business day" [max]="todayStr"
+                     [ngModel]="dateStr()" (ngModelChange)="setDate($event)" />
+              <input type="text" class="pf-ds-band__in pf-ds-band__shift" aria-label="Shift (optional)"
+                     placeholder="Shift (optional)"
+                     [ngModel]="shiftName()" (ngModelChange)="shiftName.set($event)" (change)="load()" />
+            </div>
+          </ng-container>
+          <ng-container band-actions>
+            @if (stmt(); as s) {
+              @if (!s.closure) {
+                <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
+                        [disabled]="countedCash() === null || saving()" (click)="closeDay()"
+                        [attr.aria-label]="shiftName().trim() ? 'Close shift' : 'Close day'"
+                        [title]="countedCash() === null ? 'Enter the counted cash first' : (shiftName().trim() ? 'Close shift' : 'Close day')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                  {{ saving() ? 'Closing…' : (shiftName().trim() ? 'Close shift' : 'Close day') }}
+                </button>
+              }
+            }
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Finance"
         title="Daily Statement"
         subtitle="Collections by mode, cash count and day closure.">
       </pf-screen-header>
 
-      <!-- Business day + optional shift -->
-      <div class="flex flex-wrap items-end gap-3 mb-5">
+      <div class="pf-band-body">
+      <!-- Business day + optional shift (classic; in the band pill in the new design) -->
+      <div class="flex flex-wrap items-end gap-3 mb-5 pf-classic-only">
         <div>
           <label class="pf-label">Business day</label>
           <input type="date" class="pf-input" [max]="todayStr"
@@ -223,7 +258,7 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
               <input type="text" class="pf-input" placeholder="e.g. short ₹200 — change float"
                      [ngModel]="note()" (ngModelChange)="note.set($event)" />
             </div>
-            <div class="mt-4">
+            <div class="mt-4 pf-classic-only">
               <pf-touch-btn size="md" variant="primary"
                             [disabled]="countedCash() === null || saving()"
                             (pressed)="closeDay()">
@@ -250,9 +285,11 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
             style="color: var(--text-muted);">Recent closures</h3>
         @if (closures().length === 0) {
           <p class="text-[13px]" style="color: var(--text-tertiary);">No closures in the last 30 days.</p>
+        } @else if (visibleClosures().length === 0) {
+          <p class="pf-band-empty">No closures match "{{ closureQ() }}".</p>
         } @else {
           <div class="space-y-2">
-            @for (c of closures(); track c.id) {
+            @for (c of visibleClosures(); track c.id) {
               <div class="pf-mode-row">
                 <div class="min-w-0 flex-1">
                   <p class="text-[14px] font-semibold" style="color: var(--text-primary);">
@@ -271,9 +308,20 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
           </div>
         }
       </pf-tile>
+      </div>
     </section>
   `,
   styles: [`
+    /* Band pill: business day + shift. */
+    .pf-ds-band { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .pf-ds-band__in {
+      height: 32px; padding: 0 9px; border-radius: 9px; font-size: 12.5px; font-family: inherit;
+      color: var(--text-primary); background: var(--glass-bg); border: 1px solid var(--glass-border);
+      color-scheme: light dark; outline: none;
+    }
+    .pf-ds-band__in:focus { border-color: rgba(139, 92, 246, 0.55); }
+    .pf-ds-band__shift { width: 130px; }
+    @media (max-width: 640px) { .pf-ds-band__in { height: 40px; font-size: 16px; } }
     .pf-stat-label {
       font-size: 11px;
       font-family: var(--font-mono, ui-monospace, monospace);
@@ -344,6 +392,15 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
 export class DailyStatementComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill search over the recent closures (date, weekday, shift). */
+  readonly closureQ = signal('');
+  readonly visibleClosures = computed(() => bandFilter(this._closures(), this.closureQ(), (c) => [
+    c.date,
+    new Date(c.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+    c.shift,
+  ]));
 
   readonly todayStr = new Date().toLocaleDateString('en-CA'); // yyyy-MM-dd, local
 

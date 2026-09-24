@@ -1,5 +1,6 @@
 import { renderBandPage } from './admin-band.spec-helpers';
 import { FinanceHubComponent } from '../finance/finance-hub.component';
+import { DailyStatementComponent } from '../finance/daily-statement.component';
 
 /**
  * Hub-linked pages outside /admin (owner counts them as admin nested pages):
@@ -57,6 +58,63 @@ describe('Admin band — Finance hub (/finance)', () => {
     expect(names()).toEqual([expect.stringContaining('Apollo Clinic')]);
     p.type('zzz');
     expect(names().length).toBe(0);
+    expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+  });
+});
+
+describe('Admin band — Daily statement (/finance/daily)', () => {
+  const stmt = (closure: unknown = null) => ({
+    date: '2026-09-25', shift: null, openingBalance: 100, totalCollected: 500, totalRefunded: 0,
+    net: 500, expectedCash: 600, payments: [{ mode: 'cash', count: 1, total: 500 }], refunds: [], closure,
+  });
+  const closures = [
+    { id: 'c1', date: '2026-09-20', shift: 'evening', openingBalance: 0, expectedCash: 100, countedCash: 100, variance: 0 },
+    { id: 'c2', date: '2026-09-21', shift: null, openingBalance: 0, expectedCash: 100, countedCash: 90, variance: -10 },
+  ];
+  const make = (closure: unknown = null) => renderBandPage(DailyStatementComponent, {
+    getFor: (url) => url.startsWith('/api/finance/daily') ? stmt(closure) : url.startsWith('/api/finance/closures') ? closures : [],
+  });
+
+  it('band + body, header classic-only; business day + shift sit in the pill', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.body()).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.tools()!.querySelector('input[type="date"]')).not.toBeNull();
+    expect(p.tools()!.querySelector('input[aria-label="Shift (optional)"]')).not.toBeNull();
+  });
+
+  it('changing the business day in the pill reloads that day', () => {
+    const p = make();
+    p.api.get.mockClear();
+    p.cmp.setDate('2026-09-20');
+    expect(p.api.get.mock.calls.some((c: unknown[]) => String(c[0]).includes('/api/finance/daily?date=2026-09-20'))).toBe(true);
+  });
+
+  it('Close day is the band primary action: disabled until counted cash, then posts the closure', () => {
+    const p = make();
+    const btn = () => p.actions().find((b) => b.textContent!.includes('Close day')) as HTMLButtonElement;
+    expect(btn()).toBeTruthy();
+    expect(btn().disabled).toBe(true);
+    p.cmp.countedCash.set(600);
+    p.f.detectChanges();
+    expect(btn().disabled).toBe(false);
+    btn().click();
+    expect(p.api.post).toHaveBeenCalledWith('/api/finance/close', expect.objectContaining({ countedCash: 600 }));
+  });
+
+  it('a closed day has no Close action', () => {
+    const p = make({ id: 'x', date: '2026-09-25', openingBalance: 0, expectedCash: 0, countedCash: 0, variance: 0, closedAt: '2026-09-25T10:00:00Z' });
+    expect(p.actions().length).toBe(0);
+  });
+
+  it('the pill search filters the recent closures', () => {
+    const p = make();
+    const rows = () => p.body()!.querySelectorAll('.pf-mode-row').length;
+    const before = rows();
+    p.type('evening');
+    expect(rows()).toBe(before - 1);
+    p.type('zzz');
     expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
   });
 });
