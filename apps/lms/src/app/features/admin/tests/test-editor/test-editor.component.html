@@ -508,10 +508,6 @@
                 <div class="pf-rt3__foot">
                   <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add range</button>
                 </div>
-                @if (d.criticalLow != null || d.criticalHigh != null) {
-                  <p class="pf-rrgrid__fallback">Rows without their own criticals use the test-wide alarm:
-                    below {{ d.criticalLow ?? '—' }} / above {{ d.criticalHigh ?? '—' }}{{ d.unit ? ' ' + d.unit : '' }}.</p>
-                }
               </div>
             }
           </div>

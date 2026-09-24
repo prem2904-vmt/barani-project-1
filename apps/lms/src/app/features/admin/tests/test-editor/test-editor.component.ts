@@ -32,7 +32,7 @@ import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, Mo
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../tests/tests.component';
 import { RangeSelectEditorComponent, RangeSelectOption } from './range-select-editor.component';
-import { hasLegacyFields, loadEditorFields, newFieldId, writeParameters } from '../../../../shared/utils/test-parameters';
+import { hasLegacyFields, loadEditorFields, newFieldId, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
@@ -79,8 +79,6 @@ export interface DraftTest {
   unit: string;
   reportFormat: string;
   adultReferenceRange: string;
-  criticalLow: number | null;
-  criticalHigh: number | null;
   parametersJson: string;
   conditionsJson: string;
   isActive: boolean;
@@ -126,8 +124,6 @@ function makeEmptyDraft(): DraftTest {
     unit: '',
     reportFormat: '',
     adultReferenceRange: '',
-    criticalLow: null,
-    criticalHigh: null,
     parametersJson: '',
     conditionsJson: '[]',
     isActive: true,
@@ -1649,7 +1645,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       methodology: t.methodology ?? '', resultType: t.resultType ?? '',
       unit: t.unit ?? '', reportFormat: t.reportFormat ?? '',
       adultReferenceRange: t.adultReferenceRange ?? '',
-      criticalLow: t.criticalLow ?? null, criticalHigh: t.criticalHigh ?? null,
       parametersJson: t.parameters ?? '', conditionsJson: t.conditions ?? '[]',
       isActive: t.isActive,
       outsourcedVendorId: t.outsourcedVendorId ?? '',
@@ -1939,8 +1934,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
           : JSON.stringify({ items: this._packageItems().map(id => ({ testId: id })) }))
       // A legacy blob still carrying the old `fields[]` twin is normalised to
       // the single parameters[] list on this save (props folded on load).
+      // Single-source tidy on every save: the wrapper `sampleType` is dropped
+      // (the column is the specimen) and per-value methodology copies equal
+      // to the test-level one are stripped (hybrid: value ?? test).
       : (d.parametersJson
-          ? (hasLegacyFields(d.parametersJson) ? writeParameters(d.parametersJson, this._fields()) : d.parametersJson)
+          ? tidyParametersJson(
+              hasLegacyFields(d.parametersJson) ? writeParameters(d.parametersJson, this._fields()) : d.parametersJson,
+              d.methodology) ?? undefined
           : undefined);
 
     const outsourced = d.type !== 'package' && !!d.outsourcedVendorId;
@@ -1961,8 +1961,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       unit: pkg ? undefined : d.unit,
       reportFormat: pkg ? undefined : d.reportFormat,
       adultReferenceRange: pkg ? undefined : this.flatRangeFromBands(d.adultReferenceRange),
-      criticalLow: pkg ? undefined : (d.criticalLow ?? undefined),
-      criticalHigh: pkg ? undefined : (d.criticalHigh ?? undefined),
       parametersJson,
       conditionsJson: d.conditionsJson || undefined,
       isActive: d.isActive,

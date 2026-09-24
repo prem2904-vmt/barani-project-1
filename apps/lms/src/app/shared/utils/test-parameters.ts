@@ -19,6 +19,7 @@
 import type { FieldOption, FormField, FormFieldType } from '../forms/form-field.model';
 import type { TestParameter, TestParametersBlob } from '../models/test.model';
 import { choiceOptionsFor, editorFieldTypeFor, fieldIsStaleForChoice, resolveParamEntryKind } from './param-entry-kind';
+import { stripRedundantMethodology } from './methodology';
 
 /** Editor/entry-form properties carried on a parameter (formerly fields[]-only). */
 const EDITOR_PROPS = [
@@ -203,13 +204,20 @@ export function hasLegacyFields(json: string | null | undefined): boolean {
   return !!b && 'fields' in b;
 }
 
+/** Wrapper keys that duplicate a `tests` column and must never be written:
+ *  `sampleType` — the specimen is the `SampleType` column ONLY (single source;
+ *  the report reads the column). */
+const DUPLICATE_WRAPPER_KEYS = ['sampleType'] as const;
+
 /** Write the form list back into the blob: `parameters` only — any legacy
- *  `fields` key is dropped. Other blob keys (microFormat, attachments,
- *  sampleType, …) and unknown keys on each stored parameter are kept. */
+ *  `fields` key and the duplicate wrapper `sampleType` are dropped. Other blob
+ *  keys (microFormat, attachments, …) and unknown keys on each stored
+ *  parameter are kept. */
 export function writeParameters(existingJson: string | null | undefined, fields: FormField[]): string {
   const existing = parseParametersBlob(existingJson) ?? ({} as TestParametersBlob);
   const { fields: _legacy, ...rest } = existing as TestParametersBlob & Record<string, unknown>;
   void _legacy;
+  for (const k of DUPLICATE_WRAPPER_KEYS) delete (rest as Record<string, unknown>)[k];
   const prior = readParameters(existing);
   const byId = new Map(prior.filter(p => p.id).map(p => [p.id, p] as const));
   const byName = new Map(prior.map(p => [nameKey(p.name), p] as const));
@@ -224,4 +232,26 @@ export function writeParameters(existingJson: string | null | undefined, fields:
     return { ...carried, ...fieldToParam(keep as FormField) } as TestParameter;
   });
   return JSON.stringify({ ...rest, parameters: params });
+}
+
+/**
+ * Normalise a test's Parameters JSON for SAVE (single-source rules):
+ * the duplicate wrapper `sampleType` is dropped (the column is the specimen),
+ * and per-value `methodology` copies equal to the test-level one are stripped
+ * (hybrid: value ?? test). Returns the input string untouched when nothing
+ * needed changing, so an unedited blob round-trips byte-for-byte.
+ */
+export function tidyParametersJson(json: string | null | undefined, testMethodology: string | null | undefined): string | null | undefined {
+  const blob = parseParametersBlob(json);
+  if (!blob || !json) return json;
+  let changed = false;
+  const out: Record<string, unknown> = { ...blob };
+  for (const k of DUPLICATE_WRAPPER_KEYS) {
+    if (k in out) { delete out[k]; changed = true; }
+  }
+  if (Array.isArray(blob.parameters)) {
+    const stripped = stripRedundantMethodology(blob.parameters, testMethodology);
+    if (stripped !== blob.parameters) { out['parameters'] = stripped; changed = true; }
+  }
+  return changed ? JSON.stringify(out) : json;
 }

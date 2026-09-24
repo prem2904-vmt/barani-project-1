@@ -102,6 +102,7 @@ interface DraftOrder {
 import { InlinePaymentPanelComponent, InlinePaymentResult } from '../order-create/inline-payment-panel.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
+import { savedValueRows } from '../../../shared/utils/result-flag';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -2342,42 +2343,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     }
     return out;
   }
-  /** Parse the OrderTest's currentResult JSON into per-parameter rows
-      with reference range + flag. Mirrors what validate-result does. */
+  /** Parse the OrderTest's currentResult JSON into per-parameter rows with
+      the flag + range mw SAVED with the result (never a browser recompute). */
   private extractValuesFor(t: { currentResult?: string; test?: { parameters?: string } }):
     Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical' }> {
     if (!t.currentResult || !t.test?.parameters) return [];
-    let snap: { values?: Record<string, unknown> };
-    try { snap = JSON.parse(t.currentResult); } catch { return []; }
-    if (!snap.values) return [];
-    let params: Array<{
-      name: string; title: string; unit?: string;
-      criticalLow?: number; criticalHigh?: number;
-      referenceRanges?: Array<{ min: number; max: number }>
-    }> = [];
-    try {
-      const blob = JSON.parse(t.test.parameters) as { parameters?: any[] };
-      params = blob.parameters ?? [];
-    } catch { return []; }
-    return params.map(p => {
-      const v = snap.values![p.name];
-      const n = Number(v);
-      const isNum = !Number.isNaN(n) && v !== null && v !== undefined && v !== '';
-      const r = (p.referenceRanges ?? [])[0];
-      let flag: 'normal' | 'abnormal' | 'critical' = 'normal';
-      if (isNum) {
-        if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
-        else if (r && (n < r.min || n > r.max)) flag = 'abnormal';
-      }
-      return {
-        name: p.name,
-        title: p.title || p.name,
-        value: v ?? '—',
-        unit: p.unit,
-        range: r ? `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}` : undefined,
-        flag
-      };
-    });
+    return savedValueRows(t.currentResult, t.test.parameters).map(r => ({
+      name: r.name, title: r.title, value: r.value ?? '—', unit: r.unit, range: r.range, flag: r.flag,
+    }));
   }
   isDispatched(o: Order): boolean {
     const samples = o.samples ?? [];

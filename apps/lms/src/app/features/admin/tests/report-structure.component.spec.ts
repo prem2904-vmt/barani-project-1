@@ -6,12 +6,11 @@ import { ToastService } from '../../../core/services/toast.service';
 
 /**
  * Test Master single-source — Stage 1 safety net for the printed-report
- * structure (pf-report-structure). TODAY the first edit of a test with no
- * saved layout MATERIALISES the implicit results table into a stored grid
- * section with ONE ROW PER PARAMETER (materialised() ~611) — a second list of
- * the test's values. A value added to the test later is therefore missing
- * from the stored layout. Phase 0/5: layout stores only overrides keyed by
- * param; unlisted params are appended at render.
+ * structure (pf-report-structure). Phase 0 (done): the first edit of a test
+ * with no saved layout materialises the implicit results table as a grid
+ * section with NO stored rows — parameters[] are the report rows; the layout
+ * keeps only overrides keyed by param, unlisted params are listed at render.
+ * (Before: one row per parameter was snapshotted, so later values vanished.)
  */
 async function make(inputs: Record<string, unknown>) {
   const layout = {
@@ -34,7 +33,7 @@ async function make(inputs: Record<string, unknown>) {
   return { c: f.componentInstance as any, layout, f };
 }
 
-describe('ReportStructure — implicit structure + materialisation (CURRENT)', () => {
+describe('ReportStructure — implicit structure + materialisation (Phase 0: overrides only)', () => {
   afterEach(() => vi.useRealTimers());
 
   it('with no saved layout the print order is one implicit Results table (+ Images when attachments on)', async () => {
@@ -43,7 +42,7 @@ describe('ReportStructure — implicit structure + materialisation (CURRENT)', (
     expect(c.rows()[0].implicit).toBe(true);
   });
 
-  it('the first edit SNAPSHOTS every current parameter into stored grid rows', async () => {
+  it('the first edit stores the sections with an EMPTY grid (no per-parameter snapshot)', async () => {
     const { c, layout } = await make({ testId: 't1', parameters: ['hb', 'wbc', 'plt'] });
     c.addSection('paragraph');
     await vi.advanceTimersByTimeAsync(200);
@@ -51,21 +50,20 @@ describe('ReportStructure — implicit structure + materialisation (CURRENT)', (
     const [id, secs] = layout.saveTestLayout.mock.calls[0] as any[];
     expect(id).toBe('t1');
     expect(secs.map((s: any) => s.type)).toEqual(['grid', 'paragraph']);
-    expect(secs[0].rows.map((r: any) => r.parameter_name)).toEqual(['hb', 'wbc', 'plt']);
+    expect(secs[0].rows).toEqual([]);
     expect(secs.map((s: any) => s.order)).toEqual([1, 2]);
   });
 
-  it('once stored, a parameter added to the test later is NOT in the saved rows', async () => {
+  it('a parameter added to the test later needs no layout change (rows stay override-only)', async () => {
     const { c, layout, f } = await make({ testId: 't1', parameters: ['hb'] });
     c.addSection('paragraph');
     await vi.advanceTimersByTimeAsync(200);
-    // The host now lists a second value, but the stored grid keeps its snapshot.
     f.componentRef.setInput('parameters', ['hb', 'wbc']);
     c.moveRow(c.rows()[1], -1);
     await vi.advanceTimersByTimeAsync(200);
     const secs = (layout.saveTestLayout.mock.calls.at(-1) as any[])[1];
     const grid = secs.find((s: any) => s.type === 'grid');
-    expect(grid.rows.map((r: any) => r.parameter_name)).toEqual(['hb']);
+    expect(grid.rows).toEqual([]);
   });
 
   it('miniature table excludes hidden (printOnReport:false) values and caps at 6 (+N more)', async () => {
@@ -74,7 +72,7 @@ describe('ReportStructure — implicit structure + materialisation (CURRENT)', (
     expect(c.moreParams()).toBe(1);
   });
 
-  it.skip('TARGET phase 0/5: stored layout keeps only overrides — no per-parameter row snapshot', async () => {
+  it('TARGET phase 0/5: stored layout keeps only overrides — no per-parameter row snapshot', async () => {
     const { c, layout } = await make({ testId: 't1', parameters: ['hb', 'wbc'] });
     c.addSection('paragraph');
     await vi.advanceTimersByTimeAsync(200);

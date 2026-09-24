@@ -495,7 +495,7 @@ export class TestNotesEditorComponent implements OnInit {
   /** Default column names a grid row exposes cell templates for. Matches the
    *  default department column set; admins can leave cells blank to fall back
    *  to engine-resolved values (result/unit/range pull automatically). */
-  private static readonly DEFAULT_CELL_COLUMNS = ['specimen', 'result', 'unit', 'range', 'description'];
+  private static readonly DEFAULT_CELL_COLUMNS = ['specimen', 'result', 'description'];
 
   testOptions(): PfSelectOption[] {
     return this.tests().map(t => ({
@@ -581,32 +581,11 @@ export class TestNotesEditorComponent implements OnInit {
   }
 
   /** Write the Description cell — creating the grid section / row on demand so
-   *  the admin never has to touch the advanced editor for this. */
+   *  the admin never has to touch the advanced editor for this. Only the
+   *  edited parameter gets a stored row (an override keyed by param); the
+   *  rest of the test's values print from parameters[] untouched. */
   protected setDescription(name: string, value: string): void {
-    this.sections.update(arr => {
-      const next = [...arr];
-      let gi = next.findIndex(s => s.type === 'grid');
-      if (gi < 0) {
-        // No table yet → synthesize one row per test parameter, preserving order.
-        const rows: GridRow[] = this.paramNamesFromTest().map(n => ({
-          id: this.newId('row'), row_merge: false, parameter_name: n, cells: {},
-        }) as unknown as GridRow);
-        next.push({ id: this.newId('sec'), type: 'grid', order: next.length, isVisible: true, rows } as unknown as ReportSection);
-        gi = next.length - 1;
-      }
-      const g = { ...(next[gi] as GridSection) };
-      g.rows = [...(g.rows ?? [])];
-      let ri = g.rows.findIndex(r => (r as GridRowParameter).parameter_name === name);
-      if (ri < 0) {
-        g.rows.push({ id: this.newId('row'), row_merge: false, parameter_name: name, cells: {} } as unknown as GridRow);
-        ri = g.rows.length - 1;
-      }
-      const row = { ...(g.rows[ri] as GridRowParameter) };
-      row.cells = { ...(row.cells ?? {}), description: value };
-      g.rows[ri] = row as unknown as GridRow;
-      next[gi] = g;
-      return next;
-    });
+    this.mutateDescRow(name, row => { row.cells = { ...(row.cells ?? {}), description: value }; });
   }
   // ── Conditional descriptions ────────────────────────────────
   // "High in dehydration" only when it IS high: one plain-words rule per
@@ -730,17 +709,16 @@ export class TestNotesEditorComponent implements OnInit {
       return null;
     });
   }
-  /** Find-or-synthesize the parameter's grid row (same shape setDescription
-   *  builds), then apply fn to a copy — one write path for row patches. */
+  /** Find-or-create the parameter's grid row, then apply fn to a copy — one
+   *  write path for row patches. A missing grid is created EMPTY: the layout
+   *  stores only the rows the admin overrode (keyed by param), never a
+   *  snapshot of every parameter (single source: parameters[] are the rows). */
   private mutateDescRow(name: string, fn: (row: GridRowParameter) => void): void {
     this.sections.update(arr => {
       const next = [...arr];
       let gi = next.findIndex(sec => sec.type === 'grid');
       if (gi < 0) {
-        const rows: GridRow[] = this.paramNamesFromTest().map(nm => ({
-          id: this.newId('row'), row_merge: false, parameter_name: nm, cells: {},
-        }) as unknown as GridRow);
-        next.push({ id: this.newId('sec'), type: 'grid', order: next.length, isVisible: true, rows } as unknown as ReportSection);
+        next.push({ id: this.newId('sec'), type: 'grid', order: next.length, isVisible: true, rows: [] } as unknown as ReportSection);
         gi = next.length - 1;
       }
       const g = { ...(next[gi] as GridSection) };
@@ -758,19 +736,6 @@ export class TestNotesEditorComponent implements OnInit {
     });
   }
 
-  /** Parameter names strictly from the test master (for row synthesis). */
-  private paramNamesFromTest(): string[] {
-    const host = this.parameters();
-    if (host.length > 0) return host;
-    const t = this.selectedTest();
-    const raw = (t as unknown as { parameters?: unknown })?.parameters;
-    if (!raw) return [];
-    try {
-      const blob = typeof raw === 'string' ? parseParametersBlob(raw) : raw as TestParametersBlob;
-      return readParameters(blob).map(p => (p.name || p.title || '').trim()).filter(Boolean);
-    } catch { return []; }
-  }
-
   // ── Narrowing helpers for the template ──────────────────
   gridRows(s: ReportSection): GridRow[] { return s.type === 'grid' ? (s as GridSection).rows : []; }
   paramRow(r: GridRow): GridRowParameter { return r as GridRowParameter; }
@@ -778,17 +743,32 @@ export class TestNotesEditorComponent implements OnInit {
 
   cellColumnNames(): string[] {
     // Prefer the columns the engine actually resolved (preview reflects the
-    // department's configured columns); fall back to defaults.
-    const fromPreview = this.preview()?.columns?.map(c => c.name);
-    return (fromPreview && fromPreview.length > 0)
-      ? fromPreview
+    // department's configured columns); fall back to defaults. Unit / range
+    // are never offered: they always print from the parameter (single
+    // source), so a typed cell could only disagree with the flag band.
+    const cols = this.preview()?.columns;
+    const names = (cols && cols.length > 0)
+      ? cols.filter(c => !TestNotesEditorComponent.isDerivedColumn(c.name, c.type)).map(c => c.name)
       : TestNotesEditorComponent.DEFAULT_CELL_COLUMNS;
+    return names;
+  }
+
+  /** Unit / range columns print from the parameter — never typed. */
+  private static isDerivedColumn(name: string, type?: string | null): boolean {
+    const t = (type ?? '').toLowerCase();
+    const n = (name ?? '').toLowerCase();
+    return t === 'unit' || t === 'range' || n === 'unit' || n === 'range';
+  }
+  private derivedColumnNames(): Set<string> {
+    const out = new Set(['unit', 'range']);
+    for (const c of this.preview()?.columns ?? []) {
+      if (TestNotesEditorComponent.isDerivedColumn(c.name, c.type)) out.add(c.name);
+    }
+    return out;
   }
 
   cellPlaceholder(col: string): string {
     if (col === 'result') return '{{value}} or blank → auto';
-    if (col === 'unit') return 'blank → auto';
-    if (col === 'range') return 'blank → auto';
     return '{{placeholder}}';
   }
 
@@ -863,6 +843,7 @@ export class TestNotesEditorComponent implements OnInit {
   }
 
   patchCell(si: number, ri: number, col: string, value: string) {
+    if (this.derivedColumnNames().has(col)) return;   // unit/range print from the parameter
     this.sections.update(arr => {
       const next = [...arr];
       const sec = next[si] as GridSection;
@@ -896,6 +877,25 @@ export class TestNotesEditorComponent implements OnInit {
     });
   }
 
+  /** Drop typed unit/range cells (legacy layouts carried them) — the printed
+   *  unit and range always come from the parameter. */
+  private stripDerivedCells(arr: ReportSection[]): ReportSection[] {
+    const derived = this.derivedColumnNames();
+    return arr.map(s => {
+      if (s.type !== 'grid') return s;
+      const g = s as GridSection;
+      return {
+        ...g,
+        rows: (g.rows ?? []).map(r => {
+          const cells = (r as GridRowParameter).cells;
+          if (r.row_merge || !cells || !Object.keys(cells).some(k => derived.has(k))) return r;
+          const kept = Object.fromEntries(Object.entries(cells).filter(([k]) => !derived.has(k)));
+          return { ...r, cells: kept } as GridRow;
+        }),
+      } as unknown as ReportSection;
+    });
+  }
+
   private reindex(arr: ReportSection[]): ReportSection[] {
     return arr.map((s, i) => ({ ...s, order: i + 1 }));
   }
@@ -908,7 +908,7 @@ export class TestNotesEditorComponent implements OnInit {
     if (!testId) return;
     this.saving.set(true);
     try {
-      const payload = this.reindex(this.sections());
+      const payload = this.stripDerivedCells(this.reindex(this.sections()));
       await this.layout.saveTestLayout(testId, payload);
       this.configured.set(true);
       this.toasts.success('Layout saved');

@@ -801,7 +801,6 @@ select.pf-input--compact {
 .pf-rrgrid__del { display: flex; align-items: center; justify-content: center; cursor: pointer;
   color: var(--text-tertiary, #64748b); }
 .pf-rrgrid__del:hover { color: #ef4444; }
-.pf-rrgrid__fallback { margin: 8px 2px 0; font-size: 12px; color: var(--text-tertiary, #94a3b8); }
 .pf-rt3__foot { padding: 10px 2px 0; }
 .pf-rb__add { padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
   color: var(--violet-text, #a78bfa); background: transparent; border: 1px dashed rgba(124,58,237,.45); }

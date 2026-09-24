@@ -42,6 +42,7 @@ import { TouchButtonComponent } from "../../../shared/primitives/touch-button.co
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
 import { waLink } from "../../../shared/utils/whatsapp";
 import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
+import { savedValueRows } from "../../../shared/utils/result-flag";
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
@@ -438,53 +439,18 @@ export class ReportQueueComponent implements OnInit {
     return out;
   });
 
+  /** Preliminary values with the flag + range mw SAVED with the result
+   *  (snapshot `flagged` map) — never a browser recompute. */
   private extractValues(t: OrderTest): PrelimRow[] {
     if (!t.currentResult || !t.test?.parameters) return [];
-    let snap: { values?: Record<string, unknown> };
-    try {
-      snap = JSON.parse(t.currentResult);
-    } catch {
-      return [];
-    }
-    if (!snap.values) return [];
-    let params: Array<{
-      name: string;
-      title: string;
-      unit?: string;
-      criticalLow?: number;
-      criticalHigh?: number;
-      referenceRanges?: Array<{ min: number; max: number }>;
-    }> = [];
-    try {
-      const blob = JSON.parse(t.test.parameters) as { parameters?: any[] };
-      params = blob.parameters ?? [];
-    } catch {
-      return [];
-    }
-    return params.map((p) => {
-      const v = snap.values![p.name];
-      const n = Number(v);
-      const isNum =
-        !Number.isNaN(n) && v !== null && v !== undefined && v !== "";
-      const r = (p.referenceRanges ?? [])[0];
-      let flag: "normal" | "abnormal" | "critical" = "normal";
-      if (isNum) {
-        if (
-          (p.criticalLow != null && n <= p.criticalLow) ||
-          (p.criticalHigh != null && n >= p.criticalHigh)
-        )
-          flag = "critical";
-        else if (r && (n < r.min || n > r.max)) flag = "abnormal";
-      }
-      return {
-        name: p.name,
-        title: p.title || p.name,
-        value: v ?? "—",
-        unit: p.unit,
-        range: r ? `${r.min}–${r.max}${p.unit ? " " + p.unit : ""}` : undefined,
-        flag,
-      };
-    });
+    return savedValueRows(t.currentResult, t.test.parameters).map(r => ({
+      name: r.name,
+      title: r.title,
+      value: r.value ?? "—",
+      unit: r.unit,
+      range: r.range,
+      flag: r.flag,
+    }));
   }
 
   private formatTime(iso: string): string {

@@ -122,6 +122,10 @@ export interface TestParameter {
   attachments?: boolean;
   /** Per-value print switch: false = recorded at the bench, never printed. */
   printOnReport?: boolean;
+  /** Per-value methodology OVERRIDE — hybrid: effective = this ?? the test's
+   *  `methodology` column (see shared/utils/methodology.ts). Absent = the
+   *  test-level methodology applies; a copy equal to it is stripped on save. */
+  methodology?: string | null;
 
   // ── Editor / entry-form properties (optional; readers that don't care
   // ignore them). These used to live ONLY on a parallel `fields[]` array —
@@ -145,6 +149,8 @@ export interface TestParameter {
 }
 
 export interface TestParametersBlob {
+  /** @deprecated DUPLICATE of the `tests.SampleType` column — never written
+   *  (writeParameters / tidyParametersJson drop it); the column is the specimen. */
   sampleType?: string;
   tatHours?: number;
   /** Microbiology result format hint: 'culture_sensitivity' routes to the

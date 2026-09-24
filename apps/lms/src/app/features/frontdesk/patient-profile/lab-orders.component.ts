@@ -8,6 +8,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { buildReportBlobUrl } from '../../../shared/utils/report-blob';
 import { PdfCanvasComponent } from './pdf-canvas.component';
+import { parseResultSnapshot, savedValueRows } from '../../../shared/utils/result-flag';
 
 interface ResultRow { title: string; value: string; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; }
 
@@ -221,38 +222,19 @@ export class LabOrdersComponent implements OnDestroy {
     return 'wait';
   }
 
-  /** Parse a test's entered values × its parameter defs → per-parameter rows. */
+  /** Parse a test's entered values × its parameter defs → per-parameter rows,
+   *  flagged with the verdict mw SAVED with the result (no browser recompute). */
   resultRows(t: OrderTest): ResultRow[] {
-    if (!t.currentResult) return [];
-    let snap: { values?: Record<string, unknown> };
-    try { snap = JSON.parse(t.currentResult); } catch { return []; }
-    if (!snap.values) return [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let params: any[] = [];
-    try { params = t.test?.parameters ? (JSON.parse(t.test.parameters).parameters ?? []) : []; } catch { params = []; }
-    if (params.length) {
-      return params.map(p => {
-        const v = snap.values![p.name];
-        const n = Number(v);
-        const isNum = !Number.isNaN(n) && v !== null && v !== undefined && v !== '';
-        const r = (p.referenceRanges ?? [])[0];
-        let flag: ResultRow['flag'] = 'normal';
-        if (isNum) {
-          if ((p.criticalLow != null && n <= p.criticalLow) || (p.criticalHigh != null && n >= p.criticalHigh)) flag = 'critical';
-          else if (r && r.min != null && r.max != null && (n < r.min || n > r.max)) flag = 'abnormal';
-        }
-        return {
-          title: p.title || p.name,
-          value: v === undefined || v === null || v === '' ? '—' : String(v),
-          unit: p.unit,
-          range: r && r.min != null && r.max != null ? `${r.min}–${r.max}${p.unit ? ' ' + p.unit : ''}` : undefined,
-          flag,
-        };
-      });
+    const snap = parseResultSnapshot(t.currentResult);
+    if (!snap?.values) return [];
+    const show = (v: unknown) => v === undefined || v === null || v === '' ? '—' : String(v);
+    const rows = savedValueRows(t.currentResult, t.test?.parameters);
+    if (rows.length) {
+      return rows.map(r => ({ title: r.title, value: show(r.value), unit: r.unit, range: r.range, flag: r.flag }));
     }
     // Fallback: no parameter defs available — show the raw entered values.
     return Object.entries(snap.values).map(([k, v]) => ({
-      title: k, value: v === undefined || v === null || v === '' ? '—' : String(v), flag: 'normal' as const,
+      title: k, value: show(v), flag: 'normal' as const,
     }));
   }
 

@@ -10,6 +10,7 @@ import {
   ResolvedSection,
 } from '../models/report-layout.model';
 import { ReportSignature, ReportTemplate } from '../models/report.model';
+import { flagCodeOf, savedFlagOf, type SavedFlag } from './result-flag';
 
 /**
  * Render an A4 lab report PDF in the Drlogy template style — blue
@@ -1982,6 +1983,7 @@ function buildPanelGroup(
     const srcOf = (type: string): ReportColumn | undefined => cols.find(c => c.type === type);
     const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
     const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
+    const savedValues = (t.result?.['values'] ?? undefined) as Record<string, SavedFlag> | undefined;
     for (const sec of gridSections) {
       for (const r of sec.rows ?? []) {
         // Per-report picker: the tech unticked this value for THIS order.
@@ -1991,12 +1993,20 @@ function buildPanelGroup(
           if (note) group.rows.push({ kind: 'note', note });
           continue;
         }
-        const label = flagLabel(r);
         const rc = coerceResultCell(resultSrc ? r.cells[resultSrc.name] : '');
-        // Only real abnormality letters print — 'N' (normal) must never leak
-        // onto the row ("92 mg/dL N"). Same whitelist as the legacy path.
-        const letter = (label === 'High' ? 'H' : label === 'Low' ? 'L' : '')
-          || (['H', 'L', 'C', 'A'].includes(rc.flag) ? rc.flag : '');
+        // The flag is the one mw SAVED with the result — the snapshot's
+        // per-value verdict (layouts are resolved with SCALAR values, so the
+        // cell rarely carries it) or an enriched cell. Single source: a row
+        // colour only stands in when there is no saved verdict at all. Only
+        // real abnormality letters print — 'N' (normal) must never leak onto
+        // the row ("92 mg/dL N"). Same whitelist as the legacy path.
+        const sv = r.parameterName ? savedFlagOf({ flagged: savedValues }, r.parameterName) : undefined;
+        const hasSaved = (!!sv && typeof sv === 'object' && 'flag' in sv) || !!rc.saved;
+        const savedCode = sv && typeof sv === 'object' && 'flag' in sv ? flagCodeOf(sv.flag) : flagCodeOf(rc.flag);
+        const savedLetter = savedCode === 'N' ? '' : savedCode;
+        const label = hasSaved ? '' : flagLabel(r);
+        const letter = hasSaved ? savedLetter
+          : ((label === 'High' ? 'H' : label === 'Low' ? 'L' : '') || savedLetter);
         const resultText = rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : '');
         // Admin colour semantics: red/orange = abnormal; green is an explicit
         // "normal" marker and must NOT trip the abnormal styling.
@@ -2021,7 +2031,7 @@ function buildPanelGroup(
             || (looksNumeric(resultText) ? (r.unit ?? '') : ''),
           flag: letter,
           isLow: letter === 'L',
-          abnormal: sev === 'high' || sev === 'warn' || !!letter,
+          abnormal: hasSaved ? !!letter : (sev === 'high' || sev === 'warn' || !!letter),
           color: r.color ?? null,
           bold: !!r.isBold,
           texts: Object.keys(texts).length ? texts : undefined,
@@ -3593,12 +3603,14 @@ function titleCaseHeader(label: string): string {
 /** A resolved 'result' cell sometimes arrives as the whole enriched value
  *  object JSON ({value,flag,range,unit,segment}) instead of just the value
  *  (layout engine put the object in the result column). Unwrap value + flag. */
-function coerceResultCell(raw: unknown): { value: string; flag: string } {
+/** `saved` = the cell is mw's enriched wrapper ({ value, flag, … }) — its
+ *  flag is THE verdict (single source), even when blank/'N'. */
+function coerceResultCell(raw: unknown): { value: string; flag: string; saved?: boolean } {
   const s = (raw == null ? '' : String(raw)).trim();
   if (s.startsWith('{') && s.includes('"value"')) {
     try {
       const o = JSON.parse(s) as { value?: unknown; flag?: string };
-      return { value: o.value == null ? '' : String(o.value), flag: (o.flag ?? '').toUpperCase() };
+      return { value: o.value == null ? '' : String(o.value), flag: (o.flag ?? '').toUpperCase(), saved: 'flag' in o };
     } catch { /* fall through */ }
   }
   return { value: s, flag: '' };

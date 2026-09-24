@@ -259,6 +259,14 @@ const OPERATORS = [
                             @for (col of deptColumnsForRender(); track col.id) {
                               @let locked = hasLock(asParam(r).parameter_name, col.name);
                               @let suggestions = cellSuggestions(col, r);
+                              @if (isDerivedCol(col)) {
+                                <!-- Unit / reference range print from the value's own
+                                     definition (single source) — never typed here. -->
+                                <td class="pf-le-sheet__c pf-le-sheet__c--derived"
+                                    title="Printed from the value's own {{ col.type === 'unit' ? 'unit' : 'reference range' }} in the Test Master">
+                                  <span class="pf-le-sheet__derived">from the value</span>
+                                </td>
+                              } @else {
                               <td class="pf-le-sheet__c"
                                   [class.pf-le-sheet__c--locked]="locked">
                                 <!-- All cell controls live inside the inner div so the absolute
@@ -304,6 +312,7 @@ const OPERATORS = [
                                   }
                                 </div>
                               </td>
+                              }
                             }
                           }
                           <td class="pf-le-sheet__c-actions">
@@ -1018,6 +1027,11 @@ const OPERATORS = [
     .pf-le-sheet__c {
       position: relative;
       vertical-align: middle;
+    }
+    .pf-le-sheet__c--derived { background: var(--surface-2, transparent); }
+    .pf-le-sheet__derived {
+      display: block; padding: 4px 8px; font-size: 12px; font-style: italic;
+      color: var(--text-tertiary, #94a3b8); white-space: nowrap;
     }
     .pf-le-sheet__c--locked {
       background: rgba(245, 158, 11, 0.06) !important;
@@ -2289,7 +2303,7 @@ export class TestLayoutEditorComponent {
     if (this._autosaveTimer) clearTimeout(this._autosaveTimer);
     this._autosaveTimer = setTimeout(async () => {
       try {
-        await this.layout.saveTestLayout(id, this.reindex(list));
+        await this.layout.saveTestLayout(id, this.stripDerivedCells(this.reindex(list)));
         this.configured.set(true);
         this._dirty = false;
       } catch {
@@ -2341,7 +2355,7 @@ export class TestLayoutEditorComponent {
     // the server. Failures are swallowed — worst case the migration
     // re-runs on next load, which is idempotent.
     try {
-      await this.layout.saveTestLayout(id, this.reindex(this.sections()));
+      await this.layout.saveTestLayout(id, this.stripDerivedCells(this.reindex(this.sections())));
       for (const param of paramNames) {
         try { await this.layout.deleteLock(id, param); } catch { /* ignore */ }
       }
@@ -2824,7 +2838,7 @@ export class TestLayoutEditorComponent {
     if (!id) return;
     this.saving.set(true);
     try {
-      const payload = this.reindex(this.sections());
+      const payload = this.stripDerivedCells(this.reindex(this.sections()));
       await this.layout.saveTestLayout(id, payload);
       this.configured.set(true);
       this.version.update(v => v + 1);
@@ -2858,7 +2872,7 @@ export class TestLayoutEditorComponent {
       // the latest sections (the embedded PDF preview resolves server-side).
       // Skipped if there are no sections yet (draft-empty state).
       if (this.sections().length > 0) {
-        await this.layout.saveTestLayout(id, this.reindex(this.sections()));
+        await this.layout.saveTestLayout(id, this.stripDerivedCells(this.reindex(this.sections())));
       }
       this.previewToken.update(v => v + 1);
     } catch (e: unknown) {
@@ -2933,6 +2947,31 @@ export class TestLayoutEditorComponent {
   }
 
   // ───────── Misc helpers ────────────────────────────────
+
+  /** Unit / range columns print from the parameter (single source) — the
+   *  spreadsheet shows them read-only and never stores a typed cell. */
+  isDerivedCol(col: ReportColumn): boolean {
+    return col.type === 'unit' || col.type === 'range';
+  }
+
+  /** Drop typed unit/range cells from grid rows before a save (legacy
+   *  layouts and migrated locks carried them; the engine ignores them). */
+  private stripDerivedCells(arr: ReportSection[]): ReportSection[] {
+    const derived = new Set(['unit', 'range']);
+    for (const c of this.deptColumnsForRender()) if (this.isDerivedCol(c)) derived.add(c.name);
+    return arr.map(s => {
+      if (s.type !== 'grid') return s;
+      const g = s as GridSection;
+      return {
+        ...g,
+        rows: (g.rows ?? []).map(r => {
+          const cells = (r as GridRowParameter).cells;
+          if (r.row_merge || !cells || !Object.keys(cells).some(k => derived.has(k))) return r;
+          return { ...r, cells: Object.fromEntries(Object.entries(cells).filter(([k]) => !derived.has(k))) } as GridRow;
+        }),
+      } as ReportSection;
+    });
+  }
 
   private reindex<T extends { order: number }>(arr: T[]): T[] {
     return arr.map((s, i) => ({ ...s, order: i + 1 }));

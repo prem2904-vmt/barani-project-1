@@ -1,13 +1,13 @@
 import { ReportQueueComponent } from './report-queue.component';
 
 /**
- * Test Master single-source — Stage 1 safety net.
+ * Test Master single source — report-queue's preliminary-values preview.
  *
- * report-queue's preliminary-values preview RECOMPUTES a flag in the browser
- * (extractValues ~469-484) instead of reading the flag mw saved in the result
- * snapshot (`flagged[param].flag`). These specs freeze TODAY's behaviour so the
- * Phase-0 switch ("flags = the flag mw saved, no client recompute") is a
- * deliberate, visible change. Pure method → prototype.call on a bare context.
+ * Phase 0 (done): the flag and printed range are the ones mw SAVED with the
+ * result (snapshot `flagged[param]`), via the shared savedValueRows helper.
+ * The old browser recompute (`referenceRanges[0]`, inclusive criticals,
+ * band criticals ignored, saved flag ignored) is retired.
+ * Pure method → prototype.call on a bare context.
  */
 const P = ReportQueueComponent.prototype as any;
 const extract = (t: any) => P.extractValues.call({}, t);
@@ -17,11 +17,11 @@ const ot = (values: Record<string, unknown>, params: any[], extra: Record<string
   test: { parameters: JSON.stringify({ parameters: params }) },
 });
 
-describe('ReportQueue.extractValues — client-side flag recompute (CURRENT)', () => {
+describe('ReportQueue.extractValues — saved flag (Phase 0)', () => {
   const hb = {
     name: 'hb', title: 'Haemoglobin', unit: 'g/dL', criticalLow: 7, criticalHigh: 20,
     referenceRanges: [
-      { min: 13, max: 17, sex: 'M' },   // first band — always used today
+      { min: 13, max: 17, sex: 'M' },
       { min: 12, max: 15, sex: 'F' },
     ],
   };
@@ -33,48 +33,41 @@ describe('ReportQueue.extractValues — client-side flag recompute (CURRENT)', (
     expect(extract({ currentResult: '{"values":{"a":1}}', test: { parameters: 'nope' } })).toEqual([]);
   });
 
-  it('judges against referenceRanges[0] regardless of patient sex (the [0] shortcut)', () => {
-    // 12.5 is inside the FEMALE band but below the first (male) band.
+  it('no [0] shortcut: without a saved verdict the value is unflagged and EVERY band is listed', () => {
     const [row] = extract(ot({ hb: '12.5' }, [hb]));
-    expect(row.flag).toBe('abnormal');
-    expect(row.range).toBe('13–17 g/dL');
+    expect(row.flag).toBe('normal');
+    expect(row.range).toContain('13–17');
+    expect(row.range).toContain('12–15');
     expect(row.unit).toBe('g/dL');
     expect(row.title).toBe('Haemoglobin');
   });
 
-  it('critical is INCLUSIVE here (<= / >=) — differs from validate-result and mw (strict)', () => {
-    expect(extract(ot({ hb: '7' }, [hb]))[0].flag).toBe('critical');
-    expect(extract(ot({ hb: '20' }, [hb]))[0].flag).toBe('critical');
-  });
-
-  it('uses only the PARAMETER-level criticals — band-scoped criticals are ignored', () => {
-    const p = { name: 'k', title: 'K', referenceRanges: [{ min: 3.5, max: 5, criticalLow: 2.5, criticalHigh: 6.5 }] };
-    // 7 is past the band critical-high but no param-level critical → just abnormal.
-    expect(extract(ot({ k: '7' }, [p]))[0].flag).toBe('abnormal');
-  });
-
-  it('non-numeric and missing values are "normal" and missing prints as an em dash', () => {
-    const rows = extract(ot({ hb: 'haemolysed' }, [hb, { name: 'x', title: '' }]));
-    expect(rows[0].flag).toBe('normal');
-    expect(rows[1].value).toBe('—');
-    expect(rows[1].title).toBe('x');       // empty title falls back to name
-    expect(rows[1].range).toBeUndefined();
-  });
-
-  it('IGNORES the flag mw saved in the snapshot (flagged[param].flag)', () => {
-    const t = ot({ hb: '15' }, [hb], { flagged: { hb: { value: '15', flag: 'L', range: '12–15' } } });
-    // mw said Low for this patient; the browser recomputes "normal" from band[0].
+  it('never recomputes criticals in the browser (a saved N at the param limit stays normal)', () => {
+    const t = ot({ hb: '7' }, [hb], { flagged: { hb: { value: '7', flag: 'N', range: '12–15' } } });
     expect(extract(t)[0].flag).toBe('normal');
   });
 
-  it.skip('TARGET phase 0: flag comes from the saved snapshot flagged[param].flag (no client recompute)', () => {
+  it('band-scoped criticals are honoured via the saved flag', () => {
+    const p = { name: 'k', title: 'K', referenceRanges: [{ min: 3.5, max: 5, criticalLow: 2.5, criticalHigh: 6.5 }] };
+    expect(extract(ot({ k: '7' }, [p], { flagged: { k: { value: '7', flag: 'C' } } }))[0].flag).toBe('critical');
+  });
+
+  it('missing values print as an em dash; empty title falls back to name', () => {
+    const rows = extract(ot({ hb: 'haemolysed' }, [hb, { name: 'x', title: '' }]));
+    expect(rows[0].flag).toBe('normal');
+    expect(rows[1].value).toBe('—');
+    expect(rows[1].title).toBe('x');
+    expect(rows[1].range).toBeUndefined();
+  });
+
+  it('TARGET phase 0: flag comes from the saved snapshot flagged[param].flag (no client recompute)', () => {
     const t = ot({ hb: '15' }, [hb], { flagged: { hb: { value: '15', flag: 'L', range: '12–15 g/dL' } } });
     const [row] = extract(t);
     expect(row.flag).toBe('abnormal');           // L/H/A → abnormal, C → critical, N → normal
     expect(row.range).toBe('12–15 g/dL');        // printed range = the band mw applied
   });
 
-  it.skip('TARGET phase 0: saved "C" maps to critical even when the client would say normal', () => {
+  it('TARGET phase 0: saved "C" maps to critical even when the client would say normal', () => {
     const t = ot({ hb: '15' }, [hb], { flagged: { hb: { value: '15', flag: 'C' } } });
     expect(extract(t)[0].flag).toBe('critical');
   });

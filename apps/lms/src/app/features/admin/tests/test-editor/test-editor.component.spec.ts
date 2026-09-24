@@ -72,20 +72,22 @@ function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts
 const lastPatchBody = (api: any) => api.patch.mock.calls.at(-1)[1];
 
 describe('TestEditor load → save round-trip (CURRENT)', () => {
-  it('hydrates price / methodology / criticals / sampleType / flat unit + range from the test row', () => {
+  it('hydrates price / methodology / sampleType / flat unit + range from the test row (no test-level criticals)', () => {
     const { c } = make();
     const d = c._draft();
-    expect(d).toMatchObject({ price: 250, methodology: 'ISE', criticalLow: 120, criticalHigh: 160,
+    expect(d).toMatchObject({ price: 250, methodology: 'ISE',
       sampleType: 'Serum', unit: 'mmol/L', adultReferenceRange: '135–145', testCode: 'BIO019' });
+    expect(d.criticalLow).toBeUndefined();
+    expect(d.criticalHigh).toBeUndefined();
     expect(c.fields().map((f: any) => f.name)).toEqual(['sodium']);
   });
 
-  it('save PATCHes /api/tests/{id} with price, tax, test-level criticals, methodology, sampleType, unit', () => {
+  it('save PATCHes /api/tests/{id} with price, tax, methodology, sampleType, unit', () => {
     const { c, api } = make();
     c.saveTest();
     expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', expect.anything());
     expect(lastPatchBody(api)).toMatchObject({
-      price: 250, taxSlab: 0, methodology: 'ISE', criticalLow: 120, criticalHigh: 160,
+      price: 250, taxSlab: 0, methodology: 'ISE',
       sampleType: 'Serum', unit: 'mmol/L', resultType: 'numeric', reportFormat: 'tabular', testCode: 'BIO019',
     });
   });
@@ -103,13 +105,13 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
     expect(lastPatchBody(api).adultReferenceRange).toBe('');
   });
 
-  it('parametersJson is passed through verbatim (the wrapper sampleType / methodology ride along untouched)', () => {
-    const raw = P([{ name: 'sodium', type: 'numeric', methodology: 'ISE', referenceRanges: [{ min: 135, max: 145 }] }], { sampleType: 'Plasma' });
+  it('an already-tidy parametersJson is passed through verbatim (real per-value overrides kept)', () => {
+    const raw = P([{ name: 'sodium', type: 'numeric', methodology: 'Flame', referenceRanges: [{ min: 135, max: 145 }] }], { microFormat: 'x' });
     const { c, api } = make({ test: baseTest({ parameters: raw }) });
     c.saveTest();
     const body = lastPatchBody(api);
     expect(body.parametersJson).toBe(raw);
-    expect(body.sampleType).toBe('Serum');       // column and wrapper can disagree today
+    expect(body.sampleType).toBe('Serum');       // the column is the specimen
   });
 
   it('a package save drops sampleType/methodology/criticals/unit but still sends price', () => {
@@ -179,7 +181,7 @@ describe('TestEditor — TARGET behaviour', () => {
     expect(body.taxSlab).toBeUndefined();
   });
 
-  it.skip('TARGET phase 0/6: no test-level critical pair — criticals live on bands/params only', () => {
+  it('TARGET phase 0/6: no test-level critical pair — criticals live on bands/params only', () => {
     const { c, api } = make();
     c.saveTest();
     const body = lastPatchBody(api);
@@ -195,7 +197,7 @@ describe('TestEditor — TARGET behaviour', () => {
     expect(body.adultReferenceRange).toBeUndefined();
   });
 
-  it.skip('TARGET phase 0: hybrid methodology — per-value copies equal to the test-level one are stripped on save', () => {
+  it('TARGET phase 0: hybrid methodology — per-value copies equal to the test-level one are stripped on save', () => {
     const raw = P([{ name: 'sodium', type: 'numeric', methodology: 'ISE' }, { name: 'k', type: 'numeric', methodology: 'Flame' }]);
     const { c, api } = make({ test: baseTest({ parameters: raw }) });
     c.saveTest();
@@ -204,7 +206,7 @@ describe('TestEditor — TARGET behaviour', () => {
     expect(ps[1].methodology).toBe('Flame');      // real override kept
   });
 
-  it.skip('TARGET phase 0: specimen = the sampleType column only (no wrapper sampleType in parametersJson)', () => {
+  it('TARGET phase 0: specimen = the sampleType column only (no wrapper sampleType in parametersJson)', () => {
     const raw = P([{ name: 'sodium', type: 'numeric' }], { sampleType: 'Plasma' });
     const { c, api } = make({ test: baseTest({ parameters: raw }) });
     c.saveTest();

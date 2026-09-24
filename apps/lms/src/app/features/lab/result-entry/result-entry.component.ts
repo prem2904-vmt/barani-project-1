@@ -15,7 +15,9 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { AuthService } from '../../../core/auth/auth.service';
-import { flagAgainst, formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
+import { effectiveMethodology } from '../../../shared/utils/methodology';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
 import { choiceOptionsFor, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
 import { paramToField, readParameters } from '../../../shared/utils/test-parameters';
@@ -429,7 +431,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                               @if (refLabel(p); as r) { {{ r }} } @else { — }
                             </td>
                             <td class="pf-rg__c-method">
-                              {{ $any(p)?.methodology ?? '—' }}
+                              {{ methodologyFor(p) }}
                             </td>
                           </tr>
                         }
@@ -3360,6 +3362,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return selectReferenceRange(p.referenceRanges, sex, ageYears);
   }
 
+  /** The bench chip. A value that is still the one SAVED with the result
+   *  shows mw's saved verdict (snapshot `flagged`); a value being typed gets
+   *  the shared live hint (patient band, band → param criticals, strict). */
   flagFor(p: TestParameter): Flag | null {
     if (this.inputKindFor(p) !== 'numeric') return null;
     const raw = this._values()[p.name];
@@ -3367,22 +3372,32 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const v = parseFloat(String(raw));
     if (Number.isNaN(v)) return null;
 
-    // Band-scoped criticals win (they follow the patient's sex/age group);
-    // the parameter-level pair is the fallback — mirrors mw flagging.
-    const band = this.rangeFor(p);
-    const critLow  = band?.criticalLow  ?? p.criticalLow;
-    const critHigh = band?.criticalHigh ?? p.criticalHigh;
-    if (critLow  != null && v < critLow)  return { tone: 'critical', label: `Critical · below ${critLow}` };
-    if (critHigh != null && v > critHigh) return { tone: 'critical', label: `Critical · above ${critHigh}` };
+    const ot = this._ot();
+    const saved = savedFlagOf(parseResultSnapshot(ot?.currentResult), p.name);
+    if (saved && saved.flag != null && String(saved.value ?? '') === String(raw)) {
+      const code = flagCodeOf(saved.flag);
+      if (code === 'C') return { tone: 'critical', label: 'Critical' };
+      if (code === 'L') return { tone: 'low', label: 'Low' };
+      if (code === 'H') return { tone: 'high', label: 'High' };
+      if (code === 'A') return { tone: 'high', label: 'Abnormal' };
+      if (code === 'N') return { tone: 'normal', label: 'Normal' };
+      return null;
+    }
 
-    // Shared flag rule (mirrors mw FlagOne): flags when EITHER bound exists,
-    // so one-sided bands ("< 140", "≥ 40") finally flag instead of passing
-    // everything through silently.
-    const fl = flagAgainst(band, v);
-    if (fl === 'L') return { tone: 'low',  label: 'Low' };
-    if (fl === 'H') return { tone: 'high', label: 'High' };
-    if (fl === 'N') return { tone: 'normal', label: 'Normal' };
-    return null;
+    const ageRaw = ot?.subOrder?.order?.patient?.age;
+    const lf = liveFlag(p, v, normalizeSex(ot?.subOrder?.order?.patient?.sex),
+      typeof ageRaw === 'number' ? ageRaw : null, ot?.profileCode);
+    if (!lf) return null;
+    if (lf.code === 'C') return { tone: 'critical', label: `Critical · ${lf.critical === 'low' ? 'below' : 'above'} ${lf.limit}` };
+    if (lf.code === 'L') return { tone: 'low',  label: 'Low' };
+    if (lf.code === 'H') return { tone: 'high', label: 'High' };
+    return { tone: 'normal', label: 'Normal' };
+  }
+
+  /** Methodology for one value — HYBRID: the value's own override, else the
+   *  test-level default (shared resolver, same as the report). */
+  methodologyFor(p: TestParameter): string {
+    return effectiveMethodology(p, this._ot()?.test) || '—';
   }
 
   /** Softer amber input tint for plain high/low (red stays critical-only). */

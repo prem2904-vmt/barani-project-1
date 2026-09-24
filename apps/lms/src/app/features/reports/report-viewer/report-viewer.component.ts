@@ -20,6 +20,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { flagCodeOf, savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
 
 interface ReportData {
   patient?: { name?: string; age?: number; sex?: string; phone?: string };
@@ -78,12 +79,14 @@ interface ViewPanelGroup {
  *  object JSON — `{"value":8,"flag":"H","range":"...","unit":"..."}` — instead
  *  of just the value (the layout engine put the object in the result column).
  *  Unwrap it to the value + flag so the report never shows raw JSON. */
-function coerceResultCell(raw: unknown): { value: string; flag: string } {
+/** `saved` = the cell is mw's enriched wrapper ({ value, flag, … }) — its
+ *  flag is THE verdict (single source), even when blank/'N'. */
+function coerceResultCell(raw: unknown): { value: string; flag: string; saved?: boolean } {
   const s = (raw == null ? '' : String(raw)).trim();
   if (s.startsWith('{') && s.includes('"value"')) {
     try {
       const o = JSON.parse(s) as { value?: unknown; flag?: string };
-      return { value: o.value == null ? '' : String(o.value), flag: (o.flag ?? '').toUpperCase() };
+      return { value: o.value == null ? '' : String(o.value), flag: (o.flag ?? '').toUpperCase(), saved: 'flag' in o };
     } catch { /* fall through to raw */ }
   }
   return { value: s, flag: '' };
@@ -1128,6 +1131,7 @@ export class ReportViewerComponent implements OnInit {
       const cols = [...layout!.columns, ...(layout!.departmentColumns ?? [])];
       const srcOf = (type: string) => cols.find(c => c.type === type);
       const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
+      const savedValues = (t.result?.values ?? undefined) as Record<string, SavedFlag> | undefined;
       for (const sec of gridSections) {
         for (const r of sec.rows ?? []) {
           if (r.isMerged) {
@@ -1136,8 +1140,14 @@ export class ReportViewerComponent implements OnInit {
             continue;
           }
           const rc = coerceResultCell(resultSrc ? r.cells[resultSrc.name] : '');
-          const colorWord = this.hueFlag(r.color);
-          const flag = rc.flag || (colorWord === 'High' ? 'H' : colorWord === 'Low' ? 'L' : '');
+          // mw's SAVED verdict (snapshot value / enriched cell) is the flag —
+          // single source; the row colour only stands in when there is none.
+          const sv = r.parameterName ? savedFlagOf({ flagged: savedValues }, r.parameterName) : undefined;
+          const hasSaved = (!!sv && typeof sv === 'object' && 'flag' in sv) || !!rc.saved;
+          const code = sv && typeof sv === 'object' && 'flag' in sv ? flagCodeOf(sv.flag) : flagCodeOf(rc.flag);
+          const colorWord = hasSaved ? '' : this.hueFlag(r.color);
+          const flag = (hasSaved ? (code === 'N' ? '' : code) : rc.flag)
+            || (colorWord === 'High' ? 'H' : colorWord === 'Low' ? 'L' : '');
           g.rows.push({
             kind: 'param',
             name: this.humanize(r.parameterName ?? ''),
@@ -1146,7 +1156,7 @@ export class ReportViewerComponent implements OnInit {
             unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : ''),
             flag,
             isLow: flag === 'L',
-            abnormal: !!r.color || r.isBold || (!!rc.flag && rc.flag !== 'N'),
+            abnormal: hasSaved ? !!flag : (!!r.color || r.isBold || (!!rc.flag && rc.flag !== 'N')),
           });
         }
       }

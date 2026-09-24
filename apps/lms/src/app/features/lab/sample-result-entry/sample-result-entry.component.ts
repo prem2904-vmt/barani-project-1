@@ -10,10 +10,11 @@ import {
 import { TrendTest } from "../../../shared/utils/trend-chart";
 import {
   describeAllRanges,
-  flagAgainst,
   normalizeSex,
   selectReferenceRange,
 } from "../../../shared/utils/reference-range";
+import { flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
+import { effectiveMethodology } from "../../../shared/utils/methodology";
 import { choiceOptionsFor, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
 import { readParameters } from "../../../shared/utils/test-parameters";
 import {
@@ -210,41 +211,35 @@ export class SampleResultEntryComponent {
     };
   }
 
-  /** Instant H/L/critical chip as the tech types. Criticals are strict </>;
-   *  in-range flags route through the ONE shared flagAgainst rule with the
-   *  band picked for THIS patient's sex/age. Backend stays source of truth. */
+  /** The bench chip. A value still equal to the one SAVED with the result
+   *  shows mw's saved verdict (snapshot `flagged`); a value being typed gets
+   *  the shared live hint — the band for THIS patient's sex/age (profile-
+   *  scoped under a profile), band → param criticals (strict), then the
+   *  shared in-range rule. One implementation: shared/utils/result-flag. */
   flagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
-    if (this.inputKindFor(p) === "select") return this.qualitativeFlagFor(t, p);
-    if (this.inputKindFor(p) !== "number") return null;
+    const kind = this.inputKindFor(p);
+    if (kind !== "select" && kind !== "number") return null;
     const raw = this.getValue(t.id, p.name);
-    if (raw === undefined || raw === null || raw === "") return null;
+    if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+    const saved = savedFlagOf(parseResultSnapshot(t.currentResult), p.name);
+    if (saved && saved.flag != null && String(saved.value ?? "") === String(raw)) {
+      const code = flagCodeOf(saved.flag);
+      if (code === "C") return { tone: "critical", label: "Critical" };
+      if (code === "L") return { tone: "low", label: "Low" };
+      if (code === "H") return { tone: "high", label: "High" };
+      if (code === "A") return { tone: "high", label: "Abnormal" };
+      return null;
+    }
+    if (kind === "select") return this.qualitativeFlagFor(t, p);
     const v = Number(String(raw).trim());
     if (Number.isNaN(v)) return null;
     const { sex, age } = this.patientSexAge();
-    const band = selectReferenceRange(this.bandsFor(t, p), sex, age);
-    // Band-scoped criticals win; parameter-level is the fallback (mirrors mw).
-    const critLow  = band?.criticalLow  ?? p.criticalLow;
-    const critHigh = band?.criticalHigh ?? p.criticalHigh;
-    if (critLow != null && v < critLow)
-      return { tone: "critical", label: `Critical · below ${critLow}` };
-    if (critHigh != null && v > critHigh)
-      return { tone: "critical", label: `Critical · above ${critHigh}` };
-    const fl = flagAgainst(band, v);
-    if (fl === "L") return { tone: "low", label: "Low" };
-    if (fl === "H") return { tone: "high", label: "High" };
+    const lf = liveFlag(p, v, sex, age, t.profileCode);
+    if (lf?.code === "C")
+      return { tone: "critical", label: `Critical · ${lf.critical === "low" ? "below" : "above"} ${lf.limit}` };
+    if (lf?.code === "L") return { tone: "low", label: "Low" };
+    if (lf?.code === "H") return { tone: "high", label: "High" };
     return null;
-  }
-
-  /** Profile-scoped bands (body fluids): under a profile, its bands win and
-   *  other profiles' bands drop out; untagged bands stay as generics.
-   *  Standalone, everything passes through — mirrors mw's resolver. */
-  private bandsFor(t: OrderTest, p: TestParameter) {
-    const bands = p.referenceRanges ?? [];
-    const pc = (t.profileCode ?? "").trim().toUpperCase();
-    if (!pc) return bands;
-    const scoped = bands.filter(b => (b.profileCode ?? "").trim().toUpperCase() === pc);
-    if (scoped.length) return scoped;
-    return bands.filter(b => !b.profileCode);
   }
 
   /** Dropdown normality: the LIVE option table's normal rows decide (an
@@ -905,10 +900,10 @@ export class SampleResultEntryComponent {
     return "";
   }
 
-  /** Methodology lives on the legacy TestParameter, dropped through from
-   *  the importer. Returns '—' so the column never reads blank. */
-  methodologyOf(p: TestParameter): string {
-    return (p as TestParameter & { methodology?: string }).methodology || "—";
+  /** Methodology — HYBRID: the value's own override, else the test-level
+   *  default (shared resolver; the report uses the same rule). */
+  methodologyOf(p: TestParameter, test?: { methodology?: string | null } | null): string {
+    return effectiveMethodology(p, test) || "—";
   }
 
   getValue(testId: string, paramName: string): unknown {

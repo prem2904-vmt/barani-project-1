@@ -7,11 +7,10 @@ import { ToastService } from '../../../core/services/toast.service';
 
 /**
  * Test Master single-source — Stage 1 safety net for the slim notes
- * (Description column) editor embedded in the test editor. TODAY writing the
- * first description SYNTHESISES a grid section with one row per parameter
- * (a stored copy of the value list), and the advanced cell editor lets an
- * admin TYPE the printed `unit` / `range` cells — a second source for what
- * the report prints next to the flag band.
+ * (Description column) editor embedded in the test editor. Phase 0 (done):
+ * a description stores ONE override row keyed by param (no snapshot of every
+ * parameter), and the printed `unit` / `range` cells are never typed — they
+ * always come from the parameter (the backend ignores typed ones too).
  */
 function make(params: string[]) {
   const layout = {
@@ -33,43 +32,44 @@ function make(params: string[]) {
   return { c, layout };
 }
 
-describe('TestNotesEditor — description rows (CURRENT)', () => {
-  it('first description synthesises a grid with a row for EVERY host parameter, in order', () => {
+describe('TestNotesEditor — description rows (Phase 0: overrides only)', () => {
+  it('first description creates a grid with ONE row — the edited parameter (no snapshot)', () => {
     const { c } = make(['hb', 'wbc', 'plt']);
     c.setDescription('wbc', 'Raised in infection');
     const grid = c.sections().find((s: any) => s.type === 'grid');
-    expect(grid.rows.map((r: any) => r.parameter_name)).toEqual(['hb', 'wbc', 'plt']);
+    expect(grid.rows.map((r: any) => r.parameter_name)).toEqual(['wbc']);
     expect(c.descriptionFor('wbc')).toBe('Raised in infection');
     expect(c.descriptionFor('hb')).toBe('');
   });
 
-  it('save() stores the synthesised rows (re-indexed) via saveTestLayout', async () => {
+  it('save() stores the override rows (re-indexed) via saveTestLayout', async () => {
     const { c, layout } = make(['hb', 'wbc']);
     c.setDescription('hb', 'x');
     await c.save();
     const [id, payload] = layout.saveTestLayout.mock.calls[0] as any[];
     expect(id).toBe('t1');
     expect(payload[0].order).toBe(1);
-    expect(payload[0].rows).toHaveLength(2);
+    expect(payload[0].rows).toHaveLength(1);
   });
 
-  it('typed unit / range cells are persisted verbatim (they override the engine value on print)', async () => {
+  it('legacy typed unit / range cells are dropped on save (they print from the parameter)', async () => {
     const { c, layout } = make(['hb']);
-    c.setDescription('hb', 'x');
-    c.patchCell(0, 0, 'unit', 'g%');
-    c.patchCell(0, 0, 'range', '11-16');
+    c.sections.set([{ id: 's', type: 'grid', order: 1, isVisible: true,
+      rows: [{ id: 'r', row_merge: false, parameter_name: 'hb', cells: { unit: 'g%', range: '11-16', description: 'x' } }] }]);
     await c.save();
     const row = (layout.saveTestLayout.mock.calls[0] as any[])[1][0].rows[0];
-    expect(row.cells).toMatchObject({ unit: 'g%', range: '11-16', description: 'x' });
+    expect(row.cells).toEqual({ description: 'x' });
   });
 
-  it('cell placeholders advertise "blank → auto" for unit/range', () => {
+  it('unit / range are not offered as editable cells', () => {
     const { c } = make(['hb']);
-    expect(c.cellPlaceholder('unit')).toBe('blank → auto');
-    expect(c.cellPlaceholder('range')).toBe('blank → auto');
+    expect(c.cellColumnNames()).not.toContain('unit');
+    expect(c.cellColumnNames()).not.toContain('range');
+    c.preview.set({ columns: [{ name: 'Units', type: 'unit' }, { name: 'Ref', type: 'range' }, { name: 'description', type: 'text' }] });
+    expect(c.cellColumnNames()).toEqual(['description']);
   });
 
-  it.skip('TARGET phase 0: printed unit/range always come from params — typed unit/range cells are not offered/stored', async () => {
+  it('TARGET phase 0: printed unit/range always come from params — typed unit/range cells are not offered/stored', async () => {
     const { c, layout } = make(['hb']);
     c.setDescription('hb', 'x');
     c.patchCell(0, 0, 'unit', 'g%');
@@ -79,7 +79,7 @@ describe('TestNotesEditor — description rows (CURRENT)', () => {
     expect(c.cellColumnNames()).not.toContain('unit');
   });
 
-  it.skip('TARGET phase 0/5: a description override stores ONE row keyed by param (others appended at render)', async () => {
+  it('TARGET phase 0/5: a description override stores ONE row keyed by param (others appended at render)', async () => {
     const { c, layout } = make(['hb', 'wbc', 'plt']);
     c.setDescription('wbc', 'Raised in infection');
     await c.save();

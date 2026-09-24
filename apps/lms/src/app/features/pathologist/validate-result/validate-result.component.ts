@@ -21,10 +21,14 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
-import { flagAgainst, formatRange, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
+import { formatRange, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
+import { flagTone, rangeWithUnit, savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
+import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
+  /** mw's saved per-value verdicts ({ value, flag, range, unit, … }). */
+  flagged?: Record<string, SavedFlag>;
   /** Culture sign-out: every completed bench stage's structured entries
    *  (gram smear fields, growth notes, identified organisms, branch ASTs). */
   stages?: CultureStageSnap[];
@@ -59,7 +63,7 @@ interface ParamDef {
   options?: string[];
   criticalLow?: number;
   criticalHigh?: number;
-  referenceRanges?: RangeLike[];
+  referenceRanges?: Array<RangeLike & { criticalLow?: number | null; criticalHigh?: number | null }>;
 }
 
 interface ValueRow {
@@ -1352,21 +1356,18 @@ export class ValidateResultComponent implements OnInit {
 
   readonly valueRows = computed<ValueRow[]>(() => this.valueRowsFor(this._selected()));
 
-  /** Parameter rows for ANY test in the sample (not just the focused one). */
+  /** Parameter rows for ANY test in the sample (not just the focused one).
+   *  The FLAG and printed range are the ones mw saved with the result
+   *  (snapshot `flagged` map) — the pathologist signs off exactly what will
+   *  print. The band below only draws the range bar: picked for THIS
+   *  patient's sex/age by the shared resolver (never `[0]`), with the band's
+   *  own criticals ahead of the parameter pair — the same band mw flagged with. */
   valueRowsFor(t: OrderTest | null): ValueRow[] {
     const snap = this.snapshotFor(t);
     if (!t?.test?.parameters || !snap?.values) return [];
+    const params = readParameters(parseParametersBlob(t.test.parameters)) as unknown as ParamDef[];
+    if (params.length === 0) return [];
 
-    let params: ParamDef[] = [];
-    try {
-      const blob = JSON.parse(t.test.parameters);
-      params = blob.parameters ?? [];
-    } catch { return []; }
-
-    // Pick each parameter's band for THIS patient's sex/age — same resolver
-    // as result entry and the report, so the pathologist reviews against the
-    // exact range the flag was computed with (the old `[0]` shortcut showed
-    // whatever band happened to be listed first).
     const patient = t.subOrder?.order?.patient;
     const sex = normalizeSex(patient?.sex);
     const ageYears = typeof patient?.age === 'number' ? patient.age : null;
@@ -1376,33 +1377,25 @@ export class ValidateResultComponent implements OnInit {
       const n = Number(v);
       const isNum = !Number.isNaN(n) && v !== null && v !== undefined && v !== '';
       const r = selectReferenceRange(p.referenceRanges ?? [], sex, ageYears);
-      let flag: Flag = 'normal';
-      if (isNum) {
-        // Critical is STRICT (< low / > high) — aligned with mw FlagOne,
-        // which used to disagree with the `<=`/`>=` here at the boundary.
-        if ((p.criticalLow != null && n < p.criticalLow) || (p.criticalHigh != null && n > p.criticalHigh)) flag = 'critical';
-        // Shared flag rule (mirrors mw): one-sided bands flag too, ops decide
-        // whether the boundary value is normal.
-        else {
-          const b = flagAgainst(r, n);
-          if (b === 'L' || b === 'H') flag = 'abnormal';
-        }
-      }
-      const rangeText = formatRange(r); // handles one-sided bands (no more "undefined–140")
+      const critLow = r?.criticalLow ?? p.criticalLow ?? undefined;
+      const critHigh = r?.criticalHigh ?? p.criticalHigh ?? undefined;
+      const saved = savedFlagOf(snap, p.name);
+      const unit = (saved?.unit ?? p.unit) || undefined;
+      const rangeText = saved ? (saved.range ?? null) : formatRange(r);
       return {
         name: p.name,
         title: p.title,
         value: v ?? '—',
         numeric: isNum ? n : undefined,
-        unit: p.unit,
-        range: rangeText ? `${rangeText}${p.unit ? ' ' + p.unit : ''}` : undefined,
+        unit,
+        range: rangeWithUnit(rangeText, unit),
         min: r?.min ?? undefined,
         max: r?.max ?? undefined,
-        critLow: p.criticalLow,
-        critHigh: p.criticalHigh,
+        critLow,
+        critHigh,
         isNumeric: isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),
-        flag,
-        hasRef: !!rangeText || p.criticalLow != null || p.criticalHigh != null
+        flag: flagTone(saved?.flag),
+        hasRef: !!rangeText || critLow != null || critHigh != null
       };
     });
   }

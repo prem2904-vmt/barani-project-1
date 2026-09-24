@@ -58,6 +58,14 @@ describe('ResultEntry.flagFor — live bench flag (CURRENT)', () => {
     expect(flag('')).toBeNull();
     expect(flag('abc')).toBeNull();
   });
+  it('an unchanged SAVED value shows mw\'s saved verdict, not a recompute', () => {
+    const c = ctx({ k: '4' });
+    c._ot = signal({ subOrder: { order: { patient: { sex: 'F', age: 30 } } },
+      currentResult: JSON.stringify({ values: { k: '4' }, flagged: { k: { value: '4', flag: 'C' } } }) });
+    expect(P.flagFor.call(c, k)?.tone).toBe('critical');
+    c._values = signal({ k: '4.5' });          // retyped → live hint again
+    expect(P.flagFor.call(c, k)?.tone).toBe('normal');
+  });
   it('non-numeric params never flag at the bench', () => {
     expect(P.flagFor.call(ctx({ s: 'Positive' }), { name: 's', type: 'select' })).toBeNull();
   });
@@ -73,10 +81,10 @@ describe('ResultEntry.refLabel — printed-style range on the bench (CURRENT)', 
   });
 });
 
-describe('ResultEntry — methodology (CURRENT: per-value only)', () => {
-  // The grid cell renders `$any(p)?.methodology ?? '—'` — the TEST-level
-  // Methodology column is never consulted at the bench.
-  it.skip('TARGET phase 0: hybrid methodology — effective = value.methodology ?? test.methodology', () => {
+describe('ResultEntry — methodology (Phase 0: hybrid)', () => {
+  // The grid cell renders methodologyFor(p) — the value's own override, else
+  // the TEST-level Methodology column (shared resolver).
+  it('TARGET phase 0: hybrid methodology — effective = value.methodology ?? test.methodology', () => {
     // Expected shared resolver (e.g. shared/utils/methodology.ts effectiveMethodology(param, test)):
     //   ({ methodology: 'ISE' }, { methodology: 'Photometry' }) → 'ISE'
     //   ({},                      { methodology: 'Photometry' }) → 'Photometry'
@@ -86,5 +94,6 @@ describe('ResultEntry — methodology (CURRENT: per-value only)', () => {
     const test = { methodology: 'Photometry' };
     expect(P.methodologyFor.call({ _ot: signal({ test }) }, { name: 'a', methodology: 'ISE' })).toBe('ISE');
     expect(P.methodologyFor.call({ _ot: signal({ test }) }, { name: 'a' })).toBe('Photometry');
+    expect(P.methodologyFor.call({ _ot: signal({ test: {} }) }, { name: 'a' })).toBe('—');
   });
 });

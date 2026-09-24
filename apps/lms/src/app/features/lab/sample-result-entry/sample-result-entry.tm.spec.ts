@@ -6,17 +6,18 @@ import { SampleResultEntryComponent } from './sample-result-entry.component';
  */
 const P = SampleResultEntryComponent.prototype as any;
 
-describe('SampleResultEntry.methodologyOf (CURRENT: per-value only)', () => {
-  it('reads the parameter\'s own methodology, else an em dash', () => {
+describe('SampleResultEntry.methodologyOf (Phase 0: hybrid)', () => {
+  it('reads the parameter\'s own methodology, else an em dash when the test has none', () => {
     expect(P.methodologyOf.call({}, { name: 'na', methodology: 'ISE' })).toBe('ISE');
     expect(P.methodologyOf.call({}, { name: 'na' })).toBe('—');
     expect(P.methodologyOf.call({}, { name: 'na', methodology: '' })).toBe('—');
   });
 
-  it.skip('TARGET phase 0: hybrid — value.methodology ?? test.methodology (test-level default shows)', () => {
+  it('TARGET phase 0: hybrid — value.methodology ?? test.methodology (test-level default shows)', () => {
     // Needs the owning test passed in (or resolved) so the test-level default applies.
     expect(P.methodologyOf.call({}, { name: 'na' }, { methodology: 'Photometry' })).toBe('Photometry');
     expect(P.methodologyOf.call({}, { name: 'na', methodology: 'ISE' }, { methodology: 'Photometry' })).toBe('ISE');
+    expect(P.methodologyOf.call({}, { name: 'na', methodology: '' }, { methodology: 'Photometry' })).toBe('Photometry');
   });
 });
 

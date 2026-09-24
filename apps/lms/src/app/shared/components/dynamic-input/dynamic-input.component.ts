@@ -5,6 +5,8 @@ import { TestParameter } from '../../models/test.model';
 import { FieldOption, ReferenceRange, WorkflowContext, WorkflowField } from '../../models/workflow.model';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 import { COUNTRY_PHONE_RULES, CountryPhoneRule, getCountryPhoneRule, validatePhoneNumber } from '../../forms/validate';
+import { normalizeSex, selectReferenceRange } from '../../utils/reference-range';
+import { liveFlag } from '../../utils/result-flag';
 
 export type DynamicFieldType =
   | 'text' | 'number' | 'numeric' | 'numeric_with_range' | 'critical_numeric'
@@ -1075,23 +1077,14 @@ export class DynamicInputComponent {
     this.emit('');
   }
 
-  /** The reference range that applies to the current patient context, or the first 'normal' range. */
+  /** The reference band for the current patient — the ONE shared sex/age
+   *  resolver (mw mirror), never a segment-string guess or `[0]`. */
   applicableRange = computed<ReferenceRange | null>(() => {
     const f = this._field();
     if (!f?.referenceRanges || f.referenceRanges.length === 0) return null;
-
-    const sex = this.context?.patientSex?.toLowerCase();
     const age = this.context?.patientAge;
-    const isMinor = typeof age === 'number' && age < 18;
-
-    // Try context-specific segment first
-    const prefer = (key: string) => f.referenceRanges!.find(r => r.segment === key);
-
-    if (sex === 'male' && !isMinor && prefer('adult_male'))   return prefer('adult_male')!;
-    if (sex === 'female' && !isMinor && prefer('adult_female')) return prefer('adult_female')!;
-    if (isMinor && prefer('child')) return prefer('child')!;
-
-    return prefer('normal') ?? prefer('adult') ?? f.referenceRanges[0];
+    return selectReferenceRange(f.referenceRanges, normalizeSex(this.context?.patientSex),
+      typeof age === 'number' ? age : null) ?? null;
   });
 
   rangeLabel(): string | null {
@@ -1104,19 +1097,21 @@ export class DynamicInputComponent {
     return `Normal ${min}–${max}${unit}`;
   }
 
+  /** Live hint while typing — the shared rule (band → param criticals,
+   *  strict; then the band's own bounds/ops). */
   flag = computed<Flag>(() => {
     const f = this._field();
     const v = typeof this._value() === 'number' ? this._value() as number : Number(this._value());
-    if (!f || Number.isNaN(v) || v === null) return 'none';
-    if (f.criticalLow != null && v <= f.criticalLow) return 'critical_low';
-    if (f.criticalHigh != null && v >= f.criticalHigh) return 'critical_high';
-    const r = this.applicableRange();
-    if (r) {
-      if (r.min != null && v < r.min) return 'low';
-      if (r.max != null && v > r.max) return 'high';
-      return 'normal';
+    if (!f || this._value() === null || this._value() === undefined || this._value() === '' || Number.isNaN(v)) return 'none';
+    const age = this.context?.patientAge;
+    const lf = liveFlag(f, v, normalizeSex(this.context?.patientSex), typeof age === 'number' ? age : null);
+    switch (lf?.code) {
+      case 'C': return lf.critical === 'low' ? 'critical_low' : 'critical_high';
+      case 'L': return 'low';
+      case 'H': return 'high';
+      case 'N': return 'normal';
+      default:  return 'none';
     }
-    return 'none';
   });
 
   flagLabel(): string {

@@ -604,11 +604,13 @@ export class ReportStructureComponent {
       if (this.attachments()) secs.push(imageSec());
       return secs;
     }
-    // Normal test: the implicit results table becomes a real grid section with
-    // one row per parameter (mirrors the engine's own default synthesis).
+    // Normal test: the implicit results table becomes a real grid section
+    // with NO stored rows. The test's parameters[] ARE the report rows (single
+    // source); a layout stores only rows the admin overrode, keyed by param —
+    // a value added to the test later still prints (the engine lists every
+    // parameter the layout doesn't).
     const secs: RawSection[] = [{
-      id: newSecId(), type: 'grid', order: 1, conditions: [],
-      rows: this.parameters().map(p => ({ id: newSecId(), parameter_name: p, row_merge: false, cells: {} })),
+      id: newSecId(), type: 'grid', order: 1, conditions: [], rows: [],
     }];
     if (this.attachments()) secs.push(imageSec());
     return secs;

@@ -501,7 +501,7 @@
                         </td>
                         <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                         <td class="pf-sre__gc-method">
-                          {{ methodologyOf(p) }}
+                          {{ methodologyOf(p, t.test) }}
                         </td>
                         <td class="pf-sre__gc-note">
                           <!-- Single-value tests get ONE note affordance (the
@@ -1097,7 +1097,7 @@
                         </td>
                         <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                         <td class="pf-sre__gc-method">
-                          {{ methodologyOf(p) }}
+                          {{ methodologyOf(p, t.test) }}
                           <!-- Same one-pencil rule as the flat grid: the test
                                header's + Note covers single-value tests. -->
                           @if (parametersFor(t).length > 1) {
