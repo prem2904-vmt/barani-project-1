@@ -1185,7 +1185,12 @@ a.pf-ts-tenant:hover {
     display: flex !important;
     position: static;
     transform: none;
-    flex: 1 1 auto;
+    /* basis 0, NOT auto: with `auto` the nav claims its full content width
+       first and the fixed items after it (chat · bell · user badge) get
+       pushed past the viewport edge. Basis 0 means the nav takes only what
+       is left over, so the badge is always on screen and the icons scroll
+       inside their own strip instead. */
+    flex: 1 1 0;
     min-width: 0;
     justify-content: center;
     overflow-x: auto;
@@ -1266,12 +1271,13 @@ a.pf-ts-tenant:hover {
     padding-inline: 8px;
   }
   :host-context(.design-new.nav-bottom) .pf-topnav-center {
-    flex: 1 1 auto; min-width: 0; margin-left: 0;
+    flex: 1 1 0; min-width: 0; margin-left: 0; justify-content: flex-start;
   }
   :host-context(.design-new.nav-bottom) .pf-ts-right {
     margin-left: auto; flex-shrink: 0;
   }
-  :host-context(.design-new.nav-bottom) .pf-draftshelf { flex-shrink: 0; }
+  /* The draft chip yields before the badge does. */
+  :host-context(.design-new.nav-bottom) .pf-draftshelf { flex: 0 1 auto; min-width: 0; }
   /* Comfortable thumb target for the badge itself. */
   :host-context(.design-new.nav-bottom) .pf-avatar-btn {
     flex-shrink: 0; min-width: 44px; min-height: 44px;

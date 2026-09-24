@@ -93,6 +93,39 @@ const COUNTERS: CounterSpec[] = [
             <pf-scan-icon [size]="18" />
           </button>
           }
+          <!-- Stats rides in the bar too (owner): with the header title gone
+               it was floating alone on its own row between the search and the
+               tabs. Phone-only — above 640px the inline KPI chips carry the
+               same numbers, so CSS keeps this hidden there. -->
+          <div class="pf-kpi-statbtn-m">
+            <button #kpiBtn type="button" class="pf-kpi-statbtn"
+                    [class.is-open]="kpiOpen()"
+                    aria-label="Stats"
+                    [attr.aria-expanded]="kpiOpen()"
+                    (click)="kpiOpen.set(!kpiOpen())">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </button>
+            @if (kpiOpen()) {
+              <div #kpiPop class="pf-kpi-portal">
+                <div class="pf-kpi-pop__backdrop" aria-hidden="true" (click)="kpiOpen.set(false)"></div>
+                <div class="pf-kpi-pop" role="dialog" aria-label="Queue stats"
+                     [style.top.px]="kpiPos().top" [style.right.px]="kpiPos().right">
+                  @for (c of counters; track c.id) {
+                    <button type="button" class="pf-kpi-stat" [class.is-on]="counter() === c.id"
+                            [attr.data-tone]="c.tone"
+                            (click)="setCounter(c.id); kpiOpen.set(false)">
+                      <span class="pf-kpi-stat__dot" aria-hidden="true"></span>
+                      <span class="pf-kpi-stat__label">{{ c.label }}</span>
+                      <span class="pf-kpi-stat__value">{{ counterValue(c.id) }}</span>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
         </ng-container>
         <ng-container band-tools>
           <!-- Every filter on the screen lives INSIDE the search bar (owner):
@@ -132,10 +165,12 @@ const COUNTERS: CounterSpec[] = [
       <pf-screen-header eyebrow="Lab workbench"
                         subtitle="Scan a barcode to jump straight to result entry, or pick from the queue below.">
         Lab <span class="text-gradient">my work</span>
-        <!-- Phone-only (<=640px) Stats icon — sits next to Refresh, matched in
-             size/shape (same pattern as the Report queue stats button). Each is
-             a direct [actions] element so the header lays them out with the
-             standard gap. Hidden above 640px, where the inline chips show. -->
+        <!-- Phone-only (<=640px) Stats icon. CLASSIC keeps it here in the
+             header actions. The new design renders the same control inside
+             the search bar instead (owner) — the header is title-less there,
+             so this button was left floating alone on its own row. Only one
+             branch ever renders, so #kpiBtn still resolves. -->
+        @if (!theme.isNewDesign()) {
         <div actions class="pf-kpi-statbtn-m">
           <button #kpiBtn type="button" class="pf-kpi-statbtn"
                   [class.is-open]="kpiOpen()"
@@ -167,6 +202,7 @@ const COUNTERS: CounterSpec[] = [
             </div>
           }
         </div>
+        }
         <pf-touch-btn actions variant="secondary" size="sm" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
             <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
