@@ -1,116 +1,3 @@
-/* ── Ref hospital + ref doctor row ──────────────────────── */
-.pf-refrow__field {
-  position: relative;
-  min-width: 0;
-}
-
-.pf-refrow__filter-hint {
-  font-weight: 400;
-  font-size: 10px;
-  color: var(--color-primary, #7c3aed);
-  margin-left: 6px;
-  text-transform: none;
-  letter-spacing: 0;
-  font-style: italic;
-}
-
-/* ── Ref doctor autocomplete ────────────────────────────── */
-.pf-refdoc {
-  position: relative;
-}
-
-.pf-refdoc__opt {
-  font-weight: 400;
-  color: var(--text-muted);
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.pf-refdoc__field {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  padding: 0 10px 0 36px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.pf-refdoc__field:focus-within {
-  border-color: rgba(168, 85, 247, 0.55);
-  box-shadow: 0 0 0 3px rgba(124, 58, 247, 0.18);
-}
-
-.pf-refdoc__icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-tertiary);
-}
-
-.pf-refdoc__input {
-  flex: 1;
-  min-width: 0;
-  height: 46px;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 13.5px;
-}
-
-.pf-refdoc__input::placeholder {
-  color: var(--text-muted);
-}
-
-.pf-refdoc__clear {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--glass-bg-hover);
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 4px;
-}
-
-.pf-refdoc__pop {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  background: var(--bg-card-solid, #14142a);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  padding: 6px;
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.pf-refdoc__pop-item {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  background: transparent;
-  border: none;
-  text-align: left;
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  border-radius: 8px;
-}
-
-.pf-refdoc__pop-item:hover {
-  background: var(--glass-bg-hover);
-}
-
 /* ── Category tabs (Recent / Favourites / Packages / All) ── */
 .pf-tabs {
   display: flex;
@@ -579,127 +466,6 @@
   overflow: hidden;
 }
 
-/* Left rail column scrolls internally (controls + search + tabs/rail). */
-.pf-col {
-  min-height: 0;
-  min-width: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
-}
-
-.pf-col::-webkit-scrollbar {
-  width: 6px;
-}
-
-.pf-col::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.pf-col::-webkit-scrollbar-thumb {
-  background: rgba(168, 85, 247, 0.32);
-  border-radius: 999px;
-}
-
-/* Cart side column (≥1024) scrolls internally instead of sticky-paging the
-   whole document, so the page stays non-scroll. */
-@media (min-width: 1024px) {
-  .pf-cart {
-    min-height: 0;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .pf-cart__card {
-    position: static;
-    height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(168, 85, 247, 0.32) transparent;
-  }
-
-  .pf-cart__card::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .pf-cart__card::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .pf-cart__card::-webkit-scrollbar-thumb {
-    background: rgba(168, 85, 247, 0.32);
-    border-radius: 999px;
-  }
-}
-
-/* Phone / iPad-portrait (<1024): single column. The left column still scrolls
-   internally; the cart lives in the FAB-triggered bottom-sheet drawer. */
-@media (max-width: 1023px) {
-  .pf-page__body {
-    grid-template-rows: minmax(0, 1fr);
-  }
-}
-
-/* ── Compact page header ─────────────────────────────────── */
-.pf-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 6px 0 10px;
-}
-
-.pf-head__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  align-self: center;
-  flex-shrink: 0;
-}
-
-.pf-head__back:hover {
-  background: var(--glass-bg-hover);
-  color: var(--text-primary);
-}
-
-.pf-head__title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-  line-height: 1.1;
-  flex-shrink: 0;
-}
-
-@media (min-width: 768px) {
-  .pf-head__title {
-    font-size: 26px;
-  }
-}
-
-.pf-head__sub {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ── Floating cart button ── */
 /* Sticky cart BAR (mockup) — phone + iPad-portrait; floats just above the
    bottom-nav pill and spans the width. Replaces the old floating FAB. Tap
@@ -794,519 +560,6 @@
   .pf-cartbar {
     display: none;
   }
-}
-
-/* ── Patient row ────────────────────────────────────────── */
-.pf-patient {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-}
-
-.pf-patient__name {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.pf-patient__meta {
-  margin: 2px 0 0;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-}
-
-.pf-patient__change {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.pf-patient__change:hover {
-  background: var(--glass-bg-hover);
-  color: var(--text-primary);
-}
-
-.pf-patient__cancel-btn {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  color: var(--red-text);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  padding: 0;
-}
-
-.pf-patient__cancel-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #ffffff;
-  transform: scale(1.05);
-}
-
-.pf-patient__cancel-btn:active {
-  transform: scale(0.95);
-}
-
-
-.pf-controls-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  position: relative;
-  z-index: 20;
-}
-
-@media (min-width: 1024px) {
-  .pf-controls-row {
-    grid-template-columns: 2fr 1.5fr 1.5fr;
-    align-items: center;
-    gap: 12px;
-  }
-}
-
-/* ── Referring toggle (tablet/phone) ──────────────────────────
-   Below lg the patient + two referring fields can't share a row without
-   truncating. Default: show the patient field + a toggle chip; the two
-   referring fields are hidden. Tapping the chip (pf-controls-row--refopen)
-   reveals the referring inputs full-width (stacked) and collapses the
-   patient field for the moment. The toggle itself is hidden at lg+. */
-.pf-ref-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  align-self: start;
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--input-bg, rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--input-border, var(--glass-border));
-}
-
-.pf-ref-toggle svg {
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.pf-ref-toggle--on {
-  color: var(--brand, #a855f7);
-  border-color: rgba(168, 85, 247, 0.4);
-}
-
-.pf-ref-toggle--on svg {
-  color: var(--brand, #a855f7);
-}
-
-.pf-ref-toggle__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--brand, #a855f7);
-}
-
-/* OPS-58 — edit referral on an existing/completed order. */
-.pf-refrow__field--edit { display: flex; align-items: end; }
-.pf-ref-edit-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding: 0 12px;
-  border-radius: 12px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--brand, #a855f7);
-  background: var(--input-bg, rgba(255, 255, 255, 0.03));
-  border: 1px solid rgba(168, 85, 247, 0.35);
-}
-.pf-ref-edit-btn svg { flex-shrink: 0; }
-.pf-ref-edit-actions { display: inline-flex; gap: 8px; align-items: center; }
-.pf-ref-edit-save {
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  background: var(--brand, #a855f7);
-  border: 1px solid transparent;
-}
-.pf-ref-edit-save:disabled { opacity: 0.6; }
-.pf-ref-edit-cancel {
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--input-border, var(--glass-border));
-}
-
-@media (max-width: 1023px) {
-
-  /* Referring fields hidden until the toggle opens them. */
-  .pf-controls-row .pf-refrow__field {
-    display: none;
-  }
-
-  .pf-controls-row--refopen .pf-refrow__field {
-    display: block;
-  }
-
-  /* When open, hand the row to the referring inputs; hide the patient block
-     + toggle-collapses to reclaim the vertical space for typing. */
-  .pf-controls-row--refopen .pf-controls-row__patient {
-    display: none;
-  }
-}
-
-@media (min-width: 1024px) {
-  .pf-ref-toggle {
-    display: none;
-  }
-}
-
-/* ── Inline Patient Picker & Card ── */
-.pf-patient-inline {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 48px;
-  padding: 0 14px;
-  background: var(--input-bg, rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--input-border, var(--glass-border));
-  border-radius: 12px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
-}
-
-.pf-patient-inline .pf-patient__name {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pf-patient-inline .pf-patient__change {
-  background: transparent;
-  border: none;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: background 0.15s, color 0.15s;
-}
-
-.pf-patient-inline .pf-patient__change:hover {
-  background: var(--glass-bg-hover);
-  color: var(--text-primary);
-}
-
-.pf-patient-search-inline {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ── Search + Priority share a row ─────────────────────── */
-.pf-search-row {
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 14px;
-  position: relative;
-  z-index: 5;
-}
-
-.pf-search-row .pf-search {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-@media (min-width: 480px) {
-  .pf-search-row .pf-search {
-    min-width: 260px;
-  }
-}
-
-.pf-search-row .pf-priority__toggle {
-  flex-shrink: 0;
-  height: 48px;
-  padding: 4px;
-}
-
-.pf-search-row .pf-priority__opt {
-  height: 40px;
-}
-
-/* ── Search ── */
-.pf-search {
-  position: relative;
-  border-radius: 12px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
-}
-
-.pf-search:focus-within {
-  border-color: rgba(168, 85, 247, 0.65);
-  box-shadow: 0 0 0 4px rgba(124, 58, 247, 0.16);
-  background-color: var(--glass-bg-hover);
-}
-
-/* Keyboard-first quick-add dropdown (design 1d): type → top hits → ⏎ adds. */
-.pf-search-dd {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 6px;
-  border-radius: 14px;
-  background: var(--bg-elevated, var(--bg-card-solid, #14141f));
-  border: 1px solid rgba(124, 58, 237, 0.55);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
-  max-height: 348px;
-  overflow-y: auto;
-}
-
-.pf-search-dd__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 10px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.12s, border-color 0.12s;
-}
-
-.pf-search-dd__row--active {
-  background: var(--glass-bg-hover);
-  border-color: rgba(124, 58, 237, 0.5);
-}
-
-.pf-search-dd__row--on {
-  opacity: 0.9;
-}
-
-.pf-search-dd__code {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--color-primary, #7c3aed);
-  background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
-  padding: 3px 7px;
-  border-radius: 6px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.pf-search-dd__name {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pf-search-dd__tat {
-  font-size: 10.5px;
-  color: var(--text-tertiary);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  flex-shrink: 0;
-}
-
-.pf-search-dd__price {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
-
-.pf-search-dd__add {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: var(--gradient-primary, linear-gradient(135deg, #a855f7, #7c3aed));
-  color: #fff;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.pf-search-dd__add--on {
-  background: rgba(16, 185, 129, 0.2);
-  color: var(--green-text, #10b981);
-}
-
-.pf-search-dd__hint {
-  display: flex;
-  gap: 14px;
-  padding: 6px 10px 3px;
-  font-size: 10.5px;
-  color: var(--text-tertiary);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-}
-
-/* Web + searching: the dropdown is the whole result list, so the browse picker
-   (tabs + dept chips + grid) is hidden — one search on screen, not two. */
-.pf-picker--hidden {
-  display: none;
-}
-
-.pf-search__icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-tertiary);
-  pointer-events: none;
-}
-
-.pf-search__input {
-  width: 100%;
-  height: 46px;
-  padding: 0 40px 0 40px;
-  border-radius: 12px;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 13.5px;
-  outline: none;
-}
-
-.pf-search__input::placeholder {
-  color: var(--text-muted);
-}
-
-.pf-search__clear {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.pf-search__clear:hover {
-  background: var(--glass-bg-hover);
-  color: var(--text-primary);
-}
-
-/* ── Priority toggle ────────────────────────────────────── */
-.pf-priority {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 2px 0;
-}
-
-.pf-priority__label {
-  font-size: 10.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.pf-priority__toggle {
-  position: relative;
-  display: inline-flex;
-  padding: 4px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-}
-
-.pf-priority__opt {
-  position: relative;
-  z-index: 1;
-  height: 36px;
-  padding: 0 18px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 9999px;
-  cursor: pointer;
-  transition: color 0.2s ease;
-}
-
-.pf-priority__opt:hover {
-  color: var(--text-primary);
-}
-
-.pf-priority__opt--on {
-  color: #ffffff;
-}
-
-.pf-priority__toggle[data-active='Normal']::before,
-.pf-priority__toggle[data-active='Urgent']::before {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: calc(50% - 4px);
-  height: calc(100% - 8px);
-  border-radius: 9999px;
-  background: var(--gradient-primary);
-  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
-  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.25s;
-}
-
-.pf-priority__toggle[data-active='Urgent']::before {
-  transform: translateX(100%);
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
-  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.45);
 }
 
 /* ── Eyebrow + counts ───────────────────────────────────── */
@@ -1467,23 +720,6 @@
   font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-
-/* ── Cart ── */
-.pf-cart {
-  position: relative;
-}
-
-.pf-cart__card {
-  position: sticky;
-  top: 12px;
-  padding: 18px;
-  border-radius: 22px;
-  background: var(--bg-card);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
 }
 
 .pf-cart-backdrop {
@@ -1807,14 +1043,6 @@
   color: var(--text-primary);
 }
 
-/* Front-desk inline payment: give the right column a touch more room for the
-   payment-mode tiles + cash num-pad beside the test list. */
-@media (min-width: 1024px) {
-  .pf-page__body--billing {
-    grid-template-columns: 1fr minmax(420px, 480px);
-  }
-}
-
 /* Post-payment actions (Print / Show invoice / New order). */
 .pf-paid {
   display: flex;
@@ -2124,131 +1352,6 @@
   font-size: 11.5px;
   font-weight: 600;
   color: var(--red-text);
-}
-
-.pf-proceed {
-  margin-top: 16px;
-  width: 100%;
-  height: 52px;
-  border-radius: 16px;
-  background: var(--gradient-primary);
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.4);
-  transition: transform 0.08s, box-shadow 0.25s, filter 0.08s;
-}
-
-.pf-proceed--ghost {
-  margin-top: 8px;
-  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
-  color: var(--text-secondary);
-  border-color: var(--glass-border, rgba(255, 255, 255, 0.12));
-  box-shadow: none;
-}
-
-.pf-proceed--ghost:hover:not(:disabled) {
-  box-shadow: none;
-  filter: none;
-  background: rgba(139, 92, 246, 0.1);
-}
-
-.pf-proceed:hover:not(:disabled) {
-  box-shadow: 0 14px 32px rgba(124, 58, 237, 0.55);
-  transform: translateY(-1px);
-}
-
-.pf-proceed:active:not(:disabled) {
-  transform: scale(0.98);
-  filter: brightness(1.08);
-}
-
-.pf-proceed:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.pf-cart-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 10px auto 0;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.1em;
-  font-weight: 600;
-}
-
-.pf-cart-badge-wrap {
-  display: flex;
-  justify-content: center;
-}
-
-.pf-cart-badge--urgent {
-  color: #f97316;
-  background: rgba(249, 115, 22, 0.14);
-  border: 1px solid rgba(249, 115, 22, 0.4);
-}
-
-/* Estimated time-to-report next to the cart total */
-.pf-cart-tat {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  padding: 6px 10px;
-  background: rgba(59, 130, 246, 0.10);
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  border-radius: 9999px;
-  color: var(--blue-text);
-  font-size: 11.5px;
-  font-weight: 600;
-}
-
-/* Save / discard draft action row */
-.pf-cart-draftrow {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.pf-cart-draft {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 10px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.pf-cart-draft:hover:not([disabled]) {
-  background: var(--bg-hover);
-}
-
-.pf-cart-draft[disabled] {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.pf-cart-draft--ghost {
-  flex: 0 0 auto;
-  color: var(--text-secondary);
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -2785,334 +1888,6 @@
   }
 }
 
-.pf-hdr-tat-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 9999px;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: var(--blue-text, #60a5fa);
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
-
-  svg {
-    flex-shrink: 0;
-  }
-}
-
-.pf-hdr-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 38px;
-  min-width: 38px;
-  padding: 0 10px;
-  border-radius: 9999px;
-  background: var(--glass-bg, rgba(255, 255, 255, 0.05));
-  border: 1px solid var(--input-border, rgba(139, 92, 246, 0.3));
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: padding 0.22s ease, background 0.15s ease, border-color 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
-
-  svg {
-    flex-shrink: 0;
-  }
-
-  > span {
-    display: inline-block;
-    max-width: 0;
-    margin-left: -6px;
-    overflow: hidden;
-    opacity: 0;
-    white-space: nowrap;
-    transition: max-width 0.22s ease, opacity 0.18s ease, margin-left 0.22s ease;
-  }
-
-  &:hover,
-  &:focus-visible {
-    padding: 0 14px;
-
-    > span {
-      max-width: 10rem;
-      margin-left: 0;
-      opacity: 1;
-    }
-  }
-
-  &:hover:not(:disabled) {
-    background: rgba(139, 92, 246, 0.14);
-    border-color: rgba(139, 92, 246, 0.5);
-    color: var(--violet-text, #a78bfa);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.96);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-@media (max-width: 1023px), (hover: none) {
-  .pf-hdr-btn {
-    padding: 0;
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    border-radius: 9999px;
-    justify-content: center;
-
-    > span {
-      display: none !important;
-      max-width: 0 !important;
-      opacity: 0 !important;
-      margin: 0 !important;
-    }
-
-    &:hover,
-    &:focus-visible {
-      padding: 0;
-
-      > span {
-        display: none !important;
-      }
-    }
-  }
-
-  .pf-hdr-btn--collect,
-  .pf-hdr-btn--primary {
-    padding: 0;
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    border-radius: 9999px;
-    justify-content: center;
-
-    > span {
-      display: none !important;
-    }
-
-    &:hover,
-    &:focus-visible {
-      padding: 0;
-
-      > span {
-        display: none !important;
-      }
-    }
-  }
-}
-
-.pf-hdr-btn--wa {
-  border-color: rgba(37, 211, 102, 0.4);
-  color: #25d366;
-
-  &:hover:not(:disabled) {
-    background: rgba(37, 211, 102, 0.14);
-    border-color: #25d366;
-    color: #25d366;
-  }
-}
-
-.pf-hdr-btn--collect {
-  padding: 0 14px;
-  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: none;
-
-  > span {
-    max-width: 10rem;
-    margin-left: 0;
-    opacity: 1;
-    color: #ffffff;
-  }
-
-  &:hover,
-  &:hover:not(:disabled) {
-    background: var(--gradient-primary, linear-gradient(135deg, #6d28d9, #db2777));
-    color: #ffffff;
-    border-color: transparent;
-    box-shadow: none;
-
-    > span {
-      color: #ffffff;
-    }
-  }
-}
-
-.pf-hdr-btn--primary {
-  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
-  border-color: transparent;
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
-
-  &:hover:not(:disabled) {
-    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.5);
-    color: #ffffff;
-  }
-}
-
-.pf-hdr-collect-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 9999px;
-  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #a855f7));
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
-  transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
-
-  &:hover {
-    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
-  }
-
-  &:active {
-    transform: scale(0.96);
-  }
-
-  svg {
-    stroke-width: 2.2;
-  }
-}
-
-.pf-hdr-new-btn,
-.pf-hdr-draft-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 9999px;
-  background: var(--glass-bg, rgba(255, 255, 255, 0.05));
-  border: 1px solid var(--glass-border);
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.15s, background 0.2s, border-color 0.2s;
-
-  &:hover:not(:disabled) {
-    background: var(--glass-bg-hover, rgba(255, 255, 255, 0.1));
-    border-color: rgba(124, 58, 247, 0.35);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.96);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.pf-hdr-discard-btn {
-  display: inline-flex;
-  align-items: center;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 9999px;
-  background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: var(--red-text);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-
-  &:hover {
-    background: rgba(239, 68, 68, 0.08);
-    border-color: rgba(239, 68, 68, 0.45);
-    color: var(--red-text);
-  }
-}
-
-/* ── Trendogram suggestion + customize popup ─────────────────────── */
-.pf-trend-suggest {
-  margin: 10px 0;
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(124, 58, 237, 0.06);
-  border: 1px solid rgba(168, 85, 247, 0.22);
-}
-
-.pf-trend-suggest__toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-}
-
-.pf-trend-suggest__toggle input {
-  width: 16px;
-  height: 16px;
-  accent-color: #7c3aed;
-  flex-shrink: 0;
-}
-
-.pf-trend-suggest__icon {
-  color: #a855f7;
-  display: inline-flex;
-}
-
-.pf-trend-suggest__label {
-  display: flex;
-  flex-direction: column;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.pf-trend-suggest__hint {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-tertiary);
-}
-
-.pf-trend-suggest__controls {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.pf-trend-suggest__select {
-  background: var(--input-bg, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  color: var(--text-primary);
-  font-size: 12.5px;
-}
-
-.pf-trend-suggest__edit {
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 12.5px;
-  font-weight: 600;
-  background: rgba(124, 58, 237, 0.14);
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  color: var(--text-primary);
-}
-
 .pf-trend-modal {
   position: fixed;
   inset: 0;
@@ -3243,3 +2018,713 @@
 }
 /* Specimen picker on culture cart rows (desk-side choice). */
 .pf-cart-spec { margin-top: 6px; max-width: 230px; }
+
+/* ════════════════════════════════════════════════════════════════════
+   OPTION A — unified search pill + designer cards (catalogue, billing).
+   Theme tokens only, so light and dark both follow the app theme.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* The band's pill hugs our tiles (designer: 8px inset, 6px rhythm). */
+:host ::ng-deep .pf-oc-band .pf-hb__search { padding-left: 8px; gap: 6px; }
+
+/* ── Pill contents ─────────────────────────────────────────── */
+.pf-us {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+}
+
+.pf-us__icon { flex-shrink: 0; }
+
+.pf-us__tiles { display: flex; align-items: center; gap: 6px; min-width: 0; flex-shrink: 1; }
+
+.pf-us__tile {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 210px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, transparent);
+  color: var(--text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pf-us__tile--filled {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 13%, transparent);
+  color: var(--violet-text, #6d28d9);
+}
+.pf-us__tile--on { background: var(--color-violet-600, #7c3aed); color: #fff; }
+.pf-us__tile--err { box-shadow: inset 0 0 0 1px var(--error-text, #ef4444); }
+
+.pf-us__tile-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pf-us__tile:not(.pf-us__tile--filled) .pf-us__tile-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-us__tile--filled .pf-us__tile-btn:disabled { cursor: default; }
+.pf-us__tile-btn:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 2px; border-radius: 10px; }
+.pf-us__tile-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+.pf-us__tile-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #6d28d9);
+  cursor: pointer;
+}
+.pf-us__tile-x:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 22%, transparent); }
+
+.pf-us__div { flex-shrink: 0; width: 1px; height: 26px; margin: 0 4px; background: var(--border-muted, #e5e7eb); }
+
+.pf-us__field {
+  flex: 1 1 auto;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  color: var(--text-tertiary);
+  cursor: text;
+}
+.pf-us__glass { flex-shrink: 0; }
+.pf-us__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  text-overflow: ellipsis;
+}
+.pf-us__input::placeholder { color: var(--input-placeholder, var(--text-muted)); }
+.pf-us__input:disabled { cursor: not-allowed; }
+
+.pf-us__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.pf-us__clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Urgent chip — outline red at rest, solid red when pressed. */
+.pf-us__urgent {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 40%, transparent);
+  background: transparent;
+  color: var(--error-text, #dc2626);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pf-us__urgent:hover:not(:disabled) { background: color-mix(in srgb, var(--color-danger, #ef4444) 8%, transparent); }
+.pf-us__urgent-dot { width: 8px; height: 8px; border-radius: 999px; background: #dc2626; }
+.pf-us__urgent[aria-pressed='true'] { background: #dc2626; border-color: #dc2626; color: #fff; }
+.pf-us__urgent[aria-pressed='true'] .pf-us__urgent-dot { background: #fff; }
+.pf-us__urgent:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Cart icon badge. */
+.pf-us__cart { position: relative; }
+.pf-us__badge {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-violet-600, #7c3aed);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Scope dropdown under the pill. */
+.pf-us__drop {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 14px);
+  z-index: 60;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(60vh, 440px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 16px 40px rgba(31, 17, 71, 0.18);
+}
+.pf-us__drop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+.pf-us__drop-esc { border: 0; background: transparent; font: inherit; font-size: 12px; letter-spacing: 0; color: var(--text-tertiary); cursor: pointer; }
+.pf-us__drop-note { margin: 0; padding: 12px 10px; font-size: 13px; color: var(--text-tertiary); }
+.pf-us__row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.pf-us__row--hl { background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
+.pf-us__row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pf-us__row-title { font-size: 14px; font-weight: 500; color: var(--text-primary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pf-us__row--new .pf-us__row-title::before { content: '“'; }
+.pf-us__row--new .pf-us__row-title::after { content: '”'; }
+.pf-us__row-meta { font-size: 12px; color: var(--text-tertiary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pf-us__row-cta { flex-shrink: 0; font-size: 12px; color: var(--violet-text, #6d28d9); }
+.pf-us__drop-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-muted);
+}
+.pf-us__drop-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--violet-text, #6d28d9);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pf-us__drop-act:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
+
+/* Compact scope picker — phones only (the tiles collapse into it). */
+.pf-us__compact { display: none; position: relative; flex-shrink: 0; }
+.pf-us__compact-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--color-violet-600, #7c3aed);
+  color: #fff;
+  cursor: pointer;
+}
+.pf-us__menu {
+  position: absolute;
+  left: -8px;
+  top: calc(100% + 14px);
+  z-index: 61;
+  width: min(260px, calc(100vw - 32px));
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 16px 40px rgba(31, 17, 71, 0.18);
+}
+.pf-us__menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-us__menu-item[aria-current='true'] { background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); color: var(--violet-text, #6d28d9); }
+.pf-us__menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-us__menu-text { display: flex; flex-direction: column; min-width: 0; }
+.pf-us__menu-pick { font-size: 12px; color: var(--text-tertiary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Band: report ETA pill. */
+.pf-oc-tat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--violet-text, #6d28d9);
+  background: color-mix(in srgb, var(--bg-card-solid, #fff) 60%, transparent);
+  border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.26));
+}
+
+/* Phone chips for the picks + field errors under the band. */
+.pf-oc-picks { display: none; }
+.pf-oc-errs { width: 100%; max-width: 1123px; margin: 0 auto; padding: 0 20px 4px; box-sizing: border-box; }
+.pf-oc-errs .pf-field-error { margin: 2px 0 0; }
+
+/* ── Page body: catalogue card + billing card, inner panes scroll ── */
+.pf-oc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 6px 20px 16px;
+}
+.pf-oc-body--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.pf-oc-cat,
+.pf-oc-bill {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--card-border, var(--glass-border));
+  border-radius: 16px;
+}
+.pf-oc-cat { flex: 1 1 auto; }
+
+.pf-oc-cat__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 0;
+  border-bottom: 1px solid var(--border-muted);
+}
+.pf-oc-cat__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 20px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent;
+}
+.pf-oc-cat .pf-payment-due-tests { border: 0; box-shadow: none; background: transparent; margin: 0; border-radius: 0; padding: 20px; }
+.pf-readonly-test-card__price { flex-shrink: 0; margin-left: 16px; font-size: 14px; font-weight: 700; color: var(--violet-text, #7c3aed); }
+
+/* Tabs → underline (designer). */
+.pf-oc-cat .pf-tabs {
+  gap: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.pf-oc-cat .pf-tabs__btn {
+  flex: none;
+  min-width: 0;
+  padding: 8px 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+.pf-oc-cat .pf-tabs__btn:not(.pf-tabs__btn--on):hover { background: transparent; color: var(--text-primary); }
+.pf-oc-cat .pf-tabs__btn--on,
+.pf-oc-cat .pf-tabs__btn--on:hover {
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--color-violet-600, #7c3aed);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.pf-oc-cat .pf-tabs__count { padding: 0; min-width: 0; background: transparent; color: var(--violet-text, #7c3aed); font-size: 11px; }
+
+.pf-oc-urgent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--error-text, #b91c1c);
+  background: var(--error-bg, rgba(239, 68, 68, 0.12));
+}
+.pf-oc-urgent-badge__dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+
+/* Department chips. */
+.pf-oc-cat .pf-deptpills { flex: none; gap: 8px; padding: 14px 20px 10px; }
+.pf-oc-cat .pf-deptpill {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-card-solid);
+  border-color: var(--border-muted);
+}
+.pf-oc-cat .pf-deptpill__code { padding: 0; background: transparent; font-size: 11px; opacity: 0.8; }
+
+/* Test rows (designer: 44px rows, 2 across on desktop). */
+.pf-oc-cat .pf-rail { gap: 10px; padding: 4px 0 12px; }
+.pf-oc-cat .pf-rail-card {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--bg-card-solid);
+  border-color: var(--border-muted);
+}
+.pf-oc-cat .pf-rail-card__code {
+  padding: 0;
+  background: transparent;
+  font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--violet-text, #7c3aed);
+}
+.pf-oc-cat .pf-rail-card__name { font-size: 13px; font-weight: 500; }
+.pf-oc-cat .pf-rail-card__price { font-size: 13px; font-weight: 600; }
+.pf-rail-card__check { color: var(--color-violet-600, #7c3aed); flex-shrink: 0; }
+/* ↑/↓ keyboard highlight while searching (Tests scope). */
+.pf-rail-card--kbd { box-shadow: 0 0 0 2px var(--color-violet-500, #8b5cf6); }
+
+/* ── Billing card (designer panel) ─────────────────────────── */
+.pf-oc-bill__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--bg-card-solid));
+  border-bottom: 1px solid var(--border-muted);
+}
+.pf-oc-bill__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+  color: var(--violet-text, #7c3aed);
+}
+.pf-oc-bill__title { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-secondary); }
+.pf-oc-bill__spacer { flex: 1 1 auto; }
+.pf-oc-bill__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, rgba(168, 85, 247, 0.32)) transparent;
+}
+.pf-oc-bill__foot {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border-muted);
+}
+.pf-oc-bill__foot > :only-child { grid-column: 1 / -1; }
+.pf-oc-bill__foot:empty { display: none; }
+.pf-oc-bill__meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-tertiary); }
+.pf-oc-bill__hint { margin: 0; padding: 12px 0; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
+
+.pf-oc-textbtn {
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--violet-text, #7c3aed);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Include Trendogram switch. */
+.pf-oc-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pf-oc-switch__track {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--border-muted, #d1d5db);
+  transition: background 0.15s ease;
+}
+.pf-oc-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: left 0.15s ease;
+}
+.pf-oc-switch[aria-checked='true'] .pf-oc-switch__track { background: var(--color-violet-600, #7c3aed); }
+.pf-oc-switch[aria-checked='true'] .pf-oc-switch__knob { left: 16px; }
+.pf-oc-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-oc-switch:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 3px; border-radius: 6px; }
+
+.pf-oc-trend { display: flex; align-items: center; gap: 8px; }
+.pf-oc-trend__dur { flex: 1 1 auto; min-width: 0; }
+.pf-oc-trend__edit {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.26));
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent);
+  color: var(--violet-text, #7c3aed);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Cart rows. */
+.pf-oc-bill .pf-cart-list,
+.pf-cart-drawer .pf-cart-list { margin: 0; }
+.pf-oc-bill .pf-cart-row,
+.pf-cart-drawer .pf-cart-row {
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border-muted);
+}
+.pf-cart-collected {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--success-text, #059669);
+  background: var(--success-bg, rgba(16, 185, 129, 0.15));
+  border: 1px solid var(--success-border, rgba(16, 185, 129, 0.3));
+}
+.pf-cart-lock { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; color: var(--warning-text, #f59e0b); }
+.pf-cart-line__save { color: var(--success-text, #10b981); }
+.pf-cart-line--due { font-weight: 700; color: var(--violet-text, #7c3aed); }
+.pf-oc-bill .pf-cart-totals,
+.pf-cart-drawer .pf-cart-totals { margin-top: 0; }
+
+/* Paid: invoice / receipt / share / labels. */
+.pf-oc-paid-acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.pf-oc-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pf-oc-act:hover:not(:disabled) { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.26)); }
+.pf-oc-act:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-oc-act--wa { color: var(--success-text, #059669); }
+
+/* Footer buttons. */
+.pf-oc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.pf-oc-btn--ghost { border: 1px solid var(--color-violet-600, #7c3aed); background: transparent; color: var(--violet-text, #6d28d9); }
+.pf-oc-btn--primary { border: 0; background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3)); color: #fff; }
+.pf-oc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Checkout drawer (<lg) reuses the billing body: header · scroll · footer. */
+.pf-cart-drawer {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-card-solid);
+}
+.pf-cart-drawer .pf-cart-drawer__close { position: absolute; top: 10px; right: 10px; z-index: 1; }
+.pf-cart-drawer .pf-oc-bill__head { padding-right: 56px; }
+
+/* Trend modal duration row (pf-select). */
+.pf-trend-modal__dur { display: flex; align-items: center; gap: 10px; }
+.pf-trend-modal__dur > span { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.pf-trend-modal__dur pf-select { flex: 1 1 auto; min-width: 0; }
+
+/* ── Tablet (641–1023): tiles get narrower ── */
+@media (max-width: 1023px) {
+  .pf-us__tile { max-width: 150px; }
+  .pf-oc-tat { display: none; }
+  .pf-oc-cat__list { padding-bottom: 96px; } /* clear the sticky cart bar */
+}
+@media (min-width: 641px) and (max-width: 900px) {
+  .pf-us__urgent-label { display: none; }
+  .pf-us__urgent { padding: 0 11px; }
+}
+
+/* ── Phone (≤640): compact scope picker + chips for the picks ── */
+@media (max-width: 640px) {
+  /* The global phone rule gives .pf-page a 12px gutter — the band bleeds
+     through it; the cards use it as their gutter. */
+  .pf-oc { --pf-hb-bleed: max(12px, env(safe-area-inset-left)); }
+  :host ::ng-deep .pf-oc-band .pf-hb__field { padding-left: 6px; gap: 4px; }
+  .pf-us__tiles { display: none; }
+  .pf-us__compact { display: block; }
+  .pf-us__div { margin: 0 2px; }
+  .pf-us__div--end { display: none; }
+  .pf-us__field { min-width: 0; }
+  .pf-us__input { font-size: 16px; } /* iOS zoom guard */
+  .pf-us__urgent { padding: 0 11px; }
+  .pf-us__urgent-label { display: none; }
+
+  .pf-oc-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 0 6px;
+  }
+  .pf-oc-pick {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+    color: var(--violet-text, #6d28d9);
+  }
+  .pf-oc-pick__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 70vw;
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12.5px;
+  }
+  .pf-oc-pick__btn span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .pf-oc-pick__x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin-right: 4px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+  }
+
+  .pf-oc-body { padding: 4px 0 12px; gap: 12px; }
+  .pf-oc-cat__head { padding: 8px 12px 0; }
+  .pf-oc-cat .pf-tabs { gap: 0; flex: 1 1 auto; }
+  .pf-oc-cat .pf-tabs__btn { flex: 1 1 0; justify-content: center; }
+  .pf-oc-urgent-badge { display: none; }
+  .pf-oc-cat .pf-deptpills { padding: 10px 12px 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .pf-oc-cat .pf-deptpill { flex-shrink: 0; }
+  .pf-oc-cat__list { padding: 4px 12px 96px; }
+  .pf-oc-cat .pf-rail-card__name { min-width: 80px; }
+  .pf-oc-errs { padding: 0 0 4px; }
+}
+
+.pf-cartbar__cta { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
