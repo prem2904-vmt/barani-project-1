@@ -347,8 +347,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                           aria-label="Receive" title="Receive">
                     <!-- Phones show only the tray icon; the CSS zeroes the
                          label's font-size and the sized <svg> carries it. -->
-                    <svg class="pf-rs-row__btn-ico" width="17" height="17" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    <svg class="pf-rs-row__btn-ico" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
                          stroke-linejoin="round" aria-hidden="true">
                       <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>
                       <path d="M12 3v11"/><path d="m8 10 4 4 4-4"/>
@@ -667,8 +667,12 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
         /* A ROUNDED SQUARE, not a circle: the pill radius it inherits turns
            a label-less button into a big ring that outweighs the two lines
            of text beside it. Matches the row-action shape used elsewhere. */
-        width: 40px; min-width: 40px; height: 40px;
-        border-radius: 12px;
+        /* The global touch rule ([class*='__btn'] -> 44x44 floor) was
+           holding this at 44 and the heavy arrow filled it, so a label-less
+           button ended up louder than the row it belongs to. Same exemption
+           pf-toggle already uses; the whole row is the real tap target. */
+        width: 34px; min-width: 34px; height: 34px; min-height: 34px;
+        border-radius: 10px;
         display: inline-flex; align-items: center; justify-content: center;
         flex-shrink: 0;
       }
