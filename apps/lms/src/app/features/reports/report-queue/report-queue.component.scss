@@ -828,4 +828,9 @@
 @media (max-width: 640px) {
   :host-context(.design-new) .pf-rq-filter-m,
   :host-context(.design-new) .pf-rq-filter-active { display: none !important; }
+  /* The phone block above hides EVERY pf-segmented, which also swallowed
+     the band's strip — so removing the icon row left the screen with no
+     filter at all. Bring back just the band one (the classic strip keeps
+     .pf-classic-only, so it stays hidden here). */
+  :host-context(.design-new) pf-segmented.pf-rq-bandseg { display: inline-flex; }
 }

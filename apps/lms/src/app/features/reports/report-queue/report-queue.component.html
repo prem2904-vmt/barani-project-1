@@ -11,7 +11,7 @@
       <ng-container band-tools>
         <!-- Filters live INSIDE the search bar (owner): one control strip,
              and the dots + counts legend the row colours right there. -->
-        <pf-segmented [options]="filterOptions()" [value]="filter()" size="sm"
+        <pf-segmented class="pf-rq-bandseg" [options]="filterOptions()" [value]="filter()" size="sm"
                       (valueChange)="setFilter($event)"></pf-segmented>
       </ng-container>
       <ng-container band-actions>
@@ -25,7 +25,17 @@
           </svg>
           Refresh
         </button>
-        <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="promptGenerate()">Generate</button>
+        <!-- Phones show just the icon; the CSS zeroes the label's font-size
+             and the sized <svg> carries the button (owner). -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="promptGenerate()"
+                aria-label="Generate reports" title="Generate reports">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/>
+          </svg>
+          Generate
+        </button>
       </ng-container>
     </pf-hero-band>
     }

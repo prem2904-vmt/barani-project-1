@@ -149,7 +149,16 @@
     <pf-hero-band class="pf-fd-band" [customSearch]="true">
       <ng-container band-actions>
         @if (showRegister()) {
-        <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openRegister()">New Patient</button>
+        <!-- Phones show just the +; the CSS zeroes the label's font-size and
+             the sized <svg> carries the button (owner). -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openRegister()"
+                aria-label="New patient" title="New patient">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          New Patient
+        </button>
         }
       </ng-container>
 

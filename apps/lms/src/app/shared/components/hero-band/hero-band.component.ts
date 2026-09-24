@@ -276,6 +276,13 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       .pf-hb__actions ::ng-deep .pf-hb-btn--ghost {
         font-size: 0; gap: 0; padding: 0 11px; min-width: 44px; height: 38px;
       }
+      /* The PRIMARY action goes icon-only too (owner: "New Patient" -> +,
+         "Generate" -> an icon). Same trick: the label is a bare text node,
+         so zero the button's font-size and let the sized <svg> carry it.
+         The gradient stays — it is still the one primary action. */
+      .pf-hb__actions ::ng-deep .pf-hb-btn--primary {
+        font-size: 0; gap: 0; padding: 0 12px; min-width: 44px;
+      }
       .pf-hb__actions ::ng-deep .pf-hb-btn { height: 38px; padding-inline: 14px; }
     }
     /* Very narrow phones: the tenant name is the first thing to go. */
