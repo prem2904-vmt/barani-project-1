@@ -129,8 +129,15 @@ export class TopStripComponent implements OnInit, OnDestroy {
   openConvo(c: Conversation): void {
     this.msgsPanel.close();
     if (this.themeService.isNewDesign()) {
-      // NEW design has no Messages SCREEN — chat lives in floating
-      // windows only (phones get a single full-width one).
+      // PHONE: WhatsApp behaviour — tapping a conversation navigates to the
+      // thread as a full page, and back returns to the list (owner). A
+      // 330px window docked over a 390px screen was never the right shape,
+      // and the page already has the full composer (attachments, voice).
+      if (this.chatWindows.isPhone()) {
+        void this.router.navigate(['/messages'], { queryParams: { c: c.id } });
+        return;
+      }
+      // iPad + web keep the docked floating windows.
       this.chatWindows.openWindow(c.id);
       void this.chat.loadThread(c.id);
       return;

@@ -1,5 +1,5 @@
 import { CommonModule, DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { RouterLink, ActivatedRoute } from '@angular/router';
 import {
   ChangeDetectionStrategy, Component, ElementRef, OnInit, OnDestroy, ViewChild,
   computed, effect, inject, signal
@@ -547,6 +547,11 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Deep link from the bar's Messages panel on phones: /messages?c=<id>
+   *  opens straight into that thread, so tapping a conversation lands on
+   *  the conversation rather than the list (owner: WhatsApp behaviour). */
+  private readonly route = inject(ActivatedRoute);
+
   async ngOnInit(): Promise<void> {
     // Module not in the plan → show the locked screen only; never open the
     // chat/signaling hubs (no presence, no incoming calls for this tenant).
@@ -556,11 +561,17 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       this.chat.connect().catch(() => undefined),
       this.signaling.connect().catch(() => undefined)
     ]);
+    const wanted = this.route.snapshot.queryParamMap.get('c');
     await Promise.all([
       this.chat.loadConversations().catch(() => undefined),
       this.signaling.getOnlineUsersWithStatus().catch(() => undefined),
       this.loadCallLog().catch(() => undefined)
     ]);
+    // Deep-linked conversation (?c=…) — open it now that the list is in.
+    if (wanted) {
+      const conv = this.chat.conversations().find((c) => c.id === wanted);
+      if (conv) await this.openThread(conv);
+    }
     // Ask for Notification permission once. Landing on /messages counts
     // as the user-gesture browsers want before this prompt fires.
     void this.chatNotify.ensurePermission();

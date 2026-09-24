@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
@@ -10,6 +10,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { Conversation } from '../../models/chat.model';
+import { ApiError } from '../../models/api-response.model';
 import { conversationInitials, conversationTitle } from '../../models/conversation-name';
 
 /**
@@ -19,8 +20,10 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
  * the overflow parks as circular heads on the right rail. Clicking a
  * head brings that thread back (evicting the least-recently-used one).
  *
- * NEW design only — classic keeps the people drawer untouched, and so do
- * phones (capacity 0), where a 330px window has nowhere to live.
+ * NEW design only — classic keeps the people drawer untouched. PHONES get
+ * no windows at all (capacity 0): there a conversation opens as a full
+ * page, WhatsApp-style, which is both the right shape for the screen and
+ * where the full composer already lives.
  */
 @Component({
   selector: 'pf-chat-windows',
@@ -77,7 +80,21 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
             </div>
 
             <div class="pf-cw__composer">
-              <input #box type="text" class="pf-cw__input" placeholder="Write a message…"
+              <!-- Attachments were only on the Messages page; the docked
+                   window had no way to send a file at all (owner). Same
+                   upload the page uses, so anything sent here shows up
+                   identically there. -->
+              <input #file type="file" class="pf-cw__file" multiple
+                     (change)="onFiles(c.id, file)" />
+              <button type="button" class="pf-cw__clip press" (click)="file.click()"
+                      [disabled]="uploading()" aria-label="Attach a file" title="Attach a file">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.49"/>
+                </svg>
+              </button>
+              <input #box type="text" class="pf-cw__input"
+                     [placeholder]="uploading() ? 'Uploading…' : 'Write a message…'"
                      [attr.aria-label]="'Message ' + title(c)"
                      (focus)="windowsSvc.focus(c.id)"
                      (keydown.enter)="send(c.id, box)" />
@@ -237,6 +254,14 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       outline: none;
     }
     .pf-cw__input:focus { border-color: #7c3aed; }
+    .pf-cw__file { display: none; }
+    .pf-cw__clip {
+      width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: none; background: transparent; color: var(--text-tertiary); cursor: pointer;
+    }
+    .pf-cw__clip:hover:not(:disabled) { background: rgba(124, 58, 237, 0.1); color: var(--text-primary); }
+    .pf-cw__clip:disabled { opacity: 0.5; cursor: progress; }
     .pf-cw__send {
       width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
       display: inline-flex; align-items: center; justify-content: center;
@@ -339,6 +364,37 @@ export class ChatWindowsComponent {
     }
   }
   protected initials(c: Conversation): string { return conversationInitials(c, this.meId()); }
+
+  /** True while an attachment is on its way up — the composer says so and
+   *  the clip is disabled so a second pick can't race the first. */
+  protected readonly uploading = signal(false);
+
+  /**
+   * Attach files from the docked window. One file goes with whatever is
+   * already typed as its caption; several are sent one per message, in
+   * order, which is what the Messages page does — there is no multi-
+   * attachment column to put them in.
+   */
+  protected async onFiles(conversationId: string, input: HTMLInputElement): Promise<void> {
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (!files.length) return;
+    const tooBig = files.find((f) => f.size > 15 * 1024 * 1024);
+    if (tooBig) { this.toasts.error(`${tooBig.name} is larger than 15 MB.`); return; }
+
+    this.uploading.set(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const up = await this.chat.uploadAttachment(files[i]);
+        await this.chat.sendMessage(conversationId, '', null, up);
+      }
+      this.windowsSvc.focus(conversationId);
+    } catch (err) {
+      this.toasts.error(ApiError.from(err).message);
+    } finally {
+      this.uploading.set(false);
+    }
+  }
 
   protected send(conversationId: string, box: HTMLInputElement): void {
     const body = box.value.trim();

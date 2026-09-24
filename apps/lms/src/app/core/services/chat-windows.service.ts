@@ -35,11 +35,14 @@ export class ChatWindowsService {
 
   private readonly _width = signal(this.win?.innerWidth ?? 1280);
 
+  /** Phones don't get floating windows at all: there, a conversation opens
+   *  as a full PAGE, WhatsApp-style (owner). iPad and web keep the docked
+   *  windows. 768px matches the component's own breakpoint. */
+  readonly isPhone = computed(() => this._width() < 768);
+
   readonly capacity = computed(() => {
     const w = this._width();
-    // Phones: exactly ONE window (full-width sheet) — the new design has
-    // no Messages screen to fall back to.
-    if (w < 768) return 1;
+    if (w < 768) return 0;
     return Math.max(1, Math.min(3, Math.floor((w - RAIL) / (WIN_W + GAP))));
   });
 
@@ -51,6 +54,7 @@ export class ChatWindowsService {
   }
 
   openWindow(conversationId: string): void {
+    if (this.isPhone()) return;   // phones navigate to /messages instead
     this.touch(conversationId);
     this._minimized.update(ids => ids.filter(i => i !== conversationId));
     if (this._open().includes(conversationId)) return;
