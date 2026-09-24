@@ -10,6 +10,9 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
 
 interface LabDraft {
   id?: string;
@@ -34,11 +37,31 @@ const EMPTY: LabDraft = {
 @Component({
   selector: 'pf-referral-labs',
   standalone: true,
-  imports: [FormsModule, ChipComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [FormsModule, ChipComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): referral-lab search; "Add referral lab" rides
+             the band's actions. -->
+        <pf-hero-band [back]="true" placeholder="Search referral labs — name, code, contact, department…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="toggleForm()"
+                    [attr.aria-label]="formOpen() ? 'Cancel' : 'Add referral lab'">
+              @if (formOpen()) {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              }
+              {{ formOpen() ? 'Cancel' : 'Add referral lab' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Referral / outsourced labs"
         subtitle="External labs you subcontract tests to. Mark a test as outsourced in the test editor and pick one of these — its samples form their own vials per (lab + department).">
@@ -50,6 +73,7 @@ const EMPTY: LabDraft = {
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-band-body">
       @if (formOpen()) {
         <pf-tile tone="violet" padding="lg" class="block mb-4">
           <h3 class="pf-section-title mb-3">{{ draft().id ? 'Edit referral lab' : 'New referral lab' }}</h3>
@@ -100,9 +124,11 @@ const EMPTY: LabDraft = {
         <pf-tile tone="default" padding="xl" class="block">
           <p class="text-center text-[13px]" style="color: var(--text-tertiary);">No referral labs yet. Add one to start outsourcing tests.</p>
         </pf-tile>
+      } @else if (visibleLabs().length === 0) {
+        <p class="pf-band-empty">No referral labs match "{{ q() }}".</p>
       } @else {
         <div class="space-y-3">
-          @for (l of labs(); track l.id) {
+          @for (l of visibleLabs(); track l.id) {
             <pf-tile tone="default" padding="lg" class="block">
               <div class="flex items-start justify-between gap-4 flex-wrap">
                 <div class="min-w-0 flex-1">
@@ -130,6 +156,7 @@ const EMPTY: LabDraft = {
           }
         </div>
       }
+      </div>
     </section>
   `,
   styles: [`
@@ -184,6 +211,14 @@ export class ReferralLabsComponent implements OnInit {
   private readonly toasts = inject(ToastService);
 
   protected readonly labs = signal<ReferralLab[]>([]);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill search: name, code, contact, address and handled departments. */
+  readonly q = signal('');
+  readonly visibleLabs = computed(() => bandFilter(this.labs(), this.q(), l => [
+    l.name, l.code, l.contactName, l.contactPhone, l.contactEmail, l.address,
+    ...this.deptCodesOf(l).flatMap(c => [c, this.deptName(c)]),
+  ]));
   protected readonly loading = signal<boolean>(true);
   protected readonly saving = signal<boolean>(false);
   protected readonly formOpen = signal<boolean>(false);

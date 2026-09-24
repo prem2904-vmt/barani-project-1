@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { renderBandPage } from './admin-band.spec-helpers';
 import { BranchesComponent } from './branches/branches.component';
 import { VendorsComponent } from './vendors/vendors.component';
+import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
 
 /**
  * Admin band — list pages (group C): each gets a page-specific pill search,
@@ -99,6 +100,45 @@ describe('Admin band — Vendors', () => {
     p.cmp.status.set('inactive'); p.f.detectChanges();
     expect(names(p.el)).toEqual(['Old Partner']);
     p.type('apollo');
+    expect(names(p.el).length).toBe(0);
+    expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+  });
+});
+
+describe('Admin band — Referral labs', () => {
+  const labs = [
+    { id: 'r1', name: 'Apollo Diagnostics', code: 'APOLLO', contactName: 'Suresh', isActive: true, departmentCodesJson: '["MIC"]' },
+    { id: 'r2', name: 'Neuberg', code: 'NEU', contactName: 'Priya', isActive: true, departmentCodesJson: null },
+  ];
+  const render = () => renderBandPage(ReferralLabsComponent, {
+    getFor: (url) => url.startsWith('/api/referral-labs') ? labs
+      : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Microbiology', code: 'MIC', isActive: true }]
+        : [],
+  });
+  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-rl__name')).map(n => text(n));
+
+  it('band present, header classic-only, labs in the band body', () => {
+    const p = render();
+    expect(p.band()).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(names(p.el).length).toBe(2);
+  });
+
+  it('"Add referral lab" in the band opens the form and flips to Cancel', () => {
+    const p = render();
+    p.actions().find(b => /Add referral lab/.test(b.textContent ?? ''))!.click();
+    p.f.detectChanges();
+    expect(text(p.body())).toContain('New referral lab');
+    expect(p.actions()[0].textContent).toContain('Cancel');
+  });
+
+  it('pill search matches name, contact and handled department names; empty state', () => {
+    const p = render();
+    p.type('priya');
+    expect(names(p.el)).toEqual(['Neuberg']);
+    p.type('microbio');
+    expect(names(p.el)).toEqual(['Apollo Diagnostics']);
+    p.type('zzz');
     expect(names(p.el).length).toBe(0);
     expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
   });
