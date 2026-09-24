@@ -1,5 +1,9 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandMatch } from '../../../shared/utils/band-search';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -15,18 +19,30 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
 @Component({
   selector: 'pf-admin-modules',
   standalone: true,
-  imports: [ScreenHeaderComponent],
+  imports: [ScreenHeaderComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): search modules + their features; On/Off filter
+             in the pill. Toggles save live, so there are no band actions. -->
+        <pf-hero-band [back]="true" placeholder="Search modules & features — OPD, pharmacy, inventory…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-tools>
+            <pf-segmented size="sm" [options]="statusOptions()" [value]="status()"
+                          (valueChange)="status.set($event)"></pf-segmented>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Platform"
         title="Modules"
         subtitle="Turn product modules on or off, and choose which features run inside each. Changes apply across the tenant.">
       </pf-screen-header>
 
+      <div class="pf-band-body">
       <div class="pf-mods">
-        @for (m of catalog; track m.id) {
+        @for (m of visibleCatalog(); track m.id) {
           <div class="pf-mod" [class.pf-mod--on]="isModuleOn(m.id)">
             <div class="pf-mod__head">
               <span class="pf-mod__icon" [style.opacity]="isModuleOn(m.id) ? 1 : 0.5">
@@ -71,6 +87,10 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
             }
           </div>
         }
+      </div>
+      @if (!visibleCatalog().length) {
+        <p class="pf-band-empty">No modules match{{ q().trim() ? ' "' + q() + '"' : '' }}.</p>
+      }
       </div>
     </section>
   `,
@@ -141,6 +161,29 @@ export class AdminModulesComponent implements OnInit {
   readonly catalog: ModuleDef[] = MODULE_CATALOG;
   private readonly state = signal<ModulesState>({});
   readonly busy = signal(false);
+
+  protected readonly theme = inject(ThemeService);
+  /** Band pill search: a module matches on its own label/blurb or any feature's. */
+  readonly q = signal('');
+  readonly status = signal<'all' | 'on' | 'off'>('all');
+  readonly statusOptions = computed<SegmentedOption<'all' | 'on' | 'off'>[]>(() => {
+    const on = this.catalog.filter(m => this.isModuleOn(m.id)).length;
+    return [
+      { value: 'all', label: 'All', count: this.catalog.length },
+      { value: 'on', label: 'On', count: on },
+      { value: 'off', label: 'Off', count: this.catalog.length - on },
+    ];
+  });
+  readonly visibleCatalog = computed(() => {
+    const q = this.q();
+    const st = this.status();
+    this.state(); // re-filter when a toggle flips (On/Off chips)
+    return this.catalog.filter(m => {
+      if (st === 'on' && !this.isModuleOn(m.id)) return false;
+      if (st === 'off' && this.isModuleOn(m.id)) return false;
+      return bandMatch(q, m.label, m.blurb) || m.features.some(f => bandMatch(q, f.label, f.hint));
+    });
+  });
 
   async ngOnInit(): Promise<void> {
     await this.entitlements.ensureLoaded();
