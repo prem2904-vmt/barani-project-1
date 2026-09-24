@@ -17,6 +17,8 @@ import { ImageUploadComponent } from './image-upload.component';
 import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 
 type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
@@ -37,11 +39,33 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     TouchButtonComponent,
     ReportColumnsEditorComponent,
     ImageUploadComponent,
+    HeroBandComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
-      <header class="pf-rt-head">
+    <section class="pf-band-page px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): the report's sections are the pill's tabs (tabs-only
+             pill — the page has nothing to search); Save rides the band. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="sectionOptions"
+                          [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
+                    [disabled]="saving()" (click)="save()" aria-label="Save template" title="Save template">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <header class="pf-rt-head pf-classic-only">
         <div class="min-w-0">
           <h1 class="pf-rt-title">Report designer</h1>
           <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
@@ -51,8 +75,12 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
         </pf-touch-btn>
       </header>
 
-      <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden()">
-        <!-- ── Section rail: one part of the report at a time. ── -->
+      <div class="pf-band-body pf-band-body--fill">
+      <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()">
+        <!-- ── Section rail (CLASSIC only): the new design puts the
+             sections in the band pill, so the rail is gone and the editor +
+             preview get the full width. ── -->
+        @if (!theme.isNewDesign()) {
         <nav class="pf-rt-rail" aria-label="Report template sections">
           <div class="pf-rt-rail__head">
             <span>Sections</span>
@@ -69,21 +97,24 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
             </button>
           }
         </nav>
+        }
 
         <!-- ── Focused section panel. ── -->
         <div class="pf-rt-work">
-          @if (railHidden()) {
-            <button type="button" class="pf-rt-side-expand" (click)="toggleRail()"
-                    title="Show sections" aria-label="Show section panel">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-              Sections
-            </button>
-          }
-          @if (activeSection(); as sec) {
-            <div class="pf-rt-work__hdr">
-              <h2 class="pf-rt-work__title">{{ sec.label }}</h2>
-              <p class="pf-rt-work__sub">{{ sec.desc }}</p>
-            </div>
+          @if (!theme.isNewDesign()) {
+            @if (railHidden()) {
+              <button type="button" class="pf-rt-side-expand" (click)="toggleRail()"
+                      title="Show sections" aria-label="Show section panel">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                Sections
+              </button>
+            }
+            @if (activeSection(); as sec) {
+              <div class="pf-rt-work__hdr">
+                <h2 class="pf-rt-work__title">{{ sec.label }}</h2>
+                <p class="pf-rt-work__sub">{{ sec.desc }}</p>
+              </div>
+            }
           }
           @switch (tab()) {
 
@@ -660,6 +691,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
           <p class="pf-rt-aside__hint">Preview uses a sample order. Save to apply this template to real reports.</p>
         </aside>
       </div>
+      </div>
     </section>
   `,
   styles: [`
@@ -818,6 +850,19 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
       .pf-pdf-iframe { flex: 1 1 auto; min-height: 0; height: auto; }
     }
 
+    /* NEW design (band page): the band body fills the shell; the editor
+       panel and the preview each scroll on their own — no page scroll. On
+       narrow screens (single column) the grid itself scrolls. */
+    :host-context(.design-new) .pf-rt-grid { flex: 1 1 auto; min-height: 0; }
+    @media (min-width: 1181px) {
+      :host-context(.design-new) .pf-rt-grid { align-items: stretch; }
+      :host-context(.design-new) .pf-rt-work { height: 100%; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+      :host-context(.design-new) .pf-rt-aside { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    }
+    @media (max-width: 1180px) {
+      :host-context(.design-new) .pf-rt-grid { overflow-y: auto; overscroll-behavior: contain; }
+    }
+
     /* Colour field: swatch + hex as ONE 38px control. */
     .pf-color-field { display: flex; align-items: center; height: 38px; border-radius: 10px;
       border: 1px solid var(--input-border, var(--glass-border)); background: var(--input-bg, rgba(255,255,255,.03));
@@ -926,6 +971,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly platform = inject(PlatformService);
+  protected readonly theme = inject(ThemeService);
 
   /** Section cards for the left nav — a plain-words label + what it changes,
    *  so the admin never has to guess what lives behind a tab. */
@@ -936,6 +982,9 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'table',      label: 'Results table', desc: 'Font, table colours, zebra rows, abnormal marking, departments' },
     { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
   ];
+  /** The same sections as the band pill's tabs (new design). The
+   *  description rides as the tab's tooltip. */
+  readonly sectionOptions: SegmentedOption<Tab>[] = this.sections.map(s => ({ value: s.value, label: s.label, hint: s.desc }));
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
