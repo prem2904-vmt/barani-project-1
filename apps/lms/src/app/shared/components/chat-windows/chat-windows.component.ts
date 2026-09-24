@@ -11,6 +11,11 @@ import { WebrtcService } from '../../../core/services/webrtc.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { Conversation } from '../../models/chat.model';
 import { ApiError } from '../../models/api-response.model';
+import { ApiService } from '../../../core/services/api.service';
+import { firstValueFrom } from 'rxjs';
+
+/** Just enough of a patient to list and share one. */
+interface PatientLite { id: string; displayName?: string | null; mrn?: string | null; }
 import { conversationInitials, conversationTitle } from '../../models/conversation-name';
 
 /**
@@ -79,20 +84,84 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
               }
             </div>
 
+            <!-- Share-a-patient picker (opens from the + menu). Same
+                 chat.sharePatient the Messages page calls, so a card shared
+                 from a window is the same card there. -->
+            @if (patientFor() === c.id) {
+              <div class="pf-cw__sheet">
+                <input type="text" class="pf-cw__sheet-search" placeholder="Search patients…"
+                       [value]="patientQuery()" (input)="onPatientQuery($any($event.target).value)"
+                       aria-label="Search patients" />
+                <div class="pf-cw__sheet-list">
+                  @for (pt of patientResults(); track pt.id) {
+                    <button type="button" class="pf-cw__sheet-item press" (click)="sharePatient(c.id, pt)">
+                      <span class="pf-cw__sheet-name">{{ pt.displayName || '(unknown)' }}</span>
+                      @if (pt.mrn) { <span class="pf-cw__sheet-sub">{{ pt.mrn }}</span> }
+                    </button>
+                  } @empty {
+                    <p class="pf-cw__sheet-empty">{{ patientLoading() ? 'Searching…' : 'No patients found.' }}</p>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Emoji strip (opens from the + menu). -->
+            @if (emojiFor() === c.id) {
+              <div class="pf-cw__emoji">
+                @for (e of EMOJI; track e) {
+                  <button type="button" class="pf-cw__emoji-btn press"
+                          (click)="addEmoji(box, e)" [attr.aria-label]="'Insert ' + e">{{ e }}</button>
+                }
+              </div>
+            }
+
             <div class="pf-cw__composer">
-              <!-- Attachments were only on the Messages page; the docked
-                   window had no way to send a file at all (owner). Same
-                   upload the page uses, so anything sent here shows up
-                   identically there. -->
               <input #file type="file" class="pf-cw__file" multiple
                      (change)="onFiles(c.id, file)" />
-              <button type="button" class="pf-cw__clip press" (click)="file.click()"
-                      [disabled]="uploading()" aria-label="Attach a file" title="Attach a file">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.49"/>
-                </svg>
-              </button>
+              <!-- One "+" holding everything the page composer offers
+                   (owner): attach a file, share a patient, emoji. The
+                   window had only a paperclip, and sharing a patient is
+                   the point of most of these conversations. -->
+              <div class="pf-cw__plus">
+                <button type="button" class="pf-cw__clip press" (click)="toggleMenu(c.id)"
+                        [class.is-open]="menuFor() === c.id" [disabled]="uploading()"
+                        [attr.aria-expanded]="menuFor() === c.id" aria-label="More" title="More">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                </button>
+                @if (menuFor() === c.id) {
+                  <div class="pf-cw__plus-bd" (click)="menuFor.set(null)" aria-hidden="true"></div>
+                  <div class="pf-cw__plus-pop" role="menu">
+                    <button type="button" role="menuitem" class="pf-cw__plus-item press"
+                            (click)="menuFor.set(null); file.click()">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.49"/>
+                      </svg>
+                      <span>Attach a file</span>
+                    </button>
+                    <button type="button" role="menuitem" class="pf-cw__plus-item press"
+                            (click)="openPatients(c.id)">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                      </svg>
+                      <span>Share a patient</span>
+                    </button>
+                    <button type="button" role="menuitem" class="pf-cw__plus-item press"
+                            (click)="openEmoji(c.id)">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                        <path d="M9 9h.01M15 9h.01"/>
+                      </svg>
+                      <span>Emoji</span>
+                    </button>
+                  </div>
+                }
+              </div>
               <input #box type="text" class="pf-cw__input"
                      [placeholder]="uploading() ? 'Uploading…' : 'Write a message…'"
                      [attr.aria-label]="'Message ' + title(c)"
@@ -255,6 +324,66 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     }
     .pf-cw__input:focus { border-color: #7c3aed; }
     .pf-cw__file { display: none; }
+
+    /* "+" menu — opens UPWARD; the composer sits at the window's floor. */
+    .pf-cw__plus { position: relative; display: inline-flex; flex-shrink: 0; }
+    .pf-cw__plus-bd { position: fixed; inset: 0; z-index: 49; }
+    .pf-cw__plus-pop {
+      position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 50;
+      min-width: 186px; padding: 6px;
+      display: flex; flex-direction: column;
+      border-radius: 14px;
+      background: var(--bg-card-solid, rgba(20, 22, 30, 0.98));
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+    }
+    .pf-cw__plus-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; min-height: 40px;
+      border: none; background: transparent; border-radius: 9px;
+      color: var(--text-secondary); font-size: 13px; font-family: inherit;
+      cursor: pointer; text-align: left;
+    }
+    .pf-cw__plus-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .pf-cw__clip.is-open { color: var(--violet-text, #a78bfa); }
+
+    /* Patient picker + emoji strip sit ABOVE the composer, inside the
+       window, so the thread stays visible behind them. */
+    .pf-cw__sheet {
+      flex-shrink: 0; border-top: 1px solid var(--glass-border);
+      padding: 8px; display: flex; flex-direction: column; gap: 6px;
+      max-height: 190px;
+    }
+    .pf-cw__sheet-search {
+      height: 32px; padding: 0 10px; border-radius: 8px;
+      border: 1px solid var(--glass-border); background: var(--glass-bg);
+      color: var(--text-primary); font-size: 12.5px; font-family: inherit; outline: none;
+    }
+    .pf-cw__sheet-search:focus { border-color: #7c3aed; }
+    .pf-cw__sheet-list { overflow-y: auto; display: flex; flex-direction: column; }
+    .pf-cw__sheet-item {
+      display: flex; align-items: baseline; gap: 8px;
+      padding: 8px 8px; min-height: 38px;
+      border: none; background: transparent; border-radius: 8px;
+      color: var(--text-primary); font-size: 12.5px; font-family: inherit;
+      cursor: pointer; text-align: left;
+    }
+    .pf-cw__sheet-item:hover { background: var(--bg-hover); }
+    .pf-cw__sheet-sub {
+      font-size: 11px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .pf-cw__sheet-empty { margin: 6px 4px; font-size: 12px; color: var(--text-tertiary); }
+
+    .pf-cw__emoji {
+      flex-shrink: 0; border-top: 1px solid var(--glass-border);
+      padding: 6px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+    }
+    .pf-cw__emoji-btn {
+      height: 30px; border: none; background: transparent; border-radius: 7px;
+      font-size: 16px; line-height: 1; cursor: pointer;
+    }
+    .pf-cw__emoji-btn:hover { background: var(--bg-hover); }
     .pf-cw__clip {
       width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
       display: inline-flex; align-items: center; justify-content: center;
@@ -311,6 +440,7 @@ export class ChatWindowsComponent {
   protected readonly webrtc = inject(WebrtcService);
   private readonly signaling = inject(SignalingService);
   private readonly toasts = inject(ToastService);
+  private readonly api = inject(ApiService);
 
   /** Chat only exists when the workflow says Messages is part of this
    *  tenant's process — same rule the bar's Messages icon uses. */
@@ -364,6 +494,77 @@ export class ChatWindowsComponent {
     }
   }
   protected initials(c: Conversation): string { return conversationInitials(c, this.meId()); }
+
+  /** Common set for the quick strip — a full picker belongs on the page,
+   *  not in a 330px window. */
+  protected readonly EMOJI = ['👍','🙏','✅','❌','⚠️','🙂','😀','😅','🎉','🔥','💯','👀',
+                             '🩸','🧪','🔬','📄','⏱️','❗','❓','👌','🤝','💊','🚑','📌'];
+
+  /** Which window has its "+" menu / patient picker / emoji strip open.
+   *  One at a time, and opening one closes the others. */
+  protected readonly menuFor = signal<string | null>(null);
+  protected readonly emojiFor = signal<string | null>(null);
+  protected readonly patientFor = signal<string | null>(null);
+  protected readonly patientQuery = signal('');
+  protected readonly patientResults = signal<PatientLite[]>([]);
+  protected readonly patientLoading = signal(false);
+  private patientDebounce: ReturnType<typeof setTimeout> | null = null;
+
+  protected toggleMenu(id: string): void {
+    this.menuFor.update((cur) => (cur === id ? null : id));
+    this.emojiFor.set(null);
+    this.patientFor.set(null);
+  }
+
+  protected openEmoji(id: string): void {
+    this.menuFor.set(null);
+    this.patientFor.set(null);
+    this.emojiFor.update((cur) => (cur === id ? null : id));
+  }
+
+  protected addEmoji(box: HTMLInputElement, e: string): void {
+    box.value = (box.value ?? '') + e;
+    box.focus();
+  }
+
+  protected openPatients(id: string): void {
+    this.menuFor.set(null);
+    this.emojiFor.set(null);
+    this.patientFor.set(id);
+    this.patientQuery.set('');
+    void this.searchPatients('');
+  }
+
+  protected onPatientQuery(q: string): void {
+    this.patientQuery.set(q);
+    if (this.patientDebounce) clearTimeout(this.patientDebounce);
+    this.patientDebounce = setTimeout(() => void this.searchPatients(q), 220);
+  }
+
+  private async searchPatients(q: string): Promise<void> {
+    this.patientLoading.set(true);
+    try {
+      const t = q.trim();
+      const path = t ? `/api/patients?q=${encodeURIComponent(t)}&limit=12` : '/api/patients?limit=12';
+      this.patientResults.set((await firstValueFrom(this.api.get<PatientLite[]>(path))) ?? []);
+    } catch {
+      this.patientResults.set([]);
+    } finally {
+      this.patientLoading.set(false);
+    }
+  }
+
+  /** Same call the Messages page makes, so a card shared from a window is
+   *  indistinguishable from one shared there. */
+  protected async sharePatient(conversationId: string, p: PatientLite): Promise<void> {
+    try {
+      await this.chat.sharePatient(conversationId, p.id);
+      this.patientFor.set(null);
+      this.windowsSvc.focus(conversationId);
+    } catch (err) {
+      this.toasts.error(ApiError.from(err).message);
+    }
+  }
 
   /** True while an attachment is on its way up — the composer says so and
    *  the clip is disabled so a second pick can't race the first. */
