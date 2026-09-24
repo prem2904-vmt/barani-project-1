@@ -4,6 +4,12 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+
+/** Band pill tabs — one per section card. */
+export type CultureSettingsTab = 'lock' | 'tat';
 
 interface StageTat { stageKey: string; tatHours: number; }
 interface MicroSettings { lockTimeoutMinutes: number; allowSupervisorTakeover: boolean; stageTats: StageTat[]; }
@@ -23,11 +29,32 @@ const STAGE_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-culture-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TileComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): no search — the two cards become tabs in a
+             tabs-only pill; Save rides the band actions. -->
+        <pf-hero-band [back]="true" backTo="/lab/settings" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
+                    (click)="save()" aria-label="Save changes" title="Save changes">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save changes' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Lab · Microbiology" title="Culture settings"
         subtitle="Stage lock + turnaround for the culture bench"
         parentRoute="/lab/settings">
@@ -38,6 +65,9 @@ const STAGE_LABELS: Record<string, string> = {
         </div>
       </pf-screen-header>
 
+      <div class="pf-band-body">
+      <div class="pf-band-narrow">
+      @if (showSec('lock')) {
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-cs__title">Stage lock</h3>
         <p class="pf-cs__hint">When a tech picks up a stage it's locked to them. If it sits idle this long,
@@ -53,6 +83,9 @@ const STAGE_LABELS: Record<string, string> = {
         </label>
       </pf-tile>
 
+      }
+
+      @if (showSec('tat')) {
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-cs__title">Turnaround targets</h3>
         <p class="pf-cs__hint">Each stage raises an "overdue" alert once it runs past its target.</p>
@@ -65,6 +98,9 @@ const STAGE_LABELS: Record<string, string> = {
           </div>
         }
       </pf-tile>
+      }
+      </div>
+      </div>
     </section>
   `,
   styles: [`
@@ -85,6 +121,17 @@ const STAGE_LABELS: Record<string, string> = {
 export class CultureSettingsComponent {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill tabs (new design). Classic shows both cards, as before. */
+  readonly tabOptions: SegmentedOption<CultureSettingsTab>[] = [
+    { value: 'lock', label: 'Stage lock' },
+    { value: 'tat', label: 'Turnaround' },
+  ];
+  readonly tab = signal<CultureSettingsTab>('lock');
+  showSec(key: CultureSettingsTab): boolean {
+    return !this.theme.isNewDesign() || this.tab() === key;
+  }
 
   lockTimeoutMinutes = 60;
   allowSupervisorTakeover = true;

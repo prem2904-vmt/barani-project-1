@@ -11,6 +11,7 @@ import { AppointmentsConfigComponent } from './appointments-config/appointments-
 import { AppointmentQueueService } from '../../core/services/appointment-queue.service';
 import { of } from 'rxjs';
 import { OpdSettingsComponent } from '../opd/admin/opd-settings.component';
+import { CultureSettingsComponent } from '../lab/culture-settings/culture-settings.component';
 
 /**
  * Admin band — settings forms whose section cards become a tabs-only pill
@@ -214,5 +215,39 @@ describe('Admin band B2 — OPD settings', () => {
     save!.click();
     expect(p.api.put).toHaveBeenCalledWith('/api/opd/settings',
       { followUpMode: 'assisted', tiers: [{ withinDays: 7, discountPercent: 100 }] });
+  });
+});
+
+describe('Admin band B2 — Microbiology / Culture settings', () => {
+  function make() {
+    return renderBandPage(CultureSettingsComponent, {
+      getFor: (url) => (url === '/api/microbiology/settings'
+        ? { lockTimeoutMinutes: 45, allowSupervisorTakeover: false, stageTats: [{ stageKey: 'gram', tatHours: 4 }] } : {}),
+      providers: [auth, tenantState],
+    });
+  }
+
+  it('band with a tabs-only pill, header classic-only', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.bandInput()).toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(pillTabs(p).labels()).toEqual(['Stage lock', 'Turnaround']);
+  });
+
+  it('pill tabs swap the two cards', () => {
+    const p = make();
+    expect(titles(p, '.pf-cs__title')).toEqual(['Stage lock']);
+    pillTabs(p).click('Turnaround');
+    expect(titles(p, '.pf-cs__title')).toEqual(['Turnaround targets']);
+  });
+
+  it('Save lives in the band actions and PUTs the settings', () => {
+    const p = make();
+    const save = p.actions().find((b) => b.textContent?.includes('Save'));
+    expect(save).toBeTruthy();
+    save!.click();
+    expect(p.api.put).toHaveBeenCalledWith('/api/microbiology/settings',
+      { lockTimeoutMinutes: 45, allowSupervisorTakeover: false, stageTats: [{ stageKey: 'gram', tatHours: 4 }] });
   });
 });
