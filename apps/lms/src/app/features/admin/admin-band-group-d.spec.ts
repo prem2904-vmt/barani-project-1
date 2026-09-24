@@ -3,6 +3,7 @@ import { NotificationsConfigComponent } from './notifications-config/notificatio
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder.component';
 import { ProcessBuilderComponent } from './process-builder/process-builder.component';
 import { KpiConfigComponent } from './kpis/kpi-config.component';
+import { AuditLogComponent } from './audit-log/audit-log.component';
 import { TestBed } from '@angular/core/testing';
 import { DialogService } from '../../core/services/dialog.service';
 
@@ -170,5 +171,51 @@ describe('Admin band — KPI configuration', () => {
     await p.cmp.selectScreen('pathologist');
     expect(p.cmp.selectedScreen()).toBe('pathologist');
     expect(p.api.get).toHaveBeenCalledWith('/api/kpis/assignments?screen=pathologist');
+  });
+});
+
+describe('Admin band — Audit trail', () => {
+  const page = { items: [{ id: 'l1', entityType: 'OrderEntity', entityId: 'ord-1', action: 'update', userName: 'Asha', at: '2026-09-20T10:00:00Z', changes: null }], total: 1 };
+  const make = () => renderBandPage(AuditLogComponent, { getFor: (u) => (u.startsWith('/api/audit/logs') ? page : []) });
+  const lastUrl = (p: ReturnType<typeof make>) => String(p.api.get.mock.calls.at(-1)![0]);
+
+  it('band + body; header and filter card are classic-only; no native select in the pill', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.body()).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.el.querySelector('.pf-band-body > pf-tile')?.classList.contains('pf-classic-only')).toBe(true);
+    const tools = p.tools()!;
+    expect(tools.querySelectorAll('pf-select').length).toBe(3);
+    expect(tools.querySelector('select')).toBeNull();
+    expect(p.actions().map((b) => b.textContent?.trim())).toEqual(['Clear']);
+  });
+
+  it('record id is the pill search: Enter reloads with entityId', () => {
+    const p = make();
+    const input = p.bandInput()!;
+    input.value = 'ord-1';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(lastUrl(p)).toContain('entityId=ord-1');
+    expect(lastUrl(p)).toContain('page=1');
+  });
+
+  it('pill filters apply at once: type, action, quick range; Clear resets', () => {
+    const p = make();
+    p.cmp.setFilter({ entityType: 'OrderEntity' });
+    expect(lastUrl(p)).toContain('entityType=OrderEntity');
+    p.cmp.setFilter({ action: 'delete' });
+    expect(lastUrl(p)).toContain('action=delete');
+    p.cmp.setRange('7d');
+    expect(lastUrl(p)).toContain('from=');
+    expect(lastUrl(p)).toContain('to=');
+    expect(p.cmp.hasFilters()).toBe(true);
+    p.cmp.setRange('custom');
+    p.f.detectChanges();
+    expect(p.tools()!.querySelectorAll('input[type=date]').length).toBe(2);
+    p.cmp.clearAll();
+    expect(lastUrl(p)).toBe('/api/audit/logs?page=1&pageSize=50');
+    expect(p.cmp.range()).toBe('');
   });
 });

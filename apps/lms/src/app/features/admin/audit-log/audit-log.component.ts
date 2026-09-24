@@ -8,6 +8,12 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AUDIT_ENTITY_TYPES, AuditLog, AuditLogPage } from '../../../shared/models/audit.model';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { ThemeService } from '../../../core/services/theme.service';
+
+/** Quick date windows for the band pill ('' = any time). */
+type RangeKey = '' | 'today' | '7d' | '30d' | 'custom';
 
 interface Filters {
   entityType: string;
@@ -30,7 +36,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
 @Component({
   selector: 'pf-audit-log',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Phone (<=640): the log-row header packs 5 children in one non-wrapping
@@ -71,6 +77,21 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
     @media (pointer: coarse) {
       :host .audit-row { min-height: 44px; }
     }
+    /* ── Band pill filters (new design) ── */
+    .audit-bandsel { display: block; min-width: 150px; }
+    .audit-bandsel--type { min-width: 180px; }
+    .audit-dates { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .audit-date {
+      height: 32px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; font-family: inherit;
+      background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary);
+      color-scheme: light dark;
+    }
+    .audit-date:focus { outline: none; border-color: rgba(139, 92, 246, 0.55); }
+    .audit-dates__sep { font-size: 12px; color: var(--text-tertiary); }
+    @media (max-width: 640px) {
+      .audit-bandsel, .audit-bandsel--type { min-width: 140px; }
+      .audit-date { height: 40px; font-size: 16px; }
+    }
     /* Web-below-desktop band (641–1279, behind the 64px icon rail): at >=1024
        Tailwind's lg:grid-cols-5 packs all 5 filters into one row, which leaves
        the date inputs cramped next to the rail. Cap at 3 columns so the filter
@@ -82,15 +103,50 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
     }
   `],
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the record id is the search; record type,
+             action and the date window ride in the pill and apply at once. -->
+        <pf-hero-band [back]="true" placeholder="Search by record id…"
+                      [value]="filters().entityId" (valueChange)="onIdInput($event)" (submitted)="apply()">
+          <ng-container band-tools>
+            <pf-select class="audit-bandsel audit-bandsel--type" size="sm" [options]="entityTypeOptions"
+                       [value]="filters().entityType" (valueChange)="setFilter({ entityType: $event })"
+                       aria-label="Record type"></pf-select>
+            <pf-select class="audit-bandsel" size="sm" [options]="actionOptions"
+                       [value]="filters().action" (valueChange)="setFilter({ action: $event })"
+                       aria-label="Action"></pf-select>
+            <pf-select class="audit-bandsel" size="sm" [options]="rangeOptions"
+                       [value]="range()" (valueChange)="setRange($event)"
+                       aria-label="When"></pf-select>
+            @if (range() === 'custom') {
+              <span class="audit-dates">
+                <input type="date" class="audit-date" aria-label="From"
+                       [ngModel]="filters().from" (ngModelChange)="setFilter({ from: $event })" />
+                <span class="audit-dates__sep">to</span>
+                <input type="date" class="audit-date" aria-label="To"
+                       [ngModel]="filters().to" (ngModelChange)="setFilter({ to: $event })" />
+              </span>
+            }
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!hasFilters()" (click)="clearAll()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              Clear
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Audit trail"
         subtitle="Every change to results, samples, patients, reports, billing and access — who did it, when, and exactly what changed. Append-only.">
       </pf-screen-header>
 
-      <!-- Filters -->
-      <pf-tile tone="default" padding="lg" class="block mb-4">
+      <div class="pf-band-body">
+      <!-- Filters (classic; the new design has them in the band pill) -->
+      <pf-tile tone="default" padding="lg" class="block mb-4 pf-classic-only">
         <div class="audit-filter-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label class="pf-label">Record type</label>
@@ -215,6 +271,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
           </div>
         </div>
       }
+      </div>
     </section>
   `
 })
@@ -223,6 +280,59 @@ export class AuditLogComponent implements OnInit {
   private readonly toast = inject(ToastService);
 
   readonly entityTypes = AUDIT_ENTITY_TYPES;
+  protected readonly theme = inject(ThemeService);
+
+  // ── Band pill filters ────────────────────────────────────────────────
+  readonly entityTypeOptions: PfSelectOption<string>[] = AUDIT_ENTITY_TYPES.map(t => ({ value: t.value, label: t.label }));
+  readonly actionOptions: PfSelectOption<string>[] = [
+    { value: '', label: 'Any action' },
+    { value: 'create', label: 'Created' },
+    { value: 'update', label: 'Updated' },
+    { value: 'delete', label: 'Deleted' },
+  ];
+  readonly rangeOptions: PfSelectOption<RangeKey>[] = [
+    { value: '', label: 'Any time' },
+    { value: 'today', label: 'Today' },
+    { value: '7d', label: 'Last 7 days' },
+    { value: '30d', label: 'Last 30 days' },
+    { value: 'custom', label: 'Custom dates…' },
+  ];
+  readonly range = signal<RangeKey>('');
+  private idTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Pill filter change → apply immediately (no Apply button in the band). */
+  setFilter(p: Partial<Filters>) {
+    this.patch(p);
+    this.apply();
+  }
+
+  /** Record-id search: debounced while typing; Enter applies at once. */
+  onIdInput(v: string) {
+    this.patch({ entityId: v ?? '' });
+    if (this.idTimer) clearTimeout(this.idTimer);
+    this.idTimer = setTimeout(() => { this.idTimer = null; this.apply(); }, 400);
+  }
+
+  setRange(r: RangeKey) {
+    this.range.set(r);
+    if (r === 'custom') return; // the two date inputs appear; they apply on change
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const today = new Date();
+    const back = (n: number) => { const d = new Date(today); d.setDate(d.getDate() - n); return iso(d); };
+    const from = r === 'today' ? iso(today) : r === '7d' ? back(6) : r === '30d' ? back(29) : '';
+    this.setFilter({ from, to: r ? iso(today) : '' });
+  }
+
+  readonly hasFilters = computed(() => {
+    const f = this._filters();
+    return !!(f.entityType || f.entityId || f.action || f.from || f.to);
+  });
+
+  clearAll() {
+    if (this.idTimer) { clearTimeout(this.idTimer); this.idTimer = null; }
+    this.range.set('');
+    this.reset();
+  }
 
   private readonly _filters = signal<Filters>({ ...EMPTY_FILTERS });
   readonly filters = this._filters.asReadonly();
@@ -258,6 +368,7 @@ export class AuditLogComponent implements OnInit {
   }
 
   apply() {
+    if (this.idTimer) { clearTimeout(this.idTimer); this.idTimer = null; }
     this._page.set(1);
     this.load();
   }
