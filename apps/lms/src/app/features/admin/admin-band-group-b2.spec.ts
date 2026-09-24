@@ -10,6 +10,7 @@ import { OrganizationSettingsComponent } from './organization/organization-setti
 import { AppointmentsConfigComponent } from './appointments-config/appointments-config.component';
 import { AppointmentQueueService } from '../../core/services/appointment-queue.service';
 import { of } from 'rxjs';
+import { OpdSettingsComponent } from '../opd/admin/opd-settings.component';
 
 /**
  * Admin band — settings forms whose section cards become a tabs-only pill
@@ -172,5 +173,46 @@ describe('Admin band B2 — Appointments & queue', () => {
     expect(save).toBeTruthy();
     save!.click();
     expect(p.svc.saveConfig).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Admin band B2 — OPD settings', () => {
+  function make(followUpMode = 'auto') {
+    return renderBandPage(OpdSettingsComponent, {
+      getFor: (url) => (url === '/api/opd/settings'
+        ? { followUpMode, tiers: [{ withinDays: 7, discountPercent: 100 }] } : {}),
+      providers: [auth, tenantState],
+    });
+  }
+
+  it('band with the follow-up mode as the tabs-only pill switch, header classic-only', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.bandInput()).toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(pillTabs(p).labels()).toEqual(['Off', 'Automatic', 'Assisted']);
+    // The classic radio-card gate is replaced by the pill.
+    expect(p.body()!.querySelector('.pf-os__gate')).toBeNull();
+  });
+
+  it('switching the mode in the pill shows/hides the tiers card', () => {
+    const p = make();
+    expect(titles(p, '.pf-os__title')).toContain('Tiers');
+    expect(p.body()!.querySelector('.pf-os__modehint')?.textContent).toContain('Automatic');
+    pillTabs(p).click('Off');
+    expect(titles(p, '.pf-os__title')).not.toContain('Tiers');
+    expect(p.body()!.querySelector('.pf-os__modehint')?.textContent).toContain('Off');
+    pillTabs(p).click('Assisted');
+    expect(titles(p, '.pf-os__title')).toContain('Tiers');
+  });
+
+  it('Save lives in the band actions and PUTs the chosen mode', () => {
+    const p = make();
+    pillTabs(p).click('Assisted');
+    const save = p.actions().find((b) => b.textContent?.includes('Save'));
+    expect(save).toBeTruthy();
+    save!.click();
+    expect(p.api.put).toHaveBeenCalledWith('/api/opd/settings',
+      { followUpMode: 'assisted', tiers: [{ withinDays: 7, discountPercent: 100 }] });
   });
 });

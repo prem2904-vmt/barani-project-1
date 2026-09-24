@@ -1,9 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
 
 type FollowUpMode = 'off' | 'auto' | 'assisted';
 interface FollowUpTier { withinDays: number; discountPercent: number; }
@@ -18,11 +21,32 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
 @Component({
   selector: 'pf-opd-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TileComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): no search — the follow-up MODE is the pill's switch
+             (tabs-only pill); tiers sit in the body; Save rides the band. -->
+        <pf-hero-band [back]="true" backTo="/admin/opd" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="modeOptions" [value]="mode()"
+                          (valueChange)="mode.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
+                    (click)="save()" aria-label="Save changes" title="Save changes">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save changes' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="OPD" title="OPD Settings" subtitle="Follow-up policy for repeat consultations"
         parentRoute="/admin/opd">
         <div actions>
@@ -32,6 +56,14 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
         </div>
       </pf-screen-header>
 
+      <div class="pf-band-body">
+      <div class="pf-band-narrow">
+      @if (theme.isNewDesign()) {
+        <!-- The mode is picked in the pill; its meaning stays readable here. -->
+        <p class="pf-os__modehint" role="status">
+          <strong>Follow-up: {{ modeLabel() }}.</strong> {{ modeDesc() }}
+        </p>
+      } @else {
       <pf-tile tone="default" padding="lg" class="block mb-5">
         <h3 class="pf-os__title">Follow-up mode</h3>
         <p class="pf-os__hint">
@@ -50,6 +82,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
           }
         </div>
       </pf-tile>
+      }
 
       @if (mode() !== 'off') {
         <pf-tile tone="default" padding="lg" class="block mb-5">
@@ -76,6 +109,8 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
           }
         </pf-tile>
       }
+      </div>
+      </div>
     </section>
   `,
   styles: [`
@@ -100,6 +135,9 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
     .pf-os__gate-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
     .pf-os__gate-s { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
 
+    .pf-os__modehint { margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.55;
+      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-os__modehint strong { color: var(--text-primary); font-weight: 600; }
     .pf-os__row-head { display: flex; align-items: center; justify-content: space-between; }
     .pf-os__muted { margin-top: 10px; font-size: 13px; color: var(--text-tertiary); }
     .pf-os__add { padding: 6px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600; cursor: pointer;
@@ -122,6 +160,11 @@ export class OpdSettingsComponent {
     { value: 'assisted', label: 'Assisted', desc: 'The matching tier’s discount is a ceiling — the front desk applies any amount up to it.' },
   ];
   readonly mode = signal<FollowUpMode>('off');
+  protected readonly theme = inject(ThemeService);
+  /** The band pill's switch (new design) — same three modes as the classic radio cards. */
+  readonly modeOptions: SegmentedOption<FollowUpMode>[] = this.MODES.map((m) => ({ value: m.value, label: m.label, hint: m.desc }));
+  readonly modeLabel = computed(() => this.MODES.find((m) => m.value === this.mode())?.label ?? '');
+  readonly modeDesc = computed(() => this.MODES.find((m) => m.value === this.mode())?.desc ?? '');
   readonly tiers = signal<FollowUpTier[]>([]);
   readonly saving = signal(false);
 
