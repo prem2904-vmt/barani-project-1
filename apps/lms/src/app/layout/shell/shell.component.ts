@@ -516,22 +516,33 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         border-top: 1px solid var(--header-border);
         padding-bottom: env(safe-area-inset-bottom, 0px);
         z-index: 40;
-        /* The docked bar carries the SAME sweep as the hero band (owner),
-           mirrored so the violet end sits on the same side — the two read
-           as one frame around the page instead of a tinted top and a flat
-           grey floor. Stops match hero-band.component.ts; keep them in
-           step if either moves. */
-        background-color: #ffffff;
-        background-image: linear-gradient(90deg, rgba(125, 28, 182, 0.18) 0%, rgba(173, 75, 201, 0.18) 37%,
-                                          rgba(175, 34, 201, 0.18) 68%, rgba(162, 25, 110, 0.18) 100%);
+        /* Same --pf-band-* wash as the hero band, with the fade mirrored
+           so it darkens toward the floor. One source of truth in
+           styles.scss — the two bars cannot drift apart. */
+        /* Glassmorphism (owner): translucent base + a blur of whatever is
+           scrolling underneath, so the bar frosts the page instead of
+           capping it. The wash rides on top of the frost. */
+        background-color: var(--pf-band-bg-glass);
+        background-image: var(--pf-band-fade-up), var(--pf-band-sweep);
+        backdrop-filter: blur(18px) saturate(1.3);
+        -webkit-backdrop-filter: blur(18px) saturate(1.3);
+      }
+      /* Blur is the costliest GPU op on a phone — keep it modest there. */
+      @media (max-width: 640px) {
+        :host-context(.design-new.nav-bottom) .pf-chrome {
+          backdrop-filter: blur(10px) saturate(1.2);
+          -webkit-backdrop-filter: blur(10px) saturate(1.2);
+        }
+      }
+      /* No backdrop-filter support → fall back to the opaque bar rather
+         than a see-through one with unreadable icons. */
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        :host-context(.design-new.nav-bottom) .pf-chrome {
+          background-color: var(--pf-band-bg);
+        }
       }
       :host-context(.dark.design-new.nav-bottom) .pf-chrome {
-        background-color: #1a1424;
-        background-image:
-          linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(10, 8, 16, 0.38) 100%),
-          linear-gradient(90deg, rgba(125, 28, 182, 0.34) 0%, rgba(173, 75, 201, 0.26) 37%,
-                          rgba(175, 34, 201, 0.25) 68%, rgba(162, 25, 110, 0.32) 100%);
-        border-top-color: rgba(168, 85, 247, 0.22);
+        border-top-color: var(--pf-band-edge);
       }
       /* One bottom surface only: the phone pill / iPad rail steps aside. */
       :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }

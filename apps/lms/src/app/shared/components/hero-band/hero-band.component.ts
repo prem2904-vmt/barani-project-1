@@ -93,24 +93,17 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
          reclaimed height back to the screen. */
       min-height: 72px;
       padding: 8px 20px calc(8px + 33px);  /* bottom holds room for the overlap */
-      background-color: #ffffff;
-      /* Lighter sweep (owner) — same hues, roughly half the saturation, so
-         the band reads as a tint behind the content rather than a slab.
-         The docked bottom bar mirrors these exact stops (shell). */
-      background-image: linear-gradient(90deg, rgba(125, 28, 182, 0.18) 0%, rgba(173, 75, 201, 0.18) 37%,
-                                        rgba(175, 34, 201, 0.18) 68%, rgba(162, 25, 110, 0.18) 100%);
+      /* Colours come from --pf-band-* in styles.scss so the band and the
+         docked bottom bar can never drift apart, and dimming is one edit
+         in one place (owner asked twice). */
+      background-color: var(--pf-band-bg, #ffffff);
+      background-image: var(--pf-band-fade), var(--pf-band-sweep);
     }
+    /* Dark differs only in the variable VALUES (styles.scss), so the rule
+       here is just the edge. */
     :host-context(.dark) .pf-hb__band,
     :host-context([data-theme='dark']) .pf-hb__band {
-      /* Owner: the light gradient wasn't "adding up" in dark — give the
-         band a real violet presence on a deep base instead of a faint
-         wash over transparent. */
-      background-color: #1a1424;
-      background-image:
-        linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(10, 8, 16, 0.38) 100%),
-        linear-gradient(90deg, rgba(125, 28, 182, 0.34) 0%, rgba(173, 75, 201, 0.26) 37%,
-                        rgba(175, 34, 201, 0.25) 68%, rgba(162, 25, 110, 0.32) 100%);
-      border-bottom: 1px solid rgba(168, 85, 247, 0.22);
+      border-bottom: 1px solid var(--pf-band-edge);
     }
 
     .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }
