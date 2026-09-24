@@ -45,7 +45,7 @@ describe('ResultEntry.flagFor — live bench flag (CURRENT)', () => {
 
   it('prefers BAND criticals over the parameter-level pair', () => {
     expect(flag('6.6')?.tone).toBe('critical');          // band 6.5 wins over param 8
-    expect(flag('2.4')?.label).toBe('Critical · below 2.5');
+    expect(flag('2.4')?.label).toBe('Critical low · below 2.5');
   });
   it('falls back to parameter criticals when the band has none', () => {
     const p = { ...k, referenceRanges: [{ min: 3.5, max: 5 }] };

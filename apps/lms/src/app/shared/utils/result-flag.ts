@@ -75,6 +75,36 @@ export function flagCodeOf(flag: string | null | undefined): FlagCode {
   return (f === 'H' || f === 'L' || f === 'C' || f === 'A' || f === 'N') ? f : '';
 }
 
+/** What a flag code MEANS, in plain words — chip tooltips and legends
+ *  (QA 2026-09-24: users could not tell which of H / L was high). */
+export function flagMeaning(flag: string | null | undefined): string {
+  switch (flagCodeOf(flag)) {
+    case 'H': return 'H = High — above the reference range';
+    case 'L': return 'L = Low — below the reference range';
+    case 'C': return 'C = Critical — past a critical (panic) limit';
+    case 'A': return 'A = Abnormal — not an expected (normal) answer';
+    case 'N': return 'N = Normal — within the reference range';
+    default: return '';
+  }
+}
+
+/** Tooltip for a result-entry flag chip ({ tone, label } as the entry screens
+ *  build it): names the direction of a critical and what H / L stand for. */
+export function flagChipTitle(chip: { tone: string; label: string } | null | undefined): string {
+  if (!chip) return '';
+  const label = chip.label.toLowerCase();
+  if (chip.tone === 'critical') {
+    if (label.includes('low') || label.includes('below')) return 'Critical low — below the critical (panic) limit';
+    if (label.includes('high') || label.includes('above')) return 'Critical high — above the critical (panic) limit';
+    return flagMeaning('C');
+  }
+  if (label === 'abnormal') return flagMeaning('A');
+  if (chip.tone === 'high') return flagMeaning('H');
+  if (chip.tone === 'low') return flagMeaning('L');
+  if (chip.tone === 'normal') return flagMeaning('N');
+  return '';
+}
+
 /** mw code → review tone: C critical; H/L/A abnormal; N / '' normal. */
 export function flagTone(flag: string | null | undefined): FlagTone {
   const c = flagCodeOf(flag);

@@ -16,7 +16,7 @@ import { CultureEntryComponent } from '../culture-entry/culture-entry.component'
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
-import { flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
+import { flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
 import { effectiveMethodology } from '../../../shared/utils/methodology';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
 import { choiceOptionsFor, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
@@ -423,7 +423,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 <span class="pf-rg__calc" [attr.data-kind]="c.kind">{{ c.label }}</span>
                               }
                               @if (flagFor(p); as fl) {
-                                <span class="pf-rg__flag" [attr.data-tone]="fl.tone">{{ fl.label }}</span>
+                                <span class="pf-rg__flag" [attr.data-tone]="fl.tone" [attr.title]="flagChipTitle(fl)">{{ fl.label }}</span>
                               }
                             </td>
                             <td class="pf-rg__c-unit">{{ p.unit ?? '—' }}</td>
@@ -805,7 +805,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                       }
                       @if (flagFor(p); as f) {
                         @if (f.tone !== 'critical') {
-                          <span class="pf-flag" [attr.data-tone]="f.tone">
+                          <span class="pf-flag" [attr.data-tone]="f.tone" [attr.title]="flagChipTitle(f)">
                             <span class="pf-flag__dot"></span>
                             {{ f.label }}
                           </span>
@@ -3365,6 +3365,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   /** The bench chip. A value that is still the one SAVED with the result
    *  shows mw's saved verdict (snapshot `flagged`); a value being typed gets
    *  the shared live hint (patient band, band → param criticals, strict). */
+  /** Chip tooltip: what H / L / critical mean (QA 2026-09-24). */
+  readonly flagChipTitle = flagChipTitle;
+
   flagFor(p: TestParameter): Flag | null {
     if (this.inputKindFor(p) !== 'numeric') return null;
     const raw = this._values()[p.name];
@@ -3388,7 +3391,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const lf = liveFlag(p, v, normalizeSex(ot?.subOrder?.order?.patient?.sex),
       typeof ageRaw === 'number' ? ageRaw : null, ot?.profileCode);
     if (!lf) return null;
-    if (lf.code === 'C') return { tone: 'critical', label: `Critical · ${lf.critical === 'low' ? 'below' : 'above'} ${lf.limit}` };
+    if (lf.code === 'C') return { tone: 'critical', label: `Critical ${lf.critical === 'low' ? 'low · below' : 'high · above'} ${lf.limit}` };
     if (lf.code === 'L') return { tone: 'low',  label: 'Low' };
     if (lf.code === 'H') return { tone: 'high', label: 'High' };
     return { tone: 'normal', label: 'Normal' };

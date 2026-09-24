@@ -1116,11 +1116,13 @@ export class DynamicInputComponent {
 
   flagLabel(): string {
     switch (this.flag()) {
-      case 'critical_low':  return '🔴 Critical low';
-      case 'critical_high': return '🔴 Critical high';
-      case 'low':           return '🟡 Low';
-      case 'high':          return '🟡 High';
-      case 'normal':        return '✅ Normal';
+      // Plain words, no emoji (design rule) — the tone colour comes from
+      // flagClass(); the words say which direction (QA 2026-09-24).
+      case 'critical_low':  return 'Critical low — below the critical limit';
+      case 'critical_high': return 'Critical high — above the critical limit';
+      case 'low':           return 'Low (L) — below the reference range';
+      case 'high':          return 'High (H) — above the reference range';
+      case 'normal':        return 'Normal';
       default:              return '';
     }
   }

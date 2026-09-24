@@ -377,7 +377,7 @@ interface ValueRow {
                             <span class="pf-prow__ref">{{ r.range ?? '—' }}</span>
                             <span class="pf-prow__flag">
                               @if (r.flag !== 'normal' || r.hasRef) {
-                                <span class="pf-vcard__chip" [attr.data-flag]="r.flag">
+                                <span class="pf-vcard__chip" [attr.data-flag]="r.flag" [attr.title]="flagExplanation(r) || null">
                                   <span class="pf-vcard__chip-dot"></span>
                                   {{ flagLabel(r.flag) }}
                                 </span>
