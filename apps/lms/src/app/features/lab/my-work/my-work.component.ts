@@ -245,47 +245,84 @@ const COUNTERS: CounterSpec[] = [
            My Work / Done. Hidden above 640px, where all panes lay out together.
            Selecting My Work / Queue drives the existing internal tab via
            setMobileTab → setTab so the right pane loads the right data. -->
+      <!-- New design shows ICONS, not words (owner): five labelled tabs on a
+           390px phone left "CULTU…" truncated and every label cramped. The
+           count stays — that is the part you actually read. Classic keeps
+           its words (CSS swaps which of the two shows). -->
       <div class="pf-mtabs" role="tablist" aria-label="Sections">
         @if (showCollect()) {
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'intake'"
                 [attr.aria-selected]="mobileTab() === 'intake'"
-                (click)="setMobileTab('intake')">Collect</button>
+                aria-label="Collect" title="Collect"
+                (click)="setMobileTab('intake')">
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 3v6l-5 9a2 2 0 0 0 1.8 3h12.4A2 2 0 0 0 20 18l-5-9V3"/><path d="M8 3h8"/>
+          </svg>
+          <span class="pf-mtab__label">Collect</span>
+        </button>
         } @else if (showIntake()) {
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'intake'"
                 [attr.aria-selected]="mobileTab() === 'intake'"
-                (click)="setMobileTab('intake')">Intake</button>
+                aria-label="Intake" title="Intake"
+                (click)="setMobileTab('intake')">
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/>
+          </svg>
+          <span class="pf-mtab__label">Intake</span>
+        </button>
         }
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'queue'"
                 [attr.aria-selected]="mobileTab() === 'queue'"
+                aria-label="Queue" title="Queue"
                 (click)="setMobileTab('queue')">
-          Queue
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h10"/>
+          </svg>
+          <span class="pf-mtab__label">Queue</span>
           <span class="pf-mtab__count">{{ countFor('service_queue') }}</span>
         </button>
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'mywork'"
                 [attr.aria-selected]="mobileTab() === 'mywork'"
+                aria-label="My Work" title="My Work"
                 (click)="setMobileTab('mywork')">
-          My Work
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+            <path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/>
+          </svg>
+          <span class="pf-mtab__label">My Work</span>
           <span class="pf-mtab__count">{{ countFor('my_work') }}</span>
         </button>
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'completed'"
                 [attr.aria-selected]="mobileTab() === 'completed'"
+                aria-label="Done" title="Done"
                 (click)="setMobileTab('completed')">
-          Done
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>
+          </svg>
+          <span class="pf-mtab__label">Done</span>
           <span class="pf-mtab__count">{{ countFor('completed') }}</span>
         </button>
         @if (showCulturePane() || cultureAsTab()) {
           <button type="button" role="tab" class="pf-mtab press"
                   [class.pf-mtab--on]="mobileTab() === 'culture'"
                   [attr.aria-selected]="mobileTab() === 'culture'"
+                  aria-label="Culture bench" title="Culture bench"
                   (click)="setMobileTab('culture')">
-            <!-- Five tabs have to share ~390px, so the new design uses the
-                 short label it already uses in the band. Classic keeps its
-                 original wording. -->
+            <!-- Petri dish. -->
+            <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/>
+            </svg>
             <span class="pf-mtab__label">{{ cultureAsTab() ? 'Culture' : 'Culture Bench' }}</span>
             <span class="pf-mtab__count">{{ cultureCount() }}</span>
           </button>
@@ -2196,11 +2233,15 @@ const COUNTERS: CounterSpec[] = [
          by the global primary-colour rule in styles.scss
          (:root.{light,dark}.design-new button[class*="--on"]), which
          outranks anything scoped here. Classic still gets the gradient. */
-      /* Five tabs share ~390px once Culture is in play — never let a label
-         bleed out of its pill. */
+      /* Classic keeps the words; the new design shows the icon instead
+         (owner: five labels do not fit a 390px phone). */
+      .pf-mtab__ico { display: none; flex-shrink: 0; }
       .pf-mtab__label {
         min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       }
+      :host-context(.design-new) .pf-mtab__ico { display: block; }
+      :host-context(.design-new) .pf-mtab__label { display: none; }
+      :host-context(.design-new) .pf-mtab { gap: 5px; padding: 8px 4px; }
       .pf-mtab__count {
         font-family: 'JetBrains Mono', ui-monospace, monospace;
         font-size: 10.5px;

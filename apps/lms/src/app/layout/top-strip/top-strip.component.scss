@@ -1192,6 +1192,24 @@ a.pf-ts-tenant:hover {
     scrollbar-width: none;
   }
   :host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
+  /* iPad AND phone: the work areas are the only thing allowed to scroll.
+     The right cluster (chat · bell · user badge) is pinned so the profile
+     menu — branch switching, Classic/New, design mode — is always one tap
+     away, on every width where the bar is docked (owner: those options
+     were missing on mobile AND iPad). */
+  :host-context(.design-new.nav-bottom) .pf-ts-right {
+    margin-left: auto; flex-shrink: 0;
+  }
+  /* Flipped upward, the menu only has the space ABOVE the bar to live in.
+     Cap it there and let it scroll, so the entries at the far end of the
+     list (design mode, sign out) can still be reached. */
+  :host-context(.design-new.nav-bottom) .pf-profile-pop {
+    max-height: calc(100dvh - var(--pf-botbar-h, 58px) - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    max-width: min(300px, calc(100vw - 16px));
+  }
 }
 /* ── Bottom-bar layout (all widths): a plain self-aligning flex row —
    [pf glyph][pages, LEFT-aligned][spacer][branch][bell][avatar]. The
@@ -1233,9 +1251,32 @@ a.pf-ts-tenant:hover {
   :host-context(.design-new.nav-bottom) .pf-brand-lockup { display: none !important; }
   :host-context(.design-new.nav-bottom) .pf-avatar-circle { display: none; }
   :host-context(.design-new.nav-bottom) .pf-avatar-glyph { display: block; }
-  :host-context(.design-new.nav-bottom) .pf-topstrip-bar { justify-content: center; }
   :host-context(.design-new.nav-bottom) .pf-ts-spacer { display: none; }
-  :host-context(.design-new.nav-bottom) .pf-topnav-center { flex: 0 1 auto; margin-left: 0; }
+  /* The bar used to CENTER its whole group. Once the work areas, the draft
+     chip, chat, the bell and the user badge were all in it, the group was
+     wider than a 390px phone — and a centred overflow spills off BOTH
+     ends, which silently pushed the bell and the pf badge off-screen.
+     That badge is the only way into branch switching, design mode and
+     Classic/New, so losing it took the whole menu with it (owner).
+     Now: left-aligned, the work areas are the one part that scrolls, and
+     the right cluster is pinned where it can always be reached. */
+  :host-context(.design-new.nav-bottom) .pf-topstrip-bar {
+    justify-content: flex-start;
+    gap: 6px;
+    padding-inline: 8px;
+  }
+  :host-context(.design-new.nav-bottom) .pf-topnav-center {
+    flex: 1 1 auto; min-width: 0; margin-left: 0;
+  }
+  :host-context(.design-new.nav-bottom) .pf-ts-right {
+    margin-left: auto; flex-shrink: 0;
+  }
+  :host-context(.design-new.nav-bottom) .pf-draftshelf { flex-shrink: 0; }
+  /* Comfortable thumb target for the badge itself. */
+  :host-context(.design-new.nav-bottom) .pf-avatar-btn {
+    flex-shrink: 0; min-width: 44px; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
 }
 
 /* The glyph-as-avatar: hidden by default, shown on shrink (rule above). */

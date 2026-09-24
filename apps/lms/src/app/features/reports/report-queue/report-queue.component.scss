@@ -816,3 +816,16 @@
     color: var(--text-tertiary);
   }
 }
+
+/* ── Phone (<=640px), NEW design: one filter, in the search bar ───────
+   The phone used to get its own icon-only filter row (.pf-rq-filter-m)
+   plus a text line naming the active category — a second control that
+   predates the band. The band's segmented strip now scrolls on phones
+   and carries the dots + counts, i.e. the colour legend the web version
+   has (owner: "the status should come inside the search bar", "the
+   colouring scheme is not there like we implemented in web").
+   Classic still gets the icon row. Nothing here applies >=641px. */
+@media (max-width: 640px) {
+  :host-context(.design-new) .pf-rq-filter-m,
+  :host-context(.design-new) .pf-rq-filter-active { display: none !important; }
+}

@@ -359,3 +359,29 @@
 :host-context(.dark) .pf-statusword[data-tone='blue']    { color: #38bdf8; }
 :host-context(.dark) .pf-statusword[data-tone='violet']  { color: #a78bfa; }
 :host-context(.dark) .pf-statusword[data-tone='rose']    { color: #f87171; }
+
+/* ── Phone (<=640px): the weekday strip ───────────────────────────────
+   The new design gives each day a 73px tile. Seven of those plus gaps is
+   ~559px, so on a 390px phone they overlapped and the last days ran off
+   the edge (owner). Let the strip scroll instead of forcing seven tiles
+   into the width, and snap so a tap always lands cleanly on one.
+   Nothing here applies >=641px. */
+@media (max-width: 640px) {
+  :host-context(.design-new) .pf-daystrip {
+    gap: 6px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  :host-context(.design-new) .pf-daystrip::-webkit-scrollbar { display: none; }
+  :host-context(.design-new) .pf-daystrip__day {
+    flex: 0 0 auto;
+    min-width: 52px;
+    height: 44px;                 /* thumb-sized */
+    padding: 4px 8px;
+    scroll-snap-align: center;
+  }
+  :host-context(.design-new) .pf-daystrip__dow { font-size: 9.5px; letter-spacing: 0.06em; }
+  :host-context(.design-new) .pf-daystrip__n { font-size: 13px; }
+}

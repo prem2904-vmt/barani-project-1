@@ -160,7 +160,11 @@
         <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…" (picked)="openProfile($event)"></pf-patient-search>
       </div>
 
-      <ng-container band-tools>
+      <!-- Cart + QR both ride INSIDE the search field (owner). Keeping the
+           cart in [band-tools] left it stranded as a single icon on the
+           phone filter row under the bar; frontdesk has no filters, so
+           that row existed for one button. -->
+      <ng-container band-inline>
         @if (showOrder()) {
         <button type="button" class="pf-hb-tool press" (click)="newOrder()" aria-label="Create order" title="Create order">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -171,11 +175,9 @@
           </svg>
         </button>
         }
-      </ng-container>
-
-      <!-- Scanning a patient's QR FEEDS this search, so it lives inside the
-           field, before the divider (owner) — not out with the tools. -->
-      <ng-container band-inline>
+        <!-- Scanning a patient's QR feeds this search, so it belongs in the
+             field too. One container: content projection matches a slot
+             once, so two [band-inline] blocks would drop the second. -->
         <button type="button" class="pf-hb-tool press" (click)="openQrScanner()" aria-label="Scan QR code" title="Scan QR">
           <pf-scan-icon [size]="18" />
         </button>

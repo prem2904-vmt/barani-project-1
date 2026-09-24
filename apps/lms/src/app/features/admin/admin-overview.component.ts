@@ -78,6 +78,35 @@ interface KpiCard {
               <button type="button" class="pf-ov__range" [class.pf-ov__range--on]="range() === r.key"
                       (click)="setRange(r.key)">{{ r.label }}</button>
             }
+            <!-- Phone: the pills don't fit, so the range collapses to a
+                 calendar ICON that opens the same list — and it lives in the
+                 search bar rather than as a "Today" pill parked under it
+                 (owner). Shown only <=640px in the new design. -->
+            <div class="pf-ov__range-dd pf-ov__range-dd--band">
+              <button type="button" class="pf-ov__range-ddbtn pf-ov__range-ddbtn--icon"
+                      [class.is-open]="filterOpen()"
+                      [attr.aria-expanded]="filterOpen()"
+                      [attr.aria-label]="'Date range — ' + rangeLabel()"
+                      [title]="'Date range — ' + rangeLabel()"
+                      (click)="filterOpen.set(!filterOpen())">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="16" rx="2"/>
+                  <path d="M8 3v4M16 3v4M3 10h18"/>
+                </svg>
+              </button>
+              @if (filterOpen()) {
+                <div class="pf-ov__range-bd" aria-hidden="true" (click)="filterOpen.set(false)"></div>
+                <div class="pf-ov__range-pop" role="menu" aria-label="Date range">
+                  @for (r of ranges; track r.key) {
+                    <button type="button" role="menuitemradio" class="pf-ov__range-opt"
+                            [class.is-on]="range() === r.key"
+                            [attr.aria-checked]="range() === r.key"
+                            (click)="setRange(r.key); filterOpen.set(false)">{{ r.label }}</button>
+                  }
+                </div>
+              }
+            </div>
           </div>
         </ng-container>
         <!-- Refresh is a quiet button on the band, not a bar icon (owner):
@@ -858,6 +887,20 @@ interface KpiCard {
         }
         .pf-ov__range-dd {
           display: inline-flex;
+        }
+        /* NEW design: the range belongs in the search bar as an icon, not as
+           a "Today" pill under it (owner). The band copy turns on; the
+           classic-row copy stays out of the way. */
+        :host-context(.design-new) .pf-ov__range-dd--band { display: inline-flex; }
+        :host-context(.design-new) .pf-ov__filter:not(.pf-ov__filter--band) { display: none !important; }
+        .pf-ov__range-ddbtn--icon {
+          width: 44px; height: 44px; padding: 0;
+          justify-content: center;
+          border-radius: 9999px;
+        }
+        .pf-ov__range-ddbtn--icon.is-open {
+          color: #7c3aed;
+          background: rgba(124, 58, 237, 0.12);
         }
         .pf-ov__kpis {
           grid-template-columns: repeat(2, minmax(0, 1fr));
