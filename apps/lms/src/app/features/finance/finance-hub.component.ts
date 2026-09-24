@@ -9,6 +9,10 @@ import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.com
 import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
 import { downloadCsv } from '../../shared/utils/export-csv';
+import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
+import { ThemeService } from '../../core/services/theme.service';
+import { bandFilter } from '../../shared/utils/band-search';
 
 type Module = 'overall' | 'lab' | 'credit' | 'ipd' | 'opd' | 'pharmacy';
 
@@ -46,11 +50,49 @@ interface FinanceSummary {
 @Component({
   selector: 'pf-finance-hub',
   standalone: true,
-  imports: [FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent],
+  imports: [FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-fin">
-      <pf-screen-header eyebrow="Finance" title="Finance"
+    <section class="pf-fin pf-band-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the product-line switch + the date range ride
+             in the pill; the Credit Wallet line adds a partner search. -->
+        <pf-hero-band [back]="true" [tabsOnly]="module() !== 'credit'"
+                      placeholder="Search partners — name or code…"
+                      [value]="partnerQ()" (valueChange)="partnerQ.set($event)">
+          <ng-container band-tools>
+            <pf-segmented class="pf-fin__bandseg" size="sm" [options]="moduleOptions"
+                          [value]="module()" (valueChange)="selectModule($event)"></pf-segmented>
+            @if (module() === 'lab' || module() === 'overall') {
+              <div class="pf-fin__bandrange" role="group" aria-label="Date range">
+                <input type="date" class="pf-fin__bdate" aria-label="From date" [(ngModel)]="fromDate" (change)="customRange()">
+                <span class="pf-fin__bdash" aria-hidden="true">–</span>
+                <input type="date" class="pf-fin__bdate" aria-label="To date" [(ngModel)]="toDate" (change)="customRange()">
+                <pf-segmented size="sm" [options]="quickOptions" [value]="quickDays()"
+                              (valueChange)="quick($event)"></pf-segmented>
+              </div>
+            }
+          </ng-container>
+          <ng-container band-actions>
+            @if ((module() === 'lab' || module() === 'overall') && summary()) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="exportCsv()"
+                      aria-label="Download CSV" title="Download CSV">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+                Download CSV
+              </button>
+            } @else if (module() === 'credit' && vendors().length > 0) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="exportWallets()"
+                      aria-label="Download CSV" title="Download CSV">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+                Download CSV
+              </button>
+            }
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only" eyebrow="Finance" title="Finance"
         subtitle="End-to-end money in vs money out, by product line.">
         @if (module() === 'lab' && summary()) {
           <pf-touch-btn actions size="sm" variant="secondary" (pressed)="exportCsv()">
@@ -64,8 +106,9 @@ interface FinanceSummary {
         }
       </pf-screen-header>
 
-      <!-- Module tabs -->
-      <div class="pf-fin__tabs" role="tablist">
+      <div class="pf-band-body">
+      <!-- Module tabs (classic; the new design has them in the band pill) -->
+      <div class="pf-fin__tabs pf-classic-only" role="tablist">
         @for (m of modules; track m.key) {
           <button type="button" class="pf-fin__tab"
                   [class.pf-fin__tab--on]="module() === m.key"
@@ -81,8 +124,8 @@ interface FinanceSummary {
           <p class="pf-fin__note">Showing the <strong>Lab</strong> line. IPD, OPD and Pharmacy roll into this view as their billing goes live.</p>
         }
 
-        <!-- Date range -->
-        <div class="pf-fin__range">
+        <!-- Date range (classic; the new design has it in the band pill) -->
+        <div class="pf-fin__range pf-classic-only">
           <label>From <input type="date" [(ngModel)]="fromDate" (change)="load()"></label>
           <label>To <input type="date" [(ngModel)]="toDate" (change)="load()"></label>
           <div class="pf-fin__quick">
@@ -152,7 +195,7 @@ interface FinanceSummary {
              per-vendor transaction trace (charges = money owed to us, top-ups /
              payments = settled). This is the "for this partner, this was
              charged/minused" audit the finance team asked for. -->
-        <div class="pf-fin__credit-hdr">
+        <div class="pf-fin__credit-hdr pf-classic-only">
           <div>
             <p class="pf-fin__credit-title">Credit Wallet ledger</p>
             <p class="pf-fin__sub">Partner running tabs — expand a partner to see every charge and settlement.</p>
@@ -172,7 +215,7 @@ interface FinanceSummary {
             <span>Total owed to us: <strong>{{ totalOwed() | inr }}</strong></span>
           </div>
           <ul class="pf-fin__vlist">
-            @for (v of vendors(); track v.id) {
+            @for (v of visibleVendors(); track v.id) {
               <li class="pf-fin__vitem">
                 <button type="button" class="pf-fin__vrow" (click)="toggleVendor(v.id)">
                   <span class="pf-fin__vname">
@@ -183,7 +226,9 @@ interface FinanceSummary {
                         [class.pf-fin__vbal--credit]="v.outstanding < 0">
                     {{ v.outstanding | walletOutstanding }}
                   </span>
-                  <span class="pf-fin__vchev" [class.pf-fin__vchev--open]="expandedVendor() === v.id">›</span>
+                  <svg class="pf-fin__vchev" [class.pf-fin__vchev--open]="expandedVendor() === v.id" width="16" height="16"
+                       viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                       stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                 </button>
                 @if (expandedVendor() === v.id) {
                   <div class="pf-fin__vledger">
@@ -210,6 +255,9 @@ interface FinanceSummary {
               </li>
             }
           </ul>
+          @if (!visibleVendors().length) {
+            <p class="pf-band-empty">No partners match "{{ partnerQ() }}".</p>
+          }
         }
       } @else {
         <div class="pf-fin__stub">
@@ -217,6 +265,7 @@ interface FinanceSummary {
           <p class="pf-fin__stub-sub">This module's billing isn't live yet. Its financials will appear here once it's in use.</p>
         </div>
       }
+      </div>
     </section>
   `,
   styles: [`
@@ -272,6 +321,19 @@ interface FinanceSummary {
     .pf-fin__stub { text-align: center; padding: 64px 24px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 16px; }
     .pf-fin__stub-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-fin__stub-sub { font-size: 13px; color: var(--text-tertiary); margin-top: 6px; }
+    /* Band pill: date range beside the product-line switch. */
+    .pf-fin__bandrange { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto; }
+    .pf-fin__bdate {
+      height: 32px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; font-family: inherit;
+      color: var(--text-primary); background: var(--glass-bg); border: 1px solid var(--glass-border);
+      color-scheme: light dark;
+    }
+    .pf-fin__bdash { color: var(--text-muted); font-size: 12px; }
+    .pf-fin__bandseg { flex-shrink: 0; }
+    @media (max-width: 640px) {
+      .pf-fin__bandrange { margin-left: 0; }
+      .pf-fin__bdate { height: 40px; font-size: 16px; }
+    }
   
     /* ── Phone + touch (additive; desktop untouched) ───────────── */
     @media (max-width: 640px) {
@@ -290,6 +352,7 @@ interface FinanceSummary {
 export class FinanceHubComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
 
   readonly modules: { key: Module; label: string }[] = [
     { key: 'overall', label: 'Overall' },
@@ -299,6 +362,22 @@ export class FinanceHubComponent implements OnInit {
     { key: 'opd', label: 'OPD' },
     { key: 'pharmacy', label: 'Pharmacy' },
   ];
+  /** Band pill: product-line switch (lines without billing are marked "soon"). */
+  readonly moduleOptions: SegmentedOption<Module>[] = [
+    { value: 'overall', label: 'Overall' },
+    { value: 'lab', label: 'Lab' },
+    { value: 'credit', label: 'Credit Wallet' },
+    { value: 'ipd', label: 'IPD', hint: 'IPD finance — coming soon' },
+    { value: 'opd', label: 'OPD', hint: 'OPD finance — coming soon' },
+    { value: 'pharmacy', label: 'Pharmacy', hint: 'Pharmacy finance — coming soon' },
+  ];
+  /** Band pill: quick ranges. 0 = a custom from/to. */
+  readonly quickOptions: SegmentedOption<number>[] = [
+    { value: 7, label: '7d' }, { value: 30, label: '30d' }, { value: 90, label: '90d' },
+  ];
+  readonly quickDays = signal<number>(30);
+  /** Band pill search over the Credit Wallet partners (name / code). */
+  readonly partnerQ = signal('');
   readonly module = signal<Module>('lab');
   readonly moduleLabel = computed(() => this.modules.find(m => m.key === this.module())?.label ?? '');
 
@@ -314,6 +393,8 @@ export class FinanceHubComponent implements OnInit {
   readonly expandedVendor = signal<string | null>(null);
   readonly vendorTxns = signal<Record<string, VendorTxn[] | undefined>>({});
   readonly txnsLoading = signal(false);
+  readonly visibleVendors = computed(() =>
+    bandFilter(this.vendors(), this.partnerQ(), (v) => [v.name, v.code]));
   readonly totalOwed = computed(() =>
     this.vendors().reduce((s, v) => s + Math.max(0, v.outstanding), 0));
 
@@ -331,7 +412,14 @@ export class FinanceHubComponent implements OnInit {
     return d.toISOString().slice(0, 10);
   }
 
+  /** A date typed by hand leaves the quick-range chips. */
+  customRange() {
+    this.quickDays.set(0);
+    this.load();
+  }
+
   quick(days: number) {
+    this.quickDays.set(days);
     this.fromDate = this.isoDaysAgo(days - 1);
     this.toDate = this.isoDaysAgo(0);
     this.load();
