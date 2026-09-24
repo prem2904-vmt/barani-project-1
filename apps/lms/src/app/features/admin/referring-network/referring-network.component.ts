@@ -8,6 +8,9 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
 
 interface Hospital {
   id: string;
@@ -52,11 +55,26 @@ interface Doctor {
 @Component({
   selector: 'pf-referring-network',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TouchButtonComponent, LoadingLogoComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-screen-2xl mx-auto w-full">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-screen-2xl mx-auto w-full">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the hospital search moved here from the list
+             pane; "Add hospital" rides the band's actions. -->
+        <pf-hero-band [back]="true" placeholder="Search hospitals — name, code, phone, address…"
+                      [value]="hospitalSearch()" (valueChange)="setHospitalSearch($event)">
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openHospitalEditor(null)"
+                    aria-label="Add hospital">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Add hospital
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Referring network"
         title="Hospitals &amp; doctors"
         subtitle="Manage the hospitals that refer patients to your lab and the doctors who practise at each.">
@@ -71,6 +89,7 @@ interface Doctor {
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-band-body">
       <div class="pf-rn-grid">
         <!-- ── Hospitals (left) ────────────────────────────────── -->
         <aside class="pf-rn-pane pf-rn-pane--list">
@@ -78,7 +97,7 @@ interface Doctor {
             <h2 class="pf-rn-pane__title">Hospitals</h2>
             <span class="pf-rn-pane__count">{{ hospitals().length }}</span>
           </header>
-          <input type="search" class="pf-rn-search"
+          <input type="search" class="pf-rn-search pf-classic-only"
                  placeholder="Search hospitals…"
                  [value]="hospitalSearch()"
                  (input)="setHospitalSearch(asInput($event))" />
@@ -91,7 +110,7 @@ interface Doctor {
           } @else if (filteredHospitals().length === 0) {
             <p class="pf-rn-empty">
               @if (hospitalSearch()) { No hospitals match. }
-              @else { No hospitals yet. Click <b>Add hospital</b> above. }
+              @else { No hospitals yet. Use <b>Add hospital</b> to start. }
             </p>
           } @else {
             <ul class="pf-rn-list" role="listbox">
@@ -203,6 +222,7 @@ interface Doctor {
             }
           }
         </section>
+      </div>
       </div>
 
       <!-- ── Hospital editor modal ─────────────────────────────── -->
@@ -332,6 +352,7 @@ interface Doctor {
     @media (min-width: 1024px) {
       .pf-rn-grid { grid-template-columns: 340px 1fr; align-items: start; }
     }
+    :host-context(.design-new) .pf-rn-grid { margin-top: 0; }
     .pf-rn-pane {
       background: var(--glass-bg);
       border: 1px solid var(--glass-border);
@@ -548,6 +569,7 @@ export class ReferringNetworkComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  protected readonly theme = inject(ThemeService);
 
   // ── State ───────────────────────────────────────────────────────
   readonly hospitals = signal<Hospital[]>([]);
@@ -577,11 +599,9 @@ export class ReferringNetworkComponent implements OnInit {
 
   // ── Derived ─────────────────────────────────────────────────────
   readonly filteredHospitals = computed(() => {
-    const q = this.hospitalSearch().trim().toLowerCase();
-    const list = this.hospitals();
-    if (!q) return list;
-    return list.filter(h =>
-      h.name.toLowerCase().includes(q) || (h.code ?? '').toLowerCase().includes(q));
+    // Band pill search (owner): every word must hit name, code or contact.
+    return bandFilter(this.hospitals(), this.hospitalSearch(),
+      h => [h.name, h.code, h.address, h.phone, h.email, h.gstin]);
   });
 
   readonly selectedHospital = computed<Hospital | null>(() => {

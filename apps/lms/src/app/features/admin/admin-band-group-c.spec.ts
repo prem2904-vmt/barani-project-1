@@ -3,6 +3,7 @@ import { renderBandPage } from './admin-band.spec-helpers';
 import { BranchesComponent } from './branches/branches.component';
 import { VendorsComponent } from './vendors/vendors.component';
 import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
+import { ReferringNetworkComponent } from './referring-network/referring-network.component';
 
 /**
  * Admin band — list pages (group C): each gets a page-specific pill search,
@@ -141,5 +142,45 @@ describe('Admin band — Referral labs', () => {
     p.type('zzz');
     expect(names(p.el).length).toBe(0);
     expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+  });
+});
+
+describe('Admin band — Referring network', () => {
+  const hospitals = [
+    { id: 'h1', name: 'Apollo Hospitals', code: 'APO', address: 'Greams Road', isActive: true, doctorCount: 3 },
+    { id: 'h2', name: 'MIOT International', code: 'MIOT', address: 'Manapakkam', isActive: true, doctorCount: 1 },
+  ];
+  const render = async () => {
+    const p = renderBandPage(ReferringNetworkComponent, {
+      getFor: (url) => url.startsWith('/api/referring-network/hospitals') ? hospitals : [],
+    });
+    await p.f.whenStable();
+    p.f.detectChanges();
+    return p;
+  };
+  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-rn-row__name')).map(n => text(n));
+
+  it('band present, header classic-only, the pane search box is classic-only', async () => {
+    const p = await render();
+    expect(p.band()).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.el.querySelector('.pf-rn-search')!.classList.contains('pf-classic-only')).toBe(true);
+    expect(names(p.el).length).toBe(2);
+  });
+
+  it('"Add hospital" in the band opens the hospital editor', async () => {
+    const p = await render();
+    p.actions().find(b => /Add hospital/.test(b.textContent ?? ''))!.click();
+    p.f.detectChanges();
+    expect(p.el.querySelector('.pf-rn-modal')).not.toBeNull();
+  });
+
+  it('the pill search filters hospitals (name, code, address); empty state', async () => {
+    const p = await render();
+    p.type('manapakkam');
+    expect(names(p.el)).toEqual(['MIOT International']);
+    p.type('zzz');
+    expect(names(p.el).length).toBe(0);
+    expect(text(p.body())).toContain('No hospitals match');
   });
 });
