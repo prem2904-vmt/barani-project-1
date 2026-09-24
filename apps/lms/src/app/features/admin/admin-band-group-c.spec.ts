@@ -6,6 +6,7 @@ import { VendorsComponent } from './vendors/vendors.component';
 import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
 import { ReferringNetworkComponent } from './referring-network/referring-network.component';
 import { InventoryComponent } from './inventory/inventory.component';
+import { HomeCollectionAgentsComponent } from './home-collection/home-collection-agents.component';
 
 /**
  * Admin band — list pages (group C): each gets a page-specific pill search,
@@ -242,5 +243,42 @@ describe('Admin band — Inventory', () => {
     expect(p.tools()!.querySelector('.pf-inv-bandsel--test')).not.toBeNull();
     expect(p.body()!.querySelector('table')).toBeNull();
     expect(text(p.body())).toContain('Per-test consumables');
+  });
+});
+
+describe('Admin band — Home-collection agents', () => {
+  const agents = [
+    { id: 'a1', userId: 'u1', branchId: 'b1', areaMode: 'pincode', pincodesJson: '["600040","600041"]', weightage: 2, isActive: true, user: { id: 'u1', name: 'Karthik', email: 'karthik@lab.in' } },
+    { id: 'a2', userId: 'u2', branchId: 'b1', areaMode: 'radius', centerLat: 13.08, centerLng: 80.27, radiusKm: 5, weightage: 1, isActive: true, user: { id: 'u2', name: 'Lakshmi', email: 'lakshmi@lab.in' } },
+  ];
+  const render = () => renderBandPage(HomeCollectionAgentsComponent, {
+    getFor: (url) => url.startsWith('/api/home-collection/agents') ? agents : [],
+  });
+  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body p.font-semibold')).map(n => text(n));
+
+  it('band present, header classic-only, agents in the band body', () => {
+    const p = render();
+    expect(p.band()).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(names(p.el)).toEqual(['Karthik', 'Lakshmi']);
+  });
+
+  it('"Add agent" in the band opens the form and flips to Cancel', () => {
+    const p = render();
+    p.actions().find(b => /Add agent/.test(b.textContent ?? ''))!.click();
+    p.f.detectChanges();
+    expect(text(p.body())).toContain('New agent');
+    expect(p.actions()[0].textContent).toContain('Cancel');
+  });
+
+  it('pill search matches name and covered pincodes; empty state', () => {
+    const p = render();
+    p.type('600041');
+    expect(names(p.el)).toEqual(['Karthik']);
+    p.type('lakshmi');
+    expect(names(p.el)).toEqual(['Lakshmi']);
+    p.type('zzz');
+    expect(names(p.el).length).toBe(0);
+    expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
   });
 });
