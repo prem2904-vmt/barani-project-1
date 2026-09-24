@@ -7,6 +7,10 @@ import { NumberInputComponent } from '../../../shared/primitives/number-input.co
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { ToggleComponent } from '../../../shared/primitives/toggle.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandMatch } from '../../../shared/utils/band-search';
 
 /** One catalog event merged with the tenant's override — mirrors the
  *  middleware's NotificationCatalogRow. The catalog itself lives in the
@@ -38,18 +42,30 @@ const MODULE_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-notifications-config',
   standalone: true,
-  imports: [FormsModule, NumberInputComponent, ScreenHeaderComponent, TileComponent, ToggleComponent],
+  imports: [FormsModule, NumberInputComponent, ScreenHeaderComponent, TileComponent, ToggleComponent, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): search every alert; the module filter rides in
+             the pill (a dropdown — eight modules don't fit as chips). -->
+        <pf-hero-band [back]="true" placeholder="Search alerts — what fires, who's notified…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-tools>
+            <pf-select class="pf-nc-modsel" size="sm" [options]="moduleOptions()" [value]="moduleFilter() ?? ''"
+                       (valueChange)="setModuleFilter($event || null)"></pf-select>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Notifications"
         subtitle="Every in-app alert the platform can raise — switch each one on or off, and set how long to wait before 'didn't happen in time' alerts fire.">
       </pf-screen-header>
 
-      <!-- Module filter chips -->
-      <div class="pf-nc-chips mb-5">
+      <div class="pf-band-body">
+      <!-- Module filter chips (classic; the new design has them in the pill) -->
+      <div class="pf-nc-chips pf-classic-only mb-5">
         <button type="button" class="pf-nc-chip" [class.pf-nc-chip--on]="moduleFilter() === null"
                 (click)="setModuleFilter(null)">
           All
@@ -126,9 +142,15 @@ const MODULE_LABELS: Record<string, string> = {
           </div>
         </div>
       }
+      @if (!loading() && q().trim() && !visibleModules().length) {
+        <p class="pf-band-empty">No alerts match "{{ q() }}".</p>
+      }
+      </div>
     </section>
   `,
   styles: [`
+    .pf-nc-modsel { display: block; min-width: 200px; }
+    @media (max-width: 640px) { .pf-nc-modsel { min-width: 0; width: 100%; } }
     .pf-nc-chips {
       display: flex;
       flex-wrap: wrap;
@@ -266,15 +288,29 @@ export class NotificationsConfigComponent implements OnInit {
     for (const r of this._rows()) if (!seen.includes(r.module)) seen.push(r.module);
     return seen;
   });
+  protected readonly theme = inject(ThemeService);
+  /** Band pill search over label / fires-when / recipients. */
+  readonly q = signal('');
+  private matches(r: CatalogRow): boolean { return bandMatch(this.q(), r.label, r.firesWhen, r.recipients, this.moduleLabel(r.module)); }
+
   readonly visibleModules = computed(() => {
     const f = this._moduleFilter();
-    return f === null ? this.modules() : this.modules().filter(m => m === f);
+    const mods = f === null ? this.modules() : this.modules().filter(m => m === f);
+    if (!this.q().trim()) return mods;
+    return mods.filter(m => this._rows().some(r => r.module === m && this.matches(r)));
   });
+  /** Module picker in the pill ('' = All), counts in the label. */
+  readonly moduleOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: `All modules · ${this._rows().length}` },
+    ...this.modules().map(m => ({ value: m, label: `${this.moduleLabel(m)} · ${this.countFor(m)}` })),
+  ]);
 
   moduleLabel(m: string): string { return MODULE_LABELS[m] ?? m; }
-  rowsFor(m: string): CatalogRow[] { return this._rows().filter(r => r.module === m); }
-  countFor(m: string): number { return this.rowsFor(m).length; }
-  enabledCount(m: string): number { return this.rowsFor(m).filter(r => r.enabled).length; }
+  /** Rows of a module that pass the pill search (all rows when no query). */
+  rowsFor(m: string): CatalogRow[] { return this._rows().filter(r => r.module === m && this.matches(r)); }
+  private allRowsFor(m: string): CatalogRow[] { return this._rows().filter(r => r.module === m); }
+  countFor(m: string): number { return this.allRowsFor(m).length; }
+  enabledCount(m: string): number { return this.allRowsFor(m).filter(r => r.enabled).length; }
 
   ngOnInit() {
     this.api.get<CatalogRow[]>('/api/config/notifications/catalog').subscribe({
