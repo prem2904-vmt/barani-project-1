@@ -8,6 +8,12 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+
+/** Band pill tabs — one per section card. */
+export type AppointmentsTab = 'mode' | 'slots' | 'priority';
 
 interface ModeOption { value: QueueMode; label: string; desc: string }
 
@@ -20,7 +26,7 @@ const MODES: ModeOption[] = [
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, NumberInputComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
@@ -62,8 +68,29 @@ const MODES: ModeOption[] = [
     }
   `],
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): no search — the three sections become tabs in a
+             tabs-only pill; Save rides the band actions. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || !cfg()"
+                    (click)="save()" aria-label="Save" title="Save">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Appointments & queue"
         subtitle="Choose how this branch runs its front desk, and tune the priority engine.">
@@ -72,9 +99,11 @@ const MODES: ModeOption[] = [
         </pf-touch-btn>
       </pf-screen-header>
 
+      <div class="pf-band-body">
       @if (!cfg()) {
         <pf-tile tone="default" padding="lg" class="block"><p style="color: var(--text-tertiary);">Loading…</p></pf-tile>
       } @else {
+        @if (showSec('mode')) {
         <!-- Queue mode -->
         <pf-tile tone="default" padding="lg" class="block mb-4">
           <h3 class="pf-section-title mb-3">Queue mode</h3>
@@ -90,6 +119,9 @@ const MODES: ModeOption[] = [
           </div>
         </pf-tile>
 
+        }
+
+        @if (showSec('slots')) {
         <!-- Slot config -->
         <pf-tile tone="default" padding="lg" class="block mb-4">
           <h3 class="pf-section-title mb-3">Booking slots</h3>
@@ -130,6 +162,9 @@ const MODES: ModeOption[] = [
           }
         </pf-tile>
 
+        }
+
+        @if (showSec('priority')) {
         <!-- Priority engine -->
         <pf-tile tone="default" padding="lg" class="block">
           <h3 class="pf-section-title mb-1">Priority engine</h3>
@@ -146,13 +181,27 @@ const MODES: ModeOption[] = [
             }
           </div>
         </pf-tile>
+        }
       }
+      </div>
     </section>
   `
 })
 export class AppointmentsConfigComponent implements OnInit {
   private readonly svc = inject(AppointmentQueueService);
   private readonly toast = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill tabs (new design). Classic shows every card, as before. */
+  readonly tabOptions: SegmentedOption<AppointmentsTab>[] = [
+    { value: 'mode', label: 'Queue mode' },
+    { value: 'slots', label: 'Booking slots' },
+    { value: 'priority', label: 'Priority engine' },
+  ];
+  readonly tab = signal<AppointmentsTab>('mode');
+  showSec(key: AppointmentsTab): boolean {
+    return !this.theme.isNewDesign() || this.tab() === key;
+  }
 
   readonly modes = MODES;
   readonly optionFields: { key: keyof AppointmentConfig['queueOptions']; label: string; step: number }[] = [

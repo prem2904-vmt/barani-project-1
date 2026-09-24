@@ -7,6 +7,9 @@ import { BranchLabConfigService } from '../../core/services/branch-lab-config.se
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { LabSettingsComponent } from './lab-settings/lab-settings.component';
 import { OrganizationSettingsComponent } from './organization/organization-settings.component';
+import { AppointmentsConfigComponent } from './appointments-config/appointments-config.component';
+import { AppointmentQueueService } from '../../core/services/appointment-queue.service';
+import { of } from 'rxjs';
 
 /**
  * Admin band — settings forms whose section cards become a tabs-only pill
@@ -126,5 +129,48 @@ describe('Admin band B2 — Organization & Identity', () => {
     pillTabs(p).click('Order ID');
     expect(t()).toEqual(['Order ID format']);
     expect(p.actions().length).toBe(0);
+  });
+});
+
+describe('Admin band B2 — Appointments & queue', () => {
+  const cfg = {
+    queueMode: 'token_queue', slotMinutes: 30, maxConcurrentSlots: 1, open24h: true, weeklyScheduleJson: null,
+    queueOptions: {
+      baseAppointment: 100, baseWalkin: 50, baseFollowup: 80, waitWeight: 1, appointmentGraceMinutes: 10,
+      latePenalty: 50, noShowThresholdMinutes: 30, avgCollectionMinutes: 5, urgentOverrideScore: 1000,
+    },
+  };
+  function make() {
+    const svc = { getConfig: vi.fn(() => of(cfg)), saveConfig: vi.fn((c: unknown) => of(c)) };
+    const p = renderBandPage(AppointmentsConfigComponent, {
+      providers: [auth, tenantState, { provide: AppointmentQueueService, useValue: svc }],
+    });
+    return { ...p, svc };
+  }
+
+  it('band with a tabs-only pill, header classic-only', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.bandInput()).toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    expect(pillTabs(p).labels()).toEqual(['Queue mode', 'Booking slots', 'Priority engine']);
+  });
+
+  it('pill tabs swap the section cards', () => {
+    const p = make();
+    const t = () => titles(p, '.pf-section-title');
+    expect(t()).toEqual(['Queue mode']);
+    pillTabs(p).click('Booking slots');
+    expect(t()).toEqual(['Booking slots']);
+    pillTabs(p).click('Priority engine');
+    expect(t()).toEqual(['Priority engine']);
+  });
+
+  it('Save lives in the band actions and saves the config', () => {
+    const p = make();
+    const save = p.actions().find((b) => b.textContent?.includes('Save'));
+    expect(save).toBeTruthy();
+    save!.click();
+    expect(p.svc.saveConfig).toHaveBeenCalledTimes(1);
   });
 });
