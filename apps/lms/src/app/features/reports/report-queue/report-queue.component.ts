@@ -127,7 +127,10 @@ export class ReportQueueComponent implements OnInit {
     { value: "pending", label: "Completed", dot: "#f59e0b", count: this.counts().pending,
       iconPath: ["M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4 12 14.01l-3-3"] },
     { value: "partial", label: "Partial", dot: "#38bdf8", count: this.partialOrders().length,
-      iconPath: ["M12 2v10l7 3", "M12 22a10 10 0 1 1 0-20"] },
+      // Two arcs + Z so the circle actually CLOSES (a single 10-radius arc
+      // only draws half of one, which rendered as a crescent), then two
+      // radii mark the wedge: a pie, i.e. "some of it is done".
+      iconPath: ["M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18Z", "M12 12V3", "M12 12h9"] },
     { value: "delivered", label: "Delivered", dot: "#10b981", count: this.counts().delivered,
       iconPath: ["m22 2-7 20-4-9-9-4Z", "M22 2 11 13"] },
     { value: "failed", label: "Failed", dot: "#f43f5e", count: this.counts().failed,

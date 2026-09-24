@@ -261,9 +261,13 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       /* Projected strips (segmented, admin's date range, the doctor queue's
          pills) must scroll as a unit, never compress. They carry the
          CONSUMER's encapsulation attribute, so this needs ::ng-deep. */
+      /* Centred on phone (owner). Done with auto margins, not
+         justify-content: center — when the strip is wider than the screen,
+         auto margins collapse to 0 and it stays scrollable from its start,
+         whereas centring a flex overflow makes the first chip unreachable. */
       .pf-hb__tools ::ng-deep pf-segmented,
       .pf-hb__tools ::ng-deep .pf-ov__filter--band,
-      .pf-hb__tools ::ng-deep .dq-pills--band { flex-shrink: 0; }
+      .pf-hb__tools ::ng-deep .dq-pills--band { flex-shrink: 0; margin-inline: auto; }
       .pf-hb__tools ::ng-deep .pf-ov__range,
       .pf-hb__tools ::ng-deep .dq-pill { flex-shrink: 0; height: 36px; }
 

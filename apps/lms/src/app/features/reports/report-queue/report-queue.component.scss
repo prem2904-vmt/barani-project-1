@@ -899,10 +899,40 @@
 @media (max-width: 640px) {
   .pf-rq-acts { width: 100%; margin-left: 0; gap: 8px; }
   .pf-rq-act__lbl { display: none; }
-  .pf-rq-act { flex: 1 1 0; min-height: 44px; padding: 0; }
-  .pf-rq-split { flex: 1 1 0; }
-  .pf-rq-split .pf-rq-act--face { flex: 1 1 auto; }
-  .pf-rq-caret { min-height: 44px; }
-  .pf-rq-act--more { flex: 0 0 48px; }
+  /* FOUR EQUAL CELLS. View and Download are plain cells; Share and More are
+     each wrapped in a .pf-rq-split, so the split — not the button inside it —
+     is what takes the quarter. More was pinned to 48px, which is why the row
+     looked lopsided (owner). */
+  .pf-rq-act { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 0; }
+  .pf-rq-split { flex: 1 1 0; min-width: 0; }
+  .pf-rq-split .pf-rq-act { flex: 1 1 auto; }
+  .pf-rq-act--more { width: 100%; }
+  .pf-rq-caret { min-height: 44px; flex: 0 0 34px; }
   .pf-rq-menu { left: 0; right: auto; min-width: 200px; }
+}
+
+/* ── Phone polish on the Results screen (owner) ──────────────────────
+   1. The row menus were anchored popovers and ran off the screen edge —
+      "Open lab re…", "Regenerate" were clipped. On a phone they become a
+      sheet pinned above the bar, which cannot be clipped by anything.
+   2. Dead space under the filters: the classic search (.mb-4) and the
+      classic filter strip (.mb-5) are BOTH empty in the new design, but
+      their Tailwind margins still reserved ~36px of nothing.
+   Nothing here applies >=641px, and classic keeps both wrappers. */
+@media (max-width: 640px) {
+  :host-context(.design-new) .pf-rq-chrome > .mb-4,
+  :host-context(.design-new) .pf-rq-chrome > .mb-5 { display: none; }
+
+  .pf-rq-menu {
+    position: fixed;
+    left: 10px; right: 10px; top: auto;
+    bottom: calc(var(--pf-botbar-h, 58px) + 12px);
+    min-width: 0;
+    padding: 8px;
+    border-radius: 16px;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+  }
+  .pf-rq-menu__item { min-height: 48px; font-size: 14px; padding: 12px 14px; }
+  /* A real scrim, so it reads as a sheet rather than a stray white box. */
+  .pf-rq-menu__bd { background: rgba(0, 0, 0, 0.38); }
 }
