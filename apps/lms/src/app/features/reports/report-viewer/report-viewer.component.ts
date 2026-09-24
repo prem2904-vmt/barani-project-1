@@ -1056,9 +1056,10 @@ export class ReportViewerComponent implements OnInit {
   flagStyle(): 'bold' | 'bold_color' {
     return this.tpl()?.flagStyle === 'bold_color' ? 'bold_color' : 'bold';
   }
-  /** Indicator glyph mode: H/L letters or ↑/↓ arrows. */
-  flagIndicator(): 'letter' | 'arrow' {
-    return this.tpl()?.flagIndicator === 'arrow' ? 'arrow' : 'letter';
+  /** Indicator glyph mode: H/L letters, ↑/↓ arrows, or none (plain value). */
+  flagIndicator(): 'letter' | 'arrow' | 'none' {
+    const f = this.tpl()?.flagIndicator;
+    return f === 'arrow' || f === 'none' ? f : 'letter';
   }
   /** Admin-chosen colours for abnormals (high / low). */
   private abnormalColor(): string { return this.tpl()?.abnormalColor || '#dc2626'; }
@@ -1067,14 +1068,14 @@ export class ReportViewerComponent implements OnInit {
   /** Result-cell colour: only tinted when style is bold_color AND the value
    *  is abnormal (admin high / low colour); otherwise default ink. */
   resultColor(row: ViewPanelRow): string | null {
-    if (!row.abnormal || this.flagStyle() !== 'bold_color') return null;
+    if (!row.abnormal || this.flagStyle() !== 'bold_color' || this.flagIndicator() === 'none') return null;
     return row.isLow ? this.abnormalLowColor() : this.abnormalColor();
   }
 
   /** The flag glyph to show beside the value: ↑/↓ in arrow mode, H/L/C/A in
    *  letter mode. */
   flagDisplay(row: ViewPanelRow): string {
-    if (!row.flag) return '';
+    if (!row.flag || this.flagIndicator() === 'none') return '';
     if (this.flagIndicator() === 'arrow') {
       if (row.flag === 'H') return '↑';
       if (row.flag === 'L') return '↓';

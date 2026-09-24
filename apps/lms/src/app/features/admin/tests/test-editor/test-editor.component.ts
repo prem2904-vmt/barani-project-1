@@ -57,8 +57,11 @@ import { PriceFlagComponent } from '../../../../shared/primitives/price-flag.com
 import { DEFAULT_TEST_PRICE, NOT_PRICED_LABEL, effectivePrice, isPriceDefault } from '../../../../shared/utils/test-pricing';
 import { OriginBadgeComponent } from '../../../../shared/primitives/origin-badge.component';
 import {
-  RESERVED_CODE_ERROR, RESERVED_CODE_MESSAGE, TestOrigin, canRevertToMaster, isReservedForTenant, originLabel, originOf, revertToMasterPath,
+  TestOrigin, canRevertToMaster, isCloneMode, originLabel, originOf, revertToMasterPath,
 } from '../../../../shared/utils/test-origin';
+import {
+  CODE_RANGE_EXHAUSTED_ERROR, CODE_READONLY_ERROR, CODE_READONLY_HINT, DEPARTMENT_REQUIRED_ERROR, codeDisplay,
+} from '../../../../shared/utils/test-code';
 import { DialogService } from '../../../../core/services/dialog.service';
 
 const SELECTED_GROUP = 'Selected';
@@ -180,26 +183,22 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly dialog = inject(DialogService);
 
   // ── Copy-on-write (Test Master single source, phases 3 + 5) ──────────
-  /** Code mode. 'tenant' (every LMS lab): master-shaped codes (BIO019) are
-   *  reserved — a new test's code is left blank for the server's automatic
-   *  `<SHORT>-0001`. 'master' (the admin console editing the Admin Test
-   *  Master): codes follow the department's master series (CLP015 → CLP016). */
+  /** Editor mode. 'tenant' (every LMS lab: origin badge, revert to master)
+   *  or 'master' (the admin console editing the Admin Test Master). Codes are
+   *  server-assigned and read-only in both (see shared/utils/test-code). */
   readonly codeMode = signal<'tenant' | 'master'>('tenant');
   setCodeMode(m: 'tenant' | 'master') { this.codeMode.set(m); }
   /** Where the loaded test comes from (Master / Customised / Branch / Own). */
   readonly origin = signal<TestOrigin | null>(null);
-  readonly canRevert = computed(() => this.codeMode() === 'tenant' && canRevertToMaster({ origin: this.origin() }));
-  /** The code the test carried when loaded — a copy of a master test may
-   *  keep it; only NEW master-shaped codes are refused. */
-  private _originalCode = '';
+  /** The lab's catalogue mode on the loaded row ('clone' | 'reference'). */
+  readonly catalogMode = signal<string | null>(null);
+  readonly canRevert = computed(() => this.codeMode() === 'tenant'
+    && canRevertToMaster({ origin: this.origin(), catalogMode: this.catalogMode() }));
   readonly reverting = signal(false);
-  /** Placeholder for the code input: tenant labs may leave it blank. */
-  readonly codePlaceholder = computed(() => {
-    const d = this._draft();
-    if (d.type === 'profile') return this.codeMode() === 'master' ? 'e.g. LIPID01' : 'e.g. MW-LIPID';
-    if (this.codeMode() === 'master') return 'e.g. BIO019';
-    return d.id ? 'e.g. MW-0001' : 'Leave blank to assign automatically (e.g. MW-0001)';
-  });
+  /** The read-only code field: the assigned code, or "Assigned automatically"
+   *  before the first save. */
+  readonly codeText = computed(() => codeDisplay(this._draft().testCode, !!this._draft().id));
+  readonly codeHint = CODE_READONLY_HINT;
 
   /** The price as loaded from the pricing table (effective for the acting
    *  branch). A save writes the price ONLY when the draft differs from this,
@@ -348,67 +347,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return (this._departments().find(d => d.id === id)?.name ?? '').trim();
   });
 
-  /** The last code WE filled — a dept re-pick may overwrite it, but never a
-   *  code the admin typed themselves. */
-  private lastAutoCode: string | null = null;
-  /** Next free code in the department's own series (CLP015 → CLP016):
-   *  the dept's most common alpha prefix, max number + 1, padded, skipping
-   *  anything already used anywhere in the tenant. */
-  private nextCodeForDept(deptId: string): string | null {
-    const all = [...this._allIndividualTests(), ...(this._allProfiles?.() ?? [])];
-    const usedEverywhere = new Set(all.map(t => (t.testCode ?? '').trim().toLowerCase()).filter(Boolean));
-    const freq = new Map<string, { count: number; width: number; max: number }>();
-    for (const t of all) {
-      if (t.departmentId !== deptId) continue;
-      const m = /^([A-Za-z]+)(\d+)$/.exec((t.testCode ?? '').trim());
-      if (!m) continue;
-      const p = m[1].toUpperCase();
-      const e = freq.get(p) ?? { count: 0, width: m[2].length, max: 0 };
-      e.count++; e.width = Math.max(e.width, m[2].length); e.max = Math.max(e.max, Number(m[2]));
-      freq.set(p, e);
-    }
-    let best: [string, { count: number; width: number; max: number }] | null = null;
-    for (const en of freq.entries()) if (!best || en[1].count > best[1].count) best = en;
-    if (!best) return null;
-    let n = best[1].max + 1;
-    let code = best[0] + String(n).padStart(best[1].width, '0');
-    while (usedEverywhere.has(code.toLowerCase())) { n++; code = best[0] + String(n).padStart(best[1].width, '0'); }
-    return code;
-  }
-
   onDeptPicked(name: string) {
     if (!name) { this.patch({ departmentId: '' }); return; }
     const id = this._departments().find(d => (d.name ?? '').trim() === name)?.id ?? '';
     this.patch({ departmentId: id });
-    // Creating a test: fill the next free code in this department's series.
-    // Only over an empty code or one WE filled — never the admin's own typing.
-    // Master mode only: a lab's own tests must never draw a master-shaped
-    // code — the server assigns `<SHORT>-0001` when the code is left blank.
-    const d = this._draft();
-    if (this.codeMode() === 'master' && !d.id && id && (!d.testCode.trim() || d.testCode === this.lastAutoCode)) {
-      const code = this.nextCodeForDept(id);
-      if (code) { this.patch({ testCode: code }); this.lastAutoCode = code; }
-    }
-  }
-
-  /** Test-code edit with an immediate duplicate check against the whole
-   *  loaded catalogue (case-insensitive, excluding this test itself). */
-  onTestCodeChanged(v: string) {
-    this.patch({ testCode: v });
-    const code = v.trim().toLowerCase();
-    if (!code) return;
-    const selfId = this._draft().id;
-    const dup = [...this._allIndividualTests(), ...(this._allProfiles?.() ?? [])]
-      .some(t => t.id !== selfId && (t.testCode ?? '').trim().toLowerCase() === code);
-    if (dup) {
-      this._fieldErrors.update(m => ({ ...m, testCode: `Code ${v.trim().toUpperCase()} is already in use — pick another.` }));
-      return;
-    }
-    // Tenant labs: a NEW master-shaped code (BIO019) is reserved for the
-    // Admin Test Master (a copy keeps its own master code).
-    if (this.codeMode() === 'tenant' && isReservedForTenant(v, this._originalCode)) {
-      this._fieldErrors.update(m => ({ ...m, testCode: RESERVED_CODE_MESSAGE }));
-    }
   }
 
   /** Culture-bench mark — the ONE marker the whole culture stack keys on:
@@ -996,9 +938,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly metaChips = computed<Array<{ k: string; v: string; sec: TestSection }>>(() => {
     const d = this._draft();
     const chips: Array<{ k: string; v: string; sec: TestSection }> = [];
-    const origin = originLabel({ origin: this.origin() });
+    const origin = originLabel({ origin: this.origin(), catalogMode: this.catalogMode() });
     if (origin) chips.push({ k: 'Origin', v: origin, sec: 'identity' });
-    chips.push({ k: 'Code', v: (d.testCode ?? '').trim() || (!d.id && this.codeMode() === 'tenant' ? 'Auto' : '—'), sec: 'identity' });
+    chips.push({ k: 'Code', v: (d.testCode ?? '').trim() || (d.id ? '—' : 'Auto'), sec: 'identity' });
     chips.push({ k: 'Dept', v: this.selectedDeptName() || '—', sec: 'identity' });
     if (d.type === 'individual') {
       const tube = this.tubeColors.find(c => c.key === d.tubeColor)?.label;
@@ -1142,7 +1084,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly publishChecklist = computed<Array<{ label: string; ok: boolean; action?: TestSection }>>(() => {
     const d = this._draft();
     const rows: Array<{ label: string; ok: boolean; action?: TestSection }> = [];
-    const idOk = !!d.name.trim() && !this.fieldError('name') && !this.fieldError('testCode')
+    const idOk = !!d.name.trim() && !this.fieldError('name')
       && !!d.departmentId && (d.price ?? 0) >= 0;
     rows.push({ label: 'Identity & pricing', ok: idOk, action: idOk ? undefined : 'identity' });
     if (d.type === 'individual') {
@@ -1738,7 +1680,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private hydrateFrom(t: Test) {
     this.origin.set(originOf(t));
-    this._originalCode = t.testCode ?? '';
+    this.catalogMode.set(t.catalogMode ?? null);
     this._savedPrice.set({ price: effectivePrice(t), taxSlab: Number(t.taxSlab) || 0, isDefault: isPriceDefault(t) });
     try {
       this._calcInfo.set(t.calculation ? JSON.parse(t.calculation) : null);
@@ -2015,14 +1957,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   saveTest() {
     const d = this._draft();
     if (!d.name.trim()) { this.toasts.warning('Name is required'); return; }
-    if (this.fieldError('testCode')) { this.toasts.warning(this.fieldError('testCode')!); return; }
 
     if (d.type === 'profile') {
-      if (!d.testCode.trim()) {
-        this._fieldErrors.update(m => ({ ...m, testCode: 'Profile code is required' }));
-        this.toasts.warning('Profile code is required');
-        return;
-      }
       if (this.packageItems().length === 0) {
         this.toasts.warning('Add at least one member test to the profile');
         return;
@@ -2062,7 +1998,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       departmentId: d.type === 'package' ? undefined : (d.departmentId || undefined),
       tatHours: d.tatHours, sampleType: d.type === 'package' ? undefined : (d.sampleType || undefined),
       tubeColor: d.type === 'package' ? undefined : d.tubeColor,
-      testCode: pkg ? undefined : d.testCode,
+      // No testCode: the server assigns it on create and it never changes.
       shortName: pkg ? undefined : d.shortName,
       section: pkg ? undefined : d.section,
       profile: pkg ? undefined : d.profile,
@@ -2092,10 +2028,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
           this.savePriceThen(moved ? t.id : d.id!, d, () => {
             if (moved) {
               this.toasts.success(this.codeMode() === 'tenant' && this.origin() === 'master'
+                && !isCloneMode({ catalogMode: this.catalogMode() })
                 ? 'Saved as your lab\'s own version of this test' : 'Saved');
               this.followRow(t, d.type);
             } else {
               if (t?.origin) this.origin.set(originOf(t));
+              if (t?.catalogMode) this.catalogMode.set(t.catalogMode);
               this.toasts.success('Saved');
             }
           });
@@ -2105,8 +2043,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     } else {
       this.api.post<Test>('/api/tests/', body).subscribe({
         next: t => this.savePriceThen(t.id, d, () => {
-          const assigned = !d.testCode.trim() && (t?.testCode ?? '').trim();
-          this.toasts.success(assigned ? `Created — code ${t.testCode}` : 'Created');
+          const assigned = (t?.testCode ?? '').trim();
+          this.toasts.success(assigned ? `Created — code ${assigned}` : 'Created');
           // Stay in the editor — future saves are updates on the new id.
           this.router.navigate(['/admin/tests', t.id, 'edit'],
             { queryParams: { type: d.type }, replaceUrl: true });
@@ -2143,13 +2081,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private handleSaveError(e: unknown) {
     this._saving.set(false);
     const err = ApiError.from(e);
-    if (err.code === RESERVED_CODE_ERROR) {
-      this._fieldErrors.update(m => ({ ...m, testCode: RESERVED_CODE_MESSAGE }));
-      this.toasts.warning(RESERVED_CODE_MESSAGE);
+    if (err.code === CODE_READONLY_ERROR || err.code === CODE_RANGE_EXHAUSTED_ERROR) {
+      this.toasts.warning(err.message);
       return;
     }
-    if (err.code === 'duplicate_code') {
-      this._fieldErrors.update(m => ({ ...m, testCode: err.message }));
+    if (err.code === DEPARTMENT_REQUIRED_ERROR) {
+      this.toasts.warning(err.message);
       return;
     }
     const field = err.field ?? '';

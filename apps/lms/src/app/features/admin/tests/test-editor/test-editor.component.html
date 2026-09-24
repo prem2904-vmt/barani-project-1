@@ -16,7 +16,7 @@
         </button>
       </h1>
       <div class="pf-te2-chips">
-        @if (origin() && codeMode() === 'tenant') { <pf-origin-badge [origin]="origin()" /> }
+        @if (origin() && codeMode() === 'tenant') { <pf-origin-badge [origin]="origin()" [catalogMode]="catalogMode()" /> }
         @for (c of metaChips(); track c.k) {
           @if (c.k !== 'Origin') {
             <button type="button" class="pf-chip press" (click)="jumpToSection(c.sec)">
@@ -141,12 +141,10 @@
             @if (d.type === 'individual' || d.type === 'profile') {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">{{ d.type === 'profile' ? 'Profile code' : 'Test code' }}</label>
-                <input type="text" class="pf-input pf-uf__in"
-                       [class.pf-input--error]="fieldError('testCode')"
-                       [ngModel]="d.testCode"
-                       (ngModelChange)="onTestCodeChanged($event)"
-                       [placeholder]="codePlaceholder()" />
-                @if (fieldError('testCode')) { <p class="pf-field-err">{{ fieldError('testCode') }}</p> }
+                <input type="text" class="pf-input pf-uf__in pf-input--readonly" readonly aria-readonly="true"
+                       [class.pf-input--muted]="!d.testCode"
+                       [value]="codeText()" [attr.title]="codeHint" />
+                <p class="pf-hint">{{ codeHint }}</p>
               </div>
             }
             <div class="pf-uf">

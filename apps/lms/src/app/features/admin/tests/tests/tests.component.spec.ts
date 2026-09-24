@@ -105,27 +105,35 @@ describe('Test Master grid — price / unit / range cells (CURRENT)', () => {
     expect(c.dirtyCount()).toBe(0);
   });
 
-  it('saveAll refuses duplicate codes (case-insensitive) and sends nothing', () => {
-    const { c, api, toasts } = make([hb(), hb({ id: 't2', testCode: 'X1' })]);
-    c.onCellValueChanged({ colDef: { field: 'testCode' }, newValue: 'hem012', oldValue: 'X1', data: { id: 't2' } });
-    c.saveAll();
-    expect(toasts.error).toHaveBeenCalled();
-    expect(api.patch).not.toHaveBeenCalled();
+  it('the Code column is read-only (server-assigned) and sorts naturally (BIO002 < BIO010 < BIO901 < BIO1000)', () => {
+    const { c } = make([hb()]);
+    const code = col(c, 'testCode');
+    expect(code.editable).toBe(false);
+    expect(['BIO1000', 'BIO901', 'BIO010', 'BIO002'].sort(code.comparator)).toEqual(['BIO002', 'BIO010', 'BIO901', 'BIO1000']);
   });
 
-  it('a copy of a master test may KEEP its own master code (HEM012 → hem012 is not a new reserved code)', () => {
-    const { c, api } = make([hb()]);
-    c.onCellValueChanged({ colDef: { field: 'testCode' }, newValue: 'hem012', oldValue: 'HEM012', data: { id: 't1' } });
-    c.saveAll();
-    expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { testCode: 'hem012' });
+  it('the profile/package tree lists rows in natural code order, codeless rows after', () => {
+    const { c } = make([hb({ id: 'a', type: 'profile', testCode: 'HEM1000' }), hb({ id: 'p', type: 'package', testCode: null, name: 'Wellness' }),
+      hb({ id: 'b', type: 'profile', testCode: 'HEM012' }), hb({ id: 'x', type: 'profile', testCode: 'HEM900' })]);
+    c.setType('profile');
+    const codes = c.rowData().filter((r: any) => r.type === 'profile').map((r: any) => r.testCode);
+    expect(codes).toEqual(['HEM012', 'HEM900', 'HEM1000']);
   });
 
-  it('a server reserved_code refusal shows the friendly wording', () => {
-    const { c, api, toasts } = make([hb({ testCode: 'MW-0001' })]);
-    api.patch.mockReturnValueOnce(throwError(() => new ApiError('raw', 'reserved_code')));
+  it('a server refusal (e.g. code_readonly) shows the server\'s message', () => {
+    const { c, api, toasts } = make([hb({ testCode: 'HEM900' })]);
+    api.patch.mockReturnValueOnce(throwError(() => new ApiError('Test codes are assigned automatically', 'code_readonly')));
     c.onCellValueChanged({ colDef: { field: 'name' }, newValue: 'Hb', oldValue: 'Haemoglobin', data: { id: 't1' } });
     c.saveAll();
-    expect(toasts.error).toHaveBeenCalledWith(expect.stringContaining('reserved for the Admin Test Master'));
+    expect(toasts.error).toHaveBeenCalledWith('Test codes are assigned automatically');
+  });
+
+  it('restore to default says prices are kept (never "reset to 0")', async () => {
+    const { c, dialog } = make([hb()]);
+    await c.restoreDefaults();
+    const msg = dialog.confirm.mock.calls[0][0].message as string;
+    expect(msg).toContain('Prices');
+    expect(msg).not.toMatch(/reset to (₹)?0/);
   });
 });
 
@@ -173,14 +181,6 @@ describe('Test Master grid — TARGET behaviour', () => {
     c.saveAll();
     expect(api.patch).not.toHaveBeenCalled();
     expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 200 }]);
-  });
-
-  it('TARGET phase 1/5: tenant cannot type the reserved master code shape ^[A-Z]{3}[0-9]+$ (BIO019); tenant codes carry a hyphen (MW-0001)', () => {
-    const { c, api, toasts } = make([hb({ testCode: 'MW-0001' })]);
-    c.onCellValueChanged({ colDef: { field: 'testCode' }, newValue: 'BIO019', oldValue: 'MW-0001', data: { id: 't1' } });
-    c.saveAll();
-    expect(toasts.error).toHaveBeenCalled();
-    expect(api.patch).not.toHaveBeenCalled();
   });
 
   it('TARGET phase 3: rows carry an origin badge (master | customised | branch | local)', () => {
@@ -286,6 +286,13 @@ describe('Test Master grid — copy-on-write (phases 3 + 5)', () => {
     expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ confirmLabel: 'Revert to master' }));
     expect(api.post).toHaveBeenCalledWith('/api/tests/t1/revert-to-master', {});
     expect(api.get).toHaveBeenCalledWith('/api/tests/');
+  });
+
+  it('clone mode: no revert button (the lab holds its own copy; nothing to revert to)', () => {
+    const { c } = make();
+    const actions = col(c, 'actions');
+    const el = actions.cellRenderer({ data: hb({ origin: 'customised', catalogMode: 'clone' }), context: { revert: vi.fn() } });
+    expect(el.querySelectorAll('button').length).toBe(1);
   });
 
   it('revert cancelled in the dialog sends nothing', async () => {

@@ -103,7 +103,7 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
     expect(pricing.save).not.toHaveBeenCalled();
     expect(lastPatchBody(api)).toMatchObject({
       methodology: 'ISE',
-      sampleType: 'Serum', unit: 'mmol/L', resultType: 'numeric', reportFormat: 'tabular', testCode: 'BIO019',
+      sampleType: 'Serum', unit: 'mmol/L', resultType: 'numeric', reportFormat: 'tabular',
     });
   });
 
@@ -161,52 +161,57 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
   });
 });
 
-describe('TestEditor codes (CURRENT)', () => {
+describe('TestEditor codes — server-assigned, read-only (9-series)', () => {
   const individuals = [
     { id: 'a', type: 'individual', departmentId: 'd1', testCode: 'CLP015' },
-    { id: 'b', type: 'individual', departmentId: 'd1', testCode: 'CLP003' },
     { id: 'c', type: 'individual', departmentId: 'd2', testCode: 'HEM012' },
   ];
 
-  it('MASTER mode (admin console): picking a department fills the next free code in that dept series (CLP015 → CLP016)', () => {
-    const { c } = make({ id: null, individuals, depts: [{ id: 'd1', name: 'Clinical Pathology' }] });
-    c.setCodeMode('master');
-    c.onDeptPicked('Clinical Pathology');
-    expect(c._draft().testCode).toBe('CLP016');
-  });
+  for (const mode of ['tenant', 'master'] as const) {
+    it(`no client-side code generation (${mode} mode): picking a department never fills a code`, () => {
+      const { c } = make({ id: null, individuals, depts: [{ id: 'd1', name: 'Clinical Pathology' }] });
+      c.setCodeMode(mode);
+      c.onDeptPicked('Clinical Pathology');
+      expect(c._draft().testCode).toBe('');
+      expect(c.codeText()).toBe('Assigned automatically');
+      expect((TestEditorComponent.prototype as any).nextCodeForDept).toBeUndefined();
+      expect((TestEditorComponent.prototype as any).onTestCodeChanged).toBeUndefined();
+    });
+  }
 
-  it('duplicate code (case-insensitive, whole catalogue) raises a field error', () => {
-    const { c } = make({ id: null, individuals });
-    c.onTestCodeChanged('hem012');
-    expect(c.fieldError('testCode')).toContain('HEM012');
-  });
-
-  it('MASTER mode may type the master code shape (BIO777 accepted)', () => {
-    const { c } = make({ id: null, individuals });
-    c.setCodeMode('master');
-    c.onTestCodeChanged('BIO777');
-    expect(c.fieldError('testCode')).toBeFalsy();
-  });
-
-  it('a lab copy of a master test may keep its OWN master code (BIO019 on the loaded row)', () => {
-    const { c } = make();
-    c.onTestCodeChanged('bio019');
-    expect(c.fieldError('testCode')).toBeFalsy();
-    c.onTestCodeChanged('BIO020');
-    expect(c.fieldError('testCode')).toContain('reserved for the Admin Test Master');
-  });
-
-  it('a hyphenated lab code is accepted', () => {
-    const { c } = make({ id: null, individuals });
-    c.onTestCodeChanged('MW-0007');
-    expect(c.fieldError('testCode')).toBeFalsy();
-  });
-
-  it('a server reserved_code refusal lands on the code field with the friendly wording', () => {
-    const { c, toasts } = make({ patchErr: new ApiError('Code BIO777 is reserved', 'reserved_code') });
+  it('a saved test shows its code; the save never sends a code', () => {
+    const { c, api } = make();
+    expect(c.codeText()).toBe('BIO019');
     c.saveTest();
-    expect(c.fieldError('testCode')).toContain('reserved for the Admin Test Master');
-    expect(toasts.error).not.toHaveBeenCalled();
+    expect(lastPatchBody(api).testCode).toBeUndefined();
+  });
+
+  it('a new test (profile included) saves without a code and toasts the one the server assigned', () => {
+    const { c, api, toasts } = make({ id: null, individuals, depts: [{ id: 'd1', name: 'Clinical Pathology' }],
+      postResult: { id: 'new1', testCode: 'CLP900' } });
+    c.onDeptPicked('Clinical Pathology');
+    expect(c.metaChips().find((x: any) => x.k === 'Code').v).toBe('Auto');
+    c.patch({ name: 'Ferritin' });
+    c.saveTest();
+    expect((api.post.mock.calls[0][1] as any).testCode).toBeUndefined();
+    expect(toasts.success).toHaveBeenCalledWith('Created — code CLP900');
+  });
+
+  it('a server code_readonly refusal is a warning toast, not a code-field error', () => {
+    const { c, toasts } = make({ patchErr: new ApiError('Test codes are assigned automatically', 'code_readonly') });
+    c.saveTest();
+    expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('assigned automatically'));
+    expect(c.fieldError('testCode')).toBeFalsy();
+  });
+
+  it('clone mode: a customised copy offers no revert (the server would refuse it)', () => {
+    const { c } = make({ test: baseTest({ origin: 'customised', catalogMode: 'clone' }) });
+    expect(c.canRevert()).toBe(false);
+  });
+
+  it('reference mode: a customised copy can revert to the master', () => {
+    const { c } = make({ test: baseTest({ origin: 'customised', catalogMode: 'reference' }) });
+    expect(c.canRevert()).toBe(true);
   });
 });
 
@@ -253,26 +258,6 @@ describe('TestEditor — TARGET behaviour', () => {
     expect(JSON.parse(lastPatchBody(api).parametersJson).sampleType).toBeUndefined();
   });
 
-  it('TARGET phase 1/5: a tenant typing the reserved master shape ^[A-Z]{3}[0-9]+$ (BIO777) is rejected', () => {
-    const { c } = make({ id: null });
-    c.onTestCodeChanged('BIO777');
-    expect(c.fieldError('testCode')).toBeTruthy();
-  });
-
-  it('TARGET phase 1/5: a new tenant test gets an auto code with a hyphen (e.g. MW-0001) — assigned by the SERVER', () => {
-    const individuals = [{ id: 'a', type: 'individual', departmentId: 'd1', testCode: 'CLP015' }];
-    const { c, api, toasts } = make({ id: null, individuals, depts: [{ id: 'd1', name: 'Clinical Pathology' }],
-      postResult: { id: 'new1', testCode: 'MW-0001' } });
-    c.onDeptPicked('Clinical Pathology');
-    expect(c._draft().testCode).toBe('');                       // never a master-shaped guess
-    expect(c.codePlaceholder()).toContain('assign');
-    expect(c.metaChips().find((x: any) => x.k === 'Code').v).toBe('Auto');
-    c.patch({ name: 'Ferritin' });
-    c.saveTest();
-    expect((api.post.mock.calls[0][1] as any).testCode).toBe('');
-    expect(toasts.success).toHaveBeenCalledWith('Created — code MW-0001');
-    expect('MW-0001').toMatch(/^[A-Z]+-\d{4,}$/);
-  });
 
   it('TARGET phase 3: summary shows the origin badge (master | customised | branch | local)', () => {
     const { c } = make({ test: baseTest({ origin: 'customised' }) });

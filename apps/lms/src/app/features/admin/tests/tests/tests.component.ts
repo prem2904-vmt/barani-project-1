@@ -38,8 +38,9 @@ import { notOfferedElement, priceFlagElement } from '../../../../shared/primitiv
 import { isOffered, isPriceDefault } from '../../../../shared/utils/test-pricing';
 import { originBadgeElement } from '../../../../shared/primitives/origin-badge.component';
 import {
-  RESERVED_CODE_ERROR, RESERVED_CODE_MESSAGE, canRevertToMaster, isReservedForTenant, originLabel, revertToMasterPath,
+  canRevertToMaster, originLabel, restoreDefaultsMessage, restoreDefaultsSummary, revertToMasterPath,
 } from '../../../../shared/utils/test-origin';
+import { compareTestCodes } from '../../../../shared/utils/test-code';
 import { pendingProposalIds } from '../../../../shared/utils/catalog-proposals';
 import { CatalogProposal } from '../../../../shared/models/test.model';
 import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.component';
@@ -200,19 +201,19 @@ export class TestsComponent implements OnInit {
   protected async restoreDefaults(): Promise<void> {
     const ok = await this.dialog.confirm({
       title: 'Restore the default Test Master?',
-      message: 'Your entire catalogue — tests, profiles, packages, prices and reference-range edits — is replaced with the platform default. Tests already used by orders or bills are kept for history but deactivated; everything else is deleted, and all prices reset to 0. This cannot be undone.',
+      message: restoreDefaultsMessage('lab'),
       confirmLabel: 'Restore to default',
       cancelLabel: 'Keep my catalogue',
       tone: 'danger',
     });
     if (!ok) return;
     this.restoring.set(true);
-    this.api.post<{ deleted: number; parked: number; cloned: number }>('/api/tests/restore-defaults', {}).subscribe({
+    this.api.post<{ deleted: number; parked: number; cloned: number; mode?: string }>('/api/tests/restore-defaults', {}).subscribe({
       next: r => {
         this.restoring.set(false);
         this._dirty.set(new Map());
         this._priceDirty.set(new Map());
-        this.toasts.success(`Catalogue restored — ${r.cloned} default tests loaded (${r.deleted} removed, ${r.parked} archived).`);
+        this.toasts.success(restoreDefaultsSummary(r));
         this.loadTests();
         this.loadDepartments();
       },
@@ -232,27 +233,6 @@ export class TestsComponent implements OnInit {
   private readonly _priceDirty = signal<Map<string, number>>(new Map());
   readonly dirtyCount = computed(() =>
     new Set([...this._dirty().keys(), ...this._priceDirty().keys()]).size);
-
-  /** Effective (pending-edit-aware) trimmed test code for a row. */
-  private effectiveCode(t: Test): string {
-    const pending = this._dirty().get(t.id)?.['testCode'];
-    return (pending !== undefined ? String(pending) : (t.testCode ?? '')).trim();
-  }
-  /** Codes used by more than one loaded test (case-insensitive), after pending
-   *  edits — drives the red "duplicate code" cell highlight. */
-  readonly dupCodes = computed<Set<string>>(() => {
-    const counts = new Map<string, number>();
-    for (const t of this._tests()) {
-      const c = this.effectiveCode(t).toLowerCase();
-      if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
-    }
-    return new Set([...counts].filter(([, n]) => n > 1).map(([c]) => c));
-  });
-  private isDupCode(t?: Test): boolean {
-    if (!t) return false;
-    const c = this.effectiveCode(t).toLowerCase();
-    return !!c && this.dupCodes().has(c);
-  }
 
   readonly isPhone = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
   readonly isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -393,8 +373,10 @@ export class TestsComponent implements OnInit {
           return !!m && this.matchesSearch(m, q);
         }));
     }
+    // Natural code order (BIO002 < BIO010 < BIO901 < BIO1000); codeless rows
+    // (packages) after, by name.
     roots = [...roots].sort((a, b) =>
-      (a.testCode || a.name).localeCompare(b.testCode || b.name));
+      compareTestCodes(a.testCode, b.testCode) || (a.name ?? '').localeCompare(b.name ?? ''));
 
     const expanded = this.expanded();
     const out: TestRow[] = [];
@@ -464,15 +446,10 @@ export class TestsComponent implements OnInit {
     if (view === 'individual') {
       return [
         {
-          headerName: 'Code', field: 'testCode', editable: true, minWidth: 120, maxWidth: 160, sort: 'asc', pinned: 'left',
+          // Codes are server-assigned and never change — not editable here.
+          headerName: 'Code', field: 'testCode', editable: false, minWidth: 120, maxWidth: 160, sort: 'asc', pinned: 'left',
+          comparator: (a: string | null, b: string | null) => compareTestCodes(a, b),
           cellRenderer: this.codeCellRenderer,
-          cellStyle: (p) => {
-            const isDup = this.isDupCode(p.data);
-            if (isDup) {
-              return { backgroundColor: 'rgba(239,68,68,0.28)', color: '#fecaca', fontWeight: '600' };
-            }
-            return { backgroundColor: '', color: '', fontWeight: '' };
-          },
           tooltipValueGetter: p => {
             const tColor = tubeColor(p.data?.tubeColor);
             return tColor ? `Container: ${tColor.label}` : undefined;
@@ -581,7 +558,7 @@ export class TestsComponent implements OnInit {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;align-items:center;gap:6px;height:100%;min-width:0;';
     if (!params.data) return wrap;
-    wrap.appendChild(originBadgeElement(params.data.origin));
+    wrap.appendChild(originBadgeElement(params.data.origin, params.data.catalogMode));
     if (params.data.pendingProposal?.id) {
       const dot = document.createElement('span');
       dot.title = 'A Test Master update is waiting for this test';
@@ -921,9 +898,6 @@ export class TestsComponent implements OnInit {
       return next;
     });
 
-    if (field === 'testCode') {
-      this.gridApi?.refreshCells({ columns: ['testCode'], force: true });
-    }
   }
 
   saveAll() {
@@ -931,26 +905,6 @@ export class TestsComponent implements OnInit {
     const dirty = this._dirty();
     const prices = this._priceDirty();
     if (dirty.size === 0 && prices.size === 0) return;
-
-    const seen = new Map<string, string>();
-    for (const t of this._tests()) {
-      const pending = dirty.get(t.id);
-      const raw = pending && 'testCode' in pending ? pending['testCode'] : t.testCode;
-      const code = String(raw ?? '').trim();
-      if (!code) continue;
-      const lc = code.toLowerCase();
-      if (seen.has(lc)) {
-        this.toasts.error(`Duplicate test code '${code}' — codes must be unique`);
-        return;
-      }
-      seen.set(lc, code);
-      // Master-shaped codes (BIO019) belong to the Admin Test Master; a copy
-      // may keep its own master code, never take a new one.
-      if (pending && 'testCode' in pending && isReservedForTenant(code, t.testCode)) {
-        this.toasts.error(`${code}: ${RESERVED_CODE_MESSAGE}`);
-        return;
-      }
-    }
 
     const entries = [...dirty.entries()];
     const count = this.dirtyCount();
@@ -972,7 +926,7 @@ export class TestsComponent implements OnInit {
       error: e => {
         this.saving.set(false);
         const err = ApiError.from(e);
-        this.toasts.error(err.code === RESERVED_CODE_ERROR ? RESERVED_CODE_MESSAGE : err.message);
+        this.toasts.error(err.message);
       },
     });
   }

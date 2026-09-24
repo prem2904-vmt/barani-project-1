@@ -68,6 +68,10 @@ export interface Test {
   /** Where this row comes from (copy-on-write, see shared/utils/test-origin):
    *  'master' | 'customised' | 'branch' | 'local'. Absent on older payloads. */
   origin?: 'master' | 'customised' | 'branch' | 'local' | null;
+  /** The lab's catalogue mode: 'clone' (own copy of every test — a 'master'
+   *  origin means "your copy, unchanged"; no revert) | 'reference'. Null on the
+   *  Admin Test Master's own rows and older payloads. */
+  catalogMode?: 'clone' | 'reference' | null;
   /** Unit DERIVED from the parameters (read-only; the printed unit is the
    *  parameter's). Replaces the flat `unit` column for display. */
   derivedUnit?: string | null;

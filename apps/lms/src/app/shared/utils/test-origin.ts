@@ -8,9 +8,11 @@
  *   - `branch`     — a branch's own copy (branch isolation ON);
  *   - `local`      — a test this lab created itself ("Own test").
  *
- * Code shapes (owner rule 5): `^[A-Z]{3}[0-9]+$` (BIO019, HEM012) is RESERVED
- * for the Admin Test Master. A lab's own tests always carry a hyphen — typed,
- * or the server's automatic `<SHORT>-0001` when the code is left blank.
+ * Every row also carries `catalogMode` — `clone` (the lab still holds its own
+ * copy of the whole catalogue: a `master` origin then means "your copy, still
+ * the same as the master", and nothing can be reverted) or `reference`.
+ *
+ * Test codes are server-assigned and read-only: see `test-code.ts`.
  *
  * Pure helpers, no Angular: the admin console keeps a byte-identical copy.
  */
@@ -20,6 +22,13 @@ export type TestOrigin = 'master' | 'customised' | 'branch' | 'local';
 /** Loose on purpose: callers pass full `Test` rows, grid rows, API rows. */
 export interface OriginLike {
   origin?: string | null;
+  /** 'clone' | 'reference' (absent on older payloads = reference wording). */
+  catalogMode?: string | null;
+}
+
+/** True when the row belongs to a lab still on its own full catalogue copy. */
+export function isCloneMode(t: OriginLike | null | undefined): boolean {
+  return (t?.catalogMode ?? '').toString().trim().toLowerCase() === 'clone';
 }
 
 const LABELS: Record<TestOrigin, string> = {
@@ -34,6 +43,16 @@ const HINTS: Record<TestOrigin, string> = {
   customised: 'Your lab\'s own copy of a Test Master test. Revert to go back to the master.',
   branch: 'This branch\'s own copy of a Test Master test. Revert to go back to the master.',
   local: 'A test your lab created. It is not part of the Admin Test Master.',
+};
+
+/** Clone mode: the lab holds a copy of every test — nothing is "read from"
+ *  the master, and there is no revert. */
+const CLONE_LABELS: Record<TestOrigin, string> = { ...LABELS, master: 'Master copy' };
+const CLONE_HINTS: Record<TestOrigin, string> = {
+  master: 'Your lab\'s copy of this Admin Test Master test. It still matches the master.',
+  customised: 'Your lab\'s copy of a Test Master test, changed here.',
+  branch: 'This branch\'s copy of a Test Master test, changed here.',
+  local: HINTS.local,
 };
 
 /** Stroked 24×24 SVG path per origin (never emoji). */
@@ -54,22 +73,27 @@ export function originOf(t: OriginLike | null | undefined): TestOrigin | null {
   return o === 'master' || o === 'customised' || o === 'branch' || o === 'local' ? o : null;
 }
 
-/** "Master" | "Customised" | "Branch" | "Own test" | '' (no origin). */
+/** "Master" | "Customised" | "Branch" | "Own test" | '' (no origin);
+ *  "Master copy" for an unchanged row of a clone-mode lab. */
 export function originLabel(t: OriginLike | null | undefined): string {
   const o = originOf(t);
-  return o ? LABELS[o] : '';
+  if (!o) return '';
+  return (isCloneMode(t) ? CLONE_LABELS : LABELS)[o];
 }
 
-/** One-line explanation for the badge tooltip. */
+/** One-line explanation for the badge tooltip (clone-mode wording when the
+ *  lab still holds its own copy of the catalogue). */
 export function originHint(t: OriginLike | null | undefined): string {
   const o = originOf(t);
-  return o ? HINTS[o] : '';
+  if (!o) return '';
+  return (isCloneMode(t) ? CLONE_HINTS : HINTS)[o];
 }
 
-/** Only a lab's copy of a master test can go back to the master. */
+/** Only a lab's copy of a master test can go back to the master — and only
+ *  once the lab reads the Admin Test Master (not in clone mode). */
 export function canRevertToMaster(t: OriginLike | null | undefined): boolean {
   const o = originOf(t);
-  return o === 'customised' || o === 'branch';
+  return (o === 'customised' || o === 'branch') && !isCloneMode(t);
 }
 
 /** `POST` target that drops the lab's (or branch's) copy. */
@@ -77,31 +101,23 @@ export function revertToMasterPath(testId: string): string {
   return `/api/tests/${testId}/revert-to-master`;
 }
 
-/** The Admin Test Master's code shape: 3 letters + digits, no separator. */
-export const MASTER_CODE_RE = /^[A-Z]{3}[0-9]+$/;
-
-/** True when `code` has the master shape (case-insensitive, trimmed). */
-export function isMasterCodeShape(code: string | null | undefined): boolean {
-  return MASTER_CODE_RE.test((code ?? '').trim().toUpperCase());
+/** "Restore to default" confirmation. Prices are KEPT (they live in the
+ *  pricing table); what goes is the lab's own copies of Test Master tests. */
+export function restoreDefaultsMessage(who: 'lab' | 'tenant'): string {
+  const whose = who === 'lab' ? 'Your lab\'s' : 'This tenant\'s';
+  return `${whose} own copies of Test Master tests are removed, so every test follows the Admin Test Master default again. `
+    + 'Prices and "not offered" settings are kept. Copies already used by orders or bills are kept for history, '
+    + 'deactivated. This cannot be undone.';
 }
 
-/** Friendly wording for a lab typing a master-shaped code. */
-export const RESERVED_CODE_MESSAGE =
-  'Codes like BIO019 (3 letters + digits) are reserved for the Admin Test Master. '
-  + 'Use a code with a hyphen (e.g. MW-0001), or leave it blank and one is assigned for you.';
-
-/** The server's error code for a master-shaped code on a lab test. */
-export const RESERVED_CODE_ERROR = 'reserved_code';
-
-/**
- * A lab may keep a master test's OWN code on its copy (editing HEM012 keeps
- * HEM012) but may never type a NEW master-shaped code. `original` = the code
- * the row carried when loaded.
- */
-export function isReservedForTenant(code: string | null | undefined, original?: string | null): boolean {
-  const c = (code ?? '').trim();
-  if (!c || !isMasterCodeShape(c)) return false;
-  return c.toUpperCase() !== (original ?? '').trim().toUpperCase();
+/** Toast after a restore: reference-mode labs drop copies, clone-mode labs reload the default. */
+export function restoreDefaultsSummary(r: { deleted?: number; parked?: number; cloned?: number; mode?: string } | null | undefined): string {
+  const removed = (r?.deleted ?? 0) + (r?.parked ?? 0);
+  if (r?.mode === 'reference' || !r?.cloned) {
+    return removed === 0 ? 'Nothing to restore — every test already follows the Admin Test Master.'
+      : `Restored — ${removed} lab ${removed === 1 ? 'copy' : 'copies'} removed; prices kept.`;
+  }
+  return `Catalogue restored — ${r.cloned} default tests loaded (${r.deleted ?? 0} removed, ${r.parked ?? 0} archived); prices kept.`;
 }
 
 /** Departments are master-provided (owner rule 4): labs place, enable or

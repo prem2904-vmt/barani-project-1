@@ -99,6 +99,10 @@ select.pf-input--compact {
   background-position: right 6px center;
 }
 .pf-input--error { border-color: var(--red-border, #ef4444); }
+/* The server-assigned test code: readable and selectable, never looks editable. */
+.pf-input--readonly,
+.pf-input--readonly:focus { cursor: default; border-style: dashed; box-shadow: none; }
+.pf-input--muted { color: var(--text-secondary); }
 .pf-field-err { font-size: 11.5px; color: var(--red-text, #ef4444); margin-top: 3px; }
 
 /* Reference-range bound cell: fixed-width comparator + flexible value box.
