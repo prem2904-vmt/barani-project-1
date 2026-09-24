@@ -389,6 +389,18 @@
             <span class="pf-rq-act__lbl">View</span>
           </button>
 
+          <!-- Download is a first-class action (owner): keeping the PDF is
+               what most of these rows are opened for, and it also balances
+               the cluster at four cells. -->
+          <button type="button" class="pf-rq-act press" title="Download PDF" (click)="downloadPdf(r)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+            </svg>
+            <span class="pf-rq-act__lbl">Download</span>
+          </button>
+
           <!-- Split button: the face sends it the usual way (WhatsApp opens
                pre-filled - the send is still the user's), the caret picks a
                different channel. -->
@@ -414,8 +426,6 @@
                         (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">WhatsApp</button>
                 <button type="button" class="pf-rq-menu__item press" role="menuitem"
                         (click)="deliver(r, 'print'); toggleShare(r.id)">Print</button>
-                <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                        (click)="downloadPdf(r); toggleShare(r.id)">Download PDF</button>
               </div>
             }
           </div>

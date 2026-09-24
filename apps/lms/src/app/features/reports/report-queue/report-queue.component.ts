@@ -177,8 +177,10 @@ export class ReportQueueComponent implements OnInit {
 
   /** Which row has its "more" menu open — edit / regenerate / open lab
    *  results. Seven icons per row read as a wall at every width, so the row
-   *  is View · Share ▾ · More (owner). One row at a time; opening either
-   *  menu closes the other. Presentational only. */
+   *  is View · Download · Share ▾ · More (owner) — four cells, with the two
+   *  things people actually come here for out in the open and everything
+   *  else one tap away. One row at a time; opening either menu closes the
+   *  other. Presentational only. */
   private readonly _moreFor = signal<string | null>(null);
   readonly moreFor = this._moreFor.asReadonly();
   toggleMore(id: string) {
