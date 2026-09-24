@@ -1710,6 +1710,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  /** The save body as loaded (see buildSaveBody) — what an update diffs against. */
+  private _baseline: Record<string, unknown> = {};
+
   private hydrateFrom(t: Test) {
     this.origin.set(originOf(t));
     this.catalogMode.set(t.catalogMode ?? null);
@@ -1771,6 +1774,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     // One-page layout: the Report-layout card is always visible, so its columns
     // must be loaded up-front rather than on a tab switch.
     if (this.onePage()) this.ensureLayoutData();
+    this._baseline = this.buildSaveBody(this._draft());
     this.dirty.set(false);   // fresh load is clean
     this._previewToken.update(v => v + 1);
   }
@@ -1986,21 +1990,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.navBack.backTo(`/admin/tests?type=${t}`);
   }
 
-  saveTest() {
-    const d = this._draft();
-    if (!d.name.trim()) { this.toasts.warning('Name is required'); return; }
-
-    if (d.type === 'profile') {
-      if (this.packageItems().length === 0) {
-        this.toasts.warning('Add at least one member test to the profile');
-        return;
-      }
-      if (this.repetitive() && new Set(this._memberRows().map(r => r.offsetMin)).size < 2) {
-        this.toasts.warning('A timed series needs at least two time points');
-        return;
-      }
-    }
-
+  /** The content a save writes, built from the draft + the editor's value
+   *  list. Also the load-time BASELINE: an update PATCHes only the keys whose
+   *  value differs from it (see saveTest). */
+  private buildSaveBody(d: DraftTest): Record<string, unknown> {
     const pkg = d.type === 'package';
     const bundle = d.type !== 'individual';
 
@@ -2025,7 +2018,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const outsourced = d.type !== 'package' && !!d.outsourcedVendorId;
     // No price / tax here: the pricing table owns them (saved separately
     // below through the bulk price endpoint, only when changed).
-    const body = {
+    return {
       name: d.name, type: d.type, flow: d.flow,
       departmentId: d.type === 'package' ? undefined : (d.departmentId || undefined),
       tatHours: d.tatHours, sampleType: d.type === 'package' ? undefined : (d.sampleType || undefined),
@@ -2048,11 +2041,40 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       outsourcedDepartmentId: outsourced ? (d.outsourcedDepartmentId || undefined) : undefined,
       clearOutsource: (d.id && !outsourced) ? true : undefined
     };
+  }
+
+  saveTest() {
+    const d = this._draft();
+    if (!d.name.trim()) { this.toasts.warning('Name is required'); return; }
+
+    if (d.type === 'profile') {
+      if (this.packageItems().length === 0) {
+        this.toasts.warning('Add at least one member test to the profile');
+        return;
+      }
+      if (this.repetitive() && new Set(this._memberRows().map(r => r.offsetMin)).size < 2) {
+        this.toasts.warning('A timed series needs at least two time points');
+        return;
+      }
+    }
+
+    const body = this.buildSaveBody(d);
 
     this._saving.set(true);
     if (d.id) {
-      this.api.patch<Test>(`/api/tests/${d.id}`, body).subscribe({
+      // Copy-on-write: whatever the PATCH carries is what the lab changed, and
+      // any change stores a whole copy of a master test (a "Branch" copy under
+      // isolation). So send ONLY the keys that differ from what was loaded —
+      // never the untouched rest, nor values the editor merely re-derives
+      // (the flat range, a tidied value list). Nothing changed = no PATCH.
+      const changed = changedKeys(body, this._baseline);
+      if (Object.keys(changed).length === 0) {
+        this.savePriceThen(d.id, d, () => this.toasts.success('Saved'));
+        return;
+      }
+      this.api.patch<Test>(`/api/tests/${d.id}`, changed).subscribe({
         next: t => {
+          this._baseline = body;   // saved: the next save diffs against this
           // Copy-on-write: the first save of a master test (or of the tenant
           // copy under branch isolation) creates the lab's OWN row with a new
           // id — prices and every later save go to that row.
@@ -2128,4 +2150,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.toasts.error(err.message);
     }
   }
+}
+
+/** The keys of `body` whose value differs from `baseline` (compared as JSON). */
+export function changedKeys(body: Record<string, unknown>, baseline: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (v === undefined && baseline[k] === undefined) continue;
+    if (JSON.stringify(v ?? null) !== JSON.stringify(baseline[k] ?? null)) out[k] = v;
+  }
+  return out;
 }

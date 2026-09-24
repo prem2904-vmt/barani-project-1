@@ -96,26 +96,28 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
     expect(c.fields().map((f: any) => f.name)).toEqual(['sodium']);
   });
 
-  it('save PATCHes /api/tests/{id} with methodology, sampleType, unit (no price) — unchanged price writes nothing', () => {
+  it('save PATCHes /api/tests/{id} with ONLY the edited fields (no price) — unchanged price writes nothing', () => {
     const { c, api, pricing } = make();
+    c.patch({ methodology: 'Indirect ISE', sampleType: 'Plasma' });
     c.saveTest();
     expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', expect.anything());
     expect(pricing.save).not.toHaveBeenCalled();
-    expect(lastPatchBody(api)).toMatchObject({
-      methodology: 'ISE',
-      sampleType: 'Serum', unit: 'mmol/L', resultType: 'numeric', reportFormat: 'tabular',
-    });
+    expect(lastPatchBody(api)).toEqual({ methodology: 'Indirect ISE', sampleType: 'Plasma' });
   });
 
-  it('adultReferenceRange on save is RE-DERIVED from the single numeric band (typed flat text is overwritten)', () => {
+  it('adultReferenceRange is RE-DERIVED from the single numeric band when the band changes', () => {
     const { c, api } = make({ test: baseTest({ adultReferenceRange: 'stale' }) });
+    c.patchRangeAt(0, 0, { min: 136 });
     c.saveTest();
-    expect(lastPatchBody(api).adultReferenceRange).toBe('135–145');
+    const body = lastPatchBody(api);
+    expect(body.adultReferenceRange).toBe('136–145');
+    expect(JSON.parse(body.parametersJson).parameters[0].referenceRanges[0].min).toBe(136);
   });
 
-  it('multi-band numeric value → flat adultReferenceRange is blanked', () => {
+  it('multi-band numeric value → flat adultReferenceRange is blanked when the bands change', () => {
     const { c, api } = make({ test: baseTest({ parameters: P([{ name: 'hb', type: 'numeric',
-      referenceRanges: [{ min: 13, max: 17, sex: 'M' }, { min: 12, max: 15, sex: 'F' }] }]) }) });
+      referenceRanges: [{ min: 13, max: 17 }] }]) }) });
+    c.addRange(0);
     c.saveTest();
     expect(lastPatchBody(api).adultReferenceRange).toBe('');
   });
@@ -123,14 +125,18 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
   it('an already-tidy parametersJson is passed through verbatim (real per-value overrides kept)', () => {
     const raw = P([{ name: 'sodium', type: 'numeric', methodology: 'Flame', referenceRanges: [{ min: 135, max: 145 }] }], { microFormat: 'x' });
     const { c, api } = make({ test: baseTest({ parameters: raw }) });
+    c.patch({ name: 'Sodium (lab)' });
     c.saveTest();
     const body = lastPatchBody(api);
-    expect(body.parametersJson).toBe(raw);
-    expect(body.sampleType).toBe('Serum');       // the column is the specimen
+    expect(body).toEqual({ name: 'Sodium (lab)' });   // the value list was not touched
   });
 
   it('a package save drops sampleType/methodology/criticals/unit (and price)', () => {
-    const { c, api } = make({ test: baseTest({ type: 'package', parameters: JSON.stringify({ items: [{ testId: 'a' }] }) }) });
+    const { c, api } = make({ test: baseTest({ type: 'package', parameters: JSON.stringify({ items: [{ testId: 'a', catalogKey: 'A' }] }) }) });
+    c.saveTest();
+    expect(api.patch).not.toHaveBeenCalled();     // nothing changed: nothing sent
+    c.patch({ name: 'Pkg (lab)' });
+    c.togglePackageMember('b');
     c.saveTest();
     const body = lastPatchBody(api);
     expect(body.price).toBeUndefined();
@@ -138,7 +144,7 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
     expect(body.methodology).toBeUndefined();
     expect(body.criticalLow).toBeUndefined();
     expect(body.unit).toBeUndefined();
-    expect(JSON.parse(body.parametersJson)).toEqual({ items: [{ testId: 'a' }] });
+    expect(JSON.parse(body.parametersJson)).toEqual({ items: [{ testId: 'a' }, { testId: 'b' }] });
   });
 
   it('summary chips show the price off the draft (₹250.00) and the sample column', () => {
@@ -155,6 +161,7 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
 
   it('a server field error on the content save lands as a field error, not a toast', () => {
     const { c, toasts } = make({ patchErr: { error: { message: 'Name taken', field: 'name' } } });
+    c.patch({ name: 'Sodium 2' });
     c.saveTest();
     expect(toasts.error).not.toHaveBeenCalled();
     expect(c.fieldError('name')).toBeTruthy();
@@ -182,6 +189,7 @@ describe('TestEditor codes — server-assigned, read-only (9-series)', () => {
   it('a saved test shows its code; the save never sends a code', () => {
     const { c, api } = make();
     expect(c.codeText()).toBe('BIO019');
+    c.patch({ name: 'Sodium (lab)' });
     c.saveTest();
     expect(lastPatchBody(api).testCode).toBeUndefined();
   });
@@ -199,6 +207,7 @@ describe('TestEditor codes — server-assigned, read-only (9-series)', () => {
 
   it('a server code_readonly refusal is a warning toast, not a code-field error', () => {
     const { c, toasts } = make({ patchErr: new ApiError('Test codes are assigned automatically', 'code_readonly') });
+    c.patch({ name: 'Sodium (lab)' });
     c.saveTest();
     expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('assigned automatically'));
     expect(c.fieldError('testCode')).toBeFalsy();
@@ -218,7 +227,7 @@ describe('TestEditor codes — server-assigned, read-only (9-series)', () => {
 describe('TestEditor — TARGET behaviour', () => {
   it('TARGET phase 2: the test save carries NO price/discount/tax (pricing table owns it)', () => {
     const { c, api } = make();
-    c.patch({ price: 400, taxSlab: 5 });
+    c.patch({ price: 400, taxSlab: 5, tatHours: 8 });
     c.saveTest();
     const body = lastPatchBody(api);
     expect(body.price).toBeUndefined();
@@ -228,6 +237,7 @@ describe('TestEditor — TARGET behaviour', () => {
 
   it('TARGET phase 0/6: no test-level critical pair — criticals live on bands/params only', () => {
     const { c, api } = make();
+    c.patch({ tatHours: 8 });
     c.saveTest();
     const body = lastPatchBody(api);
     expect(body.criticalLow).toBeUndefined();
@@ -245,6 +255,7 @@ describe('TestEditor — TARGET behaviour', () => {
   it('TARGET phase 0: hybrid methodology — per-value copies equal to the test-level one are stripped on save', () => {
     const raw = P([{ name: 'sodium', type: 'numeric', methodology: 'ISE' }, { name: 'k', type: 'numeric', methodology: 'Flame' }]);
     const { c, api } = make({ test: baseTest({ parameters: raw }) });
+    c.patchField(1, { unit: 'mmol/L' });
     c.saveTest();
     const ps = JSON.parse(lastPatchBody(api).parametersJson).parameters;
     expect(ps[0].methodology).toBeUndefined();    // == test-level ISE → stripped
@@ -254,6 +265,7 @@ describe('TestEditor — TARGET behaviour', () => {
   it('TARGET phase 0: specimen = the sampleType column only (no wrapper sampleType in parametersJson)', () => {
     const raw = P([{ name: 'sodium', type: 'numeric' }], { sampleType: 'Plasma' });
     const { c, api } = make({ test: baseTest({ parameters: raw }) });
+    c.patchField(0, { unit: 'mEq/L' });
     c.saveTest();
     expect(JSON.parse(lastPatchBody(api).parametersJson).sampleType).toBeUndefined();
   });
@@ -268,7 +280,7 @@ describe('TestEditor — TARGET behaviour', () => {
 describe('TestEditor — price via the pricing table (phase 2)', () => {
   it('a changed price saves the test first, then ONE bulk price write (price + tax)', () => {
     const { c, api, pricing, toasts } = make();
-    c.patch({ price: 400, taxSlab: 5 });
+    c.patch({ price: 400, taxSlab: 5, tatHours: 8 });
     c.saveTest();
     expect(api.patch).toHaveBeenCalledTimes(1);
     expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 400, taxSlab: 5 }]);
@@ -340,9 +352,18 @@ describe('TestEditor — copy-on-write (phases 3 + 5)', () => {
     const { c, pricing } = make({ test: baseTest({ origin: 'master' }),
       patchResult: baseTest({ id: 'copy1', origin: 'customised' }),
       tests: { copy1: baseTest({ id: 'copy1', origin: 'customised' }) } });
-    c.patch({ price: 480 });
+    c.patch({ price: 480, name: 'Sodium (lab)' });
     c.saveTest();
     expect(pricing.save).toHaveBeenCalledWith([{ testId: 'copy1', price: 480, taxSlab: 0 }]);
+  });
+
+  it('a PRICE-ONLY change on a master test makes no copy: no PATCH, the price is written for the master id', () => {
+    const { c, api, pricing, router } = make({ test: baseTest({ origin: 'master' }) });
+    c.patch({ price: 480 });
+    c.saveTest();
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 480, taxSlab: 0 }]);
   });
 
   it('a save that stays on the same row does not navigate', () => {
@@ -440,5 +461,53 @@ describe('TestEditor — profile member order + code-wise picker (QA 2026-09-24)
     c.packageQuery.set('bio01');
     const all = c.filteredPackageCatalogByDept().flatMap((g: any) => g.tests.map((t: any) => t.testCode));
     expect(all).toEqual(['BIO010']);
+  });
+});
+
+describe('TestEditor — a save sends only what changed (owner bug 2026-09-24: "change one test → Branch")', () => {
+  // Copy-on-write stores a WHOLE copy of a master test for any change the PATCH
+  // carries. The editor used to PATCH every field plus a flat range it derives
+  // from the band — the Admin Test Master leaves that column blank, so saving an
+  // untouched test (or changing only its TAT) still stored a copy.
+  const master = () => baseTest({ origin: 'master', adultReferenceRange: null,
+    parameters: P([{ name: 'vldl', type: 'numeric', unit: 'mg/dL',
+      referenceRanges: [{ min: 5, max: 40, label: 'Approx. 5–40', segment: 'default' }] }]) });
+
+  it('an unchanged save sends no PATCH at all (and no price)', () => {
+    const { c, api, pricing, toasts } = make({ test: master() });
+    c.saveTest();
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(pricing.save).not.toHaveBeenCalled();
+    expect(toasts.success).toHaveBeenCalledWith('Saved');
+    expect(c.dirty()).toBe(false);
+  });
+
+  it('changing only the TAT sends only tatHours — no derived flat range, no value list, no isActive', () => {
+    const { c, api } = make({ test: master() });
+    c.patch({ tatHours: 8 });
+    c.saveTest();
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(lastPatchBody(api)).toEqual({ tatHours: 8 });
+  });
+
+  it('a price-only change writes the pricing table and never PATCHes the test', () => {
+    const { c, api, pricing } = make({ test: master() });
+    c.patch({ price: 480 });
+    c.saveTest();
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 480, taxSlab: 0 }]);
+  });
+
+  it('the next save diffs against what was just saved (a second save of the same edit sends nothing)', () => {
+    const { c, api } = make({ test: master(), patchResult: master() });
+    c.patch({ tatHours: 8 });
+    c.saveTest();
+    c.saveTest();
+    expect(api.patch).toHaveBeenCalledTimes(1);
+  });
+
+  it('changedKeys: JSON-equal values are not changes; undefined on both sides is skipped', async () => {
+    const { changedKeys } = await import('./test-editor.component');
+    expect(changedKeys({ a: 1, b: 'x', c: undefined, d: [1] }, { a: 1, b: 'y', d: [1] })).toEqual({ b: 'x' });
   });
 });
