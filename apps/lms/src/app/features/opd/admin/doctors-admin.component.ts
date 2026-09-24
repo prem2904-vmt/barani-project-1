@@ -14,6 +14,8 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { bandFilter } from '../../../shared/utils/band-search';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -43,11 +45,26 @@ interface DoctorRow {
 @Component({
   selector: 'pf-doctors-admin',
   standalone: true,
-  imports: [AgGridAngular, ScreenHeaderComponent],
+  imports: [AgGridAngular, ScreenHeaderComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-da px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-da pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): search doctors; Save is the band action. -->
+        <pf-hero-band [back]="true" backTo="/admin/opd" placeholder="Search doctors — name, department, specialisation…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" (click)="save()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="OPD" title="Doctors" subtitle="Consultation fee per doctor"
         parentRoute="/admin/opd">
         <div actions>
@@ -57,6 +74,7 @@ interface DoctorRow {
         </div>
       </pf-screen-header>
 
+      <div class="pf-band-body pf-band-body--fill">
       @if (!loading() && rowData().length === 0) {
         <div class="pf-da__empty">
           <p class="pf-da__empty-t">No doctors yet</p>
@@ -66,7 +84,7 @@ interface DoctorRow {
         <ag-grid-angular
           class="pf-da-grid"
           [theme]="gridTheme()"
-          [rowData]="rowData()"
+          [rowData]="visibleRows()"
           [columnDefs]="colDefs"
           [defaultColDef]="defaultColDef"
           [getRowId]="getRowId"
@@ -75,7 +93,11 @@ interface DoctorRow {
           [stopEditingWhenCellsLoseFocus]="true"
           (cellValueChanged)="onCellValueChanged($event)">
         </ag-grid-angular>
+        @if (q().trim() && visibleRows().length === 0) {
+          <p class="pf-band-empty">No doctors match "{{ q() }}".</p>
+        }
       }
+      </div>
     </section>
   `,
   styles: [`
@@ -83,6 +105,8 @@ interface DoctorRow {
       color: #fff; background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-da__save:disabled { opacity: .5; cursor: default; }
     .pf-da-grid { display: block; width: 100%; height: calc(100dvh - 240px); min-height: 420px; margin-top: 8px; }
+    /* New design: the grid fills the band body (no page scroll). */
+    :host-context(.design-new) .pf-da-grid { flex: 1 1 auto; height: auto; min-height: 320px; margin-top: 0; }
     .pf-da__empty { margin-top: 16px; padding: 32px; text-align: center; border-radius: 14px;
       border: 1px dashed var(--glass-border, rgba(255,255,255,0.14)); }
     .pf-da__empty-t { font-weight: 700; color: var(--text-primary, #e2e8f0); }
@@ -92,9 +116,14 @@ interface DoctorRow {
 export class DoctorsAdminComponent {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
-  private readonly theme = inject(ThemeService);
+  protected readonly theme = inject(ThemeService);
 
   readonly rowData = signal<DoctorRow[]>([]);
+  /** Band pill search; the grid shows the matching rows (same objects, so
+   *  fee edits on a filtered view still reach save()). */
+  readonly q = signal('');
+  readonly visibleRows = computed(() =>
+    bandFilter(this.rowData(), this.q(), d => [d.name, d.department, d.regNo, ...(d.specializations ?? [])]));
   readonly loading = signal(true);
   readonly saving = signal(false);
   private readonly _dirty = signal<Set<string>>(new Set());

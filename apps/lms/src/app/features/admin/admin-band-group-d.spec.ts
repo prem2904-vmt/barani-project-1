@@ -4,6 +4,7 @@ import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder.co
 import { ProcessBuilderComponent } from './process-builder/process-builder.component';
 import { KpiConfigComponent } from './kpis/kpi-config.component';
 import { AuditLogComponent } from './audit-log/audit-log.component';
+import { DoctorsAdminComponent } from '../opd/admin/doctors-admin.component';
 import { TestBed } from '@angular/core/testing';
 import { DialogService } from '../../core/services/dialog.service';
 
@@ -217,5 +218,35 @@ describe('Admin band — Audit trail', () => {
     p.cmp.clearAll();
     expect(lastUrl(p)).toBe('/api/audit/logs?page=1&pageSize=50');
     expect(p.cmp.range()).toBe('');
+  });
+});
+
+describe('Admin band — OPD doctors', () => {
+  const docs = [
+    { id: 'd1', name: 'Dr Meena Rao', department: 'Cardiology', specializations: ['Echo'], fee: 500 },
+    { id: 'd2', name: 'Dr Arun Kumar', department: 'Paediatrics', specializations: [], fee: 300 },
+  ];
+  const make = () => renderBandPage(DoctorsAdminComponent, { getFor: (u) => (u === '/api/doctors' ? docs : []) });
+
+  it('band + fill body; header classic-only; Save is the band action (disabled until an edit)', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.el.querySelector('.pf-band-body.pf-band-body--fill')).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    const save = p.actions();
+    expect(save.map((b) => b.textContent?.trim())).toEqual(['Save']);
+    expect((save[0] as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('pill search narrows the grid rows (name / department / specialisation)', () => {
+    const p = make();
+    expect(p.cmp.visibleRows().length).toBe(2);
+    p.type('cardio');
+    expect(p.cmp.visibleRows().map((d: any) => d.id)).toEqual(['d1']);
+    p.type('echo');
+    expect(p.cmp.visibleRows().map((d: any) => d.id)).toEqual(['d1']);
+    p.type('nobody');
+    expect(p.cmp.visibleRows()).toEqual([]);
+    expect(p.el.querySelector('.pf-band-empty')).not.toBeNull();
   });
 });
