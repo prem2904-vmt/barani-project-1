@@ -1,4 +1,9 @@
+import { signal } from '@angular/core';
+import { vi } from 'vitest';
 import { renderBandPage } from './admin-band.spec-helpers';
+import { LabelPrinterComponent } from './label-printer/label-printer.component';
+import { PrinterService } from '../../core/printer/printer.service';
+import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { FinanceHubComponent } from '../finance/finance-hub.component';
 import { DailyStatementComponent } from '../finance/daily-statement.component';
 import { TatBoardComponent } from '../dashboard/tat-board/tat-board.component';
@@ -164,5 +169,47 @@ describe('Admin band — TAT board (/dashboard)', () => {
     expect(tiles(p)).toBe(1);
     expect(p.body()!.textContent).toContain('Ravi Kumar');
     p.f.destroy();
+  });
+});
+
+describe('Admin band — Printing (/printing)', () => {
+  const make = () => {
+    const printer = {
+      testPrint: vi.fn(async () => ({ ok: true })),
+      bleDeviceName: signal<string | null>(null), bleConnected: signal(false),
+      deviceName: signal<string | null>(null), connected: signal(false),
+      electronStatus: vi.fn(async () => ({ connected: false })), listSystemPrinters: vi.fn(async () => []),
+    };
+    const p = renderBandPage(LabelPrinterComponent, {
+      providers: [
+        { provide: PrinterService, useValue: printer },
+        { provide: BranchLabConfigService, useValue: { ensureLoaded: vi.fn(), labelCodeMode: () => 'qr', config: () => null } },
+      ],
+    });
+    return { ...p, printer };
+  };
+
+  it('tabs-only pill (no search), header classic-only, Test print on the band', async () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.bandInput()).toBeNull();
+    expect(p.el.querySelector('.pf-hb__search--tabs')).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    const btn = p.actions().find((b) => b.textContent!.includes('Test print'))!;
+    btn.click();
+    await Promise.resolve();
+    expect(p.printer.testPrint).toHaveBeenCalled();
+  });
+
+  it('pill tabs switch the visible section (web: no Documents tab)', () => {
+    const p = make();
+    const labels = Array.from(p.tools()!.querySelectorAll('pf-segmented button')).map((b) => b.getAttribute('aria-label'));
+    expect(labels).toEqual(['Printer', 'Label', 'Alignment', 'Quality']);
+    expect(p.body()!.querySelector('.pf-nudge')).toBeNull();
+    segBtn(p.tools(), 'Alignment')!.click();
+    p.f.detectChanges();
+    expect(p.body()!.querySelector('.pf-nudge')).not.toBeNull();
+    expect(p.body()!.querySelector('.pf-nudge svg')).not.toBeNull();
+    expect(p.body()!.querySelector('.pf-prev')).toBeNull();
   });
 });

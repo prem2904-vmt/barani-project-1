@@ -7,6 +7,12 @@ import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
+import { ThemeService } from '../../../core/services/theme.service';
+
+type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
 
 /**
  * Printing — the per-station print setup, for anyone with print access (not just
@@ -21,13 +27,35 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
   selector: 'pf-label-printer',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, ScreenHeaderComponent],
+  imports: [CommonModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   template: `
-    <div class="mx-auto w-full max-w-2xl px-4 py-4">
-      <pf-screen-header title="Printing"
+    <section class="pf-band-page mx-auto w-full max-w-2xl px-4 py-4">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): no search here, so the sections become pill tabs;
+             Test print is the band's primary action. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="test()" [disabled]="busy()"
+                    aria-label="Test print" title="Test print">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/>
+              </svg>
+              Test print
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only" title="Printing"
         subtitle="Set up this station's printers and label. USB is used automatically when connected, otherwise Bluetooth.">
       </pf-screen-header>
 
+      <div class="pf-band-body">
+      <div class="pf-lp-col">
       @if (!supported()) {
         <div class="pf-note">
           Direct printing runs in the installed <b>Prefrontal</b> desktop or tablet app.
@@ -36,7 +64,8 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
       }
 
       <!-- ── LABEL PRINTER ─────────────────────────────────────── -->
-      <p class="pf-h">Label printer</p>
+      @if (showSec('printer')) {
+      <p class="pf-h pf-lp-sechead">Label printer</p>
 
       @if (isElectron) {
         <div class="pf-card">
@@ -106,8 +135,11 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
         </div>
       }
 
+      }
+
       <!-- ── LABEL SIZE + CODE ─────────────────────────────────── -->
-      <p class="pf-h mt-5">Label</p>
+      @if (showSec('label')) {
+      <p class="pf-h mt-5 pf-lp-sechead">Label</p>
       <div class="pf-card pf-card--col">
         <div class="flex flex-wrap items-end gap-5">
           <label class="block">
@@ -140,11 +172,13 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
           </p>
         </div>
 
-        <button type="button" class="pf-btn pf-btn--primary self-start" (click)="test()" [disabled]="busy()">Test print</button>
+        <button type="button" class="pf-btn pf-btn--primary self-start pf-classic-only" (click)="test()" [disabled]="busy()">Test print</button>
       </div>
+      }
 
       <!-- ── ALIGNMENT (nudge print position) ──────────────────── -->
-      <p class="pf-h mt-5">Alignment</p>
+      @if (showSec('align')) {
+      <p class="pf-h mt-5 pf-lp-sechead">Alignment</p>
       <div class="pf-card">
         <div class="min-w-0">
           <p class="pf-eyebrow">Nudge the print position on the label</p>
@@ -155,18 +189,21 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
           </div>
         </div>
         <div class="pf-nudge">
-          <button type="button" (click)="printConfig.nudge(0, -0.5)" aria-label="Up">↑</button>
+          <button type="button" (click)="printConfig.nudge(0, -0.5)" aria-label="Up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
           <div class="pf-nudge-mid">
-            <button type="button" (click)="printConfig.nudge(-0.5, 0)" aria-label="Left">←</button>
-            <button type="button" (click)="resetAlign()" aria-label="Center">•</button>
-            <button type="button" (click)="printConfig.nudge(0.5, 0)" aria-label="Right">→</button>
+            <button type="button" (click)="printConfig.nudge(-0.5, 0)" aria-label="Left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+            <button type="button" (click)="resetAlign()" aria-label="Center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="6"/></svg></button>
+            <button type="button" (click)="printConfig.nudge(0.5, 0)" aria-label="Right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
           </div>
-          <button type="button" (click)="printConfig.nudge(0, 0.5)" aria-label="Down">↓</button>
+          <button type="button" (click)="printConfig.nudge(0, 0.5)" aria-label="Down"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </div>
       </div>
 
+      }
+
       <!-- ── PRINT QUALITY (driver) ────────────────────────────── -->
-      <p class="pf-h mt-5">Print quality</p>
+      @if (showSec('quality')) {
+      <p class="pf-h mt-5 pf-lp-sechead">Print quality</p>
       <div class="pf-card pf-card--col">
         <div class="flex flex-wrap gap-8">
           <label class="block grow">
@@ -189,24 +226,24 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
           for narrow tube labels — but not so small the scanner can't read it.</p>
       </div>
 
+      }
+
       <!-- ── DOCUMENT PRINTER (invoices) ───────────────────────── -->
-      @if (isElectron) {
-        <p class="pf-h mt-5">Invoice / document printer</p>
+      @if (isElectron && showSec('docs')) {
+        <p class="pf-h mt-5 pf-lp-sechead">Invoice / document printer</p>
         <div class="pf-card">
           <div class="min-w-0 grow">
             <p class="pf-eyebrow">A4 printer for invoices &amp; reports</p>
-            <select class="pf-num w-full" [value]="cfg().documentPrinter"
-                    (change)="printConfig.setDocumentPrinter($any($event.target).value)">
-              <option value="">System dialog (ask each time)</option>
-              @for (p of systemPrinters(); track p.name) {
-                <option [value]="p.name">{{ p.displayName || p.name }}{{ p.isDefault ? ' (default)' : '' }}</option>
-              }
-            </select>
+            <pf-select class="block w-full" [options]="docPrinterOptions()" [value]="cfg().documentPrinter ?? ''"
+                       [searchable]="systemPrinters().length > 8"
+                       (valueChange)="printConfig.setDocumentPrinter($any($event))"></pf-select>
           </div>
           <button type="button" class="pf-btn" (click)="loadSystemPrinters()">Refresh</button>
         </div>
       }
-    </div>
+      </div>
+      </div>
+    </section>
   `,
   styles: [`
     .pf-h { font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color: var(--text-muted); margin:0 0 8px; }
@@ -245,9 +282,15 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
     /* The mm-scaled preview can reach 408px; cap it to the viewport so a
        120mm label doesn't push the whole page sideways on a phone. */
     .pf-prev, [class*='preview'] { max-width: 100%; }
+    /* New design: the pill tab names the section, so the section heading
+       goes; the cards keep a readable column inside the full-width body. */
+    :host-context(.design-new) .pf-lp-col { max-width: 42rem; margin-inline: auto; width: 100%; }
+    :host-context(.design-new) .pf-lp-sechead { display: none; }
+    .pf-nudge button { display: inline-flex; align-items: center; justify-content: center; }
 `]
 })
 export class LabelPrinterComponent implements OnInit, OnDestroy {
+  protected readonly theme = inject(ThemeService);
   readonly printer = inject(PrinterService);
   readonly printConfig = inject(PrintConfigService);
   private readonly branchCfg = inject(BranchLabConfigService);
@@ -257,6 +300,25 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
   readonly isElectron = this.platform.isElectron();
   readonly isCapacitor = this.platform.isCapacitor();
   supported(): boolean { return this.isElectron || this.isCapacitor; }
+
+  /** Band pill tabs — one section of the station setup at a time (new design). */
+  readonly tabOptions: SegmentedOption<PrintTab>[] = [
+    { value: 'printer', label: 'Printer' },
+    { value: 'label', label: 'Label' },
+    { value: 'align', label: 'Alignment' },
+    { value: 'quality', label: 'Quality' },
+    ...(this.isElectron ? [{ value: 'docs' as PrintTab, label: 'Documents' }] : []),
+  ];
+  readonly tab = signal<PrintTab>('printer');
+  /** Classic shows every section; the new design shows the pill's tab. */
+  showSec(k: PrintTab): boolean { return !this.theme.isNewDesign() || this.tab() === k; }
+
+  readonly docPrinterOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: 'System dialog (ask each time)' },
+    ...this.systemPrinters().map((p) => ({
+      value: p.name, label: `${p.displayName || p.name}${p.isDefault ? ' (default)' : ''}`,
+    })),
+  ]);
 
   readonly cfg = this.printConfig.config;
   codeLabel(): string {
