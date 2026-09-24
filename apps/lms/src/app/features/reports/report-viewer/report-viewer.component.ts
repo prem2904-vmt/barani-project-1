@@ -1419,16 +1419,12 @@ export class ReportViewerComponent implements OnInit {
 
     const p = this.data()?.patient;
     const patient = { sex: p?.sex ?? null, age: p?.age ?? null };
-    const next: Record<string, ResolvedReportLayout> = {};
-    await Promise.all(tests.map(async t => {
-      const values = (t.result?.values ?? {}) as Record<string, unknown>;
-      try {
-        const pv = await this.layoutSvc.preview(t.testId, values, [], patient);
-        next[t.testId] = pv;
-      } catch {
-        /* test without a configured layout — fallback table will render */
-      }
-    }));
+    // The ONE resolver: SCALAR values (the snapshot's { value, flag, … }
+    // wrappers are unwrapped so "show when result > X" conditions match),
+    // snapshot images, and the ordered PROFILES' layouts.
+    const next = await resolveReportLayouts<ResolvedReportLayout>(
+      (id, values, images, p) => this.layoutSvc.preview(id, values, images as never, p),
+      tests as unknown as LayoutSnapshotTest[], patient);
     this._resolved.set(next);
   }
 

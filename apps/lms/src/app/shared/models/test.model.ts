@@ -63,6 +63,34 @@ export interface Test {
   calculation?: string | null;
   department?: { id: string; name: string; code: string };
   createdAt: string;
+  /** Lineage anchor shared by a master test and every lab copy of it. */
+  catalogKey?: string | null;
+  /** Where this row comes from (copy-on-write, see shared/utils/test-origin):
+   *  'master' | 'customised' | 'branch' | 'local'. Absent on older payloads. */
+  origin?: 'master' | 'customised' | 'branch' | 'local' | null;
+  /** Unit DERIVED from the parameters (read-only; the printed unit is the
+   *  parameter's). Replaces the flat `unit` column for display. */
+  derivedUnit?: string | null;
+  /** Flat reference range DERIVED from the parameter bands (read-only). */
+  derivedReferenceRange?: string | null;
+  /** A Test Master change waiting for this lab's copy (proposal id etc.). */
+  pendingProposal?: { id: string; kind?: string; createdAt?: string } | null;
+}
+
+/** A pending Test Master change offered to this lab's copy of a test
+ *  (`GET /api/catalog-proposals`). Under copy-on-write there is one per
+ *  override row: `targetTestId` = the lab's copy, `branchId` = the branch
+ *  whose copy it is (null = the tenant-wide copy). */
+export interface CatalogProposal {
+  id: string;
+  tenantId?: string;
+  catalogKey: string;
+  kind: 'new' | 'update' | (string & {});
+  status?: string;
+  createdAt: string;
+  targetTestId?: string | null;
+  branchId?: string | null;
+  proposedPayloadJson?: string | null;
 }
 
 // Canonical reference-range shape (segment label + min/max + structured

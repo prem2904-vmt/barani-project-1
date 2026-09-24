@@ -36,6 +36,13 @@ import { PricingComponent } from '../../pricing/pricing.component';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
 import { notOfferedElement, priceFlagElement } from '../../../../shared/primitives/price-flag.component';
 import { isOffered, isPriceDefault } from '../../../../shared/utils/test-pricing';
+import { originBadgeElement } from '../../../../shared/primitives/origin-badge.component';
+import {
+  RESERVED_CODE_ERROR, RESERVED_CODE_MESSAGE, canRevertToMaster, isReservedForTenant, originLabel, revertToMasterPath,
+} from '../../../../shared/utils/test-origin';
+import { pendingProposalIds } from '../../../../shared/utils/catalog-proposals';
+import { CatalogProposal } from '../../../../shared/models/test.model';
+import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.component';
 // (ViewChild refs let the header Create button drive the active panel)
 
 // AG Grid v33+ requires explicit module registration (once per app).
@@ -100,6 +107,7 @@ export type TestRow = Test & {
     OptionGroupsPanelComponent,
     MicroMastersPanelComponent,
     PricingComponent,
+    CatalogProposalsPanelComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './tests.component.html',
@@ -135,6 +143,53 @@ export class TestsComponent implements OnInit {
   private readonly _selectedDept = signal<string | null>(null);
   readonly saving = signal(false);
   readonly restoring = signal(false);
+
+  // ── Copy-on-write (phase 5): Test Master updates for tests this lab changed ──
+  private readonly _proposals = signal<CatalogProposal[]>([]);
+  readonly proposals = this._proposals.asReadonly();
+  readonly allTests = this._tests.asReadonly();
+  /** Distinct pending master updates — from the proposals list and the rows'
+   *  own `pendingProposal` markers. */
+  readonly pendingProposalCount = computed(() => pendingProposalIds(this._proposals(), this._tests()).size);
+
+  private loadProposals() {
+    this.api.get<CatalogProposal[]>('/api/catalog-proposals').subscribe({
+      next: l => this._proposals.set(Array.isArray(l) ? l : []),
+      // Older servers / no permission: the strip simply stays hidden.
+      error: () => this._proposals.set([]),
+    });
+  }
+
+  /** A proposal was accepted/dismissed: the catalogue and queue both moved. */
+  onProposalsChanged() {
+    this.loadTests();
+    this.loadProposals();
+  }
+
+  /** Drop this lab's (or branch's) copy of a master test: the row reads the
+   *  Admin Test Master again. Prices are untouched (the pricing table). */
+  async revertToMaster(row: TestRow) {
+    if (!row?.id || !canRevertToMaster(row)) return;
+    const branch = row.origin === 'branch';
+    const ok = await this.dialog.confirm({
+      title: `Revert ${row.name || 'this test'} to the master?`,
+      message: (branch ? 'This branch\'s' : 'Your lab\'s')
+        + ' changes to this test are discarded and it reads the Admin Test Master again. Prices stay as they are.',
+      confirmLabel: 'Revert to master',
+      cancelLabel: 'Keep my changes',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.api.post(revertToMasterPath(row.id), {}).subscribe({
+      next: () => {
+        this.toasts.success(`${row.name || 'Test'} now follows the Test Master`);
+        this._dirty.update(m => { const n = new Map(m); n.delete(row.id); return n; });
+        this.loadTests();
+        this.loadProposals();
+      },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
+  }
 
   /**
    * Replace the tenant's whole catalogue with a fresh clone of the platform
@@ -223,6 +278,7 @@ export class TestsComponent implements OnInit {
   readonly gridContext = {
     toggle: (key: string) => this.toggleRow(key),
     toggleActive: (row: TestRow) => this.toggleTestActive(row),
+    revert: (row: TestRow) => this.revertToMaster(row),
   };
 
   /** Toggle a test row's active/inactive state immediately via API patch. */
@@ -423,6 +479,7 @@ export class TestsComponent implements OnInit {
           },
         },
         { headerName: 'Name', field: 'name', editable: true, minWidth: 180, flex: 2, pinned: 'left', cellRenderer: this.plainNameRenderer },
+        this.originColDef(),
         { headerName: 'Short', field: 'shortName', editable: true, minWidth: 120 },
         { headerName: 'Section', field: 'section', editable: true, minWidth: 130 },
         {
@@ -433,18 +490,8 @@ export class TestsComponent implements OnInit {
             choices: TUBE_COLORS.map(c => ({ key: c.key, label: c.label, hex: c.hex })),
           },
         },
-        {
-          headerName: 'Reference range', colId: 'referenceRange',
-          field: 'adultReferenceRange', minWidth: 165,
-          editable: p => !this.hasMultipleBands(p.data),
-          valueGetter: p => this.hasMultipleBands(p.data)
-            ? this.referenceRange(p.data)
-            : (p.data?.adultReferenceRange ?? '').trim() || this.referenceRange(p.data),
-          tooltipValueGetter: p => this.hasMultipleBands(p.data)
-            ? 'Sex/age-specific ranges — edit them in the test editor'
-            : undefined,
-        },
-        { headerName: 'Unit', field: 'unit', editable: true, minWidth: 100 },
+        this.derivedRangeColDef(),
+        this.derivedUnitColDef(),
         {
           headerName: 'TAT (h)', field: 'tatHours', editable: true, minWidth: 100, maxWidth: 120,
           cellEditor: 'agNumberCellEditor',
@@ -463,6 +510,7 @@ export class TestsComponent implements OnInit {
         valueGetter: p => p.data?.name,
       },
       { headerName: 'Code', field: 'testCode', minWidth: 120, maxWidth: 160, sortable: false, filter: false, sort: null, pinned: 'left', cellRenderer: this.codeCellRenderer },
+      { ...this.originColDef(), sortable: false, filter: false },
       {
         headerName: 'Kind', colId: 'kind', minWidth: 110, maxWidth: 140, sortable: false, filter: false,
         valueGetter: p => this.kindLabel(p.data),
@@ -476,11 +524,8 @@ export class TestsComponent implements OnInit {
           choices: TUBE_COLORS.map(c => ({ key: c.key, label: c.label, hex: c.hex })),
         },
       },
-      {
-        headerName: 'Reference range', colId: 'referenceRange', minWidth: 150, sortable: false, filter: false,
-        valueGetter: p => this.referenceRange(p.data),
-      },
-      { headerName: 'Unit', field: 'unit', minWidth: 100, sortable: false, filter: false },
+      { ...this.derivedRangeColDef(), minWidth: 150, sortable: false, filter: false },
+      { ...this.derivedUnitColDef(), sortable: false, filter: false },
       { ...this.priceColDef(true), sortable: false, filter: false },
       this.statusColDef(),
       this.actionsColDef(),
@@ -497,6 +542,53 @@ export class TestsComponent implements OnInit {
     codeSpan.textContent = params.value ?? params.data.testCode ?? '';
     wrap.appendChild(codeSpan);
 
+    return wrap;
+  };
+
+  /** Reference range = DERIVED from the test's values (the bands that drive
+   *  flagging) — read-only here; ranges are edited in the test editor. The
+   *  server's `derivedReferenceRange` wins; older payloads derive client-side
+   *  from the first value's bands. The flat column is never shown. */
+  private derivedRangeColDef(): ColDef<TestRow> {
+    return {
+      headerName: 'Reference range', colId: 'referenceRange', minWidth: 165,
+      editable: false,
+      valueGetter: p => this.derivedRange(p.data),
+      tooltipValueGetter: () => 'Comes from the test\'s values — edit ranges in the test editor',
+    };
+  }
+
+  /** Unit = DERIVED from the values (the printed unit), read-only. */
+  private derivedUnitColDef(): ColDef<TestRow> {
+    return {
+      headerName: 'Unit', colId: 'unit', minWidth: 100, editable: false,
+      valueGetter: p => this.derivedUnit(p.data),
+      tooltipValueGetter: () => 'Comes from the test\'s values — edit it in the test editor',
+    };
+  }
+
+  /** Master / Customised / Branch / Own test chip (+ a dot when a Test
+   *  Master update is waiting for this row). */
+  private originColDef(): ColDef<TestRow> {
+    return {
+      headerName: 'Origin', colId: 'origin', minWidth: 120, maxWidth: 150, editable: false,
+      valueGetter: p => originLabel(p.data),
+      cellRenderer: this.originRenderer,
+    };
+  }
+
+  private originRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:6px;height:100%;min-width:0;';
+    if (!params.data) return wrap;
+    wrap.appendChild(originBadgeElement(params.data.origin));
+    if (params.data.pendingProposal?.id) {
+      const dot = document.createElement('span');
+      dot.title = 'A Test Master update is waiting for this test';
+      dot.setAttribute('aria-label', dot.title);
+      dot.style.cssText = 'width:7px;height:7px;border-radius:50%;background:#8b5cf6;flex:0 0 auto;';
+      wrap.appendChild(dot);
+    }
     return wrap;
   };
 
@@ -637,6 +729,21 @@ export class TestsComponent implements OnInit {
       if (data?.id) this.editTest(data.id);
     });
     wrap.appendChild(btn);
+    if (data && canRevertToMaster(data)) {
+      const rv = document.createElement('button');
+      rv.type = 'button';
+      rv.title = 'Revert to master';
+      rv.setAttribute('aria-label', 'Revert ' + (data.name || 'test') + ' to master');
+      rv.style.cssText = btn.style.cssText + 'margin-left:6px;';
+      rv.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        + '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>';
+      rv.addEventListener('click', (e) => {
+        e.stopPropagation();
+        (params.context as { revert?: (row: TestRow) => void })?.revert?.(data);
+      });
+      wrap.appendChild(rv);
+    }
     return wrap;
   };
 
@@ -644,7 +751,7 @@ export class TestsComponent implements OnInit {
     return {
       headerName: '', colId: 'actions', cellRenderer: this.actionsRenderer,
       editable: false, sortable: false, filter: false, resizable: false,
-      minWidth: 60, maxWidth: 64, pinned: 'right',
+      minWidth: 60, maxWidth: 100, pinned: 'right',
     };
   }
 
@@ -695,6 +802,7 @@ export class TestsComponent implements OnInit {
     });
     this.loadTests();
     this.loadDepartments();
+    this.loadProposals();
     this.pricing.ensureLoaded();
   }
 
@@ -771,14 +879,26 @@ export class TestsComponent implements OnInit {
     } catch { return ''; }
   }
 
-  private hasMultipleBands(t?: Test): boolean {
-    if (!t?.parameters) return false;
+  /** Server-derived range first, else the first value's bands. */
+  private derivedRange(t?: Test): string {
+    const d = (t?.derivedReferenceRange ?? '').trim();
+    if (d) {
+      const u = this.derivedUnit(t);
+      return u && !d.endsWith(u) ? `${d} ${u}` : d;
+    }
+    return this.referenceRange(t);
+  }
+
+  /** Server-derived unit first, else the first value's unit. */
+  private derivedUnit(t?: Test): string {
+    const d = (t?.derivedUnit ?? '').trim();
+    if (d) return d;
+    if (!t?.parameters) return '';
     try {
       const blob = JSON.parse(t.parameters);
-      const ps = Array.isArray(blob?.parameters) ? blob.parameters : [];
-      return ps.length === 1 && Array.isArray(ps[0]?.referenceRanges)
-        && ps[0].referenceRanges.length > 1;
-    } catch { return false; }
+      const p = Array.isArray(blob?.parameters) ? blob.parameters[0] : undefined;
+      return (p?.unit ?? '').toString().trim();
+    } catch { return ''; }
   }
 
   onCellValueChanged(e: CellValueChangedEvent<TestRow>) {
@@ -824,6 +944,12 @@ export class TestsComponent implements OnInit {
         return;
       }
       seen.set(lc, code);
+      // Master-shaped codes (BIO019) belong to the Admin Test Master; a copy
+      // may keep its own master code, never take a new one.
+      if (pending && 'testCode' in pending && isReservedForTenant(code, t.testCode)) {
+        this.toasts.error(`${code}: ${RESERVED_CODE_MESSAGE}`);
+        return;
+      }
     }
 
     const entries = [...dirty.entries()];
@@ -845,7 +971,8 @@ export class TestsComponent implements OnInit {
       },
       error: e => {
         this.saving.set(false);
-        this.toasts.error(ApiError.from(e).message);
+        const err = ApiError.from(e);
+        this.toasts.error(err.code === RESERVED_CODE_ERROR ? RESERVED_CODE_MESSAGE : err.message);
       },
     });
   }

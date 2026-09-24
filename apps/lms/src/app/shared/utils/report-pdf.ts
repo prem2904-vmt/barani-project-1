@@ -235,8 +235,13 @@ interface ReportSnapshot {
      *  "Tested at: {referralLab}" under the panel header (ISO 15189 7.4.1.6). */
     referralLab?: string | null;
     /** Analytical method (e.g. "Photometry"). Rendered as a dim sub-line
-     *  under the panel header when the template's `showMethod` is on. */
+     *  under the panel header when the template's `showMethod` is on. This is
+     *  the TEST-level default; see `valueMethods`. */
     method?: string | null;
+    /** EFFECTIVE method per value (hybrid, TM rule 6):
+     *  `{ paramName: value.methodology ?? test.Methodology }`. Where present
+     *  it wins over `method` for that value's row. */
+    valueMethods?: Record<string, string> | null;
     /** Test Master identity fields — selectable as report columns. */
     code?: string | null;
     shortName?: string | null;
@@ -717,7 +722,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     if (!merged) {
       // Method varies per member — a single method claim on the profile band
       // would be wrong, so the merged panel carries none.
-      merged = { ...g, testName: pkgName || g.testName, method: undefined, rows: [] };
+      merged = { ...g, testName: pkgName || g.testName, method: undefined, methodLine: undefined, rows: [] };
       // Column cascade for the BLOCK: the PROFILE's own override wins for
       // the whole block; a member's override never leaks into it — the
       // block falls back to the member's department columns instead.
@@ -1907,6 +1912,38 @@ interface PanelRowData {
    *  columnar renderer can fill admin text columns instead of leaving them
    *  permanently blank. */
   texts?: Record<string, string>;
+  /** This value's EFFECTIVE method (snapshot `valueMethods`, else the test's). */
+  method?: string;
+}
+
+/** The effective method of one value: the snapshot's per-value
+ *  `valueMethods` (keys match parameter names; case-insensitive), else the
+ *  test-level `method`. */
+function methodForValue(
+  t: { method?: string | null; valueMethods?: Record<string, string> | null },
+  paramName: string | null | undefined,
+): string | undefined {
+  const vm = t.valueMethods;
+  if (vm && paramName) {
+    const hit = vm[paramName] ?? Object.entries(vm).find(([k]) => k.toLowerCase() === paramName.toLowerCase())?.[1];
+    if ((hit ?? '').trim()) return hit!.trim();
+  }
+  return (t.method ?? '').trim() || undefined;
+}
+
+/** Sub-line text for a group's methods: one method → "Hexokinase"; values
+ *  measured differently → "Hexokinase (Glucose) · ISE (Sodium, Potassium)". */
+function methodLineOf(rows: PanelRowData[]): string | undefined {
+  const byMethod = new Map<string, string[]>();
+  for (const r of rows) {
+    if (r.kind !== 'param' || !r.method) continue;
+    const arr = byMethod.get(r.method) ?? [];
+    if (r.name) arr.push(r.name);
+    byMethod.set(r.method, arr);
+  }
+  if (byMethod.size === 0) return undefined;
+  if (byMethod.size === 1) return [...byMethod.keys()][0];
+  return [...byMethod].map(([m, names]) => names.length ? `${m} (${names.join(', ')})` : m).join(' · ');
 }
 
 /** Classify an engine row colour: the per-test layout conditions emit
@@ -1938,6 +1975,10 @@ interface PanelGroup {
   deptColumns?: ReportColumn[];
   specimen?: string;
   method?: string;
+  /** Values measured by DIFFERENT methods (per-value `valueMethods`): the
+   *  sub-line names each method with its values; the Method column prints
+   *  per row. Undefined when one method covers the whole group. */
+  methodLine?: string;
   code?: string;
   shortName?: string;
   section?: string;
@@ -2035,6 +2076,7 @@ function buildPanelGroup(
           color: r.color ?? null,
           bold: !!r.isBold,
           texts: Object.keys(texts).length ? texts : undefined,
+          method: methodForValue(t, r.parameterName),
         });
       }
     }
@@ -2043,7 +2085,7 @@ function buildPanelGroup(
     // erase entered results from the report: fall through to the legacy
     // values map instead of returning an empty panel that the profile
     // merge silently drops.
-    if (group.rows.some(r => r.kind === 'param')) return group;
+    if (group.rows.some(r => r.kind === 'param')) return applyValueMethods(group);
   }
 
   // Legacy values map.
@@ -2062,7 +2104,25 @@ function buildPanelGroup(
       flag: letter,
       isLow: flag === 'L',
       abnormal: !!letter,
+      method: methodForValue(t, paramName),
     });
+  }
+  return applyValueMethods(group);
+}
+
+/** Per-value methods decide the group's method treatment: one method across
+ *  every printed value → that method (sub-line + first-row column, the
+ *  classic look); different methods → no single claim (`method` cleared), a
+ *  `methodLine` naming each method with its values, and the Method column
+ *  printing per row. */
+function applyValueMethods(group: PanelGroup): PanelGroup {
+  const distinct = new Set(group.rows.filter(r => r.kind === 'param' && r.method).map(r => r.method));
+  if (distinct.size === 1) {
+    group.method = [...distinct][0];
+    group.methodLine = undefined;
+  } else if (distinct.size > 1) {
+    group.method = undefined;
+    group.methodLine = methodLineOf(group.rows);
   }
   return group;
 }
@@ -2361,7 +2421,7 @@ function renderColumnarTable(
       case 'unit':  return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.unit ?? '').trim() && looksNumeric(r.result)));
       case 'range': return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.range ?? '').trim()));
       case 'flag':  return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.flag ?? '').trim()));
-      case 'method':     return groups.some(g => !!(g.method ?? '').trim());
+      case 'method':     return groups.some(g => !!(g.method ?? '').trim() || g.rows.some(r => !!r.method));
       case 'specimen':   return groups.some(g => !!(g.specimen ?? '').trim());
       case 'code':       return groups.some(g => !!(g.code ?? '').trim());
       case 'short_name': return groups.some(g => !!(g.shortName ?? '').trim());
@@ -2419,7 +2479,8 @@ function renderColumnarTable(
 
       // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
       const sub: string[] = [];
-      if (g.method) sub.push(`Method: ${g.method}`);
+      const methodText = g.methodLine ?? g.method;
+      if (methodText) sub.push(`Method: ${methodText}`);
       if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
       if (sub.length > 0) {
         body.push([{
@@ -2468,7 +2529,11 @@ function renderColumnarTable(
           case 'range':  return (r.range ?? '').trim();
           case 'flag':   return (r.flag ?? '').trim();
           // Test-level sources print once per test block (first row).
-          case 'method':     return isFirst ? (g.method ?? '').trim() : '';
+          // One method for the block → printed once (first row); values
+          // measured by different methods → each row prints its own.
+          case 'method':     return (g.method ?? '').trim()
+            ? (isFirst ? (g.method ?? '').trim() : '')
+            : (r.method ?? '').trim();
           case 'specimen':   return isFirst ? (g.specimen ?? '').trim() : '';
           case 'code':       return isFirst ? (g.code ?? '').trim() : '';
           case 'short_name': return isFirst ? (g.shortName ?? '').trim() : '';

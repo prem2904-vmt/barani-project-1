@@ -638,48 +638,24 @@ export class ReportQueueComponent implements OnInit {
       /* malformed snapshot — render PDF without layouts */
     }
 
-    const [template] = await Promise.all([
+    // ONE resolver for every report entry point: posts SCALAR values (so
+    // "show when the result is above 70" conditions match), the snapshot's
+    // images, and the PROFILE layouts whose notes print for ordered profiles.
+    const { resolveReportLayouts } = await import("../../../shared/utils/report-layouts");
+    const [template, layouts] = await Promise.all([
       this.api
         .get<
           import("../../../shared/models/report.model").ReportTemplate | null
         >("/api/config/report-template")
         .toPromise()
         .catch(() => null),
-      ...tests.map(async (t) => {
-        if (!t.testId) return;
-        try {
-          resolvedLayouts[t.testId] = await svc.preview(
-            t.testId,
-            (t.result?.values ?? {}) as Record<string, unknown>,
-            (t as { images?: string[] | null }).images ?? [],
-            patient,
-          );
-        } catch {
-          /* test without a configured layout — fallback table */
-        }
-      }),
-    ]);
-
-    // Tests ordered through a PROFILE print the PROFILE's notes, not their own,
-    // so the profile's layout must be resolved as well. Profiles aren't
-    // snapshot rows — only their members are, carrying packageTestId.
-    const pkgIds = [
-      ...new Set(
-        (tests as Array<{ packageTestId?: string | null }>)
-          .map((t) => t.packageTestId)
-          .filter((id): id is string => !!id),
+      resolveReportLayouts<import("../../../shared/models/report-layout.model").ResolvedReportLayout>(
+        (id, values, images, p) => svc.preview(id, values, images as never, p),
+        tests,
+        patient,
       ),
-    ];
-    await Promise.all(
-      pkgIds.map(async (id) => {
-        if (resolvedLayouts[id]) return;
-        try {
-          resolvedLayouts[id] = await svc.preview(id, {}, [], patient);
-        } catch {
-          /* profile without notes — nothing extra prints */
-        }
-      }),
-    );
+    ]);
+    Object.assign(resolvedLayouts, layouts);
 
     const baseInput = { report: r, resolvedLayouts, template: template ?? null };
     const [imageCache, trendograms] = await Promise.all([

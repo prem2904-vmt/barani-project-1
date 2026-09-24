@@ -604,7 +604,7 @@ select.pf-input--compact {
 .pf-te2-crumb:hover { color: var(--violet-text, #a78bfa); }
 .pf-te2-title { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary); margin: 1px 0 0; line-height: 1.2; }
 .pf-te2-title__edit { font-size: 14px; color: var(--text-tertiary); font-weight: 400; cursor: pointer; margin-left: 4px; }
-.pf-te2-chips { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+.pf-te2-chips { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; align-items: center; }
 .pf-chip {
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer;
   border: 1px solid var(--glass-border); border-radius: 999px; padding: 4px 10px;
@@ -612,7 +612,7 @@ select.pf-input--compact {
 }
 .pf-chip:hover { border-color: var(--violet-text, #a855f7); color: var(--text-primary); }
 .pf-chip__k { color: var(--text-tertiary); }
-.pf-te2-head__save { margin-top: 6px; flex-shrink: 0; }
+.pf-te2-head__save { margin-top: 6px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
 /* Workspace shell: section rail | one focused section | preview aside. */
 .pf-te2 { display: grid; grid-template-columns: 188px minmax(0, 1fr) 420px; gap: 18px; align-items: start; }

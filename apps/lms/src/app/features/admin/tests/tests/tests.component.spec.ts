@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
+import { ApiError } from '../../../../shared/models/api-response.model';
 import { vi } from 'vitest';
 import { TestsComponent } from './tests.component';
 import { ApiService } from '../../../../core/services/api.service';
@@ -18,12 +19,13 @@ import { TestPricingService } from '../../../../core/services/test-pricing.servi
  * Phase 2: the PRICE cell shows the pricing-table price and writes ONLY
  * through the bulk price endpoint (TestPricingService), never the test row.
  */
-function make(tests: any[] = [], depts: any[] = []) {
+function make(tests: any[] = [], depts: any[] = [], opts: { proposals?: any[]; confirm?: boolean } = {}) {
   if (!window.matchMedia) {
     (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   }
   const api = {
-    get: vi.fn((url: string) => of(url.startsWith('/api/tests') ? tests : depts)),
+    get: vi.fn((url: string) => of(url.startsWith('/api/tests') ? tests
+      : url.startsWith('/api/catalog-proposals') ? (opts.proposals ?? []) : depts)),
     patch: vi.fn(() => of({})),
     post: vi.fn(() => of({})),
   };
@@ -35,14 +37,14 @@ function make(tests: any[] = [], depts: any[] = []) {
       { provide: TestPricingService, useValue: pricing },
       { provide: ToastService, useValue: toasts },
       { provide: ThemeService, useValue: { isDark: () => false } },
-      { provide: DialogService, useValue: { confirm: async () => false } },
+      { provide: DialogService, useValue: { confirm: vi.fn(async () => opts.confirm ?? false) } },
       { provide: Router, useValue: { navigate: vi.fn() } },
       { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
     ],
   });
   const c = TestBed.runInInjectionContext(() => new TestsComponent()) as any;
   c.ngOnInit();
-  return { c, api, toasts, pricing };
+  return { c, api, toasts, pricing, dialog: TestBed.inject(DialogService) as any };
 }
 
 const params = (p: any[]) => JSON.stringify({ parameters: p });
@@ -55,11 +57,13 @@ const hb = (over: any = {}) => ({
 const col = (c: any, id: string) => c.colDefs().find((d: any) => (d.colId ?? d.field) === id);
 
 describe('Test Master grid — price / unit / range cells (CURRENT)', () => {
-  it('individual view exposes EDITABLE price (pricing-table value) and unit cells', () => {
+  it('individual view exposes an EDITABLE price (pricing-table value); unit is derived, read-only', () => {
     const { c } = make([hb()]);
     expect(col(c, 'price').editable).toBe(true);
     expect(col(c, 'price').field).toBe('price');
-    expect(col(c, 'unit').editable).toBe(true);
+    expect(col(c, 'unit').editable).toBe(false);
+    expect(col(c, 'unit').valueGetter({ data: hb({ unit: 'stale' }) })).toBe('g/dL');
+    expect(col(c, 'unit').valueGetter({ data: hb({ derivedUnit: 'mmol/L' }) })).toBe('mmol/L');
   });
 
   it('price parser clamps negatives to 0 and keeps the old value on garbage; formatter prints ₹ en-IN', () => {
@@ -71,20 +75,19 @@ describe('Test Master grid — price / unit / range cells (CURRENT)', () => {
     expect(p.valueFormatter({ value: null })).toBe('');
   });
 
-  it('reference range: a typed FLAT adultReferenceRange wins over the parameter band (single band)', () => {
+  it('reference range: the server-derived range wins; the flat column is never shown', () => {
     const { c } = make();
     const rr = col(c, 'referenceRange');
-    expect(rr.valueGetter({ data: hb({ adultReferenceRange: '11–16' }) })).toBe('11–16');
-    expect(rr.valueGetter({ data: hb() })).toContain('12–17');
+    expect(rr.valueGetter({ data: hb({ derivedReferenceRange: '12–17', derivedUnit: 'g/dL' }) })).toBe('12–17 g/dL');
+    expect(rr.valueGetter({ data: hb({ adultReferenceRange: '11–16' }) })).not.toContain('11–16');
     expect(rr.valueGetter({ data: hb() })).toContain('g/dL');
-    expect(rr.editable({ data: hb() })).toBe(true);
   });
 
-  it('reference range: multi-band tests are read-only and show every band', () => {
+  it('reference range: multi-band tests show every band (read-only like every row)', () => {
     const { c } = make();
     const multi = hb({ adultReferenceRange: 'stale flat text', parameters: params([{ name: 'hb', referenceRanges: [{ min: 13, max: 17, sex: 'M' }, { min: 12, max: 15, sex: 'F' }] }]) });
     const rr = col(c, 'referenceRange');
-    expect(rr.editable({ data: multi })).toBe(false);
+    expect(rr.editable).toBe(false);
     const v = rr.valueGetter({ data: multi });
     expect(v).toContain('13–17');
     expect(v).toContain('12–15');
@@ -110,11 +113,19 @@ describe('Test Master grid — price / unit / range cells (CURRENT)', () => {
     expect(api.patch).not.toHaveBeenCalled();
   });
 
-  it('code cells are free text today — a tenant can type the master shape (^[A-Z]{3}[0-9]+$, e.g. BIO019)', () => {
+  it('a copy of a master test may KEEP its own master code (HEM012 → hem012 is not a new reserved code)', () => {
     const { c, api } = make([hb()]);
-    c.onCellValueChanged({ colDef: { field: 'testCode' }, newValue: 'BIO019', oldValue: 'HEM012', data: { id: 't1' } });
+    c.onCellValueChanged({ colDef: { field: 'testCode' }, newValue: 'hem012', oldValue: 'HEM012', data: { id: 't1' } });
     c.saveAll();
-    expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { testCode: 'BIO019' });
+    expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { testCode: 'hem012' });
+  });
+
+  it('a server reserved_code refusal shows the friendly wording', () => {
+    const { c, api, toasts } = make([hb({ testCode: 'MW-0001' })]);
+    api.patch.mockReturnValueOnce(throwError(() => new ApiError('raw', 'reserved_code')));
+    c.onCellValueChanged({ colDef: { field: 'name' }, newValue: 'Hb', oldValue: 'Haemoglobin', data: { id: 't1' } });
+    c.saveAll();
+    expect(toasts.error).toHaveBeenCalledWith(expect.stringContaining('reserved for the Admin Test Master'));
   });
 });
 
@@ -144,7 +155,7 @@ describe('Test Master grid — departments (CURRENT)', () => {
 });
 
 describe('Test Master grid — TARGET behaviour', () => {
-  it.skip('TARGET phase 0/6: unit + reference range cells are DERIVED from params (read-only, no flat columns)', () => {
+  it('TARGET phase 0/6: unit + reference range cells are DERIVED from params (read-only, no flat columns)', () => {
     const { c } = make();
     expect(col(c, 'unit').editable).toBeFalsy();
     const rr = col(c, 'referenceRange');
@@ -164,7 +175,7 @@ describe('Test Master grid — TARGET behaviour', () => {
     expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 200 }]);
   });
 
-  it.skip('TARGET phase 1/5: tenant cannot type the reserved master code shape ^[A-Z]{3}[0-9]+$ (BIO019); tenant codes carry a hyphen (MW-0001)', () => {
+  it('TARGET phase 1/5: tenant cannot type the reserved master code shape ^[A-Z]{3}[0-9]+$ (BIO019); tenant codes carry a hyphen (MW-0001)', () => {
     const { c, api, toasts } = make([hb({ testCode: 'MW-0001' })]);
     c.onCellValueChanged({ colDef: { field: 'testCode' }, newValue: 'BIO019', oldValue: 'MW-0001', data: { id: 't1' } });
     c.saveAll();
@@ -172,14 +183,14 @@ describe('Test Master grid — TARGET behaviour', () => {
     expect(api.patch).not.toHaveBeenCalled();
   });
 
-  it.skip('TARGET phase 3: rows carry an origin badge (master | customised | branch | local)', () => {
+  it('TARGET phase 3: rows carry an origin badge (master | customised | branch | local)', () => {
     const { c } = make([hb({ origin: 'customised' })]);
     const originCol = col(c, 'origin');
     expect(originCol).toBeDefined();
     expect(originCol.valueGetter({ data: hb({ origin: 'customised' }) })).toBe('Customised');
   });
 
-  it.skip('TARGET phase 5: a pending master change shows as a proposal on the overridden row', () => {
+  it('TARGET phase 5: a pending master change shows as a proposal on the overridden row', () => {
     const { c } = make([hb({ origin: 'customised', pendingProposal: { id: 'p1' } })]);
     expect(c.pendingProposalCount()).toBe(1);
   });
@@ -232,5 +243,62 @@ describe('Test Master grid — pricing table (phase 2)', () => {
     expect(c.pricingView()).toBe(true);
     c.setType('profile');
     expect(c.pricingView()).toBe(false);
+  });
+});
+
+describe('Test Master grid — copy-on-write (phases 3 + 5)', () => {
+  it('the origin column renders the quiet chip with an SVG glyph; Own test for local rows', () => {
+    const { c } = make([hb({ origin: 'local' })]);
+    const originCol = col(c, 'origin');
+    expect(originCol.valueGetter({ data: hb({ origin: 'local' }) })).toBe('Own test');
+    expect(originCol.valueGetter({ data: hb({ origin: 'master' }) })).toBe('Master');
+    const el = originCol.cellRenderer({ data: hb({ origin: 'branch', pendingProposal: { id: 'p1' } }) });
+    expect(el.textContent).toContain('Branch');
+    expect(el.querySelector('svg')).not.toBeNull();
+    expect(el.querySelector('[title*="update is waiting"]')).not.toBeNull();
+  });
+
+  it('profiles/packages view shows the origin column and derived read-only unit/range too', () => {
+    const { c } = make([hb({ type: 'profile' })]);
+    c.setType('profile');
+    expect(col(c, 'origin')).toBeDefined();
+    expect(col(c, 'unit').editable).toBe(false);
+  });
+
+  it('"Revert to master" is offered only on customised / branch rows', () => {
+    const { c } = make();
+    const actions = col(c, 'actions');
+    const ctx = { revert: vi.fn() };
+    const btns = (origin: string) => actions.cellRenderer({ data: hb({ origin }), context: ctx }).querySelectorAll('button').length;
+    expect(btns('customised')).toBe(2);
+    expect(btns('branch')).toBe(2);
+    expect(btns('master')).toBe(1);
+    expect(btns('local')).toBe(1);
+    const el = actions.cellRenderer({ data: hb({ origin: 'customised' }), context: ctx });
+    (el.querySelectorAll('button')[1] as HTMLButtonElement).click();
+    expect(ctx.revert).toHaveBeenCalled();
+  });
+
+  it('revert asks through DialogService and POSTs revert-to-master, then reloads', async () => {
+    const { c, api, dialog } = make([hb({ origin: 'customised' })], [], { confirm: true });
+    api.get.mockClear();
+    await c.revertToMaster(hb({ origin: 'customised' }));
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ confirmLabel: 'Revert to master' }));
+    expect(api.post).toHaveBeenCalledWith('/api/tests/t1/revert-to-master', {});
+    expect(api.get).toHaveBeenCalledWith('/api/tests/');
+  });
+
+  it('revert cancelled in the dialog sends nothing', async () => {
+    const { c, api } = make([hb({ origin: 'customised' })]);
+    await c.revertToMaster(hb({ origin: 'customised' }));
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('pending proposals are loaded on init and counted with the rows\' markers (distinct)', () => {
+    const { c, api } = make([hb({ origin: 'customised', pendingProposal: { id: 'p1' } })], [],
+      { proposals: [{ id: 'p1', catalogKey: 'HEM012', kind: 'update', createdAt: '' }, { id: 'p2', catalogKey: 'BIO019', kind: 'update', branchId: 'b1', createdAt: '' }] });
+    expect(api.get).toHaveBeenCalledWith('/api/catalog-proposals');
+    expect(c.pendingProposalCount()).toBe(2);
+    expect(c.proposals().length).toBe(2);
   });
 });

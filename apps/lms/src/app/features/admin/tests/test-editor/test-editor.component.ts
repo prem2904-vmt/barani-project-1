@@ -55,6 +55,11 @@ import { NavBackService } from '../../../../core/services/nav-back.service';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
 import { PriceFlagComponent } from '../../../../shared/primitives/price-flag.component';
 import { DEFAULT_TEST_PRICE, NOT_PRICED_LABEL, effectivePrice, isPriceDefault } from '../../../../shared/utils/test-pricing';
+import { OriginBadgeComponent } from '../../../../shared/primitives/origin-badge.component';
+import {
+  RESERVED_CODE_ERROR, RESERVED_CODE_MESSAGE, TestOrigin, canRevertToMaster, isReservedForTenant, originLabel, originOf, revertToMasterPath,
+} from '../../../../shared/utils/test-origin';
+import { DialogService } from '../../../../core/services/dialog.service';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -155,7 +160,8 @@ function makeEmptyDraft(): DraftTest {
     DragDropModule,
     ReportColumnsEditorComponent,
     ReportPdfPreviewComponent,
-    PriceFlagComponent
+    PriceFlagComponent,
+    OriginBadgeComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-editor.component.html',
@@ -171,6 +177,29 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
   private readonly pricing = inject(TestPricingService);
+  private readonly dialog = inject(DialogService);
+
+  // ── Copy-on-write (Test Master single source, phases 3 + 5) ──────────
+  /** Code mode. 'tenant' (every LMS lab): master-shaped codes (BIO019) are
+   *  reserved — a new test's code is left blank for the server's automatic
+   *  `<SHORT>-0001`. 'master' (the admin console editing the Admin Test
+   *  Master): codes follow the department's master series (CLP015 → CLP016). */
+  readonly codeMode = signal<'tenant' | 'master'>('tenant');
+  setCodeMode(m: 'tenant' | 'master') { this.codeMode.set(m); }
+  /** Where the loaded test comes from (Master / Customised / Branch / Own). */
+  readonly origin = signal<TestOrigin | null>(null);
+  readonly canRevert = computed(() => this.codeMode() === 'tenant' && canRevertToMaster({ origin: this.origin() }));
+  /** The code the test carried when loaded — a copy of a master test may
+   *  keep it; only NEW master-shaped codes are refused. */
+  private _originalCode = '';
+  readonly reverting = signal(false);
+  /** Placeholder for the code input: tenant labs may leave it blank. */
+  readonly codePlaceholder = computed(() => {
+    const d = this._draft();
+    if (d.type === 'profile') return this.codeMode() === 'master' ? 'e.g. LIPID01' : 'e.g. MW-LIPID';
+    if (this.codeMode() === 'master') return 'e.g. BIO019';
+    return d.id ? 'e.g. MW-0001' : 'Leave blank to assign automatically (e.g. MW-0001)';
+  });
 
   /** The price as loaded from the pricing table (effective for the acting
    *  branch). A save writes the price ONLY when the draft differs from this,
@@ -353,8 +382,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.patch({ departmentId: id });
     // Creating a test: fill the next free code in this department's series.
     // Only over an empty code or one WE filled — never the admin's own typing.
+    // Master mode only: a lab's own tests must never draw a master-shaped
+    // code — the server assigns `<SHORT>-0001` when the code is left blank.
     const d = this._draft();
-    if (!d.id && id && (!d.testCode.trim() || d.testCode === this.lastAutoCode)) {
+    if (this.codeMode() === 'master' && !d.id && id && (!d.testCode.trim() || d.testCode === this.lastAutoCode)) {
       const code = this.nextCodeForDept(id);
       if (code) { this.patch({ testCode: code }); this.lastAutoCode = code; }
     }
@@ -371,6 +402,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       .some(t => t.id !== selfId && (t.testCode ?? '').trim().toLowerCase() === code);
     if (dup) {
       this._fieldErrors.update(m => ({ ...m, testCode: `Code ${v.trim().toUpperCase()} is already in use — pick another.` }));
+      return;
+    }
+    // Tenant labs: a NEW master-shaped code (BIO019) is reserved for the
+    // Admin Test Master (a copy keeps its own master code).
+    if (this.codeMode() === 'tenant' && isReservedForTenant(v, this._originalCode)) {
+      this._fieldErrors.update(m => ({ ...m, testCode: RESERVED_CODE_MESSAGE }));
     }
   }
 
@@ -959,7 +996,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly metaChips = computed<Array<{ k: string; v: string; sec: TestSection }>>(() => {
     const d = this._draft();
     const chips: Array<{ k: string; v: string; sec: TestSection }> = [];
-    chips.push({ k: 'Code', v: (d.testCode ?? '').trim() || '—', sec: 'identity' });
+    const origin = originLabel({ origin: this.origin() });
+    if (origin) chips.push({ k: 'Origin', v: origin, sec: 'identity' });
+    chips.push({ k: 'Code', v: (d.testCode ?? '').trim() || (!d.id && this.codeMode() === 'tenant' ? 'Auto' : '—'), sec: 'identity' });
     chips.push({ k: 'Dept', v: this.selectedDeptName() || '—', sec: 'identity' });
     if (d.type === 'individual') {
       const tube = this.tubeColors.find(c => c.key === d.tubeColor)?.label;
@@ -1632,10 +1671,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
-      this.api.get<Test>(`/api/tests/${id}`).subscribe({
-        next: t => this.hydrateFrom(t),
-        error: e => this.toasts.error(ApiError.from(e).message)
-      });
+      this.loadTest(id);
     } else {
       const t = this.route.snapshot.queryParamMap.get('type');
       if (t === 'package' || t === 'individual' || t === 'profile') {
@@ -1651,7 +1687,58 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this._previewTimer) { clearTimeout(this._previewTimer); this._previewTimer = null; }
   }
 
+  private loadTest(id: string) {
+    this.api.get<Test>(`/api/tests/${id}`).subscribe({
+      next: t => this.hydrateFrom(t),
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Copy-on-write moved this test to a different row (the lab's new copy
+   *  after the first save of a master test, or the master again after a
+   *  revert): the editor follows it — same route, so the component is
+   *  reused and the URL is replaced, never pushed. */
+  private followRow(t: Test | null | undefined, type: string, fresh = false) {
+    if (!t?.id) return;
+    this.router.navigate(['/admin/tests', t.id, 'edit'], { queryParams: { type }, replaceUrl: true });
+    // `fresh` = the response IS the current row; otherwise re-read it (a
+    // price written after the save must show, not the response's old one).
+    if (fresh && t.name !== undefined && t.type !== undefined) this.hydrateFrom(t);
+    else this.loadTest(t.id);
+  }
+
+  /** Drop this lab's (or branch's) copy: the test reads the Admin Test
+   *  Master again. DialogService confirm — never window.confirm. */
+  async revertToMaster() {
+    const d = this._draft();
+    if (!d.id || !this.canRevert() || this.reverting()) return;
+    const branch = this.origin() === 'branch';
+    const ok = await this.dialog.confirm({
+      title: `Revert ${d.name || 'this test'} to the master?`,
+      message: (branch ? 'This branch\'s' : 'Your lab\'s')
+        + ' changes to this test are discarded and it reads the Admin Test Master again. Prices stay as they are.'
+        + (this.dirty() ? ' Unsaved edits here are lost too.' : ''),
+      confirmLabel: 'Revert to master',
+      cancelLabel: 'Keep my changes',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.reverting.set(true);
+    this.api.post<Test | { id?: string; testId?: string } | null>(revertToMasterPath(d.id), {}).subscribe({
+      next: r => {
+        this.reverting.set(false);
+        this.toasts.success('Reverted — this test now follows the Test Master');
+        const nextId = (r as { id?: string } | null)?.id ?? (r as { testId?: string } | null)?.testId;
+        if (nextId) this.followRow({ ...(r as Test), id: nextId }, d.type, true);
+        else this.back();
+      },
+      error: e => { this.reverting.set(false); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+
   private hydrateFrom(t: Test) {
+    this.origin.set(originOf(t));
+    this._originalCode = t.testCode ?? '';
     this._savedPrice.set({ price: effectivePrice(t), taxSlab: Number(t.taxSlab) || 0, isDefault: isPriceDefault(t) });
     try {
       this._calcInfo.set(t.calculation ? JSON.parse(t.calculation) : null);
@@ -1997,13 +2084,29 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this._saving.set(true);
     if (d.id) {
       this.api.patch<Test>(`/api/tests/${d.id}`, body).subscribe({
-        next: () => this.savePriceThen(d.id!, d, () => this.toasts.success('Saved')),
+        next: t => {
+          // Copy-on-write: the first save of a master test (or of the tenant
+          // copy under branch isolation) creates the lab's OWN row with a new
+          // id — prices and every later save go to that row.
+          const moved = !!t?.id && t.id !== d.id;
+          this.savePriceThen(moved ? t.id : d.id!, d, () => {
+            if (moved) {
+              this.toasts.success(this.codeMode() === 'tenant' && this.origin() === 'master'
+                ? 'Saved as your lab\'s own version of this test' : 'Saved');
+              this.followRow(t, d.type);
+            } else {
+              if (t?.origin) this.origin.set(originOf(t));
+              this.toasts.success('Saved');
+            }
+          });
+        },
         error: e => this.handleSaveError(e)
       });
     } else {
       this.api.post<Test>('/api/tests/', body).subscribe({
         next: t => this.savePriceThen(t.id, d, () => {
-          this.toasts.success('Created');
+          const assigned = !d.testCode.trim() && (t?.testCode ?? '').trim();
+          this.toasts.success(assigned ? `Created — code ${t.testCode}` : 'Created');
           // Stay in the editor — future saves are updates on the new id.
           this.router.navigate(['/admin/tests', t.id, 'edit'],
             { queryParams: { type: d.type }, replaceUrl: true });
@@ -2040,6 +2143,15 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private handleSaveError(e: unknown) {
     this._saving.set(false);
     const err = ApiError.from(e);
+    if (err.code === RESERVED_CODE_ERROR) {
+      this._fieldErrors.update(m => ({ ...m, testCode: RESERVED_CODE_MESSAGE }));
+      this.toasts.warning(RESERVED_CODE_MESSAGE);
+      return;
+    }
+    if (err.code === 'duplicate_code') {
+      this._fieldErrors.update(m => ({ ...m, testCode: err.message }));
+      return;
+    }
     const field = err.field ?? '';
     if (field === 'name' || field === 'price' || field === 'testCode') {
       this._fieldErrors.update(m => ({ ...m, [field]: err.message }));

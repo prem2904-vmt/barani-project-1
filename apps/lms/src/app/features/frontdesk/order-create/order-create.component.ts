@@ -450,8 +450,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private byCode = (a: Test, b: Test) =>
     ((a.testCode ?? a.code ?? '')).localeCompare(b.testCode ?? b.code ?? '', undefined, { numeric: true });
 
+  /** Search a (sub-)list; profile aliases are derived from the FULL loaded
+   *  catalogue's memberships (SGOT is found by "LFT" / "liver"). */
   private filterTestList(list: Test[], q: string): Test[] {
-    return sharedFilterTestList(list, q);
+    return sharedFilterTestList(list, q, this._tests());
   }
 
   /** Tests grouped by department, sorted by dept name. "(No department)"

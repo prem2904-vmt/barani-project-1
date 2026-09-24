@@ -2,7 +2,7 @@
   <pf-screen-header
     eyebrow="Admin"
     title="Test Master"
-    subtitle="Master catalogue of tests, profiles and packages — filter, and edit prices inline.">
+    subtitle="Tests, profiles and packages from the Admin Test Master — edit one to keep your own version, price it inline.">
     <div actions class="flex flex-wrap items-center gap-2 justify-end">
       <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" (pressed)="restoreDefaults()">
         {{ restoring() ? 'Restoring…' : 'Restore to default' }}
@@ -71,6 +71,10 @@
          per-branch when the tenant runs branch isolation). -->
     <pf-pricing [embedded]="true"></pf-pricing>
   } @else {
+  <!-- Test Master updates for tests this lab changed (one per copy, branch
+       copies named) — Accept all / Dismiss all. Hidden when none wait. -->
+  <pf-catalog-proposals-panel [proposals]="proposals()" [tests]="allTests()"
+                              (changed)="onProposalsChanged()"></pf-catalog-proposals-panel>
   <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()">
     <!-- ── LEFT: departments ─────────────────────────────── -->
     <aside class="pf-tm-side">

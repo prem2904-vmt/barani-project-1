@@ -16,14 +16,25 @@
         </button>
       </h1>
       <div class="pf-te2-chips">
+        @if (origin() && codeMode() === 'tenant') { <pf-origin-badge [origin]="origin()" /> }
         @for (c of metaChips(); track c.k) {
-          <button type="button" class="pf-chip press" (click)="jumpToSection(c.sec)">
-            <span class="pf-chip__k">{{ c.k }}</span>{{ c.v }}
-          </button>
+          @if (c.k !== 'Origin') {
+            <button type="button" class="pf-chip press" (click)="jumpToSection(c.sec)">
+              <span class="pf-chip__k">{{ c.k }}</span>{{ c.v }}
+            </button>
+          }
         }
       </div>
     </div>
     <div class="pf-te2-head__save">
+      @if (canRevert()) {
+        <pf-touch-btn size="sm" variant="ghost" [disabled]="saving() || reverting()" (pressed)="revertToMaster()">
+          <span icon-left aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+          </span>
+          {{ reverting() ? 'Reverting…' : 'Revert to master' }}
+        </pf-touch-btn>
+      }
       <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveTest()">
         {{ saving() ? 'Saving…' : 'Save' }}
       </pf-touch-btn>
@@ -134,7 +145,7 @@
                        [class.pf-input--error]="fieldError('testCode')"
                        [ngModel]="d.testCode"
                        (ngModelChange)="onTestCodeChanged($event)"
-                       [placeholder]="d.type === 'profile' ? 'e.g. LIPID01' : 'e.g. CBC001'" />
+                       [placeholder]="codePlaceholder()" />
                 @if (fieldError('testCode')) { <p class="pf-field-err">{{ fieldError('testCode') }}</p> }
               </div>
             }

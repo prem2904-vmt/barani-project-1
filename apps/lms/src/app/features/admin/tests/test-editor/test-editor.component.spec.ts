@@ -10,6 +10,8 @@ import { AuthService } from '../../../../core/auth/auth.service';
 import { NavBackService } from '../../../../core/services/nav-back.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
+import { DialogService } from '../../../../core/services/dialog.service';
+import { ApiError } from '../../../../shared/models/api-response.model';
 
 /**
  * Test Master single-source — Stage 1 safety net for the TEST EDITOR's
@@ -33,7 +35,8 @@ const baseTest = (over: any = {}) => ({
   ...over,
 });
 
-function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts?: any[]; patchErr?: any; priceErr?: any } = {}) {
+function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts?: any[]; patchErr?: any; priceErr?: any;
+  patchResult?: any; postResult?: any; confirm?: boolean; revertResult?: any; tests?: Record<string, any> } = {}) {
   const id = opts.id === undefined ? 't1' : opts.id;
   const api = {
     get: vi.fn((url: string) => {
@@ -41,11 +44,14 @@ function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts
       if (url === '/api/tests/?type=profile') return of([]);
       if (url === '/api/tenants/departments') return of(opts.depts ?? [{ id: 'd1', name: 'Biochemistry' }]);
       if (id && url === `/api/tests/${id}`) return of(opts.test ?? baseTest());
+      const other = /^\/api\/tests\/([^/?]+)$/.exec(url)?.[1];
+      if (other && opts.tests?.[other]) return of(opts.tests[other]);
       return of([]);
     }),
-    patch: vi.fn(() => (opts.patchErr ? throwError(() => opts.patchErr) : of({}))),
-    post: vi.fn(() => of({ id: 'new1' })),
+    patch: vi.fn(() => (opts.patchErr ? throwError(() => opts.patchErr) : of(opts.patchResult ?? {}))),
+    post: vi.fn((url: string, _body?: unknown) => of(url.endsWith('/revert-to-master') ? (opts.revertResult ?? null) : (opts.postResult ?? { id: 'new1' }))),
   };
+  const dialog = { confirm: vi.fn(async () => opts.confirm ?? false) };
   const toasts = { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() };
   const layout = {
     getDeptColumns: vi.fn(async () => ({ columns: [] })),
@@ -69,11 +75,12 @@ function make(opts: { test?: any; id?: string | null; individuals?: any[]; depts
       { provide: Router, useValue: router },
       { provide: NavBackService, useValue: { backTo: vi.fn() } },
       { provide: ThemeService, useValue: { isDark: () => false } },
+      { provide: DialogService, useValue: dialog },
     ],
   });
   const c = TestBed.runInInjectionContext(() => new TestEditorComponent()) as any;
   c.ngOnInit();
-  return { c, api, toasts, router, pricing };
+  return { c, api, toasts, router, pricing, dialog };
 }
 
 const lastPatchBody = (api: any) => api.patch.mock.calls.at(-1)[1];
@@ -161,8 +168,9 @@ describe('TestEditor codes (CURRENT)', () => {
     { id: 'c', type: 'individual', departmentId: 'd2', testCode: 'HEM012' },
   ];
 
-  it('new test: picking a department fills the next free code in that dept series (CLP015 → CLP016)', () => {
+  it('MASTER mode (admin console): picking a department fills the next free code in that dept series (CLP015 → CLP016)', () => {
     const { c } = make({ id: null, individuals, depts: [{ id: 'd1', name: 'Clinical Pathology' }] });
+    c.setCodeMode('master');
     c.onDeptPicked('Clinical Pathology');
     expect(c._draft().testCode).toBe('CLP016');
   });
@@ -173,10 +181,32 @@ describe('TestEditor codes (CURRENT)', () => {
     expect(c.fieldError('testCode')).toContain('HEM012');
   });
 
-  it('a tenant may type the master code shape today (BIO777 accepted)', () => {
+  it('MASTER mode may type the master code shape (BIO777 accepted)', () => {
     const { c } = make({ id: null, individuals });
+    c.setCodeMode('master');
     c.onTestCodeChanged('BIO777');
     expect(c.fieldError('testCode')).toBeFalsy();
+  });
+
+  it('a lab copy of a master test may keep its OWN master code (BIO019 on the loaded row)', () => {
+    const { c } = make();
+    c.onTestCodeChanged('bio019');
+    expect(c.fieldError('testCode')).toBeFalsy();
+    c.onTestCodeChanged('BIO020');
+    expect(c.fieldError('testCode')).toContain('reserved for the Admin Test Master');
+  });
+
+  it('a hyphenated lab code is accepted', () => {
+    const { c } = make({ id: null, individuals });
+    c.onTestCodeChanged('MW-0007');
+    expect(c.fieldError('testCode')).toBeFalsy();
+  });
+
+  it('a server reserved_code refusal lands on the code field with the friendly wording', () => {
+    const { c, toasts } = make({ patchErr: new ApiError('Code BIO777 is reserved', 'reserved_code') });
+    c.saveTest();
+    expect(c.fieldError('testCode')).toContain('reserved for the Admin Test Master');
+    expect(toasts.error).not.toHaveBeenCalled();
   });
 });
 
@@ -223,19 +253,28 @@ describe('TestEditor — TARGET behaviour', () => {
     expect(JSON.parse(lastPatchBody(api).parametersJson).sampleType).toBeUndefined();
   });
 
-  it.skip('TARGET phase 1/5: a tenant typing the reserved master shape ^[A-Z]{3}[0-9]+$ (BIO777) is rejected', () => {
+  it('TARGET phase 1/5: a tenant typing the reserved master shape ^[A-Z]{3}[0-9]+$ (BIO777) is rejected', () => {
     const { c } = make({ id: null });
     c.onTestCodeChanged('BIO777');
     expect(c.fieldError('testCode')).toBeTruthy();
   });
 
-  it.skip('TARGET phase 1/5: a new tenant test gets an auto code with a hyphen (e.g. MW-0001)', () => {
-    const { c } = make({ id: null, depts: [{ id: 'd1', name: 'Clinical Pathology' }] });
+  it('TARGET phase 1/5: a new tenant test gets an auto code with a hyphen (e.g. MW-0001) — assigned by the SERVER', () => {
+    const individuals = [{ id: 'a', type: 'individual', departmentId: 'd1', testCode: 'CLP015' }];
+    const { c, api, toasts } = make({ id: null, individuals, depts: [{ id: 'd1', name: 'Clinical Pathology' }],
+      postResult: { id: 'new1', testCode: 'MW-0001' } });
     c.onDeptPicked('Clinical Pathology');
-    expect(c._draft().testCode).toMatch(/^[A-Z]+-\d{4,}$/);
+    expect(c._draft().testCode).toBe('');                       // never a master-shaped guess
+    expect(c.codePlaceholder()).toContain('assign');
+    expect(c.metaChips().find((x: any) => x.k === 'Code').v).toBe('Auto');
+    c.patch({ name: 'Ferritin' });
+    c.saveTest();
+    expect((api.post.mock.calls[0][1] as any).testCode).toBe('');
+    expect(toasts.success).toHaveBeenCalledWith('Created — code MW-0001');
+    expect('MW-0001').toMatch(/^[A-Z]+-\d{4,}$/);
   });
 
-  it.skip('TARGET phase 3: summary shows the origin badge (master | customised | branch | local)', () => {
+  it('TARGET phase 3: summary shows the origin badge (master | customised | branch | local)', () => {
     const { c } = make({ test: baseTest({ origin: 'customised' }) });
     expect(c.metaChips().find((x: any) => x.k === 'Origin')?.v).toBe('Customised');
   });
@@ -295,5 +334,66 @@ describe('TestEditor — price via the pricing table (phase 2)', () => {
       ],
     });
     expect(c.packageMembersTotal()).toBe(201);
+  });
+});
+
+describe('TestEditor — copy-on-write (phases 3 + 5)', () => {
+  it('first save of a MASTER test follows the lab\'s new copy: replaceUrl to the new id, re-read it', () => {
+    const { c, api, router, toasts } = make({ test: baseTest({ origin: 'master' }),
+      patchResult: baseTest({ id: 'copy1', origin: 'customised' }),
+      tests: { copy1: baseTest({ id: 'copy1', origin: 'customised' }) } });
+    c.patch({ name: 'Sodium (lab)' });
+    c.saveTest();
+    expect(router.navigate).toHaveBeenCalledWith(['/admin/tests', 'copy1', 'edit'], { queryParams: { type: 'individual' }, replaceUrl: true });
+    expect(api.get).toHaveBeenCalledWith('/api/tests/copy1');
+    expect(c._draft().id).toBe('copy1');
+    expect(c.origin()).toBe('customised');
+    expect(toasts.success).toHaveBeenCalledWith(expect.stringContaining('own version'));
+  });
+
+  it('a price change on that first save is written against the NEW id', () => {
+    const { c, pricing } = make({ test: baseTest({ origin: 'master' }),
+      patchResult: baseTest({ id: 'copy1', origin: 'customised' }),
+      tests: { copy1: baseTest({ id: 'copy1', origin: 'customised' }) } });
+    c.patch({ price: 480 });
+    c.saveTest();
+    expect(pricing.save).toHaveBeenCalledWith([{ testId: 'copy1', price: 480, taxSlab: 0 }]);
+  });
+
+  it('a save that stays on the same row does not navigate', () => {
+    const { c, router } = make({ test: baseTest({ origin: 'customised' }), patchResult: baseTest({ origin: 'customised' }) });
+    c.saveTest();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('Revert to master: offered for customised / branch only, never in master mode', () => {
+    expect(make({ test: baseTest({ origin: 'customised' }) }).c.canRevert()).toBe(true);
+    TestBed.resetTestingModule();
+    expect(make({ test: baseTest({ origin: 'branch' }) }).c.canRevert()).toBe(true);
+    TestBed.resetTestingModule();
+    expect(make({ test: baseTest({ origin: 'master' }) }).c.canRevert()).toBe(false);
+    TestBed.resetTestingModule();
+    expect(make({ test: baseTest({ origin: 'local' }) }).c.canRevert()).toBe(false);
+    TestBed.resetTestingModule();
+    const m = make({ test: baseTest({ origin: 'customised' }) });
+    m.c.setCodeMode('master');
+    expect(m.c.canRevert()).toBe(false);
+  });
+
+  it('Revert confirms through DialogService, POSTs revert-to-master and follows the master row', async () => {
+    const master = baseTest({ id: 'm1', origin: 'master' });
+    const { c, api, dialog, router } = make({ test: baseTest({ origin: 'customised' }), confirm: true, revertResult: master });
+    await c.revertToMaster();
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ confirmLabel: 'Revert to master', tone: 'danger' }));
+    expect(api.post).toHaveBeenCalledWith('/api/tests/t1/revert-to-master', {});
+    expect(router.navigate).toHaveBeenCalledWith(['/admin/tests', 'm1', 'edit'], { queryParams: { type: 'individual' }, replaceUrl: true });
+    expect(c._draft().id).toBe('m1');
+    expect(c.origin()).toBe('master');
+  });
+
+  it('Revert cancelled sends nothing', async () => {
+    const { c, api } = make({ test: baseTest({ origin: 'customised' }) });
+    await c.revertToMaster();
+    expect(api.post).not.toHaveBeenCalled();
   });
 });

@@ -29,7 +29,7 @@ export function spellingVariants(q: string): string[] {
  * Searches name/testName, code/testCode, shortName, profile, hsnSacCode and
  * department name, with US/UK spelling variants.
  */
-export function scoreTestSearch(test: Test | any, query: string): number {
+export function scoreTestSearch(test: Test | any, query: string, aliases: readonly string[] = []): number {
   if (!query || !query.trim()) return 1;
   const q = query.trim().toLowerCase();
   const variants = spellingVariants(q);
@@ -37,7 +37,10 @@ export function scoreTestSearch(test: Test | any, query: string): number {
   const name = String(test?.name ?? test?.testName ?? '').toLowerCase();
   const code = String(test?.testCode ?? test?.code ?? '').toLowerCase();
   const short = String(test?.shortName ?? '').toLowerCase();
-  const profile = String(test?.profile ?? '').toLowerCase();
+  // The typed `profile` tag plus the DERIVED aliases: the names / codes /
+  // short names of every profile this test belongs to (single source: the
+  // profile's own member list, not a tag someone had to remember to type).
+  const profile = [test?.profile, ...aliases].filter(Boolean).join(' ').toLowerCase();
   const hsn = String(test?.hsnSacCode ?? '').toLowerCase();
   const dept = String(test?.department?.name ?? '').toLowerCase();
   const hay = [name, code, short, profile, hsn, dept].join(' ');
@@ -49,7 +52,7 @@ export function scoreTestSearch(test: Test | any, query: string): number {
     if (hay.includes(v)) return 70;
   }
 
-  const acronyms = acronymsOf(test);
+  const acronyms = [...acronymsOf(test), ...aliases.map(acronymOf).filter(Boolean)];
 
   // 2) Acronym: "LFT" → "Liver Function Test", "CBC" → "Complete Blood Count".
   //    The initials never appear contiguously, so the substring pass misses
@@ -133,11 +136,74 @@ function boundedLevenshtein(a: string, b: string, max: number): number {
  * best-match-first (exact/prefix above substring above acronym above fuzzy),
  * ties keeping the original order. Empty query returns the list unchanged.
  */
-export function filterTestList<T extends Test | any>(list: T[], query: string): T[] {
+export function filterTestList<T extends Test | any>(list: T[], query: string, catalogue: readonly (Test | any)[] = list): T[] {
   if (!query || !query.trim()) return list;
-  return list
-    .map((t, i) => ({ t, i, s: scoreTestSearch(t, query) }))
+  const aliases = profileAliases(catalogue);
+  return oneRowPerKey(list)
+    .map((t, i) => ({ t, i, s: scoreTestSearch(t, query, aliasesFor(t, aliases)) }))
     .filter(x => x.s > 0)
     .sort((a, b) => b.s - a.s || a.i - b.i)
     .map(x => x.t);
+}
+
+/**
+ * Profile aliases DERIVED from membership (Test Master single source: the
+ * typed `tests.Profile` tag is not the source). For every profile in the
+ * catalogue, each member (by `testId`, or by `catalogKey` for bundles
+ * stamped with it) gets the profile's name, code and short name — so SGOT
+ * is found by "liver" and "LFT" even when nobody typed a tag on it.
+ * Keys are member test ids and `key:<catalogKey>` (lower-case).
+ */
+export function profileAliases(catalogue: readonly (Test | any)[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const p of catalogue) {
+    if (p?.type !== 'profile' || !p?.parameters) continue;
+    let items: unknown[] = [];
+    try {
+      const blob = JSON.parse(p.parameters);
+      items = Array.isArray(blob?.items) ? blob.items : [];
+    } catch { continue; }
+    const labels = [p.name, p.testCode, p.shortName].map(x => String(x ?? '').trim()).filter(Boolean);
+    if (!labels.length) continue;
+    for (const it of items) {
+      const o = (typeof it === 'string' ? { testId: it } : (it ?? {})) as { testId?: string; catalogKey?: string };
+      const keys = [o.testId, o.catalogKey ? `key:${o.catalogKey.toLowerCase()}` : ''].filter(Boolean) as string[];
+      for (const k of keys) {
+        const arr = out.get(k) ?? [];
+        for (const l of labels) if (!arr.includes(l)) arr.push(l);
+        out.set(k, arr);
+      }
+    }
+  }
+  return out;
+}
+
+function aliasesFor(t: Test | any, aliases: Map<string, string[]>): string[] {
+  if (!aliases.size) return [];
+  const byId = t?.id ? aliases.get(t.id) ?? [] : [];
+  const key = String(t?.catalogKey ?? '').trim().toLowerCase();
+  const byKey = key ? aliases.get(`key:${key}`) ?? [] : [];
+  return byKey.length ? [...new Set([...byId, ...byKey])] : byId;
+}
+
+/** Copy-on-write lists carry ONE row per catalogue key; should a list ever
+ *  hold the master row next to this lab's own copy, the copy wins (branch →
+ *  lab copy → own → master) so search never shows the same test twice.
+ *  Rows without an origin (older payloads) are never merged. */
+const ORIGIN_RANK: Record<string, number> = { branch: 4, customised: 3, local: 2, master: 1 };
+function oneRowPerKey<T extends Test | any>(list: T[]): T[] {
+  const best = new Map<string, T>();
+  for (const t of list) {
+    const key = String((t as any)?.catalogKey ?? '').trim().toLowerCase();
+    const rank = ORIGIN_RANK[String((t as any)?.origin ?? '')] ?? 0;
+    if (!key || !rank) continue;
+    const cur = best.get(key);
+    if (!cur || rank > (ORIGIN_RANK[String((cur as any).origin)] ?? 0)) best.set(key, t);
+  }
+  if (!best.size) return list;
+  return list.filter(t => {
+    const key = String((t as any)?.catalogKey ?? '').trim().toLowerCase();
+    const rank = ORIGIN_RANK[String((t as any)?.origin ?? '')] ?? 0;
+    return !key || !rank || best.get(key) === t;
+  });
 }

@@ -2666,24 +2666,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (tests.length === 0) return out;
 
     const { ReportLayoutService } = await import('../../../core/services/report-layout.service');
+    const { resolveReportLayouts } = await import('../../../shared/utils/report-layouts');
     const svc = this.injector.get(ReportLayoutService);
-    await Promise.all(tests.map(async t => {
-      if (!t.testId) return;
-      try {
-        out[t.testId] = await svc.preview(t.testId, (t.result?.values ?? {}) as Record<string, unknown>, [], patient);
-      } catch { /* test without a layout — fallback table renders */ }
-    }));
-    // A test ordered through a PROFILE prints the PROFILE's notes, never its
-    // own — so the profile's layout has to be fetched too. Profiles aren't
-    // snapshot rows (only their members are), so collect the distinct
-    // packageTestIds and resolve those as well.
-    const pkgIds = [...new Set(tests.map(t => t.packageTestId).filter((id): id is string => !!id))];
-    await Promise.all(pkgIds.map(async id => {
-      if (out[id]) return;
-      try {
-        out[id] = await svc.preview(id, {}, [], patient);
-      } catch { /* profile without notes — nothing extra prints */ }
-    }));
+    // The ONE resolver: SCALAR values (so "show when result > X" conditions
+    // match), snapshot images, and the ordered PROFILES' layouts (their notes
+    // print instead of the members').
+    Object.assign(out, await resolveReportLayouts<import('../../../shared/models/report-layout.model').ResolvedReportLayout>(
+      (id, values, images, p) => svc.preview(id, values, images as never, p), tests, patient));
     return out;
   }
 

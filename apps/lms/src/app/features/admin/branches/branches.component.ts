@@ -4,6 +4,7 @@ import { CdkDragDrop, CdkDropList, CdkDrag, CdkDragHandle } from '@angular/cdk/d
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { DEPARTMENTS_FROM_MASTER } from '../../../shared/utils/test-origin';
 import { Branch, Department, SubBranch } from '../../../shared/models/tenant.model';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
@@ -238,13 +239,13 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                   <div class="pf-branch-deps-header">
                     <h4 class="text-[11px] font-mono uppercase tracking-[0.16em]"
                         style="color: var(--text-muted);">Departments & lab spaces</h4>
-                    <div class="flex items-center gap-2">
-                      <pf-touch-btn size="sm" variant="ghost" (pressed)="beginAddDept(b.id)">
-                        <span icon-left aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
-                        Department
-                      </pf-touch-btn>
-                    </div>
                   </div>
+                  <!-- Departments are master-provided (TM owner rule 4): a lab
+                       places, enables or disables them — it never creates one. -->
+                  <p class="pf-dept-source text-[11px] mb-1" style="color: var(--text-tertiary);">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                    {{ DEPARTMENTS_FROM_MASTER }}
+                  </p>
                   <p class="text-[11px] mb-2" style="color: var(--text-tertiary);">
                     Drag a department into a space. Tubes are counted per space + colour — departments in one space sharing a colour share a vial.
                   </p>
@@ -293,15 +294,6 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                           </div>
                         } @empty { <p class="pf-lane-empty">No departments in the default Lab space</p> }
                       </div>
-                      @if (isAddingInLane(b.id, null)) {
-                        <div class="pf-lane-add">
-                          <input type="text" class="pf-input" placeholder="Department name" [ngModel]="deptDraft().name" (ngModelChange)="patchDeptDraft({ name: $event })" />
-                          <input type="text" class="pf-input uppercase" placeholder="CODE" [ngModel]="deptDraft().code" (ngModelChange)="patchDeptDraft({ code: $event.toUpperCase() })" />
-                          <div class="flex gap-2"><pf-touch-btn size="sm" variant="primary" (pressed)="createDepartment(b.id)">Save</pf-touch-btn><pf-touch-btn size="sm" variant="ghost" (pressed)="cancelAddDept()">Cancel</pf-touch-btn></div>
-                        </div>
-                      } @else {
-                        <button type="button" class="pf-lane-add-btn press" (click)="beginAddDept(b.id, null)">+ Add department</button>
-                      }
                     </div>
 
                     <!-- One lane per space -->
@@ -329,14 +321,6 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                             </div>
                           } @empty { <p class="pf-lane-empty">Drag departments here</p> }
                         </div>
-                        @if (isAddingInLane(b.id, sp.id)) {
-                          <div class="pf-lane-add">
-                            <input type="text" class="pf-input" placeholder="Type a department…" [ngModel]="deptDraft().name" (ngModelChange)="patchDeptDraft({ name: $event })" />
-                            <div class="flex gap-2"><pf-touch-btn size="sm" variant="primary" (pressed)="createDepartment(b.id)">Add</pf-touch-btn><pf-touch-btn size="sm" variant="ghost" (pressed)="cancelAddDept()">Cancel</pf-touch-btn></div>
-                          </div>
-                        } @else {
-                          <button type="button" class="pf-lane-add-btn press" (click)="beginAddDept(b.id, sp.id)">+ Add department</button>
-                        }
                       </div>
                     }
 
@@ -583,12 +567,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       letter-spacing: .02em; transition: border-color .15s, color .15s, background .15s;
     }
     .pf-add-space-lane:hover { border-color: #7c3aed; color: #c4b5fd; background: rgba(124,58,237,0.07); }
-    .pf-lane-add-btn {
-      margin: 0 8px 8px; padding: 7px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;
-      color: var(--text-tertiary); background: transparent; border: 1px dashed var(--glass-border, rgba(255,255,255,0.18));
-    }
-    .pf-lane-add-btn:hover { color: var(--text-primary); border-color: rgba(168,85,247,.5); }
-    .pf-lane-add { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid var(--glass-border, rgba(255,255,255,0.08)); }
+    .pf-dept-source { display: flex; align-items: center; gap: 6px; }
     .pf-lane-del { display: inline-flex; padding: 4px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 6px; flex-shrink: 0; }
     .pf-lane-del:hover { color: #f87171; background: rgba(248,113,113,0.12); }
     .pf-lane-body { min-height: 60px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
@@ -771,15 +750,6 @@ export class BranchesComponent implements OnInit {
   private readonly _newBranch = signal({ name: '', code: '', type: 'lab', city: '', state: '', hasPfBox: false });
   readonly newBranch = this._newBranch.asReadonly();
 
-  protected readonly addingDeptFor = signal<string | null>(null);
-  /** When adding a department, the space lane it's being added into (null = Unassigned). */
-  protected readonly addingDeptSpace = signal<string | null>(null);
-  private readonly _deptDraft = signal({ name: '', code: '' });
-  readonly deptDraft = this._deptDraft.asReadonly();
-  /** True when the inline add-dept form should show inside this lane. */
-  isAddingInLane(branchId: string, spaceId: string | null): boolean {
-    return this.addingDeptFor() === branchId && this.addingDeptSpace() === spaceId;
-  }
 
   protected readonly addingSubBranchFor = signal<string | null>(null);
   private readonly _subBranchDraft = signal({ name: '', code: '', type: 'lab', city: '' });
@@ -985,45 +955,11 @@ export class BranchesComponent implements OnInit {
   }
 
   // ── Department ─────────────────────────────────
-  beginAddDept(branchId: string, spaceId: string | null = null) {
-    this.addingDeptFor.set(branchId);
-    this.addingDeptSpace.set(spaceId);
-    this._deptDraft.set({ name: '', code: '' });
-  }
-  patchDeptDraft(p: Partial<{ name: string; code: string }>) { this._deptDraft.update(v => ({ ...v, ...p })); }
-  cancelAddDept() { this.addingDeptFor.set(null); this.addingDeptSpace.set(null); }
-
-  /** A unique 3-letter code derived from the department name (no manual entry). */
-  private deriveCode(branchId: string, name: string): string {
-    const letters = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
-    let base = (letters.slice(0, 3) || 'DEP').padEnd(3, 'X');
-    const existing = new Set(this.allDeptsFor(branchId).map(d => (d.code || '').toUpperCase()));
-    if (!existing.has(base)) return base;
-    // Clash → swap the last char through A–Z until free.
-    for (let i = 0; i < 26; i++) {
-      const c = base.slice(0, 2) + String.fromCharCode(65 + i);
-      if (!existing.has(c)) return c;
-    }
-    return base;
-  }
-  createDepartment(branchId: string) {
-    const name = this._deptDraft().name.trim();
-    if (!name) { this.toasts.warning('Department name required'); return; }
-    const code = this.deriveCode(branchId, name);
-    const targetSpace = this.addingDeptSpace();
-    // Departments are tenant-global (no branchId) — the new department appears
-    // on every branch board. Creating it inside a space lane only places it in
-    // THAT branch's space (a link row); other branches get it in Lab (default).
-    this.api.post<Department>('/api/tenants/departments', { name, code }).subscribe({
-      next: saved => {
-        this._departments.update(list => [...list, saved]);
-        if (targetSpace) this.setDeptSpace(saved, branchId, targetSpace);
-        this.toasts.success('Department added');
-        this.cancelAddDept();
-      },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
-  }
+  // Departments come ONLY from the Admin Test Master (TM owner rule 4): a
+  // lab places them in spaces and enables/disables them; creating one is
+  // refused server-side (403 departments_master_only), so there is no
+  // "add department" UI anywhere in the LMS.
+  protected readonly DEPARTMENTS_FROM_MASTER = DEPARTMENTS_FROM_MASTER;
 
   /**
    * Persist a department's 2-digit sample code. Empty input clears it (null);
