@@ -7,6 +7,9 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { Branch } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { DialogService } from '../../../core/services/dialog.service';
 
 interface KpiCatalogItem {
   id: string;
@@ -64,11 +67,43 @@ const CATEGORY_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-kpi-config',
   standalone: true,
-  imports: [CommonModule, SelectComponent, LoadingLogoComponent],
+  imports: [CommonModule, SelectComponent, LoadingLogoComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-kpi-page">
-      <header class="pf-kpi-hdr items-center">
+    <div class="pf-kpi-page pf-band-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band pill (owner): the catalog search, plus the scope and screen
+             pickers; Discard / Save ride the band actions. -->
+        <pf-hero-band [back]="true" placeholder="Search KPIs — name, code, description…"
+                      [value]="filterQuery()" (valueChange)="filterQuery.set($event)">
+          <ng-container band-tools>
+            <pf-select class="pf-kpi-bandsel pf-kpi-bandsel--scope" size="sm" [options]="scopeOptions()"
+                       [value]="selectedScope()" (valueChange)="onScopeChange($event)"
+                       aria-label="Configure for"></pf-select>
+            <pf-select class="pf-kpi-bandsel" size="sm" [options]="screenOptions()"
+                       [value]="selectedScreen()" (valueChange)="selectScreen($event)"
+                       aria-label="Screen"></pf-select>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!dirty()" (click)="reload()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+              </svg>
+              Discard
+            </button>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" (click)="save()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <path d="M17 21v-8H7v8M7 3v5h8"/>
+              </svg>
+              {{ saving() ? 'Saving…' : 'Save' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <header class="pf-kpi-hdr pf-classic-only items-center">
         @if (navBack.showBack()) {
           <button type="button" class="pf-hdr-back shrink-0 inline-flex items-center justify-center" (click)="navBack.back()" aria-label="Go back">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -80,7 +115,7 @@ const CATEGORY_LABELS: Record<string, string> = {
         </div>
       </header>
 
-      <section class="pf-kpi-controls">
+      <section class="pf-kpi-controls pf-classic-only">
         <label class="pf-kpi-control">
           <span class="pf-kpi-control__lbl">Configure for</span>
           <pf-select
@@ -105,6 +140,7 @@ const CATEGORY_LABELS: Record<string, string> = {
         </div>
       </section>
 
+      <div class="pf-band-body pf-band-body--fill pf-kpi-body">
       @if (loading()) {
         <div class="pf-kpi-loading flex justify-center py-12">
           <pf-loading-logo size="xl" color="purple" [showDna]="true"
@@ -117,7 +153,7 @@ const CATEGORY_LABELS: Record<string, string> = {
             <header class="pf-kpi-catalog__hdr">
               <h2>Available KPIs</h2>
               <input type="search"
-                     class="pf-kpi-search"
+                     class="pf-kpi-search pf-classic-only"
                      placeholder="Filter…"
                      [value]="filterQuery()"
                      (input)="filterQuery.set($any($event.target).value)" />
@@ -163,7 +199,7 @@ const CATEGORY_LABELS: Record<string, string> = {
                   {{ scopeLabel() }} · {{ assigned().length }} card{{ assigned().length === 1 ? '' : 's' }}
                 </p>
               </div>
-              <div class="pf-kpi-assigned__actions">
+              <div class="pf-kpi-assigned__actions pf-classic-only">
                 <button type="button" class="pf-kpi-btn pf-kpi-btn--ghost"
                         [disabled]="!dirty()"
                         (click)="reload()">Discard</button>
@@ -223,6 +259,7 @@ const CATEGORY_LABELS: Record<string, string> = {
           </main>
         </section>
       }
+      </div>
     </div>
   `,
   styles: [`
@@ -236,6 +273,28 @@ const CATEGORY_LABELS: Record<string, string> = {
       flex-direction: column;
       gap: 20px;
     }
+
+    /* NEW design: the workshop fills the band body and each pane scrolls on
+       its own — no page-level scroll. Stacked (<=900px) the body scrolls. */
+    :host-context(.design-new) .pf-kpi-workshop {
+      flex: 1 1 auto; min-height: 0; align-items: stretch;
+      grid-template-rows: minmax(0, 1fr);
+    }
+    :host-context(.design-new) .pf-kpi-catalog,
+    :host-context(.design-new) .pf-kpi-assigned { min-height: 0; overflow-y: auto; }
+    :host-context(.design-new) .pf-kpi-catalog__hdr,
+    :host-context(.design-new) .pf-kpi-assigned__hdr {
+      position: sticky; top: 0; z-index: 1; background: var(--bg-card-solid);
+    }
+    @media (max-width: 900px) {
+      :host-context(.design-new) .pf-kpi-body { display: block !important; overflow-y: auto !important; }
+      :host-context(.design-new) .pf-kpi-workshop { grid-template-rows: none; }
+      :host-context(.design-new) .pf-kpi-catalog,
+      :host-context(.design-new) .pf-kpi-assigned { overflow-y: visible; }
+    }
+    .pf-kpi-bandsel { display: block; min-width: 190px; }
+    .pf-kpi-bandsel--scope { min-width: 170px; }
+    @media (max-width: 640px) { .pf-kpi-bandsel, .pf-kpi-bandsel--scope { min-width: 150px; } }
 
     .pf-kpi-hdr h1 {
       font-size: 22px;
@@ -728,6 +787,8 @@ export class KpiConfigComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   protected readonly navBack = inject(NavBackService);
+  protected readonly theme = inject(ThemeService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly screens = SCREENS;
 
@@ -769,6 +830,12 @@ export class KpiConfigComponent implements OnInit {
     { value: '__tenant', label: 'All branches (tenant-wide)' },
     ...this._branches().map(b => ({ value: b.id, label: b.name }))
   ]);
+
+  /** Screen picker in the band pill: label carries the assigned-card count. */
+  readonly screenOptions = computed<PfSelectOption<string>[]>(() => SCREENS.map(s => {
+    const n = this.assignedCountForScreen(s.id);
+    return { value: s.id, label: n > 0 ? `${s.label} · ${n}` : s.label, hint: s.hint };
+  }));
 
   readonly scopeLabel = computed(() => {
     const scope = this.selectedScope();
@@ -823,16 +890,22 @@ export class KpiConfigComponent implements OnInit {
   }
 
   // ── Scope / screen pickers ─────────────────────────────────
-  onScopeChange(value: string) {
+  /** Themed confirm (never window.confirm) before dropping staged edits. */
+  private async okToDiscard(): Promise<boolean> {
+    if (!this.dirty()) return true;
+    return this.dialog.confirm({ title: 'Discard unsaved changes?', tone: 'danger' });
+  }
+
+  async onScopeChange(value: string) {
     if (value === this.selectedScope()) return;
-    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
+    if (!(await this.okToDiscard())) return;
     this.selectedScope.set(value);
     this.loadAssignmentsForCurrentScope();
   }
 
-  selectScreen(id: string) {
+  async selectScreen(id: string) {
     if (id === this.selectedScreen()) return;
-    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
+    if (!(await this.okToDiscard())) return;
     this.selectedScreen.set(id);
     this.loadAssignmentsForCurrentScope();
   }
@@ -960,8 +1033,8 @@ export class KpiConfigComponent implements OnInit {
     });
   }
 
-  reload() {
-    if (this.dirty() && !confirm('Discard unsaved changes?')) return;
+  async reload() {
+    if (!(await this.okToDiscard())) return;
     this.loadAssignmentsForCurrentScope();
   }
 

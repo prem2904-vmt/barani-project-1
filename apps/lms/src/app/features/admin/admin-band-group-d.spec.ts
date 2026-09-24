@@ -2,6 +2,9 @@ import { renderBandPage } from './admin-band.spec-helpers';
 import { NotificationsConfigComponent } from './notifications-config/notifications-config.component';
 import { WorkflowBuilderComponent } from './workflow-builder/workflow-builder.component';
 import { ProcessBuilderComponent } from './process-builder/process-builder.component';
+import { KpiConfigComponent } from './kpis/kpi-config.component';
+import { TestBed } from '@angular/core/testing';
+import { DialogService } from '../../core/services/dialog.service';
 
 /**
  * Group D admin pages on the band pill: notifications, workflows list,
@@ -122,5 +125,50 @@ describe('Admin band — Process builder', () => {
     expect(labels).toEqual(['New', 'Duplicate', 'Set active', 'Save']);
     p.cmp.selectWorkflow('w2');
     expect(p.cmp.currentId()).toBe('w2');
+  });
+});
+
+describe('Admin band — KPI configuration', () => {
+  const catalog = [
+    { id: 'k1', code: 'CASH_IN', name: 'Cash in', category: 'financial', valueType: 'money', defaultLabel: 'Cash in' },
+    { id: 'k2', code: 'TAT_BREACH', name: 'TAT breaches', category: 'tat', valueType: 'count', defaultLabel: 'TAT breaches' },
+  ];
+  const make = () => renderBandPage(KpiConfigComponent, {
+    getFor: (u) => (u === '/api/kpis' ? catalog : u.startsWith('/api/kpis/assignments') ? [] : u === '/api/tenants/branches' ? [{ id: 'b1', name: 'Main' }] : []),
+  });
+  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-kpi-cat__name')).map((n) => n.textContent?.trim());
+
+  it('band + fill body; custom header, controls and in-pane search/actions are classic-only', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.el.querySelector('.pf-band-body.pf-band-body--fill')).not.toBeNull();
+    expect(p.el.querySelector('.pf-kpi-hdr')?.classList.contains('pf-classic-only')).toBe(true);
+    expect(p.el.querySelector('.pf-kpi-controls')?.classList.contains('pf-classic-only')).toBe(true);
+    expect(p.el.querySelector('.pf-kpi-search')?.classList.contains('pf-classic-only')).toBe(true);
+    expect(p.actions().map((b) => b.textContent?.trim())).toEqual(['Discard', 'Save']);
+    expect(p.tools()!.querySelectorAll('pf-select').length).toBe(2);
+  });
+
+  it('pill search filters the catalog', () => {
+    const p = make();
+    expect(names(p.el)).toEqual(['Cash in', 'TAT breaches']);
+    p.type('tat');
+    expect(names(p.el)).toEqual(['TAT breaches']);
+  });
+
+  it('screen picker: count in the label; switching reloads assignments for that screen', async () => {
+    const p = make();
+    expect(p.cmp.screenOptions()[0]).toEqual({ value: 'admin', label: 'Admin dashboard', hint: 'Tenant-wide overview' });
+    p.cmp.addToScreen(catalog[0]);
+    expect(p.cmp.screenOptions()[0].label).toBe('Admin dashboard · 1');
+    // Dirty → themed confirm (never window.confirm); declining keeps the screen.
+    const dialog = TestBed.inject(DialogService) as any;
+    await p.cmp.selectScreen('pathologist');
+    expect(dialog.confirm).toHaveBeenCalled();
+    expect(p.cmp.selectedScreen()).toBe('admin');
+    dialog.confirm.mockResolvedValue(true);
+    await p.cmp.selectScreen('pathologist');
+    expect(p.cmp.selectedScreen()).toBe('pathologist');
+    expect(p.api.get).toHaveBeenCalledWith('/api/kpis/assignments?screen=pathologist');
   });
 });
