@@ -448,7 +448,7 @@
             <div class="pf-rr2__head">
               <div>
                 <span class="pf-te2-h">Reference ranges — what counts as normal</span>
-                <p class="pf-rr2__sub">Prints on the report next to the result and decides the H&nbsp;/&nbsp;L flag.</p>
+                <p class="pf-rr2__sub">Prints on the report next to the result and decides the flag: <strong>H</strong>&nbsp;=&nbsp;High (above the range), <strong>L</strong>&nbsp;=&nbsp;Low (below it), <strong>C</strong>&nbsp;=&nbsp;past a critical limit.</p>
               </div>
 
             </div>
@@ -575,7 +575,7 @@
                   </div>
 
                   @if (isNumericType(p.type)) {
-                    <p class="pf-vbatch__sub">Reference ranges — prints next to the result and decides the H&nbsp;/&nbsp;L flag.</p>
+                    <p class="pf-vbatch__sub">Reference ranges — prints next to the result and decides the flag: <strong>H</strong>&nbsp;=&nbsp;High (above the range), <strong>L</strong>&nbsp;=&nbsp;Low (below it), <strong>C</strong>&nbsp;=&nbsp;past a critical limit.</p>
                     <div class="pf-rrgrid-wrap">
                       <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
                         [rowData]="rangeRowsFor(i)" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
@@ -590,12 +590,12 @@
                       </div>
                     </div>
                     <div class="grid gap-2 grid-cols-2 md:grid-cols-4">
-                      <label class="flex flex-col gap-0.5 min-w-0">
+                      <label class="flex flex-col gap-0.5 min-w-0" title="A result below this is flagged C (Critical low) — used when the band has no critical low of its own.">
                         <span class="pf-mini-lbl">Critical low</span>
                         <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.criticalLow ?? null"
                                           (valueChange)="patchField(i, { criticalLow: $event ?? undefined })"></pf-number-input>
                       </label>
-                      <label class="flex flex-col gap-0.5 min-w-0">
+                      <label class="flex flex-col gap-0.5 min-w-0" title="A result above this is flagged C (Critical high) — used when the band has no critical high of its own.">
                         <span class="pf-mini-lbl">Critical high</span>
                         <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.criticalHigh ?? null"
                                           (valueChange)="patchField(i, { criticalHigh: $event ?? undefined })"></pf-number-input>
@@ -885,8 +885,8 @@
           @if (d.type === 'profile' && !repetitiveActive() && orderedMembers().length > 0) {
             <div class="pf-tp pf-member-order">
               <div class="pf-tp__hdr">
-                <span class="pf-tp__badge">Order</span>
-                <span class="pf-tp__count">Result entry and the report list the members in this order — drag a row or use the arrows.</span>
+                <span class="pf-tp__badge">Lab entry order</span>
+                <span class="pf-tp__count">Result entry lists the members in this order — drag a row or use the arrows. The printed report has its own order (Printed report).</span>
               </div>
               <ul class="pf-tp__list" cdkDropList (cdkDropListDropped)="dropMember($event)">
                 @for (m of orderedMembers(); track m.id; let i = $index; let first = $first; let last = $last) {
@@ -970,6 +970,35 @@
           <p class="pf-te2-sec__sub">What the patient's PDF shows for this test — in print order. Drag to rearrange, tap the eye to hide a line.</p>
         </div>
         <div class="pf-te2-sec__body">
+          @if (d.type === 'profile' && reportOrderedMembers().length > 0) {
+            <div class="pf-tp pf-member-order">
+              <div class="pf-tp__hdr">
+                <span class="pf-tp__badge">Printed report order</span>
+                <span class="pf-tp__count">The final report prints the members in this order — independent of the lab entry order.</span>
+                @if (reportOrderCustom()) {
+                  <button type="button" class="pf-linklike pf-member-order__reset" (click)="resetReportOrder()">Use lab entry order</button>
+                }
+              </div>
+              <ul class="pf-tp__list" cdkDropList (cdkDropListDropped)="dropReportMember($event)">
+                @for (m of reportOrderedMembers(); track m.id; let i = $index; let first = $first; let last = $last) {
+                  <li class="pf-tp-row" cdkDrag cdkDragLockAxis="y">
+                    <span class="pf-tp-row__grip" cdkDragHandle aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
+                    </span>
+                    <span class="pf-member-order__pos">{{ i + 1 }}</span>
+                    <span class="pf-tp-row__name">{{ m.name }}</span>
+                    @if (m.code) { <code class="pf-member-order__code">{{ m.code }}</code> }
+                    <button type="button" class="pf-tp-row__btn press" [disabled]="first" [attr.aria-label]="'Print ' + m.name + ' earlier'" title="Move up" (click)="moveReportMember(i, -1)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="pf-tp-row__btn press" [disabled]="last" [attr.aria-label]="'Print ' + m.name + ' later'" title="Move down" (click)="moveReportMember(i, 1)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
           @if (d.id) {
             @if (customizingColumns()) {
               <div class="pf-lay-colwrap">

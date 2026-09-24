@@ -13,7 +13,7 @@ import {
   normalizeSex,
   selectReferenceRange,
 } from "../../../shared/utils/reference-range";
-import { flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
+import { flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
 import { effectiveMethodology } from "../../../shared/utils/methodology";
 import { choiceOptionsFor, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
 import { readParameters } from "../../../shared/utils/test-parameters";
@@ -216,6 +216,9 @@ export class SampleResultEntryComponent {
    *  the shared live hint — the band for THIS patient's sex/age (profile-
    *  scoped under a profile), band → param criticals (strict), then the
    *  shared in-range rule. One implementation: shared/utils/result-flag. */
+  /** Chip tooltip: what H / L / critical mean (QA 2026-09-24). */
+  readonly flagChipTitle = flagChipTitle;
+
   flagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
     const kind = this.inputKindFor(p);
     if (kind !== "select" && kind !== "number") return null;
@@ -236,7 +239,7 @@ export class SampleResultEntryComponent {
     const { sex, age } = this.patientSexAge();
     const lf = liveFlag(p, v, sex, age, t.profileCode);
     if (lf?.code === "C")
-      return { tone: "critical", label: `Critical · ${lf.critical === "low" ? "below" : "above"} ${lf.limit}` };
+      return { tone: "critical", label: `Critical ${lf.critical === "low" ? "low · below" : "high · above"} ${lf.limit}` };
     if (lf?.code === "L") return { tone: "low", label: "Low" };
     if (lf?.code === "H") return { tone: "high", label: "High" };
     return null;

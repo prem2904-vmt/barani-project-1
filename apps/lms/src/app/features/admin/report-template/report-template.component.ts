@@ -458,17 +458,21 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Abnormal results</h4>
-                  <p class="pf-rtb-s">How out-of-range values are marked — this row is live:</p>
+                  <p class="pf-rtb-s">How out-of-range values are marked — a high and a low result, live:</p>
                   <div class="pf-wys-paper pf-wys-demo">
-                    <span>Hemoglobin</span>
-                    <span [style.fontWeight]="(tpl().flagIndicator ?? 'letter') === 'none' ? '400' : '700'"
-                          [style.color]="(tpl().flagStyle ?? 'bold') === 'bold_color' && (tpl().flagIndicator ?? 'letter') !== 'none' ? (tpl().abnormalLowColor || '#2563eb') : '#111'">
-                      11.4 g/dL
-                      @if ((tpl().flagIndicator ?? 'letter') === 'letter') { <span>&nbsp;L</span> }
-                      @else if ((tpl().flagIndicator ?? 'letter') === 'arrow') { <span>&nbsp;▼</span> }
-                    </span>
-                    <span class="pf-wys-demo__range">12.0 – 16.0</span>
+                    @for (row of flagDemoRows; track row.dir) {
+                      <div class="pf-wys-demo__row">
+                        <span class="pf-wys-demo__kind">{{ row.dir === 'high' ? 'High' : 'Low' }}</span>
+                        <span class="pf-wys-demo__name">{{ row.name }}</span>
+                        <span [style.fontWeight]="(tpl().flagIndicator ?? 'letter') === 'none' ? '400' : '700'"
+                              [style.color]="flagDemoColor(row.dir)">
+                          {{ row.value }}@if (flagGlyph(row.dir); as g) {<span>&nbsp;{{ g }}</span>}
+                        </span>
+                        <span class="pf-wys-demo__range">{{ row.range }}</span>
+                      </div>
+                    }
                   </div>
+                  <p class="pf-rtb-s pf-flag-legend">{{ flagLegend() }}</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div [style.opacity]="(tpl().flagIndicator ?? 'letter') === 'none' ? '0.4' : null"
                        [style.pointerEvents]="(tpl().flagIndicator ?? 'letter') === 'none' ? 'none' : null">
@@ -492,7 +496,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                       (valueChange)="patch({ flagIndicator: $event })">
                     </pf-segmented>
                     <p class="text-[12px] mt-1" style="color: var(--text-tertiary);">
-                      Mark high/low with H&nbsp;/&nbsp;L letters or ↑&nbsp;/&nbsp;↓ arrows. Choose <b>None</b> for a plain report — no letters, arrows, bold or colour.
+                      Letters: <b>H</b> marks a <b>High</b> result, <b>L</b> a <b>Low</b> one. Arrows: <b>▲</b> High, <b>▼</b> Low. Choose <b>None</b> for a plain report — no letters, arrows, bold or colour.
                     </p>
                   </div>
                   @if ((tpl().flagStyle ?? 'bold') === 'bold_color') {
@@ -704,8 +708,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-wys-mini--bordered i:first-child { background: #cbd5e1; }
     .pf-wys-mini--striped i:nth-child(odd) { background: #cbd5e1; }
 
-    .pf-wys-demo { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; font-size: 13px; }
+    .pf-wys-demo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; font-size: 13px; }
+    .pf-wys-demo__row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .pf-wys-demo__kind { min-width: 38px; font-size: 10px; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: #666; }
+    .pf-wys-demo__name { min-width: 128px; }
     .pf-wys-demo__range { color: #777; font-size: 12px; }
+    .pf-flag-legend { margin-bottom: 12px; font-weight: 600; color: var(--text-secondary); white-space: pre-wrap; }
 
     .pf-wys-sigs { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
     .pf-wys-sig { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; min-width: 120px; font-size: 12px; }
@@ -969,15 +978,41 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'bordered', label: 'Bordered' },
     { value: 'striped',  label: 'Striped'  },
   ];
+  // High / Low made explicit (QA 2026-09-24): users could not tell which
+  // mark meant which. Each option names both marks; the live preview shows a
+  // HIGH and a LOW row side by side, and the legend spells the pair out.
   readonly flagIndicatorOptions: SegmentedOption<string>[] = [
-    { value: 'letter', label: 'H / L' },
-    { value: 'arrow',  label: '↑ / ↓' },
+    { value: 'letter', label: 'Letters H · L' },
+    { value: 'arrow',  label: 'Arrows ▲ · ▼' },
     { value: 'none',   label: 'None' },
   ];
   readonly flagStyleOptions: SegmentedOption<string>[] = [
-    { value: 'bold',       label: 'Bold (H/L)'   },
+    { value: 'bold',       label: 'Bold'          },
     { value: 'bold_color', label: 'Bold + colour' },
   ];
+  /** The two sample results of the abnormal-marks preview. */
+  readonly flagDemoRows: ReadonlyArray<{ dir: 'high' | 'low'; name: string; value: string; range: string }> = [
+    { dir: 'high', name: 'Glucose, fasting', value: '182 mg/dL', range: '70 – 99' },
+    { dir: 'low',  name: 'Hemoglobin',       value: '11.4 g/dL', range: '12.0 – 16.0' },
+  ];
+  /** The mark the report prints after a high / low result (PDF: letter, or a
+   *  ▲ / ▼ triangle in arrow mode; nothing for None). */
+  flagGlyph(dir: 'high' | 'low'): string {
+    const mode = this.tpl().flagIndicator ?? 'letter';
+    if (mode === 'none') return '';
+    if (mode === 'arrow') return dir === 'high' ? '▲' : '▼';
+    return dir === 'high' ? 'H' : 'L';
+  }
+  flagDemoColor(dir: 'high' | 'low'): string {
+    const t = this.tpl();
+    if ((t.flagStyle ?? 'bold') !== 'bold_color' || (t.flagIndicator ?? 'letter') === 'none') return '#111';
+    return dir === 'high' ? (t.abnormalColor || '#dc2626') : (t.abnormalLowColor || '#2563eb');
+  }
+  /** One line naming both marks, e.g. "High: H  ·  Low: L". */
+  flagLegend(): string {
+    if ((this.tpl().flagIndicator ?? 'letter') === 'none') return 'No marks — high and low results print as plain values.';
+    return `High: ${this.flagGlyph('high')}   ·   Low: ${this.flagGlyph('low')}   ·   Critical: C`;
+  }
   readonly patientLayoutOptions: SegmentedOption<string>[] = [
     { value: 'three-col',     label: '3-column (Classic)' },
     { value: 'four-col-grid', label: '4-column grid'     },

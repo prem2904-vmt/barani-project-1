@@ -384,14 +384,16 @@ select.pf-input--compact {
 .pf-tp-row__btn:disabled { opacity: 0.35; cursor: default; }
 .pf-tp-row__btn:disabled:hover { color: var(--text-tertiary); border-color: var(--glass-border); }
 
-/* Profile member ORDER list — the sequence result entry + the report follow. */
+/* Profile member ORDER lists — lab entry (items[]) and printed report (reportOrder). */
 .pf-member-order { margin-bottom: 18px; }
 .pf-member-order .pf-tp__count { line-height: 1.35; }
+.pf-member-order .pf-tp__badge { white-space: nowrap; flex-shrink: 0; }
 .pf-member-order__pos {
   min-width: 18px; flex-shrink: 0; text-align: right;
   font-size: 11px; font-weight: 700; color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
+.pf-linklike.pf-member-order__reset { margin-left: auto; flex-shrink: 0; font-size: 12px; }
 .pf-member-order__code {
   flex-shrink: 0; font-size: 11px; color: var(--text-tertiary);
   font-family: 'JetBrains Mono', ui-monospace, monospace;

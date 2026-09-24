@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
-import { TestEditorComponent } from './test-editor.component';
+import { TestEditorComponent, readReportOrder, reconcileMemberOrder } from './test-editor.component';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ReportLayoutService } from '../../../../core/services/report-layout.service';
@@ -428,8 +428,11 @@ describe('TestEditor — profile member order + code-wise picker (QA 2026-09-24)
     c.moveMember(2, 1);          // bottom can't go down — no-op
     expect(c.orderedMembers().map((m: any) => m.id)).toEqual(['a', 'b', 'c']);
     c.saveTest();
+    // Two independent sequences (owner 2026-09-24): rearranging the LAB ENTRY
+    // order leaves the printed report in the order it had (now stored as
+    // reportOrder, since the two differ).
     expect(JSON.parse(lastPatchBody(api).parametersJson))
-      .toEqual({ items: [{ testId: 'a' }, { testId: 'b' }, { testId: 'c' }] });
+      .toEqual({ items: [{ testId: 'a' }, { testId: 'b' }, { testId: 'c' }], reportOrder: ['c', 'a', 'b'] });
   });
 
   it('drag-and-drop moves a member to the dropped slot', () => {
@@ -511,3 +514,131 @@ describe('TestEditor — a save sends only what changed (owner bug 2026-09-24: "
     expect(changedKeys({ a: 1, b: 'x', c: undefined, d: [1] }, { a: 1, b: 'y', d: [1] })).toEqual({ b: 'x' });
   });
 });
+
+describe('TestEditor — two sequences: lab entry order vs printed report order (owner 2026-09-24)', () => {
+  const members = [
+    { id: 'a', type: 'individual', name: 'Albumin', testCode: 'BIO010', department: { name: 'Biochemistry' } },
+    { id: 'b', type: 'individual', name: 'Bilirubin', testCode: 'BIO002', department: { name: 'Biochemistry' } },
+    { id: 'c', type: 'individual', name: 'Creatinine', testCode: 'BIO1000', department: { name: 'Biochemistry' } },
+    { id: 'd', type: 'individual', name: 'Globulin', testCode: 'BIO2', department: { name: 'Biochemistry' } },
+  ];
+  const profile = (ids: string[], reportOrder?: unknown[]) =>
+    baseTest({ type: 'profile', parameters: JSON.stringify({ items: ids.map(testId => ({ testId })), ...(reportOrder ? { reportOrder } : {}) }) });
+  const ids = (list: any[]) => list.map((m: any) => m.id);
+
+  it('a profile without reportOrder prints in its lab entry order, and an untouched save sends nothing', () => {
+    const { c, api } = make({ test: profile(['c', 'a', 'b']), individuals: members });
+    expect(ids(c.reportOrderedMembers())).toEqual(['c', 'a', 'b']);
+    expect(c.reportOrderCustom()).toBe(false);
+    c.saveTest();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it('rearranging the PRINTED order saves reportOrder and leaves items[] (lab entry) alone', () => {
+    const { c, api } = make({ test: profile(['a', 'b', 'c']), individuals: members });
+    c.moveReportMember(2, -1);                       // a, c, b
+    c.dropReportMember({ previousIndex: 2, currentIndex: 0 });   // b, a, c
+    expect(ids(c.reportOrderedMembers())).toEqual(['b', 'a', 'c']);
+    expect(ids(c.orderedMembers())).toEqual(['a', 'b', 'c']);
+    expect(c.dirty()).toBe(true);
+    c.saveTest();
+    expect(JSON.parse(lastPatchBody(api).parametersJson))
+      .toEqual({ items: [{ testId: 'a' }, { testId: 'b' }, { testId: 'c' }], reportOrder: ['b', 'a', 'c'] });
+  });
+
+  it('a stored reportOrder loads, and reconciles with membership (new member last, removed member gone)', () => {
+    const { c } = make({ test: profile(['a', 'b', 'c'], ['c', { testId: 'b' }, 'a']), individuals: members });
+    expect(ids(c.reportOrderedMembers())).toEqual(['c', 'b', 'a']);
+    c.togglePackageMember('d');
+    c.togglePackageMember('b');
+    expect(ids(c.reportOrderedMembers())).toEqual(['c', 'a', 'd']);
+    expect(ids(c.orderedMembers())).toEqual(['a', 'c', 'd']);
+  });
+
+  it('"Use lab entry order" drops the stored reportOrder on save', () => {
+    const { c, api } = make({ test: profile(['a', 'b'], ['b', 'a']), individuals: members });
+    expect(c.reportOrderCustom()).toBe(true);
+    c.resetReportOrder();
+    expect(c.reportOrderCustom()).toBe(false);
+    c.saveTest();
+    expect(JSON.parse(lastPatchBody(api).parametersJson)).toEqual({ items: [{ testId: 'a' }, { testId: 'b' }] });
+  });
+
+  it('up/down at the ends is a no-op', () => {
+    const { c } = make({ test: profile(['a', 'b']), individuals: members });
+    c.moveReportMember(0, -1);
+    c.moveReportMember(1, 1);
+    expect(ids(c.reportOrderedMembers())).toEqual(['a', 'b']);
+  });
+
+  it('a package never writes reportOrder', () => {
+    const { c, api } = make({ test: baseTest({ type: 'package', parameters: JSON.stringify({ items: [{ testId: 'a' }, { testId: 'b' }] }) }), individuals: members });
+    c.moveMember(0, 1);
+    c.saveTest();
+    expect(JSON.parse(lastPatchBody(api).parametersJson)).toEqual({ items: [{ testId: 'b' }, { testId: 'a' }] });
+  });
+
+  it('reconcileMemberOrder / readReportOrder', () => {
+    expect(reconcileMemberOrder(['c', 'x', 'a', 'c'], ['a', 'b', 'c'])).toEqual(['c', 'a', 'b']);
+    expect(reconcileMemberOrder([], ['a', 'a', 'b'])).toEqual(['a', 'b']);
+    expect(readReportOrder({ reportOrder: ['a', { testId: 'b' }, '', null, 'a'] })).toEqual(['a', 'b']);
+    expect(readReportOrder({ reportOrder: [] })).toBeNull();
+    expect(readReportOrder({ items: [] })).toBeNull();
+    expect(readReportOrder(null)).toBeNull();
+  });
+});
+
+describe('TestEditor — reference-range comparator per band (≤ / ≥, QA 2026-09-24)', () => {
+  const one = (band: any) => baseTest({ adultReferenceRange: '',
+    parameters: P([{ name: 'prog', title: 'Progesterone', type: 'numeric', unit: 'ng/mL', referenceRanges: [band] }]) });
+  const savedBand = (api: any) => JSON.parse(lastPatchBody(api).parametersJson).parameters[0].referenceRanges[0];
+
+  const boundOfBand = (band: any) => {
+    TestBed.resetTestingModule();
+    return make({ test: one(band) }).c.rangeRows()[0].bound;
+  };
+  it('existing bands read as today: two-sided = Low – high, one-sided without op = strict', () => {
+    expect(boundOfBand({ min: 135, max: 145 })).toBe('between');
+    expect(boundOfBand({ min: null, max: 0.89 })).toBe('lt');
+    expect(boundOfBand({ min: 60, max: null })).toBe('gt');
+    expect(boundOfBand({ min: null, max: 0.89, maxOp: 'lte' })).toBe('lte');
+  });
+
+  it('picking ≤ on a "< 0.89" band saves maxOp lte and the flat range prints ≤', () => {
+    const { c, api } = make({ test: one({ segment: 'default', min: null, max: 0.89 }) });
+    c.onRangeCellChanged({ data: { ...c.rangeRows()[0], bound: 'lte' }, colDef: { field: 'bound' } });
+    expect(c.rangeRows()[0].bound).toBe('lte');
+    c.saveTest();
+    expect(savedBand(api)).toEqual({ segment: 'default', min: null, max: 0.89, maxOp: 'lte' });
+    expect(lastPatchBody(api).adultReferenceRange).toBe('≤ 0.89');
+  });
+
+  it('picking ≥ on a two-sided band keeps the low value as the one-sided limit', () => {
+    const { c, api } = make({ test: one({ segment: 'default', min: 60, max: 90 }) });
+    c.setRangeBound(0, 0, 'gte');
+    c.saveTest();
+    expect(savedBand(api)).toEqual({ segment: 'default', min: 60, max: null, minOp: 'gte' });
+    expect(lastPatchBody(api).adultReferenceRange).toBe('≥ 60');
+  });
+
+  it('Low – high on a one-sided band opens both cells until the other value is typed, and drops the op', () => {
+    const { c, api } = make({ test: one({ segment: 'default', min: null, max: 14, maxOp: 'lte' }) });
+    c.setRangeBound(0, 0, 'between');
+    expect(c.rangeRows()[0].bound).toBe('between');
+    c.patchRangeAt(0, 0, { min: 2 });
+    c.saveTest();
+    expect(savedBand(api)).toEqual({ segment: 'default', min: 2, max: 14 });
+  });
+
+  it('the value cells follow the comparator: ≤ uses Normal high only', () => {
+    const { c } = make({ test: one({ min: null, max: 0.89, maxOp: 'lte' }) });
+    const col = (f: string) => c.rangeColDefs.find((x: any) => x.field === f);
+    const row = { data: c.rangeRows()[0] };
+    expect(col('min').editable(row)).toBe(false);
+    expect(col('max').editable(row)).toBe(true);
+    expect(col('min').headerName).toBe('Normal low');
+    expect(col('criticalLow').headerName).toBe('Critical low');
+    expect(col('criticalHigh').headerTooltip).toContain('Critical high');
+  });
+});
+

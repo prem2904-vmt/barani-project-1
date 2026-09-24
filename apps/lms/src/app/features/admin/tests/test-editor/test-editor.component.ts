@@ -51,6 +51,7 @@ interface OgGroupLite {
   links: { testId: string }[];
 }
 import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../../shared/utils/reference-range';
+import { RANGE_BOUND_OPTIONS, RangeBound, boundLabel, boundOf, boundUses, withBound } from '../../../../shared/utils/range-bound';
 import { NavBackService } from '../../../../core/services/nav-back.service';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
 import { PriceFlagComponent } from '../../../../shared/primitives/price-flag.component';
@@ -621,6 +622,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       sex: r.sex ?? 'any',
       agePreset: this.agePresetFor(i, ri),
       minAge: r.minAge ?? null, maxAge: r.maxAge ?? null, ageUnit: r.ageUnit ?? 'years',
+      bound: this.boundFor(i, ri, r),
       min: r.min ?? null, max: r.max ?? null,
       criticalLow: r.criticalLow ?? null, criticalHigh: r.criticalHigh ?? null,
       prints: (r.min != null || r.max != null) ? (r.label || this.autoRangeLabel(r)) : '—',
@@ -642,6 +644,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         sex: r.sex ?? 'any',
         agePreset: this.agePresetFor(i, ri),
         minAge: r.minAge ?? null, maxAge: r.maxAge ?? null, ageUnit: r.ageUnit ?? 'years',
+        bound: this.boundFor(i, ri, r),
         min: r.min ?? null, max: r.max ?? null,
         criticalLow: r.criticalLow ?? null, criticalHigh: r.criticalHigh ?? null,
         prints: (r.min != null || r.max != null) ? (r.label || this.autoRangeLabel(r)) : '—',
@@ -686,11 +689,28 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
       cellEditorParams: { options: TestEditorComponent.AGE_UNIT_OPTS },
       cellRenderer: this.ddCell(v => String(v ?? 'years')) },
-    { field: 'min', headerName: 'Low', minWidth: 84, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
-    { field: 'max', headerName: 'High', minWidth: 84, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
+    // Comparator per band (owner/QA 2026-09-24): a two-sided low – high
+    // range, or ONE bound with its operator — "≤ 0.89", "≥ 60". Inclusive
+    // operators make the limit itself normal (flag + printed symbol).
+    { field: 'bound', headerName: 'Normal is', minWidth: 138, flex: 1,
+      headerTooltip: 'Low – high: normal between two values. <, ≤, >, ≥: one limit — ≤ / ≥ count the limit itself as normal.',
+      cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
+      cellEditorParams: { options: RANGE_BOUND_OPTIONS.map(o => ({ value: o.value, label: o.label })) },
+      tooltipValueGetter: p => RANGE_BOUND_OPTIONS.find(o => o.value === p.value)?.hint ?? '',
+      cellRenderer: this.ddCell(v => boundLabel(String(v ?? 'between'))) },
+    { field: 'min', headerName: 'Normal low', minWidth: 96, flex: .7, cellClass: 'pf-rrgrid__num',
+      headerTooltip: 'Lowest normal value — a result below it is flagged L (Low).',
+      editable: p => boundUses(p.data?.bound as RangeBound, 'min'),
+      valueFormatter: p => boundUses(p.data?.bound as RangeBound, 'min') ? (p.value ?? '—') : '' },
+    { field: 'max', headerName: 'Normal high', minWidth: 98, flex: .7, cellClass: 'pf-rrgrid__num',
+      headerTooltip: 'Highest normal value — a result above it is flagged H (High).',
+      editable: p => boundUses(p.data?.bound as RangeBound, 'max'),
+      valueFormatter: p => boundUses(p.data?.bound as RangeBound, 'max') ? (p.value ?? '—') : '' },
     { field: 'criticalLow', headerName: 'Critical low', minWidth: 104, flex: .8,
+      headerTooltip: 'Panic limit for this group — a result below it is flagged C (Critical low).',
       cellClass: 'pf-rrgrid__num pf-rrgrid__crit', valueFormatter: p => p.value ?? '—' },
     { field: 'criticalHigh', headerName: 'Critical high', minWidth: 108, flex: .8,
+      headerTooltip: 'Panic limit for this group — a result above it is flagged C (Critical high).',
       cellClass: 'pf-rrgrid__num pf-rrgrid__crit', valueFormatter: p => p.value ?? '—' },
     { field: 'prints', headerName: 'On the report', minWidth: 150, flex: 1.5,
       cellClass: 'pf-rrgrid__prints', tooltipField: 'prints',
@@ -705,6 +725,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (f === 'sex') this.patchRangeAt(i, ri, { sex: e.data.sex });
     else if (f === 'ageUnit') this.patchRangeAt(i, ri, { ageUnit: e.data.ageUnit });
     else if (f === 'agePreset') this.setAgePreset(i, ri, e.data.agePreset);
+    else if (f === 'bound') this.setRangeBound(i, ri, e.data.bound as RangeBound);
     else if (f === 'prints') {
       // Editing the printed text writes the range's custom label; clearing it
       // returns to the automatic wording.
@@ -975,6 +996,27 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     { key: 'adult',   label: 'Adult (18+)',      minAge: 18,  maxAge: null, ageUnit: 'years' },
     { key: 'senior',  label: 'Senior (65+)',     minAge: 65,  maxAge: null, ageUnit: 'years' },
   ];
+  /** Bands the user switched to "Low – high" while they still hold one
+   *  value — shown as two-sided (both cells editable) until the other value
+   *  is typed. Pure UI state, like _customAge. */
+  private readonly _betweenPick = signal<Record<string, boolean>>({});
+  private boundFor(i: number, ri: number, r: ReferenceRange): RangeBound {
+    return this._betweenPick()[`${i}:${ri}`] ? 'between' : boundOf(r);
+  }
+  /** Switch one band's comparator (Normal is: low – high / < / ≤ / > / ≥). */
+  setRangeBound(i: number, ri: number, bound: RangeBound) {
+    const band = this._fields()[i]?.referenceRanges?.[ri];
+    if (!band || !RANGE_BOUND_OPTIONS.some(o => o.value === bound)) return;
+    this._betweenPick.update(m => ({ ...m, [`${i}:${ri}`]: bound === 'between' }));
+    if (boundOf(band) === bound) return;
+    this._fields.update(list => list.map((p, idx) => {
+      if (idx !== i) return p;
+      const ranges = [...(p.referenceRanges ?? [])];
+      ranges[ri] = withBound(ranges[ri], bound);
+      return { ...p, referenceRanges: ranges };
+    }));
+    this.persistFieldsToDraft();
+  }
   private readonly _customAge = signal<Record<string, boolean>>({});
 
   rangeAt(i: number, ri: number) { return this.fields()[i]?.referenceRanges?.[ri] ?? null; }
@@ -1599,6 +1641,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const next = items.slice();
     moveItemInArray(next, index, to);
     this._packageItems.set(next);
+    this.dirty.set(true);
   }
 
   dropMember(ev: CdkDragDrop<unknown>) {
@@ -1606,6 +1649,61 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const next = this._packageItems().slice();
     moveItemInArray(next, ev.previousIndex, ev.currentIndex);
     this._packageItems.set(next);
+    this.dirty.set(true);
+  }
+
+  // ── PRINTED REPORT order (owner 2026-09-24) — a SECOND, independent
+  // sequence. The list above (items[]) is the LAB ENTRY order (Position is
+  // stamped from it at order creation); this one only decides the order the
+  // members print on the final report, stored as the profile's optional
+  // `reportOrder` (member test ids). Starts as the stored reportOrder, else
+  // the loaded lab order — so rearranging lab entry never moves the report.
+  // New members join at the end; removed members drop out.
+  private readonly _reportOrder = signal<string[]>([]);
+  readonly reportOrderIds = computed<string[]>(() =>
+    reconcileMemberOrder(this._reportOrder(), this.packageItems()));
+  readonly reportOrderedMembers = computed<{ id: string; name: string; code: string }[]>(() => {
+    const byId = this._memberById();
+    return this.reportOrderIds().map(id => {
+      const t = byId.get(id);
+      return { id, name: t?.name ?? '(unknown test)', code: t?.testCode ?? '' };
+    });
+  });
+  /** True when the printed order differs from the lab entry order. */
+  readonly reportOrderCustom = computed(() => {
+    const lab = [...new Set(this.packageItems())];
+    const rep = this.reportOrderIds();
+    return rep.length !== lab.length || rep.some((id, i) => id !== lab[i]);
+  });
+
+  moveReportMember(index: number, delta: -1 | 1) {
+    const ids = this.reportOrderIds();
+    const to = index + delta;
+    if (index < 0 || index >= ids.length || to < 0 || to >= ids.length) return;
+    const next = ids.slice();
+    moveItemInArray(next, index, to);
+    this._reportOrder.set(next);
+    this.dirty.set(true);
+  }
+
+  dropReportMember(ev: CdkDragDrop<unknown>) {
+    if (ev.previousIndex === ev.currentIndex) return;
+    const next = this.reportOrderIds().slice();
+    moveItemInArray(next, ev.previousIndex, ev.currentIndex);
+    this._reportOrder.set(next);
+    this.dirty.set(true);
+  }
+
+  /** Print in the lab entry order again. */
+  resetReportOrder() {
+    this._reportOrder.set([...new Set(this.packageItems())]);
+    this.dirty.set(true);
+  }
+
+  /** The `reportOrder` a save writes: only when it differs from the lab entry
+   *  order (a profile whose two orders agree keeps its stored blob as-is). */
+  private reportOrderForSave(): string[] | undefined {
+    return this._draft().type === 'profile' && this.reportOrderCustom() ? this.reportOrderIds() : undefined;
   }
 
   isInPackage(id: string): boolean { return this.packageItems().includes(id); }
@@ -1747,6 +1845,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
           .map((it: unknown) => typeof it === 'string' ? it : ((it as { testId?: string })?.testId ?? ''))
           .filter((id: string) => id.length > 0);
         this._packageItems.set([...new Set(ids)]);
+        this._reportOrder.set(readReportOrder(blob) ?? [...new Set(ids)]);
         if (t.type === 'profile' && blob.repetitive === true) {
           this.repetitive.set(true);
           this._memberRows.set(this.normalizeRows(items
@@ -1763,11 +1862,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       } catch {
         this._packageItems.set([]);
+        this._reportOrder.set([]);
         this._memberRows.set([]);
         this.repetitive.set(false);
       }
     } else {
       this._packageItems.set([]);
+      this._reportOrder.set([]);
       this._memberRows.set([]);
       this.repetitive.set(false);
     }
@@ -2001,9 +2102,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       ? (d.type === 'profile' && this.repetitive()
           ? JSON.stringify({
               repetitive: true,
-              items: this.normalizeRows(this._memberRows()).map(r => ({ testId: r.testId, offsetMin: r.offsetMin }))
+              items: this.normalizeRows(this._memberRows()).map(r => ({ testId: r.testId, offsetMin: r.offsetMin })),
+              ...withReportOrder(this.reportOrderForSave()),
             })
-          : JSON.stringify({ items: this._packageItems().map(id => ({ testId: id })) }))
+          : JSON.stringify({
+              items: this._packageItems().map(id => ({ testId: id })),
+              ...withReportOrder(this.reportOrderForSave()),
+            }))
       // A legacy blob still carrying the old `fields[]` twin is normalised to
       // the single parameters[] list on this save (props folded on load).
       // Single-source tidy on every save: the wrapper `sampleType` is dropped
@@ -2160,4 +2265,32 @@ export function changedKeys(body: Record<string, unknown>, baseline: Record<stri
     if (JSON.stringify(v ?? null) !== JSON.stringify(baseline[k] ?? null)) out[k] = v;
   }
   return out;
+}
+
+/** A profile's printed-report order, reconciled with its current members:
+ *  the stored order's members first (dropping any no longer in the profile),
+ *  then members it doesn't name yet, in lab-entry order. */
+export function reconcileMemberOrder(order: readonly string[], members: readonly string[]): string[] {
+  const live = [...new Set(members)];
+  const have = new Set(live);
+  const out = [...new Set(order)].filter(id => have.has(id));
+  const placed = new Set(out);
+  for (const id of live) if (!placed.has(id)) out.push(id);
+  return out;
+}
+
+/** The member ids of a profile blob's `reportOrder` (id strings or
+ *  `{ testId }` objects), or null when the blob has none. */
+export function readReportOrder(blob: unknown): string[] | null {
+  const raw = (blob as { reportOrder?: unknown } | null)?.reportOrder;
+  if (!Array.isArray(raw)) return null;
+  const ids = raw
+    .map(e => typeof e === 'string' ? e : ((e as { testId?: string } | null)?.testId ?? ''))
+    .filter(id => id.length > 0);
+  return ids.length > 0 ? [...new Set(ids)] : null;
+}
+
+/** `{ reportOrder }` to spread into a saved profile blob — nothing when unset. */
+function withReportOrder(order: string[] | undefined): { reportOrder?: string[] } {
+  return order && order.length > 0 ? { reportOrder: order } : {};
 }
