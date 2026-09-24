@@ -614,6 +614,16 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   @HostListener('focusout', ['$event'])
   onFocusOut(ev: FocusEvent): void {
+    // Opening a SEARCHABLE single select swaps the trigger <button> for the
+    // search input. Chrome focuses a button on mouse click (Safari/WebKit
+    // doesn't), so on the swap Chrome fires focusout (relatedTarget=null) on
+    // the outgoing button — which closed the panel the instant it opened.
+    // That blur is our own re-render, not the user leaving: ignore it (the
+    // search input takes focus right after; real outside clicks still close
+    // via document:click, and leaving the input still closes via focusout).
+    const target = ev.target as Element | null;
+    if (this.isOpen() && this.searchable && !this.multiple
+        && target?.matches?.('button.pf-dd__trigger')) return;
     const related = ev.relatedTarget as Node | null;
     const panelEl = this.panelRef?.rootNodes.find(
       (n: Node) => n.nodeType === Node.ELEMENT_NODE
