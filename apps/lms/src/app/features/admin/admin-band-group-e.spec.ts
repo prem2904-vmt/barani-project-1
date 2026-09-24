@@ -1,6 +1,7 @@
 import { renderBandPage } from './admin-band.spec-helpers';
 import { FinanceHubComponent } from '../finance/finance-hub.component';
 import { DailyStatementComponent } from '../finance/daily-statement.component';
+import { TatBoardComponent } from '../dashboard/tat-board/tat-board.component';
 
 /**
  * Hub-linked pages outside /admin (owner counts them as admin nested pages):
@@ -116,5 +117,52 @@ describe('Admin band — Daily statement (/finance/daily)', () => {
     expect(rows()).toBe(before - 1);
     p.type('zzz');
     expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+  });
+});
+
+describe('Admin band — TAT board (/dashboard)', () => {
+  const rows = [
+    { orderTestId: 'o1', patient: 'Ravi Kumar', test: 'CBC', status: 'received', elapsedMinutes: 90, remainingMinutes: -5, level: 'urgent' },
+    { orderTestId: 'o2', patient: 'Asha Devi', test: 'Lipid profile', status: 'in_progress', elapsedMinutes: 40, remainingMinutes: 20, level: 'high' },
+    { orderTestId: 'o3', patient: 'John Paul', test: 'TSH', status: 'entered', elapsedMinutes: 10, remainingMinutes: 200, level: 'normal' },
+  ];
+  const make = () => renderBandPage(TatBoardComponent, {
+    getFor: (url) => url.startsWith('/api/dashboard/tat') ? { summary: {}, rows } : [],
+  });
+  const tiles = (p: ReturnType<typeof make>) => p.body()!.querySelectorAll('pf-tile').length;
+
+  it('band + scrolling body, header classic-only, Refresh on the band', () => {
+    const p = make();
+    expect(p.band()).not.toBeNull();
+    expect(p.body()).not.toBeNull();
+    expect(p.headerIsClassicOnly()).toBe(true);
+    p.api.get.mockClear();
+    const refresh = p.actions().find((b) => b.textContent!.includes('Refresh'))!;
+    refresh.click();
+    expect(p.api.get).toHaveBeenCalledWith('/api/dashboard/tat');
+    p.f.destroy();
+  });
+
+  it('pill search filters the in-flight tests (patient / test / status)', () => {
+    const p = make();
+    expect(tiles(p)).toBe(3);
+    p.type('lipid');
+    expect(tiles(p)).toBe(1);
+    p.type('in progress');
+    expect(tiles(p)).toBe(1);
+    p.type('zzz');
+    expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+    p.f.destroy();
+  });
+
+  it('urgency filter in the pill shows one level, with counts', () => {
+    const p = make();
+    const urgent = segBtn(p.tools(), 'Urgent')!;
+    expect(urgent.textContent).toContain('1');
+    urgent.click();
+    p.f.detectChanges();
+    expect(tiles(p)).toBe(1);
+    expect(p.body()!.textContent).toContain('Ravi Kumar');
+    p.f.destroy();
   });
 });

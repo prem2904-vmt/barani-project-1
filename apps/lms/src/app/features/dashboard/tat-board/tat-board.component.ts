@@ -8,6 +8,13 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { ThemeService } from '../../../core/services/theme.service';
+import { bandFilter } from '../../../shared/utils/band-search';
+
+type TatLevel = 'urgent' | 'high' | 'normal';
+type LevelFilter = 'all' | TatLevel;
 
 interface TatRow {
   orderTestId: string;
@@ -33,16 +40,41 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
     ScreenHeaderComponent,
     TileComponent,
     TouchButtonComponent,
-    KpiStripComponent
+    KpiStripComponent,
+    HeroBandComponent,
+    SegmentedComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="tat-page px-4 md:px-8 pt-6">
+    <section class="tat-page pf-band-page px-4 md:px-8 pt-6">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner): the pill searches the in-flight tests; the
+             urgency filter (dots + counts) rides inside it; Refresh is a
+             quiet band action. -->
+        <pf-hero-band [back]="true" placeholder="Search patient, test or status…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-tools>
+            <pf-segmented size="sm" [options]="levelOptions()" [value]="levelFilter()"
+                          (valueChange)="levelFilter.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()"
+                    aria-label="Refresh" title="Refresh">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+              </svg>
+              Refresh
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
 
       <div class="tat-chrome">
         <pf-kpi-strip screen="tat_board"></pf-kpi-strip>
 
-        <pf-screen-header
+        <pf-screen-header class="pf-classic-only"
           eyebrow="Live dashboard"
           title="TAT Board"
           subtitle="Turnaround health across in-flight tests. Auto-refresh every 30s.">
@@ -63,7 +95,7 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
       <!-- Hard-coded KPI tiles removed — admin-configurable KPIs render
            via <pf-kpi-strip screen="tat_board"> at the top of the page. -->
 
-      <div class="tat-scroll pb-10">
+      <div class="tat-scroll pf-band-body pb-10">
       @for (level of levels; track level) {
         @let rowsForLevel = rowsFor(level);
         @if (rowsForLevel.length > 0) {
@@ -104,6 +136,9 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
         }
       }
 
+      @if (rows().length > 0 && visibleCount() === 0) {
+        <p class="pf-band-empty">No tests match this search / filter.</p>
+      }
       @if (rows().length === 0) {
         <pf-tile tone="default" padding="xl">
           <div class="text-center py-6">
@@ -202,6 +237,27 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
 })
 export class TatBoardComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  protected readonly theme = inject(ThemeService);
+
+  /** Band pill: search (patient / test / status) + urgency filter. */
+  readonly q = signal('');
+  readonly levelFilter = signal<LevelFilter>('all');
+  private readonly matched = computed(() =>
+    bandFilter(this._rows(), this.q(), (r) => [r.patient, r.test, r.status, r.status?.replace(/_/g, ' ')]));
+  readonly visibleCount = computed(() => {
+    const f = this.levelFilter();
+    return this.matched().filter((r) => f === 'all' || r.level === f).length;
+  });
+  readonly levelOptions = computed<SegmentedOption<LevelFilter>[]>(() => {
+    const m = this.matched();
+    const n = (l: TatLevel) => m.filter((r) => r.level === l).length;
+    return [
+      { value: 'all', label: 'All', count: m.length },
+      { value: 'urgent', label: 'Urgent', dot: '#ef4444', count: n('urgent') },
+      { value: 'high', label: 'High', dot: '#f59e0b', count: n('high') },
+      { value: 'normal', label: 'Within TAT', dot: '#10b981', count: n('normal') },
+    ];
+  });
 
   readonly levels: Array<'urgent' | 'high' | 'normal'> = ['urgent', 'high', 'normal'];
 
@@ -218,7 +274,9 @@ export class TatBoardComponent implements OnInit, OnDestroy {
   ngOnDestroy() { if (this._interval) clearInterval(this._interval); }
 
   rowsFor(level: 'urgent' | 'high' | 'normal'): TatRow[] {
-    return this._rows().filter(r => r.level === level);
+    const f = this.levelFilter();
+    if (f !== 'all' && f !== level) return [];
+    return this.matched().filter(r => r.level === level);
   }
 
   levelLabel(level: 'urgent' | 'high' | 'normal'): string {
