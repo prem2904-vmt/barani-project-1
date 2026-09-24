@@ -255,26 +255,6 @@
   color: #7c3aed !important;
 }
 
-/* Receive actions (lab intake header + queue rows) follow the frame's
-   row-action anatomy — violet outline, not the filled gradient. */
-:root.light.design-new .pf-mw-scan__btn,
-:root.light.design-new .pf-rs-row__btn {
-  background: #ffffff !important;
-  border: 1px solid #7c3aed !important;
-  color: #7c3aed !important;
-  box-shadow: none !important;
-}
-:root.light.design-new .pf-mw-scan__btn:hover:not(:disabled),
-:root.light.design-new .pf-rs-row__btn:hover:not(:disabled) {
-  background: #f8f2ff !important;
-  filter: none !important;
-}
-:root.light.design-new .pf-mw-scan__btn:disabled,
-:root.light.design-new .pf-rs-row__btn:disabled {
-  border-color: #d1d5db !important;
-  color: #9ca3af !important;
-}
-
 /* Bottom-navbar experiment: one source of truth for the docked bar's
    height so every surface can clear it (pages, toasts, drawers...). */
 :root.design-new.nav-bottom {
@@ -2448,23 +2428,6 @@ html.pf-design-mode {
   color: #ddd6fe !important;
 }
 :root.dark.design-new .pf-mw-scan__btn,
-:root.dark.design-new .pf-rs-row__btn {
-  background: transparent !important;
-  border: 1px solid rgba(167, 139, 250, 0.65) !important;
-  color: #c4b5fd !important;
-  box-shadow: none !important;
-}
-:root.dark.design-new .pf-mw-scan__btn:hover:not(:disabled),
-:root.dark.design-new .pf-rs-row__btn:hover:not(:disabled) {
-  background: rgba(139, 92, 246, 0.14) !important;
-  filter: none !important;
-}
-:root.dark.design-new .pf-mw-scan__btn:disabled,
-:root.dark.design-new .pf-rs-row__btn:disabled {
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  color: #6b7280 !important;
-}
-
 /* Avatars in dark-new: soft violet disc, violet-tinted initials —
    the dark twin of the light designer disc. */
 :root.dark.design-new pf-avatar .root {
@@ -2575,25 +2538,41 @@ html.pf-design-mode {
     background: transparent !important;
     overflow: visible !important;
   }
-  .pf-rq-iconbtn {
+  /* ONE definition for every row action in the app (owner: "same type of
+     pattern… I don't want to juggle between this again and again"). Lab
+     intake's Receive and the scan bar's Receive join it here rather than
+     each screen hand-sizing its own button. Size lives HERE too — that is
+     the part that kept drifting. */
+  .pf-rq-iconbtn,
+  .pf-rs-row__btn,
+  .pf-mw-scan__btn {
     border: 1px solid #7c3aed !important;
     border-radius: 8px !important;
     padding: 0 10px !important;
     height: 26px;
+    min-height: 26px !important;   /* beats the global 44px touch floor */
+    min-width: auto !important;
     color: #7c3aed !important;
     background: #ffffff !important;
     font-size: 12px !important;
     font-weight: 600 !important;
+    letter-spacing: 0.02em;
   }
-  .pf-rq-iconbtn:hover { background: #f8f2ff !important; }
+  .pf-rq-iconbtn:hover,
+  .pf-rs-row__btn:hover:not(:disabled),
+  .pf-mw-scan__btn:hover:not(:disabled) { background: #f8f2ff !important; }
 }
 :root.dark.design-new {
-  .pf-rq-iconbtn {
+  .pf-rq-iconbtn,
+  .pf-rs-row__btn,
+  .pf-mw-scan__btn {
     background: transparent !important;
     border-color: rgba(167, 139, 250, 0.65) !important;
     color: #c4b5fd !important;
   }
-  .pf-rq-iconbtn:hover { background: rgba(139, 92, 246, 0.14) !important; }
+  .pf-rq-iconbtn:hover,
+  .pf-rs-row__btn:hover:not(:disabled),
+  .pf-mw-scan__btn:hover:not(:disabled) { background: rgba(139, 92, 246, 0.14) !important; }
 }
 
 /* ══ NEW design: SECTION EYEBROWS on the theme font (owner).
