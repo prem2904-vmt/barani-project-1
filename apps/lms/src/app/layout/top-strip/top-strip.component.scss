@@ -1500,3 +1500,13 @@ a.pf-ts-tenant:hover {
   color: var(--text-muted);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
+
+/* ── Phone: there is no Messages POPOVER ──────────────────────────────
+   The bar icon routes to /messages instead (see toggleMsgs). This is a
+   belt-and-braces guard so any other caller that raises the panel — the
+   windows' compose path, a stale signal — can't leave an iPad-shaped
+   dropdown floating over a phone screen (owner). */
+@media (max-width: 767px) {
+  :host-context(.design-new) .pf-msgs-pop,
+  :host-context(.design-new) .pf-msgs-bd { display: none !important; }
+}

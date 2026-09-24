@@ -109,6 +109,16 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   /** Open the Messages panel and make sure the people list is loaded. */
   toggleMsgs(): void {
+    // PHONE: the whole thing is WhatsApp, not just the thread (owner).
+    // A people/conversation LIST is a screen on a phone — squeezing it into
+    // a popover anchored to a bar icon was the iPad/web shape leaking down.
+    // The bar icon goes straight to /messages; the page owns the list, the
+    // search and the threads.
+    if (this.themeService.isNewDesign() && this.chatWindows.isPhone()) {
+      this.msgsPanel.close();
+      void this.router.navigate(['/messages']);
+      return;
+    }
     this.msgsPanel.toggle();
     if (this.msgsPanel.open()) void this.directory.load();
   }
