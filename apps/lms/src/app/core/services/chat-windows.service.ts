@@ -29,6 +29,35 @@ export class ChatWindowsService {
   readonly open = this._open.asReadonly();
   readonly minimized = this._minimized.asReadonly();
 
+  /** Favourites — pinned people (owner). A favourite keeps its head on
+   *  the rail even after its window is CLOSED, so the people you talk to
+   *  all day are always one tap away. Persisted per device. */
+  private static readonly FAV_KEY = 'pf.chat.favourites';
+  private readonly _favourites = signal<string[]>(this.restoreFavourites());
+  readonly favourites = this._favourites.asReadonly();
+
+  isFavourite(conversationId: string): boolean {
+    return this._favourites().includes(conversationId);
+  }
+
+  toggleFavourite(conversationId: string): void {
+    this._favourites.update((ids) =>
+      ids.includes(conversationId)
+        ? ids.filter((i) => i !== conversationId)
+        : [...ids, conversationId]);
+    try {
+      localStorage.setItem(ChatWindowsService.FAV_KEY, JSON.stringify(this._favourites()));
+    } catch { /* private mode — favourites just won't survive the session */ }
+  }
+
+  private restoreFavourites(): string[] {
+    try {
+      const raw = localStorage.getItem(ChatWindowsService.FAV_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+    } catch { return []; }
+  }
+
   /** Focus clock — lowest value = least recently used. */
   private readonly focusSeq = new Map<string, number>();
   private seq = 0;

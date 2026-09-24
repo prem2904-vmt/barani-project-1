@@ -54,6 +54,19 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
                   </svg>
                 </button>
               }
+              <button type="button" class="pf-cw__icon press"
+                      [class.is-fav]="windowsSvc.isFavourite(c.id)"
+                      (click)="windowsSvc.toggleFavourite(c.id); $event.stopPropagation()"
+                      [attr.aria-pressed]="windowsSvc.isFavourite(c.id)"
+                      [title]="windowsSvc.isFavourite(c.id) ? 'Remove from favourites' : 'Add to favourites'"
+                      aria-label="Favourite">
+                <svg width="15" height="15" viewBox="0 0 24 24"
+                     [attr.fill]="windowsSvc.isFavourite(c.id) ? 'currentColor' : 'none'"
+                     stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true">
+                  <path d="m12 17.3-5.6 3 1.1-6.3-4.5-4.4 6.3-.9L12 3l2.7 5.7 6.3.9-4.5 4.4 1.1 6.3z"/>
+                </svg>
+              </button>
               <button type="button" class="pf-cw__icon press" (click)="windowsSvc.minimize(c.id); $event.stopPropagation()"
                       aria-label="Minimize chat">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -167,6 +180,25 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
                      [attr.aria-label]="'Message ' + title(c)"
                      (focus)="windowsSvc.focus(c.id)"
                      (keydown.enter)="send(c.id, box)" />
+              <!-- Voice message — the page has had this; the window had not
+                   (owner). Same recorder, same upload, auto-sends on stop. -->
+              <button type="button" class="pf-cw__send press"
+                      [class.is-rec]="recordingFor() === c.id"
+                      (click)="toggleRecord(c.id)"
+                      [title]="recordingFor() === c.id ? 'Stop and send (' + recordSecs() + 's)' : 'Record a voice message'"
+                      [attr.aria-label]="recordingFor() === c.id ? 'Stop recording and send' : 'Record a voice message'">
+                @if (recordingFor() === c.id) {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                  </svg>
+                } @else {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="9" y="2" width="6" height="12" rx="3"/>
+                    <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/>
+                  </svg>
+                }
+              </button>
               <button type="button" class="pf-cw__send press" (click)="send(c.id, box)" aria-label="Send">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -190,6 +222,13 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
               <span class="pf-cw__init">{{ initials(c) }}</span>
               @if (c.unreadCount > 0) {
                 <span class="pf-cw__head-badge">{{ c.unreadCount > 9 ? '9+' : c.unreadCount }}</span>
+              }
+              @if (windowsSvc.isFavourite(c.id)) {
+                <span class="pf-cw__head-fav" aria-hidden="true">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="m12 17.3-5.6 3 1.1-6.3-4.5-4.4 6.3-.9L12 3l2.7 5.7 6.3.9-4.5 4.4 1.1 6.3z"/>
+                  </svg>
+                </span>
               }
             </button>
           }
@@ -324,6 +363,16 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     }
     .pf-cw__input:focus { border-color: #7c3aed; }
     .pf-cw__file { display: none; }
+    .pf-cw__icon.is-fav { color: #fbbf24; }
+    .pf-cw__send.is-rec { color: #f87171; animation: pf-cw-rec 1.1s ease-in-out infinite; }
+    @keyframes pf-cw-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+    @media (prefers-reduced-motion: reduce) { .pf-cw__send.is-rec { animation: none; } }
+    .pf-cw__head-fav {
+      position: absolute; bottom: -1px; right: -1px;
+      width: 14px; height: 14px; border-radius: 9999px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--bg-card-solid, #14141f); color: #fbbf24;
+    }
 
     /* "+" menu — opens UPWARD; the composer sits at the window's floor. */
     .pf-cw__plus { position: relative; display: inline-flex; flex-shrink: 0; }
@@ -454,7 +503,17 @@ export class ChatWindowsComponent {
   /** Open windows resolved against the live conversation list. */
   protected readonly windows = computed(() => this.resolve(this.windowsSvc.open()));
   /** Minimized heads, same resolution. */
-  protected readonly heads = computed(() => this.resolve(this.windowsSvc.minimized()));
+  /** The rail = minimised chats PLUS favourites that aren't open right now
+   *  (owner: a favourite stays on the rail even after you close it). A
+   *  favourite you just closed is still one tap away; ordering keeps the
+   *  minimised ones first since those are the live conversations. */
+  protected readonly heads = computed(() => {
+    const open = new Set(this.windowsSvc.open());
+    const mini = this.windowsSvc.minimized();
+    const favs = this.windowsSvc.favourites()
+      .filter((id) => !open.has(id) && !mini.includes(id));
+    return this.resolve([...mini, ...favs]);
+  });
 
   constructor() {
     // Keep every open thread pinned to its newest message.
@@ -563,6 +622,84 @@ export class ChatWindowsComponent {
       this.windowsSvc.focus(conversationId);
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
+    }
+  }
+
+  // ── Voice messages ────────────────────────────────────────────────
+  /** Which window is recording (null = none). Only one at a time. */
+  protected readonly recordingFor = signal<string | null>(null);
+  protected readonly recordSecs = signal(0);
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordStream: MediaStream | null = null;
+  private recordChunks: Blob[] = [];
+  private recordTimer: ReturnType<typeof setInterval> | null = null;
+  private recordStartedAt = 0;
+
+  /**
+   * Tap to start, tap again to stop and send — the same contract the
+   * Messages page uses, including the 60-second hard cap. Sends straight
+   * away on stop: a voice note is rarely something you sit on.
+   */
+  protected async toggleRecord(conversationId: string): Promise<void> {
+    if (this.recordingFor()) { this.stopRecording(true); return; }
+    if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined') {
+      this.toasts.error("Voice messages aren't supported on this browser.");
+      return;
+    }
+    try {
+      this.recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+      this.mediaRecorder = mime
+        ? new MediaRecorder(this.recordStream, { mimeType: mime })
+        : new MediaRecorder(this.recordStream);
+      this.recordChunks = [];
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) this.recordChunks.push(e.data);
+      };
+      this.mediaRecorder.onstop = () => void this.finalizeRecording(conversationId);
+      this.mediaRecorder.start();
+      this.recordStartedAt = Date.now();
+      this.recordSecs.set(0);
+      this.recordingFor.set(conversationId);
+      this.recordTimer = setInterval(() => {
+        const elapsed = Date.now() - this.recordStartedAt;
+        this.recordSecs.set(Math.round(elapsed / 1000));
+        if (elapsed >= 60000) this.stopRecording(true);   // hard cap
+      }, 200);
+    } catch {
+      this.toasts.error('Microphone permission denied.');
+    }
+  }
+
+  private stopRecording(send: boolean): void {
+    if (!this.recordingFor()) return;
+    this.recordingFor.set(null);
+    if (this.recordTimer) { clearInterval(this.recordTimer); this.recordTimer = null; }
+    try { this.mediaRecorder?.stop(); } catch { /* already stopped */ }
+    this.recordStream?.getTracks().forEach((t) => t.stop());
+    this.recordStream = null;
+    if (!send) this.recordChunks = [];
+  }
+
+  private async finalizeRecording(conversationId: string): Promise<void> {
+    if (this.recordChunks.length === 0) return;
+    const secs = Math.max(1, Math.round((Date.now() - this.recordStartedAt) / 1000));
+    const mime = this.mediaRecorder?.mimeType?.split(';')[0] ?? 'audio/webm';
+    const ext = mime === 'audio/mp4' ? 'm4a' : 'webm';
+    const file = new File([new Blob(this.recordChunks, { type: mime })],
+                          `voice-${secs}s.${ext}`, { type: mime });
+    this.recordChunks = [];
+    this.uploading.set(true);
+    try {
+      const up = await this.chat.uploadAttachment(file);
+      await this.chat.sendMessage(conversationId, '', null, up);
+      this.windowsSvc.focus(conversationId);
+    } catch (err) {
+      this.toasts.error(ApiError.from(err).message);
+    } finally {
+      this.uploading.set(false);
     }
   }
 
