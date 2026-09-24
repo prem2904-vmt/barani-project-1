@@ -77,4 +77,50 @@ describe('CatalogProposalsPanel', () => {
     c.dismiss('p1');
     expect(api.post).toHaveBeenCalledWith('/api/catalog-proposals/p1/dismiss', {});
   });
+
+  it('Review shows each request\'s dates and the Field · Yours · Master difference', () => {
+    const { f, c, el } = render({ proposals: [{
+      id: 'p1', catalogKey: 'BIO010', kind: 'update', targetTestId: 'hb', createdAt: '',
+      masterUpdatedAt: '2026-09-24T12:00:00Z', yourChangedAt: '2026-09-20T12:00:00Z',
+      fields: [
+        { field: 'TatHours', label: 'Turnaround time', yours: '4 hours', master: '3 hours' },
+        { field: 'Section', label: 'Section', yours: null, master: 'Glucose' },
+      ],
+    }] });
+    c.open.set(true);
+    f.detectChanges();
+    const row = el.querySelector('.pf-cp__row')!;
+    expect(row.querySelector('.pf-cp__dates')?.textContent).toMatch(/^Master updated 24 Sep( 2026)?, after your change on 20 Sep( 2026)?$/);
+    const head = [...row.querySelectorAll('.pf-cp__diff thead th')].map(th => th.textContent?.trim());
+    expect(head).toEqual(['Field', 'Yours', 'Master']);
+    const cells = [...row.querySelectorAll('.pf-cp__diff tbody tr')].map(tr =>
+      [...tr.querySelectorAll('th, td')].map(x => x.textContent?.trim()));
+    expect(cells).toEqual([
+      ['Turnaround time', '4 hours', '3 hours'],
+      ['Section', '\u2014', 'Glucose'],
+    ]);
+  });
+
+  it('per-row Accept / Dismiss buttons post that request and tell the host', () => {
+    const { f, c, el, api, changed } = render();
+    c.open.set(true);
+    f.detectChanges();
+    const rows = el.querySelectorAll('.pf-cp__row');
+    const btn = (row: Element, label: string) =>
+      [...row.querySelectorAll('button')].find(b => b.textContent?.trim() === label) as HTMLButtonElement;
+    btn(rows[1], 'Accept').click();
+    expect(api.post).toHaveBeenCalledWith('/api/catalog-proposals/p2/accept', {});
+    expect(changed).toHaveBeenCalledTimes(1);
+    btn(rows[0], 'Dismiss').click();
+    expect(api.post).toHaveBeenCalledWith('/api/catalog-proposals/p1/dismiss', {});
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to the server-resolved test name / code when the grid has no row', () => {
+    const { f, c, el } = render({ proposals: [{ id: 'p3', catalogKey: 'BIO010', kind: 'update', targetTestId: 'gone',
+      testName: 'Fasting Blood Sugar', testCode: 'BIO010', createdAt: '' }] });
+    c.open.set(true);
+    f.detectChanges();
+    expect(el.querySelector('.pf-cp__row')?.textContent).toContain('Fasting Blood Sugar');
+  });
 });

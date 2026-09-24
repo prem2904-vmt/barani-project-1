@@ -6,7 +6,9 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import { CatalogProposal, Test } from '../../../../shared/models/test.model';
-import { proposalPath, proposalTest, proposalBranchLabel, proposalKindLabel } from '../../../../shared/utils/catalog-proposals';
+import {
+  proposalPath, proposalTest, proposalBranchLabel, proposalKindLabel, proposalDatesLine, proposalDiffRows,
+} from '../../../../shared/utils/catalog-proposals';
 
 /**
  * Test Master updates waiting for this lab (copy-on-write, phase 5).
@@ -16,8 +18,11 @@ import { proposalPath, proposalTest, proposalBranchLabel, proposalKindLabel } fr
  * arrives here as a proposal — one per copy, so a branch's copy shows with
  * its branch. The lab accepts or dismisses each one, or all at once.
  *
- * A quiet strip above the Test Master grid; expands into the per-row list.
- * Hidden entirely when nothing is waiting.
+ * A quiet strip above the Test Master grid; "Review" expands into the per-row
+ * list — each request with its dates ("Master updated 24 Sep, after your change
+ * on 20 Sep") and the side-by-side difference (Field · Yours · Master). Accept =
+ * the copy takes the master's current version (it then reads the master again);
+ * Dismiss = keep yours until the master changes again. Hidden when nothing waits.
  */
 @Component({
   selector: 'pf-catalog-proposals-panel',
@@ -46,15 +51,36 @@ import { proposalPath, proposalTest, proposalBranchLabel, proposalKindLabel } fr
           <ul class="pf-cp__list">
             @for (p of rows(); track p.id) {
               <li class="pf-cp__row">
-                <div class="pf-cp__what">
-                  <span class="pf-cp__name">{{ p.name }}</span>
-                  @if (p.code) { <span class="pf-cp__code">{{ p.code }}</span> }
+                <div class="pf-cp__head">
+                  <div class="pf-cp__what">
+                    <span class="pf-cp__name">{{ p.name }}</span>
+                    @if (p.code) { <span class="pf-cp__code">{{ p.code }}</span> }
+                  </div>
+                  <span class="pf-cp__tag">{{ p.kind }}</span>
+                  <span class="pf-cp__tag pf-cp__tag--branch">{{ p.branch }}</span>
+                  <span class="pf-cp__spacer"></span>
+                  <button type="button" class="pf-cp__btn" [disabled]="busy()" (click)="dismiss(p.id)"
+                          title="Keep your version. A later master change will ask again.">Dismiss</button>
+                  <button type="button" class="pf-cp__btn pf-cp__btn--primary" [disabled]="busy()" (click)="accept(p.id)"
+                          title="Take the master's current version of this test. Prices stay as they are.">Accept</button>
                 </div>
-                <span class="pf-cp__tag">{{ p.kind }}</span>
-                <span class="pf-cp__tag pf-cp__tag--branch">{{ p.branch }}</span>
-                <span class="pf-cp__spacer"></span>
-                <button type="button" class="pf-cp__btn" [disabled]="busy()" (click)="dismiss(p.id)">Dismiss</button>
-                <button type="button" class="pf-cp__btn pf-cp__btn--primary" [disabled]="busy()" (click)="accept(p.id)">Accept</button>
+                @if (p.dates) { <p class="pf-cp__dates">{{ p.dates }}</p> }
+                @if (p.diff.length > 0) {
+                  <div class="pf-cp__diffwrap">
+                    <table class="pf-cp__diff">
+                      <thead><tr><th scope="col">Field</th><th scope="col">Yours</th><th scope="col">Master</th></tr></thead>
+                      <tbody>
+                        @for (d of p.diff; track d.field) {
+                          <tr>
+                            <th scope="row">{{ d.label }}</th>
+                            <td class="pf-cp__yours">{{ d.yours }}</td>
+                            <td class="pf-cp__master">{{ d.master }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
               </li>
             }
           </ul>
@@ -75,15 +101,26 @@ import { proposalPath, proposalTest, proposalBranchLabel, proposalKindLabel } fr
     .pf-cp__btn:disabled { opacity: 0.5; cursor: default; }
     .pf-cp__btn--primary { border-color: transparent; background: rgba(139, 92, 246, 0.14); color: var(--violet-text); }
     .pf-cp__list { list-style: none; margin: 0; padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
-    .pf-cp__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px;
+    .pf-cp__row { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px;
       background: rgba(148, 163, 184, 0.06); }
+    .pf-cp__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-cp__dates { margin: 0; font-size: 12px; color: var(--text-secondary); }
+    .pf-cp__diffwrap { overflow-x: auto; }
+    .pf-cp__diff { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .pf-cp__diff th, .pf-cp__diff td { text-align: left; padding: 5px 8px; vertical-align: top;
+      border-top: 1px solid rgba(148, 163, 184, 0.16); }
+    .pf-cp__diff thead th { border-top: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+      text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-cp__diff tbody th { font-weight: 500; color: var(--text-secondary); white-space: nowrap; width: 1%; }
+    .pf-cp__yours { color: var(--text-primary); }
+    .pf-cp__master { color: var(--violet-text); font-weight: 500; }
     .pf-cp__what { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
     .pf-cp__name { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-cp__code { font-size: 11.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
     .pf-cp__tag { font-size: 11px; padding: 2px 7px; border-radius: 999px; color: var(--text-secondary);
       background: rgba(148, 163, 184, 0.12); white-space: nowrap; }
     .pf-cp__tag--branch { color: var(--sky-text); background: rgba(14, 165, 233, 0.10); }
-    @media (max-width: 640px) { .pf-cp__row .pf-cp__spacer { display: none; } }
+    @media (max-width: 640px) { .pf-cp__head .pf-cp__spacer { display: none; } }
   `],
 })
 export class CatalogProposalsPanelComponent {
@@ -109,10 +146,12 @@ export class CatalogProposalsPanelComponent {
     const t = proposalTest(p, this.tests());
     return {
       id: p.id,
-      name: t?.name ?? p.catalogKey,
-      code: t?.testCode ?? '',
+      name: t?.name ?? p.testName ?? p.catalogKey,
+      code: t?.testCode ?? p.testCode ?? '',
       kind: proposalKindLabel(p),
       branch: proposalBranchLabel(p, this.branchNames()),
+      dates: proposalDatesLine(p),
+      diff: proposalDiffRows(p),
     };
   }));
 
@@ -123,7 +162,7 @@ export class CatalogProposalsPanelComponent {
     const n = this.proposals().length;
     const ok = await this.dialog.confirm({
       title: `Accept all ${n} Test Master update${n === 1 ? '' : 's'}?`,
-      message: 'Each of your changed tests takes the Admin Test Master\'s new version. Your own edits to those tests are replaced. Prices are not affected.',
+      message: 'Each of your changed tests takes the Admin Test Master\'s current version and follows the master again. Your own edits to those tests are replaced. Prices are not affected.',
       confirmLabel: 'Accept all',
       cancelLabel: 'Not now',
       tone: 'primary',
@@ -136,7 +175,7 @@ export class CatalogProposalsPanelComponent {
     const n = this.proposals().length;
     const ok = await this.dialog.confirm({
       title: `Dismiss all ${n} Test Master update${n === 1 ? '' : 's'}?`,
-      message: 'Your changed tests stay exactly as they are. You can still revert any of them to the master later.',
+      message: 'Your changed tests stay exactly as they are. If the master changes them again you will be asked again; you can also revert any of them to the master later.',
       confirmLabel: 'Dismiss all',
       cancelLabel: 'Not now',
       tone: 'danger',

@@ -10,12 +10,30 @@
  * Pure, no Angular: the admin console keeps a byte-identical copy.
  */
 
+/** One differing catalogue field of a request: the lab's value next to the
+ *  Admin Test Master's current one (display text; null = not set). */
+export interface ProposalField {
+  field: string;
+  label: string;
+  yours?: string | null;
+  master?: string | null;
+}
+
 export interface ProposalLike {
   id: string;
   catalogKey?: string | null;
   kind?: string | null;
   targetTestId?: string | null;
   branchId?: string | null;
+  /** The test it is about (server-resolved; the grid row wins when loaded). */
+  testName?: string | null;
+  testCode?: string | null;
+  /** When the master version on offer was made, and when the lab last
+   *  changed its copy (ISO). */
+  masterUpdatedAt?: string | null;
+  yourChangedAt?: string | null;
+  /** Every differing catalogue field (Field · Yours · Master). */
+  fields?: readonly ProposalField[] | null;
 }
 
 export interface ProposalTestLike {
@@ -61,4 +79,39 @@ export function pendingProposalIds(proposals: readonly ProposalLike[], tests: re
   for (const p of proposals) if (p?.id) ids.add(p.id);
   for (const t of tests) if (t.pendingProposal?.id) ids.add(t.pendingProposal.id);
   return ids;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "24 Sep" (with the year when it is not `now`'s year); '' for a missing or
+ *  unreadable date. Local calendar day. */
+export function proposalDate(iso: string | null | undefined, now: Date = new Date()): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const day = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return d.getFullYear() === now.getFullYear() ? day : `${day} ${d.getFullYear()}`;
+}
+
+/** The request's one-line history: "Master updated 24 Sep, after your change on
+ *  20 Sep" — or, when the lab edited its copy after the master moved, "Master
+ *  updated 24 Sep · you changed your copy on 26 Sep". Missing dates drop out. */
+export function proposalDatesLine(p: ProposalLike, now: Date = new Date()): string {
+  const master = proposalDate(p.masterUpdatedAt, now);
+  const yours = proposalDate(p.yourChangedAt, now);
+  if (master && yours) {
+    const after = new Date(p.masterUpdatedAt!).getTime() >= new Date(p.yourChangedAt!).getTime();
+    return after
+      ? `Master updated ${master}, after your change on ${yours}`
+      : `Master updated ${master} \u00b7 you changed your copy on ${yours}`;
+  }
+  if (master) return `Master updated ${master}`;
+  if (yours) return `You changed your copy on ${yours}`;
+  return '';
+}
+
+/** The difference table rows, blanks shown as an em dash. */
+export function proposalDiffRows(p: ProposalLike): { field: string; label: string; yours: string; master: string }[] {
+  const dash = (v: string | null | undefined) => (v ?? '').trim() || '\u2014';
+  return (p.fields ?? []).map(f => ({ field: f.field, label: f.label || f.field, yours: dash(f.yours), master: dash(f.master) }));
 }

@@ -91,6 +91,14 @@ export interface CatalogProposal {
   targetTestId?: string | null;
   branchId?: string | null;
   proposedPayloadJson?: string | null;
+  /** The test it is about (server-resolved). */
+  testName?: string | null;
+  testCode?: string | null;
+  /** When the master version on offer was made / when the lab last changed its copy. */
+  masterUpdatedAt?: string | null;
+  yourChangedAt?: string | null;
+  /** Every differing catalogue field — the review's Field · Yours · Master table. */
+  fields?: { field: string; label: string; yours?: string | null; master?: string | null }[] | null;
 }
 
 // Canonical reference-range shape (segment label + min/max + structured

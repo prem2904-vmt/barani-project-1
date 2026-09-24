@@ -1,5 +1,6 @@
 import {
-  pendingProposalIds, proposalBranchLabel, proposalKindLabel, proposalPath, proposalTest,
+  pendingProposalIds, proposalBranchLabel, proposalDate, proposalDatesLine, proposalDiffRows, proposalKindLabel,
+  proposalPath, proposalTest,
 } from './catalog-proposals';
 
 describe('catalog proposals (copy-on-write, per override row)', () => {
@@ -34,5 +35,30 @@ describe('catalog proposals (copy-on-write, per override row)', () => {
 
   it('pending ids are distinct across the list and the rows\' markers', () => {
     expect([...pendingProposalIds([{ id: 'p1' }, { id: 'p9' }], tests)].sort()).toEqual(['p1', 'p9']);
+  });
+
+  it('dates: "Master updated 24 Sep, after your change on 20 Sep"', () => {
+    const now = new Date(2026, 8, 25);
+    expect(proposalDate('2026-09-24T12:00:00Z', now)).toBe('24 Sep');
+    expect(proposalDate('2025-12-31T12:00:00Z', now)).toBe('31 Dec 2025');
+    expect(proposalDate(null, now)).toBe('');
+    expect(proposalDate('not a date', now)).toBe('');
+    expect(proposalDatesLine({ id: 'p', masterUpdatedAt: '2026-09-24T12:00:00Z', yourChangedAt: '2026-09-20T12:00:00Z' }, now))
+      .toBe('Master updated 24 Sep, after your change on 20 Sep');
+    expect(proposalDatesLine({ id: 'p', masterUpdatedAt: '2026-09-24T12:00:00Z', yourChangedAt: '2026-09-25T12:00:00Z' }, now))
+      .toBe('Master updated 24 Sep \u00b7 you changed your copy on 25 Sep');
+    expect(proposalDatesLine({ id: 'p', masterUpdatedAt: '2026-09-24T12:00:00Z' }, now)).toBe('Master updated 24 Sep');
+    expect(proposalDatesLine({ id: 'p' }, now)).toBe('');
+  });
+
+  it('difference rows: label, yours, master (blanks as a dash)', () => {
+    expect(proposalDiffRows({ id: 'p', fields: [
+      { field: 'TatHours', label: 'Turnaround time', yours: '4 hours', master: '3 hours' },
+      { field: 'Calculation', label: 'Calculation', yours: null, master: 'BIO001 * 2' },
+    ] })).toEqual([
+      { field: 'TatHours', label: 'Turnaround time', yours: '4 hours', master: '3 hours' },
+      { field: 'Calculation', label: 'Calculation', yours: '\u2014', master: 'BIO001 * 2' },
+    ]);
+    expect(proposalDiffRows({ id: 'p' })).toEqual([]);
   });
 });
