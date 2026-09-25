@@ -10,6 +10,7 @@ import { OpdSettingsComponent } from '../opd/admin/opd-settings.component';
 import { ModulePlaceholderComponent } from '../modules/module-placeholder.component';
 import { AdminOverviewComponent } from './admin-overview.component';
 import { AdminDashboardComponent } from './admin-dashboard.component';
+import { BranchesComponent } from './branches/branches.component';
 
 /**
  * /admin ND audit (fork D) — the CURRENT ND-PATTERN on hubs, list pages and
@@ -25,8 +26,10 @@ export function hygiene(el: HTMLElement) {
   expect(el.querySelector('input[type="checkbox"]:not(.pf-te2-srcheck)')).toBeNull();
   expect(EMOJI.test(el.textContent ?? '')).toBe(false);
 }
+/** Visible primaries (the classic header stays in code as .pf-classic-only). */
 export const primaries = (el: HTMLElement) =>
-  el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn .v-primary').length;
+  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn .v-primary'))
+    .filter(b => !b.closest('.pf-classic-only')).length;
 
 describe('ND audit D — Modules', () => {
   it('module + feature toggles are slate switches (role=switch); the On/Off filter is a neutral kit segment', () => {
@@ -142,6 +145,44 @@ describe('ND audit D — Overview (/admin) and settings hub (/admin/manage)', ()
     expect(pane.querySelector('.pf-admin-tile .nd-card__icon')).not.toBeNull();
     expect(p.el.querySelector('[data-g]')).toBeNull();
     expect(primaries(p.el)).toBe(0);
+    hygiene(p.el);
+  });
+});
+
+describe('ND audit D — Branches', () => {
+  const branches = [
+    { id: 'b1', name: 'Main Lab — Anna Nagar Collection Centre', code: 'MAIN', city: 'Chennai', isActive: true, hasPfBox: true,
+      subBranches: [{ id: 's1', branchId: 'b1', name: 'Kilpauk Satellite', code: 'KIL', type: 'satellite', isActive: true }] },
+  ];
+  const render = () => renderBandPage(BranchesComponent, {
+    getFor: (url) => url.startsWith('/api/tenants/branches') ? branches
+      : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Haematology', code: 'HEM', isActive: true, subBranchId: 's1' }] : [],
+  });
+
+  it('ONE primary: "Add branch" in the band; while the form is open the band turns Cancel and "Create branch" is the primary', () => {
+    const p = render();
+    expect(primaries(p.el)).toBe(1);
+    p.cmp.toggleNewBranch(); p.f.detectChanges();
+    expect(primaries(p.el)).toBe(1);
+    const form = p.el.querySelector('.pf-br-new.nd-card')!;
+    expect(form.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
+    expect(form.querySelectorAll('input.nd-input').length).toBe(4);
+    expect(form.querySelector('.nd-btn--primary')!.textContent).toContain('Create branch');
+    expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
+  });
+
+  it('branch cards are kit cards; names never truncated; no gradient badge / pink sub-branch; no × / → glyphs', () => {
+    const p = render();
+    const card = p.el.querySelector('.pf-br-card.nd-card')!;
+    expect(card).not.toBeNull();
+    expect(p.el.querySelector('.pf-trunc')).toBeNull();
+    expect(card.querySelector('.pf-br-name')!.textContent).toContain('Anna Nagar Collection Centre');
+    p.cmp.toggle('b1'); p.f.detectChanges();
+    expect(card.textContent).not.toMatch(/[×→]/);
+    expect(p.el.querySelector('.pf-dot-on')).not.toBeNull();
+    const act = card.querySelector('.nd-rowact')!;
+    expect(act.textContent).toContain('Deactivate');
+    expect(act.querySelector('svg')).not.toBeNull();
     hygiene(p.el);
   });
 });
