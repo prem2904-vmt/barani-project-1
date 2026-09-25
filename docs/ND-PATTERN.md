@@ -573,22 +573,26 @@ canonical example is the **test editor**
   for AT). Autosave only where it is truly authoritative — the test editor
   is NOT (its sections save on Save), so Save stays the primary.
 - **Context bar** (`pf-hero-band [customSearch] [contextBar]`, projected
-  `<div band-search class="nd-ctx">`): the record's name as the primary
-  chip (`.nd-ctx__primary`, 15px / 600, FULL — wraps, never an ellipsis)
-  with a quiet pencil (`.nd-ctx__edit`) that opens the field; then neutral
-  key / value chips (`.nd-ctx__chip` › `.nd-ctx__k` + value): origin (no
-  coloured dot), codes in Noto tabular (`.nd-num`), department, sample,
-  price, TAT, fasting, role, status … A chip may jump to its section. The
-  unpriced price carries the one allowed mark, `.nd-dot-unpriced`. A new
-  record's primary chip says what it is ("New test", "New role"). No big
-  title, breadcrumb or subtitle anywhere on the page. `[contextBar]` lets
-  the pill grow to a second row and use the band's full width; on phones
-  the chips scroll sideways in one row.
-- **Sections = a tabs row** (`.nd-tabs[role=tablist]` ›
-  `.nd-tabs__item[role=tab][aria-selected]`: glyph + label +
-  `.nd-tabs__dot`, violet = complete, hollow = something to finish) under
-  the band — the report-designer precedent. No SECTIONS rail: the content
-  takes the full width. Phones: the row scrolls sideways.
+  `<div band-search class="nd-ctx">`) = **the record's name + its section
+  tabs, nothing else** (owner, 2026-09-25): `[Test name ✎] | [Basics |
+  Price & sample | Result entry | Printed report | Consumables]`.
+  - The name is the primary chip (`.nd-ctx__primary`, 15px / 600, FULL —
+    wraps, never an ellipsis) with a quiet pencil (`.nd-ctx__edit`) that
+    opens the field. A tiny muted origin badge (Master / changed here /
+    Branch) may sit on it. A new record says what it is ("New test").
+  - **No fact chips** (code, department, sample, price, TAT, fasting …):
+    the sections below already show them — duplication is against the
+    pattern. Editors without sections may carry at most the one or two
+    identity facts the form doesn't show (a role's type, a field's key).
+  - The sections are a neutral segmented control IN the pill, after a
+    hairline divider: the selected segment is a raised card surface that
+    SLIDES between tabs (`--nd-spring`, off under reduced motion); each tab
+    has a small violet status dot (filled = complete, ring = something to
+    finish). One line at 1440; narrower, the tabs scroll inside the pill
+    (the open tab is kept in view); phones stack the name above a
+    sideways-scrolling tabs row. No SECTIONS rail, no separate tabs row.
+  - No big title, breadcrumb or subtitle anywhere. Single-section editors
+    skip the tabs (name only).
 - **Content:** the focused section is ONE `.nd-card` (violet icon chip +
   UPPERCASE label + a short `.nd-card__note`); only its body scrolls.
   Fields are kit fields (`.nd-field` › `.nd-field__lbl` + `.nd-input` +
@@ -600,17 +604,21 @@ canonical example is the **test editor**
   500 secondary, hints 12px tertiary, sub-headings 13px / 600.
 - **Side card only when it adds info** the form can't show — the test
   editor's LIVE PREVIEW (the printed page), 400px at ≥1024px. Below that it
-  hides behind a secondary **Preview** button at the end of the tabs row and
-  opens as a sheet (phones: `.nd-sheet`-style, above the navbar; tablets: a
+  hides behind a secondary **Preview** button in the band actions (an icon
+  on phones) and opens as a sheet (phones: `.nd-sheet`-style, above the navbar; tablets: a
   side sheet), with a scrim; Esc / × / scrim close.
+- **Fields line up:** on band pages `pf-select` triggers and
+  `pf-number-input` boxes match `.nd-input` (40px; 44px on phones).
+  Selected chips / tiles use `aria-pressed` / `aria-checked`, never an
+  `…--on` class (a global rule paints `button[class*="--on"]` violet).
 - **Palette + font:** violet + neutrals + slate; no green / teal / amber
   status text or pills ("Complete" = violet check, "Needs a name" = the
   amber required dot); Noto only, tabular numbers for codes, never
   monospace; SVG icons, never glyphs (✕ ↑ ↓ ⠿ ƒ ●).
 - **Real-layout check:** `apps/lms-e2e/src/test-editor-layout.rbac.spec.ts`
   (seeded Lab Admin; opens BIO005 via Test Master's own list call; read
-  only) asserts ONE primary on every tab, the full name in the context bar,
-  the tabs row, the 400px preview card at 1440, no page scroll, and no
+  only) asserts ONE primary on every tab, the pill = the full name + the
+  tabs on ONE line (no fact chips), the 400px preview card at 1440, no page scroll, and no
   monospace / green computed anywhere on the editor; at 375 the tabs scroll,
   Save is an icon and Preview opens a sheet above the navbar. Run it against
   a build: `BASE_URL=http://localhost:4310 CORS_RELAY=1 SHOTS_DIR=…`.
@@ -627,7 +635,8 @@ Toggle   .nd-toggle[role=switch][aria-checked] › .nd-toggle__track › .nd-tog
 Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done
 Numbers  .nd-num (Noto Sans + tabular-nums; .nd-mono is an alias)
 Fields   .nd-field › __lbl · .nd-input(--error)[readonly] · __hint
-Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit · __chip · __k · .nd-dot-unpriced
+Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit (+ the section tabs in the pill)
+         .nd-ctx__chip · __k · .nd-dot-unpriced (identity facts only where no section shows them)
          .nd-tabs[role=tablist] › .nd-tabs__item[role=tab][aria-selected] › .nd-tabs__dot(--ok) · .nd-savestate(__dot)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
