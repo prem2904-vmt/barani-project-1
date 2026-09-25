@@ -468,7 +468,8 @@ const COUNTERS: CounterSpec[] = [
                 <pf-scan-icon [size]="14" />
               </button>
               }
-              <button type="button" class="pf-mw-scan__btn press"
+              <button type="button" class="press"
+                      [class.pf-mw-scan__btn]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
                       [disabled]="!intakeScanInput().trim()"
                       (click)="intakeReceive()">Receive</button>
             </div>
@@ -2670,6 +2671,28 @@ const COUNTERS: CounterSpec[] = [
     }
     :host-context(.design-new) .nd-tilegrid .pf-tq__side > :last-child { margin-left: auto; }
     :host-context(.design-new) .nd-tilegrid .pf-tq__side:empty { display: none; }
+
+    /* ════ Round 6 (owner): the SAMPLE ID is the primary line ════
+       16.5px / 600 / normal text colour, Noto tabular — the biggest thing
+       on the tile. Patient name 13/500 secondary, meta 12 muted. */
+    :host-context(.design-new) .pf-tq__id {
+      font-family: inherit !important; font-size: 16.5px !important; font-weight: 600 !important;
+      color: var(--text-primary) !important; font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+    }
+    :host-context(.design-new) .pf-tq__who { font-size: 13px !important; font-weight: 500 !important; color: var(--text-secondary) !important; }
+    :host-context(.design-new) .pf-tq__sub,
+    :host-context(.design-new) .pf-tq__note { font-size: 12px; color: var(--text-muted); }
+    /* Stripe only where it means something: urgent (red) / high (amber). */
+    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--high) .pf-tq__cap { background: transparent; }
+    /* Intake scan field: kit input + a real secondary Receive. */
+    :host-context(.design-new) .pf-mw-scan:focus-within {
+      border-color: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+    }
+    :host-context(.design-new) .pf-mw-scan .nd-rowact { height: 28px; min-height: 28px; padding: 0 12px; }
+    @media (pointer: coarse) {
+      :host-context(.design-new) .pf-mw-scan .nd-rowact { height: 40px; min-height: 40px; }
+    }
 
   `]
 })

@@ -90,8 +90,8 @@ export interface CultureCaseView {
       <ul class="flex flex-col gap-3 list-none p-0 m-0" [ndTileGrid]="theme.isNewDesign()">
         @for (c of cases(); track c.orderTestId) {
           @let inc = incubatingStage(c);
-          <li class="pf-cc" [class.pf-cc--incub]="!!inc">
-            <span class="pf-cc__cap" aria-hidden="true"></span>
+          <li class="pf-cc" [class.pf-cc--incub]="!!inc" [class.pf-cc--nd]="theme.isNewDesign()">
+            @if (!theme.isNewDesign()) { <span class="pf-cc__cap" aria-hidden="true"></span> }
             <!-- The whole card is the one control: tap → bench workspace. -->
             <button type="button" class="pf-cc__hdr press" (click)="open(c)" [title]="'Open ' + (c.barcode || c.sampleId || 'case')">
               <span class="pf-cc__main">
@@ -102,9 +102,16 @@ export interface CultureCaseView {
                   }
                   <span class="pf-cc__day">Day {{ dayNo(c.createdAt) }}</span>
                 </span>
+                @if (theme.isNewDesign()) {
+                  <!-- New design: sample ID is the primary line; patient, then
+                       test, as quieter secondary lines (owner). -->
+                  <span class="pf-cc__who">{{ c.patientName || '—' }}</span>
+                  <span class="pf-cc__sub">{{ c.testName || 'Culture' }}@if (c.departmentName) { · {{ c.departmentName }} }</span>
+                } @else {
                 <span class="pf-cc__sub">
                   {{ c.patientName || '—' }} · {{ c.testName || 'Culture' }}@if (c.departmentName) { · {{ c.departmentName }} }
                 </span>
+                }
                 @if (inc) {
                   <span class="pf-cc__incub">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -119,7 +126,12 @@ export interface CultureCaseView {
                   <span class="pf-cc__now">Next: {{ currentStageLabel(c) }}</span>
                 }
               </span>
+              @if (theme.isNewDesign()) {
+                <svg class="pf-cc__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              } @else {
               <span class="pf-cc__chev" aria-hidden="true">→</span>
+              }
             </button>
 
           </li>
@@ -151,7 +163,41 @@ export interface CultureCaseView {
     .pf-cc__chev { flex-shrink: 0; font-size: 15px; color: var(--text-tertiary); transition: transform .15s ease, color .15s ease; }
     .pf-cc:hover .pf-cc__chev { color: var(--violet-text, #7c3aed); transform: translateX(2px); }
 
-  `],
+  
+    /* ── New design (owner): same card as the other My Work tiles ──
+       No stripe; sample ID is the primary line; patient + test secondary;
+       the next step is a neutral chip whose small violet dot is the one
+       accent; Day N a neutral chip top-right; a quiet chevron. */
+    .pf-cc--nd { border-radius: var(--nd-radius-sm, 10px); background: var(--nd-card-bg); border: 1px solid var(--nd-line);
+      height: 100%; }
+    .pf-cc--nd:hover { border-color: var(--nd-sel-border); }
+    .pf-cc--nd.pf-cc--incub { border-color: var(--nd-line); }
+    .pf-cc--nd .pf-cc__hdr { padding: 12px 12px 12px 14px; align-items: flex-start; height: 100%; }
+    .pf-cc--nd .pf-cc__main { gap: 3px; }
+    .pf-cc--nd .pf-cc__id { font-family: inherit; font-size: 16.5px; font-weight: 600; letter-spacing: 0.01em; color: var(--text-primary); }
+    .pf-cc--nd .pf-cc__who { font-size: 13px; font-weight: 500; color: var(--text-secondary); overflow-wrap: anywhere; }
+    .pf-cc--nd .pf-cc__sub { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+    .pf-cc--nd .pf-cc__day,
+    .pf-cc--nd .pf-cc__tag,
+    .pf-cc--nd .pf-cc__tag--warn {
+      font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none;
+      padding: 2px 8px; border-radius: var(--nd-radius-chip, 8px);
+      background: var(--nd-chip-bg); color: var(--text-secondary); font-variant-numeric: tabular-nums;
+    }
+    .pf-cc--nd .pf-cc__now,
+    .pf-cc--nd .pf-cc__incub {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
+      padding: 3px 9px; border-radius: var(--nd-radius-chip, 8px);
+      background: var(--nd-chip-bg); color: var(--text-secondary); font-size: 12px; font-weight: 500;
+    }
+    .pf-cc--nd .pf-cc__now::before {
+      content: ''; width: 6px; height: 6px; border-radius: 999px; flex: none;
+      background: var(--color-violet-600, #7c3aed);
+    }
+    .pf-cc--nd .pf-cc__incub svg { color: var(--text-tertiary); }
+    .pf-cc--nd .pf-cc__chev { align-self: center; color: var(--text-muted); font-size: inherit; }
+    .pf-cc--nd:hover .pf-cc__chev { color: var(--text-secondary); transform: translateX(2px); }
+`],
 })
 export class CulturePanelComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);

@@ -189,6 +189,16 @@ pill. Functional exceptions — these are data or warnings, not decoration:
   numbers (`.nd-num` = Noto Sans + `font-variant-numeric: tabular-nums`),
   never a system monospace (`monospace` / `ui-monospace` renders as Courier).
 
+### In lab work lists the sample ID is the primary line
+
+Queue / My Work / Completed / Culture tiles and Lab Intake rows lead with the
+SAMPLE ID: ~16.5px, weight 600, normal text colour, Noto Sans tabular numbers
+(never small violet, never monospace). Patient name ~13px / 500 secondary,
+meta ~12px muted. Colour stripes only for urgent (red) / high (amber). A
+received / done row goes quieter (muted text + a small violet check), never
+a green or amber pill. The next step on a culture case is a neutral chip
+whose small violet dot is the one accent.
+
 ### Work queues: adaptive tile grid, 3/2/1 columns by container width
 
 Queue / My Work / Completed / Culture lists use `<ul [ndTileGrid]="…">`

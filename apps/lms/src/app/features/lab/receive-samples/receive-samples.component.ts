@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { ThemeService } from '../../../core/services/theme.service';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { DestroyRef, ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -337,14 +338,26 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                     Awaiting
                   </span>
                 } @else if (g.state === 'received') {
-                  <span class="pf-rs-row__chip pf-rs-row__chip--done" title="Received at the lab — drops off this list after 24 h.">
+                  <span class="pf-rs-row__chip pf-rs-row__chip--done" [class.pf-rs-done]="theme.isNewDesign()"
+                        title="Received at the lab — drops off this list after 24 h.">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                     Received
                   </span>
                 } @else {
-                  <button type="button" class="pf-rs-row__btn press" [disabled]="busy()"
+                  <button type="button" class="press" [disabled]="busy()"
+                          [class.pf-rs-row__btn]="!theme.isNewDesign()"
+                          [class.nd-rowact]="theme.isNewDesign()"
+                          [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
                           (click)="markArrived(g.orderId, labCfg.sampleFocused() ? asTube(g).sampleDbId ?? undefined : undefined)"
-                          aria-label="Receive" title="Receive">Receive</button>
+                          [attr.aria-label]="'Receive ' + (g.sampleId || g.patientName || '')" title="Receive">
+                    @if (theme.isNewDesign()) {
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/>
+                      </svg>
+                    }
+                    <span class="nd-rowact__t">Receive</span>
+                  </button>
                 }
               </li>
             } @else {
@@ -910,6 +923,36 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       .pkg-preview__row { flex-wrap: wrap; }
       .pkg-preview__meta { width: 100%; }
     }
+
+    /* ── New design (owner): palette + pattern ──
+       No coloured stripes (urgent/high only, where they exist); pending =
+       neutral row + .nd-rowact Receive; received = quieter row, small violet
+       check + muted "Received", no pill, no green/amber/teal. The sample ID
+       is the primary line (16.5 / 600, Noto tabular). */
+    :host-context(.design-new) .pf-rs-row {
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px);
+    }
+    :host-context(.design-new) .pf-rs-row:hover { background: var(--nd-card-bg); border-color: var(--nd-sel-border); }
+    :host-context(.design-new) .pf-rs-row--pending,
+    :host-context(.design-new) .pf-rs-row--received { border-left: 1px solid var(--nd-line); }
+    :host-context(.design-new) .pf-rs-row--received { background: var(--nd-card-bg); }
+    :host-context(.design-new) .pf-rs-row--received .pf-rs-row__sample,
+    :host-context(.design-new) .pf-rs-row--received .pf-rs-row__name,
+    :host-context(.design-new) .pf-rs-row--received .pf-rs-row__name-main { color: var(--text-tertiary) !important; }
+    :host-context(.design-new) .pf-rs-row__sample {
+      font-family: inherit; font-size: 16.5px; font-weight: 600; letter-spacing: 0.01em;
+      font-variant-numeric: tabular-nums; color: var(--text-primary);
+    }
+    :host-context(.design-new) .pf-rs-row__patient { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+    :host-context(.design-new) .pf-rs-row__chip {
+      background: var(--nd-chip-bg); border: 0; color: var(--text-secondary);
+      font-weight: 500; letter-spacing: 0; border-radius: var(--nd-radius-chip, 8px);
+    }
+    :host-context(.design-new) .pf-rs-row__chip.pf-rs-done {
+      background: none; border: 0; padding: 0 4px; gap: 5px; color: var(--text-tertiary);
+      display: inline-flex; align-items: center; font-weight: 500;
+    }
+    :host-context(.design-new) .pf-rs-row__chip.pf-rs-done svg { color: var(--color-violet-600, #7c3aed); }
   `]
 })
 export class ReceiveSamplesComponent implements OnInit {
@@ -925,6 +968,8 @@ export class ReceiveSamplesComponent implements OnInit {
   private readonly api = inject(ApiService);
   /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
   readonly theme = inject(ThemeService);
+  /** Row actions: text on web, icon on touch (nd-kit .nd-rowact). */
+  readonly webPointer = webPointerSignal();
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);

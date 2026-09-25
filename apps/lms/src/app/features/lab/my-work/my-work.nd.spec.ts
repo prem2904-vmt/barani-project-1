@@ -101,3 +101,14 @@ describe('My Work — round 5 (owner): headers, counts, row actions, dots', () =
     expect(c.plural(2, 'sample')).toBe('2 samples');
   });
 });
+
+describe('My Work — round 6 (owner): sample ID is the primary line', () => {
+  const css = () => ((MyWorkComponent as any).ɵcmp.styles as string[]).join('\n');
+  it('tile ID is 16.5px / 600 / primary text colour; name 13px secondary', () => {
+    expect(css()).toMatch(/\.design-new[^{]*\.pf-tq__id[^{]*\{[^}]*font-size:\s*16\.5px\s*!important;\s*font-weight:\s*600\s*!important;[^}]*color:\s*var\(--text-primary\)/);
+    expect(css()).toMatch(/\.design-new[^{]*\.pf-tq__who[^{]*\{[^}]*font-size:\s*13px/);
+  });
+  it('normal-priority tiles lose the stripe (urgent / high keep theirs)', () => {
+    expect(css()).toMatch(/\.pf-tq[^{\s]*:not\(\.pf-tq--urgent\):not\(\.pf-tq--high\)[^{]*\.pf-tq__cap[^{]*\{[^}]*transparent/);
+  });
+});
