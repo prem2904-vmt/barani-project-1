@@ -11,6 +11,8 @@ import { ModulePlaceholderComponent } from '../modules/module-placeholder.compon
 import { AdminOverviewComponent } from './admin-overview.component';
 import { AdminDashboardComponent } from './admin-dashboard.component';
 import { BranchesComponent } from './branches/branches.component';
+import { VendorsComponent } from './vendors/vendors.component';
+import { provideHttpClient } from '@angular/common/http';
 
 /**
  * /admin ND audit (fork D) — the CURRENT ND-PATTERN on hubs, list pages and
@@ -184,5 +186,47 @@ describe('ND audit D — Branches', () => {
     expect(act.textContent).toContain('Deactivate');
     expect(act.querySelector('svg')).not.toBeNull();
     hygiene(p.el);
+  });
+});
+
+describe('ND audit D — Vendors', () => {
+  const vendors = [
+    { id: 'v1', name: 'Apollo Hospital', code: 'APOLLO', contactName: 'Ravi', gstin: '33ABCDE1234F1Z5', isActive: true, totalCredit: 0, usedCredit: 500, balance: 0, outstanding: -200, createdAt: '2026-01-01' },
+    { id: 'v2', name: 'Old Partner', code: 'OLD', isActive: false, totalCredit: 0, usedCredit: 0, balance: 0, outstanding: 0, createdAt: '2026-01-01' },
+  ];
+  const render = () => renderBandPage(VendorsComponent, {
+    getFor: (url) => url.startsWith('/api/vendors') && !url.includes('/transactions') ? vendors : [],
+    providers: [provideHttpClient()],
+  });
+
+  it('ONE primary (band "Add vendor"); per-vendor actions are .nd-rowact text buttons with icons for touch', () => {
+    const p = render();
+    expect(primaries(p.el)).toBe(1);
+    const acts = p.el.querySelectorAll('.pf-vn-card')[0].querySelectorAll('.pf-vendor__actions .nd-rowact');
+    expect(Array.from(acts).map(a => a.querySelector('.nd-rowact__t')!.textContent!.trim()))
+      .toEqual(['Top up', 'Record payment', 'Email statement', 'View history', 'Deactivate']);
+    expect(Array.from(acts).every(a => !!a.querySelector('svg[aria-hidden="true"]'))).toBe(true);
+    p.cmp.openTopUp(vendors[0]); p.f.detectChanges();
+    expect(primaries(p.el)).toBe(1);
+    hygiene(p.el);
+  });
+
+  it('new-vendor editor = kit card with kit fields; the band button becomes a quiet Cancel', () => {
+    const p = render();
+    p.cmp.toggleNewVendor(); p.f.detectChanges();
+    const form = p.el.querySelector('.pf-vn-new.nd-card')!;
+    expect(form.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
+    expect(form.querySelectorAll('input.nd-input').length).toBeGreaterThanOrEqual(8);
+    expect(primaries(p.el)).toBe(1);
+    expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
+  });
+
+  it('palette: code / inactive = neutral chips, in-credit = violet (never green), filter = neutral nd-seg', () => {
+    const p = render();
+    const chips = p.el.querySelectorAll('.pf-vendor__code.nd-chip');
+    expect(chips.length).toBe(3);
+    expect(p.el.querySelector('.pf-vendor__bal-amt--credit')).not.toBeNull();
+    expect(p.tools()!.querySelectorAll('.nd-seg [role="radio"]').length).toBe(3);
+    expect(p.el.querySelector('pf-chip, pf-tile')).toBeNull();
   });
 });

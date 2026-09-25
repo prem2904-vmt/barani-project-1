@@ -84,7 +84,7 @@ describe('Admin band — Vendors', () => {
     const p = render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.tools()!.querySelector('pf-segmented')).not.toBeNull();
+    expect(p.tools()!.querySelector('.nd-seg[role="radiogroup"]')).not.toBeNull();
     expect(names(p.el).length).toBe(3);
   });
 
