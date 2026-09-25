@@ -64,7 +64,8 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       </div>
 
       <div class="pf-hb__searchrow">
-        <div class="pf-hb__search" [class.pf-hb__search--tabs]="tabsOnly()" [class.pf-hb__search--ctx]="contextBar()">
+        <div class="pf-hb__search" [class.pf-hb__search--tabs]="tabsOnly()" [class.pf-hb__search--ctx]="contextBar()"
+             [class.pf-hb__search--std]="standardPill()">
           <!-- The field (icon + input + scan icons) is one unit. On
                tablet/desktop it is display:contents, i.e. INVISIBLE to
                layout — the pill renders exactly as before. On phones it
@@ -183,12 +184,16 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     /* Context-bar pill (editors): the record's identity chips may need a
        second row at tablet widths — the pill grows instead of clipping. */
     .pf-hb__search.pf-hb__search--ctx { height: auto; min-height: 53px; padding-block: 4px; max-width: none; }
+    /* …unless the page asks for the STANDARD pill: the search pill's own
+       max-width + centring (Order & Payments, My Work…), whatever it holds. */
+    .pf-hb__search.pf-hb__search--ctx.pf-hb__search--std { max-width: var(--pf-hb-pill-max); }
 
     /* ── Search pill overlapping the band's bottom edge (53px, r20) ── */
     .pf-hb__searchrow { padding: 0 20px; margin-top: -33px; }
     .pf-hb__search {
       display: flex; align-items: center; gap: 10px;
-      height: 53px; max-width: 1123px; margin-inline: auto;
+      --pf-hb-pill-max: 1123px;
+      height: 53px; max-width: var(--pf-hb-pill-max); margin-inline: auto;
       padding: 0 12px 0 20px;
       border-radius: 20px;
       background: #ffffff;
@@ -365,6 +370,9 @@ export class HeroBandComponent {
   /** Pill = an editor's CONTEXT BAR (identity chips projected via
    *  [band-search] with customSearch): the pill may grow to wrap them. */
   readonly contextBar = input<boolean>(false);
+  /** A context-bar pill at the STANDARD search-pill size (same max-width
+   *  and centring as every search page) instead of the full band width. */
+  readonly standardPill = input<boolean>(false);
 
   /** Optional handler for the back chevron — for an in-page step (e.g. the
    *  collect drawer) whose "back" closes the step rather than navigating.

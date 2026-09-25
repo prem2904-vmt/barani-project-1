@@ -200,6 +200,10 @@
 .nd-input--error, .nd-input--error:hover, .nd-input--error:focus { border-color: var(--red-border, #ef4444); }
 .nd-input--error:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-border, #ef4444) 18%, transparent); }
 textarea.nd-input { resize: vertical; line-height: 1.45; }
+/* Numbers are typed, never spun: no native spinner arrows on kit inputs. */
+.nd-input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+.nd-input[type='number']::-webkit-inner-spin-button,
+.nd-input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 @media (max-width: 640px) { .nd-input { min-height: 44px; font-size: 16px; } }
 
 /* Field parity on new-design band pages: pf-select triggers and

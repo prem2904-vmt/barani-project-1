@@ -97,10 +97,13 @@ describe('DynamicInputComponent — new-design markup', () => {
     expect(c.countrySelectOptionsNd[0]).toMatchObject({ value: '+91', label: '+91', hint: 'India' });
   });
 
-  it('DOB keeps the date ⇄ age logic: kit date input + age + a neutral Yrs / Mo segment', () => {
+  it('DOB keeps the date ⇄ age logic: typed dd/mm/yyyy + numeric-text age + a neutral Yrs / Mo segment', () => {
     const { el, c } = create({ name: 'date_of_birth', title: 'Date of birth', type: 'date' });
-    expect(el.querySelector('input[type="date"].nd-input.nd-num')).not.toBeNull();
-    expect(el.querySelector('input[type="number"].nd-input.nd-num')).not.toBeNull();
+    const dob = el.querySelector<HTMLInputElement>('input.pf-di-date__in.nd-input.nd-num')!;
+    expect(dob.value).toBe('');
+    expect(dob.placeholder).toBe('dd/mm/yyyy');
+    expect(el.querySelector('input.pf-di-dob__age[type="text"][inputmode="numeric"]')).not.toBeNull();
+    expect(el.querySelector('input[type="number"]')).toBeNull();
     const unit = el.querySelectorAll('.pf-di-seg--unit .nd-seg__item');
     expect(Array.from(unit).map(b => b.textContent!.trim())).toEqual(['Yrs', 'Mo']);
     expect(unit[0].getAttribute('aria-checked')).toBe('true');
@@ -108,6 +111,34 @@ describe('DynamicInputComponent — new-design markup', () => {
     c.valueChange.subscribe(v => (out = v));
     c.onHybridAge(30);
     expect(String(out)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('DOB: an impossible or future date is an inline error and never stored', () => {
+    const { el, f, c } = create({ name: 'date_of_birth', title: 'Date of birth', type: 'date' });
+    let out: unknown = 'unset';
+    c.valueChange.subscribe(v => (out = v));
+    const dob = el.querySelector<HTMLInputElement>('input.pf-di-date__in')!;
+    dob.value = '31022020'; dob.dispatchEvent(new Event('input')); f.detectChanges();
+    expect(el.querySelector('.pf-di-err')!.textContent).toContain('valid date');
+    expect(out).toBeNull();
+    dob.value = '01012999'; dob.dispatchEvent(new Event('input')); f.detectChanges();
+    expect(el.querySelector('.pf-di-err')!.textContent).toContain('future');
+    dob.value = '15051990'; dob.dispatchEvent(new Event('input')); f.detectChanges();
+    expect(out).toBe('1990-05-15');
+    expect(el.querySelector('.pf-di-err')).toBeNull();
+  });
+
+  it('a number field that is really a phone ("Additional contact") gets the phone treatment — no spinner', () => {
+    const { el, c } = create({ name: 'additional_contact', title: 'Additional contact', type: 'number' });
+    expect(el.querySelector('.pf-di-phone input[type="tel"]')).not.toBeNull();
+    expect(el.querySelector('input[type="number"]')).toBeNull();
+    let out: unknown;
+    c.valueChange.subscribe(v => (out = v));
+    c.onPhoneDigitsChange('9876543210');
+    expect(out).toBe('+919876543210');
+    // A real number field keeps its input (spinner hidden by the kit).
+    const n = create({ name: 'weight', title: 'Weight', type: 'number' });
+    expect(n.el.querySelector('input[type="number"].nd-input')).not.toBeNull();
   });
 
   it('identity numbers (ABHA) are grouped in tabular numbers; checkbox → slate switch', () => {

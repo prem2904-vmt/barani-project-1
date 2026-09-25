@@ -37,6 +37,12 @@ export interface DynamicFieldConfig {
 
 type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high';
 
+/** A number field that is really a phone number (by its name / label). */
+export function isContactNumberField(f: { type?: string; name?: string; title?: string } | null | undefined): boolean {
+  if (!f || !['number', 'numeric'].includes(f.type ?? '')) return false;
+  return /phone|mobile|contact|whats\s?app|(^|[^a-z])tel([^a-z]|$)/i.test(`${f.name ?? ''} ${f.title ?? ''}`);
+}
+
 @Component({
   selector: 'pf-dynamic-input',
   standalone: true,
@@ -57,9 +63,9 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
          logic (phone rules, identity grouping, DOB ⇄ age) is shared with
          the classic template below — only the markup differs. -->
     <ng-template #ndTpl>
-      @let t = field.type;
+      @let t = ndType();
       @let opts = normalisedOptions();
-      @let err = error || (t === 'phone' ? phoneError() : null);
+      @let err = error || (t === 'phone' ? phoneError() : null) || (isDobField() ? dobError() : null);
       <div class="flex flex-col gap-1.5 nd-field pf-di-nd" [attr.data-field]="field.name" [class.pf-di-nd--error]="!!err">
         @if (t !== 'checkbox' && t !== 'toggle') {
           <label class="nd-field__lbl pf-di-lbl" [attr.for]="inputId" [id]="inputId + '-l'">
@@ -118,16 +124,27 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
             @if (isDobField()) {
               <!-- DOB ⇄ age: an exact date OR an age (Yrs / Mo), same logic as classic. -->
               <div class="pf-di-dob">
-                <input [id]="inputId" data-pf-stop type="date" class="nd-input nd-num pf-di-dob__date" [attr.max]="todayIso"
-                       [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
-                       [attr.aria-required]="field.required || null"
-                       [ngModel]="value" (ngModelChange)="emit($event)" />
+                <!-- A typed dd/mm/yyyy (auto slashes) — EMPTY by default in every
+                     browser (a native date input shows today greyed in Safari).
+                     The calendar button still opens the native picker. -->
+                <span class="pf-di-date pf-di-dob__date">
+                  <input #dobIn [id]="inputId" data-pf-stop type="text" inputmode="numeric" autocomplete="off"
+                         maxlength="10" placeholder="dd/mm/yyyy" class="nd-input nd-num pf-di-date__in"
+                         [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+                         [attr.aria-required]="field.required || null"
+                         [value]="dobText()" (input)="onDobInput(dobIn)" (blur)="onDobBlur()" />
+                  <button type="button" class="pf-di-date__pick" tabindex="-1" aria-label="Pick a date" title="Pick a date"
+                          (click)="openDobPicker(dobPick)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                  </button>
+                  <input #dobPick type="date" class="pf-di-date__native" tabindex="-1" aria-hidden="true"
+                         [attr.max]="todayIso" [value]="value || ''" (change)="onDobPicked(dobPick.value)" />
+                </span>
                 <span class="pf-di-dob__or">or</span>
-                <input type="number" inputmode="numeric" class="nd-input nd-num pf-di-dob__age" min="0"
-                       [class.nd-input--error]="!!err"
-                       [attr.max]="ageUnit() === 'months' ? 240 : 150" placeholder="Age"
+                <input #ageIn type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off"
+                       class="nd-input nd-num pf-di-dob__age" [class.nd-input--error]="!!err" placeholder="Age"
                        [attr.aria-label]="'Age in ' + ageUnit()"
-                       [ngModel]="hybridAgeDisplay()" (ngModelChange)="onHybridAge($event)" />
+                       [value]="hybridAgeDisplay() ?? ''" (input)="onAgeText(ageIn)" />
                 <div class="nd-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
                      (keydown)="onUnitKey($event)">
                   <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
@@ -960,6 +977,16 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
     .pf-di-dob { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .pf-di-dob__date { flex: 1 1 150px; width: auto; }
     .pf-di-dob__age { flex: 0 0 84px; width: 84px; }
+    /* Typed date + a calendar button over a hidden native picker. */
+    .pf-di-date { position: relative; display: block; min-width: 0; }
+    .pf-di-date__in { padding-right: 40px; }
+    .pf-di-date__pick {
+      position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+      display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+      border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary); cursor: pointer;
+    }
+    .pf-di-date__pick:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
+    .pf-di-date__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
     .pf-di-dob__or { flex: none; font-size: 12px; color: var(--text-tertiary); }
     /* Segmented choices: a 40px neutral control; wraps rather than clips. */
     .pf-di-seg { box-sizing: border-box; min-height: 40px; max-width: 100%; flex-wrap: wrap; align-items: stretch; }
@@ -1025,6 +1052,61 @@ export class DynamicInputComponent {
     if (v == null || v === '') this._selectedCountryCode.set(code);
   }
 
+  /** Number fields that are really phone numbers ("Additional contact",
+   *  "Alternate mobile" …) get the phone treatment in the new design: a
+   *  tel input with the country code, never a number spinner. */
+  isContactNumber(): boolean { return this.nd && isContactNumberField(this._field()); }
+  private isPhoneLike(): boolean { return this._field()?.type === 'phone' || this.isContactNumber(); }
+  /** The type the nd markup renders (contact numbers → phone). */
+  ndType(): string { return this.isContactNumber() ? 'phone' : (this._field()?.type ?? ''); }
+
+  // ── New-design DOB: typed dd/mm/yyyy, never prefilled ──────────────
+  private readonly _dobTyping = signal<string | null>(null);
+  private readonly _dobError = signal<string | null>(null);
+  readonly dobError = this._dobError.asReadonly();
+  /** What the box shows: the text being typed, else the value as dd/mm/yyyy
+   *  (EMPTY when there is no value — nothing is ever defaulted). */
+  readonly dobText = computed(() => this._dobTyping() ?? DynamicInputComponent.isoToDmy(this._value()));
+  private static isoToDmy(v: unknown): string {
+    const m = String(v ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+  }
+  onDobInput(el: HTMLInputElement): void {
+    const d = el.value.replace(/\D/g, '').slice(0, 8);
+    const t = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+    if (el.value !== t) el.value = t;
+    this._dobTyping.set(t);
+    this._dobError.set(null);
+    if (d.length < 8) { if (this._value()) this.emit(null); return; }
+    const day = +d.slice(0, 2), mon = +d.slice(2, 4), yr = +d.slice(4);
+    const iso = `${d.slice(4)}-${d.slice(2, 4)}-${d.slice(0, 2)}`;
+    const dt = new Date(yr, mon - 1, day);
+    const real = yr >= 1900 && dt.getFullYear() === yr && dt.getMonth() === mon - 1 && dt.getDate() === day;
+    if (!real) { this._dobError.set('Not a valid date (dd/mm/yyyy)'); this.emit(null); return; }
+    if (iso > this.todayIso) { this._dobError.set("Date of birth can't be in the future"); this.emit(null); return; }
+    this.emit(iso);
+  }
+  onDobBlur(): void {
+    // Keep a half-typed date on screen only while its error explains it.
+    if (!this._dobError()) this._dobTyping.set(null);
+  }
+  onDobPicked(v: string): void {
+    this._dobTyping.set(null);
+    this._dobError.set(null);
+    this.emit(v || null);
+  }
+  openDobPicker(el: HTMLInputElement): void {
+    try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { el.click(); }
+  }
+  /** Age as a numeric TEXT box (no spinner): digits only. */
+  onAgeText(el: HTMLInputElement): void {
+    const d = el.value.replace(/\D/g, '').slice(0, 3);
+    if (el.value !== d) el.value = d;
+    this._dobTyping.set(null);
+    this._dobError.set(null);
+    this.onHybridAge(d === '' ? null : Number(d));
+  }
+
   /** Roving tabindex: the checked option is the Tab / Enter stop (the
    *  first one while nothing is checked). */
   segStop(list: FieldOption[], i: number): boolean {
@@ -1081,7 +1163,7 @@ export class DynamicInputComponent {
 
   @Input() set value(v: unknown) {
     this._value.set(v);
-    if (this._field()?.type === 'phone' && typeof v === 'string' && v.trim()) {
+    if (this.isPhoneLike() && typeof v === 'string' && v.trim()) {
       const matched = COUNTRY_PHONE_RULES.find(r => v.startsWith(r.code));
       if (matched && matched.code !== this._selectedCountryCode()) {
         this._selectedCountryCode.set(matched.code);
@@ -1125,7 +1207,7 @@ export class DynamicInputComponent {
   });
 
   readonly phoneError = computed<string | null>(() => {
-    if (this._field()?.type !== 'phone') return null;
+    if (!this.isPhoneLike()) return null;
     const val = this._value();
     if (val == null || val === '') return null;
     return validatePhoneNumber(val, this._selectedCountryCode());

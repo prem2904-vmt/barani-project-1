@@ -13,7 +13,7 @@ import {
   WorkflowTransition
 } from '../../models/workflow.model';
 import { TestParameter } from '../../models/test.model';
-import { DynamicInputComponent } from '../dynamic-input/dynamic-input.component';
+import { DynamicInputComponent, isContactNumberField } from '../dynamic-input/dynamic-input.component';
 import { validateFieldValue } from '../../forms/validate';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 
@@ -425,6 +425,7 @@ export class WorkflowRendererComponent implements OnChanges {
     const wide = f.width === 'full'
       || ['phone', 'textarea', 'multiselect', 'multi_button_select', 'test_parameters', 'tube_collection'].includes(f.type)
       || (f.type === 'date' && /(^|_)dob$|date_of_birth|birth_?date/i.test(f.name))
+      || isContactNumberField(f)
       || (['button_select', 'image_select', 'radio'].includes(f.type) && (f.options?.length ?? 0) > 4);
     return wide ? 'pf-wr-span' : '';
   }
