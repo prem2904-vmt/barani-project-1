@@ -40,7 +40,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     <div class="pf-hb">
       <div class="pf-hb__band">
         <div class="pf-hb__tenant">
-          @if (back() && navBack.showBack()) {
+          @if (back() && (navBack.showBack() || !!backAction())) {
             <button type="button" class="pf-hb__back press" (click)="goBack()" aria-label="Go back" title="Back">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -358,7 +358,14 @@ export class HeroBandComponent {
    *  span the whole pill. */
   readonly tabsOnly = input<boolean>(false);
 
+  /** Optional handler for the back chevron — for an in-page step (e.g. the
+   *  collect drawer) whose "back" closes the step rather than navigating.
+   *  When set, the chevron also shows on primary routes. Additive. */
+  readonly backAction = input<(() => void) | null>(null);
+
   goBack(): void {
+    const act = this.backAction();
+    if (act) { act(); return; }
     const to = this.backTo();
     if (to) this.navBack.backTo(to);
     else this.navBack.back();
