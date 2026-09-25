@@ -112,7 +112,7 @@ type SigTab = 'signature' | 'registration';
           lab screens and as "Reg. …" under your signature on reports.
         </p>
         <div class="pf-sig-row" style="margin-top: 0;">
-          <input type="text" class="pf-sig-input" maxlength="64" placeholder="e.g. TN-12345"
+          <input type="text" class="nd-input nd-num pf-sig-input" maxlength="64" aria-label="Registration ID" placeholder="e.g. TN-12345"
                  [value]="regId()" (input)="regId.set($any($event.target).value)" />
           <button type="button" class="pf-sig-cta pf-sig-cta--primary pf-classic-only" style="margin-top: 0;"
                   [disabled]="busy() || regId().trim() === savedRegId()" (click)="saveRegId()">Save</button>
@@ -131,27 +131,25 @@ type SigTab = 'signature' | 'registration';
   styles: [`
     :host-context(.design-new) .pf-sig-col { max-width: 42rem; margin-inline: auto; width: 100%; }
     :host-context(.design-new) .pf-sig-tile:first-child { margin-top: 0; }
-    .pf-sig-tile { margin-top: 14px; padding: 18px; border-radius: 16px;
-      background: var(--glass-bg, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border, rgba(148,163,184,0.16)); }
-    .pf-sig-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    .pf-sig-tile { margin-top: 14px; padding: 18px; border-radius: var(--nd-radius-card, 16px);
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: var(--nd-shadow-sm); }
+    .pf-sig-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
       color: var(--text-tertiary, #94a3b8); margin-bottom: 10px; }
     .pf-sig-preview { background: #ffffff; border-radius: 12px; padding: 14px; display: flex; align-items: center;
-      justify-content: center; min-height: 110px; border: 1px solid var(--glass-border, rgba(148,163,184,0.2)); }
+      justify-content: center; min-height: 110px; border: 1px solid var(--nd-line); }
     .pf-sig-preview img { max-width: 100%; max-height: 140px; object-fit: contain; }
     .pf-sig-empty { padding: 22px 6px 16px; }
     .pf-sig-empty p { margin: 0; font-size: 14px; color: var(--text-secondary, #cbd5e1); }
     .pf-sig-muted { color: var(--text-tertiary, #94a3b8) !important; font-size: 12.5px !important; margin-top: 4px !important; }
     .pf-sig-row { display: flex; gap: 10px; margin-top: 14px; }
-    .pf-sig-cta { border-radius: 10px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
-      border: 1px solid var(--glass-border, rgba(148,163,184,0.28)); background: transparent; color: var(--text-secondary, #cbd5e1); }
-    .pf-sig-cta:hover:not(:disabled) { background: rgba(148,163,184,0.12); }
-    .pf-sig-cta--primary { margin-top: 16px; background: var(--violet-600, #7c3aed); border-color: transparent; color: #fff; }
-    .pf-sig-cta--danger { color: #f87171; border-color: rgba(248,113,113,0.4); }
+    .pf-sig-cta { min-height: 44px; border-radius: var(--nd-radius-sm, 10px); padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--nd-line); background: transparent; color: var(--text-secondary); }
+    .pf-sig-cta:hover:not(:disabled) { background: var(--nd-chip-bg); }
+    /* The kit primary (gradient) — the ONE in view when the band has none. */
+    .pf-sig-cta--primary { margin-top: 16px; background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3)); border-color: transparent; color: #fff; }
+    .pf-sig-cta--danger { color: var(--red-text, #b91c1c); border-color: rgba(248,113,113,0.4); }
     .pf-sig-cta:disabled { opacity: .5; cursor: default; }
-    .pf-sig-input { flex: 1; min-width: 0; border-radius: 10px; padding: 10px 12px; font-size: 14px;
-      background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
-      color: var(--text-primary, #e2e8f0); font-family: 'JetBrains Mono', ui-monospace, monospace; }
-    .pf-sig-input:focus { outline: none; border-color: var(--violet-500, #8b5cf6); }
+    .pf-sig-input { flex: 1; }
   `],
 })
 export class MySignatureComponent {

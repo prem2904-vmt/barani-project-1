@@ -72,7 +72,7 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
           <div class="min-w-0">
             <p class="pf-eyebrow">USB</p>
             <p class="pf-val">
-              @if (usbConnected()) { {{ usbName() || 'Label printer' }} <span class="pf-ok">· connected</span> }
+              @if (usbConnected()) { {{ usbName() || 'Label printer' }} <span class="pf-ok"><svg class="pf-ok__i" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>connected</span> }
               @else { Not connected }
             </p>
           </div>
@@ -84,7 +84,7 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
             <p class="pf-eyebrow">Bluetooth</p>
             <p class="pf-val">
               {{ printer.bleDeviceName() ?? 'None paired' }}
-              @if (printer.bleConnected()) { <span class="pf-ok">· connected</span> }
+              @if (printer.bleConnected()) { <span class="pf-ok"><svg class="pf-ok__i" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>connected</span> }
             </p>
           </div>
           <button type="button" class="pf-btn pf-btn--primary" (click)="startBlePair()" [disabled]="pairing()">
@@ -99,7 +99,7 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
             } @else {
               @for (d of bleDevices(); track d.deviceId) {
                 <button type="button" class="pf-row" (click)="choose(d.deviceId)">
-                  <span class="truncate">{{ d.deviceName }}</span>
+                  <span class="pf-wrap">{{ d.deviceName }}</span>
                   <span class="pf-hint">tap to pair</span>
                 </button>
               }
@@ -113,7 +113,7 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
             <p class="pf-eyebrow">Bluetooth printer</p>
             <p class="pf-val">
               {{ printer.deviceName() ?? 'None paired' }}
-              @if (printer.connected()) { <span class="pf-ok">· connected</span> }
+              @if (printer.connected()) { <span class="pf-ok"><svg class="pf-ok__i" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>connected</span> }
             </p>
           </div>
           <button type="button" class="pf-btn pf-btn--primary" (click)="scan()" [disabled]="busy()">
@@ -126,7 +126,7 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
           } @else {
             @for (d of devices(); track d.deviceId) {
               <button type="button" class="pf-row" (click)="pair(d)" [disabled]="busy()">
-                <span class="min-w-0"><span class="block truncate">{{ d.name || 'Unnamed device' }}</span>
+                <span class="min-w-0"><span class="block pf-wrap">{{ d.name || 'Unnamed device' }}</span>
                   <span class="pf-mono">{{ d.deviceId }}</span></span>
                 <span class="pf-hint">tap to pair</span>
               </button>
@@ -144,12 +144,12 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
         <div class="flex flex-wrap items-end gap-5">
           <label class="block">
             <span class="pf-eyebrow">Width (mm)</span>
-            <input type="number" min="10" max="120" class="pf-num" [value]="cfg().labelWidthMm"
+            <input type="number" min="10" max="120" class="nd-input nd-num pf-num" [value]="cfg().labelWidthMm"
                    (change)="onSize('w', $any($event.target).valueAsNumber)">
           </label>
           <label class="block">
             <span class="pf-eyebrow">Height (mm)</span>
-            <input type="number" min="10" max="120" class="pf-num" [value]="cfg().labelHeightMm"
+            <input type="number" min="10" max="120" class="nd-input nd-num pf-num" [value]="cfg().labelHeightMm"
                    (change)="onSize('h', $any($event.target).valueAsNumber)">
           </label>
           <div class="pf-prev-wrap">
@@ -246,34 +246,39 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
     </section>
   `,
   styles: [`
-    .pf-h { font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color: var(--text-muted); margin:0 0 8px; }
-    .pf-note { border-radius:12px; padding:14px 16px; margin-bottom:12px; font-size:13px; background: var(--glass-bg, rgba(255,255,255,.05)); border:1px solid var(--border-muted); color: var(--text-secondary); }
-    .pf-card { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; margin-bottom:12px; border-radius:14px; background: var(--glass-bg, rgba(255,255,255,.05)); border:1px solid var(--border-muted); }
+    .pf-h { font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color: var(--text-muted); margin:0 0 8px; }
+    .pf-note { border-radius:var(--nd-radius, 12px); padding:14px 16px; margin-bottom:12px; font-size:13px; background: var(--nd-chip-bg); border:1px solid var(--nd-line); color: var(--text-secondary); }
+    /* Kit card surface (nd-card look). */
+    .pf-card { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; margin-bottom:12px; border-radius:var(--nd-radius-card, 16px); background: var(--nd-card-bg); border:1px solid var(--nd-line); box-shadow: var(--nd-shadow-sm); }
     .pf-card--col { flex-direction:column; align-items:stretch; gap:16px; }
-    .pf-eyebrow { display:block; font-size:10.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color: var(--text-muted); margin:0 0 6px; }
-    .pf-val { margin:0; color: var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .pf-ok { color: var(--success, #34d399); }
+    .pf-eyebrow { display:block; font-size:12px; font-weight:500; color: var(--text-secondary); margin:0 0 6px; }
+    .pf-val { margin:0; color: var(--text-primary); overflow-wrap:anywhere; }
+    .pf-wrap { overflow-wrap:anywhere; }
+    /* Connected = neutral text + a violet check (never green). */
+    .pf-ok { display:inline-flex; align-items:center; gap:4px; margin-left:6px; font-size:12.5px; color: var(--text-secondary); }
+    .pf-ok__i { color: var(--violet-text, #7c3aed); }
     .pf-muted { padding:14px 16px; font-size:13px; color: var(--text-muted); }
     .pf-hint { font-size:12px; color: var(--text-muted); }
-    .pf-mono { display:block; font-size:11px; font-family: ui-monospace, monospace; color: var(--text-muted); }
-    .pf-btn { padding:8px 14px; border-radius:10px; font-size:13px; font-weight:600; border:1px solid var(--border-muted); background:transparent; color: var(--text-primary); cursor:pointer; }
+    .pf-mono { display:block; font-size:11px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+    .pf-btn { min-height:40px; padding:8px 14px; border-radius:var(--nd-radius-sm, 10px); font-size:13px; font-weight:600; border:1px solid var(--nd-line); background:transparent; color: var(--text-primary); cursor:pointer; white-space:nowrap; }
     .pf-btn:disabled { opacity:.5; cursor:default; }
-    .pf-btn--primary { background: var(--gradient-primary, #7c3aed); border-color:transparent; color:#fff; }
-    .pf-list { border:1px solid var(--border-muted); border-radius:14px; overflow:hidden; margin-bottom:12px; }
+    /* In-card actions are SECONDARY (outline): the band's Test print is the ONE primary. */
+    .pf-btn--primary { background: transparent; border-color: var(--color-violet-600, #7c3aed); color: var(--violet-text, #6d28d9); }
+    .pf-list { border:1px solid var(--nd-line); background: var(--nd-card-bg); border-radius:var(--nd-radius, 12px); overflow:hidden; margin-bottom:12px; }
     .pf-row { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; text-align:left; background:transparent; color: var(--text-primary); border:0; border-bottom:1px solid var(--border-muted); cursor:pointer; }
-    .pf-num { padding:8px 10px; border-radius:10px; background: var(--glass-bg); border:1px solid var(--border-muted); color: var(--text-primary); font-size:14px; width:96px; }
+    .pf-num { width:96px; }
     .pf-chip { padding:7px 14px; border-radius:999px; font-size:13px; font-weight:600; border:1px solid var(--border-muted); background:transparent; color: var(--text-secondary); cursor:pointer; }
-    .pf-chip--on { background: var(--gradient-primary, #7c3aed); border-color:transparent; color:#fff; }
-    .pf-range { width:100%; min-width:180px; accent-color: var(--gradient-primary, #7c3aed); }
+    .pf-chip--on { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); color: var(--text-primary); }
+    .pf-range { width:100%; min-width:180px; accent-color: var(--nd-toggle-on, #aeb8c2); }
     .pf-nudge { display:flex; flex-direction:column; align-items:center; gap:4px; flex-shrink:0; }
     .pf-nudge-mid { display:flex; gap:4px; }
-    .pf-nudge button { width:36px; height:36px; border-radius:9px; border:1px solid var(--border-muted); background: var(--glass-bg); color: var(--text-primary); font-size:16px; cursor:pointer; }
-    .pf-nudge button:active { background: var(--gradient-primary, #7c3aed); color:#fff; }
+    .pf-nudge button { width:40px; height:40px; border-radius:9px; border:1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-primary); font-size:16px; cursor:pointer; }
+    .pf-nudge button:active { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
     .pf-prev-wrap { display:flex; flex-direction:column; }
     .pf-prev { position:relative; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:6px 8px; background:#fff; border:1px solid #cbd5e1; border-radius:4px; overflow:hidden; box-shadow: var(--shadow-sm); }
     .pf-prev-t { display:flex; flex-direction:column; gap:1px; min-width:0; color:#0f172a; line-height:1.15; }
     .pf-prev-t b { font-size:9px; font-weight:800; }
-    .pf-prev-t span { font-size:8px; font-family: ui-monospace, monospace; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pf-prev-t span { font-size:8px; font-variant-numeric: tabular-nums; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .pf-prev-d { font-weight:700; letter-spacing:.08em; }
     .pf-prev-c { flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:7px; font-weight:700; color:#0f172a; border:1.5px solid #0f172a; border-radius:3px; }
     .pf-prev-c[data-mode='barcode'] { width:34%; min-width:30px; height:60%; background: repeating-linear-gradient(90deg,#0f172a 0 1.5px,#fff 1.5px 3px); border:none; color:transparent; }
@@ -287,6 +292,7 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
     :host-context(.design-new) .pf-lp-col { max-width: 42rem; margin-inline: auto; width: 100%; }
     :host-context(.design-new) .pf-lp-sechead { display: none; }
     .pf-nudge button { display: inline-flex; align-items: center; justify-content: center; }
+    @media (prefers-reduced-motion: reduce) { .pf-btn, .pf-nudge button { transition: none; } }
 `]
 })
 export class LabelPrinterComponent implements OnInit, OnDestroy {
