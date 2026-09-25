@@ -410,27 +410,39 @@ describe('Result entry (nd) — phone rows + type scale', () => {
       expect(btn.getAttribute('aria-label')).toBe('Details');
       btn.click();
       f.detectChanges();
-      const peek = row.querySelector('.pf-sre__peek') as HTMLElement;
+      // A BODY-level portal: no card / scroller can clip it.
+      const peek = document.body.querySelector(':scope > .pf-sre-peek') as HTMLElement;
+      expect(peek).not.toBeNull();
+      expect(peek.style.position).toBe('fixed');
+      expect(row.querySelector('.pf-sre-peek')).toBeNull();
       expect(peek.textContent).toContain('Method');
       expect(peek.textContent).toContain('Real-Time PCR');
       // Auto-hides after ~4s.
       vi.advanceTimersByTime(4100);
       f.detectChanges();
-      expect(row.querySelector('.pf-sre__peek')).toBeNull();
+      expect(document.body.querySelector('.pf-sre-peek')).toBeNull();
       // Re-open, then tap elsewhere.
       btn.click();
       f.detectChanges();
-      expect(row.querySelector('.pf-sre__peek')).not.toBeNull();
+      expect(document.body.querySelector('.pf-sre-peek')).not.toBeNull();
       document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
       f.detectChanges();
-      expect(row.querySelector('.pf-sre__peek')).toBeNull();
+      expect(document.body.querySelector('.pf-sre-peek')).toBeNull();
       // A second tap on the icon closes it.
       btn.click(); f.detectChanges();
       btn.dispatchEvent(new Event('pointerdown', { bubbles: true })); btn.click(); f.detectChanges();
-      expect(row.querySelector('.pf-sre__peek')).toBeNull();
+      expect(document.body.querySelector('.pf-sre-peek')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('phones: the patient chip keeps the FULL name (meta → tooltip; wraps instead of an ellipsis)', async () => {
+    const { el } = await render();
+    const chip = el.querySelector('.pf-sre-chip--patient') as HTMLElement;
+    expect(chip.getAttribute('title')).toBe('Mr. Sathish Kumaravel Ramasamy · 29/M · AA0012');
+    expect(css()).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-chip--patient\s+\.pf-sre-chip__name\s*\{[^}]*white-space:\s*normal[^}]*text-overflow:\s*clip/);
+    expect(css()).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-chip--patient\s+\.pf-sre-chip__meta\s*\{\s*display:\s*none/);
   });
 
   it('the "i" is hidden when a row has no range, unit or method', async () => {

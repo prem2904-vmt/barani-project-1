@@ -198,20 +198,96 @@ export class SampleResultEntryComponent {
   infoOpen(testId: string, name: string): boolean {
     return this._info() === `${testId}::${name}`;
   }
-  /** One peek at a time; a second tap closes; auto-hides after ~4s. */
-  toggleInfo(testId: string, name: string) {
-    const k = `${testId}::${name}`;
+  /** One peek at a time; a second tap closes; auto-hides after ~4s. The
+   *  peek is a BODY-level portal (position: fixed), so no card, scroller or
+   *  transformed ancestor can clip it; it sits below the icon, flips above
+   *  when there's no room, and always stays 16px inside the viewport. */
+  toggleInfo(t: OrderTest, p: TestParameter, anchor?: HTMLElement | null) {
+    const k = `${t.id}::${p.name}`;
     const wasOpen = this._info() === k;
     this.closeInfo();
     if (wasOpen) return;
     if (this._lastInfoClosed === k) { this._lastInfoClosed = null; return; }
     this._info.set(k);
+    this.renderPeek(t, p, anchor ?? null);
     this.infoTimer = setTimeout(() => this.closeInfo(), 4000);
   }
   private _lastInfoClosed: string | null = null;
+  private peekEl: HTMLElement | null = null;
+  private readonly onPeekScroll = () => this.closeInfo();
+
+  private renderPeek(t: OrderTest, p: TestParameter, anchor: HTMLElement | null) {
+    if (typeof document === "undefined") return;
+    const rows: Array<[string, string]> = [];
+    const range = this.refLabelFor(p);
+    const method = this.methodologyOf(p, t.test);
+    if (range) rows.push(["Range", range]);
+    if (p.unit) rows.push(["Unit", p.unit]);
+    if (method !== "—") rows.push(["Method", method]);
+    const el = document.createElement("div");
+    el.className = "pf-sre-peek";
+    el.setAttribute("role", "tooltip");
+    // Property by property: one value a parser doesn't know must not drop
+    // the rest (cssText is all-or-nothing in some engines).
+    const style: Array<[string, string]> = [
+      ["position", "fixed"], ["z-index", "2000"], ["top", "0px"], ["left", "0px"], ["box-sizing", "border-box"],
+      ["width", "min(300px, calc(100vw - 32px))"], ["padding", "10px 12px"],
+      ["display", "flex"], ["flex-direction", "column"], ["gap", "6px"],
+      ["border-radius", "var(--nd-radius-sm, 10px)"], ["background", "var(--nd-card-bg, #fff)"],
+      ["border", "1px solid var(--nd-line, #e5e7eb)"], ["box-shadow", "0 12px 32px rgba(15, 23, 42, 0.22)"],
+      ["font-family", "inherit"], ["font-size", "12.5px"], ["line-height", "1.45"], ["color", "var(--text-primary)"],
+      ["white-space", "normal"], ["overflow-wrap", "break-word"], ["pointer-events", "auto"],
+    ];
+    for (const [k, v] of style) el.style.setProperty(k, v);
+    for (const [key, val] of rows) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:grid;grid-template-columns:56px minmax(0,1fr);column-gap:8px";
+      const kEl = document.createElement("span");
+      kEl.textContent = key;
+      kEl.style.cssText = "color:var(--text-muted);font-size:11.5px";
+      const vEl = document.createElement("span");
+      vEl.textContent = val;
+      vEl.style.cssText = "font-variant-numeric:tabular-nums";
+      row.append(kEl, vEl);
+      el.append(row);
+    }
+    document.body.appendChild(el);
+    this.peekEl = el;
+    // Place: under the icon, right-aligned to it; flip above if needed;
+    // clamp into the viewport with 16px margins.
+    const M = 16, GAP = 6;
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const r = anchor?.getBoundingClientRect() ?? { top: M, bottom: M, left: M, right: vw - M } as DOMRect;
+    const w = el.offsetWidth, h = el.offsetHeight;
+    let left = r.right - w;
+    left = Math.max(M, Math.min(left, vw - M - w));
+    let top = r.bottom + GAP;
+    let above = false;
+    if (top + h > vh - M && r.top - GAP - h >= M) { top = r.top - GAP - h; above = true; }
+    top = Math.max(M, Math.min(top, vh - M - h));
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+    el.style.transformOrigin = above ? "bottom right" : "top right";
+    const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduce && typeof el.animate === "function") {
+      el.animate([{ opacity: 0, transform: "scale(0.96)" }, { opacity: 1, transform: "none" }],
+        { duration: 200, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+    }
+    window.addEventListener("scroll", this.onPeekScroll, true);
+  }
+
   closeInfo() {
     if (this.infoTimer !== null) { clearTimeout(this.infoTimer); this.infoTimer = null; }
     this._info.set(null);
+    if (this.peekEl) {
+      this.peekEl.remove();
+      this.peekEl = null;
+      window.removeEventListener("scroll", this.onPeekScroll, true);
+    }
+  }
+  ngOnDestroy() {
+    this.closeInfo();
   }
   /** Tapping anywhere else closes the peek. The icon's own pointerdown is
    *  remembered so its click toggles it shut instead of re-opening. */
@@ -219,7 +295,9 @@ export class SampleResultEntryComponent {
   onDocPointerDown(ev: Event) {
     const open = this._info();
     if (!open) { this._lastInfoClosed = null; return; }
-    const inside = (ev.target as HTMLElement | null)?.closest?.(".pf-sre__info");
+    const target = ev.target as HTMLElement | null;
+    if (target?.closest?.(".pf-sre-peek")) return;   // taps inside the peek keep it
+    const inside = target?.closest?.(".pf-sre__info");
     this._lastInfoClosed = inside ? open : null;
     this.closeInfo();
   }

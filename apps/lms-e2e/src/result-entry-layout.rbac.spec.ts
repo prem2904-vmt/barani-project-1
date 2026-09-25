@@ -79,19 +79,52 @@ test.describe('Result entry — real layout', () => {
     const labelSize = await page.locator('.pf-sre-card__label').first().evaluate((e) => getComputedStyle(e).fontSize);
     expect(labelSize).toBe('12px');
 
+    // The patient's FULL name — never an ellipsis.
+    const name = page.locator('.pf-sre-chip--patient .pf-sre-chip__name');
+    const fits = await name.evaluate((e) => e.scrollWidth <= e.clientWidth + 1);
+    expect(fits).toBe(true);
+    await expect(name).not.toHaveText(/…|\.\.$/);
+
+    // The "i" peek: a body-level overlay, fully inside the viewport, not
+    // clipped by any ancestor (elementFromPoint at its corners is the peek).
+    const infoBtn = page.locator('.pf-sre__info-btn:visible').first();
+    if (await infoBtn.count()) {
+      await page.waitForTimeout(6500);    // let the "not in your queue" toast leave
+      await setTheme(page, 'light');
+      await infoBtn.click();
+      const peek = page.locator('body > .pf-sre-peek');
+      await expect(peek).toBeVisible();
+      await page.waitForTimeout(250);     // fade/scale-in done
+      const box = (await peek.boundingBox())!;
+      const vp = page.viewportSize()!;
+      expect(box.x).toBeGreaterThanOrEqual(16 - 0.5);
+      expect(box.y).toBeGreaterThanOrEqual(16 - 0.5);
+      expect(box.x + box.width).toBeLessThanOrEqual(vp.width - 16 + 0.5);
+      expect(box.y + box.height).toBeLessThanOrEqual(vp.height - 16 + 0.5);
+      expect(box.width).toBeGreaterThanOrEqual(Math.min(300, vp.width - 32) - 1);
+      const corners = await peek.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        // 12px in: past the rounded corners.
+        return [[r.left + 12, r.bottom - 12], [r.right - 12, r.bottom - 12], [r.left + 12, r.top + 12]]
+          .map(([x, y]) => el.contains(document.elementFromPoint(x, y)));
+      });
+      expect(corners).toEqual([true, true, true]);
+      if (SHOTS) {
+        await page.screenshot({ path: `${SHOTS}/375-light-peek.png` });
+        await setTheme(page, 'dark');
+        await page.waitForTimeout(150);
+        await page.screenshot({ path: `${SHOTS}/375-dark-peek.png` });
+      }
+      await page.mouse.click(10, vp.height - 120);   // outside tap closes it
+      await expect(peek).toHaveCount(0);
+    }
+
     if (SHOTS) {
-      // Let the "not in your queue" toast leave before the screenshots.
-      await page.waitForTimeout(6500);
+      await page.waitForTimeout(300);
       for (const theme of ['dark', 'light'] as const) {
         await setTheme(page, theme);
         await page.waitForTimeout(200);
         await page.screenshot({ path: `${SHOTS}/375-${theme}.png` });
-      }
-      const info = row.locator('.pf-sre__info-btn');
-      if (await info.count()) {
-        await info.click();
-        await page.waitForTimeout(300);
-        await page.screenshot({ path: `${SHOTS}/375-light-peek.png` });
       }
       for (const w of [768, 1440]) {
         await page.setViewportSize({ width: w, height: 900 });

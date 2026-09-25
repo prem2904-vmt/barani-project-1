@@ -22,7 +22,8 @@
     <!-- CONTEXT BAR: the subject as read-only chips. -->
     <div band-search class="pf-sre-ctx">
       @if (sample(); as s) {
-        <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--patient" title="Patient">
+        <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--patient"
+              [title]="patientName() + (patientMeta() ? ' · ' + patientMeta() : '')">
           <span class="pf-sre-chip__name">{{ patientName() }}</span>
           @if (patientMeta()) { <span class="pf-sre-chip__meta nd-num">{{ patientMeta() }}</span> }
         </span>
@@ -412,16 +413,9 @@
         <span class="pf-sre__info">
           <button type="button" class="pf-sre__info-btn" tabindex="-1"
                   aria-label="Details" [attr.aria-expanded]="infoOpen(t.id, p.name)"
-                  (click)="toggleInfo(t.id, p.name)">
+                  (click)="toggleInfo(t, p, $any($event.currentTarget))">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
           </button>
-          @if (infoOpen(t.id, p.name)) {
-            <span class="pf-sre__peek" role="tooltip">
-              @if (refLabelFor(p)) { <span class="pf-sre__peek-row"><span class="pf-sre__peek-k">Range</span><span class="nd-num">{{ refLabelFor(p) }}</span></span> }
-              @if (p.unit) { <span class="pf-sre__peek-row"><span class="pf-sre__peek-k">Unit</span><span>{{ p.unit }}</span></span> }
-              @if (methodologyOf(p, t.test) !== '—') { <span class="pf-sre__peek-row"><span class="pf-sre__peek-k">Method</span><span>{{ methodologyOf(p, t.test) }}</span></span> }
-            </span>
-          }
         </span>
       </ng-template>
 

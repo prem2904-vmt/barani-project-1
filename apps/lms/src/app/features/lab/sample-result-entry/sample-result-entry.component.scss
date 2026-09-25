@@ -164,18 +164,6 @@
 /* The "i" peek cell exists for phones only (web shows the columns). */
 .pf-sre__gc-info { display: none; }
 .pf-sre__info { position: relative; display: inline-flex; }
-.pf-sre__peek {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
-  display: flex; flex-direction: column; gap: 4px; min-width: 200px; max-width: min(300px, calc(100vw - 48px));
-  padding: 10px 12px; border-radius: var(--nd-radius-sm);
-  background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
-  font-size: 12.5px; line-height: 1.4; color: var(--text-primary); text-align: left; white-space: normal;
-  transform-origin: top right;
-  animation: nd-fade-scale var(--nd-dur-fast, 200ms) var(--nd-spring) both;
-}
-.pf-sre__peek-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); column-gap: 8px; }
-.pf-sre__peek-row > :last-child { overflow-wrap: break-word; }
-.pf-sre__peek-k { color: var(--text-muted); font-size: 11.5px; }
 .pf-sre__gunit-inline { display: none; }
 .pf-sre__grow-comments td { padding: 8px 12px; background: var(--nd-in-tint); border-bottom: 1px solid var(--nd-line); }
 .pf-sre__grow-attach td { padding: 6px 12px 10px; border-bottom: 1px solid var(--nd-line); }
@@ -369,6 +357,12 @@
   /* Beats the global phone rule [role='tablist'] { display: flex !important }. */
   .pf-sre .pf-sre-tabs[role='tablist'] { display: none !important; }
   .pf-sre-phone { display: inline-flex !important; }
+  /* The patient's FULL name, never an ellipsis: the age/sex · ID meta
+     moves to the chip's tooltip, and a long name wraps to two lines. */
+  .pf-sre-chip--patient { flex: 1 1 auto; height: auto; min-height: 36px; padding-block: 4px; }
+  .pf-sre-chip--patient .pf-sre-chip__meta { display: none; }
+  .pf-sre-chip--patient .pf-sre-chip__name { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; overflow-wrap: break-word; }
+  .pf-sre-switch, .pf-sre-chip--sample { flex: none; }
   .pf-sre-chip { height: 36px; }
   /* The band's actions don't fit: technician + Save draft + Submit move to
      the compact bottom bar (above the always-visible navbar). */
@@ -444,6 +438,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pf-sre-skel__bar, .pf-sre__autosave-dot, .pf-sre__peek, .pf-sre-switch__menu { animation: none; }
+  .pf-sre-skel__bar, .pf-sre__autosave-dot, .pf-sre-switch__menu { animation: none; }
   .pf-sre__ginput, .pf-sre__gnote, .pf-sre-tabs__ind { transition: none !important; }
 }
