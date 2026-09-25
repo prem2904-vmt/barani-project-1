@@ -25,6 +25,14 @@ export const SCOPE_PLACEHOLDERS: Record<SearchScope, string> = {
   hospital: 'Find the referring hospital or vendor',
 };
 
+/** Short placeholders for phones (the pill is narrow there). */
+export const SCOPE_PLACEHOLDERS_SHORT: Record<SearchScope, string> = {
+  tests: 'Search tests',
+  patient: 'Find patient',
+  doctor: 'Find doctor',
+  hospital: 'Find hospital',
+};
+
 /** One row of the scope dropdown under the pill. `kind: 'new'` is the
  *  free-text "add as a new entry" row (the referral fields have always
  *  accepted any name — the backend stores the text). */
