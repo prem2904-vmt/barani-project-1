@@ -98,7 +98,7 @@
 .nd-card__foot {
   flex: none; position: sticky; bottom: 0;
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
-  padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 14px 14px;   /* the nav below owns the bottom safe area */
   background: var(--nd-card-bg); border-top: 1px solid var(--nd-line);
 }
 .nd-card__foot > :only-child, .nd-card__foot > .nd-span { grid-column: 1 / -1; }
@@ -171,30 +171,31 @@
   .nd-anim-pop, .nd-anim-in, .nd-anim-rise, .nd-toggle__track, .nd-toggle__knob, .nd-btn { animation: none !important; transition: none !important; }
 }
 
-/* ── Mobile: sticky bottom bar, tall sheet, immersive ───────────────── */
+/* ── Mobile: sticky bottom bar + tall sheet (both above the nav) ────── */
 .nd-bottombar { display: none; }
 .nd-sheet__handle { display: none; }
 @media (max-width: 640px) {
   .nd-bottombar {
-    position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 46;
+    position: fixed; left: 12px; right: 12px; bottom: calc(var(--nd-nav-h) + 10px); z-index: 46;
     display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px;
     border-radius: 14px; background: var(--nd-card-bg); border: 1px solid var(--nd-line);
     box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
   }
   .nd-bottombar__info { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
   .nd-sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
-    height: calc(92dvh - env(safe-area-inset-top, 0px));
+    position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h); z-index: 80;
+    height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h) - 8px));
     border-radius: 20px 20px 0 0;
     display: flex; flex-direction: column;
     animation: nd-rise var(--nd-dur-sheet) var(--nd-spring-bounce) both;
   }
   .nd-sheet__handle { display: block; flex: none; width: 40px; height: 5px; margin: 8px auto 2px; border-radius: 999px; background: var(--nd-line); }
-  .nd-sheet-backdrop { position: fixed; inset: 0; z-index: 79; background: rgba(0, 0, 0, 0.45); }
+  .nd-sheet-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h); z-index: 79; background: rgba(0, 0, 0, 0.45); }
 }
-/* html.nd-immersive: a full-screen flow owns the screen — hide the app bar. */
-@media (max-width: 1279px) {
-  html.nd-immersive .pf-chrome,
-  html.nd-immersive .pf-bottom-nav,
-  html.cap-native.nd-immersive .pf-bottom-nav { display: none !important; }
-}
+/* The bottom navbar is ALWAYS visible (owner rule): layouts fit ABOVE it.
+   --nd-nav-h = the docked bar's height (new design) or the floating pill's
+   clearance. In-flow pages get it from the shell's main padding; fixed /
+   teleported full-screen views use .nd-fullscreen; bottom bars and sheets
+   sit on top of the nav. */
+:root { --nd-nav-h: var(--pf-botbar-h, 0px); }
+.nd-fullscreen { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h); }

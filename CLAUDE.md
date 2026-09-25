@@ -248,5 +248,6 @@ Use these standard library types and **enforce them with module boundary rules**
 - Non-negotiables: primary gradient ONLY on the single main CTA; the band is the same on
   every step and its pill is the context bar; band + main card + side card layout; slate
   toggles; neutral selected states; no truncation when there is room; one row per search
-  result; web vs touch search modes; phone bottom bar / 92dvh sheet / immersive class;
+  result; web vs touch search modes; the bottom navbar is ALWAYS visible (layouts fit above
+  it, never hide it); phone bottom bar / 92dvh sheet above the nav;
   spring motion with reduced-motion off; SVG stroked icons (no emoji); no native controls.

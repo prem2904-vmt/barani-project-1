@@ -157,15 +157,19 @@ status colours (success / warning / error), the unpriced dot.
   doesn't zoom.
 - **Phone bottom bar:** `.nd-bottombar` (+ `.nd-bottombar__info`) carries the
   side card's summary and its primary action (the cart bar; Collect's
-  "0/1 drawn · Collect all to finish").
+  "0/1 drawn · Collect all to finish"), above the navbar.
 - **Phone sheet:** `.nd-sheet` (about 92dvh minus the top safe area) with a
   `.nd-sheet__handle`, an inner scrolling body, a sticky footer with the
   bottom safe area, and `.nd-sheet-backdrop`. Side-card actions open in it.
-- **Immersive:** while a full-screen flow or sheet owns the screen, set an
-  html class that hides the app bar and bottom nav. Use `html.nd-immersive`
-  (the kit), or the existing `pf-sheet-immersive` / `pf-collect-immersive`.
-  Always remove it on close **and** on destroy. Call `KeyboardService.reset()`
-  when a view that owns an input tears down.
+- **The bottom navbar is ALWAYS visible — on every screen and size. Never
+  hide it.** Layouts fit ABOVE it: `--nd-nav-h` (the docked bar's height,
+  incl. the bottom safe area) is reserved by the shell for in-flow pages;
+  fixed / teleported full-screen views use `.nd-fullscreen` (ends at
+  `bottom: var(--nd-nav-h)`); sticky footers, `.nd-bottombar` and
+  `.nd-sheet` sit on top of it (the sheet's height is capped between the top
+  safe area and the nav). The only exception is the app-wide soft-keyboard
+  dodge that already existed (KeyboardService) — call
+  `KeyboardService.reset()` when a view that owns an input tears down.
 - Follow the repo's mobile conventions: phone rules are additive, inside
   `@media (max-width: 640px)`, and never change desktop.
 
@@ -206,7 +210,7 @@ Toggle   .nd-toggle[role=switch][aria-checked] › .nd-toggle__track › .nd-tog
 Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done · .nd-mono
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
-Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · html.nd-immersive
+Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .nd-fullscreen · --nd-nav-h
 Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line
          --nd-shadow-sm · --nd-chip-bg · --nd-sel-bg · --nd-sel-border · --nd-in-tint · --nd-done-tint
          --nd-toggle-on · --nd-toggle-off · --nd-toggle-urgent

@@ -3414,16 +3414,17 @@
 /* ── Phone "Review & Pay" sheet: ~92% tall, grab handle, inner scroll ── */
 .pf-sheet-handle { display: none; }
 @media (max-width: 1023px) {
-  :host .pf-cart-backdrop { z-index: 79; }
-  :host .pf-cart-drawer.pf-cart-drawer--tall {
+  :host .pf-cart-backdrop { z-index: 79; bottom: var(--nd-nav-h, 0px); }
+:host .pf-cart-drawer.pf-cart-drawer--tall {
     top: auto;
-    bottom: 0;
+    /* Sits ON TOP of the always-visible bottom navbar. */
+    bottom: var(--nd-nav-h, 0px);
     left: 0;
     right: 0;
-    height: calc(92dvh - env(safe-area-inset-top, 0px));
-    max-height: calc(92dvh - env(safe-area-inset-top, 0px));
+    height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+    max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
     border-radius: 20px 20px 0 0;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: 0;
     z-index: 80;
   }
   .pf-sheet-handle {
@@ -3437,7 +3438,7 @@
   }
   .pf-cart-drawer--tall .pf-oc-bill__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 }
-:host-context(html.cap-native) .pf-cart-drawer.pf-cart-drawer--tall { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
 
 /* Touch: no native tooltip on cart rows; long names wrap to 2 lines. */
 .pf-crt--wrap .pf-crt__name {
@@ -3473,13 +3474,12 @@
     min-width: 40px;
     min-height: 40px;
   }
-  :host .pf-cart-drawer.pf-cart-drawer--tall { padding-bottom: 0; }
   .pf-cart-drawer .pf-oc-bill__foot--sticky {
     position: sticky;
     bottom: 0;
     z-index: 2;
     background: var(--bg-card-solid);
-    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 14px;   /* the nav below owns the bottom safe area */
   }
 }
 

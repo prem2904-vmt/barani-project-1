@@ -174,15 +174,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly isPhone = signal(!!this._phoneMql?.matches);
   private readonly _onPhoneChange = (e: MediaQueryListEvent) => this.isPhone.set(e.matches);
 
-  /** The checkout sheet (below lg) is open → the app's bottom bar hides so
-   *  the sheet's footer (Total, Save as draft, Continue / Confirm) is never
-   *  under it. Same html-class mechanism the collect screen uses; always
-   *  restored on close / destroy. */
+  /** The checkout sheet (below lg) is open. The app's bottom navbar stays
+   *  visible (owner rule): the sheet sits ON TOP of it (bottom = nav height)
+   *  so its sticky footer is never under the nav. */
   readonly sheetOpen = computed(() => this.cartOpen() && !this.isLg());
-  private readonly _sheetClass = effect(() => {
-    const open = this.sheetOpen();
-    if (typeof document !== 'undefined') document.documentElement.classList.toggle('pf-sheet-immersive', open);
-  });
   private readonly _onVisibleResync = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') this.loadOrderableTests();
   };
@@ -1823,7 +1818,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._lgMql?.removeEventListener?.('change', this._onLgChange);
     this._webMql?.removeEventListener?.('change', this._onWebChange);
     this._phoneMql?.removeEventListener?.('change', this._onPhoneChange);
-    if (typeof document !== 'undefined') document.documentElement.classList.remove('pf-sheet-immersive');
     this.keyboard.reset?.();
     if (typeof window !== 'undefined') {
       window.visualViewport?.removeEventListener('resize', this._onViewport);
