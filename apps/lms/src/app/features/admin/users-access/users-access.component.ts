@@ -28,13 +28,32 @@ import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ROLE_INFO } from './permission-catalog';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 type Tab = 'users' | 'roles';
 
+const svg = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON_CALL = svg('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>');
+const ICON_EDIT = svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>');
+const ICON_KEY = svg('<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>');
+const ICON_SHIELD = svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>');
+
+/** Kit row action (ND-PATTERN): a 32px secondary TEXT button on web, a
+ *  neutral 44px ICON button on touch (label kept for AT + tooltip). */
+function rowAction(web: boolean, label: string, icon: string, title: string): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = web ? 'nd-rowact' : 'nd-rowact nd-rowact--icon';
+  b.title = title;
+  b.setAttribute('aria-label', title);
+  b.innerHTML = `${icon}<span class="nd-rowact__t">${label}</span>`;
+  return b;
+}
+
 const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
-  fontFamily: 'Inter, system-ui, sans-serif',
+  fontFamily: "'Noto Sans', system-ui, sans-serif",
   fontSize: 13,
   rowHeight: 52,
   headerHeight: 40,
@@ -43,7 +62,7 @@ const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
 });
 
 const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
-  fontFamily: 'Inter, system-ui, sans-serif',
+  fontFamily: "'Noto Sans', system-ui, sans-serif",
   fontSize: 13,
   rowHeight: 52,
   headerHeight: 40,
@@ -143,7 +162,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         </div>
 
         <div class="flex items-center gap-3 ml-auto">
-          <span class="text-[12px] font-mono" style="color: var(--text-muted);">
+          <span class="text-[12px] nd-num" style="color: var(--text-muted);">
             @if (tab() === 'users') {
               {{ filteredUsers().length }} user{{ filteredUsers().length === 1 ? '' : 's' }}
             } @else {
@@ -192,7 +211,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
     .pf-ua-grid { height: calc(100vh - 240px); min-height: 420px; }
     :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; }
     .pf-ua-count {
-      font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px; font-variant-numeric: tabular-nums;
       color: var(--text-muted); white-space: nowrap; padding: 0 6px;
     }
     @media (max-width: 640px) {
@@ -216,6 +235,8 @@ export class UsersAccessComponent implements OnInit {
   private readonly entitlements = inject(TenantEntitlementsService);
 
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  /** Row actions: TEXT on web (fine pointer + hover), ICON on touch. */
+  readonly web = webPointerSignal();
 
   /** Returns true if calling this user makes sense: the Messages module is in
    *  the plan (calls are part of it), the user is active, and not yourself. */
@@ -280,13 +301,16 @@ export class UsersAccessComponent implements OnInit {
     const name = u.displayName || u.firstName || u.username || 'User';
 
     const avatar = document.createElement('div');
-    avatar.style.cssText = 'width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg, #7c3aed, #a855f7);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;box-shadow:0 2px 6px rgba(124,58,237,0.25);';
+    // Designer avatar: flat soft-violet disc, violet initials (no gradient —
+    // the gradient is reserved for the ONE primary action).
+    avatar.className = 'pf-ua-avatar';
+    avatar.style.cssText = 'width:32px;height:32px;border-radius:50%;background:color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);color:var(--violet-text, #6d28d9);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;';
     const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     avatar.textContent = initials;
     wrap.appendChild(avatar);
 
     const nameSpan = document.createElement('span');
-    nameSpan.style.cssText = 'font-weight:600;font-size:14px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameSpan.style.cssText = 'font-weight:500;font-size:14px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     nameSpan.textContent = name;
     wrap.appendChild(nameSpan);
 
@@ -299,31 +323,21 @@ export class UsersAccessComponent implements OnInit {
     if (!params.data) return wrap;
 
     const u = params.data;
-    const label = document.createElement('label');
-    label.style.cssText = 'position:relative;display:inline-block;width:36px;height:20px;cursor:pointer;';
-
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = !!u.isActive;
-    input.style.cssText = 'opacity:0;width:0;height:0;margin:0;';
-
-    const slider = document.createElement('span');
-    slider.style.cssText = `position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:${u.isActive ? 'var(--nd-toggle-on, #aeb8c2)' : 'var(--nd-toggle-off, #e3e7eb)'};transition:.2s;border-radius:20px;`;
-
-    const dot = document.createElement('span');
-    dot.style.cssText = `position:absolute;content:"";height:14px;width:14px;left:${u.isActive ? '18px' : '3px'};bottom:3px;background-color:white;transition:.2s;border-radius:50%;`;
-
-    slider.appendChild(dot);
-    label.appendChild(input);
-    label.appendChild(slider);
-
-    input.addEventListener('change', (e) => {
+    // Kit slate switch (.nd-toggle[role=switch]) — ON = slate, never violet / green.
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nd-toggle pf-ua-status';
+    btn.setAttribute('role', 'switch');
+    btn.setAttribute('aria-checked', String(!!u.isActive));
+    btn.setAttribute('aria-label', `${u.isActive ? 'Active' : 'Inactive'} — ${u.isActive ? 'deactivate' : 'reactivate'} ${u.displayName || u.username || 'user'}`);
+    btn.title = u.isActive ? 'Active' : 'Inactive';
+    btn.innerHTML = '<span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>';
+    btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const ctx = params.context as { toggleActive?: (u: User) => void };
       ctx?.toggleActive?.(u);
     });
-
-    wrap.appendChild(label);
+    wrap.appendChild(btn);
     return wrap;
   };
 
@@ -341,29 +355,21 @@ export class UsersAccessComponent implements OnInit {
       resetPassword?: (u: User) => void;
     };
 
+    const web = (params.context as { web?: () => boolean })?.web?.() ?? true;
     if (u.isActive && ctx?.canCall?.(u) && u.authId) {
       const online = ctx?.isOnline?.(u.authId);
-      const callBtn = document.createElement('button');
-      callBtn.type = 'button';
-      callBtn.style.cssText = `padding:4px 10px;font-size:12px;font-weight:600;border-radius:6px;border:none;background:transparent;cursor:${online ? 'pointer' : 'not-allowed'};color:${online ? '#7c3aed' : 'var(--text-muted)'};display:inline-flex;align-items:center;gap:4px;`;
+      const callBtn = rowAction(web, 'Call', ICON_CALL,
+        online ? `Voice call ${u.displayName}` : `${u.displayName} is offline`);
       callBtn.disabled = !online;
-      callBtn.title = online ? `Voice call ${u.displayName}` : `${u.displayName} is offline`;
-      callBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg> Call`;
       callBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx.callUser?.(u); });
       wrap.appendChild(callBtn);
     }
 
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.style.cssText = 'padding:4px 10px;font-size:12px;font-weight:600;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);';
-    editBtn.textContent = 'Edit';
+    const editBtn = rowAction(web, 'Edit', ICON_EDIT, `Edit ${u.displayName || u.username || 'user'}`);
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.editUser?.(u); });
     wrap.appendChild(editBtn);
 
-    const pwdBtn = document.createElement('button');
-    pwdBtn.type = 'button';
-    pwdBtn.style.cssText = 'padding:4px 10px;font-size:12px;font-weight:600;border-radius:6px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);';
-    pwdBtn.textContent = 'Reset password';
+    const pwdBtn = rowAction(web, 'Reset password', ICON_KEY, `Reset password for ${u.displayName || u.username || 'user'}`);
     pwdBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx?.resetPassword?.(u); });
     wrap.appendChild(pwdBtn);
 
@@ -376,13 +382,14 @@ export class UsersAccessComponent implements OnInit {
     if (!params.data) return wrap;
 
     const r = params.data;
+    // Neutral static chip; the small violet dot marks a pre-seeded role. No green.
     const badge = document.createElement('span');
+    badge.className = 'nd-chip nd-chip--static pf-ua-type';
+    badge.style.cssText = 'cursor:default;height:26px;';
     if (r.isPreSeeded) {
-      badge.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);color:#7c3aed;line-height:1.2;';
-      badge.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:#7c3aed;display:inline-block;flex-shrink:0;"></span>Pre-seeded';
+      badge.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:var(--color-violet-600, #7c3aed);display:inline-block;flex-shrink:0;" aria-hidden="true"></span>Pre-seeded';
     } else {
-      badge.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#059669;line-height:1.2;';
-      badge.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;flex-shrink:0;"></span>Custom';
+      badge.textContent = 'Custom';
     }
     wrap.appendChild(badge);
     return wrap;
@@ -405,10 +412,8 @@ export class UsersAccessComponent implements OnInit {
     if (!params.data) return wrap;
 
     const r = params.data;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.style.cssText = 'padding:4px 12px;font-size:12px;font-weight:600;border-radius:6px;border:1px solid var(--border-color, #e5e7eb);background:var(--bg-card);cursor:pointer;color:var(--text-primary);';
-    btn.textContent = 'Manage permissions';
+    const web = (params.context as { web?: () => boolean })?.web?.() ?? true;
+    const btn = rowAction(web, 'Manage permissions', ICON_SHIELD, `Manage permissions for ${r.name}`);
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const ctx = params.context as { openRole?: (r: Role) => void };
@@ -418,7 +423,7 @@ export class UsersAccessComponent implements OnInit {
     return wrap;
   };
 
-  readonly userColDefs = computed<ColDef<User>[]>(() => [
+  readonly userColDefs = computed<ColDef<User>[]>(() => { const web = this.web(); return [
     {
       headerName: 'User',
       colId: 'displayName',
@@ -459,15 +464,15 @@ export class UsersAccessComponent implements OnInit {
       headerName: '',
       colId: 'actions',
       cellRenderer: this.userActionsCellRenderer,
-      minWidth: 280,
+      minWidth: web ? 300 : 170,
       editable: false,
       sortable: false,
       filter: false,
       resizable: false,
     },
-  ]);
+  ]; });
 
-  readonly roleColDefs = computed<ColDef<Role>[]>(() => [
+  readonly roleColDefs = computed<ColDef<Role>[]>(() => { const web = this.web(); return [
     {
       headerName: 'Role Name',
       colId: 'name',
@@ -511,15 +516,16 @@ export class UsersAccessComponent implements OnInit {
       headerName: '',
       colId: 'actions',
       cellRenderer: this.roleActionsCellRenderer,
-      width: 180,
+      width: web ? 200 : 80,
       editable: false,
       sortable: false,
       filter: false,
       resizable: false,
     },
-  ]);
+  ]; });
 
   readonly gridContext = {
+    web: () => this.web(),
     canCall: (u: User) => this.canCall(u),
     isOnline: (authId: string) => this.isOnline(authId),
     callUser: (u: User) => this.callUser(u),
