@@ -13,6 +13,7 @@ import { AdminDashboardComponent } from './admin-dashboard.component';
 import { BranchesComponent } from './branches/branches.component';
 import { VendorsComponent } from './vendors/vendors.component';
 import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
+import { ReferringNetworkComponent } from './referring-network/referring-network.component';
 import { provideHttpClient } from '@angular/common/http';
 
 /**
@@ -261,5 +262,44 @@ describe('ND audit D — Referral labs', () => {
     expect(chip.getAttribute('aria-pressed')).toBe('true');
     expect(form.querySelector('[class*="--on"]')).toBeNull();
     expect(primaries(p.el)).toBe(1);
+  });
+});
+
+describe('ND audit D — Referring network', () => {
+  const hospitals = [
+    { id: 'h1', name: 'Apollo Hospitals', code: 'APO', address: 'Greams Road', isActive: true, doctorCount: 1 },
+  ];
+  const doctors = [{ id: 'd1', hospitalId: 'h1', name: 'Dr. Priya Krishnan', designation: 'Consultant', registrationNo: 'TN-12345', isActive: true }];
+  const render = async () => {
+    const p = renderBandPage(ReferringNetworkComponent, {
+      getFor: (url) => url.startsWith('/api/referring-network/hospitals') && !url.includes('/doctors') ? hospitals
+        : url.includes('doctors') ? doctors : [],
+    });
+    await p.f.whenStable(); p.f.detectChanges();
+    return p;
+  };
+
+  it('panes are kit cards with BILLING headers; the selected hospital is the NEUTRAL aria-selected row; ONE primary', async () => {
+    const p = await render();
+    const panes = p.el.querySelectorAll('.pf-rn-pane.nd-card');
+    expect(panes.length).toBe(2);
+    expect(panes[0].querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
+    expect(panes[0].querySelector('.pf-rn-pane__count')!.classList.contains('nd-num')).toBe(true);
+    p.cmp.selectHospital('h1'); await p.f.whenStable(); p.f.detectChanges();
+    expect(p.el.querySelector('.pf-rn-row[aria-selected="true"]')).not.toBeNull();
+    expect(p.el.querySelector('.pf-rn-row--on')).toBeNull();
+    expect(primaries(p.el)).toBe(1);
+    const add = Array.from(p.el.querySelectorAll('.pf-rn-hdrbtn')).find(b => /Add doctor/.test(b.textContent ?? ''))!;
+    expect(add.classList.contains('nd-btn--secondary')).toBe(true);
+    hygiene(p.el);
+  });
+
+  it('the hospital editor is an nd-card modal (BILLING header, kit fields, ONE primary in the footer)', async () => {
+    const p = await render();
+    p.cmp.openHospitalEditor(null); p.f.detectChanges();
+    const m = p.el.querySelector('.pf-rn-modal.nd-card[role="dialog"]')!;
+    expect(m.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
+    expect(m.querySelectorAll('input.nd-input').length).toBeGreaterThanOrEqual(5);
+    expect(m.querySelectorAll('.nd-btn--primary').length).toBe(1);
   });
 });

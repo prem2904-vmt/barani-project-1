@@ -11,6 +11,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 
 interface Hospital {
   id: string;
@@ -92,10 +93,11 @@ interface Doctor {
       <div class="pf-band-body">
       <div class="pf-rn-grid">
         <!-- ── Hospitals (left) ────────────────────────────────── -->
-        <aside class="pf-rn-pane pf-rn-pane--list">
-          <header class="pf-rn-pane__hdr">
-            <h2 class="pf-rn-pane__title">Hospitals</h2>
-            <span class="pf-rn-pane__count">{{ hospitals().length }}</span>
+        <aside class="pf-rn-pane pf-rn-pane--list nd-card">
+          <header class="nd-card__head pf-rn-pane__hdr">
+            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/></svg></span>
+            <h2 class="nd-card__label pf-rn-pane__title">Hospitals</h2>
+            <span class="pf-rn-pane__count nd-num">{{ hospitals().length }}</span>
           </header>
           <input type="search" class="pf-rn-search pf-classic-only"
                  placeholder="Search hospitals…"
@@ -113,18 +115,18 @@ interface Doctor {
               @else { No hospitals yet. Use <b>Add hospital</b> to start. }
             </p>
           } @else {
-            <ul class="pf-rn-list" role="listbox">
+            <ul class="pf-rn-list" role="listbox" aria-label="Hospitals">
               @for (h of filteredHospitals(); track h.id) {
                 <li>
-                  <button type="button" class="pf-rn-row press"
-                          [class.pf-rn-row--on]="selectedHospitalId() === h.id"
+                  <button type="button" class="pf-rn-row press" role="option"
+                          [attr.aria-selected]="selectedHospitalId() === h.id"
                           (click)="selectHospital(h.id)">
                     <div class="min-w-0 flex-1">
                       <p class="pf-rn-row__name">{{ h.name }}</p>
                       <p class="pf-rn-row__meta">
-                        @if (h.code) { {{ h.code }} · }
-                        {{ h.doctorCount }} doctor<span [class.hidden]="h.doctorCount === 1">s</span>
-                        @if (!h.isActive) { · <span class="pf-rn-row__inactive">inactive</span> }
+                        @if (h.code) { <span class="nd-num">{{ h.code }}</span> · }
+                        <span class="nd-num">{{ h.doctorCount }}</span> doctor<span [class.hidden]="h.doctorCount === 1">s</span>
+                        @if (!h.isActive) { · <span class="pf-rn-row__inactive">Inactive</span> }
                       </p>
                     </div>
                   </button>
@@ -135,7 +137,7 @@ interface Doctor {
         </aside>
 
         <!-- ── Doctors (right) ─────────────────────────────────── -->
-        <section class="pf-rn-pane">
+        <section class="pf-rn-pane nd-card">
           @if (!selectedHospital(); as _) {
             <div class="pf-rn-placeholder">
               <p class="pf-rn-placeholder__title">Pick a hospital to manage its doctors</p>
@@ -145,26 +147,24 @@ interface Doctor {
             </div>
           }
           @if (selectedHospital(); as h) {
-            <header class="pf-rn-pane__hdr">
+            <header class="nd-card__head pf-rn-pane__hdr">
+              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
               <div class="min-w-0 flex-1">
-                <h2 class="pf-rn-pane__title">{{ h.name }}</h2>
+                <h2 class="pf-rn-pane__title pf-rn-pane__title--name">{{ h.name }}</h2>
                 <p class="pf-rn-pane__sub">
-                  @if (h.code) { {{ h.code }} · }
-                  @if (h.phone) { {{ h.phone }} · }
+                  @if (h.code) { <span class="nd-num">{{ h.code }}</span> · }
+                  @if (h.phone) { <span class="nd-num">{{ h.phone }}</span> · }
                   @if (h.address) { {{ h.address }} }
                   @if (!h.code && !h.phone && !h.address) { no details yet }
                 </p>
               </div>
-              <pf-touch-btn size="sm" variant="ghost" (pressed)="openHospitalEditor(h)">Edit hospital</pf-touch-btn>
-              <pf-touch-btn size="sm" variant="primary" (pressed)="openDoctorEditor(null)">
-                <span icon-left aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 5v14M5 12h14"/>
-                  </svg>
-                </span>
+              <button type="button" class="nd-btn nd-btn--tertiary pf-rn-hdrbtn press" (click)="openHospitalEditor(h)">Edit hospital</button>
+              <!-- Secondary: "Add hospital" in the band is this view's one primary. -->
+              <button type="button" class="nd-btn nd-btn--secondary pf-rn-hdrbtn press" (click)="openDoctorEditor(null)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 Add doctor
-              </pf-touch-btn>
+              </button>
             </header>
 
             @if (loadingDoctors()) {
@@ -188,32 +188,20 @@ interface Doctor {
                       <p class="pf-rn-doc__sub">
                         @if (d.qualification) { {{ d.qualification }} }
                         @if (d.qualification && d.registrationNo) { · }
-                        @if (d.registrationNo) { Reg #{{ d.registrationNo }} }
+                        @if (d.registrationNo) { Reg #<span class="nd-num">{{ d.registrationNo }}</span> }
                       </p>
                       <p class="pf-rn-doc__contact">
-                        @if (d.phone) { {{ d.phone }} }
+                        @if (d.phone) { <span class="nd-num">{{ d.phone }}</span> }
                         @if (d.phone && d.email) { · }
                         @if (d.email) { {{ d.email }} }
                       </p>
                     </div>
                     <div class="pf-rn-doc__actions">
-                      @if (!d.isActive) { <span class="pf-rn-row__inactive">inactive</span> }
-                      <button type="button" class="pf-rn-doc__btn press" (click)="openDoctorEditor(d)" aria-label="Edit">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                          <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                        </svg>
-                      </button>
+                      @if (!d.isActive) { <span class="nd-chip nd-chip--static pf-rn-chip">Inactive</span> }
+                      <!-- Row actions: text on web, icon on touch. -->
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openDoctorEditor(d)" aria-label="Edit doctor" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
                       @if (d.isActive) {
-                        <button type="button" class="pf-rn-doc__btn pf-rn-doc__btn--danger press"
-                                (click)="deactivateDoctor(d)" aria-label="Deactivate">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
-                        </button>
+                        <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="deactivateDoctor(d)" aria-label="Deactivate doctor" title="Deactivate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="nd-rowact__t">Deactivate</span></button>
                       }
                     </div>
                   </li>
@@ -228,10 +216,13 @@ interface Doctor {
       <!-- ── Hospital editor modal ─────────────────────────────── -->
       @if (hospitalEditor(); as he) {
         <div class="pf-rn-modal-bd" (click)="closeHospitalEditor()"></div>
-        <div class="pf-rn-modal pf-sheet__panel" role="dialog" aria-modal="true">
-          <header class="pf-rn-modal__hdr">
-            <h3>{{ he.id ? 'Edit hospital' : 'Add hospital' }}</h3>
-            <button type="button" class="pf-rn-modal__close press" (click)="closeHospitalEditor()" aria-label="Close">
+        <div class="pf-rn-modal nd-card" role="dialog" aria-modal="true" [attr.aria-label]="he.id ? 'Edit hospital' : 'Add hospital'">
+          <span class="nd-sheet__handle" aria-hidden="true"></span>
+          <header class="nd-card__head pf-rn-modal__hdr">
+            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/></svg></span>
+            <h3 class="nd-card__label">{{ he.id ? 'Edit hospital' : 'Add hospital' }}</h3>
+            <span class="nd-card__spacer"></span>
+            <button type="button" class="nd-btn nd-btn--icon pf-rn-modal__close press" (click)="closeHospitalEditor()" aria-label="Close" title="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18M6 6l12 12"/>
@@ -241,46 +232,45 @@ interface Doctor {
           <div class="pf-rn-modal__body">
             <label class="pf-rn-fld">
               <span>Name <span class="pf-rn-fld__req">*</span></span>
-              <input type="text" [(ngModel)]="he.name" (input)="clearHospErr('name')" [class.pf-rn-err]="hospErr('name')" placeholder="Apollo Hospitals" />
+              <input class="nd-input" type="text" [(ngModel)]="he.name" (input)="clearHospErr('name')" [class.nd-input--error]="hospErr('name')" placeholder="Apollo Hospitals" />
               @if (hospErr('name')) { <p class="pf-rn-fld__err">{{ hospErr('name') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Code</span>
-              <input type="text" [(ngModel)]="he.code" (input)="clearHospErr('code')" [class.pf-rn-err]="hospErr('code')" placeholder="APO" />
+              <input class="nd-input" type="text" [(ngModel)]="he.code" (input)="clearHospErr('code')" [class.nd-input--error]="hospErr('code')" placeholder="APO" />
               @if (hospErr('code')) { <p class="pf-rn-fld__err">{{ hospErr('code') }}</p> }
             </label>
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Address</span>
-              <input type="text" [(ngModel)]="he.address" placeholder="21 Greams Lane, Chennai" />
+              <input class="nd-input" type="text" [(ngModel)]="he.address" placeholder="21 Greams Lane, Chennai" />
             </label>
             <label class="pf-rn-fld">
               <span>Phone</span>
-              <input type="tel" [(ngModel)]="he.phone" placeholder="+91 44 1234 5678" />
+              <input class="nd-input" type="tel" [(ngModel)]="he.phone" placeholder="+91 44 1234 5678" />
             </label>
             <label class="pf-rn-fld">
               <span>Email</span>
-              <input type="email" [(ngModel)]="he.email" placeholder="referrals@apollo.com" />
+              <input class="nd-input" type="email" [(ngModel)]="he.email" placeholder="referrals@apollo.com" />
             </label>
             <label class="pf-rn-fld">
               <span>GSTIN</span>
-              <input type="text" [(ngModel)]="he.gstin" placeholder="33AABCA1234A1Z5" />
+              <input class="nd-input" type="text" [(ngModel)]="he.gstin" placeholder="33AABCA1234A1Z5" />
             </label>
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Notes</span>
-              <textarea rows="2" [(ngModel)]="he.notes" placeholder="Panel rates, commission deal, billing quirks…"></textarea>
+              <textarea class="nd-input" rows="2" [(ngModel)]="he.notes" placeholder="Panel rates, commission deal, billing quirks…"></textarea>
             </label>
           </div>
           <footer class="pf-rn-modal__ftr">
             @if (he.id) {
-              <pf-touch-btn size="sm" variant="ghost" (pressed)="deactivateHospital()">Deactivate</pf-touch-btn>
+              <button type="button" class="nd-btn nd-btn--tertiary press" (click)="deactivateHospital()">Deactivate</button>
             }
             <span class="flex-1"></span>
-            <pf-touch-btn size="sm" variant="ghost" (pressed)="closeHospitalEditor()">Cancel</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary"
-                          [disabled]="!he.name?.trim() || savingHospital()"
-                          (pressed)="saveHospital()">
-              @if (savingHospital()) { Saving… } @else { Save }
-            </pf-touch-btn>
+            <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeHospitalEditor()">Cancel</button>
+            <button type="button" class="nd-btn nd-btn--primary press"
+                    [disabled]="!he.name?.trim() || savingHospital()" (click)="saveHospital()">
+              @if (savingHospital()) { Saving… } @else { Save hospital }
+            </button>
           </footer>
         </div>
       }
@@ -288,10 +278,13 @@ interface Doctor {
       <!-- ── Doctor editor modal ───────────────────────────────── -->
       @if (doctorEditor(); as de) {
         <div class="pf-rn-modal-bd" (click)="closeDoctorEditor()"></div>
-        <div class="pf-rn-modal pf-sheet__panel" role="dialog" aria-modal="true">
-          <header class="pf-rn-modal__hdr">
-            <h3>{{ de.id ? 'Edit doctor' : 'Add doctor' }}</h3>
-            <button type="button" class="pf-rn-modal__close press" (click)="closeDoctorEditor()" aria-label="Close">
+        <div class="pf-rn-modal nd-card" role="dialog" aria-modal="true" [attr.aria-label]="de.id ? 'Edit doctor' : 'Add doctor'">
+          <span class="nd-sheet__handle" aria-hidden="true"></span>
+          <header class="nd-card__head pf-rn-modal__hdr">
+            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <h3 class="nd-card__label">{{ de.id ? 'Edit doctor' : 'Add doctor' }}</h3>
+            <span class="nd-card__spacer"></span>
+            <button type="button" class="nd-btn nd-btn--icon pf-rn-modal__close press" (click)="closeDoctorEditor()" aria-label="Close" title="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 6 6 18M6 6l12 12"/>
@@ -301,42 +294,41 @@ interface Doctor {
           <div class="pf-rn-modal__body">
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Name <span class="pf-rn-fld__req">*</span></span>
-              <input type="text" [(ngModel)]="de.name" (input)="clearDocErr('name')" [class.pf-rn-err]="docErr('name')" placeholder="Dr. Priya Krishnan" />
+              <input class="nd-input" type="text" [(ngModel)]="de.name" (input)="clearDocErr('name')" [class.nd-input--error]="docErr('name')" placeholder="Dr. Priya Krishnan" />
               @if (docErr('name')) { <p class="pf-rn-fld__err">{{ docErr('name') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Designation</span>
-              <input type="text" [(ngModel)]="de.designation" placeholder="Consultant Physician" />
+              <input class="nd-input" type="text" [(ngModel)]="de.designation" placeholder="Consultant Physician" />
             </label>
             <label class="pf-rn-fld">
               <span>Department</span>
-              <input type="text" [(ngModel)]="de.department" placeholder="Cardiology" />
+              <input class="nd-input" type="text" [(ngModel)]="de.department" placeholder="Cardiology" />
             </label>
             <label class="pf-rn-fld">
               <span>Qualification</span>
-              <input type="text" [(ngModel)]="de.qualification" placeholder="MBBS, MD" />
+              <input class="nd-input" type="text" [(ngModel)]="de.qualification" placeholder="MBBS, MD" />
             </label>
             <label class="pf-rn-fld">
               <span>Registration #</span>
-              <input type="text" [(ngModel)]="de.registrationNo" placeholder="TN-12345" />
+              <input class="nd-input" type="text" [(ngModel)]="de.registrationNo" placeholder="TN-12345" />
             </label>
             <label class="pf-rn-fld">
               <span>Phone</span>
-              <input type="tel" [(ngModel)]="de.phone" placeholder="+91 98765 43210" />
+              <input class="nd-input" type="tel" [(ngModel)]="de.phone" placeholder="+91 98765 43210" />
             </label>
             <label class="pf-rn-fld">
               <span>Email</span>
-              <input type="email" [(ngModel)]="de.email" placeholder="priya@apollo.com" />
+              <input class="nd-input" type="email" [(ngModel)]="de.email" placeholder="priya@apollo.com" />
             </label>
           </div>
           <footer class="pf-rn-modal__ftr">
             <span class="flex-1"></span>
-            <pf-touch-btn size="sm" variant="ghost" (pressed)="closeDoctorEditor()">Cancel</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary"
-                          [disabled]="!de.name?.trim() || savingDoctor()"
-                          (pressed)="saveDoctor()">
-              @if (savingDoctor()) { Saving… } @else { Save }
-            </pf-touch-btn>
+            <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeDoctorEditor()">Cancel</button>
+            <button type="button" class="nd-btn nd-btn--primary press"
+                    [disabled]="!de.name?.trim() || savingDoctor()" (click)="saveDoctor()">
+              @if (savingDoctor()) { Saving… } @else { Save doctor }
+            </button>
           </footer>
         </div>
       }
@@ -353,28 +345,18 @@ interface Doctor {
       .pf-rn-grid { grid-template-columns: 340px 1fr; align-items: start; }
     }
     :host-context(.design-new) .pf-rn-grid { margin-top: 0; }
-    .pf-rn-pane {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
-      padding: 14px;
-      min-height: 200px;
-    }
-    .pf-rn-pane--list { display: flex; flex-direction: column; gap: 10px; }
-    .pf-rn-pane__hdr {
-      display: flex; align-items: center; gap: 10px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--glass-border);
-      margin-bottom: 10px;
-    }
-    .pf-rn-pane__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    /* Panes = kit cards with the BILLING header; bodies pad inside. */
+    .pf-rn-pane { min-height: 200px; overflow: visible; }
+    .pf-rn-pane > :not(.nd-card__head) { margin-left: 14px; margin-right: 14px; }
+    .pf-rn-pane > :last-child { margin-bottom: 14px; }
+    .pf-rn-pane--list { gap: 10px; }
+    .pf-rn-pane__hdr { margin: 0 0 10px; }
+    .pf-rn-pane__title { margin: 0; }
+    .pf-rn-pane__title--name { font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-rn-pane__sub { margin: 2px 0 0; font-size: 12px; color: var(--text-tertiary); }
-    .pf-rn-pane__count {
-      margin-left: auto; padding: 2px 8px; border-radius: 999px;
-      background: rgba(168, 85, 247, 0.18); color: #c4b5fd;
-      font-size: 11px; font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
+    .pf-rn-pane__count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+    .pf-rn-hdrbtn { height: 36px; min-height: 36px; }
+    .pf-rn-chip { height: 24px; font-size: 11.5px; }
 
     .pf-rn-search {
       width: 100%; height: 36px; padding: 0 12px;
@@ -394,14 +376,12 @@ interface Doctor {
       color: var(--text-primary); cursor: pointer;
       transition: background 0.12s, border-color 0.12s;
     }
-    .pf-rn-row:hover { background: var(--glass-bg-hover); }
-    .pf-rn-row--on {
-      background: color-mix(in srgb, #a78bfa 14%, transparent);
-      border-color: rgba(168, 85, 247, 0.55);
-    }
+    .pf-rn-row:hover { background: var(--nd-chip-bg); }
+    /* Neutral selected state (aria-selected), never violet (ND-PATTERN §3). */
+    .pf-rn-row[aria-selected='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
     .pf-rn-row__name { margin: 0; font-size: 13.5px; font-weight: 600; }
     .pf-rn-row__meta { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-rn-row__inactive { color: var(--amber-text); font-weight: 600; }
+    .pf-rn-row__inactive { color: var(--text-secondary); font-weight: 600; }
 
     .pf-rn-empty { padding: 24px 8px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
     .pf-rn-placeholder { padding: 50px 16px; text-align: center; }
@@ -412,17 +392,16 @@ interface Doctor {
     .pf-rn-doc {
       display: flex; gap: 12px;
       padding: 12px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
+      background: var(--nd-card-bg);
+      border: 1px solid var(--nd-line);
+      border-radius: var(--nd-radius);
     }
     .pf-rn-doc__main { flex: 1; min-width: 0; }
     .pf-rn-doc__name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-rn-doc__meta { margin: 2px 0 0; font-size: 12.5px; color: var(--text-secondary); }
-    .pf-rn-doc__sub  { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-rn-doc__sub  { margin: 2px 0 0; font-size: 12px; color: var(--text-tertiary); }
     .pf-rn-doc__contact { margin: 2px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-rn-doc__actions { display: inline-flex; align-items: flex-start; gap: 4px; }
+    .pf-rn-doc__actions { display: inline-flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .pf-rn-doc__btn {
       width: 28px; height: 28px; border-radius: 8px;
       background: transparent; border: 1px solid var(--glass-border);
@@ -433,29 +412,19 @@ interface Doctor {
     .pf-rn-doc__btn--danger:hover { color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
 
     /* ── Editor modal ─────────────────────────────────────────── */
-    .pf-rn-modal-bd { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 50; }
+    /* Editor modal = nd-card modal (web) / sheet above the navbar (phones). */
+    .pf-rn-modal-bd { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); background: rgba(0,0,0,0.45); z-index: 79; }
     .pf-rn-modal {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      z-index: 51; width: calc(100% - 32px); max-width: 560px;
-      max-height: calc(100dvh - 32px);
-      display: flex; flex-direction: column;
-      background: var(--bg-card-solid, #14142a);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      z-index: 80; width: calc(100% - 32px); max-width: 560px;
+      max-height: calc(100dvh - var(--nd-nav-h, 0px) - 32px);
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
     }
-    .pf-rn-modal__hdr {
-      display: flex; align-items: center; gap: 8px;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--glass-border);
-    }
-    .pf-rn-modal__hdr h3 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
-    .pf-rn-modal__close {
-      width: 28px; height: 28px; border-radius: 8px;
-      background: transparent; border: none; color: var(--text-secondary); cursor: pointer;
-      display: inline-flex; align-items: center; justify-content: center;
-    }
-    .pf-rn-modal__close:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
+    /* Centered modal: fade only (a transform keyframe would un-centre it). */
+    .pf-rn-modal { animation: pf-rn-fade var(--nd-dur) var(--nd-spring) both; }
+    @keyframes pf-rn-fade { from { opacity: 0; } to { opacity: 1; } }
+    .pf-rn-modal__hdr { flex: none; }
+    .pf-rn-modal__close { width: 36px; height: 36px; min-height: 36px; }
     .pf-rn-modal__body {
       padding: 14px 16px;
       display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px;
@@ -464,27 +433,16 @@ interface Doctor {
     @media (max-width: 540px) { .pf-rn-modal__body { grid-template-columns: 1fr; } }
     .pf-rn-fld--wide { grid-column: 1 / -1; }
     .pf-rn-fld { display: flex; flex-direction: column; gap: 4px; }
-    .pf-rn-fld > span {
-      font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--text-tertiary);
-    }
+    .pf-rn-fld > span { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .pf-rn-fld__req { color: var(--red-text); }
-    .pf-rn-fld input, .pf-rn-fld textarea {
-      height: 36px; padding: 0 10px;
-      border-radius: 8px;
-      border: 1px solid var(--glass-border);
-      background: var(--glass-bg);
-      color: var(--text-primary); font-size: 13px; outline: none;
-    }
-    .pf-rn-fld textarea { height: auto; padding: 8px 10px; resize: vertical; min-height: 60px; }
-    .pf-rn-fld input:focus, .pf-rn-fld textarea:focus { border-color: rgba(168, 85, 247, 0.55); }
-    .pf-rn-fld input.pf-rn-err, .pf-rn-fld textarea.pf-rn-err { border-color: #f43f5e; }
+    .pf-rn-fld textarea { min-height: 64px; }
     .pf-rn-fld__err { margin: 2px 0 0; font-size: 11.5px; color: var(--red-text); text-transform: none; letter-spacing: 0; font-weight: 500; }
     .pf-rn-modal__ftr {
       display: flex; align-items: center; gap: 8px;
       padding: 12px 16px;
-      border-top: 1px solid var(--glass-border);
+      border-top: 1px solid var(--nd-line); flex: none;
     }
+    .pf-rn-modal__ftr .nd-btn { height: 40px; min-height: 40px; }
 
     /* ───────────────────────────────────────────────────────────────
        Cross-platform overrides — ADDITIVE ONLY.
@@ -494,14 +452,11 @@ interface Doctor {
     /* Hover affordances: only on real pointers (no sticky :hover on touch). */
     @media (hover: none) {
       .pf-rn-row:hover { background: transparent; }
-      .pf-rn-doc__btn:hover { background: transparent; color: var(--text-secondary); }
-      .pf-rn-doc__btn--danger:hover { color: var(--text-secondary); border-color: var(--glass-border); }
-      .pf-rn-modal__close:hover { background: transparent; color: var(--text-secondary); }
+
     }
 
     /* Touch pointers: grow tap targets to >=44px without shifting desktop. */
     @media (pointer: coarse) {
-      .pf-rn-doc__btn { width: 44px; height: 44px; }
       .pf-rn-modal__close { width: 44px; height: 44px; }
       .pf-rn-row { padding-top: 12px; padding-bottom: 12px; }
       /* Text fields meet the 44px tap floor (desktop keeps its 36px). */
@@ -537,32 +492,24 @@ interface Doctor {
       .pf-rn-pane__hdr { flex-wrap: wrap; }
       .pf-rn-pane__hdr > .min-w-0 { flex-basis: 100%; }
 
+      /* The sheet sits ABOVE the always-visible navbar (ND-PATTERN §8). */
       .pf-rn-modal {
-        top: auto; left: 0; right: 0; bottom: 0;
+        top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px);
         transform: none;
         width: 100%; max-width: none;
-        max-height: 88dvh;
-        border-radius: 18px 18px 0 0;
+        max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+        border-radius: 20px 20px 0 0;
       }
+      .pf-rn-modal { animation: nd-rise var(--nd-dur-sheet) var(--nd-spring-bounce) both; }
       .pf-rn-modal__body { max-height: 60dvh; }
       .pf-rn-fld input, .pf-rn-fld textarea { font-size: 16px; }
       .pf-rn-search { font-size: 16px; }
-      .pf-rn-modal__ftr {
-        padding-bottom: calc(12px + var(--tab-nav-total-height, 0px));
-        flex-wrap: wrap;
-      }
+      .pf-rn-modal__ftr { flex-wrap: wrap; }
     }
 
     /* Capacitor native: bottom-sheet modal must clear the home-indicator /
        gesture bar in addition to the in-app bottom-nav. */
-    :host-context(html.cap-native) .pf-rn-modal {
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-    @media (max-width: 640px) {
-      :host-context(html.cap-native) .pf-rn-modal__ftr {
-        padding-bottom: calc(12px + var(--tab-nav-total-height, 0px) + env(safe-area-inset-bottom));
-      }
-    }
+    @media (prefers-reduced-motion: reduce) { .pf-rn-modal { animation: none !important; } }
   `]
 })
 export class ReferringNetworkComponent implements OnInit {
@@ -570,6 +517,8 @@ export class ReferringNetworkComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   protected readonly theme = inject(ThemeService);
+  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  protected readonly web = webPointerSignal();
 
   // ── State ───────────────────────────────────────────────────────
   readonly hospitals = signal<Hospital[]>([]);
