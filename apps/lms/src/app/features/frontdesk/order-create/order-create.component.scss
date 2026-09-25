@@ -3326,17 +3326,17 @@
 
 /* Billing: payment rises like an iOS sheet (slight overshoot); the cart
    collapses up into its summary line; Edit reverses (cart drops back in). */
-.pf-oc-phase--rise { animation: pf-oc-sheet-up 360ms var(--pf-spring-bounce) both; }
+.pf-oc-phase--rise { animation: pf-oc-sheet-up 560ms var(--pf-spring-bounce) both; }
 @keyframes pf-oc-sheet-up {
   from { opacity: 0; transform: translateY(32px); }
   to { opacity: 1; transform: none; }
 }
-.pf-oc-phase--rise .pf-oc-sum { transform-origin: top center; animation: pf-oc-sum-collapse 300ms var(--pf-spring) both; }
+.pf-oc-phase--rise .pf-oc-sum { transform-origin: top center; animation: pf-oc-sum-collapse 480ms var(--pf-spring) both; }
 @keyframes pf-oc-sum-collapse {
   from { transform: scaleY(1.8); opacity: 0.4; }
   to { transform: none; opacity: 1; }
 }
-.pf-oc-phase--cart { animation: pf-oc-cart-down 340ms var(--pf-spring) both; }
+.pf-oc-phase--cart { animation: pf-oc-cart-down 520ms var(--pf-spring) both; }
 @keyframes pf-oc-cart-down {
   from { opacity: 0; transform: translateY(-16px); }
   to { opacity: 1; transform: none; }
