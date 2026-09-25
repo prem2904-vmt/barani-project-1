@@ -436,3 +436,55 @@ describe('Billing phases (cart → payment)', () => {
     expect(c.billPhase()).toBe('pay');
   });
 });
+
+describe('Search focus mode — dropdown filters', () => {
+  const tests = [
+    T('uglu', 'Urine Glucose', 'Clinical Pathology', { department: { name: 'Clinical Pathology', code: 'CPY' } }),
+    T('uket', 'Urine Ketones', 'Clinical Pathology', { department: { name: 'Clinical Pathology', code: 'CPY' } }),
+    T('ualb', 'Urine Albumin', 'Biochemistry', { department: { name: 'Biochemistry', code: 'BIO' } }),
+    T('uprof', 'Urine Routine Panel', 'Clinical Pathology', { type: 'profile', department: { name: 'Clinical Pathology', code: 'CPY' } }),
+    T('upkg', 'Urine Checkup Bundle', 'Biochemistry', { type: 'package', department: { name: 'Biochemistry', code: 'BIO' } }),
+  ];
+
+  it('type chips narrow the results; counts reflect each type', () => {
+    const { c } = make(tests);
+    c.onPillInput('urine');
+    expect(c.searchResults().length).toBe(5);
+    expect(c.searchTypeCounts()).toMatchObject({ all: 5, individual: 3, profile: 1, package: 1 });
+    c.setSearchType('profile');
+    expect(c.searchResults().map((t: any) => t.id)).toEqual(['uprof']);
+    c.setSearchType('individual');
+    expect(c.searchResults().map((t: any) => t.id).sort()).toEqual(['ualb', 'uglu', 'uket']);
+  });
+
+  it('department chips narrow the results and combine with the type chip', () => {
+    const { c } = make(tests);
+    c.onPillInput('urine');
+    c.setSearchDept('Biochemistry');
+    expect(c.searchResults().map((t: any) => t.id).sort()).toEqual(['ualb', 'upkg']);
+    expect(c.searchTypeCounts()).toMatchObject({ all: 2, individual: 1, package: 1, profile: 0 });
+    c.setSearchType('individual');
+    expect(c.searchResults().map((t: any) => t.id)).toEqual(['ualb']);
+    expect(c.searchDeptCounts()).toMatchObject({ 'Biochemistry': 1, 'Clinical Pathology': 2 });
+    c.setSearchDept('Biochemistry');                 // tap again = All
+    expect(c.searchDept()).toBe('');
+  });
+
+  it('the filters never touch the catalogue grid', () => {
+    const { c } = make(tests);
+    c.onPillInput('urine');
+    c.setSearchType('package');
+    c.setSearchDept('Biochemistry');
+    expect(c.filteredTests().map((t: any) => t.id).sort()).toEqual(['ualb', 'uglu', 'uket']);
+  });
+
+  it('changing a filter resets the keyboard highlight to the first result', () => {
+    const { c } = make(tests);
+    c.onPillInput('urine');
+    c.onPillArrow(new Event('keydown'), 1);
+    c.onPillArrow(new Event('keydown'), 1);
+    expect(c.activeResult()).toBe(2);
+    c.setSearchType('individual');
+    expect(c.activeResult()).toBe(0);
+  });
+});

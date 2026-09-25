@@ -202,3 +202,57 @@ describe('Order & Payments — two-phase billing card', () => {
     expect(el.querySelector('.pf-oc-phase')!.getAttribute('data-phase')).toBe('cart');
   });
 });
+
+describe('Order & Payments — search focus mode', () => {
+  const scrim = (el: HTMLElement) => el.querySelector('.pf-oc-scrim') as HTMLElement;
+
+  it('the scrim and the lifted pill appear only while the dropdown is open', () => {
+    const { el, f, c } = render();
+    expect(scrim(el).classList).not.toContain('pf-oc-scrim--on');
+    c.onPillInput('glu');
+    f.detectChanges();
+    expect(scrim(el).classList).toContain('pf-oc-scrim--on');
+    expect(el.querySelector('pf-hero-band')!.classList).toContain('pf-oc-band--focus');
+    expect(el.querySelectorAll('.pf-us__filters .pf-us__chip').length).toBeGreaterThan(4);
+  });
+
+  it('a scrim click closes the dropdown immediately (CSS-only fade, no JS delay)', () => {
+    const { el, f, c } = render();
+    c.onPillInput('glu');
+    f.detectChanges();
+    scrim(el).click();
+    f.detectChanges();
+    expect(c.dropOpen()).toBe(false);
+    expect(el.querySelector('#pf-us-drop')).toBeNull();
+    expect(scrim(el).classList).not.toContain('pf-oc-scrim--on');
+  });
+
+  it('Esc (from the input or a filter chip) closes it', () => {
+    const { el, f, c } = render();
+    c.onPillInput('glu');
+    f.detectChanges();
+    const chip = el.querySelector('.pf-us__chip') as HTMLElement;
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    f.detectChanges();
+    expect(c.dropOpen()).toBe(false);
+    c.onPillInput('glu');
+    f.detectChanges();
+    (el.querySelector('.pf-us__input') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    f.detectChanges();
+    expect(c.dropOpen()).toBe(false);
+  });
+
+  it('a filter chip narrows the rendered results', () => {
+    const { el, f, c } = render();
+    c.onPillInput('a');
+    f.detectChanges();
+    const all = el.querySelectorAll('.pf-us__trow').length;
+    const profilesChip = [...el.querySelectorAll('.pf-us__chip')].find(b => b.textContent?.includes('Profiles')) as HTMLButtonElement;
+    profilesChip.click();
+    f.detectChanges();
+    const rows = [...el.querySelectorAll('.pf-us__trow')];
+    expect(rows.length).toBeLessThan(all);
+    expect(rows.every(r => r.getAttribute('data-type') === 'profile')).toBe(true);
+    expect(profilesChip.getAttribute('aria-pressed')).toBe('true');
+  });
+});
