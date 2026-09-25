@@ -215,6 +215,10 @@
      at the bottom-left — never touch overlay children here. */
   .pf-page__header,
   .pf-page__body { position: relative; z-index: 1; }
+  /* The header (band + patient search) must sit ABOVE the body: both were
+     z 1, so the body — later in the DOM — painted over the search's
+     suggestion dropdown in light mode (the dark block has no such lift). */
+  .pf-page__header { z-index: 2; }
 }
 
 /* ══ Designer DARK skin (new design) — same anatomy as the light frame,
