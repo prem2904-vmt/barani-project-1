@@ -164,7 +164,7 @@
 
     <!-- ─── Collect drawer ────────────────────────────────────────────── -->
     @if (activeGroup(); as g) {
-      <div #drawerEl class="pf-drawer pf-drawer--nd" role="dialog" aria-modal="true" [attr.aria-label]="'Collect samples for ' + patientFullName(g)" (click)="close()">
+      <div #drawerEl class="pf-drawer pf-drawer--nd nd-fullscreen" role="dialog" aria-modal="true" [attr.aria-label]="'Collect samples for ' + patientFullName(g)" (click)="close()">
         <div class="pf-drawer__panel nd-page" (click)="$event.stopPropagation()">
           <!-- Band: IDENTICAL to every step (back + tenant). The pill is the
                CONTEXT BAR: subject chips (patient, order, samples) + this
@@ -234,26 +234,9 @@
                 </div>
               </header>
               <div class="nd-card__body">
-                <div class="pf-sc-grid">
+                <div class="pf-sc-grid" [attr.data-size]="tileSize(g)" [class]="'pf-sc-grid pf-sc-grid--' + tileSize(g)">
                   @for (s of visibleSamples(g); track s.id) {
                     <div class="pf-tube-wrap">
-              @if (dispatchSelect() === null && (s.source === 'external' || canMarkExternal(s))) {
-                <button type="button" class="pf-tube__extflag"
-                        [class.pf-tube__extflag--on]="s.source === 'external'"
-                        [disabled]="sourceBusy()"
-                        (click)="toggleExternal(s, $event)"
-                        [title]="s.source === 'external'
-                          ? 'Brought in from outside — tap to undo'
-                          : 'Mark as brought in from outside (skips the draw)'"
-                        [attr.aria-label]="s.source === 'external' ? 'External sample — tap to undo' : 'Mark sample as external'"
-                        [attr.aria-pressed]="s.source === 'external'">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12 3v10"/><path d="m8 9 4 4 4-4"/><path d="M4 19h16"/>
-                  </svg>
-                  <!-- Label shows on tablet/desktop; phones keep icon-only. -->
-                  <span class="pf-tube__extflag-txt">External</span>
-                </button>
-              }
               <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
                    list (a floating popover). A div, not <button>, so the hold /
                    pointer handling is clean. -->
@@ -509,7 +492,7 @@
                        the column height; holding the vial ~2s peeks it. No
                        textual hint and no draw-volume pill — the card carries
                        only the container name and the sample id. -->
-                  <p class="pf-tube__code">Sample ID: {{ s.barcode ?? '—' }}</p>
+                  <p class="pf-tube__code">Sample ID&nbsp;<span class="nd-mono">{{ s.barcode ?? '—' }}</span></p>
 
                   @if (s.status !== 'pending') {
                     <span class="pf-tube__stamp">
@@ -549,6 +532,23 @@
                   }
                 </div>
               </div>
+              @if (dispatchSelect() === null && (s.source === 'external' || canMarkExternal(s))) {
+                <button type="button" class="pf-tube__extflag pf-sc-ext"
+                        [class.pf-tube__extflag--on]="s.source === 'external'"
+                        [disabled]="sourceBusy()"
+                        (click)="toggleExternal(s, $event)"
+                        [title]="s.source === 'external'
+                          ? 'Brought in from outside — tap to undo'
+                          : 'Mark as brought in from outside (skips the draw)'"
+                        [attr.aria-label]="s.source === 'external' ? 'External sample — tap to undo' : 'Mark sample as external'"
+                        [attr.aria-pressed]="s.source === 'external'">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 3v10"/><path d="m8 9 4 4 4-4"/><path d="M4 19h16"/>
+                  </svg>
+                  <!-- Label shows on tablet/desktop; phones keep icon-only. -->
+                  <span class="pf-tube__extflag-txt">External (brought in)</span>
+                </button>
+              }
                     </div><!-- /pf-tube-wrap -->
                   }
                   @if (visibleSamples(g).length === 0) {

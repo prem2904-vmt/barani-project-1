@@ -538,11 +538,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the full-screen overlay actually cover the nav.
     effect(() => {
       const hasDrawer = !!this.activeGroup();
-      // Full-screen flow: hide the app bar / bottom nav while it is open
-      // (html.pf-collect-immersive — the shell + global styles react).
-      // Always removed on close and on destroy.
-      if (typeof document !== "undefined")
-        document.documentElement.classList.toggle("pf-collect-immersive", hasDrawer);
+      // The bottom navbar stays visible (owner rule): the drawer is an
+      // .nd-fullscreen view that ends ABOVE it.
       if (!hasDrawer) {
         this.detachTeleport();
         return;
@@ -584,8 +581,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._clock = null;
     }
     this.detachTeleport();
-    if (typeof document !== "undefined")
-      document.documentElement.classList.remove("pf-collect-immersive");
   }
 
   private detachTeleport() {
@@ -798,6 +793,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       { id: 'drawn', label: 'Drawn', count: ss.filter(s => s.status !== 'pending').length },
       { id: 'external', label: 'External', count: ss.filter(s => s.source === 'external').length },
     ];
+  }
+  /** Adaptive tile size from the vial count (usually ≤ 6–7 vials, so use
+   *  the big screen): 1–2 → xl, 3–4 → lg, 5–7 → md, 8+ → sm. */
+  tileSize(g: OrderGroup): 'xl' | 'lg' | 'md' | 'sm' {
+    const n = this.visibleSamples(g).length;
+    return n <= 2 ? 'xl' : n <= 4 ? 'lg' : n <= 7 ? 'md' : 'sm';
   }
   /** The vial tiles shown under the current filter. */
   visibleSamples(g: OrderGroup): OrderSample[] {

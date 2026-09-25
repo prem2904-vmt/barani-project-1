@@ -1779,13 +1779,13 @@
       .pf-drawer--nd .pf-sc-tile .pf-vial { height: 86px; }
       .pf-drawer--nd .pf-sc-tile .pf-vial--cup { height: 70px; }
       .pf-drawer--nd .pf-tube-wrap:has(.pf-tube__extflag) .pf-sc-tile { padding-right: 44px; }
-      .pf-sc-body { padding: 8px 12px calc(84px + env(safe-area-inset-bottom, 0px)); }
+      .pf-sc-body { padding: 8px 12px 84px; }   /* clears the collect bar (the drawer already ends above the nav) */
       /* COLLECTION becomes the sheet opened from the bottom bar. */
       .pf-sc-side { display: none; }
       .pf-sc-side.pf-sc-side--open {
         display: flex;
-        position: fixed; left: 0; right: 0; bottom: 0; z-index: 1002;
-        height: calc(92dvh - env(safe-area-inset-top, 0px));
+        position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 1002;
+        height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
         border-radius: 20px 20px 0 0;
         animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce, ease) both;
       }
@@ -1812,3 +1812,73 @@
       animation-delay: 0.6s;
     }
     .pf-drawer--nd .pf-sc-tile.pf-tube--done .pf-tube__stamp { animation-delay: 0.6s; }
+
+    /* ════ Round 2 (owner): nav always visible, External row, adaptive tiles ════ */
+    /* The drawer ends ABOVE the always-visible bottom navbar. */
+    .pf-drawer.pf-drawer--nd.nd-fullscreen { bottom: var(--nd-nav-h, 0px); height: auto; }
+
+    /* Tile = one card: the tap area (tube + text) on top, then a divider
+       and the External row. The two never share a hit area. */
+    .pf-drawer--nd .pf-sc-grid .pf-tube-wrap {
+      display: flex; flex-direction: column;
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
+      border-radius: var(--nd-radius, 12px); box-shadow: var(--nd-shadow-sm);
+      overflow: hidden;
+      transition: background 0.25s ease 0.6s, border-color 0.25s ease 0.6s;
+    }
+    .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:has(.pf-tube--done) {
+      background: var(--nd-done-tint);
+      border-color: color-mix(in srgb, var(--color-success, #10b981) 45%, transparent);
+    }
+    .pf-drawer--nd .pf-sc-grid .pf-tube.pf-sc-tile {
+      flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px;
+      text-align: center; min-height: 0;
+      padding: 14px 12px 12px;
+      border: 0; border-radius: 0; box-shadow: none; background: transparent;
+    }
+    .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:has(.pf-tube__extflag) .pf-sc-tile { padding-right: 12px; }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-tile .pf-tube__body { align-items: center; flex: none; width: 100%; }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-tile .pf-tube__label { text-align: center; white-space: normal; overflow-wrap: anywhere; }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-tile .pf-tube__code { white-space: nowrap; }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-ext {
+      position: static;
+      width: 100%; min-height: 44px; height: 44px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      border: 0; border-top: 1px solid var(--nd-line); border-radius: 0;
+      background: transparent; box-shadow: none;
+      color: var(--text-secondary);
+      font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none;
+    }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-ext::after { display: none; }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-ext .pf-tube__extflag-txt { display: inline; }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-ext:not(:disabled):hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-ext.pf-tube__extflag--on {
+      background: var(--nd-sel-bg); color: var(--text-primary); border: 0; border-top: 1px solid var(--nd-sel-border);
+    }
+
+    /* Adaptive size by vial count — the tube (and its fill) is the hero. */
+    .pf-sc-grid--xl { grid-template-columns: repeat(auto-fit, minmax(280px, 340px)); justify-content: center; gap: 20px; }
+    .pf-sc-grid--lg { grid-template-columns: repeat(auto-fit, minmax(220px, 280px)); justify-content: center; gap: 16px; }
+    .pf-sc-grid--md { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+    .pf-sc-grid--sm { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+    .pf-drawer--nd .pf-sc-grid--xl .pf-sc-tile .pf-vial      { height: clamp(160px, 34dvh, 250px); }
+    .pf-drawer--nd .pf-sc-grid--xl .pf-sc-tile .pf-vial--cup { height: clamp(140px, 28dvh, 210px); }
+    .pf-drawer--nd .pf-sc-grid--lg .pf-sc-tile .pf-vial      { height: clamp(130px, 24dvh, 175px); }
+    .pf-drawer--nd .pf-sc-grid--lg .pf-sc-tile .pf-vial--cup { height: clamp(110px, 20dvh, 150px); }
+    .pf-drawer--nd .pf-sc-grid--md .pf-sc-tile .pf-vial      { height: clamp(100px, 16dvh, 128px); }
+    .pf-drawer--nd .pf-sc-grid--md .pf-sc-tile .pf-vial--cup { height: clamp(88px, 14dvh, 108px); }
+    .pf-drawer--nd .pf-sc-grid--sm .pf-sc-tile .pf-vial      { height: 84px; }
+    .pf-drawer--nd .pf-sc-grid--sm .pf-sc-tile .pf-vial--cup { height: 72px; }
+    .pf-sc-grid--xl .pf-tube__label { font-size: 15px; }
+
+    @media (max-width: 640px) {
+      .pf-sc-grid--xl, .pf-sc-grid--lg, .pf-sc-grid--md, .pf-sc-grid--sm {
+        grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; gap: 8px;
+      }
+      .pf-sc-grid--xl:has(> :only-child) { grid-template-columns: minmax(0, 260px); justify-content: center; }
+      .pf-drawer--nd .pf-sc-grid--xl .pf-sc-tile .pf-vial { height: 150px; }
+      .pf-drawer--nd .pf-sc-grid--lg .pf-sc-tile .pf-vial,
+      .pf-drawer--nd .pf-sc-grid--md .pf-sc-tile .pf-vial,
+      .pf-drawer--nd .pf-sc-grid--sm .pf-sc-tile .pf-vial { height: 96px; }
+      .pf-drawer--nd .pf-sc-grid .pf-sc-ext .pf-tube__extflag-txt { display: inline; }
+    }
