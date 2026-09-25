@@ -26,400 +26,453 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
   imports: [FormsModule, NumPadComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-sc" role="dialog" aria-modal="true" [attr.aria-label]="title">
+    <div class="pf-sc" role="dialog" aria-modal="true" [attr.aria-label]="displayTitle">
       <div class="pf-sc__backdrop" (click)="cancel()"></div>
 
-      <div class="pf-sc__card" (click)="$event.stopPropagation()">
+      <!-- nd-card modal on web; the kit's .nd-sheet turns it into a tall
+           sheet ABOVE the always-visible bottom navbar on phones. -->
+      <div class="pf-sc__card nd-sheet" (click)="$event.stopPropagation()">
+        <span class="nd-sheet__handle" aria-hidden="true"></span>
+
         <header class="pf-sc__head">
-          <div class="pf-sc__eyebrow">
-            <span class="pf-sc__dot" [class.pf-sc__dot--live]="cameraReady()"></span>
-            Scanner · {{ cameraReady() ? 'LIVE' : 'STARTING' }}
+          <div class="pf-sc__bar">
+            <span class="nd-card__icon pf-sc__ico" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <path d="M7 8v8M10.5 8v8M14 8v8M17 8v8"/>
+              </svg>
+            </span>
+            <span class="nd-card__label pf-sc__label">{{ manualOnly ? 'Enter sample' : 'Scan sample' }}</span>
+            <button type="button" class="pf-sc__close press" (click)="cancel()" aria-label="Close" title="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+              </svg>
+            </button>
           </div>
           <h2 class="pf-sc__title">{{ displayTitle }}</h2>
           @if (expectedBarcode) {
-            <p class="pf-sc__sub">Expected: <span class="pf-sc__code">{{ expectedBarcode }}</span></p>
+            <div class="pf-sc__expect">
+              <span class="pf-sc__expect-label">Expected</span>
+              <span class="pf-sc__expect-id">{{ expectedBarcode }}</span>
+            </div>
           } @else if (manualOnly) {
             <p class="pf-sc__sub">Type the sample ID from the container.</p>
-          } @else {
-            <p class="pf-sc__sub">Aim at the barcode on the vial.</p>
           }
-          <button type="button" class="pf-sc__close press" (click)="cancel()" aria-label="Close">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-            </svg>
-          </button>
         </header>
 
-        <div class="pf-sc__viewport" [hidden]="manualMode()">
-          <video #video autoplay muted playsinline class="pf-sc__video" (click)="refocus()" title="Tap to focus"></video>
-          <div class="pf-sc__frame" aria-hidden="true"></div>
-          @if (torchAvailable()) {
-            <button type="button" class="pf-sc__torch" [class.pf-sc__torch--on]="torchOn()"
-                    (click)="toggleTorch()" [attr.aria-pressed]="torchOn()" aria-label="Toggle torch" title="Torch">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 18h6M10 22h4M12 2a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.3V16h6v-1.2c0-.9.4-1.7 1-2.3A6 6 0 0 0 12 2z"/>
-              </svg>
-            </button>
-          }
-          @if (canSwitchCamera()) {
-            <button type="button" class="pf-sc__torch pf-sc__switch" (click)="switchCamera()"
-                    aria-label="Switch camera" title="Switch camera">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M23 4v6h-6M1 20v-6h6"/>
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-              </svg>
-            </button>
-          }
-          @if (!cameraReady()) {
-            <div class="pf-sc__viewport-fallback">
-              @if (cameraError()) {
-                <p>{{ cameraError() }}</p>
-                <p class="pf-sc__viewport-hint">You can still scan with a handheld gun — it types into this modal automatically.</p>
-              } @else {
-                <p>Waiting for camera…</p>
+        <div class="pf-sc__body">
+          <div class="pf-sc__viewport" [hidden]="manualMode()">
+            <video #video autoplay muted playsinline class="pf-sc__video" (click)="refocus()" title="Tap to focus"></video>
+            @if (cameraReady()) {
+              <div class="pf-sc__reticle" [class.pf-sc__reticle--bad]="!!lastMismatch()"
+                   [class.pf-sc__reticle--ok]="!!matchedCode()" aria-hidden="true">
+                <span class="pf-sc__corner pf-sc__corner--tl"></span>
+                <span class="pf-sc__corner pf-sc__corner--tr"></span>
+                <span class="pf-sc__corner pf-sc__corner--bl"></span>
+                <span class="pf-sc__corner pf-sc__corner--br"></span>
+                @if (!matchedCode()) { <span class="pf-sc__line"></span> }
+                @if (matchedCode()) {
+                  <span class="pf-sc__ok">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+                  </span>
+                }
+              </div>
+            }
+            <div class="pf-sc__tools">
+              @if (canSwitchCamera()) {
+                <button type="button" class="pf-sc__glass press" (click)="switchCamera()"
+                        aria-label="Switch camera" title="Switch camera">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                </button>
               }
+              @if (torchAvailable()) {
+                <button type="button" class="pf-sc__glass press" [attr.data-on]="torchOn() ? '' : null"
+                        (click)="toggleTorch()" [attr.aria-pressed]="torchOn()" aria-label="Toggle torch" title="Torch">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9 18h6M10 22h4M12 2a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.3V16h6v-1.2c0-.9.4-1.7 1-2.3A6 6 0 0 0 12 2z"/>
+                  </svg>
+                </button>
+              }
+            </div>
+            @if (!cameraReady()) {
+              <div class="pf-sc__fallback">
+                @if (cameraError()) {
+                  <span class="pf-sc__fallback-ico" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M2 2l20 20"/><path d="M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14"/>
+                      <path d="M9.5 4h5L17 7h3a2 2 0 0 1 2 2v7.5"/><path d="M14.1 14.1A3 3 0 0 1 9.9 9.9"/>
+                    </svg>
+                  </span>
+                  <p class="pf-sc__fallback-title">{{ cameraError() }}</p>
+                  <p class="pf-sc__fallback-hint">A handheld scanner still works — scan the vial and it lands here.</p>
+                  @if (!manualOnly) {
+                    <button type="button" class="nd-btn nd-btn--secondary press" (click)="toggleManual()">Enter manually</button>
+                  }
+                } @else {
+                  <p class="pf-sc__fallback-hint">Starting camera…</p>
+                }
+              </div>
+            }
+          </div>
+
+          @if (!manualMode()) {
+            <p class="pf-sc__status" aria-live="polite">
+              <span class="pf-sc__pulse" [class.pf-sc__pulse--live]="cameraReady()" aria-hidden="true"></span>
+              {{ cameraReady() ? 'Point the camera at the sample barcode, or scan with a handheld scanner.'
+                               : 'Scan with a handheld scanner, or wait for the camera.' }}
+            </p>
+            @if (hidShown(); as hid) {
+              <div class="pf-sc__hid">
+                <span class="pf-sc__hid-label">Handheld scanner</span>
+                <span class="pf-sc__chip">{{ hid }}</span>
+              </div>
+            }
+          }
+
+          @if (manualMode()) {
+            <div class="pf-sc__manual">
+              @if (parsedExpected(); as p) {
+                <p class="pf-sc__manual-hint">Type the 5-digit sequence on the vial. The rest is locked to the expected barcode.</p>
+                <div class="pf-sc__seg">
+                  <span class="pf-sc__seg-part pf-sc__seg-part--locked">PF</span>
+                  <span class="pf-sc__seg-sep">·</span>
+                  <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.vendor }}</span>
+                  <span class="pf-sc__seg-sep">·</span>
+                  <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.year }}</span>
+                  <span class="pf-sc__seg-sep">·</span>
+                  <input #manualInput
+                         class="pf-sc__seg-part pf-sc__seg-input"
+                         [attr.inputmode]="isTouch() ? 'none' : 'numeric'"
+                         [readonly]="isTouch()"
+                         pattern="[0-9]*"
+                         maxlength="5"
+                         placeholder="00000"
+                         aria-label="Sequence number"
+                         [ngModel]="manualSeq()"
+                         (ngModelChange)="onManualSeqChange($event)"
+                         (keydown.enter)="submitManual()" />
+                  <span class="pf-sc__seg-sep">·</span>
+                  <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.dept }}</span>
+                </div>
+                @if (isTouch()) {
+                  <div class="pf-sc__numpad">
+                    <pf-num-pad
+                      [value]="manualSeq()"
+                      [allowDecimal]="false"
+                      [allowNegative]="false"
+                      [maxLength]="5"
+                      (valueChange)="onManualSeqChange($event)"></pf-num-pad>
+                  </div>
+                }
+                <button #confirmBtn
+                        type="button"
+                        class="nd-btn nd-btn--primary pf-sc__confirm press"
+                        [disabled]="manualSeq().length !== 5"
+                        (click)="submitManual()">
+                  Confirm
+                </button>
+              } @else {
+                <!-- Short sample IDs (LAB26001, BIO260800003…) don't segment —
+                     type the full number off the container. Same handleScan path,
+                     so the wrong-vial guard still applies. -->
+                <label class="pf-sc__manual-hint" for="pf-sc-free">Type the sample ID written on the container.</label>
+                <input #manualInput id="pf-sc-free"
+                       class="pf-sc__free-input uppercase"
+                       type="text" autocapitalize="characters" autocomplete="off" spellcheck="false"
+                       [placeholder]="expectedBarcode || 'Sample ID'"
+                       [ngModel]="manualFree()"
+                       (ngModelChange)="manualFree.set($event)"
+                       (keydown.enter)="submitManualFree()" />
+                <button type="button"
+                        class="nd-btn nd-btn--primary pf-sc__confirm press"
+                        [disabled]="!manualFree().trim()"
+                        (click)="submitManualFree()">
+                  Confirm
+                </button>
+              }
+            </div>
+          }
+
+          @if (lastMismatch(); as code) {
+            <div class="pf-sc__mismatch" role="alert">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
+              </svg>
+              <span>Scanned <b>{{ code }}</b> — this isn't the expected sample (<b>{{ expectedBarcode }}</b>).</span>
             </div>
           }
         </div>
 
-        @if (manualMode()) {
-          <div class="pf-sc__manual">
-            @if (parsedExpected(); as p) {
-              <p class="pf-sc__manual-hint">Type the 5-digit sequence on the vial. Other parts are locked to the expected barcode.</p>
-              <div class="pf-sc__seg">
-                <span class="pf-sc__seg-part pf-sc__seg-part--locked">PF</span>
-                <span class="pf-sc__seg-sep">·</span>
-                <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.vendor }}</span>
-                <span class="pf-sc__seg-sep">·</span>
-                <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.year }}</span>
-                <span class="pf-sc__seg-sep">·</span>
-                <input #manualInput
-                       class="pf-sc__seg-part pf-sc__seg-input"
-                       [attr.inputmode]="isTouch() ? 'none' : 'numeric'"
-                       [readonly]="isTouch()"
-                       pattern="[0-9]*"
-                       maxlength="5"
-                       placeholder="00000"
-                       [ngModel]="manualSeq()"
-                       (ngModelChange)="onManualSeqChange($event)"
-                       (keydown.enter)="submitManual()" />
-                <span class="pf-sc__seg-sep">·</span>
-                <span class="pf-sc__seg-part pf-sc__seg-part--locked">{{ p.dept }}</span>
-              </div>
-              @if (isTouch()) {
-                <div class="pf-sc__numpad">
-                  <pf-num-pad
-                    [value]="manualSeq()"
-                    [allowDecimal]="false"
-                    [allowNegative]="false"
-                    [maxLength]="5"
-                    (valueChange)="onManualSeqChange($event)"></pf-num-pad>
-                </div>
-              }
-              <button #confirmBtn
-                      type="button"
-                      class="pf-sc__manual-confirm press"
-                      [disabled]="manualSeq().length !== 5"
-                      (click)="submitManual()">
-                Confirm
-              </button>
-            } @else {
-              <!-- Short sample IDs (LAB26001, BIO260800003…) don't segment —
-                   type the full number off the container. Same handleScan path,
-                   so the wrong-vial guard still applies. -->
-              <p class="pf-sc__manual-hint">Type the sample ID written on the container.</p>
-              <input #manualInput
-                     class="pf-sc__free-input uppercase"
-                     type="text" autocapitalize="characters" autocomplete="off" spellcheck="false"
-                     [placeholder]="expectedBarcode || 'Sample ID'"
-                     [ngModel]="manualFree()"
-                     (ngModelChange)="manualFree.set($event)"
-                     (keydown.enter)="submitManualFree()" />
-              <button type="button"
-                      class="pf-sc__manual-confirm press"
-                      [disabled]="!manualFree().trim()"
-                      (click)="submitManualFree()">
-                Confirm
-              </button>
-            }
-          </div>
-        }
-
-        @if (lastMismatch(); as code) {
-          <div class="pf-sc__mismatch" role="alert">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
-            </svg>
-            Scanned <b>{{ code }}</b> — expected <b>{{ expectedBarcode }}</b>. Keep the correct vial and try again.
-          </div>
-        }
-
         <footer class="pf-sc__foot">
-          @if (!manualMode()) {
-            <div class="pf-sc__hid">
-              <span class="pf-sc__hid-label">HID scanner input</span>
-              <code class="pf-sc__hid-buffer">{{ hidBuffer() || '—' }}</code>
-            </div>
-          } @else {
-            <div></div>
+          @if (!manualOnly) {
+            <button type="button" class="nd-btn nd-btn--secondary pf-sc__manual-toggle press" (click)="toggleManual()">
+              {{ manualMode() ? 'Use camera' : 'Enter manually' }}
+            </button>
           }
-          <div class="pf-sc__foot-actions">
-            @if (!manualOnly) {
-              <button type="button" class="pf-sc__manual-toggle press" (click)="toggleManual()">
-                {{ manualMode() ? 'Use camera' : 'Enter manually' }}
-              </button>
-            }
-            <button type="button" class="pf-sc__cancel press" (click)="cancel()">Cancel</button>
-          </div>
+          <button type="button" class="nd-btn nd-btn--tertiary pf-sc__cancel press" (click)="cancel()">Cancel</button>
         </footer>
       </div>
     </div>
   `,
   styles: [`
+    /* New-design scanner (owner): nd-card modal / phone sheet, BILLING
+       header, readable expected-ID chip, Apple-style corner reticle, calm
+       status line, red ONLY for the wrong-vial warning. One font family
+       (Noto Sans, tabular numbers for IDs) — never monospace. */
     :host { display: block; }
 
     .pf-sc {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
       padding: 16px;
-      /* Promoted from z-80 to z-1000 so the modal sits ABOVE the floating
-         bottom-nav pill (z-35) and any page-level FABs. Modal contract:
-         once a modal is open, nothing else should be tappable. */
+      /* Above page FABs and the floating nav; a modal owns the screen. */
       z-index: 1000;
+      font-family: inherit;
     }
     .pf-sc__backdrop {
       position: absolute; inset: 0;
-      /* Bumped from 0.6 → 0.78 so the bottom-nav pill underneath isn't
-         visible as a faint shape through the scrim — modal feels solid. */
-      background: rgba(2, 4, 16, 0.82);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-    /* Mobile: make the modal a true full-bleed bottom sheet so its action
-       buttons (Manually / Cancel) sit comfortably above the safe area
-       and never touch the bottom-nav pill. */
-    @media (max-width: 640px) {
-      .pf-sc { padding: 0; align-items: flex-end; }
-      .pf-sc__card {
-        max-width: 100%;
-        width: 100%;
-        border-radius: 18px 18px 0 0;
-        max-height: 92dvh;
-        padding-bottom: max(16px, env(safe-area-inset-bottom));
-      }
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
     }
     .pf-sc__card {
       position: relative;
-      width: 100%;
-      max-width: 460px;
-      background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border);
-      border-radius: 18px;
-      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+      width: 100%; max-width: 460px; max-height: calc(100dvh - 32px);
+      display: flex; flex-direction: column;
+      background: var(--nd-card-bg, var(--bg-card-solid));
+      border: 1px solid var(--nd-line, var(--glass-border));
+      border-radius: var(--nd-radius-card, 16px);
+      box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22), var(--nd-shadow-sm, none);
       overflow: hidden;
-      animation: pf-sc-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      animation: pf-sc-in var(--nd-dur, 320ms) var(--nd-spring, ease) both;
     }
     @keyframes pf-sc-in {
-      from { opacity: 0; transform: translateY(12px) scale(0.96); }
-      to   { opacity: 1; transform: translateY(0) scale(1); }
+      from { opacity: 0; transform: translateY(10px) scale(0.98); }
+      to   { opacity: 1; transform: none; }
     }
 
-    .pf-sc__head { position: relative; padding: 18px 20px 14px; }
-    .pf-sc__eyebrow {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.18em; text-transform: uppercase;
-      color: var(--text-muted);
-    }
-    .pf-sc__dot {
-      display: inline-block; width: 7px; height: 7px; border-radius: 9999px;
-      background: var(--text-muted);
-    }
-    .pf-sc__dot--live {
-      background: #34d399;
-      box-shadow: 0 0 10px rgba(52, 211, 153, 0.6);
-      animation: pf-sc-live 1.4s ease-in-out infinite;
-    }
-    @keyframes pf-sc-live {
-      50% { opacity: 0.5; transform: scale(0.85); }
-    }
-
-    .pf-sc__title { margin: 4px 0 0; font-size: 18px; font-weight: 600; color: var(--text-primary); }
-    .pf-sc__sub { margin: 4px 0 0; font-size: 12.5px; color: var(--text-tertiary); }
-    .pf-sc__code {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #c4b5fd;
-      letter-spacing: 0.04em;
-    }
-
+    /* ── Header: exactly the BILLING card header ── */
+    .pf-sc__head { flex: none; padding: 14px 16px 12px; }
+    .pf-sc__bar { display: flex; align-items: center; gap: 10px; }
+    .pf-sc__label { flex: 1 1 auto; min-width: 0; }
     .pf-sc__close {
-      position: absolute; top: 12px; right: 12px;
-      width: 32px; height: 32px;
+      flex: none; width: 32px; height: 32px; margin-right: -4px;
       display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 9999px;
-      background: transparent; border: none; cursor: pointer;
-      color: var(--text-muted);
+      border-radius: 8px; border: 0; background: transparent; cursor: pointer;
+      color: var(--text-tertiary);
     }
-    .pf-sc__close:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .pf-sc__close:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+    .pf-sc__title {
+      margin: 12px 0 0; font-size: 18px; font-weight: 600; line-height: 1.3;
+      color: var(--text-primary); text-wrap: balance;
+    }
+    .pf-sc__sub { margin: 4px 0 0; font-size: 13px; color: var(--text-tertiary); }
+    .pf-sc__expect {
+      display: inline-flex; align-items: center; gap: 8px; margin-top: 8px;
+      padding: 5px 10px; border-radius: var(--nd-radius-chip, 8px);
+      background: var(--nd-chip-bg);
+    }
+    .pf-sc__expect-label { font-size: 12px; color: var(--text-tertiary); }
+    .pf-sc__expect-id {
+      font-size: 14px; font-weight: 600; color: var(--text-primary);
+      font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+    }
 
+    .pf-sc__body {
+      flex: 1 1 auto; min-height: 0; overflow-y: auto;
+      padding: 0 16px 14px; display: flex; flex-direction: column; gap: 10px;
+    }
+
+    /* ── Camera viewport ── */
     .pf-sc__viewport {
-      position: relative;
+      position: relative; flex: none;
       aspect-ratio: 4 / 3;
-      background: #0a0a10;
+      border-radius: var(--nd-radius, 12px);
+      background: #0b0d12;
       overflow: hidden;
     }
-    .pf-sc__video { width: 100%; height: 100%; object-fit: cover; }
-    .pf-sc__torch {
-      position: absolute; bottom: 12px; right: 12px; z-index: 2;
-      width: 42px; height: 42px; border-radius: 50%;
+    .pf-sc__viewport[hidden] { display: none; }
+    .pf-sc__video { display: block; width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+
+    /* The scan window: four white corner brackets; everything outside is
+       dimmed by the reticle's own oversized shadow. */
+    .pf-sc__reticle {
+      position: absolute; inset: 16% 12%;
+      border-radius: 14px; pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(8, 10, 16, 0.45);
+      --pf-sc-corner: #ffffff;
+    }
+    .pf-sc__corner {
+      position: absolute; width: 26px; height: 26px;
+      border: 3px solid var(--pf-sc-corner);
+      transition: border-color var(--nd-dur-fast, 200ms) ease;
+    }
+    .pf-sc__corner--tl { top: 0; left: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; }
+    .pf-sc__corner--tr { top: 0; right: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
+    .pf-sc__corner--bl { bottom: 0; left: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
+    .pf-sc__corner--br { bottom: 0; right: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
+    .pf-sc__reticle--bad { --pf-sc-corner: #ef4444; animation: pf-sc-shake 0.32s ease both; }
+    .pf-sc__reticle--ok { --pf-sc-corner: var(--color-primary, #7c3aed); }
+    @keyframes pf-sc-shake {
+      25% { transform: translateX(-4px); } 75% { transform: translateX(4px); }
+    }
+    .pf-sc__line {
+      position: absolute; left: 10px; right: 10px; top: 8%; height: 2px; border-radius: 2px;
+      background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-primary, #7c3aed) 85%, #fff), transparent);
+      opacity: 0.8;
+      animation: pf-sc-sweep 2.4s ease-in-out infinite alternate;
+    }
+    @keyframes pf-sc-sweep { from { top: 8%; } to { top: 92%; } }
+    .pf-sc__ok {
+      position: absolute; top: 50%; left: 50%;
+      width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 9999px;
       display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(10, 12, 20, 0.55); color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.25); cursor: pointer;
-      -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
-      transition: background 0.15s ease, color 0.15s ease;
+      background: var(--color-primary, #7c3aed); color: #fff;
+      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+      animation: pf-sc-pop 0.28s var(--nd-spring-bounce, ease) both;
     }
-    .pf-sc__torch--on { background: #fbbf24; color: #1f2937; border-color: #fbbf24; }
-    .pf-sc__switch { right: auto; left: 12px; }
-    .pf-sc__video { cursor: pointer; }
-    .pf-sc__frame {
-      position: absolute; inset: 12%;
-      border: 2px dashed rgba(236, 72, 153, 0.55);
-      border-radius: 12px;
-      pointer-events: none;
-      box-shadow: 0 0 0 9999px rgba(10, 10, 16, 0.35);
+    @keyframes pf-sc-pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+
+    .pf-sc__tools {
+      position: absolute; top: 10px; right: 10px; z-index: 2;
+      display: flex; flex-direction: column; gap: 8px;
     }
-    .pf-sc__viewport-fallback {
+    .pf-sc__glass {
+      width: 40px; height: 40px; border-radius: 9999px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(255, 255, 255, 0.16); color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.28); cursor: pointer;
+      -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      transition: background var(--nd-dur-fast, 200ms) ease;
+    }
+    .pf-sc__glass:hover { background: rgba(255, 255, 255, 0.26); }
+    .pf-sc__glass[data-on] { background: #fff; color: #111827; }
+
+    .pf-sc__fallback {
       position: absolute; inset: 0;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 8px; padding: 20px;
-      text-align: center;
-      color: var(--violet-text);
-      background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(236, 72, 153, 0.08));
-      font-size: 13px;
+      gap: 8px; padding: 20px; text-align: center;
+      background: var(--nd-chip-bg); color: var(--text-secondary);
     }
-    .pf-sc__viewport-hint { color: var(--text-muted); font-size: 11.5px; margin: 0; }
+    .pf-sc__fallback-ico {
+      width: 40px; height: 40px; border-radius: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--nd-card-bg); color: var(--text-tertiary);
+    }
+    .pf-sc__fallback-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); text-wrap: balance; }
+    .pf-sc__fallback-hint { margin: 0 0 4px; font-size: 13px; color: var(--text-tertiary); text-wrap: pretty; }
 
+    /* ── Live status line (app font, sentence case) ── */
+    .pf-sc__status {
+      display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 0;
+      font-size: 13px; line-height: 1.45; color: var(--text-secondary);
+    }
+    .pf-sc__pulse {
+      flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 9999px;
+      background: var(--text-muted, #9ca3af);
+    }
+    .pf-sc__pulse--live {
+      background: var(--color-primary, #7c3aed);
+      animation: pf-sc-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pf-sc-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent); }
+      50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-primary, #7c3aed) 0%, transparent); }
+    }
+    .pf-sc__hid { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-sc__hid-label { font-size: 12px; color: var(--text-tertiary); }
+    .pf-sc__chip {
+      display: inline-flex; align-items: center; max-width: 100%;
+      padding: 3px 9px; border-radius: var(--nd-radius-chip, 8px);
+      background: var(--nd-chip-bg); color: var(--text-primary);
+      font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    /* ── Wrong vial: the one red thing on the modal ── */
     .pf-sc__mismatch {
-      display: flex; align-items: center; gap: 8px;
-      margin: 10px 16px 0;
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.35);
-      color: var(--red-text);
-      font-size: 12px;
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 10px 12px; border-radius: var(--nd-radius-sm, 10px);
+      background: color-mix(in srgb, #ef4444 9%, var(--nd-card-bg, #fff));
+      border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+      color: var(--red-text, #b91c1c);
+      font-size: 13px; line-height: 1.45;
     }
-    .pf-sc__mismatch b { color: #fff; font-weight: 600; }
+    .pf-sc__mismatch svg { flex: none; margin-top: 2px; }
+    .pf-sc__mismatch b { font-weight: 600; font-variant-numeric: tabular-nums; }
 
-    .pf-sc__foot {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; padding: 14px 16px 16px;
-      border-top: 1px solid var(--glass-border);
-    }
-    .pf-sc__hid { display: flex; flex-direction: column; min-width: 0; }
-    .pf-sc__hid-label {
-      font-size: 10px; font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em; text-transform: uppercase;
-      color: var(--text-muted);
-    }
-    .pf-sc__hid-buffer {
-      font-size: 12.5px;
-      color: var(--text-secondary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .pf-sc__cancel {
-      padding: 8px 14px; border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-primary);
-      font-size: 12.5px; font-weight: 500;
-      cursor: pointer;
-    }
-    .pf-sc__cancel:hover { background: var(--glass-bg-hover); }
-
-    .pf-sc__foot-actions { display: flex; gap: 8px; align-items: center; }
-    .pf-sc__manual-toggle {
-      padding: 8px 14px; border-radius: 9999px;
-      background: transparent; border: 1px solid var(--glass-border);
-      color: var(--text-secondary); font-size: 12.5px; font-weight: 500; cursor: pointer;
-    }
-    .pf-sc__manual-toggle:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-
-    /* Manual entry — replaces the camera viewport when active */
-    .pf-sc__manual { padding: 16px; }
-    /* Mobile: the native soft keyboard is suppressed (input is inputmode=none
-       + readonly on touch), so the custom numpad is the sole input. Let the
-       panel scroll within the sheet and reserve the home-bar safe area so the
-       C / 0 / backspace row and the Confirm button are never clipped. */
-    @media (max-width: 640px) {
-      .pf-sc__manual {
-        max-height: 78dvh;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: max(16px, env(safe-area-inset-bottom));
-      }
-    }
-    .pf-sc__manual-hint { font-size: 12px; color: var(--text-tertiary); margin: 0 0 12px; }
-    /* Shared centering width so the segment row, numpad grid and Confirm
-       button form one balanced, centered column rather than stretching
-       edge-to-edge or hugging a side. */
+    /* ── Manual entry (kit inputs) ── */
+    .pf-sc__manual { display: flex; flex-direction: column; gap: 12px; padding-top: 2px; }
+    .pf-sc__manual-hint { margin: 0; font-size: 13px; color: var(--text-tertiary); }
     .pf-sc__seg {
       display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;
-      max-width: 340px; margin-inline: auto;
-      padding: 14px 16px; background: var(--glass-bg); border: 1px solid var(--glass-border);
-      border-radius: 14px; font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 17px; font-weight: 600; letter-spacing: 0.02em;
+      width: 100%; max-width: 360px; margin-inline: auto;
+      padding: 12px 14px; border-radius: var(--nd-radius, 12px);
+      background: var(--nd-chip-bg); border: 1px solid var(--nd-line);
+      font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums;
     }
     .pf-sc__seg-part { color: var(--text-primary); }
     .pf-sc__seg-sep { color: var(--text-muted); }
-    .pf-sc__seg-part--locked { opacity: 0.7; }
+    .pf-sc__seg-part--locked { color: var(--text-tertiary); }
     .pf-sc__seg-input {
-      flex: 1 0 110px; min-width: 110px; max-width: 180px;
-      background: rgba(168, 85, 247, 0.10); border: 1px solid rgba(168, 85, 247, 0.45);
-      border-radius: 10px; padding: 6px 10px; outline: none;
-      font: inherit; color: var(--text-primary); text-align: center; letter-spacing: 0.18em;
+      flex: 1 0 110px; min-width: 110px; max-width: 170px; height: 40px;
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
+      border-radius: var(--nd-radius-sm, 10px); padding: 0 10px; outline: none;
+      font: inherit; color: var(--text-primary); text-align: center; letter-spacing: 0.12em;
     }
-    .pf-sc__seg-input:focus {
-      border-color: rgba(168, 85, 247, 0.85);
-      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18);
+    .pf-sc__seg-input:focus, .pf-sc__free-input:focus {
+      border-color: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
     }
-    .pf-sc__seg-input::placeholder { color: var(--text-muted); letter-spacing: 0.18em; }
-
-    /* Center the 3-column numpad grid: cap its width and auto-margin it so
-       it sits centered in the modal. The inner pf-num-pad is forced to fill
-       this capped track so the keys stay edge-aligned and the gaps even. */
-    .pf-sc__numpad { margin-top: 14px; max-width: 340px; margin-inline: auto; }
+    .pf-sc__seg-input::placeholder { color: var(--text-muted); }
+    .pf-sc__numpad { width: 100%; max-width: 360px; margin-inline: auto; }
     .pf-sc__numpad pf-num-pad { display: block; width: 100%; }
-
-    .pf-sc__manual-confirm {
-      margin-top: 14px; width: 100%; max-width: 340px; margin-inline: auto; display: block;
-      padding: 12px 16px; border-radius: 14px; border: 0;
-      background: var(--gradient-primary); color: #fff;
-      font-size: 14px; font-weight: 600; cursor: pointer;
-      box-shadow: 0 8px 22px rgba(124, 58, 237, 0.35);
-      transition: transform 80ms ease, box-shadow 0.25s ease, filter 80ms ease;
-    }
-    .pf-sc__manual-confirm:hover:not(:disabled) {
-      box-shadow: 0 14px 32px rgba(124, 58, 237, 0.45);
-      transform: translateY(-1px);
-    }
-    .pf-sc__manual-confirm:active:not(:disabled) { transform: scale(0.98); filter: brightness(1.08); }
-    .pf-sc__manual-confirm:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
-    /* Free-text sample-ID input (short codes that don't segment) */
     .pf-sc__free-input {
-      width: 100%; margin: 10px 0 12px; padding: 12px 14px;
-      background: rgba(255,255,255,0.05); border: 1px solid var(--border-input, rgba(255,255,255,0.15));
-      border-radius: 10px; color: var(--text-primary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 17px; letter-spacing: 0.08em;
+      width: 100%; height: 48px; padding: 0 14px; outline: none;
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
+      border-radius: var(--nd-radius-sm, 10px); color: var(--text-primary);
+      font: inherit; font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums;
     }
-    .pf-sc__free-input:focus { outline: none; border-color: var(--color-violet-500, #7c3aed); }
-  
-    /* Touch: the two controls on the one phone-first screen meet the 44px
-       floor. Desktop untouched. */
+    .pf-sc__confirm { width: 100%; max-width: 360px; margin-inline: auto; }
+
+    /* ── Footer: nd-card sticky foot — secondary + tertiary, no primary ── */
+    .pf-sc__foot {
+      flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+      padding: 12px 16px; border-top: 1px solid var(--nd-line);
+      background: var(--nd-card-bg);
+    }
+    .pf-sc__cancel { color: var(--text-secondary); padding: 0 12px; }
+    .pf-sc__cancel:hover { color: var(--text-primary); }
+
+    /* ── Phones: tall sheet above the always-visible bottom navbar ── */
+    @media (max-width: 640px) {
+      .pf-sc { padding: 0; bottom: var(--nd-nav-h, 0px); align-items: flex-end; }
+      .pf-sc__card {
+        max-width: none; max-height: none; border-radius: 20px 20px 0 0;
+        border-bottom: 0;
+      }
+      .pf-sc__viewport { aspect-ratio: auto; flex: 1 1 260px; min-height: 240px; }
+      .pf-sc__foot { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+      .pf-sc__foot .nd-btn { flex: 1 1 0; }
+      .pf-sc__glass { width: 44px; height: 44px; }
+    }
     @media (pointer: coarse) {
-      .pf-sc__close { width: 44px; height: 44px; }
-      .pf-sc__torch { width: 44px; height: 44px; }
+      .pf-sc__close { width: 44px; height: 44px; margin-right: -8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pf-sc__card, .pf-sc__ok, .pf-sc__reticle--bad { animation: none; }
+      .pf-sc__line { display: none; }
+      .pf-sc__pulse--live { animation: none; }
     }
 `]
 })
@@ -479,6 +532,14 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   private _hidBuffer = '';
   private _hidLastKeyAt = 0;
   protected readonly hidBuffer = signal<string>('');
+  /** Last complete handheld read — shown as a chip once one arrives. */
+  protected readonly lastHid = signal<string>('');
+  /** What the "Handheld scanner" row shows: keys as they stream, then the read. */
+  protected readonly hidShown = computed(() => this.hidBuffer() || this.lastHid());
+  /** Set on a match: the reticle shows a violet check for a beat, then emits. */
+  protected readonly matchedCode = signal<string | null>(null);
+  /** How long the match check stays up before the caller takes over. */
+  static MATCH_HOLD_MS = 320;
 
   // Manual entry: only available when expectedBarcode is set so we can
   // lock vendor/year/dept and just collect the 5-digit sequence. The
@@ -689,7 +750,10 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     this._hidLastKeyAt = now;
 
     if (ev.key === 'Enter') {
-      if (this._hidBuffer) this.handleScan(this._hidBuffer);
+      if (this._hidBuffer) {
+        this.lastHid.set(this._hidBuffer);
+        this.handleScan(this._hidBuffer);
+      }
       this._hidBuffer = '';
       this.hidBuffer.set('');
       return;
@@ -713,8 +777,19 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.stopCamera();
-    this.matched.emit(trimmed);
+    if (this.matchedCode()) return; // already matched — ignore repeat frames
+    this.lastMismatch.set(null);
+    // Camera mode: pop the violet check over the reticle for a beat, then
+    // hand off exactly as before. Manual / camera-less: hand off at once.
+    const showCheck = this.cameraReady() && !this.manualMode();
+    if (!showCheck) { this.stopCamera(); this.matched.emit(trimmed); return; }
+    // Stop decoding now (no double-emit) but keep the frame on screen under
+    // the check; the stream is released just before the hand-off.
+    this.active = false;
+    if (this.rafId !== null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
+    this.matchedCode.set(trimmed);
+    setTimeout(() => { this.stopCamera(); this.matched.emit(trimmed); },
+      BarcodeScannerModalComponent.MATCH_HOLD_MS);
   }
 
   cancel() {

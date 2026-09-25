@@ -2366,7 +2366,9 @@ html.cap-android .pf-bottom-nav:not(.pf-bottom-nav--rail) {
    the root-level bottom-nav. While the scanner is open (body gets
    .pf-scanner-open from the modal), hide the nav so its pill doesn't
    poke through at the bottom — a modal should own the screen. */
-body.pf-scanner-open pf-bottom-nav {
+/* New design: the bottom navbar is ALWAYS visible (owner rule) — the
+   scanner is a sheet that sits above it on phones — so classic only. */
+html:not(.design-new) body.pf-scanner-open pf-bottom-nav {
   display: none !important;
 }
 

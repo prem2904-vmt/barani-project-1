@@ -244,6 +244,32 @@ pill. Functional exceptions — these are data or warnings, not decoration:
 - **Tests:** add specs for the pattern hooks. Examples: only one primary; kit
   classes present; no truncation; mode switching.
 
+## 11. Scanner
+
+One shared modal (`shared/components/barcode-scanner/barcode-scanner-modal.component.ts`)
+serves every scan point. Redesign it, never fork it per screen.
+
+- Shell: nd-card modal (16px radius, soft shadow) on web; `.nd-sheet` on
+  phones, a tall sheet that sits **above** the always-visible bottom
+  navbar (the nav is never hidden in the new design).
+- Header = BILLING header: violet icon chip + `SCAN SAMPLE` (or
+  `ENTER SAMPLE` in manual mode) + neutral × icon button. Title 18px/600.
+- Expected ID: a neutral chip — muted "Expected", then the ID at 600 in the
+  normal text colour with tabular numbers. Never faint, never monospace.
+- Viewport: inset, 12px corners, outside of the scan window dimmed. The
+  window is four white corner brackets (Apple reticle) with a slow violet
+  sweep line (off under reduced motion). Camera switch / torch are 40px
+  glass icon buttons at the top-right (44px on phones), with aria-labels.
+- Status line in the app font, sentence case: violet pulsing dot + what to
+  do. A handheld (HID) read appears as a neutral chip — no placeholder dash.
+- States: match = violet check pops over the reticle, then hand-off;
+  mismatch = red inline message + red reticle flash, scanning continues;
+  camera unavailable = neutral panel + secondary "Enter manually"; manual
+  tenants skip the camera entirely.
+- Footer: secondary "Enter manually" + tertiary "Cancel". The only primary
+  is the manual view's Confirm. Red only for the wrong-vial warning; no
+  green, no pink, no spaced monospace caps.
+
 ## API summary
 
 ```
