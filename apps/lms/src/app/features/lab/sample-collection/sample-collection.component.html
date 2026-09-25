@@ -143,6 +143,25 @@
           }
         </ul>
       }
+      } @else if (!activeGroup() && theme.isNewDesign()) {
+        <!-- New design, deep-link + order still loading: the SAME frame the
+             drawer will show (band + VIALS + COLLECTION skeleton), so the
+             slide-in from Order & Payments lands on the real layout. -->
+        <div class="pf-drawer pf-drawer--nd nd-fullscreen pf-sc-skel" aria-busy="true" aria-label="Opening collection">
+          <pf-hero-band class="pf-sc-band" [customSearch]="true" [back]="true" [backAction]="closeFn">
+            <div band-search class="pf-sc-ctx"><span class="pf-sc-skel__bar" style="width: 220px"></span></div>
+          </pf-hero-band>
+          <div class="nd-body nd-body--split pf-sc-body">
+            <section class="nd-card">
+              <header class="nd-card__head"><span class="nd-card__label">Vials</span></header>
+              <div class="nd-card__body"><div class="pf-sc-skel__grid"><span class="pf-sc-skel__tile"></span><span class="pf-sc-skel__tile"></span></div></div>
+            </section>
+            <aside class="nd-card">
+              <header class="nd-card__head"><span class="nd-card__label">Collection</span></header>
+              <div class="nd-card__body"><span class="pf-sc-skel__bar" style="width: 60%"></span><span class="pf-sc-skel__bar"></span><span class="pf-sc-skel__bar" style="width: 80%"></span></div>
+            </aside>
+          </div>
+        </div>
       } @else if (!activeGroup()) {
         <!-- Deep-link mode + drawer not yet ready: render the org's
              standard loading logo so the page isn't blank while the

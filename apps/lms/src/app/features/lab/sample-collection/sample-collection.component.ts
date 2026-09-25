@@ -544,6 +544,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         this.detachTeleport();
         return;
       }
+      // NEW design: no teleport. The drawer stays in the page (under the
+      // shell's stacking context) at a z-index BELOW the docked app bar, so
+      // the bar's own menus (avatar / branch / bell) open above it instead
+      // of behind it. The drawer already ends above the bar (.nd-fullscreen).
+      if (this.theme.isNewDesign()) return;
       // Wait a frame for @if to render the element before reparenting.
       queueMicrotask(() => {
         const el = this.drawerRef?.nativeElement;
