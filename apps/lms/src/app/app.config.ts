@@ -4,7 +4,8 @@ import {
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withNavigationErrorHandler, withRouterConfig } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withNavigationErrorHandler, withRouterConfig, withViewTransitions } from '@angular/router';
+import { slideTransition } from './core/navigation/slide-transition';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import {
   HashLocationStrategy,
@@ -81,7 +82,10 @@ export const appConfig: ApplicationConfig = {
       withNavigationErrorHandler(e => {
         if (isChunkLoadError(e.error)) reloadOnceForStaleBuild();
       }),
-      withRouterConfig({ onSameUrlNavigation: 'reload' })),
+      withRouterConfig({ onSameUrlNavigation: 'reload' }),
+      // Seamless step-to-step slide (Order & Payments ⇄ Collect); every other
+      // navigation skips the transition. See core/navigation/slide-transition.ts.
+      withViewTransitions({ skipInitialTransition: true, onViewTransitionCreated: slideTransition })),
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     { provide: APP_BASE_HREF, useValue: '/' },
     {

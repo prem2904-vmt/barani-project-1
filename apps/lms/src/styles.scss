@@ -2733,3 +2733,20 @@ html.pf-design-mode {
 
 /* ═══ nd-kit: the new-design pattern (docs/ND-PATTERN.md) ═══ */
 @import './app/shared/styles/nd-kit';
+
+/* ═══ Step-to-step slide (router view transitions, core/navigation) ═══
+   Forward: this screen exits LEFT, the next enters from the right; back
+   reverses. The docked app bar keeps still (its own transition name). Only
+   the navigations slideDirection() allows get the class; all others skip. */
+:root.design-new .pf-chrome { view-transition-name: pf-app-bar; }
+@keyframes pf-vt-out-left  { to   { transform: translateX(-28%); opacity: 0; } }
+@keyframes pf-vt-in-right  { from { transform: translateX(100%); } }
+@keyframes pf-vt-out-right { to   { transform: translateX(28%);  opacity: 0; } }
+@keyframes pf-vt-in-left   { from { transform: translateX(-100%); } }
+html.pf-vt-forward::view-transition-old(root) { animation: pf-vt-out-left 360ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-forward::view-transition-new(root) { animation: pf-vt-in-right 360ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-back::view-transition-old(root)    { animation: pf-vt-out-right 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-back::view-transition-new(root)    { animation: pf-vt-in-left 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  html::view-transition-old(root), html::view-transition-new(root) { animation: none !important; }
+}
