@@ -5,14 +5,13 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ReferralLab } from '../../../shared/models/referral-lab.model';
 import { Department } from '../../../shared/models/tenant.model';
-import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 
 interface LabDraft {
   id?: string;
@@ -37,7 +36,7 @@ const EMPTY: LabDraft = {
 @Component({
   selector: 'pf-referral-labs',
   standalone: true,
-  imports: [FormsModule, ChipComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, HeroBandComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TouchButtonComponent, LoadingLogoComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -47,7 +46,8 @@ const EMPTY: LabDraft = {
         <pf-hero-band [back]="true" placeholder="Search referral labs — name, code, contact, department…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="toggleForm()"
+            <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!formOpen()"
+                    [class.pf-hb-btn--ghost]="formOpen()" (click)="toggleForm()"
                     [attr.aria-label]="formOpen() ? 'Cancel' : 'Add referral lab'">
               @if (formOpen()) {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -75,67 +75,67 @@ const EMPTY: LabDraft = {
 
       <div class="pf-band-body">
       @if (formOpen()) {
-        <pf-tile tone="violet" padding="lg" class="block mb-4">
-          <h3 class="pf-section-title mb-3">{{ draft().id ? 'Edit referral lab' : 'New referral lab' }}</h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label class="pf-label">Name *</label>
-              <input type="text" class="pf-input" [class.pf-input--error]="nameError()" [ngModel]="draft().name" (ngModelChange)="patch({ name: $event })" placeholder="Apollo Diagnostics"/>
+        <section class="nd-card nd-anim-in pf-rl-form" [attr.aria-label]="draft().id ? 'Edit referral lab' : 'New referral lab'">
+          <div class="nd-card__head">
+            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9"/></svg></span>
+            <h3 class="nd-card__label">{{ draft().id ? 'Edit referral lab' : 'New referral lab' }}</h3>
+            @if (draft().id && draft().name) { <span class="nd-card__note">{{ draft().name }}</span> }
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pf-rl-form__body">
+            <div><label class="nd-field__lbl pf-rl-lbl">Name *</label>
+              <input type="text" class="nd-input" [class.nd-input--error]="nameError()" [ngModel]="draft().name" (ngModelChange)="patch({ name: $event })" placeholder="Apollo Diagnostics"/>
               @if (nameError()) { <p class="pf-field-err">{{ nameError() }}</p> }</div>
-            <div><label class="pf-label">Code</label>
-              <input type="text" class="pf-input uppercase" [class.pf-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patch({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
+            <div><label class="nd-field__lbl pf-rl-lbl">Code</label>
+              <input type="text" class="nd-input nd-num uppercase" [class.nd-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patch({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
               @if (codeError()) { <p class="pf-field-err">{{ codeError() }}</p> }</div>
-            <div><label class="pf-label">Contact name</label>
-              <input type="text" class="pf-input" [ngModel]="draft().contactName" (ngModelChange)="patch({ contactName: $event })"/></div>
-            <div><label class="pf-label">Contact phone</label>
-              <input type="tel" class="pf-input" [ngModel]="draft().contactPhone" (ngModelChange)="patch({ contactPhone: $event })"/></div>
-            <div><label class="pf-label">Contact email</label>
-              <input type="email" class="pf-input" [ngModel]="draft().contactEmail" (ngModelChange)="patch({ contactEmail: $event })"/></div>
-            <div class="sm:col-span-2"><label class="pf-label">Address</label>
-              <input type="text" class="pf-input" [ngModel]="draft().address" (ngModelChange)="patch({ address: $event })"/></div>
+            <div><label class="nd-field__lbl pf-rl-lbl">Contact name</label>
+              <input type="text" class="nd-input" [ngModel]="draft().contactName" (ngModelChange)="patch({ contactName: $event })"/></div>
+            <div><label class="nd-field__lbl pf-rl-lbl">Contact phone</label>
+              <input type="tel" class="nd-input" [ngModel]="draft().contactPhone" (ngModelChange)="patch({ contactPhone: $event })"/></div>
+            <div><label class="nd-field__lbl pf-rl-lbl">Contact email</label>
+              <input type="email" class="nd-input" [ngModel]="draft().contactEmail" (ngModelChange)="patch({ contactEmail: $event })"/></div>
+            <div class="sm:col-span-2"><label class="nd-field__lbl pf-rl-lbl">Address</label>
+              <input type="text" class="nd-input" [ngModel]="draft().address" (ngModelChange)="patch({ address: $event })"/></div>
             <div class="sm:col-span-2">
-              <label class="pf-label">Departments handled</label>
+              <label class="nd-field__lbl pf-rl-lbl">Departments handled</label>
               <div class="flex flex-wrap gap-2">
                 @for (d of deptOptions(); track d.code) {
-                  <button type="button" class="pf-dept-chip" [class.pf-dept-chip--on]="draft().departmentCodes.includes(d.code)"
+                  <button type="button" class="nd-chip pf-dept-chip" [attr.aria-pressed]="draft().departmentCodes.includes(d.code)"
                           (click)="toggleDept(d.code)">{{ d.name }}</button>
                 } @empty {
-                  <span class="text-[12px]" style="color: var(--text-tertiary);">No departments configured yet.</span>
+                  <span class="nd-field__hint">No departments configured yet.</span>
                 }
               </div>
-              <p class="text-[11px] mt-1" style="color: var(--text-tertiary);">Optional — scopes the department picker on outsourced tests.</p>
+              <p class="nd-field__hint pf-rl-hint">Optional — scopes the department picker on outsourced tests.</p>
             </div>
           </div>
-          <div class="mt-4 flex gap-2 justify-end">
-            <pf-touch-btn size="sm" variant="ghost" (pressed)="toggleForm()">Cancel</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="!draft().name.trim() || saving()">
+          <div class="nd-card__foot">
+            <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleForm()">Cancel</button>
+            <button type="button" class="nd-btn nd-btn--primary press" (click)="save()" [disabled]="!draft().name.trim() || saving()">
               {{ saving() ? 'Saving…' : (draft().id ? 'Save changes' : 'Create referral lab') }}
-            </pf-touch-btn>
+            </button>
           </div>
-        </pf-tile>
+        </section>
       }
 
       @if (loading()) {
-        <pf-tile tone="default" padding="lg" class="block">
-          <div class="flex justify-center py-6">
-            <pf-loading-logo size="lg" color="purple" [showDna]="true" [showText]="true" text="Loading referral labs…"></pf-loading-logo>
-          </div>
-        </pf-tile>
+        <div class="flex justify-center py-6">
+          <pf-loading-logo size="lg" color="purple" [showDna]="true" [showText]="true" text="Loading referral labs…"></pf-loading-logo>
+        </div>
       } @else if (labs().length === 0) {
-        <pf-tile tone="default" padding="xl" class="block">
-          <p class="text-center text-[13px]" style="color: var(--text-tertiary);">No referral labs yet. Add one to start outsourcing tests.</p>
-        </pf-tile>
+        <p class="pf-band-empty">No referral labs yet. Add one to start outsourcing tests.</p>
       } @else if (visibleLabs().length === 0) {
         <p class="pf-band-empty">No referral labs match "{{ q() }}".</p>
       } @else {
         <div class="space-y-3">
           @for (l of visibleLabs(); track l.id) {
-            <pf-tile tone="default" padding="lg" class="block">
+            <div class="nd-card pf-rl-card">
               <div class="flex items-start justify-between gap-4 flex-wrap">
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 mb-1">
                     <h3 class="pf-rl__name">{{ l.name }}</h3>
-                    @if (l.code) { <span class="pf-rl__code">{{ l.code }}</span> }
-                    @if (!l.isActive) { <pf-chip tone="rose" size="sm">inactive</pf-chip> }
+                    @if (l.code) { <span class="nd-chip nd-chip--static nd-num pf-rl__code">{{ l.code }}</span> }
+                    @if (!l.isActive) { <span class="nd-chip nd-chip--static pf-rl__code">Inactive</span> }
                   </div>
                   @if (l.contactName || l.contactPhone) {
                     <p class="pf-rl__meta">{{ l.contactName || '—' }} · {{ l.contactPhone || 'no phone' }}</p>
@@ -148,11 +148,12 @@ const EMPTY: LabDraft = {
                   }
                 </div>
                 <div class="flex gap-2 flex-wrap pf-rl-actions">
-                  <pf-touch-btn size="sm" variant="ghost" (pressed)="edit(l)">Edit</pf-touch-btn>
-                  <pf-touch-btn size="sm" variant="ghost" (pressed)="toggleActive(l)">{{ l.isActive ? 'Deactivate' : 'Reactivate' }}</pf-touch-btn>
+                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="edit(l)" aria-label="Edit" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
+                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="toggleActive(l)"
+                          [attr.aria-label]="l.isActive ? 'Deactivate' : 'Reactivate'" [title]="l.isActive ? 'Deactivate' : 'Reactivate'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="nd-rowact__t">{{ l.isActive ? 'Deactivate' : 'Reactivate' }}</span></button>
                 </div>
               </div>
-            </pf-tile>
+            </div>
           }
         </div>
       }
@@ -167,12 +168,17 @@ const EMPTY: LabDraft = {
     .pf-input--error { border-color: #f43f5e; }
     .pf-input--error:focus { box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18); }
     .pf-field-err { margin: 4px 0 0; font-size: 11.5px; color: var(--red-text); }
-    .pf-dept-chip { padding: 5px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-secondary); cursor: pointer; }
-    .pf-dept-chip--on { background: var(--gradient-primary, linear-gradient(135deg,#7c3aed,#ec4899)); color: #fff; border-color: transparent; }
-    .pf-rl__name { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
-    .pf-rl__code { padding: 2px 8px; background: rgba(168, 85, 247, 0.18); color: #c4b5fd; border-radius: 9999px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; }
+    /* Dept chips: kit .nd-chip with the NEUTRAL selected state (aria-pressed). */
+    .pf-dept-chip { height: 32px; }
+    .pf-rl-form { margin-bottom: 16px; }
+    .pf-rl-form__body { padding: 16px 18px; }
+    .pf-rl-card { padding: 16px 18px; overflow: visible; }
+    .pf-rl-lbl { display: block; margin-bottom: 6px; }
+    .pf-rl-hint { margin-top: 6px; }
+    .pf-rl__name { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.01em; }
+    .pf-rl__code { height: 24px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
     .pf-rl__meta { margin: 2px 0 0; font-size: 12px; color: var(--text-secondary); }
-    .pf-rl__dept { padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 600; background: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid var(--glass-border); }
+    .pf-rl__dept { padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 600; background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line); }
 
     /* ===== Additive cross-platform overrides (do not affect desktop-web >=1280px) ===== */
 
@@ -212,6 +218,8 @@ export class ReferralLabsComponent implements OnInit {
 
   protected readonly labs = signal<ReferralLab[]>([]);
   protected readonly theme = inject(ThemeService);
+  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  protected readonly web = webPointerSignal();
 
   /** Band pill search: name, code, contact, address and handled departments. */
   readonly q = signal('');

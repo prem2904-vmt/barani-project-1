@@ -12,6 +12,7 @@ import { AdminOverviewComponent } from './admin-overview.component';
 import { AdminDashboardComponent } from './admin-dashboard.component';
 import { BranchesComponent } from './branches/branches.component';
 import { VendorsComponent } from './vendors/vendors.component';
+import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
 import { provideHttpClient } from '@angular/common/http';
 
 /**
@@ -228,5 +229,37 @@ describe('ND audit D — Vendors', () => {
     expect(p.el.querySelector('.pf-vendor__bal-amt--credit')).not.toBeNull();
     expect(p.tools()!.querySelectorAll('.nd-seg [role="radio"]').length).toBe(3);
     expect(p.el.querySelector('pf-chip, pf-tile')).toBeNull();
+  });
+});
+
+describe('ND audit D — Referral labs', () => {
+  const labs = [
+    { id: 'r1', name: 'Apollo Diagnostics', code: 'APOLLO', contactName: 'Suresh', isActive: true, departmentCodesJson: '["MIC"]' },
+    { id: 'r2', name: 'Neuberg', code: 'NEU', isActive: false, departmentCodesJson: null },
+  ];
+  const render = () => renderBandPage(ReferralLabsComponent, {
+    getFor: (url) => url.startsWith('/api/referral-labs') ? labs
+      : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Microbiology', code: 'MIC', isActive: true }] : [],
+  });
+
+  it('ONE primary; Edit / Deactivate are .nd-rowact; codes are neutral tabular chips', () => {
+    const p = render();
+    expect(primaries(p.el)).toBe(1);
+    const card = p.el.querySelector('.pf-rl-card.nd-card')!;
+    expect(Array.from(card.querySelectorAll('.nd-rowact .nd-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Deactivate']);
+    expect(card.querySelector('.pf-rl__code.nd-chip.nd-num')!.textContent).toContain('APOLLO');
+    hygiene(p.el);
+  });
+
+  it('edit opens the kit-card editor; dept chips use the NEUTRAL aria-pressed state (no --on gradient)', () => {
+    const p = render();
+    p.cmp.edit(labs[0]); p.f.detectChanges();
+    const form = p.el.querySelector('.pf-rl-form.nd-card')!;
+    expect(form.querySelector('.nd-card__label')!.textContent).toContain('Edit referral lab');
+    const chip = form.querySelector('.pf-dept-chip')!;
+    expect(chip.classList.contains('nd-chip')).toBe(true);
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    expect(form.querySelector('[class*="--on"]')).toBeNull();
+    expect(primaries(p.el)).toBe(1);
   });
 });
