@@ -101,22 +101,24 @@ interface Category {
         <!-- Category is chosen on the Overview screen and deep-linked via ?cat=;
              the left category rail was redundant with those cards, so this hub
              shows just the selected category full-width. Back returns to it. -->
-        <div class="pf-admin-pane">
+        <div class="pf-admin-pane nd-card">
           @if (q().trim()) {
-            <header class="pf-admin-pane__hdr">
-              <div class="pf-admin-pane__hdr-text">
-                <h2 class="pf-admin-pane__title">Search results</h2>
-                <p class="pf-admin-pane__blurb">{{ results().length }} match{{ results().length === 1 ? '' : 'es' }} for “{{ q() }}”</p>
-              </div>
-              <span class="pf-admin-pane__count">{{ results().length }}</span>
+            <header class="nd-card__head pf-admin-pane__hdr">
+              <span class="nd-card__icon pf-admin-pane__chip">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              </span>
+              <h2 class="nd-card__label pf-admin-pane__title">Search results</h2>
+              <p class="nd-card__note pf-admin-pane__blurb">for “{{ q() }}”</p>
+              <span class="pf-admin-pane__count nd-num">{{ results().length }} {{ results().length === 1 ? 'match' : 'matches' }}</span>
             </header>
             <div class="pf-admin-pane__grid">
               @for (r of results(); track r.tile.title) {
                 <a [routerLink]="r.tile.href" [queryParams]="r.tile.queryParams ?? null"
-                   class="pf-admin-tile group press">
-                  <span class="pf-admin-tile__icon" [attr.data-g]="r.cat.gradient">
-                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor"
-                         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                   class="pf-admin-tile nd-row group press">
+                  <span class="nd-card__icon pf-admin-tile__icon">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                         stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path [attr.d]="r.tile.iconPath"/>
                       @if (r.tile.iconExtra) { <path [attr.d]="r.tile.iconExtra"/> }
                     </svg>
@@ -127,16 +129,16 @@ interface Category {
                   </div>
                   <span class="pf-admin-tile__arrow">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
                   </span>
                 </a>
               } @empty {
-                <p style="color:var(--text-tertiary);padding:10px 2px">No settings match “{{ q() }}”.</p>
+                <p class="pf-band-empty">No settings match “{{ q() }}”.</p>
               }
             </div>
           } @else if (activeCategory(); as cat) {
-            <header class="pf-admin-pane__hdr">
-              <span class="pf-admin-pane__chip" [attr.data-g]="cat.gradient">
+            <header class="nd-card__head pf-admin-pane__hdr">
+              <span class="nd-card__icon pf-admin-pane__chip">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
                      stroke="currentColor" stroke-width="1.8"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -144,21 +146,19 @@ interface Category {
                   @if (cat.iconExtra) { <path [attr.d]="cat.iconExtra"/> }
                 </svg>
               </span>
-              <div class="pf-admin-pane__hdr-text">
-                <h2 class="pf-admin-pane__title">{{ cat.label }}</h2>
-                <p class="pf-admin-pane__blurb">{{ cat.blurb }}</p>
-              </div>
-              <span class="pf-admin-pane__count">{{ cat.tiles.length }}</span>
+              <h2 class="nd-card__label pf-admin-pane__title">{{ cat.label }}</h2>
+              <p class="nd-card__note pf-admin-pane__blurb">{{ cat.blurb }}</p>
+              <span class="pf-admin-pane__count nd-num">{{ cat.tiles.length }} {{ cat.tiles.length === 1 ? 'setting' : 'settings' }}</span>
             </header>
 
             <div class="pf-admin-pane__grid">
               @for (tile of cat.tiles; track tile.title) {
                 <a [routerLink]="tile.href" [queryParams]="tile.queryParams ?? null"
-                   class="pf-admin-tile group press">
-                  <span class="pf-admin-tile__icon" [attr.data-g]="cat.gradient">
-                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"
-                         stroke="currentColor" stroke-width="1.6"
-                         stroke-linecap="round" stroke-linejoin="round">
+                   class="pf-admin-tile nd-row group press">
+                  <span class="nd-card__icon pf-admin-tile__icon">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+                         stroke="currentColor" stroke-width="1.7"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path [attr.d]="tile.iconPath"/>
                       @if (tile.iconExtra) { <path [attr.d]="tile.iconExtra"/> }
                     </svg>
@@ -169,7 +169,7 @@ interface Category {
                   </div>
                   <span class="pf-admin-tile__arrow">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M5 12h14m-5-6 6 6-6 6"/>
                     </svg>
                   </span>
@@ -192,7 +192,7 @@ interface Category {
               <ul class="pf-admin-tips__list">
                 @for (tip of cat.tips; track tip) {
                   <li class="pf-admin-tips__item">
-                    <span class="pf-admin-tips__bullet" [attr.data-g]="cat.gradient" aria-hidden="true"></span>
+                    <span class="pf-admin-tips__bullet" aria-hidden="true"></span>
                     {{ tip }}
                   </li>
                 }
@@ -236,7 +236,6 @@ interface Category {
     }
     .pf-admin-hdr__eyebrow {
       font-size: 11px; font-weight: 600;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
       letter-spacing: 0.16em; text-transform: uppercase;
       color: var(--text-muted);
       margin: 0 0 2px;
@@ -287,126 +286,17 @@ interface Category {
       .pf-admin-layout { gap: 14px; }
     }
 
-    /* ── Left rail ───────────────────────────────────────── */
-    .pf-admin-rail {
-      display: flex; flex-direction: column; gap: 4px;
-      padding: 10px;
-      border-radius: 16px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      overflow-y: auto;
-    }
-    @media (max-width: 768px) {
-      .pf-admin-rail { flex-direction: row; overflow-x: auto; padding: 8px; }
-    }
-    .pf-admin-rail__btn {
-      display: flex; align-items: center; gap: 10px;
-      width: 100%;
-      padding: 10px;
-      border-radius: 10px;
-      background: transparent; border: 0;
-      color: var(--text-secondary);
-      text-align: left; cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-    }
-    .pf-admin-rail__btn:hover {
-      background: rgba(168, 85, 247, 0.06);
-      color: var(--text-primary);
-    }
-    .pf-admin-rail__btn--on {
-      background: linear-gradient(135deg, rgba(168, 85, 247, 0.20), rgba(236, 72, 153, 0.10));
-      color: var(--text-primary);
-      box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.32);
-    }
-    .pf-admin-rail__icon {
-      width: 32px; height: 32px; border-radius: 9px;
-      display: inline-flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-tertiary);
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    /* When the rail button is active, swap to the category's signature
-       gradient so the left + right halves share the same colour cue. */
-    .pf-admin-rail__icon[data-on="true"] {
-      color: #ffffff;
-      border-color: transparent;
-    }
-    .pf-admin-rail__icon[data-on="true"][data-g='violet']  { background: linear-gradient(135deg, #7c3aed, #a855f7); }
-    .pf-admin-rail__icon[data-on="true"][data-g='fuchsia'] { background: linear-gradient(135deg, #9333ea, #d946ef); }
-    .pf-admin-rail__icon[data-on="true"][data-g='pink']    { background: linear-gradient(135deg, #db2777, #f472b6); }
-    .pf-admin-rail__icon[data-on="true"][data-g='rose']    { background: linear-gradient(135deg, #e11d48, #fb7185); }
-    .pf-admin-rail__icon[data-on="true"][data-g='amber']   { background: linear-gradient(135deg, #d97706, #fbbf24); }
-    .pf-admin-rail__icon[data-on="true"][data-g='emerald'] { background: linear-gradient(135deg, #059669, #10b981); }
-    .pf-admin-rail__icon[data-on="true"][data-g='teal']    { background: linear-gradient(135deg, #0d9488, #2dd4bf); }
-    .pf-admin-rail__icon[data-on="true"][data-g='sky']     { background: linear-gradient(135deg, #0284c7, #38bdf8); }
-    .pf-admin-rail__text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-    .pf-admin-rail__label { font-size: 13px; font-weight: 600; line-height: 1.2; }
-    .pf-admin-rail__count {
-      font-size: 10.5px; font-weight: 500;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-    }
-    .pf-admin-rail__chev {
-      color: var(--text-muted);
-      opacity: 0; transition: opacity 0.15s;
-    }
-    .pf-admin-rail__btn--on .pf-admin-rail__chev { opacity: 1; }
-    .pf-admin-rail__btn:hover .pf-admin-rail__chev { opacity: 0.7; }
-    @media (max-width: 768px) {
-      .pf-admin-rail__btn { flex: 0 0 auto; min-width: 180px; }
-      .pf-admin-rail__chev { display: none; }
-    }
-
     /* ── Right pane ─────────────────────────────────────── */
-    .pf-admin-pane {
-      padding: 14px 18px 18px;
-      border-radius: 16px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      min-width: 0;
-      overflow-y: auto;
-      display: flex; flex-direction: column;
-    }
-    .pf-admin-pane__hdr {
-      display: flex; align-items: center; gap: 12px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid var(--glass-border);
-      margin-bottom: 16px;
-    }
-    .pf-admin-pane__chip {
-      width: 36px; height: 36px; border-radius: 10px;
-      display: inline-flex; align-items: center; justify-content: center;
-      color: #ffffff; flex-shrink: 0;
-    }
-    .pf-admin-pane__hdr-text { flex: 1; min-width: 0; }
-    .pf-admin-pane__blurb {
-      font-size: 12.5px; color: var(--text-tertiary);
-      margin: 2px 0 0; line-height: 1.35;
-    }
-    .pf-admin-pane__chip[data-g='violet']  { background: linear-gradient(135deg, #7c3aed, #a855f7); }
-    .pf-admin-pane__chip[data-g='fuchsia'] { background: linear-gradient(135deg, #9333ea, #d946ef); }
-    .pf-admin-pane__chip[data-g='pink']    { background: linear-gradient(135deg, #db2777, #f472b6); }
-    .pf-admin-pane__chip[data-g='rose']    { background: linear-gradient(135deg, #e11d48, #fb7185); }
-    .pf-admin-pane__chip[data-g='amber']   { background: linear-gradient(135deg, #d97706, #fbbf24); }
-    .pf-admin-pane__chip[data-g='emerald'] { background: linear-gradient(135deg, #059669, #10b981); }
-    .pf-admin-pane__chip[data-g='teal']    { background: linear-gradient(135deg, #0d9488, #2dd4bf); }
-    .pf-admin-pane__chip[data-g='sky']     { background: linear-gradient(135deg, #0284c7, #38bdf8); }
-    .pf-admin-pane__title {
-      font-size: 16px; font-weight: 700;
-      color: var(--text-primary);
-      margin: 0;
-    }
-    .pf-admin-pane__count {
-      margin-left: auto;
-      font-size: 11px; font-weight: 600;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: var(--text-muted);
-      padding: 2px 8px; border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
+    /* The pane is ONE kit card: BILLING-style header (violet icon chip +
+       UPPERCASE label + note + a plain muted count), tiles scroll inside. */
+    .pf-admin-pane { min-width: 0; overflow: visible; }
+    .pf-admin-pane__hdr { margin: 0; }
+    .pf-admin-pane__blurb { margin: 0; }
+    .pf-admin-pane__grid, .pf-admin-tips { margin-left: 16px; margin-right: 16px; }
+    .pf-admin-pane__grid { margin-top: 16px; }
+    .pf-admin-pane > :last-child { margin-bottom: 16px; }
+    .pf-admin-pane__title { margin: 0; }
+    .pf-admin-pane__count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
     .pf-admin-pane__grid {
       display: grid;
       /* Larger min so each tile gets more room — 2-up on most desktops,
@@ -419,42 +309,19 @@ interface Category {
 
     /* ── Tile card ──────────────────────────────────────── */
     .pf-admin-tile {
-      display: flex; align-items: center; gap: 16px;
-      padding: 20px;
-      min-height: 110px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--glass-border);
+      gap: 16px; padding: 18px; min-height: 96px; border-radius: var(--nd-radius);
       text-decoration: none;
-      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+      transition: border-color var(--nd-dur-fast) ease, transform 100ms ease;
     }
-    .pf-admin-tile:hover {
-      border-color: rgba(168, 85, 247, 0.40);
-      background: rgba(168, 85, 247, 0.06);
-      transform: translateY(-1px);
-    }
+    .pf-admin-tile:hover { border-color: var(--nd-sel-border); transform: translateY(-1px); }
+    .pf-admin-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     /* Tile icon — inherits the active category's signature gradient.
        That single colour family is what makes the pane feel coherent
        (was a jumble of 3 random gradients per tile). */
-    .pf-admin-tile__icon {
-      width: 52px; height: 52px;
-      border-radius: 13px;
-      display: inline-flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      color: #ffffff;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
-    }
-    .pf-admin-tile__icon[data-g='violet']   { background: linear-gradient(135deg, #7c3aed, #a855f7); }
-    .pf-admin-tile__icon[data-g='fuchsia']  { background: linear-gradient(135deg, #9333ea, #d946ef); }
-    .pf-admin-tile__icon[data-g='pink']     { background: linear-gradient(135deg, #db2777, #f472b6); }
-    .pf-admin-tile__icon[data-g='rose']     { background: linear-gradient(135deg, #e11d48, #fb7185); }
-    .pf-admin-tile__icon[data-g='amber']    { background: linear-gradient(135deg, #d97706, #fbbf24); }
-    .pf-admin-tile__icon[data-g='emerald']  { background: linear-gradient(135deg, #059669, #10b981); }
-    .pf-admin-tile__icon[data-g='teal']     { background: linear-gradient(135deg, #0d9488, #2dd4bf); }
-    .pf-admin-tile__icon[data-g='sky']      { background: linear-gradient(135deg, #0284c7, #38bdf8); }
+    .pf-admin-tile__icon { width: 44px; height: 44px; border-radius: 12px; }
     .pf-admin-tile__body { flex: 1; min-width: 0; }
     .pf-admin-tile__title {
-      font-weight: 700; font-size: 15.5px; line-height: 1.2; margin: 0;
+      font-weight: 600; font-size: 15px; line-height: 1.2; margin: 0;
       color: var(--text-primary); letter-spacing: -0.01em;
     }
     .pf-admin-tile__sub {
@@ -478,14 +345,13 @@ interface Category {
       margin-top: 18px;
       padding: 14px 16px;
       border-radius: 12px;
-      background: rgba(255,255,255,0.02);
-      border: 1px dashed var(--glass-border);
+      background: var(--nd-chip-bg);
+      border: 1px solid var(--nd-line);
     }
     .pf-admin-tips__title {
       display: inline-flex; align-items: center; gap: 6px;
-      font-size: 11px; font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em; text-transform: uppercase;
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
       color: var(--text-secondary);
       margin: 0 0 10px;
     }
@@ -500,16 +366,8 @@ interface Category {
     }
     .pf-admin-tips__bullet {
       flex-shrink: 0; margin-top: 7px;
-      width: 6px; height: 6px; border-radius: 9999px;
+      width: 6px; height: 6px; border-radius: 9999px; background: var(--nd-sel-border);
     }
-    .pf-admin-tips__bullet[data-g='violet']  { background: #a855f7; }
-    .pf-admin-tips__bullet[data-g='fuchsia'] { background: #d946ef; }
-    .pf-admin-tips__bullet[data-g='pink']    { background: #f472b6; }
-    .pf-admin-tips__bullet[data-g='rose']    { background: #fb7185; }
-    .pf-admin-tips__bullet[data-g='amber']   { background: #fbbf24; }
-    .pf-admin-tips__bullet[data-g='emerald'] { background: #10b981; }
-    .pf-admin-tips__bullet[data-g='teal']    { background: #2dd4bf; }
-    .pf-admin-tips__bullet[data-g='sky']     { background: #38bdf8; }
 
     /* ─────────────────────────────────────────────────────────────
        CROSS-PLATFORM OVERRIDES — additive only. Desktop-web (>=1280,
@@ -520,20 +378,12 @@ interface Category {
        shifts, chevron reveal) get stuck after a tap on coarse pointers.
        Neutralise them only where there's no true hover — this cannot
        reach a desktop mouse (hover:hover). */
+    @media (prefers-reduced-motion: reduce) {
+      .pf-admin-tile, .pf-admin-tile:hover, .pf-admin-tile__arrow { transition: none; transform: none; }
+    }
     @media (hover: none) {
-      .pf-admin-rail__btn:hover {
-        background: transparent;
-        color: var(--text-secondary);
-      }
-      .pf-admin-rail__btn--on:hover {
-        background: linear-gradient(135deg, rgba(168, 85, 247, 0.20), rgba(236, 72, 153, 0.10));
-        color: var(--text-primary);
-      }
-      .pf-admin-rail__btn:hover .pf-admin-rail__chev { opacity: 0; }
-      .pf-admin-rail__btn--on:hover .pf-admin-rail__chev { opacity: 1; }
       .pf-admin-tile:hover {
-        border-color: var(--glass-border);
-        background: rgba(255, 255, 255, 0.02);
+        border-color: var(--nd-line);
         transform: none;
       }
       .pf-admin-tile:hover .pf-admin-tile__arrow {

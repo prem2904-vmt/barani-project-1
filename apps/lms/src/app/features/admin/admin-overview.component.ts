@@ -62,7 +62,7 @@ interface KpiCard {
   imports: [RouterLink, DatePipe, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-ov">
+    <section class="pf-ov pf-band-page">
       @if (theme.isNewDesign()) {
       <!-- Common hero search (designer band): the admin settings jump-box —
            same q()/setQ pipeline as the inline box it replaces. -->
@@ -73,11 +73,15 @@ interface KpiCard {
         <ng-container band-tools>
           <!-- Date range rides in the search bar (owner) — one control
                strip instead of a separate filter row. -->
-          <div class="pf-ov__filter pf-ov__filter--band" role="tablist" aria-label="Date range">
-            @for (r of ranges; track r.key) {
-              <button type="button" class="pf-ov__range" [class.pf-ov__range--on]="range() === r.key"
-                      (click)="setRange(r.key)">{{ r.label }}</button>
-            }
+          <div class="pf-ov__filter pf-ov__filter--band">
+            <!-- Neutral kit segment (ND-PATTERN §3): the selected range is a
+                 raised neutral segment, never the primary gradient. -->
+            <span class="nd-seg pf-ov__seg" role="radiogroup" aria-label="Date range">
+              @for (r of ranges; track r.key) {
+                <button type="button" class="nd-seg__item pf-ov__range" role="radio" [attr.aria-checked]="range() === r.key"
+                        (click)="setRange(r.key)">{{ r.label }}</button>
+              }
+            </span>
             <!-- Phone: the pills don't fit, so the range collapses to a
                  calendar ICON that opens the same list — and it lives in the
                  search bar rather than as a "Today" pill parked under it
@@ -136,6 +140,7 @@ interface KpiCard {
       </header>
       }
 
+      <div class="pf-band-body pf-ov__body">
       <!-- Admin search: one box that jumps to any config screen (item 140). -->
       <label class="pf-ov__search pf-classic-only">
         <svg
@@ -198,10 +203,11 @@ interface KpiCard {
             <a
               [routerLink]="[r.href]"
               [queryParams]="r.queryParams ?? null"
-              class="pf-ov__card press"
+              class="pf-ov__card nd-card press"
             >
-              <span class="pf-ov__card-ic" [attr.data-g]="r.g">
+              <span class="nd-card__icon pf-ov__card-ic">
                 <svg
+                  aria-hidden="true"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -216,7 +222,7 @@ interface KpiCard {
               <span class="pf-ov__card-s">{{ r.hint }}</span>
             </a>
           } @empty {
-            <p style="color:var(--text-tertiary);padding:10px 2px">
+            <p class="pf-band-empty">
               No settings or pages match “{{ q() }}”.
             </p>
           }
@@ -315,8 +321,8 @@ interface KpiCard {
           [class.pf-ov__kpis--loading]="loading() && !metrics()"
         >
           @for (c of cards; track c.key) {
-            <div class="pf-ov__kpi" [attr.data-color]="c.color">
-              <span class="pf-ov__kpi-ic">
+            <div class="pf-ov__kpi nd-card">
+              <span class="nd-card__icon pf-ov__kpi-ic">
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -337,29 +343,29 @@ interface KpiCard {
         <!-- At-a-glance configuration counts. -->
         <p class="pf-ov__section">Configuration</p>
         <div class="pf-ov__stats">
-          <div class="pf-ov__stat">
+          <div class="pf-ov__stat nd-card">
             <span class="pf-ov__stat-v">{{ branchCount() ?? "—" }}</span
             ><span class="pf-ov__stat-l">Branches</span>
           </div>
-          <div class="pf-ov__stat">
+          <div class="pf-ov__stat nd-card">
             <span class="pf-ov__stat-v">{{ deptCount() ?? "—" }}</span
             ><span class="pf-ov__stat-l">Departments</span>
           </div>
-          <div class="pf-ov__stat">
+          <div class="pf-ov__stat nd-card">
             <span class="pf-ov__stat-v">{{ testCount() ?? "—" }}</span
             ><span class="pf-ov__stat-l">Tests</span>
           </div>
-          <div class="pf-ov__stat">
+          <div class="pf-ov__stat nd-card">
             <span class="pf-ov__stat-v">{{ roleCount() ?? "—" }}</span
             ><span class="pf-ov__stat-l">Roles</span>
           </div>
-          <div class="pf-ov__stat">
+          <div class="pf-ov__stat nd-card">
             <span class="pf-ov__stat-v">{{ summary()?.workflows ?? "—" }}</span
             ><span class="pf-ov__stat-l">Form flows</span>
           </div>
           <a
             routerLink="/dashboard"
-            class="pf-ov__stat pf-ov__stat--link press"
+            class="pf-ov__stat pf-ov__stat--link nd-card press"
           >
             <span class="pf-ov__stat-v">TAT</span
             ><span class="pf-ov__stat-l">Live turnaround →</span>
@@ -373,10 +379,11 @@ interface KpiCard {
             <a
               [routerLink]="g.href ? [g.href] : ['/admin/manage']"
               [queryParams]="g.href ? null : { cat: g.cat }"
-              class="pf-ov__card press"
+              class="pf-ov__card nd-card press"
             >
-              <span class="pf-ov__card-ic" [attr.data-g]="g.cat">
+              <span class="nd-card__icon pf-ov__card-ic">
                 <svg
+                  aria-hidden="true"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -393,6 +400,7 @@ interface KpiCard {
           }
         </div>
       }
+      </div>
     </section>
   `,
   styles: [
@@ -420,7 +428,6 @@ interface KpiCard {
         flex-wrap: wrap;
       }
       .pf-ov__eyebrow {
-        font-family: "JetBrains Mono", ui-monospace, monospace;
         font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
@@ -654,8 +661,8 @@ interface KpiCard {
         cursor: pointer;
       }
       .pf-ov__range-opt.is-on {
-        background: var(--gradient-primary);
-        color: #fff;
+        background: var(--nd-sel-bg);
+        color: var(--text-primary);
       }
 
       /* ── KPI grid ── */
@@ -671,8 +678,9 @@ interface KpiCard {
         position: relative;
         padding: 16px 16px 15px;
         border-radius: 16px;
-        border: 1px solid var(--glass-border);
-        background: var(--bg-card-solid, #14141f);
+        border: 1px solid var(--nd-line);
+        background: var(--nd-card-bg);
+        box-shadow: var(--nd-shadow-sm);
         display: flex;
         flex-direction: column;
         gap: 2px;
@@ -692,8 +700,8 @@ interface KpiCard {
         display: grid;
         place-items: center;
         margin-bottom: 8px;
-        background: color-mix(in srgb, var(--kc, #8b5cf6) 16%, transparent);
-        color: var(--kc, #8b5cf6);
+        background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+        color: var(--violet-text, #7c3aed);
       }
       .pf-ov__kpi-ic svg {
         width: 18px;
@@ -701,41 +709,17 @@ interface KpiCard {
       }
       .pf-ov__kpi-l {
         font-size: 11px;
-        font-weight: 700;
+        font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--text-muted);
       }
       .pf-ov__kpi-v {
         font-size: 25px;
-        font-weight: 800;
+        font-weight: 600;
         letter-spacing: -0.02em;
         color: var(--text-primary);
         font-variant-numeric: tabular-nums;
-      }
-      .pf-ov__kpi[data-color="emerald"] {
-        --kc: #34d399;
-      }
-      .pf-ov__kpi[data-color="rose"] {
-        --kc: #fb7185;
-      }
-      .pf-ov__kpi[data-color="violet"] {
-        --kc: #a78bfa;
-      }
-      .pf-ov__kpi[data-color="amber"] {
-        --kc: #fbbf24;
-      }
-      .pf-ov__kpi[data-color="orange"] {
-        --kc: #fb923c;
-      }
-      .pf-ov__kpi[data-color="blue"] {
-        --kc: #60a5fa;
-      }
-      .pf-ov__kpi[data-color="teal"] {
-        --kc: #2dd4bf;
-      }
-      .pf-ov__kpi[data-color="pink"] {
-        --kc: #f472b6;
       }
 
       .pf-ov__stats {
@@ -752,17 +736,18 @@ interface KpiCard {
       .pf-ov__stat {
         padding: 14px 16px;
         border-radius: 14px;
-        border: 1px solid var(--glass-border);
-        background: var(--bg-card-solid, #14141f);
+        border: 1px solid var(--nd-line);
+        background: var(--nd-card-bg);
+        box-shadow: var(--nd-shadow-sm);
         display: flex;
         flex-direction: column;
       }
       .pf-ov__stat--link:hover {
-        border-color: var(--violet-500, #8b5cf6);
+        border-color: var(--nd-sel-border);
       }
       .pf-ov__stat-v {
         font-size: 22px;
-        font-weight: 800;
+        font-weight: 600;
         letter-spacing: -0.02em;
         color: var(--text-primary);
         font-variant-numeric: tabular-nums;
@@ -777,9 +762,8 @@ interface KpiCard {
       }
 
       .pf-ov__section {
-        font-family: "JetBrains Mono", ui-monospace, monospace;
-        font-size: 10px;
-        font-weight: 700;
+        font-size: 11px;
+        font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: var(--text-muted);
@@ -796,14 +780,15 @@ interface KpiCard {
         gap: 4px;
         padding: 16px;
         border-radius: 16px;
-        border: 1px solid var(--glass-border);
-        background: var(--bg-card-solid, #14141f);
+        border: 1px solid var(--nd-line);
+        background: var(--nd-card-bg);
+        box-shadow: var(--nd-shadow-sm);
         transition:
           border-color 0.15s,
           transform 0.15s;
       }
       .pf-ov__card:hover {
-        border-color: var(--violet-500, #8b5cf6);
+        border-color: var(--nd-sel-border);
         transform: translateY(-2px);
       }
       .pf-ov__card-ic {
@@ -812,33 +797,15 @@ interface KpiCard {
         border-radius: 11px;
         display: grid;
         place-items: center;
-        background: rgba(124, 58, 237, 0.14);
-        color: var(--violet-300, #c4b5fd);
         margin-bottom: 6px;
       }
       .pf-ov__card-ic svg {
         width: 19px;
         height: 19px;
       }
-      .pf-ov__card-ic[data-g="catalog"] {
-        background: rgba(16, 185, 129, 0.14);
-        color: #6ee7b7;
-      }
-      .pf-ov__card-ic[data-g="org"] {
-        background: rgba(59, 130, 246, 0.14);
-        color: #93c5fd;
-      }
-      .pf-ov__card-ic[data-g="finance"] {
-        background: rgba(245, 158, 11, 0.14);
-        color: #fcd34d;
-      }
-      .pf-ov__card-ic[data-g="automation"] {
-        background: rgba(236, 72, 153, 0.14);
-        color: var(--pink-text);
-      }
       .pf-ov__card-t {
         font-size: 15px;
-        font-weight: 700;
+        font-weight: 600;
         color: var(--text-primary);
       }
       .pf-ov__card-s {
@@ -846,18 +813,36 @@ interface KpiCard {
         color: var(--text-tertiary);
       }
 
+      /* ── New design (ND-PATTERN): palette only — every KPI / card icon is
+         the violet kit chip on a kit card (no per-metric rainbow, no left
+         colour bars); section labels in Noto (no mono); the range is a
+         neutral nd-seg; only .pf-band-body scrolls. ── */
+      :host-context(.design-new) .pf-ov__kpi::before { display: none; }
+      .pf-ov__kpi.nd-card, .pf-ov__stat.nd-card, .pf-ov__card.nd-card { overflow: visible; }
+      .pf-ov__kpi-ic.nd-card__icon { width: 34px; height: 34px; border-radius: 10px; margin-bottom: 8px; }
+      .pf-ov__card-ic.nd-card__icon { width: 38px; height: 38px; border-radius: 11px; }
+      .pf-ov__seg { flex: none; }
+      .pf-ov__seg .nd-seg__item { height: 30px; }
+      :host-context(.design-new) .pf-ov__body { padding-top: 4px; }
+      /* Phone: the range collapses to the calendar icon (below). */
+      @media (max-width: 640px) { .pf-ov__seg { display: none; } }
+      @media (prefers-reduced-motion: reduce) {
+        .pf-ov__card, .pf-ov__card:hover { transition: none; transform: none; }
+        .pf-ov__refresh--busy svg { animation: none; }
+      }
+
       /* ---- Touch / non-hover overrides (additive; never affect desktop hover) ---- */
       @media (hover: none) {
         .pf-ov__card:hover {
           transform: none;
-          border-color: var(--glass-border);
+          border-color: var(--nd-line);
         }
         .pf-ov__card:active {
           transform: translateY(-1px);
-          border-color: var(--violet-500, #8b5cf6);
+          border-color: var(--nd-sel-border);
         }
         .pf-ov__stat--link:hover {
-          border-color: var(--glass-border);
+          border-color: var(--nd-line);
         }
       }
       @media (pointer: coarse) {
@@ -899,8 +884,8 @@ interface KpiCard {
           border-radius: 9999px;
         }
         .pf-ov__range-ddbtn--icon.is-open {
-          color: #7c3aed;
-          background: rgba(124, 58, 237, 0.12);
+          color: var(--text-primary);
+          background: var(--nd-sel-bg);
         }
         .pf-ov__kpis {
           grid-template-columns: repeat(2, minmax(0, 1fr));

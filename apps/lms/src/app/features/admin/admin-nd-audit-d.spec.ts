@@ -8,6 +8,8 @@ import { OpdAdminComponent } from '../opd/admin/opd-admin.component';
 import { CultureSettingsComponent } from '../lab/culture-settings/culture-settings.component';
 import { OpdSettingsComponent } from '../opd/admin/opd-settings.component';
 import { ModulePlaceholderComponent } from '../modules/module-placeholder.component';
+import { AdminOverviewComponent } from './admin-overview.component';
+import { AdminDashboardComponent } from './admin-dashboard.component';
 
 /**
  * /admin ND audit (fork D) — the CURRENT ND-PATTERN on hubs, list pages and
@@ -112,5 +114,34 @@ describe('ND audit D — module placeholders (/admin/ipd …)', () => {
     expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
     TestBed.resetTestingModule();
+  });
+});
+
+describe('ND audit D — Overview (/admin) and settings hub (/admin/manage)', () => {
+  it('Overview: range is a neutral nd-seg in the pill, content scrolls inside .pf-band-body, violet kit icon chips only', () => {
+    const p = renderBandPage(AdminOverviewComponent);
+    const seg = p.tools()!.querySelector('.nd-seg[role="radiogroup"]')!;
+    expect(seg.querySelectorAll('[role="radio"]').length).toBe(4);
+    expect(seg.querySelector('[aria-checked="true"]')!.textContent!.trim()).toBe('Today');
+    expect(p.el.querySelector('pf-hero-band .pf-ov__range--on')).toBeNull();
+    expect(p.body()).not.toBeNull();
+    expect(p.body()!.querySelector('.pf-ov__kpi.nd-card .nd-card__icon')).not.toBeNull();
+    expect(p.el.querySelector('[data-color], [data-g]')).toBeNull();
+    expect(primaries(p.el)).toBe(0);
+    hygiene(p.el);
+  });
+
+  it('Manage: the category pane is ONE kit card with the BILLING header and a plain muted count; no rainbow chips', () => {
+    const p = renderBandPage(AdminDashboardComponent);
+    const pane = p.el.querySelector('.pf-admin-pane.nd-card')!;
+    expect(pane).not.toBeNull();
+    const head = pane.querySelector('.nd-card__head')!;
+    expect(head.querySelector('.nd-card__icon svg')).not.toBeNull();
+    expect(head.querySelector('.nd-card__label')).not.toBeNull();
+    expect(head.querySelector('.pf-admin-pane__count')!.textContent).toMatch(/\d+ settings?/);
+    expect(pane.querySelector('.pf-admin-tile .nd-card__icon')).not.toBeNull();
+    expect(p.el.querySelector('[data-g]')).toBeNull();
+    expect(primaries(p.el)).toBe(0);
+    hygiene(p.el);
   });
 });
