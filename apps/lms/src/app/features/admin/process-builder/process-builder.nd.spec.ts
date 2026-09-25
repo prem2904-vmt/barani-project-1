@@ -44,4 +44,17 @@ describe('Process builder — ND audit', () => {
     });
     expect(/[⠿‹›×＋●]/.test(body.textContent ?? '')).toBe(false);
   });
+
+  it('no per-lane colour setting: no colour input / recolour, and a new lane is the primary colour', () => {
+    const p = make();
+    p.f.detectChanges();
+    expect(p.el.querySelector('input[type="color"], .pb-color')).toBeNull();
+    expect(typeof (p.cmp as any).recolor).toBe('undefined');
+    const before = (p.cmp as any).lanes().length;
+    (p.cmp as any).addCategory();
+    (p.cmp as any).addCategory();
+    const lanes = (p.cmp as any).lanes();
+    expect(lanes.length).toBe(before + 2);
+    expect(lanes.slice(-2).map((l: any) => l.cat.color)).toEqual(['#7c3aed', '#7c3aed']);
+  });
 });

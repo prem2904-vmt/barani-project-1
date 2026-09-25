@@ -16,9 +16,10 @@ import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, Process
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
 
-/** New work-areas get palette colours only (violet / slate) — the builder
- *  itself draws every lane in the kit palette whatever colour was saved. */
-const PALETTE_COLORS = ['#7c3aed', '#64748b'];
+/** Lanes are palette-only (owner, 2026-09-25): there is NO per-lane colour
+ *  setting. A new work-area still carries the model's `color` field (the
+ *  stored value is untouched for existing areas) — always the one primary. */
+const LANE_COLOR = '#7c3aed';
 
 /**
  * Admin process-workflow builder. Drag operations (the action catalogue) into
@@ -285,7 +286,6 @@ const PALETTE_COLORS = ['#7c3aed', '#64748b'];
     .pb-lane-name { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text-primary); font-size: 14px; font-weight: 700; padding: 2px 4px; border-radius: 6px; transition: background .15s; }
     .pb-lane-name:hover, .pb-lane-name:focus { background: rgba(255,255,255,0.05); outline: none; }
     .pb-lane-tools { display: flex; align-items: center; gap: 3px; }
-    .pb-color { width: 22px; height: 22px; padding: 0; border: none; background: none; cursor: pointer; border-radius: 6px; }
     /* Icon picker: the leading icon is both the work-area identity and the
        trigger — click it to open a grid of choices. */
     .pb-icon-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
@@ -380,7 +380,6 @@ const PALETTE_COLORS = ['#7c3aed', '#64748b'];
       .pb-lane-hd { flex-wrap: wrap; }
       .pb-lane-tools { gap: 4px; }
       .pb-mini { min-width: 44px; min-height: 44px; width: 44px; height: 44px; flex-shrink: 0; }
-      .pb-color { width: 44px; height: 44px; }
       .pb-toggle { min-width: 44px; min-height: 44px; justify-content: center; }
       /* role pills become toggle buttons in edit mode — give them the full
          44px touch floor (they sit in a wrap-flow so height grows gracefully). */
@@ -720,12 +719,10 @@ export class ProcessBuilderComponent implements OnInit {
 
   // ── Category ops ─────────────────────────────────────────────────
   addCategory() {
-    const color = PALETTE_COLORS[this.lanes().length % PALETTE_COLORS.length];
-    this.lanes.update(l => [...l, { cat: { id: crypto.randomUUID(), name: 'New area', icon: 'folder', color, order: l.length }, items: [] }]);
+    this.lanes.update(l => [...l, { cat: { id: crypto.randomUUID(), name: 'New area', icon: 'folder', color: LANE_COLOR, order: l.length }, items: [] }]);
     this.dirty.set(true);
   }
   renameCategory(i: number, name: string) { this.lanes.update(l => l.map((ln, k) => k === i ? { ...ln, cat: { ...ln.cat, name } } : ln)); this.dirty.set(true); }
-  recolor(i: number, color: string) { this.lanes.update(l => l.map((ln, k) => k === i ? { ...ln, cat: { ...ln.cat, color } } : ln)); this.dirty.set(true); }
   toggleIconMenu(i: number) { this.iconMenuLane.set(this.iconMenuLane() === i ? -1 : i); }
   setIcon(i: number, icon: string) {
     this.lanes.update(l => l.map((ln, k) => k === i ? { ...ln, cat: { ...ln.cat, icon } } : ln));
