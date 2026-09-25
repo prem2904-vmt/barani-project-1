@@ -2,12 +2,14 @@ import { test, expect, type Page } from '@playwright/test';
 import { loginAs } from './support/auth';
 
 /**
- * Patient registration — REAL layout (ND-PATTERN "Patient registration";
- * jsdom can't lay out). Signs in as the seeded Micro World Lab Admin, opens
- * /frontdesk/patients/new and checks at 1440 and 375: ONE primary (Register
- * patient) in the band, the pill = the subject name + the section tabs only,
- * one section card (no page scroll), 40px fields (44px on phones, phone
- * inputs ≥16px), no monospace / green, validation opening the right section.
+ * Patient registration — REAL layout (ND-PATTERN §15 "one single form, no
+ * tabs, keyboard-first"; jsdom can't lay out). Signs in as the seeded Micro
+ * World Lab Admin, opens /frontdesk/patients/new and checks: at 1440×900 the
+ * three section cards side by side with NO page / body scroll, the pill =
+ * the name only, ONE primary, First name focused, Enter to the next field,
+ * field-level errors, Title → Sex, 40px fields, no mono / green; at 1024 two
+ * columns; at 375 one column scrolling under the pinned band (icon primary,
+ * full-width 44px / 16px fields).
  *
  * NOTHING IS WRITTEN: every POST / PATCH to /api/patients is answered in the
  * browser (and asserted never to be needed); the edit-mode shots load a
@@ -74,7 +76,7 @@ async function shoot(page: Page, name: string) {
   for (const theme of ['light', 'dark'] as const) {
     await setTheme(page, theme);
     await page.waitForTimeout(250);
-    await page.screenshot({ path: `${SHOTS}/${name}-${theme}.png`, fullPage: false });
+    await page.screenshot({ path: `${SHOTS}/v2-${name}-${theme}.png`, fullPage: false });
   }
   await setTheme(page, 'light');
 }
@@ -122,8 +124,8 @@ async function noPageScroll(page: Page) {
 
 const PRIMARY = '.pf-hb-btn--primary, .nd-btn--primary, .pf-btn-primary, pf-touch-btn .v-primary';
 
-test.describe('Patient registration — real layout', () => {
-  test('1440 + 375: band + name/tabs pill, one primary, section card, kit fields (no writes)', async ({ page }) => {
+test.describe('Patient registration — real layout (one form)', () => {
+  test('1440 / 1024 / 375: one form, cards 3 / 2 / 1, keyboard-first, field errors (no writes)', async ({ page }) => {
     await relayCors(page);
     const writes = await blockPatientWrites(page);
     await loginAs(page, 'admin');
@@ -132,114 +134,108 @@ test.describe('Patient registration — real layout', () => {
 
     const ctx = page.locator('pf-hero-band .nd-ctx.pf-reg-ctx');
     await expect(ctx.locator('.pf-reg-ctx__nametext')).toHaveText('New patient', { timeout: 30_000 });
-    await expect(page.locator('[data-field="first_name"] input')).toBeVisible({ timeout: 30_000 });
+    const firstName = page.locator('[data-field="first_name"] input');
+    await expect(firstName).toBeVisible({ timeout: 30_000 });
 
-    // Pill = the name + the section tabs, nothing else, on ONE line at 1440.
-    await expect(ctx.locator('.nd-ctx__chip')).toHaveCount(0);
-    const tabs = ctx.locator('[role="tablist"] [role="tab"]');
-    const labels = (await tabs.allInnerTexts()).map(t => t.trim());
-    expect(labels[0]).toBe('Identity');
-    expect(labels.length).toBeGreaterThanOrEqual(2);
-    const nameBox = (await ctx.locator('.nd-ctx__primary').boundingBox())!;
-    const tabBox = (await ctx.locator('[role="tablist"]').boundingBox())!;
-    expect(Math.abs((nameBox.y + nameBox.height / 2) - (tabBox.y + tabBox.height / 2))).toBeLessThan(8);
-
-    // ONE primary on the page, in the band: Register patient.
+    // Pill = the name only: no tabs, no chips.
+    await expect(page.locator('[role="tablist"], [role="tab"], .nd-ctx__chip, .pf-reg-next')).toHaveCount(0);
+    // ONE primary on the page, in the band.
     await expect(page.locator(PRIMARY)).toHaveCount(1);
     await expect(page.locator('pf-hero-band .pf-hb__actions .pf-hb-btn--primary')).toHaveText(/Register patient/);
-    await expect(page.locator('pf-screen-header')).toHaveCount(0);
 
-    // One section card; no page scroll.
-    await expect(page.locator('#pf-reg-sec.nd-card')).toBeVisible();
-    let sc = await noPageScroll(page);
+    // Every section at once: three cards side by side.
+    const cards = page.locator('.pf-wr-cards > .pf-wr-card');
+    const n = await cards.count();
+    expect(n).toBeGreaterThanOrEqual(3);
+    const boxes = await Promise.all([0, 1, 2].map(i => cards.nth(i).boundingBox()));
+    expect(Math.abs(boxes[0]!.y - boxes[1]!.y)).toBeLessThan(2);
+    expect(Math.abs(boxes[1]!.y - boxes[2]!.y)).toBeLessThan(2);
+    expect(boxes[1]!.x).toBeGreaterThan(boxes[0]!.x + boxes[0]!.width - 1);
+    await expect(page.locator('[data-field="phone"] input[type="tel"]')).toBeVisible();
+
+    // No page scroll AND no body scroll with the default form at 1440×900.
+    const sc = await noPageScroll(page);
     expect(sc.doc).toBeLessThanOrEqual(1);
     expect(sc.main).toBeLessThanOrEqual(1);
+    const bodyScroll = await page.locator('.pf-reg-body').evaluate(e => e.scrollHeight - e.clientHeight);
+    expect(bodyScroll).toBeLessThanOrEqual(1);
+    // The cards end above the navbar.
+    const navH = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nd-nav-h')) || 0);
+    expect(boxes[0]!.y + boxes[0]!.height).toBeLessThanOrEqual(900 - navH + 1);
 
-    // 40px fields: inputs, the Title / Sex segments.
+    // Keyboard-first: First name is focused on arrival; Enter → Last name.
+    await expect(firstName).toBeFocused();
+    await page.keyboard.type('Venkatasubramanian');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-field="fathers_name"] input')).toBeFocused();
+    await page.keyboard.type('Ramakrishnan');
+    await expect(ctx.locator('.pf-reg-ctx__nametext')).toHaveText('Venkatasubramanian Ramakrishnan');
+
+    // 40px fields; quiet grey ABHA buttons in the Identity card header.
     const h = async (sel: string) => (await page.locator(sel).first().boundingBox())?.height ?? 0;
     expect(await h('[data-field="first_name"] input')).toBeCloseTo(40, 0);
-    expect(await h('[data-field="title"] .nd-seg')).toBeGreaterThanOrEqual(40);
-    expect(await h('[data-field="title"] .nd-seg')).toBeLessThanOrEqual(42);
-    // Title pills keep their natural width on web (not a full-width bar).
-    expect((await page.locator('[data-field="title"] .nd-seg').boundingBox())!.width).toBeLessThan(600);
+    expect(await h('[data-field="phone"] .pf-di-phone')).toBeCloseTo(40, 0);
+    const abha = page.locator('.pf-wr-card').first().locator('.nd-card__head .nd-btn--quiet');
+    await expect(abha).toHaveCount(2);
 
-    let hy = await hygiene(page);
+    const hy = await hygiene(page);
     expect(hy.mono, 'monospace').toEqual([]);
     expect(hy.green, 'green').toEqual([]);
-    await shoot(page, 'register-1440-identity');
+    await shoot(page, 'register-1440');
 
-    // Every section: one primary, 40px controls, clean palette.
-    for (let i = 1; i < labels.length; i++) {
-      await tabs.nth(i).click();
-      await expect(tabs.nth(i)).toHaveAttribute('aria-selected', 'true');
-      await page.waitForTimeout(350);
-      await expect(page.locator(PRIMARY)).toHaveCount(1);
-      if (await page.locator('[data-field="phone"] .pf-di-phone').count()) {
-        expect(await h('[data-field="phone"] .pf-di-phone')).toBeCloseTo(40, 0);
-      }
-      hy = await hygiene(page);
-      expect(hy.mono, `monospace on ${labels[i]}`).toEqual([]);
-      expect(hy.green, `green on ${labels[i]}`).toEqual([]);
-      await shoot(page, `register-1440-${labels[i].toLowerCase().replace(/[^a-z]+/g, '-')}`);
-    }
+    // Title → Sex; Sex quick keys.
+    await page.locator('[data-field="title"] [role="radio"]', { hasText: /^Mrs\.$/ }).click();
+    await expect(page.locator('[data-field="sex"] [role="radio"][aria-checked="true"]')).toHaveText('Female');
+    await page.locator('[data-field="sex"] [role="radio"][aria-checked="true"]').focus();
+    await page.keyboard.press('o');
+    await expect(page.locator('[data-field="sex"] [role="radio"][aria-checked="true"]')).toHaveText('Other');
 
-    // Validation walks every section: Register with nothing filled opens
-    // Identity with the message — and nothing is posted.
+    // Field-level errors: the missing phone is outlined, has its message and gets focus.
+    const dob = page.locator('[data-field="date_of_birth"] input[type="date"]');
+    if (await dob.count()) await dob.fill('1990-05-15');
     await page.locator('.pf-reg-primary').click();
-    await expect(page.locator('.pf-wr-err')).toContainText('Required');
-    await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
-    await shoot(page, 'register-1440-validation');
+    const phone = page.locator('[data-field="phone"]');
+    await expect(phone.locator('.pf-di-err')).toContainText(/Required/);
+    await expect(phone.locator('.pf-di-phone--err')).toHaveCount(1);
+    await expect(phone.locator('input[type="tel"]')).toBeFocused();
+    await expect(page.locator('[data-field="first_name"] .pf-di-err')).toHaveCount(0);
+    await shoot(page, 'register-1440-errors');
 
-    // The pill follows the typed name — in full.
-    await page.locator('[data-field="first_name"] input').fill('Venkatasubramanian');
-    await page.locator('[data-field="fathers_name"] input').fill('Ramakrishnan');
-    await expect(ctx.locator('.pf-reg-ctx__nametext')).toHaveText('Venkatasubramanian Ramakrishnan');
-    await page.locator('[data-field="title"] .nd-seg__item', { hasText: /^Mr\.$/ }).click();
-    await expect(page.locator('[data-field="sex"] .nd-seg__item[aria-pressed="true"]')).toHaveText('Male');
-    await shoot(page, 'register-1440-filled');
+    // ── Tablet: two columns ─────────────────────────────────────────────
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.waitForTimeout(400);
+    const t = await Promise.all([0, 1, 2].map(i => cards.nth(i).boundingBox()));
+    expect(Math.abs(t[0]!.y - t[1]!.y)).toBeLessThan(2);
+    expect(t[2]!.y).toBeGreaterThan(t[0]!.y + 10);
+    await shoot(page, 'register-1024');
 
-    // ── Phone ────────────────────────────────────────────────────────────
+    // ── Phone: one column, band pinned ──────────────────────────────────
     await page.setViewportSize({ width: 375, height: 812 });
     await page.waitForTimeout(450);
-    // The primary is a 44px-ish icon at the top of the band, above the pill.
+    const p = await Promise.all([0, 1, 2].map(i => cards.nth(i).boundingBox()));
+    expect(Math.abs(p[0]!.x - p[1]!.x)).toBeLessThan(2);
+    expect(p[1]!.y).toBeGreaterThan(p[0]!.y + p[0]!.height - 1);
     const pb = (await page.locator('pf-hero-band .pf-hb-btn--primary').boundingBox())!;
     expect(pb.width).toBeLessThanOrEqual(60);
-    expect(pb.y + pb.height).toBeLessThanOrEqual(nameBox.y + 400); // sanity
-    const pillTop = (await ctx.boundingBox())!.y;
-    expect(pb.y).toBeLessThan(pillTop);
+    expect(pb.y).toBeLessThan((await ctx.boundingBox())!.y);
     await expect(page.locator('.pf-reg-cancel')).toBeHidden();
-    // Tabs scroll sideways inside the pill (never wrap / squeeze), ≥40px tall.
-    const tl = await ctx.locator('[role="tablist"]').evaluate(e => ({
-      ox: getComputedStyle(e).overflowX, h: e.getBoundingClientRect().height }));
-    expect(['auto', 'scroll']).toContain(tl.ox);
-    const tabH = (await tabs.first().boundingBox())!.height;
-    expect(tabH).toBeGreaterThanOrEqual(40);
-    // Fields full width, ≥44px, 16px text (iOS never zooms).
-    const card = (await page.locator('#pf-reg-sec .nd-card__body').boundingBox())!;
-    const fn = page.locator('[data-field="first_name"] input');
-    const fb = (await fn.boundingBox())!;
+    const card = (await page.locator('.pf-wr-card').first().locator('.nd-card__body').boundingBox())!;
+    const fb = (await firstName.boundingBox())!;
     expect(fb.width).toBeGreaterThan(card.width - 40);
     expect(fb.height).toBeGreaterThanOrEqual(44);
-    expect(await fn.evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
-    // The card ends above the always-visible bottom navbar; no page scroll.
-    const navH = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nd-nav-h')) || 0);
-    const cb = (await page.locator('#pf-reg-sec').boundingBox())!;
-    expect(cb.y + cb.height).toBeLessThanOrEqual(812 - navH + 1);
-    sc = await noPageScroll(page);
-    expect(sc.doc).toBeLessThanOrEqual(1);
-    // The card label beats the global phone h2 cap (12px, like result entry).
-    expect(await page.locator('#pf-reg-sec .nd-card__label').evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeLessThanOrEqual(13);
-    await shoot(page, 'register-375-identity');
-    for (let i = 1; i < labels.length; i++) {
-      await tabs.nth(i).click();
-      await page.waitForTimeout(350);
-      const tel = page.locator('[data-field="phone"] input[type="tel"]');
-      if (await tel.count()) {
-        expect(await tel.evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
-        expect((await page.locator('[data-field="phone"] .pf-di-phone').boundingBox())!.height).toBeGreaterThanOrEqual(44);
-      }
-      await shoot(page, `register-375-${labels[i].toLowerCase().replace(/[^a-z]+/g, '-')}`);
-    }
+    expect(await firstName.evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
+    expect(await page.locator('.pf-wr-card').first().locator('.nd-card__label').evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeLessThanOrEqual(13);
+    const doc = await noPageScroll(page);
+    expect(doc.doc).toBeLessThanOrEqual(1);
+    await shoot(page, 'register-375-top');
+    // The body scrolls; the band stays put.
+    const bandY = (await page.locator('pf-hero-band').boundingBox())!.y;
+    await page.locator('.pf-reg-body').evaluate(e => e.scrollTo({ top: e.scrollHeight }));
+    await page.waitForTimeout(300);
+    expect((await page.locator('pf-hero-band').boundingBox())!.y).toBeCloseTo(bandY, 0);
+    const tel = page.locator('[data-field="phone"] input[type="tel"]');
+    expect(await tel.evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
+    await shoot(page, 'register-375-bottom');
 
     expect(writes, 'no patient writes').toEqual([]);
     await page.unrouteAll({ behavior: 'ignoreErrors' });
@@ -258,10 +254,10 @@ test.describe('Patient registration — real layout', () => {
     await expect(page.locator('pf-hero-band .nd-savestate')).toContainText('All changes saved');
     await page.locator('[data-field="first_name"] input').fill('Lakshmi V');
     await expect(page.locator('pf-hero-band .nd-savestate')).toContainText('Unsaved changes');
-    await shoot(page, 'edit-1440-identity');
+    await shoot(page, 'edit-1440');
     await page.setViewportSize({ width: 375, height: 812 });
     await page.waitForTimeout(450);
-    await shoot(page, 'edit-375-identity');
+    await shoot(page, 'edit-375');
     expect(writes, 'no patient writes').toEqual([]);
     await page.unrouteAll({ behavior: 'ignoreErrors' });
   });

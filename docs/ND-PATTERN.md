@@ -670,56 +670,70 @@ canonical example is the **test editor**
 
 ## 15. Patient registration
 
+**Registration = one single form, no tabs, keyboard-first** (owner,
+2026-09-25 — the tabbed version was rejected: minimise clicks).
 `/frontdesk/patients/new` (+ `?patientId=` = edit details; Order & Payments'
-"Register a new patient" / "Edit … details" land here) —
-`features/frontdesk/patient-register/`. An §14 editor over the tenant's
-`patient_registration` workflow (owner, 2026-09-25):
+"Register a new patient" / "Edit … details" add `returnTo=order`) —
+`features/frontdesk/patient-register/`, over the tenant's
+`patient_registration` workflow.
 
-- **Band:** back · tenant · actions. New: ghost **Cancel**,
-  ghost **Save & book test** (registers, then opens Order & Payments with the
-  patient attached — `OrderEntryService.startNewOrder(id)`), ghost **Save &
-  book appointment**, then the ONE primary **Register patient**. Edit: the
-  neutral save state (`.nd-savestate`), Cancel, primary **Save changes**.
-  Phones: Cancel goes (the back chevron is the same move), the rest are 44px
-  icons at the top of the band.
-- **Pill = the subject name + the section tabs, nothing else:** "New patient"
-  until a name is typed, then the FULL live name ("Mr. Ravi Shankar"; Baby →
-  "Baby of <mother>"); edit = the patient's name. Quiet pencil → Identity,
-  focus First name. Tabs = the form's REAL groupings, from the workflow
-  (display-only split, storage keys untouched): **Identity · Contact & IDs ·
-  Additional details** (+ any tenant step). Sliding neutral indicator, violet
-  dot (filled = complete, ring = something to finish), ←/→ walk the tabs;
-  phones stack the name over a sideways-scrolling tabs row.
-- **One section card** (violet icon chip + the step title; the note says
-  "N required" with the amber dot, or "Optional"); only its body scrolls.
-  The card header carries ABHA: **Fill from ABHA** (scan / number → fills
-  the form) + **Create ABHA** on a new patient, **Verify / create ABHA** in
-  edit — `.nd-rowact` (text on web, icons on touch). A secondary "Next: …"
-  closes each section.
-- **Fields** (`pf-workflow-renderer [nd] [activeStepId] [hideActions]` →
-  `pf-dynamic-input [nd]`; both default OFF so result entry / the workflow
-  preview keep the classic look): kit `.nd-field` + `.nd-input` (40px; 44px
-  and 16px text on phones), the amber required dot (never a red `*`), Title
-  and 2–4-option selects (Sex) as neutral `.nd-seg` with `aria-pressed`
-  (pills keep their width on web; 5+ go three-up on phones), DOB ⇄ age kept
-  (kit date input + age + Yrs / Mo segment), phone = one kit shell with the
-  country code as `pf-select` (code + country hint, no flag emoji), ABHA /
-  Aadhaar / phone / age in tabular numbers, on/off = slate `.nd-toggle`.
-- **Validation** still covers EVERY section on any submit; the renderer's
-  `(invalid)` names the step and the page opens it, with the message at the
-  top of the card (`role="alert"`). Duplicate patient → `DialogService`
-  confirm → retry with `force`. ABHA prefill also updates the pill.
-- **ABHA modals** (`abha-prefill`, `abha-wizard`) in the new design: nd-card
-  modal, kit inputs, OTP in Noto tabular numbers (no monospace), neutral info
-  text (no green); phones: a sheet above the navbar.
+- **One form, every section visible at once** — no tabs, no "Next", no
+  section switching. Each workflow section is an `.nd-card` (violet icon
+  chip + label + "N required" with the amber dot, or "Optional"):
+  **Identity | Contact & IDs | Additional details** (+ any tenant step).
+  ≥1200px: 3 columns side by side filling the body — the default form fits
+  above the navbar at 1440×900 with no page / body scroll; extra tenant
+  fields scroll inside a card body, never the page. Tablet (≥768px): 2
+  columns. Phone: 1 column scrolling under the pinned band. Inside a card
+  fields sit two-up; wide ones (Title, DOB ⇄ age, phone, textareas) span
+  the card; one column on phones / narrow cards.
+- **Pill = the patient's NAME only** ("New patient" → the FULL live name,
+  "Baby of <mother>"; edit = the patient). Pencil → First name.
+- **Band:** back · tenant · Cancel, Save & book test, Save & book
+  appointment (ghosts) and the ONE primary **Register patient** (edit: the
+  neutral save state, Cancel, **Save changes**). Phones: Cancel goes, the
+  rest are 44px icons. **Ctrl / ⌘ + Enter** saves from anywhere.
+- **Keyboard-first:** First name is focused on arrival (web; never on touch
+  — no surprise keyboard). **Enter = next field** in reading order (card by
+  card, top to bottom; a textarea keeps Enter, an open `pf-select` uses it
+  to pick); **Enter on the last field = Register**. Tab follows the same
+  order. Title / Sex / Yes-No are neutral `.nd-seg` **radio groups** (one
+  Tab stop, ←/→ select, Home / End, a letter picks — M / F / O on Sex, M
+  cycles Mr. / Mrs. / Ms. / Master on Title). Title → Sex where unambiguous
+  (Mr. / Master → Male, Mrs. / Ms. → Female); a manual Sex always wins.
+- **Fewer clicks:** ABHA **Fill from ABHA** / **Create ABHA** (edit: Verify /
+  create) are quiet grey `.nd-btn--quiet` buttons in the Identity card
+  header; DOB-or-age inline; the phone country code defaults to the
+  tenant's own (from its phone number, else +91); no confirms except the
+  existing duplicate-patient check (`DialogService`, then retry with
+  `force`).
+- **Errors are field-level:** every invalid field is outlined in error red
+  (`.nd-input--error`, stays red while focused) with its message under it
+  (`aria-invalid` + `aria-describedby`); focus + scroll go to the FIRST
+  invalid field; fixing a field clears only its error. No banner.
+- **Back to the order:** from a half-built Order & Payments, the cart
+  (tests, priority, referring doctor / hospital) is stashed
+  (`pf:order-draft:pending-registration`) and Register / Save changes /
+  Cancel return to `/frontdesk/order?patientId=…&resume=registration`, which
+  restores it with the patient attached (one-shot; ignored without
+  `resume`; a day's TTL).
+- **Fields** (`pf-workflow-renderer [nd] [hideActions] [stepHeaderTpl]` →
+  `pf-dynamic-input [nd] [error] [defaultCountryCode]`, both OFF by default):
+  kit `.nd-field` / `.nd-input` 40px (44px + 16px text on phones), amber
+  required dot, tabular numbers for phone / IDs / age, no flag emoji, slate
+  switches. Violet + neutrals only; Noto only.
+- **ABHA modals** (`abha-prefill`, `abha-wizard`): nd-card modal, kit inputs,
+  OTP in Noto tabular numbers, neutral info text; phones: a sheet above the
+  navbar.
 - **Real-layout check:** `apps/lms-e2e/src/patient-register-layout.rbac.spec.ts`
-  (seeded Lab Admin; every `/api/patients` write is answered in the browser
-  and asserted never sent; edit mode loads a made-up patient answered in the
-  browser) asserts one primary, the name + tabs pill on one line, no page
-  scroll, 40px fields, no mono / green, validation opening Identity, the
-  live pill name; at 375 the icon primary above the pill, scrolling ≥40px
-  tabs, full-width ≥44px / 16px fields, a 12px card label and the card above
-  the navbar. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
+  (seeded Lab Admin; every `/api/patients` write answered in the browser and
+  asserted never sent; edit mode loads a made-up patient in the browser):
+  at 1440×900 three cards side by side, no page / body scroll, name-only
+  pill, one primary, First name focused, Enter → Last name, Title → Sex,
+  Sex quick key, field errors focusing the first; 1024 two columns; 375 one
+  column, icon primary above the pill, full-width 44px / 16px fields, the
+  band pinned while the body scrolls. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`
+  (shots `v2-*`).
 
 ## API summary
 
@@ -727,7 +741,7 @@ canonical example is the **test editor**
 Layout   .nd-page · .nd-head(__back|__who|__title|__meta|__actions) · .nd-band-chip
          .nd-body · .nd-body--split
 Card     .nd-card · .nd-card__head · __icon · __label · __note · __spacer · __body · __foot · .nd-span
-Buttons  .nd-btn + --primary | --secondary | --tertiary | --icon
+Buttons  .nd-btn + --primary | --secondary | --tertiary | --icon | --quiet (neutral grey helper)
 Select   .nd-seg / .nd-seg__item[aria-checked] · .nd-chip[aria-pressed] · .nd-chip--static · .nd-tile-sel
 Toggle   .nd-toggle[role=switch][aria-checked] › .nd-toggle__track › .nd-toggle__knob · .nd-toggle--urgent
 Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done
