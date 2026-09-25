@@ -262,10 +262,17 @@ const NOT_A_DISK = '__not_a_disk';
                   <span class="pm-list__ttl">{{ mode() === 'review' ? 'Review' : 'Disks' }}</span>
                   <span class="pm-list__count nd-num">{{ activeRows().length }} {{ activeRows().length === 1 ? 'disk' : 'disks' }}</span>
                 </div>
-                <p class="pm-status" role="status" [attr.data-ai]="ai()">
-                  @if (ai() === 'pending') { <span class="pm-status__dot" aria-hidden="true"></span> }
-                  {{ aiLine() }}
-                </p>
+                @if (manualHint(); as hint) {
+                  <div class="pm-note pm-note--manual" role="status">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    <span class="pm-note__t">{{ hint }}</span>
+                  </div>
+                } @else {
+                  <p class="pm-status" role="status" [attr.data-ai]="ai()">
+                    @if (ai() === 'pending') { <span class="pm-status__dot" aria-hidden="true"></span> }
+                    {{ aiLine() }}
+                  </p>
+                }
                 @for (w of warnings(); track w.text) {
                   <div class="pm-note" role="note">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>
@@ -283,23 +290,23 @@ const NOT_A_DISK = '__not_a_disk';
                         [attr.data-n]="d.n" (click)="select(d.id)">
                       <span class="pm-drow__n nd-num" aria-hidden="true">{{ d.n }}</span>
                       <div class="pm-drow__code">
-                        @if (mode() === 'measure') {
+                        <div class="pm-drow__pick">
                           <pf-select class="pm-codesel" [class.pm-codesel--pending]="isPending(d)" [class.pm-codesel--set]="!!d.code || d.notDisk"
                                      [options]="codeOptions().get(d.id) ?? []" [value]="codeValue(d)" [searchable]="true" size="sm"
                                      [placeholder]="isPending(d) ? (aiSlow() ? 'Still reading…' : 'Reading…') : 'Unknown — tap to pick'"
                                      [attr.aria-label]="'Disk ' + d.n + ' code'"
                                      (valueChange)="pickCode(d.id, $any($event))"></pf-select>
                           @if (d.codeSrc === 'ai' && d.code) { <span class="pm-ai" title="Read by AI — check it">AI</span> }
-                          @if (!d.code && !d.notDisk && d.suggested) {
-                            <button type="button" class="pm-sug" (click)="$event.stopPropagation(); pickCode(d.id, d.suggested)"
-                                    [attr.aria-label]="'Probably ' + d.suggested + ' — confirm for disk ' + d.n">
-                              <span class="pm-sug__t">Probably <b class="nd-num">{{ d.suggested }}</b></span>
-                              <span class="pm-sug__ok">Confirm</span>
-                            </button>
-                          }
-                        } @else {
-                          <span class="pm-codechip nd-num" [class.pm-codechip--none]="!d.code">{{ d.notDisk ? 'Not a disk' : (d.code || 'No code') }}</span>
-                          <span class="pm-drow__drug">{{ d.notDisk ? '' : (drugOf(d) || 'Not applied') }}</span>
+                        </div>
+                        @if (!d.code && !d.notDisk && d.suggested) {
+                          <button type="button" class="pm-sug" (click)="$event.stopPropagation(); pickCode(d.id, d.suggested)"
+                                  [attr.aria-label]="'Probably ' + d.suggested + ' — confirm for disk ' + d.n">
+                            <span class="pm-sug__t">Probably <b class="nd-num">{{ d.suggested }}</b></span>
+                            <span class="pm-sug__ok">Confirm</span>
+                          </button>
+                        }
+                        @if (mode() === 'review' && !d.notDisk) {
+                          <span class="pm-drow__drug" [class.pm-drow__drug--none]="!drugOf(d)">{{ drugOf(d) || 'Not applied — pick a code' }}</span>
                         }
                       </div>
                       @if (!d.notDisk) {
@@ -491,20 +498,19 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-drow--off { opacity: 0.6; }
     .pm-drow__n { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
       font-size: 12px; font-weight: 600; color: var(--text-primary); background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
-    .pm-drow__code { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .pm-drow__drug { font-size: 12.5px; color: var(--text-secondary); min-width: 0; }
+    .pm-drow__code { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; }
+    .pm-drow__pick { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .pm-drow__code > .pm-sug { align-self: flex-start; }
+    .pm-drow__drug { font-size: 12.5px; color: var(--text-secondary); min-width: 0; padding-left: 2px; }
+    .pm-drow__drug--none { color: var(--text-tertiary); }
     .pm-codesel { flex: 1 1 auto; min-width: 0; }
     .pm-ai { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-tertiary);
       padding: 1px 5px; border-radius: 6px; border: 1px solid var(--nd-line); }
-    .pm-drow__code { flex-wrap: wrap; }
     .pm-sug { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 4px 0 10px; border-radius: var(--nd-radius-chip, 999px);
       border: 1px solid var(--nd-line); background: var(--nd-chip-bg); color: var(--text-secondary); font: inherit; font-size: 12.5px; cursor: pointer; }
     .pm-sug b { font-weight: 600; color: var(--text-primary); }
     .pm-sug__t { white-space: nowrap; }
     .pm-sug__ok { padding: 3px 8px; border-radius: 999px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); color: var(--text-primary); font-weight: 500; }
-    .pm-codechip { display: inline-flex; align-items: center; height: 26px; padding: 0 9px; border-radius: var(--nd-radius-chip, 999px);
-      font-size: 13px; font-weight: 600; color: var(--text-primary); background: var(--nd-chip-bg); white-space: nowrap; }
-    .pm-codechip--none { font-weight: 500; color: var(--text-tertiary); }
     .pm-drow__mm { display: inline-flex; align-items: center; gap: 4px; }
     .pm-mm { width: 52px; height: 36px; padding: 0 6px; text-align: center; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line);
       background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; outline: none; }
@@ -982,6 +988,13 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
       case 'failed': return this.aiMsg() || 'Codes: pick manually';
       default: return rows.length ? 'Codes: pick manually' : '';
     }
+  }
+  /** Manual fallback: a short neutral hint at the top of the list. */
+  manualHint(): string | null {
+    if (this.ai() !== 'failed') return null;
+    return this.aiMsg().startsWith('AI limit')
+      ? 'AI limit reached this month — pick each disk’s code'
+      : 'AI reading isn’t available — pick each disk’s code';
   }
   readonly usageLine = computed(() => {
     const u = this.usage();

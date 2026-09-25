@@ -108,7 +108,8 @@ describe('Measure & read — the ONE background AI call', () => {
     c.startAiRead();
     f.detectChanges();
     expect(c.ai()).toBe('failed');
-    expect(el.querySelector('.pm-status')?.textContent).toContain('Codes: pick manually');
+    expect(el.querySelector('.pm-note--manual')?.textContent?.trim()).toBe('AI reading isn’t available — pick each disk’s code');
+    expect(el.querySelector('.pm-status')).toBeNull();
     expect(el.querySelector('.pm-codesel .pf-dd__value')?.textContent?.trim()).toBe('Unknown — tap to pick');
     expect(el.querySelectorAll('.pm-codesel--pending').length).toBe(0);
   });
@@ -172,6 +173,38 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(api.confirm).toHaveBeenCalledWith('aud-1', [
       { n: 1, code: 'AMC 30' }, { n: 2, code: 'CFM 5' }, { n: 3, code: 'CAZ 30' }, { n: 4, code: 'IPM 10' },
     ]);
+  });
+
+  it('Review: every disk keeps the code picker; picking there updates the line and enables Apply', () => {
+    const { f, c, el } = setup(() => throwError(() => ({ status: 404 })));
+    c.startAiRead();
+    c.goReview();
+    f.detectChanges();
+    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('AI reading isn’t available');
+    const pickers = el.querySelectorAll('.pm-drow pf-select.pm-codesel');
+    expect(pickers.length).toBe(4);                          // not a static "No code" chip
+    expect(el.querySelector('.pm-drow[data-n="1"] .pf-dd__value')?.textContent?.trim()).toBe('Unknown — tap to pick');
+    expect(el.querySelector('.pm-drow[data-n="1"] .pm-drow__drug')?.textContent?.trim()).toBe('Not applied — pick a code');
+    const apply = () => el.querySelector<HTMLButtonElement>('.pm-controls .nd-btn--primary')!;
+    expect(apply().textContent?.trim()).toBe('Apply to table');
+    expect(apply().disabled).toBe(true);
+    expect(el.querySelector('.pm-controls .pm-hinttext')?.textContent).toContain('0 zones go to the AST table');
+    // Pick on Review (the same panel list, used codes marked).
+    c.pickCode(40, 'IPM 10');
+    f.detectChanges();
+    expect(c.mode()).toBe('review');
+    expect(el.querySelector('.pm-drow[data-n="4"] .pf-dd__value')?.textContent?.trim()).toBe('IPM 10');
+    expect(el.querySelector('.pm-drow[data-n="4"] .pm-drow__drug')?.textContent?.trim()).toBe('Imipenem');
+    expect(el.querySelector('.pm-controls .pm-hinttext')?.textContent).toContain('1 zone goes to the AST table');
+    expect(apply().disabled).toBe(false);
+    expect(c.codeOptions().get(10).find((o: any) => o.value === 'IPM 10').hint).toContain('on disk 4');
+  });
+
+  it('the AI cap gets its own hint', () => {
+    const { f, c, el } = setup(() => throwError(() => ({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } })));
+    c.startAiRead();
+    f.detectChanges();
+    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('AI limit reached this month');
   });
 
   it('disks without a code are left out of Apply (and the review says so)', async () => {

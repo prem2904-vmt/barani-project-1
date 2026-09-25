@@ -203,9 +203,22 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
 
     // Absent backend → manual fallback.
     await held!.fulfill({ status: 404, body: '' });
-    await expect(modal.locator('.pm-status')).toContainText('Codes: pick manually');
+    await expect(modal.locator('.pm-note--manual')).toContainText('AI reading isn’t available — pick each disk’s code');
     await expect(modal.locator('.pm-codesel .pf-dd__value').first()).toHaveText('Unknown — tap to pick');
     await shots(page, 'read-manual-1440');
+    // Review keeps the picker: pick PIT's code there → Apply enables.
+    await modal.locator('.pm-controls .nd-btn--primary').click();   // Review
+    const apply = modal.locator('.pm-controls .nd-btn--primary');
+    await expect(apply).toHaveText(/Apply to table/);
+    await expect(apply).toBeDisabled();
+    await expect(modal.locator('.pm-drow pf-select.pm-codesel')).toHaveCount(count);
+    await modal.locator(`.pm-drow[data-n="${pit!.n}"] .pf-dd__trigger`).click();
+    await page.locator('#pf-overlay-host .pf-dd__option', { hasText: 'PIT 100/10' }).first().click();
+    await expect(modal.locator('.pm-controls .pm-hinttext')).toContainText('1 zone goes to the AST table');
+    await expect(apply).toBeEnabled();
+    await expect(modal.locator(`.pm-drow[data-n="${pit!.n}"] .pm-drow__drug`)).toContainText('Piperacillin-Tazobactam');
+    await shots(page, 'review-manual-picked-1440');
+    await modal.getByRole('button', { name: 'Back' }).click();
 
     // Real answer → filled state (re-run the read through Recalibrate → Measure).
     aiMode = 'real';
