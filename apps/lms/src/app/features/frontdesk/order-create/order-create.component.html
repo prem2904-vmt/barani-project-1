@@ -2,7 +2,7 @@
   <!-- Hero band (designer system). No page title: the band + navbar carry
        the context. Back chevron top-left; the unified search pill (Option A)
        overlaps the band edge: scope tiles · one input · Urgent · cart · scan. -->
-  <pf-hero-band class="pf-oc-band" [class.pf-oc-band--focus]="dropOpen()" [customSearch]="true" [back]="true" backTo="/frontdesk">
+  <pf-hero-band class="pf-oc-band" [class.pf-oc-band--focus]="searchActive()" [customSearch]="true" [back]="true" backTo="/frontdesk">
     <ng-container band-actions>
       @if (tatLabel()) {
       <span class="pf-oc-tat" [title]="tatLabel()">
@@ -120,7 +120,7 @@
         <input #searchInput type="text" class="pf-us__input" autocomplete="off" role="combobox"
           aria-autocomplete="list" aria-controls="pf-us-drop" [attr.aria-expanded]="scopeOpen()"
           [value]="pillValue()" [placeholder]="pillPlaceholder()" [disabled]="!scopeEnabled(scope())"
-          (input)="onPillInput(asInput($event))" (focus)="onPillFocus()"
+          (input)="onPillInput(asInput($event))" (focus)="onPillFocus()" (blur)="onPillBlur()"
           (keydown.arrowDown)="onPillArrow($event, 1)" (keydown.arrowUp)="onPillArrow($event, -1)"
           (keydown.enter)="onPillEnter($event)" (keydown.escape)="onPillEscape()"
           (keydown.tab)="scopeOpen.set(false)" />
@@ -132,6 +132,11 @@
           <path d="M6 6l12 12M18 6 6 18" />
         </svg>
       </button>
+      }
+
+      <!-- Touch: iOS-style Cancel slides in at the field's right. -->
+      @if (showCancel()) {
+      <button type="button" class="pf-us__cancel" (pointerdown)="$event.preventDefault()" (click)="cancelSearch()">Cancel</button>
       }
 
       <!-- ONE results dropdown for every scope, directly under the pill, sized
@@ -149,49 +154,14 @@
           <button type="button" class="pf-us__drop-esc" (click)="onPillEscape()" aria-label="Close">Esc</button>
         </div>
         @if (scope() === 'tests') {
-        <!-- ONE filter row: type (segmented) on the left, department chips
-             on the right; no chip selected = all departments. -->
-        <div class="pf-us__filters">
-          <pf-segmented size="sm" class="pf-us__seg" [options]="searchTypeOpts()" [value]="searchType()"
-            (valueChange)="setSearchType($any($event)); focusSearchInput()"></pf-segmented>
-          @if (deptChips().length > 0) {
-          <div class="pf-us__chips" role="group" aria-label="Filter by department (none selected = all)">
-            @for (d of deptChips(); track d.name) {
-            <button type="button" class="pf-us__chip" [attr.aria-pressed]="searchDept() === d.name" [title]="d.name"
-              [attr.aria-label]="d.name + ', ' + (searchDeptCounts()[d.name] ?? 0) + ' matches'"
-              (click)="setSearchDept(d.name); focusSearchInput()">
-              {{ d.code || d.name }}<span class="pf-us__chip-n">{{ searchDeptCounts()[d.name] ?? 0 }}</span>
-            </button>
-            }
-          </div>
-          }
-        </div>
+        <ng-container *ngTemplateOutlet="searchFilters"></ng-container>
         }
         </div>
         @if (scope() === 'tests') {
         <!-- ONE result per row: the ranking reads top to bottom, ↑↓ = one row. -->
         <div class="pf-us__tlist">
         @for (t of searchResults(); track t.id; let i = $index) {
-        <button type="button" class="pf-us__trow" role="option" [attr.data-search-row]="t.id" [attr.data-type]="t.type"
-          [title]="rowTitle(t)"
-          [class.pf-us__row--hl]="i === activeResult()" [class.pf-us__trow--in]="isSelected(t.id)"
-          [attr.aria-selected]="isSelected(t.id)" (mouseenter)="activeResult.set(i)" (click)="addSearchResult(t)">
-          <span class="pf-us__tcheck" aria-hidden="true">
-            @if (isSelected(t.id)) {
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-              stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-            } @else {
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
-              stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
-            }
-          </span>
-          <span class="pf-us__tcode">{{ shortCode(t) }}</span>
-          <!-- Full name (wraps if it must, never cut off) + muted department. -->
-          <span class="pf-us__tname">{{ testDisplayName(t) }}</span>
-          @if (t.department?.name) { <span class="pf-us__tdept">{{ t.department?.name }}</span> }
-          <span class="pf-us__tprice"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
-          <span class="sr-only">{{ isSelected(t.id) ? 'In cart, tap to remove' : 'Tap to add' }}</span>
-        </button>
+        <ng-container *ngTemplateOutlet="searchRow; context: { $implicit: t, i: i }"></ng-container>
         }
         </div>
         @if (searchResults().length === 0) {
@@ -348,6 +318,24 @@
           }
           }
         </div>
+      </div>
+      } @else if (inCardSearch()) {
+      <!-- TOUCH search: the card itself is the results (no dropdown). -->
+      <div class="pf-oc-cat__results" aria-live="polite">
+        <div class="pf-oc-res__head">
+          <span class="pf-oc-res__title">{{ searchResults().length }}{{ searchResults().length === 50 ? '+' : '' }} result{{ searchResults().length === 1 ? '' : 's' }} for “{{ query() }}”</span>
+        </div>
+        <ng-container *ngTemplateOutlet="searchFilters"></ng-container>
+      </div>
+      <div class="pf-oc-cat__list pf-oc-res__list" role="listbox" aria-label="Matching tests">
+        <div class="pf-us__tlist">
+          @for (t of searchResults(); track t.id; let i = $index) {
+          <ng-container *ngTemplateOutlet="searchRow; context: { $implicit: t, i: i }"></ng-container>
+          }
+        </div>
+        @if (searchResults().length === 0) {
+        <p class="pf-us__drop-note">No matches for “{{ query() }}”.</p>
+        }
       </div>
       } @else {
       <div class="pf-oc-cat__head">
@@ -539,7 +527,7 @@
     <!-- Billing card (designer's panel) — a persistent column at lg+. Below
          lg the same body opens as the checkout drawer (only one exists). -->
     @if (isLg()) {
-    <aside class="pf-oc-bill" #billCard aria-label="Billing">
+    <aside class="pf-oc-bill" #billCard aria-label="Billing" [class.pf-oc-bill--recede]="inCardSearch()">
       <ng-container *ngTemplateOutlet="billBody"></ng-container>
     </aside>
     }
@@ -639,7 +627,7 @@
       <!-- Two phases that follow the flow: CART (build the order; the list
            gets the whole body) then PAYMENT (cart collapses to one line). -->
       @if (billPhaseView() === 'cart') {
-      <div class="pf-oc-phase" data-phase="cart">
+      <div class="pf-oc-phase pf-oc-phase--cart" data-phase="cart">
       <div class="pf-oc-bill__meta">
         <span>{{ selected().length }} test{{ selected().length === 1 ? '' : 's' }}</span>
         @if (priority() === 'Urgent') {
@@ -742,7 +730,7 @@
 
       </div>
       } @else {
-      <div class="pf-oc-phase" data-phase="pay">
+      <div class="pf-oc-phase pf-oc-phase--pay pf-oc-phase--rise" data-phase="pay">
         <button type="button" class="pf-oc-sum press" (click)="editCart()"
           [attr.aria-label]="'Cart: ' + selected().length + ' tests, ' + (total() | inr) + '. ' + (isReadOnly() || paidOrderId() ? 'Show tests' : 'Edit cart')">
           <span class="pf-oc-sum__text">{{ selected().length }} test{{ selected().length === 1 ? '' : 's' }} · {{ total() | inr }}</span>
@@ -982,6 +970,51 @@
       }
       }
     </footer>
+  </ng-template>
+
+  <!-- Search filter row (dropdown on web, results card on touch). -->
+  <ng-template #searchFilters>
+        <!-- ONE filter row: type (segmented) on the left, department chips
+             on the right; no chip selected = all departments. -->
+        <div class="pf-us__filters">
+          <pf-segmented size="sm" class="pf-us__seg" [options]="searchTypeOpts()" [value]="searchType()"
+            (valueChange)="setSearchType($any($event)); focusSearchInput()"></pf-segmented>
+          @if (deptChips().length > 0) {
+          <div class="pf-us__chips" role="group" aria-label="Filter by department (none selected = all)">
+            @for (d of deptChips(); track d.name) {
+            <button type="button" class="pf-us__chip" [attr.aria-pressed]="searchDept() === d.name" [title]="d.name"
+              [attr.aria-label]="d.name + ', ' + (searchDeptCounts()[d.name] ?? 0) + ' matches'"
+              (click)="setSearchDept(d.name); focusSearchInput()">
+              {{ d.code || d.name }}<span class="pf-us__chip-n">{{ searchDeptCounts()[d.name] ?? 0 }}</span>
+            </button>
+            }
+          </div>
+          }
+        </div>
+  </ng-template>
+
+  <!-- One search result row (dropdown on web, results card on touch). -->
+  <ng-template #searchRow let-t let-i="i">
+        <button type="button" class="pf-us__trow" [style.--pf-i]="i < 16 ? i : 16" role="option" [attr.data-search-row]="t.id" [attr.data-type]="t.type"
+          [title]="rowTitle(t)"
+          [class.pf-us__row--hl]="i === activeResult()" [class.pf-us__trow--in]="isSelected(t.id)"
+          [attr.aria-selected]="isSelected(t.id)" (mouseenter)="activeResult.set(i)" (click)="addSearchResult(t)">
+          <span class="pf-us__tcheck" aria-hidden="true">
+            @if (isSelected(t.id)) {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+            } @else {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            }
+          </span>
+          <span class="pf-us__tcode">{{ shortCode(t) }}</span>
+          <!-- Full name (wraps if it must, never cut off) + muted department. -->
+          <span class="pf-us__tname">{{ testDisplayName(t) }}</span>
+          @if (t.department?.name) { <span class="pf-us__tdept">{{ t.department?.name }}</span> }
+          <span class="pf-us__tprice"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
+          <span class="sr-only">{{ isSelected(t.id) ? 'In cart, tap to remove' : 'Tap to add' }}</span>
+        </button>
   </ng-template>
 
   <!-- One catalogue row (every tab). The row is a div; the toggle and the

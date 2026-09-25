@@ -32,6 +32,7 @@ import { SCOPE_PLACEHOLDERS, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES 
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { KeyboardService } from '../../../core/services/keyboard.service';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -64,6 +65,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly process = inject(ProcessWorkflowService);
   private readonly auth = inject(AuthService);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly keyboard = inject(KeyboardService);
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
   /** The unified search pill (tiles + input + urgent) — outside-click target. */
@@ -155,6 +157,16 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _lgMql = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(OrderCreateComponent.LG_MQ) : null;
   readonly isLg = signal(!!this._lgMql?.matches);
   private readonly _onLgChange = (e: MediaQueryListEvent) => this.isLg.set(e.matches);
+
+  /** ONE search mode per device type (owner): a mouse + hover device (web /
+   *  desktop) searches in the DROPDOWN under the pill and the catalogue
+   *  never changes; a touch device (iPad / phone) has NO dropdown for tests:
+   *  the catalogue card itself becomes the results. Reactive via matchMedia. */
+  private static readonly WEB_MQ = '(hover: hover) and (pointer: fine)';
+  private readonly _webMql = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(OrderCreateComponent.WEB_MQ) : null;
+  readonly isWebSearch = signal(this._webMql ? !!this._webMql.matches : true);
+  private readonly _onWebChange = (e: MediaQueryListEvent) => this.isWebSearch.set(e.matches);
+  readonly searchMode = computed<'dropdown' | 'incard'>(() => this.isWebSearch() ? 'dropdown' : 'incard');
   private readonly _onVisibleResync = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') this.loadOrderableTests();
   };
@@ -351,13 +363,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly individualTests = computed(() => this._tests().filter(t => t.type === 'individual'));
   readonly packages = computed(() => {
     const list = this._tests().filter(t => t.type === 'package');
-    return this.filterTestList(list, this._query());
+    return list;   // browse view: the pill query never filters the grid
   });
   /** Profiles — orderable coded bundles, their own filter tab (kept out of
    *  "All tests", which is individuals only). */
   readonly profiles = computed(() => {
     const list = this._tests().filter(t => t.type === 'profile');
-    return this.filterByDept(this.filterTestList(list, this._query()));
+    return this.filterByDept(list);   // browse view: never filtered by the query
   });
   /** Profiles grouped by department (dept header on top, like the tests view). */
   readonly profilesByDept = computed<Array<{ department: string; tests: Test[] }>>(() => {
@@ -402,7 +414,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (ids.size === 0) return [];
     const byId = new Map(this._tests().map(t => [t.id, t]));
     const list = Array.from(ids).map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
-    return this.filterTestList(list, this._query());
+    return list;   // browse view: the pill query never filters the grid
   });
 
   /** Tests this user has ordered in the past, most-recent first. */
@@ -411,7 +423,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (ids.length === 0) return [];
     const byId = new Map(this._tests().map(t => [t.id, t]));
     const list = ids.map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
-    return this.filterTestList(list, this._query());
+    return list;   // browse view: the pill query never filters the grid
   });
 
   /** True when the test id is in the user's favourites. */
@@ -761,6 +773,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit() {
     this.loadSpecimens();
     this._lgMql?.addEventListener?.('change', this._onLgChange);
+    this._webMql?.addEventListener?.('change', this._onWebChange);
     if (typeof window !== 'undefined') {
       window.visualViewport?.addEventListener('resize', this._onViewport);
       window.addEventListener('resize', this._onViewport);
@@ -1791,6 +1804,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   ngOnDestroy() {
     this._lgMql?.removeEventListener?.('change', this._onLgChange);
+    this._webMql?.removeEventListener?.('change', this._onWebChange);
+    this.keyboard.reset?.();
     if (typeof window !== 'undefined') {
       window.visualViewport?.removeEventListener('resize', this._onViewport);
       window.removeEventListener('resize', this._onViewport);
@@ -2001,7 +2016,28 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly scopeOpen = signal(false);
   /** The dropdown is actually showing. */
   readonly dropOpen = computed(() =>
-    this.scopeOpen() && (this.scope() !== 'tests' || !!this._query().trim()));
+    this.scopeOpen() && (this.scope() !== 'tests'
+      || (this.searchMode() === 'dropdown' && !!this._query().trim())));
+  /** Touch: the catalogue card shows ranked results while a test query is
+   *  typed (no dropdown); clearing it restores the browse view. */
+  readonly inCardSearch = computed(() =>
+    this.searchMode() === 'incard' && this.scope() === 'tests' && !!this._query().trim());
+  /** The search input holds focus. */
+  readonly pillFocused = signal(false);
+  /** "You're about to search": drives the activation animation (pill grows,
+   *  background recedes). */
+  readonly searchActive = computed(() => this.pillFocused() || this.dropOpen() || this.inCardSearch());
+  /** Touch: an iOS-style "Cancel" slides in at the field's right. */
+  readonly showCancel = computed(() => !this.isWebSearch() && (this.pillFocused() || this.dropOpen() || this.inCardSearch()));
+  onPillBlur(): void { setTimeout(() => this.pillFocused.set(false), 0); }
+  /** Cancel (touch): clear the query, close any list, drop the keyboard. */
+  cancelSearch(): void {
+    this.setQuery('');
+    this.closeScope();
+    this.pillFocused.set(false);
+    this.searchInput()?.nativeElement?.blur();
+    this.keyboard.reset?.();
+  }
   /** Panel max-height (px) so its bottom stays above the on-screen keyboard:
    *  measured from window.visualViewport, which shrinks when a keyboard
    *  opens on iPad / phones. null = CSS default. */
@@ -2129,7 +2165,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     else if (k === 'doctor') { this.refDoctorError.set(null); this.searchDoctors(v); }
     else if (k === 'hospital') { this.refHospitalError.set(null); this.searchHospitals(v); }
   }
-  onPillFocus(): void { this.sizeDropdown(); this.scopeOpen.set(true); }
+  onPillFocus(): void { this.pillFocused.set(true); this.sizeDropdown(); this.scopeOpen.set(true); }
 
   onPillArrow(e: Event, dir: number): void {
     if (this.scope() === 'tests') { this.scopeOpen.set(true); this.onSearchArrow(e, dir); return; }
