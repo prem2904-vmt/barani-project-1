@@ -16,11 +16,9 @@ import {
   WorkflowStep
 } from '../../../shared/models/workflow.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
+import { ChipTone } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
-import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ConditionBuilderComponent } from './condition-builder.component';
@@ -28,6 +26,7 @@ import { WorkflowBuilderService } from './workflow-builder.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 
 interface HistoryRow {
   id: string;
@@ -46,11 +45,8 @@ interface HistoryRow {
     DatePipe,
     ConditionBuilderComponent,
     WorkflowRendererComponent,
-    ChipComponent,
     ScreenHeaderComponent,
     SelectComponent,
-    TileComponent,
-    ToggleComponent,
     TouchButtonComponent,
     LoadingLogoComponent,
     HeroBandComponent
@@ -60,8 +56,7 @@ interface HistoryRow {
     @if (!screenName()) {
       <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
         @if (theme.isNewDesign()) {
-          <!-- Band pill (owner): search the screen forms (LIST mode only; the
-               one-screen editor below is exempt and keeps its header). -->
+          <!-- Band pill (owner): search the screen forms. -->
           <pf-hero-band [back]="true" placeholder="Search forms — patient register, order create…"
                         [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
         }
@@ -73,380 +68,357 @@ interface HistoryRow {
 
         <div class="pf-band-body">
         @if (screens().length === 0) {
-          <pf-tile tone="default" padding="xl">
-            <div class="text-center py-6">
-              <p class="text-[14px]" style="color: var(--text-secondary);">No workflows yet.</p>
-            </div>
-          </pf-tile>
+          <div class="nd-card pf-wf-empty"><p>No workflows yet.</p></div>
         } @else if (visibleScreens().length === 0) {
           <p class="pf-band-empty">No forms match "{{ q() }}".</p>
         } @else {
-          <div class="space-y-2.5">
+          <ul class="pf-wf-list">
             @for (r of visibleScreens(); track r.screenName) {
-              <pf-tile [tone]="r.status === 'published' ? 'default' : 'amber'" padding="md">
-                <div class="pf-wf-row flex items-center gap-3 flex-wrap md:flex-nowrap" (click)="openBuilder(r.screenName)">
-                  <div class="pf-wf-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect width="7" height="7" x="3" y="3" rx="1"/>
-                      <rect width="7" height="7" x="14" y="3" rx="1"/>
-                      <rect width="7" height="7" x="3" y="14" rx="1"/>
-                      <rect width="7" height="7" x="14" y="14" rx="1"/>
-                    </svg>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="pf-wf-titlerow flex items-center gap-2 flex-wrap">
-                      <p class="pf-wf-name font-semibold text-[15px] min-w-0 truncate" style="color: var(--text-primary);">{{ prettify(r.screenName) }}</p>
+              <li class="nd-row pf-wf-row" (click)="openBuilder(r.screenName)">
+                <span class="nd-card__icon pf-wf-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/>
+                    <rect width="7" height="7" x="3" y="14" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/>
+                  </svg>
+                </span>
+                <span class="pf-wf-main">
+                  <span class="pf-wf-titlerow">
+                    <span class="nd-row__name pf-wf-name">{{ prettify(r.screenName) }}</span>
+                    <span class="nd-chip nd-chip--static pf-wf-status" [attr.data-status]="r.status">
                       @if (r.status === 'published') {
-                        <pf-chip tone="emerald" size="sm">published</pf-chip>
-                      } @else {
-                        <pf-chip tone="amber" size="sm">{{ r.status }}</pf-chip>
-                      }
-                    </div>
-                    <p class="text-[12px] mt-0.5 font-mono" style="color: var(--text-tertiary);">
-                      v{{ r.version }} · {{ stepCount(r) }} steps · {{ fieldCount(r) }} fields
-                    </p>
-                  </div>
-                  <pf-touch-btn class="pf-wf-edit" size="sm" variant="primary" (pressed)="openBuilder(r.screenName)">Edit</pf-touch-btn>
-                </div>
-              </pf-tile>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                        Published
+                      } @else { {{ r.status }} }
+                    </span>
+                  </span>
+                  <span class="nd-row__meta nd-num pf-wf-meta">v{{ r.version }} · {{ stepCount(r) }} steps · {{ fieldCount(r) }} fields</span>
+                </span>
+                <button type="button" class="nd-rowact pf-wf-edit" [class.nd-rowact--icon]="!web()"
+                        (click)="$event.stopPropagation(); openBuilder(r.screenName)"
+                        [attr.aria-label]="'Edit ' + prettify(r.screenName)" title="Edit">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  <span class="nd-rowact__t">Edit</span>
+                </button>
+              </li>
             }
-          </div>
+          </ul>
         }
         </div>
       </section>
     }
 
     @if (screenName() && builder.workflow(); as wf) {
-      <section class="px-4 md:px-6 pt-6 pb-10">
+      <section class="px-4 md:px-6 pt-6 pb-10 pf-wfe" [class.pf-band-page]="theme.isNewDesign()">
+        @if (theme.isNewDesign()) {
+          <!-- ND "Editors": band = back · tenant · actions (Save draft
+               secondary, Publish = the ONE primary); pill = CONTEXT BAR. -->
+          <pf-hero-band class="pf-wfe-band" [back]="true" backTo="/admin/workflows" [customSearch]="true" [contextBar]="true">
+            <ng-container band-actions>
+              <span class="nd-savestate pf-wfe-savestate" role="status" aria-live="polite"
+                    [attr.aria-label]="builder.isDirty() ? 'Unsaved changes' : 'All changes saved'">
+                @if (builder.isDirty()) {
+                  <span class="nd-savestate__dot" aria-hidden="true"></span><span class="pf-wfe-savestate__t">Unsaved changes</span>
+                } @else {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-wfe-savestate__t">All changes saved</span>
+                }
+              </span>
+              <span class="pf-wfe-more">
+                <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-act" (click)="openPreview()" aria-label="Preview" title="Preview">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                  Preview
+                </button>
+                <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-act" (click)="openHistory()" aria-label="History" title="Version history">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+                  History
+                </button>
+                <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-act" (click)="resetWorkflow()" aria-label="Reload from server" title="Reload from server">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+                  Reset
+                </button>
+              </span>
+              <!-- Phones: the three utilities fold into a "More" menu. -->
+              <span class="pf-wfe-morewrap">
+                <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-morebtn" (click)="moreOpen.set(!moreOpen())"
+                        aria-label="More actions" title="More" aria-haspopup="menu" [attr.aria-expanded]="moreOpen()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+                  More
+                </button>
+                @if (moreOpen()) {
+                  <div class="nd-card pf-wfe-menu nd-anim-in" role="menu">
+                    <button type="button" role="menuitem" class="pf-wfe-menu__item" (click)="moreOpen.set(false); openPreview()">Preview</button>
+                    <button type="button" role="menuitem" class="pf-wfe-menu__item" (click)="moreOpen.set(false); openHistory()">Version history</button>
+                    <button type="button" role="menuitem" class="pf-wfe-menu__item" (click)="moreOpen.set(false); resetWorkflow()">Reload from server</button>
+                  </div>
+                }
+              </span>
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-draft" [disabled]="!builder.isDirty() || saving()"
+                      (click)="saveDraft()" aria-label="Save draft" title="Save draft">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+                Save draft
+              </button>
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-wfe-publish" [disabled]="saving()"
+                      (click)="publish()" [attr.aria-label]="saving() ? 'Publishing' : 'Publish'" title="Publish">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+                {{ saving() ? 'Publishing…' : 'Publish' }}
+              </button>
+            </ng-container>
+
+            <div band-search class="nd-ctx pf-wfe-ctx">
+              <span class="nd-ctx__primary">{{ wf.title }}</span>
+              <span class="nd-ctx__chip" data-k="Form"><span class="nd-ctx__k">Form</span><span class="nd-num">{{ screenName() }}</span></span>
+              <span class="nd-ctx__chip" data-k="Version"><span class="nd-ctx__k">Version</span><span class="nd-num">v{{ builder.record()?.version ?? '—' }}</span></span>
+              <span class="nd-ctx__chip" data-k="Status"><span class="nd-ctx__k">Status</span>{{ builder.record()?.status ?? '—' }}</span>
+              <span class="nd-ctx__chip" data-k="Steps"><span class="nd-num">{{ wf.steps.length }}</span> {{ wf.steps.length === 1 ? 'step' : 'steps' }}</span>
+            </div>
+          </pf-hero-band>
+        }
+
         <pf-screen-header
-          class="pf-builder-hdr"
+          class="pf-builder-hdr pf-classic-only"
           [eyebrow]="'Workflow · v' + (builder.record()?.version ?? '—') + ' · ' + (builder.record()?.status ?? '—')"
           [title]="wf.title"
           [subtitle]="builder.isDirty() ? 'Unsaved changes — save draft or publish to commit.' : 'Live configuration.'">
-          <pf-touch-btn actions class="pf-tab-back" size="sm" variant="ghost" (pressed)="closeBuilder()">
-            <span icon-left aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m15 18-6-6 6-6"/>
-              </svg>
-            </span>
-            <span class="pf-tab-full">All workflows</span>
-            <span class="pf-tab-short">Back</span>
-          </pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openPreview()">
-            <span icon-left class="pf-tab-icon" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
-              </svg>
-            </span>
-            <span class="pf-tab-full">Preview</span>
-            <span class="pf-tab-short">Preview</span>
-          </pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openHistory()">
-            <span icon-left class="pf-tab-icon" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>
-              </svg>
-            </span>
-            <span class="pf-tab-full">History</span>
-            <span class="pf-tab-short">History</span>
-          </pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="resetWorkflow()">
-            <span icon-left class="pf-tab-icon" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>
-              </svg>
-            </span>
-            <span class="pf-tab-full">Reset</span>
-            <span class="pf-tab-short">Reset</span>
-          </pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="secondary"
-                        [disabled]="!builder.isDirty() || saving()"
-                        (pressed)="saveDraft()">
-            <span icon-left class="pf-tab-icon" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
-              </svg>
-            </span>
-            <span class="pf-tab-full">Save draft</span>
-            <span class="pf-tab-short">Save</span>
-          </pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="primary"
-                        [disabled]="saving()"
-                        (pressed)="publish()">
-            <span icon-left class="pf-tab-icon" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>
-              </svg>
-            </span>
-            <span class="pf-tab-full">{{ saving() ? 'Publishing…' : 'Publish' }}</span>
-            <span class="pf-tab-short">{{ saving() ? 'Publishing…' : 'Publish' }}</span>
-          </pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openPreview()">Preview</pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openHistory()">History</pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="ghost" (pressed)="resetWorkflow()">Reset</pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="secondary" [disabled]="!builder.isDirty() || saving()" (pressed)="saveDraft()">Save draft</pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="publish()">{{ saving() ? 'Publishing…' : 'Publish' }}</pf-touch-btn>
         </pf-screen-header>
 
-        <!-- md (iPad Mini, 768px): introduce a narrower 200px steps rail so
-             the field editor on the right has breathing room. lg (1024px+)
-             goes back to the full 280px panel. Below md the layout stacks. -->
-        <div class="grid grid-cols-1 md:grid-cols-[200px_1fr] lg:grid-cols-[280px_1fr] gap-5">
-
-          <!-- ──────── Steps panel ──────── -->
-          <pf-tile tone="default" padding="none" class="block h-fit">
-            <div class="pf-panel-header">
-              <h3 class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                  style="color: var(--text-muted);">Steps</h3>
-              <button type="button" class="pf-inline-link" (click)="addStep()">+ Add</button>
-            </div>
-            <ul cdkDropList (cdkDropListDropped)="onStepDrop($event)" class="p-2 space-y-1.5">
+        <div class="pf-wfe-body" [class.pf-band-body]="theme.isNewDesign()">
+        @if (theme.isNewDesign()) {
+          <!-- Steps = a TABS ROW (was a rail). Drag a tab to reorder. -->
+          <div class="pf-wfe-tabsrow">
+            <div class="nd-tabs pf-wfe-tabs" role="tablist" aria-label="Steps"
+                 cdkDropList cdkDropListOrientation="horizontal" (cdkDropListDropped)="onStepDrop($event)">
               @for (s of wf.steps; track s.id) {
-                <li cdkDrag
-                    class="pf-step-item group"
-                    [class.pf-step-selected]="builder.selectedStepId() === s.id"
+                <button type="button" cdkDrag class="nd-tabs__item pf-wfe-tab" role="tab"
+                        [attr.aria-selected]="builder.selectedStepId() === s.id" [attr.data-step]="s.id"
+                        (click)="builder.selectStep(s.id)">
+                  <span>{{ s.title }}</span>
+                  <span class="nd-num pf-wfe-tab__n" [attr.aria-label]="s.fields.length + ' fields'">{{ s.fields.length }}</span>
+                </button>
+              }
+            </div>
+            <button type="button" class="nd-btn nd-btn--tertiary pf-wfe-addstep" (click)="addStep()">+ Step</button>
+          </div>
+        }
+
+        <div class="pf-wfe-grid" [class.pf-wfe-grid--nd]="theme.isNewDesign()">
+          @if (!theme.isNewDesign()) {
+          <!-- ──────── Steps panel (classic rail) ──────── -->
+          <div class="nd-card pf-wfe-rail">
+            <div class="nd-card__head">
+              <span class="nd-card__label">Steps</span><span class="nd-card__spacer"></span>
+              <button type="button" class="nd-btn nd-btn--tertiary pf-wfe-mini" (click)="addStep()">+ Add</button>
+            </div>
+            <ul cdkDropList (cdkDropListDropped)="onStepDrop($event)" class="pf-wfe-steps">
+              @for (s of wf.steps; track s.id) {
+                <li cdkDrag class="nd-row pf-step-item" [class.nd-row--in]="builder.selectedStepId() === s.id"
                     (click)="builder.selectStep(s.id)">
                   <span class="pf-drag-handle" cdkDragHandle aria-hidden="true">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/>
-                      <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-                      <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
-                    </svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
                   </span>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-[13px] font-medium truncate" [attr.title]="s.title" style="color: var(--text-primary);">{{ s.title }}</p>
-                    <p class="text-[11px] font-mono" style="color: var(--text-muted);">{{ s.type }} · {{ s.fields.length }} fields</p>
-                  </div>
-                  <button type="button" class="pf-step-delete opacity-0 group-hover:opacity-100"
-                          (click)="$event.stopPropagation(); deleteStep(s.id)" aria-label="Delete step">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M18 6 6 18"/>
-                      <path d="m6 6 12 12"/>
-                    </svg>
-                  </button>
+                  <span class="pf-wfe-rowtext">
+                    <span class="nd-row__name">{{ s.title }}</span>
+                    <span class="nd-row__meta nd-num">{{ s.type }} · {{ s.fields.length }} fields</span>
+                  </span>
                 </li>
               }
             </ul>
-          </pf-tile>
+          </div>
+          }
 
-          <!-- ──────── Detail panel ──────── -->
+          <!-- ──────── Detail: stacked nd-cards ──────── -->
           @if (builder.selectedStep(); as step) {
-            <pf-tile tone="default" padding="lg" class="block">
-              <div class="space-y-5">
-
-                <!-- Step header -->
-                <div class="grid grid-cols-2 gap-3 pf-step-titlegrid">
-                  <div>
-                    <label class="pf-label">Title</label>
-                    <input type="text" class="pf-input"
-                          [ngModel]="step.title"
-                          (ngModelChange)="builder.updateStep(step.id, { title: $event })" />
+            <div class="pf-wfe-detail" role="tabpanel">
+              <section class="nd-card pf-wfe-card">
+                <div class="nd-card__head">
+                  <span class="nd-card__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+                  </span>
+                  <span class="nd-card__label">Step</span>
+                  <span class="nd-card__spacer"></span>
+                  <button type="button" class="nd-rowact pf-wfe-delstep" [class.nd-rowact--icon]="!web()"
+                          (click)="deleteStep(step.id)" aria-label="Delete step" title="Delete step">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                    <span class="nd-rowact__t">Delete step</span>
+                  </button>
+                </div>
+                <div class="nd-card__body pf-wfe-cardbody">
+                  <div class="pf-wfe-grid2">
+                    <label class="nd-field">
+                      <span class="nd-field__lbl">Title</span>
+                      <input type="text" class="nd-input" [ngModel]="step.title"
+                             (ngModelChange)="builder.updateStep(step.id, { title: $event })" />
+                    </label>
+                    <label class="nd-field">
+                      <span class="nd-field__lbl">Name</span>
+                      <input type="text" class="nd-input nd-num" [ngModel]="step.name"
+                             (ngModelChange)="builder.updateStep(step.id, { name: $event })" />
+                    </label>
                   </div>
-                  <div>
-                    <label class="pf-label">Name</label>
-                    <input type="text" class="pf-input font-mono"
-                          [ngModel]="step.name"
-                          (ngModelChange)="builder.updateStep(step.id, { name: $event })" />
+                  <div class="pf-wfe-grid3">
+                    <div class="nd-field">
+                      <span class="nd-field__lbl">Type</span>
+                      <pf-select [options]="stepTypeSelectOptions" [value]="step.type"
+                                 (valueChange)="builder.updateStep(step.id, { type: $any($event) })"></pf-select>
+                    </div>
+                    <button type="button" class="nd-toggle pf-wfe-toggle" role="switch" [attr.aria-checked]="step.isRequired"
+                            (click)="builder.updateStep(step.id, { isRequired: !step.isRequired })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span>Required</span>
+                    </button>
+                    <button type="button" class="nd-toggle pf-wfe-toggle" role="switch" [attr.aria-checked]="step.canSkip"
+                            (click)="builder.updateStep(step.id, { canSkip: !step.canSkip })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                      <span>Can be skipped</span>
+                    </button>
                   </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label class="pf-label">Type</label>
-                    <pf-select
-                      [options]="stepTypeSelectOptions"
-                      [value]="step.type"
-                      (valueChange)="builder.updateStep(step.id, { type: $any($event) })"></pf-select>
-                  </div>
-                  <div class="pf-toggle-row">
-                    <span class="text-[13px]" style="color: var(--text-primary);">Required</span>
-                    <pf-toggle size="sm"
-                               [checked]="step.isRequired"
-                               (checkedChange)="builder.updateStep(step.id, { isRequired: $event })">
-                    </pf-toggle>
-                  </div>
-                  <div class="pf-toggle-row">
-                    <span class="text-[13px]" style="color: var(--text-primary);">Can be skipped</span>
-                    <pf-toggle size="sm"
-                               [checked]="step.canSkip"
-                               (checkedChange)="builder.updateStep(step.id, { canSkip: $event })">
-                    </pf-toggle>
-                  </div>
-                </div>
+              </section>
 
-                <!-- Fields panel -->
-                <div class="pt-5" style="border-top: 1px solid var(--border-muted);">
-                  <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                        style="color: var(--text-muted);">Fields</h3>
-                    <button type="button" class="pf-inline-link" (click)="openAddField(step.id)">+ Add field</button>
-                  </div>
-                  <ul cdkDropList (cdkDropListDropped)="onFieldDrop(step.id, $event)"
-                      class="space-y-1.5">
+              <section class="nd-card pf-wfe-card">
+                <div class="nd-card__head">
+                  <span class="nd-card__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+                  </span>
+                  <span class="nd-card__label">Fields</span>
+                  <span class="nd-card__note nd-num">{{ step.fields.length }} {{ step.fields.length === 1 ? 'field' : 'fields' }}</span>
+                  <button type="button" class="nd-btn nd-btn--tertiary pf-wfe-mini" (click)="openAddField(step.id)">+ Add field</button>
+                </div>
+                <div class="nd-card__body pf-wfe-cardbody">
+                  <ul cdkDropList (cdkDropListDropped)="onFieldDrop(step.id, $event)" class="pf-wfe-fields">
                     @for (f of step.fields; track f.id) {
-                      <li cdkDrag
-                          class="pf-field-item group">
+                      <li cdkDrag class="nd-row pf-field-item">
                         <span class="pf-drag-handle" cdkDragHandle aria-hidden="true">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                            <circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/>
-                            <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-                            <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
-                          </svg>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
                         </span>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-[13px] font-medium truncate" style="color: var(--text-primary);">
+                        <span class="pf-wfe-rowtext">
+                          <span class="nd-row__name">
                             {{ f.title }}
-                            @if (f.isRequired) { <span style="color: var(--red-text);">*</span> }
-                            <span class="ml-1 text-[11px] font-mono" style="color: var(--text-muted);">({{ f.type }})</span>
-                          </p>
-                          <p class="text-[11px] font-mono" style="color: var(--text-tertiary);">
-                            {{ f.storageKey }}
-                            @if (f.showWhen && f.showWhen.length > 0) {
-                              <span class="ml-2" style="color: var(--amber-text);">· conditional</span>
-                            }
-                          </p>
-                        </div>
-                        <div class="flex items-center gap-1">
-                          <button type="button" class="pf-field-action opacity-0 group-hover:opacity-100"
-                                  (click)="openEditField(step.id, f)" aria-label="Edit field">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M12 20h9"/>
-                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                            </svg>
-                          </button>
-                          <button type="button" class="pf-field-delete opacity-0 group-hover:opacity-100"
-                                  (click)="deleteField(step.id, f.id)" aria-label="Delete field">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M18 6 6 18"/>
-                              <path d="m6 6 12 12"/>
-                            </svg>
-                          </button>
-                        </div>
+                            @if (f.isRequired) { <span class="pf-wfe-req" aria-label="required">*</span> }
+                          </span>
+                          <span class="nd-row__meta">
+                            <span class="nd-num">{{ f.storageKey }}</span> · {{ f.type }}
+                            @if (f.showWhen && f.showWhen.length > 0) { · conditional }
+                          </span>
+                        </span>
+                        <button type="button" class="nd-rowact pf-field-action" [class.nd-rowact--icon]="!web()"
+                                (click)="openEditField(step.id, f)" [attr.aria-label]="'Edit ' + f.title" title="Edit field">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                          <span class="nd-rowact__t">Edit</span>
+                        </button>
+                        <button type="button" class="nd-rowact pf-field-delete" [class.nd-rowact--icon]="!web()"
+                                (click)="deleteField(step.id, f.id)" [attr.aria-label]="'Delete ' + f.title" title="Delete field">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                          <span class="nd-rowact__t">Delete</span>
+                        </button>
                       </li>
                     } @empty {
-                      <li class="text-[12px] text-center py-4" style="color: var(--text-tertiary);">No fields yet.</li>
+                      <li class="pf-wfe-empty">No fields yet.</li>
                     }
                   </ul>
                 </div>
+              </section>
 
-                <!-- Step show-when -->
-                <div class="pt-5" style="border-top: 1px solid var(--border-muted);">
-                  <h3 class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
-                      style="color: var(--text-muted);">Show this step when</h3>
-                  <pf-condition-builder
-                    [rules]="step.showWhen ?? []"
-                    [fields]="builder.allFields()"
-                    emptyLabel="Always shown."
-                    (rulesChange)="builder.setStepShowConditions(step.id, $event.length === 0 ? undefined : $event)">
-                  </pf-condition-builder>
+              <section class="nd-card pf-wfe-card">
+                <div class="nd-card__head">
+                  <span class="nd-card__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </span>
+                  <span class="nd-card__label">Visibility</span>
                 </div>
-
-                <!-- Step skip-when -->
-                <div class="pt-5" style="border-top: 1px solid var(--border-muted);">
-                  <h3 class="text-[11px] font-mono uppercase tracking-[0.16em] mb-2"
-                      style="color: var(--text-muted);">Skip this step when</h3>
-                  <pf-condition-builder
-                    [rules]="step.skipWhen ?? []"
-                    [fields]="builder.allFields()"
-                    emptyLabel="Never auto-skipped."
-                    (rulesChange)="builder.setStepSkipConditions(step.id, $event.length === 0 ? undefined : $event)">
-                  </pf-condition-builder>
+                <div class="nd-card__body pf-wfe-cardbody">
+                  <h3 class="pf-wfe-h">Show this step when</h3>
+                  <pf-condition-builder [rules]="step.showWhen ?? []" [fields]="builder.allFields()" emptyLabel="Always shown."
+                    (rulesChange)="builder.setStepShowConditions(step.id, $event.length === 0 ? undefined : $event)"></pf-condition-builder>
+                  <h3 class="pf-wfe-h">Skip this step when</h3>
+                  <pf-condition-builder [rules]="step.skipWhen ?? []" [fields]="builder.allFields()" emptyLabel="Never auto-skipped."
+                    (rulesChange)="builder.setStepSkipConditions(step.id, $event.length === 0 ? undefined : $event)"></pf-condition-builder>
                 </div>
+              </section>
 
-                <!-- Step routing -->
-                <div class="pt-5" style="border-top: 1px solid var(--border-muted);">
-                  <h3 class="text-[11px] font-mono uppercase tracking-[0.16em] mb-3"
-                      style="color: var(--text-muted);">After this step</h3>
-
-                  <div class="grid grid-cols-[180px_1fr] gap-3 items-center mb-3 pf-route-row">
-                    <label class="text-[13px]" style="color: var(--text-secondary);">Default next step</label>
-                    <pf-select
-                      [options]="defaultNextOptions(step.id)"
-                      [value]="step.afterStep.defaultNextStep ?? ''"
-                      placeholder="— Finish workflow —"
-                      (valueChange)="setDefaultNext(step.id, $any($event) || null)"></pf-select>
+              <section class="nd-card pf-wfe-card">
+                <div class="nd-card__head">
+                  <span class="nd-card__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  </span>
+                  <span class="nd-card__label">After this step</span>
+                </div>
+                <div class="nd-card__body pf-wfe-cardbody">
+                  <div class="pf-route-row">
+                    <span class="nd-field__lbl">Default next step</span>
+                    <pf-select [options]="defaultNextOptions(step.id)" [value]="step.afterStep.defaultNextStep ?? ''"
+                               placeholder="— Finish workflow —"
+                               (valueChange)="setDefaultNext(step.id, $any($event) || null)"></pf-select>
                   </div>
-
-                  <div class="space-y-2">
-                    @for (route of step.afterStep.conditionalRoutes ?? []; let i = $index; track i) {
-                      <div class="pf-route-card">
-                        <div class="flex items-center justify-between mb-2">
-                          <p class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                             style="color: var(--text-muted);">Conditional route {{ i + 1 }}</p>
-                          <button type="button" class="pf-field-delete"
-                                  (click)="removeRoute(step.id, i)" aria-label="Remove route">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M18 6 6 18"/>
-                              <path d="m6 6 12 12"/>
-                            </svg>
-                          </button>
-                        </div>
-                        <pf-condition-builder
-                          [rules]="route.conditions"
-                          [fields]="builder.allFields()"
-                          emptyLabel="Add rules to trigger this route."
-                          (rulesChange)="updateRouteConditions(step.id, i, $event)">
-                        </pf-condition-builder>
-                        <div class="mt-2 grid grid-cols-[100px_1fr] items-center gap-2 pf-goto-row">
-                          <span class="text-[12px]" style="color: var(--text-tertiary);">Go to step</span>
-                          <pf-select
-                            [options]="goToStepOptions(step.id)"
-                            [value]="route.goToStep"
-                            (valueChange)="updateRouteTarget(step.id, i, $any($event))"></pf-select>
-                        </div>
+                  @for (route of step.afterStep.conditionalRoutes ?? []; let i = $index; track i) {
+                    <div class="pf-route-card">
+                      <div class="pf-route-card__head">
+                        <span class="pf-wfe-h">Conditional route <span class="nd-num">{{ i + 1 }}</span></span>
+                        <button type="button" class="nd-rowact pf-route-remove" [class.nd-rowact--icon]="!web()"
+                                (click)="removeRoute(step.id, i)" aria-label="Remove route" title="Remove route">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                          <span class="nd-rowact__t">Remove</span>
+                        </button>
                       </div>
-                    }
-                    <button type="button" class="pf-inline-link"
-                            (click)="addRoute(step.id)">+ Add conditional route</button>
-                  </div>
+                      <pf-condition-builder [rules]="route.conditions" [fields]="builder.allFields()"
+                        emptyLabel="Add rules to trigger this route." (rulesChange)="updateRouteConditions(step.id, i, $event)"></pf-condition-builder>
+                      <div class="pf-route-row">
+                        <span class="nd-field__lbl">Go to step</span>
+                        <pf-select [options]="goToStepOptions(step.id)" [value]="route.goToStep"
+                                   (valueChange)="updateRouteTarget(step.id, i, $any($event))"></pf-select>
+                      </div>
+                    </div>
+                  }
+                  <button type="button" class="nd-btn nd-btn--tertiary pf-wfe-mini" (click)="addRoute(step.id)">+ Add conditional route</button>
                 </div>
-
-              </div>
-            </pf-tile>
+              </section>
+            </div>
           } @else {
-            <pf-tile tone="default" padding="xl" class="block">
-              <div class="text-center py-10">
-                <p class="text-[14px]" style="color: var(--text-secondary);">
-                  Select a step on the left.
-                </p>
-              </div>
-            </pf-tile>
+            <div class="nd-card pf-wfe-empty"><p>{{ theme.isNewDesign() ? 'Pick a step above.' : 'Select a step on the left.' }}</p></div>
           }
-
+        </div>
         </div>
       </section>
 
       <!-- ──────── Undo toast ──────── -->
       @if (builder.lastDeletedField(); as del) {
-        <div class="pf-undo-toast">
+        <div class="pf-undo-toast" role="status">
           Field <strong>{{ del.field.title }}</strong> deleted
           <button class="pf-undo-btn" (click)="builder.undoDeleteField()">Undo</button>
         </div>
       }
       @if (builder.lastDeletedStep(); as del) {
-        <div class="pf-undo-toast">
+        <div class="pf-undo-toast" role="status">
           Step <strong>{{ del.step.title }}</strong> deleted
           <button class="pf-undo-btn" (click)="builder.undoDeleteStep()">Undo</button>
         </div>
       }
 
-      <!-- ──────── Preview modal ──────── -->
+      <!-- ──────── Preview modal (above the always-visible navbar) ──────── -->
       @if (previewOpen()) {
-        <div class="fixed inset-0 z-40 flex items-center justify-center pf-preview-overlay">
-          <div class="absolute inset-0" style="background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);"
-               (click)="closePreview()"></div>
-          <div class="pf-preview-modal">
-            <header class="pf-preview-header">
-              <div>
-                <p class="text-[11px] font-mono uppercase tracking-[0.16em]"
-                   style="color: var(--text-muted);">Preview</p>
-                <p class="text-[15px] font-semibold" style="color: var(--text-primary);">{{ builder.workflow()!.title }}</p>
-              </div>
-              <pf-touch-btn size="sm" variant="ghost" (pressed)="closePreview()">Close</pf-touch-btn>
+        <div class="pf-wfe-overlay pf-preview-overlay" role="dialog" aria-modal="true" aria-label="Preview">
+          <div class="pf-wfe-scrim" (click)="closePreview()"></div>
+          <div class="nd-card pf-preview-modal nd-anim-in">
+            <header class="nd-card__head pf-preview-header">
+              <span class="nd-card__icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </span>
+              <span class="nd-card__label">Preview</span>
+              <span class="nd-card__note">{{ builder.workflow()!.title }}</span>
+              <button type="button" class="nd-btn nd-btn--icon pf-close-btn" (click)="closePreview()" aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
             </header>
-            <div class="p-6">
+            <div class="nd-card__body pf-preview-body">
               <pf-workflow-renderer
                 [config]="builder.workflow()!"
                 [context]="previewContext()"
                 [resources]="previewResources"
                 [finishLabel]="'(preview only)'"></pf-workflow-renderer>
-              <p class="text-[11px] mt-4" style="color: var(--text-muted);">
-                Running against mocked context — age 34 Male, standard permissions. No writes occur.
-              </p>
+              <p class="pf-wfe-hint">Running against mocked context — age 34 Male, standard permissions. No writes occur.</p>
             </div>
           </div>
         </div>
@@ -454,464 +426,150 @@ interface HistoryRow {
 
       <!-- ──────── Version history slide-over ──────── -->
       @if (historyOpen()) {
-        <div class="fixed inset-0 z-50 flex">
-          <div class="absolute inset-0" style="background: rgba(0, 0, 0, 0.5);"
-               (click)="closeHistory()"></div>
-          <aside class="pf-history-panel">
-            <header class="pf-history-header">
-              <h2 class="text-[15px] font-semibold" style="color: var(--text-primary);">Version history</h2>
-              <button type="button" class="pf-close-btn"
-                      (click)="closeHistory()" aria-label="Close">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 6 6 18"/>
-                  <path d="m6 6 12 12"/>
-                </svg>
+        <div class="pf-wfe-overlay pf-wfe-overlay--side" role="dialog" aria-modal="true" aria-label="Version history">
+          <div class="pf-wfe-scrim" (click)="closeHistory()"></div>
+          <aside class="nd-card pf-history-panel">
+            <header class="nd-card__head pf-history-header">
+              <span class="nd-card__icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+              </span>
+              <span class="nd-card__label">Version history</span>
+              <span class="nd-card__spacer"></span>
+              <button type="button" class="nd-btn nd-btn--icon pf-close-btn" (click)="closeHistory()" aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
             </header>
-            <section class="flex-1 overflow-y-auto px-5 py-3">
+            <section class="nd-card__body">
               @if (historyLoading()) {
                 <div class="flex justify-center py-3">
-                  <pf-loading-logo size="sm" color="purple"
-                                   [showText]="true" text="Loading…"></pf-loading-logo>
+                  <pf-loading-logo size="sm" color="purple" [showText]="true" text="Loading…"></pf-loading-logo>
                 </div>
               } @else if (historyRows().length === 0) {
-                <p class="text-[13px]" style="color: var(--text-tertiary);">No prior versions yet. Save or publish to create one.</p>
+                <p class="pf-wfe-hint">No prior versions yet. Save or publish to create one.</p>
               } @else {
-                <ul class="space-y-3">
+                <ul class="pf-wfe-fields">
                   @for (h of historyRows(); track h.id) {
-                    <li class="pf-history-row">
-                      <p class="text-[13px] font-medium" style="color: var(--text-primary);">{{ h.changeSummary ?? '(no summary)' }}</p>
-                      <p class="text-[11px] font-mono mt-0.5" style="color: var(--text-muted);">{{ h.changedAt | date:'short' }}</p>
-                      <div class="mt-2">
-                        <pf-touch-btn size="sm" variant="ghost" (pressed)="restoreFromHistory(h)">Restore this version</pf-touch-btn>
-                      </div>
+                    <li class="nd-row pf-history-row">
+                      <span class="pf-wfe-rowtext">
+                        <span class="nd-row__name">{{ h.changeSummary ?? '(no summary)' }}</span>
+                        <span class="nd-row__meta nd-num">{{ h.changedAt | date:'short' }}</span>
+                      </span>
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="restoreFromHistory(h)"
+                              aria-label="Restore this version" title="Restore this version">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+                        <span class="nd-rowact__t">Restore</span>
+                      </button>
                     </li>
                   }
                 </ul>
               }
             </section>
-            <footer class="pf-history-footer">
-              Restoring writes a new history entry — nothing is lost.
-            </footer>
+            <footer class="pf-history-footer">Restoring writes a new history entry — nothing is lost.</footer>
           </aside>
         </div>
       }
     }
   `,
   styles: [`
-    .pf-wf-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(236, 72, 153, 0.08));
-      border: 1px solid rgba(168, 85, 247, 0.3);
-      color: var(--violet-text);
-      flex-shrink: 0;
-    }
-    .pf-panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border-muted);
-    }
-    .pf-inline-link {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--violet-text);
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0;
-    }
-    .pf-inline-link:hover { text-decoration: underline; }
+    /* ═══ ND-PATTERN: list rows, editor (band + context bar + step tabs),
+       stacked nd-cards; overlays sit above the always-visible navbar. ═══ */
+    .pf-wf-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .pf-wf-row { cursor: pointer; gap: 12px; padding: 10px 12px; transition: border-color var(--nd-dur-fast) ease; }
+    .pf-wf-row:hover { border-color: var(--nd-sel-border); }
+    .pf-wf-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-wf-titlerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-wf-name { flex: 0 1 auto; font-size: 14.5px; font-weight: 600; }
+    .pf-wf-status { height: 24px; font-size: 11.5px; text-transform: capitalize; }
+    .pf-wf-status svg { color: var(--violet-text, #7c3aed); }
+    .pf-wf-empty, .pf-wfe-empty { padding: 28px 16px; text-align: center; font-size: 13.5px; color: var(--text-secondary); list-style: none; }
 
-    /* Header action tabs: by default only the full label shows (desktop is
-       byte-identical). The leading icon + short label are surfaced only on
-       phone via the <=640 override below. */
-    .pf-tab-icon { display: none; }
-    .pf-tab-short { display: none; }
-    /* The shared header now renders a leading back chevron at every width, so the
-       in-page "All workflows" back action is redundant — hide it on all widths. */
-    .pf-tab-back { display: none !important; }
+    /* Editor */
+    .pf-wfe-body { display: flex; flex-direction: column; gap: 14px; }
+    .pf-wfe-tabsrow { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .pf-wfe-tabs { flex: 0 1 auto; }
+    .pf-wfe-tab__n { font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-wfe-tab.cdk-drag-preview { box-shadow: var(--nd-shadow-sm); }
+    .pf-wfe-addstep { flex: none; height: 36px; min-height: 36px; }
+    .pf-wfe-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 768px) { .pf-wfe-grid:not(.pf-wfe-grid--nd) { grid-template-columns: 240px minmax(0, 1fr); } }
+    .pf-wfe-rail { align-self: start; }
+    .pf-wfe-steps, .pf-wfe-fields { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pf-wfe-steps { padding: 8px; }
+    .pf-step-item { cursor: pointer; }
+    .pf-wfe-detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .pf-wfe-card .nd-card__body { overflow: visible; }
+    .pf-wfe-cardbody { gap: 14px; padding: 14px 16px 16px; }
+    .pf-wfe-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+    .pf-wfe-grid3 { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px 20px; align-items: end; }
+    .pf-wfe-toggle { min-height: 40px; font-size: 13px; }
+    .pf-wfe-rowtext { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-wfe-rowtext .nd-row__meta { flex: none; }
+    .pf-wfe-req { color: var(--red-text, #b91c1c); }
+    .pf-wfe-h { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-wfe-hint { margin: 12px 0 0; font-size: 12px; color: var(--text-tertiary); }
+    .pf-wfe-mini { height: 32px; min-height: 32px; font-size: 12.5px; }
+    .pf-drag-handle { display: inline-flex; color: var(--text-muted); cursor: move; flex: none; }
+    .pf-field-item { gap: 8px; }
+    .pf-route-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; align-items: center; }
+    .pf-route-card { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--nd-radius);
+      border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+    .pf-route-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
-    .pf-step-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease;
-    }
-    .pf-step-item:hover { background: var(--bg-hover); }
-    .pf-step-selected {
-      background: linear-gradient(135deg, rgba(124, 58, 237, 0.22), rgba(236, 72, 153, 0.08)) !important;
-      border-color: rgba(168, 85, 247, 0.4) !important;
-      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.2);
-    }
+    /* Band: phone = icons; the three utility actions fold behind Save draft/Publish. */
+    .pf-wfe-more { display: inline-flex; gap: 8px; }
+    .pf-wfe-savestate { margin-right: 2px; }
+    .pf-wfe-morewrap { display: none; position: relative; }
+    .pf-wfe-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 70; min-width: 200px; padding: 6px; gap: 2px; }
+    .pf-wfe-menu__item { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border: 0; border-radius: 8px;
+      background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+    .pf-wfe-menu__item:hover { background: var(--nd-chip-bg); }
 
-    .pf-field-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      transition: border-color 0.15s ease;
-    }
-    .pf-field-item:hover { border-color: var(--card-hover-border); }
-
-    .pf-drag-handle {
-      display: inline-flex;
-      color: var(--text-muted);
-      cursor: move;
-    }
-    .pf-drag-locked { opacity: 0.3; cursor: not-allowed; }
-
-    .pf-lock, .pf-step-delete, .pf-field-action, .pf-field-delete {
-      width: 24px;
-      height: 24px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: background 0.15s ease, color 0.15s ease;
-    }
-    .pf-step-delete:hover, .pf-field-delete:hover {
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--red-text);
-    }
-    .pf-field-action:hover {
-      background: rgba(124, 58, 237, 0.15);
-      color: var(--violet-text);
-    }
-
-    .pf-toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px;
-      border-radius: 12px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
-
-    .pf-route-card {
-      padding: 14px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
-
+    /* Undo toast: above the navbar. */
     .pf-undo-toast {
-      position: fixed;
-      bottom: 100px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 50;
-      padding: 10px 16px;
-      border-radius: 14px;
-      background: rgba(15, 23, 42, 0.95);
-      color: #ffffff;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
-      backdrop-filter: blur(12px);
+      position: fixed; left: 50%; transform: translateX(-50%); z-index: 50;
+      bottom: calc(var(--nd-nav-h, 0px) + 16px);
+      padding: 10px 16px; border-radius: 14px; background: rgba(15, 23, 42, 0.95); color: #ffffff; font-size: 13px;
+      display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
     }
-    .pf-undo-btn {
-      padding: 3px 10px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.15);
-      color: #ffffff;
-      font-size: 12px;
-      font-weight: 500;
-      border: none;
-      cursor: pointer;
-    }
+    .pf-undo-btn { padding: 3px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.15); color: #ffffff;
+      font-size: 12px; font-weight: 500; border: none; cursor: pointer; }
     .pf-undo-btn:hover { background: rgba(255, 255, 255, 0.25); }
 
-    .pf-preview-modal {
-      position: relative;
-      width: 100%;
-      max-width: 56rem;
-      max-height: 85dvh;
-      overflow: auto;
-      border-radius: 20px;
-      background: var(--bg-card-solid);
-      border: 1px solid var(--glass-border);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    }
-    .pf-preview-header {
-      position: sticky;
-      top: 0;
-      background: var(--bg-card-solid);
-      border-bottom: 1px solid var(--border-muted);
-      padding: 12px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      z-index: 10;
-    }
+    /* Overlays: end ABOVE the always-visible navbar. */
+    .pf-wfe-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 60;
+      display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .pf-wfe-overlay--side { justify-content: flex-end; padding: 0; }
+    .pf-wfe-scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
+    .pf-preview-modal { position: relative; width: 100%; max-width: 56rem; max-height: 100%; }
+    .pf-preview-header { position: sticky; top: 0; z-index: 1; }
+    .pf-preview-body { padding: 18px 20px; }
+    .pf-history-panel { position: relative; height: 100%; width: 100%; max-width: 28rem; border-radius: 0;
+      animation: pf-wfe-slide var(--nd-dur) var(--nd-spring) both; }
+    .pf-history-footer { flex: none; padding: 12px 16px; border-top: 1px solid var(--nd-line); font-size: 12px; color: var(--text-tertiary); }
+    .pf-close-btn { width: 36px; height: 36px; min-height: 36px; margin-left: auto; }
+    @keyframes pf-wfe-slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-    .pf-history-panel {
-      position: relative;
-      margin-left: auto;
-      height: 100%;
-      width: 100%;
-      max-width: 28rem;
-      background: var(--bg-card-solid);
-      border-left: 1px solid var(--glass-border);
-      box-shadow: -20px 0 60px rgba(0, 0, 0, 0.4);
-      display: flex;
-      flex-direction: column;
-    }
-    .pf-history-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--border-muted);
-    }
-    .pf-close-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 9999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      color: var(--text-muted);
-      border: none;
-      cursor: pointer;
-    }
-    .pf-close-btn:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-    .pf-history-row {
-      padding: 12px 14px;
-      border-radius: 12px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-    }
-    .pf-history-footer {
-      padding: 12px 20px;
-      border-top: 1px solid var(--border-muted);
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       CROSS-PLATFORM OVERRIDES — ADDITIVE ONLY.
-       Everything above (desktop-web base, >=1280px) is byte-for-byte
-       unchanged. These rules apply ONLY below desktop, on touch, or
-       under platform html classes — they cannot reach the wide view.
-       ════════════════════════════════════════════════════════════ */
-
-    /* --- Touch: reveal hover-gated row actions (edit / delete on steps
-       and fields) which are otherwise stuck at opacity:0 with no hover
-       to trigger them. Desktop hover behaviour is untouched. --- */
-    @media (hover: none), (pointer: coarse) {
-      :host .pf-step-delete,
-      :host .pf-field-action,
-      :host .pf-field-delete {
-        opacity: 1 !important;
-      }
-    }
-
-    /* --- Touch sizing: grow the small (24px) icon buttons and the drag
-       handles to a comfortable target without changing desktop visuals.
-       Scoped to this page's own controls only. --- */
-    @media (pointer: coarse) {
-      :host .pf-step-delete,
-      :host .pf-field-action,
-      :host .pf-field-delete,
-      :host .pf-close-btn {
-        min-width: 44px;
-        min-height: 44px;
-      }
-      :host .pf-drag-handle {
-        min-width: 44px;
-        min-height: 44px;
-        align-items: center;
-        justify-content: center;
-      }
-      :host .pf-inline-link {
-        min-height: 44px;
-        display: inline-flex;
-        align-items: center;
-      }
-    }
-
-    /* --- Phone (<=640): stop iOS auto-zoom on focus by lifting this
-       page's inputs to >=16px. Scoped to :host so the shared .pf-input
-       primitive is unchanged elsewhere. --- */
-    @media (max-width: 640px) {
-      :host .pf-input { font-size: 16px; }
-
-      /* ICON-ONLY header actions on phone: hide BOTH labels and show just the
-         leading icon. Six text buttons were eating the whole header width and
-         squeezing the title down to a 1-char-per-line vertical column — compact
-         icons free the width so the title stays horizontal and nothing clips. */
-      :host .pf-tab-icon { display: inline-flex; align-items: center; }
-      :host .pf-tab-full { display: none; }
-      :host .pf-tab-short { display: none; }
-      /* Drop the in-page Back action on phone — the shared header's leading
-         chevron (added app-wide) already returns to the workflow list. */
-      :host .pf-tab-back { display: none; }
-
-      /* Editor header (form flows): the title + the icon actions can't share one
-         row on a phone without crushing the title into a vertical sliver. Stack
-         them — title (with the leading chevron) on its own line, and BELOW it a
-         single segmented action bar (one bordered box, icons split into equal
-         divided cells) — the same look as the report-queue download/view/share/
-         print bar. Scoped to .pf-builder-hdr via ng-deep so only the form-flow
-         editor changes; every other screen is untouched. */
-      :host ::ng-deep .pf-builder-hdr header { flex-wrap: wrap; }
-      :host ::ng-deep .pf-builder-hdr h1 { font-size: 22px !important; }
-      /* The actions cluster becomes the segmented bar. */
-      :host ::ng-deep .pf-builder-hdr header > div:last-child {
-        width: 100%;
-        margin-top: 12px;
-        gap: 0 !important;
-        align-items: stretch;
-        flex-wrap: nowrap;
-        border: 1px solid var(--glass-border);
-        border-radius: 10px;
-        overflow: hidden;
-        background: var(--seg-track);
-      }
-      /* Each action = an equal divided cell. */
-      :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn {
-        flex: 1 1 0;
-        display: flex;
-        border-right: 1px solid var(--glass-border);
-      }
-      :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn:last-child {
-        border-right: 0;
-      }
-      /* Keep the in-page Back out of the bar (the shared chevron covers it). */
-      :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn.pf-tab-back {
-        display: none !important;
-      }
-      :host ::ng-deep .pf-builder-hdr header > div:last-child pf-touch-btn button {
-        width: 100%;
-        min-width: 0;
-        height: 44px;
-        padding: 0;
-        gap: 0;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-      }
-
-      /* Workflow list rows: the whole card is tappable to edit on phone, so
-         drop the decorative grid icon and the separate Edit button — just the
-         name + status remain. Name pinned left, status chip pushed to the right
-         edge of the card. */
-      :host .pf-wf-icon { display: none; }
-      :host .pf-wf-edit { display: none; }
-      :host .pf-wf-row { cursor: pointer; }
-      :host .pf-wf-titlerow {
-        flex-wrap: nowrap;
-        justify-content: space-between;
-        gap: 10px;
-      }
-      :host .pf-wf-titlerow pf-chip { flex: 0 0 auto; }
-
-      /* The actions cluster wraps under the title on phone; trim the section's
-         top padding so the STEPS panel starts reasonably high (kills the big
-         empty gap above the content). */
-      :host section { padding-top: 14px; }
-
-      /* Collapse the fixed-width inner grids (step title pair + routing
-         rows) to a single column so they don't overflow the narrow
-         detail panel. Base grid-cols stay intact above this width. */
-      :host .pf-step-titlegrid { grid-template-columns: 1fr; }
-      :host .pf-route-row,
-      :host .pf-goto-row { grid-template-columns: 1fr; }
-      :host .pf-route-row > label { margin-bottom: 2px; }
-
-      /* Keep this page from introducing horizontal overflow on phones. */
-      :host section { overflow-x: clip; }
-    }
-
-    /* --- Web-below-desktop band (641–1279), two-pane sub-band: between
-       768–1023px the steps rail narrows to 200px (md:grid-cols-[200px_1fr]),
-       leaving the detail panel only ~440px wide. The detail panel's inner
-       fixed-width grids (step title pair, routing label columns) crowd at
-       that width, so collapse them to a single column here. The desktop
-       lg layout (1024px+ → 280px rail) keeps the multi-column grids, and
-       >=1280 stays byte-identical. Additive — base grid-cols are intact. */
-    @media (min-width: 768px) and (max-width: 1023px) {
-      :host .pf-step-titlegrid { grid-template-columns: 1fr; }
-      :host .pf-route-row,
-      :host .pf-goto-row { grid-template-columns: 1fr; }
-      :host .pf-route-row > label,
-      :host .pf-goto-row > span { margin-bottom: 2px; }
-    }
-
-    /* --- Web-below-desktop band (641–1279): guard against this page
-       introducing horizontal page scroll (no element may push past the
-       64px left rail). Desktop >=1280 is unaffected. --- */
-    @media (min-width: 641px) and (max-width: 1279px) {
-      :host section { overflow-x: clip; }
-    }
-
-    /* --- Undo toast sits at a fixed 100px above the bottom; on phones
-       that can collide with the bottom-nav pill. Lift it clear using the
-       global nav-height token (+ safe area is already inside the token). */
     @media (max-width: 1023px) {
-      .pf-undo-toast {
-        bottom: calc(var(--tab-nav-total-height, 88px) + 12px);
-      }
-    }
-
-    /* --- Phone (<=640): the centred preview modal becomes a full-width
-       bottom sheet so it doesn't get squeezed; history slide-over already
-       spans full width below its 28rem cap. --- */
-    @media (max-width: 640px) {
-      :host .pf-preview-overlay { align-items: flex-end; }
-      .pf-preview-modal {
-        max-width: 100%;
-        max-height: 90dvh;
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
-      }
-    }
-
-    /* --- Capacitor native: keep the full-bleed overlays clear of the
-       notch / status bar and home indicator. The preview header is
-       sticky at the top of its own scroller and the history panel is a
-       full-height fixed pane, so both need their own insets here. --- */
-    :host-context(html.cap-native) .pf-history-header {
-      padding-top: calc(14px + env(safe-area-inset-top, 0px));
-    }
-    :host-context(html.cap-native) .pf-history-footer {
-      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-    }
-    :host-context(html.cap-native) .pf-preview-header {
-      padding-top: calc(12px + env(safe-area-inset-top, 0px));
+      .pf-wfe-grid3 { grid-template-columns: 1fr 1fr; }
+      .pf-wfe-grid3 > .nd-field { grid-column: 1 / -1; }
     }
     @media (max-width: 640px) {
-      :host-context(html.cap-native) .pf-preview-modal {
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-      }
+      .pf-wfe-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      /* Phones: Preview / History / Reset fold into the "More" menu so the
+         band keeps More · Save draft · Publish as 44px icons. */
+      .pf-wfe-more { display: none; }
+      .pf-wfe-morewrap { display: inline-flex; }
+      .pf-wfe-grid2, .pf-route-row { grid-template-columns: 1fr; }
+      .pf-wfe-tabsrow { flex-wrap: nowrap; }
+      .pf-wfe-tabs { flex: 1 1 auto; }
+      .pf-wfe-overlay { padding: 0; align-items: flex-end; }
+      .pf-preview-modal { border-radius: 20px 20px 0 0; max-height: 92%; }
+      .pf-wf-row { padding: 8px 10px; }
+      .pf-wf-icon { display: none; }
     }
+    @media (prefers-reduced-motion: reduce) { .pf-history-panel { animation: none; } }
+    :host-context(html.cap-native) .pf-history-header { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+    :host-context(html.cap-native) .pf-preview-header { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
   `]
 })
 export class WorkflowBuilderComponent implements OnInit, OnDestroy {
@@ -925,6 +583,10 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
   private readonly _screens = signal<WorkflowConfigRecord[]>([]);
   readonly screens = this._screens.asReadonly();
   protected readonly theme = inject(ThemeService);
+  /** Row actions: text on web, icons on touch (ND-PATTERN). */
+  protected readonly web = webPointerSignal();
+  /** Phones: Preview / History / Reset live in a "More" menu in the band. */
+  protected readonly moreOpen = signal(false);
   /** Band pill search over the screen forms (name, status). */
   readonly q = signal('');
   readonly visibleScreens = computed(() =>
