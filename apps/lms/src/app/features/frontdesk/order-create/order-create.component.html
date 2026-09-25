@@ -2,7 +2,8 @@
   <!-- Hero band (designer system). No page title: the band + navbar carry
        the context. Back chevron top-left; the unified search pill (Option A)
        overlaps the band edge: scope tiles · one input · Urgent · cart · scan. -->
-  <pf-hero-band class="pf-oc-band" [class.pf-oc-band--focus]="dropOpen()" [customSearch]="true" [back]="true" backTo="/frontdesk">
+  <pf-hero-band class="pf-oc-band" [class.pf-oc-band--focus]="dropOpen()"
+    [class.pf-oc-band--tab0]="scope() === 'tests'" [customSearch]="true" [back]="true" backTo="/frontdesk">
     <ng-container band-actions>
       @if (tatLabel()) {
       <span class="pf-oc-tat" [title]="tatLabel()">
@@ -51,15 +52,20 @@
     </ng-container>
 
     <div band-search #pill class="pf-us">
-      <!-- Scope tiles (tablet/desktop). Picking a match fills the tile. -->
-      <div class="pf-us__tiles" role="group" aria-label="What to search">
+      <!-- Scope tabs (tablet/desktop): folder tabs on the pill's top edge; the
+           active one merges into the pill. Picking a match fills its tab. -->
+      <div class="pf-us__tiles" role="tablist" aria-label="What to search">
         @for (k of scopes; track k) {
         <div class="pf-us__tile" [class.pf-us__tile--on]="scope() === k" [class.pf-us__tile--filled]="!!tilePick(k)"
           [class.pf-us__tile--req]="k === 'patient' && patientMissing()"
           [class.pf-us__tile--nudge]="k === 'patient' && patientNudge()"
           [class.pf-us__tile--err]="(k === 'doctor' && !!refDoctorError()) || (k === 'hospital' && !!refHospitalError())">
-          <button type="button" class="pf-us__tile-btn" [disabled]="!scopeEnabled(k)" (click)="selectScope(k)"
-            [attr.aria-pressed]="scope() === k" [title]="tileTitle(k)" [attr.aria-label]="tileTitle(k)">
+          <button type="button" class="pf-us__tile-btn" role="tab" [attr.data-scope-tab]="k"
+            [disabled]="!scopeEnabled(k)" (click)="selectScope(k)"
+            [attr.aria-selected]="scope() === k" [attr.tabindex]="(focusedTab() ?? scope()) === k ? 0 : -1" (focus)="focusedTab.set(k)" (blur)="focusedTab.set(null)" aria-controls="pf-us-drop"
+            (keydown.arrowRight)="moveTab($event, k, 1)" (keydown.arrowLeft)="moveTab($event, k, -1)"
+            (keydown.home)="moveTab($event, k, -99)" (keydown.end)="moveTab($event, k, 99)"
+            [title]="tileTitle(k)" [attr.aria-label]="tileTitle(k)">
             <ng-container *ngTemplateOutlet="scopeIcon; context: { $implicit: k }"></ng-container>
             <span class="pf-us__tile-label">{{ tileLabel(k) }}</span>
             @if (k === 'patient' && patientMissing()) {
@@ -108,7 +114,7 @@
         }
       </div>
 
-      <span class="pf-us__div" aria-hidden="true"></span>
+      <span class="pf-us__div pf-us__div--compact" aria-hidden="true"></span>
 
       <label class="pf-us__field">
         <svg class="pf-us__glass" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -138,8 +144,7 @@
            from the visual viewport so it stays above an on-screen keyboard. -->
       @if (dropOpen()) {
       <div id="pf-us-drop" class="pf-us__drop" role="listbox" [attr.aria-label]="scopeLabels[scope()] + ' matches'"
-        [style.max-height.px]="dropMaxH()" [style.left.px]="dropBox()?.left" [style.top.px]="dropBox()?.top"
-        [style.width.px]="dropBox()?.width" [class.pf-us__drop--tests]="scope() === 'tests'"
+        [style.max-height.px]="dropMaxH()" [class.pf-us__drop--tests]="scope() === 'tests'"
         (keydown.escape)="onPillEscape(); focusSearchInput()">
         <!-- Sticky top: title + (Tests) filter chips that narrow ONLY these
              results. Tab from the input reaches the chips. -->
