@@ -5,8 +5,6 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { NumberInputComponent } from '../../../shared/primitives/number-input.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
-import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -42,7 +40,7 @@ const MODULE_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-notifications-config',
   standalone: true,
-  imports: [FormsModule, NumberInputComponent, ScreenHeaderComponent, TileComponent, ToggleComponent, HeroBandComponent, SelectComponent],
+  imports: [FormsModule, NumberInputComponent, ScreenHeaderComponent, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -88,11 +86,11 @@ const MODULE_LABELS: Record<string, string> = {
         <div class="mb-6">
           <div class="pf-nc-section">
             <h3 class="pf-nc-section__title">{{ moduleLabel(m) }}</h3>
-            <span class="pf-nc-section__meta">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
+            <span class="pf-nc-section__meta nd-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
           </div>
           <div class="space-y-2">
             @for (r of rowsFor(m); track r.key) {
-              <pf-tile tone="default" padding="md">
+              <div class="nd-card pf-nc-card">
                 <div class="pf-nc-row">
                   <div class="pf-nc-row__icon" [class.pf-nc-row__icon--overdue]="r.kind === 'overdue'"
                        [class.pf-nc-row__icon--off]="!r.enabled">
@@ -115,7 +113,7 @@ const MODULE_LABELS: Record<string, string> = {
                     <div class="flex items-center gap-2 flex-wrap">
                       <p class="font-semibold text-[14.5px]" style="color: var(--text-primary);">{{ r.label }}</p>
                       @if (r.kind === 'overdue') {
-                        <span class="pf-nc-badge pf-nc-badge--overdue">overdue watch</span>
+                        <span class="nd-chip nd-chip--static pf-nc-badge">Overdue watch</span>
                       }
                     </div>
                     <p class="text-[12.5px] mt-0.5 leading-snug" style="color: var(--text-secondary);">{{ r.firesWhen }}</p>
@@ -135,9 +133,12 @@ const MODULE_LABELS: Record<string, string> = {
                     }
                   </div>
 
-                  <pf-toggle [checked]="r.enabled" (checkedChange)="setEnabled(r, $event)"></pf-toggle>
+                  <button type="button" class="nd-toggle pf-nc-switch" role="switch" [attr.aria-checked]="r.enabled"
+                          [attr.aria-label]="r.label + (r.enabled ? ' — on' : ' — off')" (click)="setEnabled(r, !r.enabled)">
+                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                  </button>
                 </div>
-              </pf-tile>
+              </div>
             }
           </div>
         </div>
@@ -173,8 +174,8 @@ const MODULE_LABELS: Record<string, string> = {
     .pf-nc-chip:hover { color: var(--text-primary); }
     .pf-nc-chip--on {
       color: var(--text-primary);
-      border-color: rgba(139, 92, 246, 0.55);
-      background: rgba(139, 92, 246, 0.14);
+      border-color: var(--nd-sel-border);
+      background: var(--nd-sel-bg);
     }
     .pf-nc-chip__count {
       font-size: 10.5px;
@@ -217,34 +218,20 @@ const MODULE_LABELS: Record<string, string> = {
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(139, 92, 246, 0.07));
-      border: 1px solid rgba(139, 92, 246, 0.3);
-      color: var(--violet-text, #a78bfa);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      color: var(--violet-text, #7c3aed);
     }
-    .pf-nc-row__icon--overdue {
-      background: linear-gradient(135deg, rgba(232, 119, 34, 0.2), rgba(232, 119, 34, 0.06));
-      border-color: rgba(232, 119, 34, 0.32);
-      color: #f0a35e;
-    }
+    /* Overdue watches: the same violet chip — the clock glyph + "Overdue
+       watch" chip say it; no orange (palette only). */
     .pf-nc-row__icon--off {
-      background: var(--glass-bg);
-      border-color: var(--glass-border);
+      background: var(--nd-chip-bg);
       color: var(--text-muted);
     }
 
-    .pf-nc-badge {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      padding: 2px 7px;
-      border-radius: 999px;
-    }
-    .pf-nc-badge--overdue {
-      color: #f0a35e;
-      background: rgba(232, 119, 34, 0.12);
-      border: 1px solid rgba(232, 119, 34, 0.3);
-    }
+    .pf-nc-card { padding: 12px 14px; }
+    .pf-nc-badge { height: 22px; font-size: 11px; }
+    .pf-nc-switch { flex: none; min-height: 36px; }
+    @media (pointer: coarse) { .pf-nc-switch { min-width: 44px; min-height: 44px; justify-content: center; } }
 
     .pf-nc-threshold {
       display: flex;

@@ -23,7 +23,7 @@ describe('Admin band — Notifications', () => {
     { key: 'c', module: 'billing', label: 'Refund issued', firesWhen: 'A refund posts', recipients: 'Accounts', kind: 'instant', enabled: false, thresholdMinutes: null, thresholdConfigurable: false },
   ];
   const make = () => renderBandPage(NotificationsConfigComponent, { getFor: (u) => (u.includes('/notifications/catalog') ? rows : []) });
-  const labels = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body pf-tile p.font-semibold')).map((p) => p.textContent?.trim());
+  const labels = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-nc-card p.font-semibold')).map((p) => p.textContent?.trim());
 
   it('band + body; classic header and chip row are classic-only', () => {
     const p = make();

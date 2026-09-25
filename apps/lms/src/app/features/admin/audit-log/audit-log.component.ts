@@ -77,16 +77,23 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
     @media (pointer: coarse) {
       :host .audit-row { min-height: 44px; }
     }
+    /* ── Log rows: kit card + a NEUTRAL action chip. Deletes / failed
+       sign-ins keep red text (a real warning); creates carry a violet dot. ── */
+    .audit-card { padding: 10px 14px; overflow: visible; }
+    .audit-badge { height: 24px; font-size: 11.5px; font-weight: 600; flex-shrink: 0; }
+    .audit-badge[data-tone='warn'] { color: var(--red-text, #b91c1c); }
+    .audit-badge__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+    .audit-id { color: var(--text-tertiary); overflow-wrap: anywhere; }
     /* ── Band pill filters (new design) ── */
     .audit-bandsel { display: block; min-width: 150px; }
     .audit-bandsel--type { min-width: 180px; }
     .audit-dates { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .audit-date {
-      height: 32px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; font-family: inherit;
-      background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary);
+      height: 32px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; font-family: inherit; font-variant-numeric: tabular-nums;
+      background: var(--nd-card-bg); border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent); color: var(--text-primary);
       color-scheme: light dark;
     }
-    .audit-date:focus { outline: none; border-color: rgba(139, 92, 246, 0.55); }
+    .audit-date:focus { outline: none; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
     .audit-dates__sep { font-size: 12px; color: var(--text-tertiary); }
     @media (max-width: 640px) {
       .audit-bandsel, .audit-bandsel--type { min-width: 140px; }
@@ -205,22 +212,19 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
       } @else {
         <div class="space-y-2">
           @for (log of logs(); track log.id) {
-            <pf-tile tone="default" padding="md" class="block">
+            <div class="nd-card audit-card">
               <button type="button" class="audit-row w-full flex items-center gap-3 text-left"
-                      (click)="toggle(log.id)">
-                <span class="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
-                      [style.background]="badgeBg(log.action)"
-                      [style.color]="badgeFg(log.action)">
+                      (click)="toggle(log.id)" [attr.aria-expanded]="expanded() === log.id">
+                <span class="nd-chip nd-chip--static audit-badge" [attr.data-tone]="badgeTone(log.action)">
+                  @if (badgeTone(log.action) === 'add') { <span class="audit-badge__dot" aria-hidden="true"></span> }
                   {{ actionLabel(log.action) }}
                 </span>
                 <span class="text-[13px] font-semibold shrink-0">{{ typeLabel(log.entityType) }}</span>
-                <span class="text-[12px] font-mono truncate min-w-0" style="color: var(--text-tertiary);">
-                  {{ shortId(log.entityId) }}
-                </span>
+                <span class="audit-id nd-num text-[12px] min-w-0">{{ log.entityId }}</span>
                 <span class="audit-user ml-auto text-[12px] shrink-0" style="color: var(--text-secondary);">
                   {{ log.userName || 'System' }}
                 </span>
-                <span class="audit-when text-[11px] shrink-0" style="color: var(--text-tertiary);">
+                <span class="audit-when nd-num text-[11.5px] shrink-0" style="color: var(--text-tertiary);">
                   {{ when(log.at) }}
                 </span>
               </button>
@@ -241,7 +245,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                     <div class="space-y-1.5">
                       @for (d of diff(log); track d.field) {
                         <div class="audit-diff grid grid-cols-[140px_1fr] gap-2 text-[12px] audit-diff-row">
-                          <span class="font-mono font-semibold" style="color: var(--text-secondary);">{{ d.field }}</span>
+                          <span class="nd-num font-semibold" style="color: var(--text-secondary);">{{ d.field }}</span>
                           @if (d.kind === 'change') {
                             <span>
                               <span class="line-through" style="color: var(--text-tertiary);">{{ d.old }}</span>
@@ -255,10 +259,10 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
                       }
                     </div>
                   }
-                  <p class="audit-full-id mt-2 text-[11px] font-mono" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
+                  <p class="audit-full-id mt-2 text-[11.5px] nd-num" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
                 </div>
               }
-            </pf-tile>
+            </div>
           }
         </div>
 
@@ -462,15 +466,12 @@ export class AuditLogComponent implements OnInit {
       default: return a.toUpperCase();
     }
   }
-  badgeBg(a: string): string {
-    if (a === 'create' || a === 'login') return 'rgba(16,185,129,0.15)';
-    if (a === 'delete' || a === 'login_failed' || a === 'pin_failed') return 'rgba(244,63,94,0.15)';
-    return 'rgba(245,158,11,0.15)';
-  }
-  badgeFg(a: string): string {
-    if (a === 'create' || a === 'login') return '#10b981';
-    if (a === 'delete' || a === 'login_failed' || a === 'pin_failed') return '#f43f5e';
-    return '#f59e0b';
+  /** Palette-only action chip: 'warn' (red text) for deletes / failed
+   *  sign-ins, 'add' (violet dot) for creates / sign-ins, else neutral. */
+  badgeTone(a: string): 'warn' | 'add' | 'neutral' {
+    if (a === 'delete' || a === 'login_failed' || a === 'pin_failed') return 'warn';
+    if (a === 'create' || a === 'login') return 'add';
+    return 'neutral';
   }
   shortId(id: string): string {
     return id.length > 12 ? id.slice(0, 8) + '…' : id;

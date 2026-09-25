@@ -178,7 +178,7 @@ const CATEGORY_LABELS: Record<string, string> = {
                         @if (isAssigned(k.id)) {
                           <span class="pf-kpi-cat__pill">added</span>
                         } @else {
-                          <span class="pf-kpi-cat__add">＋ Add</span>
+                          <span class="pf-kpi-cat__add">+ Add</span>
                         }
                       </button>
                     </li>
@@ -214,7 +214,7 @@ const CATEGORY_LABELS: Record<string, string> = {
             @if (assigned().length === 0) {
               <div class="pf-kpi-empty pf-kpi-empty--card">
                 <p><strong>No KPIs assigned yet.</strong></p>
-                <p>Add cards from the catalog on the left. Drag them to reorder; click × to remove.</p>
+                <p>Add cards from the catalog on the left. Drag them to reorder; remove one with its close button.</p>
               </div>
             } @else {
               <ul class="pf-kpi-assigned__list">
@@ -227,23 +227,24 @@ const CATEGORY_LABELS: Record<string, string> = {
                       (dragover)="onDragOver($event, i)"
                       (drop)="onDrop($event, i)"
                       (dragend)="onDragEnd()">
-                    <span class="pf-kpi-tile__grip" aria-hidden="true">⋮⋮</span>
-                    <span class="pf-kpi-tile__pos">{{ i + 1 }}</span>
+                    <span class="pf-kpi-tile__grip" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
+                    <span class="pf-kpi-tile__pos nd-num">{{ i + 1 }}</span>
                     <div class="pf-kpi-tile__body">
                       <span class="pf-kpi-tile__label">{{ kpiName(a.kpiId) }}</span>
                       <span class="pf-kpi-tile__meta">
                         {{ kpiCategory(a.kpiId) }} · {{ kpiValueType(a.kpiId) }}
                       </span>
                     </div>
-                    <label class="pf-kpi-tile__toggle" [title]="a.enabled ? 'Disable' : 'Enable'">
-                      <input type="checkbox" [checked]="a.enabled" (change)="toggleEnabled(i)" />
-                      <span></span>
-                    </label>
+                    <button type="button" class="nd-toggle pf-kpi-tile__switch" role="switch" [attr.aria-checked]="a.enabled"
+                            [attr.aria-label]="kpiName(a.kpiId) + (a.enabled ? ' — shown' : ' — hidden')"
+                            [title]="a.enabled ? 'Disable' : 'Enable'" (click)="toggleEnabled(i)">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                     <span class="pf-kpi-tile__updown" aria-hidden="false">
                       <button type="button" class="pf-kpi-tile__mv" [disabled]="i === 0"
-                              (click)="move(i, -1)" aria-label="Move up">▲</button>
+                              (click)="move(i, -1)" aria-label="Move up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
                       <button type="button" class="pf-kpi-tile__mv" [disabled]="i === assigned().length - 1"
-                              (click)="move(i, 1)" aria-label="Move down">▼</button>
+                              (click)="move(i, 1)" aria-label="Move down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                     </span>
                     <button type="button" class="pf-kpi-tile__x"
                             (click)="removeAt(i)" aria-label="Remove">
@@ -384,7 +385,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       border: 1px solid rgba(168, 85, 247, 0.4);
       font-size: 11px;
       font-weight: 600;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       color: #d8b4fe;
     }
     .pf-kpi-screen-tab--on .pf-kpi-screen-tab__count {
@@ -482,7 +483,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     .pf-kpi-cat__type {
       grid-area: type;
       font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       color: var(--text-muted);
       letter-spacing: 0.04em;
     }
@@ -494,7 +495,9 @@ const CATEGORY_LABELS: Record<string, string> = {
       padding: 4px 8px;
       border-radius: 8px;
     }
-    .pf-kpi-cat__add { color: #c4b5fd; background: rgba(168, 85, 247, 0.1); }
+    .pf-kpi-cat__add { color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); }
+    .pf-kpi-tile__switch { flex: none; }
+    @media (pointer: coarse) { .pf-kpi-tile__switch { min-width: 44px; min-height: 44px; justify-content: center; } }
     .pf-kpi-cat__pill { color: var(--text-muted); background: rgba(255,255,255,0.04); }
 
     /* ── Assigned column ───────────────────────────────────── */
@@ -563,9 +566,10 @@ const CATEGORY_LABELS: Record<string, string> = {
     .pf-kpi-tile--over { border-color: rgba(168, 85, 247, 0.7); background: rgba(168,85,247,0.06); }
 
     .pf-kpi-tile__grip {
+      display: inline-flex; align-items: center;
       cursor: grab;
       color: var(--text-muted);
-      font-family: monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 16px;
       letter-spacing: -2px;
       user-select: none;
@@ -583,7 +587,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       color: var(--violet-text);
       font-size: 11.5px;
       font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     .pf-kpi-tile__body { min-width: 0; display: flex; flex-direction: column; }
@@ -773,6 +777,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     .pf-kpi-tile__mv {
       width: 34px; height: 22px; border-radius: 6px; border: 1px solid var(--glass-border);
       background: var(--glass-bg); color: var(--text-secondary); font-size: 10px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
       min-width: 34px !important; min-height: 22px !important;
     }
     .pf-kpi-tile__mv:disabled { opacity: .3; }
