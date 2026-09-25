@@ -1,4 +1,5 @@
 import { inject } from '@angular/core';
+import { cultureResultRedirectGuard, cultureSampleRedirectGuard } from './core/navigation/culture-redirect.guard';
 import { CanActivateFn, Route, Router } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { AuthService } from './core/auth/auth.service';
@@ -456,7 +457,8 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'lab/result/:id',
-        canActivate: [permissionGuard(['enter_result', 'edit_result'])],
+        // A culture test opens the Culture case page instead (one route).
+        canActivate: [permissionGuard(['enter_result', 'edit_result']), cultureResultRedirectGuard],
         loadComponent: () => import('./features/lab/result-entry/result-entry.component').then(m => m.ResultEntryComponent)
       },
       {
@@ -466,7 +468,9 @@ export const appRoutes: Route[] = [
         path: 'lab/sample/:sampleId',
         // validate_result: the pathologist reviews the tube on this SAME
         // screen (?validate=1) — read-only + Reject/Validate footer.
-        canActivate: [permissionGuard(['enter_result', 'edit_result', 'validate_result'])],
+        // A culture-only tube opens the Culture case page (/lab/culture/:id) —
+        // search, scan, notifications, deep links and bookmarks alike.
+        canActivate: [permissionGuard(['enter_result', 'edit_result', 'validate_result']), cultureSampleRedirectGuard],
         loadComponent: () => import('./features/lab/sample-result-entry/sample-result-entry.component').then(m => m.SampleResultEntryComponent)
       },
       {

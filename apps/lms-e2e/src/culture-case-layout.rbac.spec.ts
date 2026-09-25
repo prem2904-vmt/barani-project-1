@@ -179,4 +179,22 @@ test.describe('Culture case — real layout', () => {
       }
     }
   });
+
+  test('band search for a culture sample opens the Culture case page, not the old screen', async ({ page }) => {
+    await loginAs(page, 'admin');
+    // Safety: never claim from a test.
+    await page.route(/\/claim(\?|$)/, route => route.abort());
+    const code = process.env['CULTURE_BARCODE'] || 'MICRO26001';
+    await page.goto('/lab/my-work');
+    await page.waitForLoadState('networkidle').catch(() => {});
+    const input = page.locator('pf-hero-band input.pf-hb__input');
+    test.skip(!(await input.count()), 'No band search on My Work for this role.');
+    await input.fill(code);
+    await input.press('Enter');
+    await page.waitForURL(/\/lab\/(culture|sample)\//, { timeout: 20_000 });
+    expect(page.url()).toMatch(/\/lab\/culture\//);
+    await expect(page.locator('.pf-cse-ctx .pf-cse-chip--id')).toContainText(code);
+    await expect(page.locator('pf-culture-entry:not([embedded])')).toHaveCount(0);
+  });
 });
+
