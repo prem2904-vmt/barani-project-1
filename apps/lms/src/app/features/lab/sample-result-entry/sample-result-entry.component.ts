@@ -58,6 +58,7 @@ import { CultureResult } from "../../../shared/models/culture.model";
 import { formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
 import { sampleVtName } from "../../../core/navigation/zoom-transition";
+import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
 
 /** Live flag preview beside a numeric input — client mirror only; the
  *  backend conditions engine still decides the persisted/reported flag. */
@@ -585,8 +586,30 @@ export class SampleResultEntryComponent {
   /** Keep the tube's tests in their authored display order (profile member
    *  sequence), and expose the logical count (a profile counts as ONE). */
   private normalizeSample(s: OrderSample | null): OrderSample | null {
-    if (!s?.tests) return s;
-    return { ...s, tests: sortTestsForDisplay(s.tests) };
+    if (!s?.tests) { this._outsourcedTests.set([]); return s; }
+    // Outsourced lines (old shared tubes) never enter the editable set —
+    // they render read-only with an "Outsourced · <partner>" chip.
+    const { inHouse, outsourced } = splitOutsourced(s.tests, s.outsourcedVendorId);
+    this._outsourcedTests.set(outsourced);
+    if (outsourced.length) this.loadPartnerNames();
+    return { ...s, tests: sortTestsForDisplay(inHouse) };
+  }
+
+  // ── Outsourced lines (read-only) ─────────────────────────────────────
+  private readonly _outsourcedTests = signal<OrderTest[]>([]);
+  readonly outsourcedTests = this._outsourcedTests.asReadonly();
+  private readonly _partnerNames = signal<Record<string, string>>({});
+  private partnerNamesLoaded = false;
+  private loadPartnerNames() {
+    if (this.partnerNamesLoaded) return;
+    this.partnerNamesLoaded = true;
+    this.api.get<{ id: string; name: string }[]>("/api/referral-labs?includeInactive=true").subscribe({
+      next: (l) => this._partnerNames.set(Object.fromEntries((l ?? []).map((x) => [x.id, x.name]))),
+      error: () => { /* chip falls back to "Outsourced" */ },
+    });
+  }
+  outsourcedChip(t: OrderTest): string {
+    return outsourcedChip(t, this._partnerNames(), this._sample()?.outsourcedVendorId);
   }
   readonly logicalCount = computed(() =>
     logicalTestCount(this.sample()?.tests),

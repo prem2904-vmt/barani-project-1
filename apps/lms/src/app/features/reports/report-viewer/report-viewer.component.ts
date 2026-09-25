@@ -21,6 +21,8 @@ import { EditResultDialogComponent } from '../../../shared/components/edit-resul
 import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { flagCodeOf, savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
+import { OutsourcingService } from '../../../core/services/outsourcing.service';
+import { PartnerReport, absoluteFileUrl, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
 
 interface ReportData {
   patient?: { name?: string; age?: number; sex?: string; phone?: string };
@@ -211,6 +213,24 @@ function coerceCellText(raw: unknown): string {
       }
 
       <div class="pf-rv-scroll">
+      @if (report() && partnerReports().length) {
+        <!-- Outsourced tests: the partner lab's own report is delivered
+             alongside ours (never parsed into it — our PDF says "Tested at"). -->
+        <section class="pf-rv-partner" aria-label="Partner lab reports">
+          <p class="pf-rv-partner__title">Partner lab reports</p>
+          @for (p of partnerReports(); track p.orderTestId) {
+            <div class="pf-rv-partner__row">
+              <span class="pf-rv-partner__name">{{ p.testName }}
+                @if (p.partnerLabName) { <span class="pf-rv-partner__lab">Tested at {{ p.partnerLabName }}</span> }
+              </span>
+              <button type="button" class="nd-rowact" (click)="openPartnerReport(p)"
+                      [attr.aria-label]="'Open partner report for ' + p.testName">
+                <span class="nd-rowact__t">Open · print</span>
+              </button>
+            </div>
+          }
+        </section>
+      }
       @if (report(); as r) {
         <!-- The on-screen report IS the rendered PDF — the exact same file
              the Download button produces (jsPDF + tenant template + per-test
@@ -737,6 +757,13 @@ function coerceCellText(raw: unknown): string {
         padding: 18mm 14mm !important;
       }
     }
+
+    /* Partner lab reports (outsourced tests) */
+    .pf-rv-partner { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--nd-line, var(--glass-border)); border-radius: 12px; background: var(--nd-card-bg, var(--glass-bg)); }
+    .pf-rv-partner__title { margin: 0 0 6px; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+    .pf-rv-partner__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+    .pf-rv-partner__name { font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; }
+    .pf-rv-partner__lab { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); }
 
     /* Share-with-colleague modal */
     .pf-rv-share-backdrop {
@@ -1349,6 +1376,21 @@ export class ReportViewerComponent implements OnInit {
     return token.startsWith('#') ? token : '#e2e8f0';
   }
 
+  // ── Partner lab reports (outsourced tests) ─────────────
+  private readonly outsourcing = inject(OutsourcingService);
+  readonly partnerReports = signal<PartnerReport[]>([]);
+  private loadPartnerReports(orderId: string | undefined) {
+    if (!orderId) return;
+    this.outsourcing.partnerReports(orderId).then(
+      l => this.partnerReports.set(l ?? []),
+      () => this.partnerReports.set([]));
+  }
+  /** Opens the partner's file in a new tab — the browser's own viewer
+   *  downloads / prints it as is. */
+  openPartnerReport(p: PartnerReport) {
+    window.open(absoluteFileUrl(p.url, this.outsourcing.apiBase), '_blank', 'noopener');
+  }
+
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) { this.back(); return; }
@@ -1356,6 +1398,7 @@ export class ReportViewerComponent implements OnInit {
       next: r => {
         this._report.set(r);
         this.resolveLayouts();
+        this.loadPartnerReports(r?.orderId);
       },
       error: () => this.toasts.error('Could not load report')
     });
@@ -1476,6 +1519,8 @@ export class ReportViewerComponent implements OnInit {
       `Your lab report from ${lab} is ready.`,
     ];
     if (link) lines.push(`View & download your report:\n${link}`);
+    const partnerLine = partnerReportShareLine(this.partnerReports());
+    if (partnerLine) lines.push(partnerLine);
     lines.push('Please contact us if you have any questions.');
     // Render + archive the PDF (best-effort, background) so the public link
     // resolves to a real file when the patient opens it. Fire before the

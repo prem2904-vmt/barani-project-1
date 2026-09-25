@@ -441,3 +441,10 @@
   .pf-sre-skel__bar, .pf-sre__autosave-dot, .pf-sre-switch__menu { animation: none; }
   .pf-sre__ginput, .pf-sre__gnote, .pf-sre-tabs__ind { transition: none !important; }
 }
+
+
+/* Outsourced lines (old shared tubes): read-only, neutral chip. */
+.pf-sre__out-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
+.pf-sre__out-name { font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; }
+.pf-sre__out-chip { height: 26px; }
+.pf-sre__out-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }

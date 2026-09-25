@@ -10,6 +10,8 @@ interface PublicReportResult {
   org?: string; patient?: string; reportReady?: boolean; reportPdfUrl?: string;
   report?: { id: string; type: string; createdAt?: string; data?: string | null };
   template?: unknown;
+  /** Outsourced tests' partner-lab reports, delivered alongside ours. */
+  partnerReports?: { testName: string; partnerLabName?: string | null; url: string; fileName?: string | null }[];
 }
 
 /**
@@ -42,6 +44,12 @@ interface PublicReportResult {
             <span class="viewer-org">{{ result()?.org || 'Your lab' }}</span>
             <a class="viewer-open" [href]="rawPdfUrl()" target="_blank" rel="noopener">Open in new tab ↗</a>
           </div>
+          @for (p of result()?.partnerReports ?? []; track p.url) {
+            <div class="viewer-bar viewer-bar--partner">
+              <span class="viewer-org">{{ p.testName }}@if (p.partnerLabName) { · tested at {{ p.partnerLabName }}}</span>
+              <a class="viewer-open" [href]="fileUrl(p.url)" target="_blank" rel="noopener">Partner lab report ↗</a>
+            </div>
+          }
           @if (isIos) {
             <!-- iOS (Safari + WKWebView) renders ONLY PAGE 1 of a PDF inside
                  an iframe — a patient with a 3-page report would never see
@@ -145,6 +153,11 @@ export class PublicReportComponent {
   protected readonly rawPdfUrl = signal<string>('');
 
   private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
+
+  /** Partner files live on the API host ("/uploads/…"). */
+  protected fileUrl(url: string): string {
+    return /^https?:\/\//i.test(url) ? url : `${environment.apiUrl.replace(/\/$/, '')}${url}`;
+  }
 
   constructor() {
     // Hand-off from the tracking page: the patient already verified there, and

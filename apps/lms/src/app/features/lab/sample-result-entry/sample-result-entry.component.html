@@ -238,6 +238,21 @@
           </div>
         }
 
+        <!-- Outsourced tests on this (old, shared) tube: performed by the
+             partner lab — read-only here, never an editable field. -->
+        @if (outsourcedTests().length > 0) {
+          <section class="nd-card pf-sre-card pf-sre__outsourced" aria-label="Outsourced tests">
+            <div class="nd-card__body pf-sre-card__body">
+              @for (t of outsourcedTests(); track t.id) {
+                <div class="pf-sre__out-row">
+                  <span class="pf-sre__out-name">{{ t.test?.name ?? "Test" }}</span>
+                  <span class="nd-chip nd-chip--static pf-sre__out-chip">{{ outsourcedChip(t) }}</span>
+                </div>
+              }
+              <p class="pf-sre__out-hint">Results come back from the partner lab — the front desk attaches their report.</p>
+            </div>
+          </section>
+        }
         @for (blk of entryBlocks(); track blk.key; let bi = $index) {
           @if (blk.kind === "card") {
             <ng-container *ngTemplateOutlet="testCard; context: { $implicit: blk.tests, first: bi === 0 }"></ng-container>
