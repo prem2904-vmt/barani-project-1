@@ -2228,51 +2228,6 @@
 .pf-us__drop-act:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
 
 /* Compact scope picker — phones only (the tiles collapse into it). */
-.pf-us__compact { display: none; position: relative; flex-shrink: 0; }
-.pf-us__compact-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 36px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--color-violet-600, #7c3aed);
-  color: #fff;
-  cursor: pointer;
-}
-.pf-us__menu {
-  position: absolute;
-  left: -8px;
-  top: calc(100% + 14px);
-  z-index: 61;
-  width: min(260px, calc(100vw - 32px));
-  padding: 6px;
-  border-radius: 12px;
-  background: var(--bg-card-solid);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 16px 40px rgba(31, 17, 71, 0.18);
-}
-.pf-us__menu-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-}
-.pf-us__menu-item[aria-current='true'] { background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); color: var(--violet-text, #6d28d9); }
-.pf-us__menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
-.pf-us__menu-text { display: flex; flex-direction: column; min-width: 0; }
-.pf-us__menu-pick { font-size: 12px; color: var(--text-tertiary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-
 /* Band: report ETA pill. */
 .pf-oc-tat {
   display: inline-flex;
@@ -2627,13 +2582,11 @@
   .pf-oc-tat { display: none; }
   .pf-oc-cat__list { padding-bottom: 96px; } /* clear the sticky cart bar */
 }
-/* ── Phone (≤640): compact scope picker + chips for the picks ── */
+/* ── Phone (≤640): icon-only scope tiles + chips for the picks ── */
 @media (max-width: 640px) {
   /* The global phone rule gives .pf-page a 12px gutter — the band bleeds
      through it; the cards use it as their gutter. */
   .pf-oc { --pf-hb-bleed: max(12px, env(safe-area-inset-left)); }
-  .pf-us__tiles { display: none; }
-  .pf-us__compact { display: block; }
   .pf-us__div { margin: 0 2px; }
   .pf-us__field { min-width: 0; }
   .pf-us__input { font-size: 16px; } /* iOS zoom guard */
@@ -2713,7 +2666,6 @@
   background: var(--color-warning, #f59e0b);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning, #f59e0b) 25%, transparent);
 }
-.pf-us__compact-btn--req { box-shadow: 0 0 0 2px var(--color-warning, #f59e0b); }
 @keyframes pf-us-req-pulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-warning, #f59e0b) 0%, transparent); }
   50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-warning, #f59e0b) 22%, transparent); }
@@ -3358,4 +3310,152 @@
   .pf-oc-scrim, .pf-oc-scrim--on, .pf-oc-bill, .pf-oc-bill--recede { transition: none; }
   .pf-us__drop, .pf-us__trow, .pf-oc-cat__results, .pf-us__cancel,
   .pf-oc-phase--rise, .pf-oc-phase--rise .pf-oc-sum, .pf-oc-phase--cart { animation: none; }
+}
+
+/* ════ Round 10 (owner): primary only for the main CTA; neutral controls ════ */
+:host {
+  --pf-neutral-sel-bg: #eceff2;
+  --pf-neutral-sel-border: #9aa4ae;
+  --pf-neutral-chip-bg: #f3f4f6;
+  /* Designer toggle (Figma): slate track, white knob, small shadow. */
+  --pf-toggle-on: #aeb8c2;
+  --pf-toggle-off: #e3e7eb;
+  --pf-toggle-urgent: #d0706f;
+}
+:host-context(.dark),
+:host-context([data-theme='dark']) {
+  --pf-neutral-sel-bg: rgba(255, 255, 255, 0.12);
+  --pf-neutral-sel-border: rgba(255, 255, 255, 0.4);
+  --pf-neutral-chip-bg: rgba(255, 255, 255, 0.1);
+  --pf-toggle-on: #6b7784;
+  --pf-toggle-off: rgba(255, 255, 255, 0.16);
+  --pf-toggle-urgent: #a9524f;
+}
+
+/* Active scope tile: a subtle violet tint, not a solid primary fill. */
+.pf-us__tile--on {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #6d28d9);
+}
+
+/* Toggles (Urgent, Include Trendogram): neutral slate; Urgent ON = muted red. */
+.pf-toggle-neutral .pf-oc-switch__track { background: var(--pf-toggle-off); }
+.pf-toggle-neutral[aria-checked='true'] .pf-oc-switch__track { background: var(--pf-toggle-on); }
+.pf-toggle-neutral.pf-oc-switch--urgent[aria-checked='true'] .pf-oc-switch__track { background: var(--pf-toggle-urgent); }
+.pf-toggle-neutral .pf-oc-switch__knob { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25); }
+
+/* ₹ / % discount: a neutral segmented control. */
+.pf-cart-disc__kind { border-color: var(--border-muted); background: var(--pf-neutral-chip-bg); }
+.pf-cart-disc__kind:hover { border-color: var(--pf-neutral-sel-border); }
+.pf-cart-disc__kind button:hover:not([aria-checked='true']) { background: transparent; color: var(--text-primary); }
+.pf-cart-disc__kind button[aria-checked='true'] {
+  background: var(--bg-card-solid);
+  color: var(--text-primary);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+
+/* Department chips (catalogue + search filters) and the type segment:
+   neutral selected state. */
+.pf-deptpill[aria-pressed='true'] {
+  background: var(--pf-neutral-sel-bg);
+  border-color: var(--pf-neutral-sel-border);
+  color: var(--text-primary);
+}
+.pf-deptpill[aria-pressed='true'] .pf-deptpill__code { background: transparent; }
+.pf-us__chip[aria-pressed='true'],
+.pf-us__filters .pf-us__chip[aria-pressed='true'] {
+  background: var(--pf-neutral-sel-bg);
+  color: var(--text-primary);
+}
+:host ::ng-deep .pf-us__seg .seg-item.is-selected {
+  background: var(--bg-card-solid) !important;
+  background-image: none !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18) !important;
+}
+
+/* In-cart: subtle tint + a neutral check (no primary fill). */
+.pf-crow--in {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--bg-card-solid));
+  border-color: var(--pf-neutral-sel-border);
+}
+.pf-crow--in .pf-crow__check,
+.pf-us__trow--in .pf-us__tcheck { background: var(--text-primary); color: var(--bg-card-solid); border-color: transparent; }
+
+/* Phone cart bar: neutral thumbnail + neutral count chip ("Review & Pay"
+   stays the one primary CTA). */
+.pf-cartbar__icon {
+  background: var(--pf-neutral-chip-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-muted);
+}
+.pf-cartbar__badge {
+  background: var(--bg-card-solid);
+  color: var(--text-primary);
+  border: 1px solid var(--border-muted);
+}
+
+/* ── Phones: the SAME scope model as web — four icon buttons in the pill ── */
+.pf-us__filled-dot { display: none; }
+@media (max-width: 640px) {
+  .pf-us__tiles { display: flex; gap: 2px; }
+  .pf-us__tile { max-width: none; border-radius: 10px; }
+  .pf-us__tile-btn { width: 36px; height: 36px; padding: 0; justify-content: center; position: relative; }
+  .pf-us__tile-x { display: none; }
+  .pf-us__tile-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .pf-us__tile--filled:not(.pf-us__tile--on) { background: transparent; }
+  .pf-us__filled-dot {
+    display: block;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--violet-text, #6d28d9);
+  }
+  .pf-us__req { position: absolute; top: 4px; right: 4px; }
+  .pf-us__tile--req .pf-us__filled-dot { display: none; }
+  .pf-us__div { margin: 0 4px; }
+}
+
+/* ── Phone "Review & Pay" sheet: ~92% tall, grab handle, inner scroll ── */
+.pf-sheet-handle { display: none; }
+@media (max-width: 1023px) {
+  :host .pf-cart-backdrop { z-index: 79; }
+  :host .pf-cart-drawer.pf-cart-drawer--tall {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(92dvh - env(safe-area-inset-top, 0px));
+    max-height: calc(92dvh - env(safe-area-inset-top, 0px));
+    border-radius: 20px 20px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    z-index: 80;
+  }
+  .pf-sheet-handle {
+    display: block;
+    flex: none;
+    width: 40px;
+    height: 5px;
+    margin: 8px auto 2px;
+    border-radius: 999px;
+    background: var(--border-muted);
+  }
+  .pf-cart-drawer--tall .pf-oc-bill__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+}
+:host-context(html.cap-native) .pf-cart-drawer.pf-cart-drawer--tall { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* Touch: no native tooltip on cart rows; long names wrap to 2 lines. */
+.pf-crt--wrap .pf-crt__name {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  text-overflow: clip;
+  line-height: 1.3;
 }

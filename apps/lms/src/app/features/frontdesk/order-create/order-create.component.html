@@ -62,6 +62,9 @@
             [attr.aria-pressed]="scope() === k" [title]="tileTitle(k)" [attr.aria-label]="tileTitle(k)">
             <ng-container *ngTemplateOutlet="scopeIcon; context: { $implicit: k }"></ng-container>
             <span class="pf-us__tile-label">{{ tileLabel(k) }}</span>
+            <!-- Phones: icons only; a filled scope shows a small dot (the
+                 picked name stays in the chips under the pill). -->
+            @if (tilePick(k)) { <span class="pf-us__filled-dot" aria-hidden="true"></span> }
             @if (k === 'patient' && patientMissing()) {
             <span class="pf-us__req" aria-hidden="true"></span>
             <span class="sr-only">(required)</span>
@@ -74,34 +77,6 @@
               stroke-linecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6 6 18" />
             </svg>
-          </button>
-          }
-        </div>
-        }
-      </div>
-
-      <!-- Phone: the tiles collapse into one compact scope picker. -->
-      <div class="pf-us__compact">
-        <button type="button" class="pf-us__compact-btn" (click)="scopeMenuOpen.set(!scopeMenuOpen())"
-          [class.pf-us__compact-btn--req]="patientMissing()" [class.pf-us__tile--nudge]="patientNudge()"
-          aria-haspopup="menu" [attr.aria-expanded]="scopeMenuOpen()"
-          [attr.aria-label]="'Searching ' + scopeLabels[scope()].toLowerCase() + '. Change what to search'">
-          <ng-container *ngTemplateOutlet="scopeIcon; context: { $implicit: scope() }"></ng-container>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
-        @if (scopeMenuOpen()) {
-        <div class="pf-us__menu" role="menu" aria-label="What to search">
-          @for (k of scopes; track k) {
-          <button type="button" role="menuitem" class="pf-us__menu-item" [attr.aria-current]="scope() === k ? 'true' : null"
-            [disabled]="!scopeEnabled(k)" (click)="selectScope(k)">
-            <ng-container *ngTemplateOutlet="scopeIcon; context: { $implicit: k }"></ng-container>
-            <span class="pf-us__menu-text">
-              <span>{{ scopeLabels[k] }}</span>
-              @if (tilePick(k)) { <span class="pf-us__menu-pick">{{ tilePick(k) }}</span> }
-            </span>
           </button>
           }
         </div>
@@ -224,18 +199,6 @@
       }
     </div>
 
-    <ng-container band-inline>
-      <button type="button" class="pf-hb-tool pf-us__cart press" (click)="openCartFromPill()"
-        [attr.aria-label]="'Cart, ' + selected().length + ' test' + (selected().length === 1 ? '' : 's')">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="9" cy="20" r="1.5" />
-          <circle cx="18" cy="20" r="1.5" />
-          <path d="M2 3h3l2.5 12.5h12L22 7H6" />
-        </svg>
-        @if (selected().length > 0) { <span class="pf-us__badge" aria-hidden="true">{{ selected().length }}</span> }
-      </button>
-    </ng-container>
   </pf-hero-band>
 
   <!-- Focus mode: while the results dropdown is open the page behind it
@@ -412,10 +375,10 @@
       <!-- Department quick-filter pills — narrows the current tab's list. -->
       @if (deptChips().length > 0) {
       <div class="pf-deptpills pf-no-print" role="group" aria-label="Filter by department">
-        <button type="button" class="pf-deptpill" [class.pf-deptpill--on]="deptFilter() === ''"
+        <button type="button" class="pf-deptpill"
           [attr.aria-pressed]="deptFilter() === ''" (click)="setDeptFilter('')">All</button>
         @for (d of deptChips(); track d.name) {
-        <button type="button" class="pf-deptpill" [class.pf-deptpill--on]="deptFilter() === d.name"
+        <button type="button" class="pf-deptpill"
           [attr.aria-pressed]="deptFilter() === d.name" (click)="setDeptFilter(d.name)">
           @if (d.code) { <span class="pf-deptpill__code">{{ d.code }}</span> }
           <span class="pf-deptpill__name">{{ d.name }}</span>
@@ -568,7 +531,8 @@
   <!-- Phone/tablet checkout drawer + backdrop -->
   @if (cartOpen() && !isLg()) {
   <div class="pf-cart-backdrop" (click)="closeCart()"></div>
-  <aside class="pf-cart-drawer" aria-label="Billing">
+  <aside class="pf-cart-drawer pf-cart-drawer--tall" aria-label="Billing">
+    <span class="pf-sheet-handle" aria-hidden="true"></span>
     <button type="button" class="pf-cart-drawer__close press" (click)="closeCart()" aria-label="Close billing">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -593,7 +557,7 @@
       <span class="pf-oc-bill__title">BILLING</span>
       <span class="pf-oc-bill__spacer"></span>
       <!-- Urgent = the order priority (was the Normal/Urgent switch). -->
-      <button type="button" class="pf-oc-switch pf-oc-switch--urgent" role="switch"
+      <button type="button" class="pf-oc-switch pf-toggle-neutral pf-oc-switch--urgent" role="switch"
         [attr.aria-checked]="priority() === 'Urgent'" [disabled]="isReadOnly()" (click)="toggleUrgent()">
         <span class="pf-oc-switch__track" aria-hidden="true"><span class="pf-oc-switch__knob"></span></span>
         Urgent
@@ -601,7 +565,7 @@
       @if (!isReadOnly()) {
       <!-- Trendogram: embed serial-result trend charts in the report. Only
            patients with repeat tests are eligible. -->
-      <button type="button" class="pf-oc-switch" role="switch" [attr.aria-checked]="trendogramOn()"
+      <button type="button" class="pf-oc-switch pf-toggle-neutral" role="switch" [attr.aria-checked]="trendogramOn()"
         [disabled]="trendEligible().length === 0"
         [title]="trendEligible().length ? trendEligible().length + ' repeat test' + (trendEligible().length === 1 ? '' : 's') + ' · trend charts' : 'No repeat tests for this patient yet'"
         (click)="trendogramOn.set(!trendogramOn())">
@@ -649,8 +613,8 @@
         }
         @for (id of selected(); track id) {
         @if (findTest(id); as t) {
-        <li class="pf-crt" [class.pf-crt--included]="isCoveredMember(t.id)"
-          [title]="testDisplayName(t) + (isCoveredMember(t.id) ? ' · included in ' + coveringPackageName(t.id) : '') + (isCollected(t.id) ? ' · sample collected' : '')">
+        <li class="pf-crt" [class.pf-crt--included]="isCoveredMember(t.id)" [class.pf-crt--wrap]="!isWebSearch()"
+          [attr.title]="!isWebSearch() ? null : testDisplayName(t) + (isCoveredMember(t.id) ? ' · included in ' + coveringPackageName(t.id) : '') + (isCollected(t.id) ? ' · sample collected' : '')">
           <div class="pf-crt__line">
             <span class="pf-crt__name">{{ testDisplayName(t) }}</span>
             <span class="pf-crt__code">{{ shortCode(t) }}</span>
@@ -759,10 +723,10 @@
           <div class="pf-cart-disc__ctl">
             <div class="pf-cart-disc__kind" role="radiogroup" aria-label="Discount unit">
               <button type="button" role="radio" [attr.aria-checked]="discountKind() === 'flat'"
-                [class.pf-cart-disc__kind--on]="discountKind() === 'flat'" [disabled]="isReadOnly()"
+                [disabled]="isReadOnly()"
                 (click)="isReadOnly() ? null : setDiscountKind('flat')" aria-label="Discount in rupees">₹</button>
               <button type="button" role="radio" [attr.aria-checked]="discountKind() === 'percent'"
-                [class.pf-cart-disc__kind--on]="discountKind() === 'percent'" [disabled]="isReadOnly()"
+                [disabled]="isReadOnly()"
                 (click)="isReadOnly() ? null : setDiscountKind('percent')" aria-label="Discount in percent">%</button>
             </div>
             <input type="text" inputmode="decimal" aria-label="Discount amount"

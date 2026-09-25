@@ -246,7 +246,7 @@ interface MethodDef {
       .pf-ipp__kinds {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px;
         padding: 3px; border-radius: 10px;
-        background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--glass-bg, transparent));
+        background: var(--glass-bg-hover, rgba(127, 127, 127, 0.08));
       }
       .pf-ipp__kind {
         height: 30px; border: 0; border-radius: 8px; cursor: pointer;
@@ -255,8 +255,9 @@ interface MethodDef {
         transition: background 0.15s, color 0.15s;
       }
       .pf-ipp__kind:hover:not([aria-checked="true"]) { color: var(--text-primary); }
+      /* Neutral raised segment (primary is kept for the one main CTA). */
       .pf-ipp__kind[aria-checked="true"] {
-        background: var(--bg-card-solid, #fff); color: var(--color-primary, #7c3aed); font-weight: 600;
+        background: var(--bg-card-solid, #fff); color: var(--text-primary); font-weight: 600;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
       }
 
@@ -270,10 +271,11 @@ interface MethodDef {
         transition: background 0.15s, border-color 0.15s, color 0.15s;
       }
       .pf-ipp__method:hover:not([aria-checked="true"]) { border-color: var(--card-hover-border, var(--glass-border-hover)); color: var(--text-primary); }
+      /* Neutral selected tile: stronger border + light tint, normal text. */
       .pf-ipp__method[aria-checked="true"] {
-        border: 1.5px solid var(--color-violet-500, #8b5cf6);
-        background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent);
-        color: var(--color-primary, #7c3aed);
+        border: 1.5px solid color-mix(in srgb, var(--text-primary) 55%, transparent);
+        background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+        color: var(--text-primary);
       }
 
       /* The selected method's detail panel. */
@@ -355,8 +357,8 @@ interface MethodDef {
         border: 1px solid var(--glass-border); background: transparent; color: var(--text-secondary);
       }
       .pf-ipp__tender[aria-checked="true"] {
-        border-color: var(--color-violet-500, #8b5cf6); color: var(--color-primary, #7c3aed);
-        background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent);
+        border-color: color-mix(in srgb, var(--text-primary) 55%, transparent); color: var(--text-primary);
+        background: color-mix(in srgb, var(--text-primary) 6%, transparent);
       }
 
       /* Own Confirm (hosts without a pinned footer, e.g. the frontdesk
