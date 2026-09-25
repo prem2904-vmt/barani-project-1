@@ -126,7 +126,7 @@ describe('Order & Payments — catalogue rows', () => {
 
   it('search dropdown rows (mixed types) mark profile / package with the outline hook', () => {
     const { el, f, c } = render();
-    c.onPillInput('a');
+    c.onPillInput('01');
     f.detectChanges();
     const types = [...el.querySelectorAll('.pf-us__trow')].map(r => r.getAttribute('data-type'));
     expect(types).toEqual(expect.arrayContaining(['individual', 'profile', 'package']));
@@ -213,7 +213,8 @@ describe('Order & Payments — search focus mode', () => {
     f.detectChanges();
     expect(scrim(el).classList).toContain('pf-oc-scrim--on');
     expect(el.querySelector('pf-hero-band')!.classList).toContain('pf-oc-band--focus');
-    expect(el.querySelectorAll('.pf-us__filters .pf-us__chip').length).toBeGreaterThan(4);
+    expect(el.querySelectorAll('.pf-us__filters pf-segmented button').length).toBe(4);
+    expect(el.querySelectorAll('.pf-us__filters .pf-us__chip').length).toBeGreaterThan(1);
   });
 
   it('a scrim click closes the dropdown immediately (CSS-only fade, no JS delay)', () => {
@@ -231,7 +232,7 @@ describe('Order & Payments — search focus mode', () => {
     const { el, f, c } = render();
     c.onPillInput('glu');
     f.detectChanges();
-    const chip = el.querySelector('.pf-us__chip') as HTMLElement;
+    const chip = el.querySelector('.pf-us__filters button') as HTMLElement;
     chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     f.detectChanges();
     expect(c.dropOpen()).toBe(false);
@@ -244,15 +245,33 @@ describe('Order & Payments — search focus mode', () => {
 
   it('a filter chip narrows the rendered results', () => {
     const { el, f, c } = render();
-    c.onPillInput('a');
+    c.onPillInput('01');
     f.detectChanges();
     const all = el.querySelectorAll('.pf-us__trow').length;
-    const profilesChip = [...el.querySelectorAll('.pf-us__chip')].find(b => b.textContent?.includes('Profiles')) as HTMLButtonElement;
-    profilesChip.click();
+    const profilesSeg = [...el.querySelectorAll('.pf-us__filters pf-segmented button')].find(b => b.textContent?.includes('Profiles')) as HTMLButtonElement;
+    profilesSeg.click();
     f.detectChanges();
     const rows = [...el.querySelectorAll('.pf-us__trow')];
     expect(rows.length).toBeLessThan(all);
     expect(rows.every(r => r.getAttribute('data-type') === 'profile')).toBe(true);
-    expect(profilesChip.getAttribute('aria-pressed')).toBe('true');
+    const dept = [...el.querySelectorAll('.pf-us__filters .pf-us__chip')].find(b => b.getAttribute('title') === 'Biochemistry') as HTMLButtonElement;
+    dept.click();
+    f.detectChanges();
+    expect(dept.getAttribute('aria-pressed')).toBe('true');
+    expect([...el.querySelectorAll('.pf-us__trow')].every(r => r.textContent?.includes('Diabetes'))).toBe(true);
+  });
+});
+
+describe('Order & Payments — dropdown rows and filter row', () => {
+  it('rows show check, code, name, price (no TAT); one filter row with no "All" dept chip', () => {
+    const { el, f, c } = render();
+    c.onPillInput('01');
+    f.detectChanges();
+    const text = [...el.querySelectorAll('.pf-us__trow')].map(r => r.textContent ?? '').join(' ');
+    expect(el.querySelectorAll('.pf-us__trow').length).toBe(4);
+    expect(text).not.toMatch(/TAT/);
+    expect(el.querySelectorAll('.pf-us__filters').length).toBe(1);
+    const deptLabels = [...el.querySelectorAll('.pf-us__filters .pf-us__chip')].map(b => b.textContent?.trim() ?? '');
+    expect(deptLabels.some(l => /^All/.test(l))).toBe(false);
   });
 });

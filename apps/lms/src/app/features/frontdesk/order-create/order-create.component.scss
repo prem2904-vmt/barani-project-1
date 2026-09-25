@@ -3189,3 +3189,57 @@
 @media (max-width: 640px) and (prefers-reduced-motion: reduce) {
   :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field { transform: none; }
 }
+
+/* ════ Round 6 (owner): full-width dropdown, one filter row ════ */
+/* Panel spans the pill exactly (left/top/width bound from TS). */
+.pf-us__drop { container: usdrop / inline-size; }
+.pf-us__drop--tests { padding: 8px 10px 10px; }
+.pf-us__tgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px 8px;
+}
+@container usdrop (min-width: 600px) {
+  .pf-us__tgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1400px) {
+  @container usdrop (min-width: 600px) {
+    .pf-us__tgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+}
+.pf-us__tgrid .pf-us__trow + .pf-us__trow { margin-top: 0; }
+
+/* One row: segmented type control left, department chips right. */
+.pf-us__filters {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 2px 0;
+}
+.pf-us__seg { flex-shrink: 0; }
+.pf-us__filters .pf-us__chips {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pf-us__filters .pf-us__chips::-webkit-scrollbar { display: none; }
+.pf-us__filters .pf-us__chip {
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+  gap: 4px;
+}
+.pf-us__filters .pf-us__chip-n { font-family: inherit; color: var(--text-muted); opacity: 1; }
+.pf-us__filters .pf-us__chip[aria-pressed='true'] .pf-us__chip-n { color: inherit; opacity: 0.75; }
+@container usdrop (max-width: 600px) {
+  .pf-us__filters { flex-wrap: wrap; }
+  .pf-us__filters .pf-us__chips { justify-content: flex-start; flex-basis: 100%; }
+}
+.pf-us__drop--tests .pf-us__drop-top { top: -8px; margin: -8px -10px 4px; padding: 8px 10px 6px; }

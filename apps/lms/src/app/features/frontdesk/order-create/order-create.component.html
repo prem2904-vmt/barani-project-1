@@ -138,7 +138,9 @@
            from the visual viewport so it stays above an on-screen keyboard. -->
       @if (dropOpen()) {
       <div id="pf-us-drop" class="pf-us__drop" role="listbox" [attr.aria-label]="scopeLabels[scope()] + ' matches'"
-        [style.max-height.px]="dropMaxH()" (keydown.escape)="onPillEscape(); focusSearchInput()">
+        [style.max-height.px]="dropMaxH()" [style.left.px]="dropBox()?.left" [style.top.px]="dropBox()?.top"
+        [style.width.px]="dropBox()?.width" [class.pf-us__drop--tests]="scope() === 'tests'"
+        (keydown.escape)="onPillEscape(); focusSearchInput()">
         <!-- Sticky top: title + (Tests) filter chips that narrow ONLY these
              results. Tab from the input reaches the chips. -->
         <div class="pf-us__drop-top">
@@ -147,26 +149,18 @@
           <button type="button" class="pf-us__drop-esc" (click)="onPillEscape()" aria-label="Close">Esc</button>
         </div>
         @if (scope() === 'tests') {
+        <!-- ONE filter row: type (segmented) on the left, department chips
+             on the right; no chip selected = all departments. -->
         <div class="pf-us__filters">
-          <div class="pf-us__chips" role="group" aria-label="Filter by type">
-            @for (k of searchTypeDefs; track k.id) {
-            <button type="button" class="pf-us__chip" [attr.aria-pressed]="searchType() === k.id"
-              (click)="setSearchType(k.id); focusSearchInput()">
-              {{ k.label }} <span class="pf-us__chip-n">{{ searchTypeCounts()[k.id] ?? 0 }}</span>
-            </button>
-            }
-          </div>
+          <pf-segmented size="sm" class="pf-us__seg" [options]="searchTypeOpts()" [value]="searchType()"
+            (valueChange)="setSearchType($any($event)); focusSearchInput()"></pf-segmented>
           @if (deptChips().length > 0) {
-          <div class="pf-us__chips pf-us__chips--scroll" role="group" aria-label="Filter by department">
-            <button type="button" class="pf-us__chip" [attr.aria-pressed]="searchDept() === ''"
-              (click)="setSearchDept(''); focusSearchInput()">
-              All <span class="pf-us__chip-n">{{ searchTypeTotalInType() }}</span>
-            </button>
+          <div class="pf-us__chips" role="group" aria-label="Filter by department (none selected = all)">
             @for (d of deptChips(); track d.name) {
             <button type="button" class="pf-us__chip" [attr.aria-pressed]="searchDept() === d.name" [title]="d.name"
               [attr.aria-label]="d.name + ', ' + (searchDeptCounts()[d.name] ?? 0) + ' matches'"
               (click)="setSearchDept(d.name); focusSearchInput()">
-              {{ d.code || d.name }} <span class="pf-us__chip-n">{{ searchDeptCounts()[d.name] ?? 0 }}</span>
+              {{ d.code || d.name }}<span class="pf-us__chip-n">{{ searchDeptCounts()[d.name] ?? 0 }}</span>
             </button>
             }
           </div>
@@ -175,6 +169,7 @@
         }
         </div>
         @if (scope() === 'tests') {
+        <div class="pf-us__tgrid">
         @for (t of searchResults(); track t.id; let i = $index) {
         <button type="button" class="pf-us__trow" role="option" [attr.data-search-row]="t.id" [attr.data-type]="t.type"
           [title]="rowTitle(t)"
@@ -192,11 +187,11 @@
           <span class="pf-us__tcode">{{ shortCode(t) }}</span>
           <span class="pf-us__tname" [title]="testDisplayName(t)">{{ testDisplayName(t) }}
           </span>
-          @if (t.tatHours) { <span class="pf-us__ttat">TAT {{ t.tatHours }}h</span> }
           <span class="pf-us__tprice"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
           <span class="sr-only">{{ isSelected(t.id) ? 'In cart, tap to remove' : 'Tap to add' }}</span>
         </button>
         }
+        </div>
         @if (searchResults().length === 0) {
         <p class="pf-us__drop-note">
           No {{ searchType() === 'all' ? 'tests, profiles or packages' : searchType() === 'individual' ? 'tests' : searchType() + 's' }}

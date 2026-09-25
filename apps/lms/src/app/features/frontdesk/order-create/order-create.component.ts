@@ -14,10 +14,11 @@ import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Patient, formatPatientInfo, patientDisplayName } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
-import { filterTestList as sharedFilterTestList } from '../../../shared/utils/test-search';
+import { filterTestList as sharedFilterTestList, filterTestListStrict } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, taxSlabOf } from '../../../shared/utils/test-pricing';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
@@ -45,7 +46,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -1058,7 +1059,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Every match for the query, before the dropdown's own filters. */
   private readonly searchBase = computed<Test[]>(() => {
     const q = this._query().trim();
-    return q ? this.filterTestList(this._tests(), q) : [];
+    // STRICT ranked matching (code, name, short name, profile label; no
+    // fuzzy) — the dropdown must not bury "JAK2" under 190 near-misses.
+    return q ? filterTestListStrict(this._tests(), q) : [];
   });
 
   // ── Dropdown filters (focus mode): type + department chips that narrow
@@ -1098,8 +1101,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     return out;
   });
-  readonly searchTypeTotalInType = computed(() =>
-    this.searchBase().filter(t => this.matchesSearchType(t)).length);
+  /** The type control's options (pf-segmented) with inline counts. */
+  readonly searchTypeOpts = computed(() => this.searchTypeDefs.map(d => ({
+    value: d.id, label: d.label, count: this.searchTypeCounts()[d.id] ?? 0,
+  })));
   setSearchType(k: 'all' | 'individual' | 'profile' | 'package'): void {
     this.searchType.set(k);
     this.activeResult.set(0);
@@ -2001,17 +2006,34 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  measured from window.visualViewport, which shrinks when a keyboard
    *  opens on iPad / phones. null = CSS default. */
   readonly dropMaxH = signal<number | null>(null);
+  /** Panel geometry: exactly the PILL's width, aligned to its left/right
+   *  edges and hanging from its bottom (px, relative to the .pf-us box the
+   *  panel is positioned in). null = CSS fallback. */
+  readonly dropBox = signal<{ left: number; top: number; width: number } | null>(null);
   private readonly _onViewport = () => this.sizeDropdown();
-  /** Re-measure the panel against the visual viewport. */
+  /** The visible pill: the band's search bar, or on phones its field row. */
+  private pillBox(): HTMLElement | null {
+    const us = this.pillEl()?.nativeElement;
+    if (!us) return null;
+    const field = us.closest('.pf-hb__field') as HTMLElement | null;
+    if (field && typeof getComputedStyle !== 'undefined' && getComputedStyle(field).display !== 'contents') return field;
+    return (us.closest('.pf-hb__search') as HTMLElement | null) ?? us;
+  }
+  /** Re-measure the panel against the pill and the visual viewport (which
+   *  shrinks when an on-screen keyboard opens). */
   sizeDropdown(): void {
     if (typeof window === 'undefined') return;
-    const pill = this.pillEl()?.nativeElement;
-    if (!pill) return;
+    const us = this.pillEl()?.nativeElement;
+    const pill = this.pillBox();
+    if (!us || !pill) return;
+    const u = us.getBoundingClientRect();
+    const p = pill.getBoundingClientRect();
+    if (p.width > 0) this.dropBox.set({ left: p.left - u.left, top: p.bottom - u.top + 8, width: p.width });
     const vv = window.visualViewport;
     const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
-    const top = pill.getBoundingClientRect().bottom + 14;
-    this.dropMaxH.set(Math.max(160, Math.floor(viewBottom - top - 12)));
+    this.dropMaxH.set(Math.max(160, Math.floor(viewBottom - (p.bottom + 8) - 12)));
   }
+
   /** Keyboard-highlighted dropdown row. */
   readonly scopeHighlight = signal(0);
   /** Phone: the compact scope picker menu (the tiles collapse into it). */
@@ -2060,6 +2082,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.scope.set(k);
     this.scopeQuery.set('');
     this.scopeHighlight.set(0);
+    this.sizeDropdown();
     this.scopeOpen.set(k !== 'tests' || !!this._query().trim());
     if (k !== 'patient') this.patientNudge.set(false);
     if (k === 'patient') { this.patientResults.set([]); this.patientLoading.set(false); }
