@@ -48,15 +48,6 @@
         Edit order
       </button>
       }
-      @if (canRegisterPatient() && scopeEnabled('patient')) {
-      <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="newPatient()" aria-label="New patient">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-          stroke-linecap="round" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        New Patient
-      </button>
-      }
     </ng-container>
 
     <div band-search #pill class="pf-us">
@@ -64,11 +55,17 @@
       <div class="pf-us__tiles" role="group" aria-label="What to search">
         @for (k of scopes; track k) {
         <div class="pf-us__tile" [class.pf-us__tile--on]="scope() === k" [class.pf-us__tile--filled]="!!tilePick(k)"
+          [class.pf-us__tile--req]="k === 'patient' && patientMissing()"
+          [class.pf-us__tile--nudge]="k === 'patient' && patientNudge()"
           [class.pf-us__tile--err]="(k === 'doctor' && !!refDoctorError()) || (k === 'hospital' && !!refHospitalError())">
           <button type="button" class="pf-us__tile-btn" [disabled]="!scopeEnabled(k)" (click)="selectScope(k)"
             [attr.aria-pressed]="scope() === k" [title]="tileTitle(k)" [attr.aria-label]="tileTitle(k)">
             <ng-container *ngTemplateOutlet="scopeIcon; context: { $implicit: k }"></ng-container>
             <span class="pf-us__tile-label">{{ tileLabel(k) }}</span>
+            @if (k === 'patient' && patientMissing()) {
+            <span class="pf-us__req" aria-hidden="true"></span>
+            <span class="sr-only">(required)</span>
+            }
           </button>
           @if (tileClearable(k)) {
           <button type="button" class="pf-us__tile-x" (click)="clearScope(k, $event)"
@@ -86,6 +83,7 @@
       <!-- Phone: the tiles collapse into one compact scope picker. -->
       <div class="pf-us__compact">
         <button type="button" class="pf-us__compact-btn" (click)="scopeMenuOpen.set(!scopeMenuOpen())"
+          [class.pf-us__compact-btn--req]="patientMissing()" [class.pf-us__tile--nudge]="patientNudge()"
           aria-haspopup="menu" [attr.aria-expanded]="scopeMenuOpen()"
           [attr.aria-label]="'Searching ' + scopeLabels[scope()].toLowerCase() + '. Change what to search'">
           <ng-container *ngTemplateOutlet="scopeIcon; context: { $implicit: scope() }"></ng-container>
@@ -125,7 +123,7 @@
           (input)="onPillInput(asInput($event))" (focus)="onPillFocus()"
           (keydown.arrowDown)="onPillArrow($event, 1)" (keydown.arrowUp)="onPillArrow($event, -1)"
           (keydown.enter)="onPillEnter($event)" (keydown.escape)="onPillEscape()"
-          (keydown.tab)="scope() === 'tests' ? onSearchTab($event) : null" />
+          (keydown.tab)="scopeOpen.set(false)" />
       </label>
       @if (pillValue() && scopeEnabled(scope())) {
       <button type="button" class="pf-us__clear" (click)="onPillInput(''); focusSearchInput()" aria-label="Clear search">
@@ -136,22 +134,42 @@
       </button>
       }
 
-      <!-- Urgent chip = the order-priority field (was the Normal/Urgent switch). -->
-      <button type="button" class="pf-us__urgent"
-        [attr.aria-pressed]="priority() === 'Urgent'" [disabled]="isReadOnly()" (click)="toggleUrgent()"
-        aria-label="Urgent priority">
-        <span class="pf-us__urgent-dot" aria-hidden="true"></span>
-        <span class="pf-us__urgent-label">Urgent</span>
-      </button>
-      <span class="pf-us__div pf-us__div--end" aria-hidden="true"></span>
-
-      <!-- Matches for the Patient / Doctor / Hospital scope. -->
-      @if (scopeOpen() && scope() !== 'tests') {
-      <div id="pf-us-drop" class="pf-us__drop" role="listbox" [attr.aria-label]="scopeLabels[scope()] + ' matches'">
+      <!-- ONE results dropdown for every scope, directly under the pill, sized
+           from the visual viewport so it stays above an on-screen keyboard. -->
+      @if (dropOpen()) {
+      <div id="pf-us-drop" class="pf-us__drop" role="listbox" [attr.aria-label]="scopeLabels[scope()] + ' matches'"
+        [style.max-height.px]="dropMaxH()">
         <div class="pf-us__drop-head">
-          <span>{{ scopeTitle() }}</span>
-          <button type="button" class="pf-us__drop-esc" (click)="closeScope()" aria-label="Close">Esc</button>
+          <span>{{ scope() === 'tests' ? testsTitle() : scopeTitle() }}</span>
+          <button type="button" class="pf-us__drop-esc" (click)="onPillEscape()" aria-label="Close">Esc</button>
         </div>
+        @if (scope() === 'tests') {
+        @for (t of searchResults(); track t.id; let i = $index) {
+        <button type="button" class="pf-us__trow" role="option" [attr.data-search-row]="t.id"
+          [class.pf-us__row--hl]="i === activeResult()" [class.pf-us__trow--in]="isSelected(t.id)"
+          [attr.aria-selected]="isSelected(t.id)" (mouseenter)="activeResult.set(i)" (click)="addSearchResult(t)">
+          <span class="pf-us__tcheck" aria-hidden="true">
+            @if (isSelected(t.id)) {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+            } @else {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+              stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            }
+          </span>
+          <span class="pf-us__tcode">{{ shortCode(t) }}</span>
+          <span class="pf-us__tname" [title]="testDisplayName(t)">{{ testDisplayName(t) }}
+            @if (t.type !== 'individual') { <span class="pf-us__ttype">{{ t.type === 'package' ? 'Package' : 'Profile' }}</span> }
+          </span>
+          @if (t.tatHours) { <span class="pf-us__ttat">TAT {{ t.tatHours }}h</span> }
+          <span class="pf-us__tprice">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
+          <span class="sr-only">{{ isSelected(t.id) ? 'In cart, tap to remove' : 'Tap to add' }}</span>
+        </button>
+        }
+        @if (searchResults().length === 0) {
+        <p class="pf-us__drop-note">No tests, profiles or packages match “{{ query() }}”.</p>
+        }
+        }
         @switch (patientStatus()) {
         @case ('hint') { <p class="pf-us__drop-note">Type at least 2 characters: name, phone, MRN or ABHA.</p> }
         @case ('loading') { <p class="pf-us__drop-note">Searching for “{{ scopeQuery() }}”…</p> }
@@ -168,11 +186,20 @@
           <span class="pf-us__row-cta">{{ r.kind === 'new' ? 'Add' : 'Select' }}</span>
         </button>
         }
-        @if (scope() !== 'patient' && scopeRows().length === 0) {
+        @if ((scope() === 'doctor' || scope() === 'hospital') && scopeRows().length === 0) {
         <p class="pf-us__drop-note">No match yet. Type a name and press Enter to add it as a new entry.</p>
         }
-        @if (scope() === 'patient' && canRegisterPatient()) {
+        @if (scope() === 'patient') {
         <div class="pf-us__drop-foot">
+          <!-- ABHA QR lookup lives here now (the pill has no scan icon). -->
+          <button type="button" class="pf-us__drop-act" (click)="openScanner()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16" />
+            </svg>
+            Scan ABHA / QR
+          </button>
+          @if (canRegisterPatient()) {
           <button type="button" class="pf-us__drop-act" (click)="newPatient()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
               stroke-linecap="round" aria-hidden="true">
@@ -180,7 +207,8 @@
             </svg>
             Register a new patient
           </button>
-          @if (patient(); as p) {
+          }
+          @if (canRegisterPatient() && patient(); as p) {
           <button type="button" class="pf-us__drop-act" (click)="editPatient()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -206,11 +234,6 @@
         </svg>
         @if (selected().length > 0) { <span class="pf-us__badge" aria-hidden="true">{{ selected().length }}</span> }
       </button>
-      @if (scopeEnabled('patient')) {
-      <button type="button" class="pf-hb-tool press" (click)="openScanner()" aria-label="Scan patient ABHA or QR code">
-        <pf-scan-icon [size]="18" />
-      </button>
-      }
     </ng-container>
   </pf-hero-band>
 
@@ -238,6 +261,16 @@
     }
     }
   </div>
+  }
+
+  @if (patientNudge() && !patient()) {
+  <p class="pf-oc-need" role="alert">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" />
+    </svg>
+    Pick the patient for this order first: search above, or register a new patient.
+  </p>
   }
 
   @if (refHospitalError() || refDoctorError()) {
@@ -525,7 +558,7 @@
 
         @if (categoryTab() === 'all') {
         @if (filteredTests().length === 0 && individualTests().length > 0) {
-        <p class="pf-empty-line">No tests match "{{ query() }}"</p>
+        <p class="pf-empty-line">No tests in this department.</p>
         } @else if (individualTests().length === 0) {
         <p class="pf-empty-line">No tests configured.</p>
         } @else {
@@ -539,8 +572,6 @@
             <div class="pf-rail" role="list">
               @for (t of group.tests; track t.id) {
               <button type="button" class="pf-rail-card press" [class.pf-rail-card--on]="isSelected(t.id)"
-                [class.pf-rail-card--kbd]="activeTestId() === t.id" [attr.data-test-row]="t.id"
-                (mouseenter)="query() ? activeResult.set(searchResults().indexOf(t)) : null"
                 (click)="toggleTest(t)" role="listitem">
                 <div class="pf-rail-card__title-row">
                   <span class="inline-flex items-center gap-1.5">
@@ -669,6 +700,12 @@
       </span>
       <span class="pf-oc-bill__title">BILLING</span>
       <span class="pf-oc-bill__spacer"></span>
+      <!-- Urgent = the order priority (was the Normal/Urgent switch). -->
+      <button type="button" class="pf-oc-switch pf-oc-switch--urgent" role="switch"
+        [attr.aria-checked]="priority() === 'Urgent'" [disabled]="isReadOnly()" (click)="toggleUrgent()">
+        <span class="pf-oc-switch__track" aria-hidden="true"><span class="pf-oc-switch__knob"></span></span>
+        Urgent
+      </button>
       @if (!isReadOnly()) {
       <!-- Trendogram: embed serial-result trend charts in the report. Only
            patients with repeat tests are eligible. -->
@@ -697,6 +734,9 @@
 
       <div class="pf-oc-bill__meta">
         <span>{{ selected().length }} test{{ selected().length === 1 ? '' : 's' }}</span>
+        @if (priority() === 'Urgent') {
+        <span class="pf-oc-urgent-tag"><span class="pf-oc-urgent-badge__dot" aria-hidden="true"></span>Urgent</span>
+        }
         <span class="pf-oc-bill__spacer"></span>
         @if (hasDraft() && !isReadOnly() && !paidOrderId()) {
         <button type="button" class="pf-oc-textbtn" (click)="discardDraft()">Discard draft</button>
@@ -987,21 +1027,24 @@
       }
       } @else {
       @if (!isReadOnly()) {
-      <button type="button" class="pf-oc-btn pf-oc-btn--ghost press" (click)="saveDraft()"
-        [disabled]="!patient() || selected().length === 0">Save as draft</button>
+      <button type="button" class="pf-oc-btn pf-oc-btn--ghost press" (click)="onSaveDraftClick()"
+        [disabled]="!!patient() && selected().length === 0">Save as draft</button>
       }
       @if (showInlinePay()) {
       @if (refundDue() === 0) {
       @if (payPanel(); as pp) {
       <button type="button" class="pf-oc-btn pf-oc-btn--primary press" [disabled]="pp.confirmDisabled()"
-        (click)="pp.emit()">{{ pp.confirmLabel() }}</button>
+        (click)="onConfirmClick()">{{ pp.confirmLabel() }}</button>
       } @else {
-      <button type="button" class="pf-oc-btn pf-oc-btn--primary" disabled>Confirm {{ total() | inr }} received</button>
+      <!-- No pay pane yet: without a patient the click points at the Patient
+           tile instead of silently doing nothing. -->
+      <button type="button" class="pf-oc-btn pf-oc-btn--primary press" [disabled]="!!patient()"
+        (click)="onConfirmClick()">Confirm {{ total() | inr }} received</button>
       }
       }
       } @else {
-      <button type="button" class="pf-oc-btn pf-oc-btn--primary press" (click)="submit()"
-        [disabled]="saving() || selected().length === 0 || !patient()">
+      <button type="button" class="pf-oc-btn pf-oc-btn--primary press" (click)="onProceedClick()"
+        [disabled]="saving() || (!!patient() && selected().length === 0)">
         {{ editOrderId() ? 'Update order & reconcile' : 'Proceed to billing' }}
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

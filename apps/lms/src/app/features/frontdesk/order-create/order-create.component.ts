@@ -22,7 +22,6 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
-import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
 import { waLink } from '../../../shared/utils/whatsapp';
@@ -47,7 +46,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, PriceFlagComponent, HeroBandComponent, BarcodeScannerModalComponent, ScanIconComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, PriceFlagComponent, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -289,7 +288,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Categorized test picker state ─────────────────────────────────
   /** Active category tab. 'all' falls back to the existing dept-grouped grid. */
   readonly categoryTab = signal<'recent' | 'favourites' | 'packages' | 'profiles' | 'all'>('recent');
-  private preSearchTab: 'recent' | 'favourites' | 'packages' | 'profiles' | 'all' = 'recent';
   /** Per-user pinned test ids, fetched from /api/test-picker/favorites. */
   readonly favouriteIds = signal<Set<string>>(new Set());
   /** Per-user recent test ids, fetched from /api/test-picker/recent. */
@@ -420,12 +418,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
   readonly filteredTests = computed(() => {
-    const q = this._query().trim();
-    // Unified search (Option A): with the Tests scope, typing filters the
-    // catalogue IN THE PAGE on every device — tests, profiles and packages,
-    // narrowed by the department chip too. ↑/↓ + ⏎ walk the matches in place
-    // (see searchResults), so the keyboard-first quick add survives.
-    if (q) return this.filterByDept(this.filterTestList(this._tests(), q));
+    // The catalogue grid is a BROWSE view (tab + department). The pill's
+    // query never filters it: search results live in the dropdown under the
+    // pill, which stays visible above an on-screen keyboard (iPad / touch).
     return this.filterByDept(this.individualTests());
   });
 
@@ -766,6 +761,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit() {
     this.loadSpecimens();
     this._lgMql?.addEventListener?.('change', this._onLgChange);
+    if (typeof window !== 'undefined') {
+      window.visualViewport?.addEventListener('resize', this._onViewport);
+      window.addEventListener('resize', this._onViewport);
+    }
     this.labCfg.ensureLoaded();
     // Only active tests are orderable — a disabled department's tests (cascaded
     // to inactive) must not appear in the picker.
@@ -1045,25 +1044,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   setQuery(q: string) {
     this._query.set(q);
     this.activeResult.set(0);
-    const queryStr = q.trim();
-    if (queryStr !== '') {
-      if (this.categoryTab() !== 'all') {
-        this.preSearchTab = this.categoryTab();
-        this.categoryTab.set('all');
-      }
-    } else {
-      this.categoryTab.set(this.preSearchTab);
-    }
   }
   asInput(ev: Event): string { return (ev.target as HTMLInputElement).value; }
 
   // ── Keyboard-first quick add (Tests scope) ──────────────────────
-  /** The in-page matches for the current query, in the order the catalogue
-   *  shows them (department groups, code order) — ↑/↓ walk this list and ⏎
-   *  adds the highlighted row. Empty when the field is empty. */
-  readonly searchResults = computed<Test[]>(() =>
-    this._query().trim() ? this.filteredTestsByDept().flatMap(g => g.tests) : []);
-  /** Id of the highlighted in-page match (null when not searching). */
+  /** Tests-scope matches shown in the dropdown under the pill: the whole
+   *  orderable catalogue (tests, profiles, packages; profile aliases like
+   *  "LFT" resolve), capped so the panel stays quick. ↑/↓ walk it, ⏎ adds. */
+  readonly searchResults = computed<Test[]>(() => {
+    const q = this._query().trim();
+    return q ? this.filterTestList(this._tests(), q).slice(0, 50) : [];
+  });
+  /** Id of the highlighted match (null when not searching). */
   readonly activeTestId = computed<string | null>(() => {
     const list = this.searchResults();
     return list.length ? list[Math.min(this.activeResult(), list.length - 1)].id : null;
@@ -1081,12 +1073,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.activeResult.update(i => Math.max(0, Math.min(n - 1, i + dir)));
     this.revealActiveTest();
   }
-  /** Keep the highlighted in-page match visible inside the catalogue pane. */
+  /** Keep the highlighted dropdown row visible inside the panel. */
   private revealActiveTest(): void {
     const id = this.activeTestId();
     if (!id || typeof document === 'undefined') return;
     setTimeout(() => {
-      const el = document.querySelector(`[data-test-row="${id}"]`) as HTMLElement | null;
+      const el = document.querySelector(`[data-search-row="${id}"]`) as HTMLElement | null;
       el?.scrollIntoView?.({ block: 'nearest' });
     }, 0);
   }
@@ -1094,13 +1086,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const list = this.searchResults();
     if (list.length === 0) return;
     e.preventDefault();
-    this.addSearchResult(list[Math.min(this.activeResult(), list.length - 1)]);
+    this.addSearchResult(list[Math.min(this.activeResult(), list.length - 1)], true);
   }
-  /** Add a dropdown hit and keep focus for the next query. Adding a test already
-   *  clears the field + refocuses (toggleTest/togglePackage) — "⏎ add & keep typing". */
-  addSearchResult(t: Test): void {
-    this.activeResult.set(0);
+  /** Tap a dropdown hit: toggle it in the cart (the row shows ✓) and keep the
+   *  panel open, so several matches can be added on a touch screen. ⏎ on a
+   *  keyboard adds and clears the field — "⏎ add & keep typing". */
+  addSearchResult(t: Test, clearAfter = false): void {
     if (t.type === 'package') this.togglePackage(t); else this.toggleTest(t);
+    if (clearAfter) { this.setQuery(''); this.scopeOpen.set(false); }
+    this.focusSearchInput();
   }
 
   isSelected(id: string): boolean { return this._selected().includes(id); }
@@ -1142,10 +1136,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     this._selected.update(cur => cur.includes(t.id) ? cur.filter(id => id !== t.id) : [...cur, t.id]);
-    if (this.query().trim() !== '') {
-      this.setQuery('');
-      this.focusSearchInput();
-    }
   }
   removeTest(id: string) {
     if (this.rejectIfLocked()) return;
@@ -1185,10 +1175,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._selected.update(cur =>
       cur.includes(pkg.id) ? cur.filter(id => id !== pkg.id) : [...cur, pkg.id]
     );
-    if (this.query().trim() !== '') {
-      this.setQuery('');
-      this.focusSearchInput();
-    }
   }
 
   toggleCart() { this._cartOpen.update(v => !v); }
@@ -1229,6 +1215,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   // the × on the tile detaches the patient (clearPatient).
   attachPatient(p: Patient) {
     if (!p) return;
+    this.patientNudge.set(false);
     this.router.navigate([], { queryParams: { patientId: p.id }, queryParamsHandling: 'merge' });
     this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${p.id}`).subscribe({
       next: res => {
@@ -1248,16 +1235,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   goHome() { this.router.navigateByUrl('/frontdesk'); }
-
-  onSearchTab(event: Event) {
-    if (this.query().trim() !== '') {
-      const firstCard = document.querySelector('.pf-rail-card') as HTMLElement;
-      if (firstCard) {
-        event.preventDefault();
-        firstCard.focus();
-      }
-    }
-  }
 
   /** Billing route params — carry the cart discount (resolved ₹) so the
    *  billing screen opens with it pre-applied. */
@@ -1708,6 +1685,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   ngOnDestroy() {
     this._lgMql?.removeEventListener?.('change', this._onLgChange);
+    if (typeof window !== 'undefined') {
+      window.visualViewport?.removeEventListener('resize', this._onViewport);
+      window.removeEventListener('resize', this._onViewport);
+    }
+    clearTimeout(this.nudgeTimer);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this._onVisibleResync);
     this.closeInvoicePreview();
   }
@@ -1839,7 +1821,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   setCategoryTab(tab: 'recent' | 'favourites' | 'packages' | 'profiles' | 'all'): void {
     this.categoryTab.set(tab);
-    this.preSearchTab = tab;
   }
 
   // ── Ref hospital ─────────────────────────────────────────────────
@@ -1898,10 +1879,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ══ Unified search pill (Option A) ═══════════════════════════════
   // One pill in the hero band: scope tiles (Tests / Patient / Doctor /
-  // Hospital) + ONE input + Urgent chip + cart + scan. Replaces the old
-  // patient box, the two referral boxes, the test search box and the
-  // Normal/Urgent switch. Each scope is driven by the same endpoint the old
-  // box used; the Tests scope is the old test search (setQuery).
+  // Hospital) + ONE input + cart. Replaces the old patient box, the two
+  // referral boxes and the test search box. Each scope is driven by the same
+  // endpoint the old box used. EVERY scope's results open in one animated
+  // dropdown under the pill, sized above the on-screen keyboard (iPad /
+  // touch first), so results are never hidden in the page below.
 
   protected readonly scopes = SEARCH_SCOPES;
   protected readonly scopeLabels = SCOPE_LABELS;
@@ -1909,8 +1891,26 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly scope = signal<SearchScope>('tests');
   /** Typed text for the Patient / Doctor / Hospital scopes (Tests uses query()). */
   readonly scopeQuery = signal('');
-  /** The dropdown of matches under the pill (never for Tests). */
+  /** The dropdown of matches under the pill (Tests: once something is typed). */
   readonly scopeOpen = signal(false);
+  /** The dropdown is actually showing. */
+  readonly dropOpen = computed(() =>
+    this.scopeOpen() && (this.scope() !== 'tests' || !!this._query().trim()));
+  /** Panel max-height (px) so its bottom stays above the on-screen keyboard:
+   *  measured from window.visualViewport, which shrinks when a keyboard
+   *  opens on iPad / phones. null = CSS default. */
+  readonly dropMaxH = signal<number | null>(null);
+  private readonly _onViewport = () => this.sizeDropdown();
+  /** Re-measure the panel against the visual viewport. */
+  sizeDropdown(): void {
+    if (typeof window === 'undefined') return;
+    const pill = this.pillEl()?.nativeElement;
+    if (!pill) return;
+    const vv = window.visualViewport;
+    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const top = pill.getBoundingClientRect().bottom + 14;
+    this.dropMaxH.set(Math.max(160, Math.floor(viewBottom - top - 12)));
+  }
   /** Keyboard-highlighted dropdown row. */
   readonly scopeHighlight = signal(0);
   /** Phone: the compact scope picker menu (the tiles collapse into it). */
@@ -1959,7 +1959,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.scope.set(k);
     this.scopeQuery.set('');
     this.scopeHighlight.set(0);
-    this.scopeOpen.set(k !== 'tests');
+    this.scopeOpen.set(k !== 'tests' || !!this._query().trim());
+    if (k !== 'patient') this.patientNudge.set(false);
     if (k === 'patient') { this.patientResults.set([]); this.patientLoading.set(false); }
     if (k === 'doctor') this.searchDoctors('', true);
     if (k === 'hospital') this.searchHospitals('', true);
@@ -1995,7 +1996,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** The single input's (input) handler. */
   onPillInput(v: string): void {
     const k = this.scope();
-    if (k === 'tests') { this.setQuery(v); return; }
+    this.sizeDropdown();
+    if (k === 'tests') { this.setQuery(v); this.scopeOpen.set(true); return; }
     this.scopeQuery.set(v);
     this.scopeOpen.set(true);
     this.scopeHighlight.set(0);
@@ -2003,10 +2005,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     else if (k === 'doctor') { this.refDoctorError.set(null); this.searchDoctors(v); }
     else if (k === 'hospital') { this.refHospitalError.set(null); this.searchHospitals(v); }
   }
-  onPillFocus(): void { if (this.scope() !== 'tests') this.scopeOpen.set(true); }
+  onPillFocus(): void { this.sizeDropdown(); this.scopeOpen.set(true); }
 
   onPillArrow(e: Event, dir: number): void {
-    if (this.scope() === 'tests') { this.onSearchArrow(e, dir); return; }
+    if (this.scope() === 'tests') { this.scopeOpen.set(true); this.onSearchArrow(e, dir); return; }
     const n = this.scopeRows().length;
     if (!n) return;
     e.preventDefault();
@@ -2021,7 +2023,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.pickScopeRow(rows[Math.min(this.scopeHighlight(), rows.length - 1)]);
   }
   onPillEscape(): void {
-    if (this.scope() === 'tests') this.setQuery('');
+    if (this.scope() === 'tests') { this.setQuery(''); this.scopeOpen.set(false); }
     else this.closeScope();
   }
 
@@ -2081,6 +2083,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const n = this.scopeRows().filter(r => r.kind === 'match').length;
     return `${SCOPE_LABELS[this.scope()].toUpperCase()} · ${n} MATCH${n === 1 ? '' : 'ES'}`;
   });
+  /** Dropdown header for the Tests scope, e.g. "TESTS · 12 MATCHES". */
+  readonly testsTitle = computed(() => {
+    const n = this.searchResults().length;
+    return `TESTS · ${n}${n === 50 ? '+' : ''} MATCH${n === 1 ? '' : 'ES'}`;
+  });
   /** Status line for the Patient scope (hint / searching / nothing found). */
   readonly patientStatus = computed<'hint' | 'loading' | 'empty' | null>(() => {
     if (this.scope() !== 'patient') return null;
@@ -2118,11 +2125,37 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (p) this.router.navigate(['/frontdesk/patients/new'], { queryParams: { patientId: p.id } });
   }
 
-  /** Urgent chip in the pill — the same order-priority field the old
-   *  Normal/Urgent switch set. */
+  /** "Urgent" switch in the billing card — the same order-priority field the
+   *  old Normal/Urgent switch set. Locked on a read-only order. */
   toggleUrgent(): void {
     if (this.isReadOnly()) return;
     this.setPriority(this._priority() === 'Urgent' ? 'Normal' : 'Urgent');
+  }
+
+  // ── Patient is required ────────────────────────────────────────────
+  /** No patient yet on an order being built → the Patient tile shows as
+   *  required (outline, dot, gentle pulse). */
+  readonly patientMissing = computed(() => !this._patient() && this.scopeEnabled('patient'));
+  /** Set when Confirm / Save as draft was tried without a patient: the tile
+   *  shakes and an inline hint shows under the band. */
+  readonly patientNudge = signal(false);
+  private nudgeTimer?: ReturnType<typeof setTimeout>;
+  /** Guard for Confirm / Save as draft / Proceed. Returns true (and nudges)
+   *  when the patient is missing, so the caller stops. */
+  requirePatient(): boolean {
+    if (this._patient()) return false;
+    this.patientNudge.set(false);
+    clearTimeout(this.nudgeTimer);
+    // Re-trigger the shake even on a repeat click (class off → on).
+    this.nudgeTimer = setTimeout(() => this.patientNudge.set(true), 0);
+    this.selectScope('patient');
+    return true;
+  }
+  onSaveDraftClick(): void { if (!this.requirePatient()) this.saveDraft(); }
+  onProceedClick(): void { if (!this.requirePatient()) this.submit(); }
+  onConfirmClick(): void {
+    if (this.requirePatient()) return;
+    this.payPanel()?.emit();
   }
 
   /** Cart icon in the pill: the billing card is on screen at lg+ (bring it
@@ -2133,9 +2166,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     else this.toggleCart();
   }
 
-  // Scan icon in the pill: look a patient up by ABHA QR / number (the same
-  // rules pf-patient-search's scanner used): confident match → attach it,
-  // otherwise show the matches in the Patient dropdown.
+  // "Scan ABHA / QR" in the Patient dropdown: look a patient up by ABHA QR /
+  // number (the same rules pf-patient-search's scanner used): confident
+  // match → attach it, otherwise show the matches in the Patient dropdown.
   readonly scanning = signal(false);
   openScanner(): void { if (this.scopeEnabled('patient')) this.scanning.set(true); }
   onScanned(text: string): void {
