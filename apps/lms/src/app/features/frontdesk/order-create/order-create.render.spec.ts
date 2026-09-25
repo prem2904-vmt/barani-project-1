@@ -483,21 +483,20 @@ describe('Order & Payments — phone sheet + one-row phone pill', () => {
     expect(head.contains(close)).toBe(false);
   });
 
-  it('while the sheet is open the app bar is hidden (html class); restored on close and destroy', () => {
+  it('the bottom navbar is NEVER hidden while the sheet is open; the sheet is the nav-aware tall variant', () => {
     const r = phone();
-    openSheet(r);
-    expect(document.documentElement.classList).toContain('pf-sheet-immersive');
+    const sheet = openSheet(r);
+    const cls = document.documentElement.classList;
+    expect(cls).not.toContain('pf-sheet-immersive');
+    expect(cls).not.toContain('nd-immersive');
+    expect(cls).not.toContain('pf-collect-immersive');
+    expect(sheet.classList).toContain('pf-cart-drawer--tall');   // bottom: var(--nd-nav-h)
     r.c.closeCart();
     r.f.detectChanges();
-    expect(document.documentElement.classList).not.toContain('pf-sheet-immersive');
-    r.c.toggleCart();
-    r.f.detectChanges();
-    expect(document.documentElement.classList).toContain('pf-sheet-immersive');
-    r.f.destroy();
-    expect(document.documentElement.classList).not.toContain('pf-sheet-immersive');
+    expect(cls).not.toContain('pf-sheet-immersive');
   });
 
-  it('desktop never hides the app bar', () => {
+  it('desktop never hides the bottom navbar either', () => {
     const r = render();
     r.c._selected.set(['t1']);
     r.c.toggleCart();

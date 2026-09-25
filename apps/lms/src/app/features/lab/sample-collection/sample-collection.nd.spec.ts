@@ -95,23 +95,15 @@ describe('Collect sample — colour discipline (primary only on the main CTA)', 
   });
 });
 
-describe('Collect sample — full-screen flow hides the app bar', () => {
-  afterEach(() => document.documentElement.classList.remove('pf-collect-immersive'));
-
-  it('html.pf-collect-immersive is set while the drawer is open and removed on close / destroy', () => {
+describe('Collect sample — the bottom navbar stays visible', () => {
+  it('opening the drawer never hides the nav (no immersive html class)', () => {
     const c = make();
     c._pending.set([S('a')]);
     c._openOrderId.set('o1');
     TestBed.tick();
-    expect(document.documentElement.classList).toContain('pf-collect-immersive');
-    c._openOrderId.set(null);
-    TestBed.tick();
-    expect(document.documentElement.classList).not.toContain('pf-collect-immersive');
-    c._openOrderId.set('o1');
-    TestBed.tick();
-    expect(document.documentElement.classList).toContain('pf-collect-immersive');
-    c.ngOnDestroy();
-    expect(document.documentElement.classList).not.toContain('pf-collect-immersive');
+    const cls = document.documentElement.classList;
+    expect(cls).not.toContain('pf-collect-immersive');
+    expect(cls).not.toContain('nd-immersive');
   });
 });
 
@@ -242,5 +234,48 @@ describe('nd-kit — the Collect screen is built from the kit classes', () => {
       'nd-seg', 'nd-seg__item', 'nd-chip', 'nd-band-chip', 'nd-row', 'nd-row--done', 'nd-mono', 'nd-bottombar']) {
       expect(drawer.querySelector('.' + cls), cls).not.toBeNull();
     }
+  });
+});
+
+describe('Collect sample — layout above the nav, External row, adaptive tiles', () => {
+  afterEach(() => document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove()));
+
+  it('the drawer is an .nd-fullscreen view (ends above the navbar via --nd-nav-h)', async () => {
+    const { drawer } = await renderDrawer([S('a')]);
+    expect(drawer.classList).toContain('nd-fullscreen');
+  });
+
+  it('tile size class by vial count: 1 → xl, 3 → lg, 6 → md, 9 → sm', () => {
+    const c = make();
+    const sizeFor = (n: number) => c.tileSize(G(Array.from({ length: n }, (_, i) => S('s' + i))));
+    expect(sizeFor(1)).toBe('xl');
+    expect(sizeFor(3)).toBe('lg');
+    expect(sizeFor(6)).toBe('md');
+    expect(sizeFor(9)).toBe('sm');
+  });
+
+  it('the grid carries the size class', async () => {
+    const { drawer } = await renderDrawer([S('a'), S('b'), S('c')]);
+    expect(drawer.querySelector('.pf-sc-grid')!.classList).toContain('pf-sc-grid--lg');
+  });
+
+  it('External is its own row OUTSIDE the tap area; clicking it does not draw', async () => {
+    const { drawer, f, c } = await renderDrawer([S('a')]);
+    const wrap = drawer.querySelector('.pf-tube-wrap') as HTMLElement;
+    const tile = wrap.querySelector('.pf-sc-tile') as HTMLElement;
+    const ext = wrap.querySelector('.pf-sc-ext') as HTMLButtonElement;
+    expect(ext).not.toBeNull();
+    expect(tile.contains(ext)).toBe(false);
+    expect(ext.compareDocumentPosition(tile) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy(); // tile first, then External
+    expect(ext.textContent).toContain('External (brought in)');
+    ext.click();
+    f.detectChanges();
+    expect(c.api.patch).not.toHaveBeenCalledWith('/api/samples/a/collect');
+    expect(c.api.patch).toHaveBeenCalledWith('/api/samples/a/source', { source: 'external' });
+  });
+
+  it('sample ID reads on one line: "Sample ID 26117"', async () => {
+    const { drawer } = await renderDrawer([S('a')]);
+    expect(drawer.querySelector('.pf-sc-tile .pf-tube__code')?.textContent?.replace(/\u00a0/g, ' ').trim()).toBe('Sample ID B-a');
   });
 });
