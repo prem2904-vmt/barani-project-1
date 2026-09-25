@@ -14,6 +14,7 @@ import {
 import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { UserAccountActionsService } from './user-account-actions.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -232,6 +233,7 @@ export class UsersAccessComponent implements OnInit {
   private readonly presence = inject(PresenceService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
+  private readonly accountActions = inject(UserAccountActionsService);
   private readonly entitlements = inject(TenantEntitlementsService);
 
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
@@ -575,56 +577,18 @@ export class UsersAccessComponent implements OnInit {
     }
   }
 
+  // Reset / deactivate / reactivate: shared with the Edit-user band.
   async reactivate(u: User) {
-    const ok = await this.dialog.confirm({
-      title: `Reactivate ${u.displayName || u.firstName || 'this user'}?`,
-      message: 'They regain access immediately with their previous roles.',
-      confirmLabel: 'Reactivate',
-    });
-    if (!ok) return;
-    this.api.patch(`/api/users/${u.id}`, { isActive: true }).subscribe({
-      next: () => {
-        this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: true } : x));
-        this.toasts.success('User reactivated');
-      },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
+    if (await this.accountActions.reactivate(u))
+      this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: true } : x));
   }
 
   async resetPassword(u: User) {
-    const ok = await this.dialog.confirm({
-      title: `Reset password for ${u.displayName || u.firstName || 'this user'}?`,
-      message: 'A new temporary password is generated and shown once — share it securely. They must change it at next login.',
-      confirmLabel: 'Reset password',
-    });
-    if (!ok) return;
-    const temp = 'Pf-' + Math.random().toString(36).slice(2, 8) + Math.floor(10 + Math.random() * 89);
-    this.api.post(`/api/users/${u.id}/reset-password`, { newPassword: temp }).subscribe({
-      next: () => {
-        this.dialog.confirm({
-          title: 'Password reset',
-          message: `Temporary password for ${u.displayName}:\n\n${temp}\n\nShare it securely — it won't be shown again.`,
-          confirmLabel: 'Done',
-        });
-      },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
+    await this.accountActions.resetPassword(u);
   }
 
   async deactivate(u: User) {
-    const ok = await this.dialog.confirm({
-      title: `Deactivate ${u.displayName || u.firstName || 'this user'}?`,
-      message: 'They lose access immediately. Their history and assignments are kept.',
-      tone: 'danger',
-      confirmLabel: 'Deactivate',
-    });
-    if (!ok) return;
-    this.api.delete(`/api/users/${u.id}`).subscribe({
-      next: () => {
-        this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: false } : x));
-        this.toasts.success('User deactivated');
-      },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
+    if (await this.accountActions.deactivate(u))
+      this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: false } : x));
   }
 }

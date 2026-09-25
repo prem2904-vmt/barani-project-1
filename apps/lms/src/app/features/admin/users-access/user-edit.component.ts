@@ -18,6 +18,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ROLE_INFO } from './permission-catalog';
 import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
+import { UserAccountActionsService } from './user-account-actions.service';
 
 interface EditForm {
   /** Honorific ("Dr." for doctors, etc.) — prefixes every mention of the name. */
@@ -50,6 +51,27 @@ interface EditForm {
              the CONTEXT BAR (the user being edited as read-only chips). -->
         <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=users'" [customSearch]="true" [contextBar]="true">
           <ng-container band-actions>
+            <!-- Account actions (owner): the list's row actions + their
+                 confirms, as band secondaries. Icons on phones. -->
+            @if (loaded()) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ue-reset press"
+                      [disabled]="accountBusy()" (click)="resetPassword()"
+                      aria-label="Reset password" title="Reset password">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+                Reset password
+              </button>
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ue-active press"
+                      [disabled]="accountBusy()" (click)="toggleActive()"
+                      [attr.aria-label]="isActive() ? 'Deactivate' : 'Reactivate'" [title]="isActive() ? 'Deactivate' : 'Reactivate'">
+                @if (isActive()) {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>
+                  Deactivate
+                } @else {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+                  Reactivate
+                }
+              </button>
+            }
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
                     [disabled]="!canSave() || saving()" (click)="save()"
                     [attr.aria-label]="saving() ? 'Saving' : 'Save changes'" title="Save changes">
@@ -198,6 +220,28 @@ export class UserEditComponent implements OnInit {
   private readonly _saving = signal(false);
   private readonly _username = signal('');
   private readonly _loadedName = signal('');
+  /** The loaded user's account state (band: Reset password / (De|Re)activate). */
+  private readonly accountActions = inject(UserAccountActionsService);
+  private readonly _loadedUser = signal<User | null>(null);
+  readonly loaded = computed(() => !!this._loadedUser());
+  readonly isActive = computed(() => this._loadedUser()?.isActive !== false);
+  readonly accountBusy = signal(false);
+  async resetPassword(): Promise<void> {
+    const u = this._loadedUser();
+    if (!u || this.accountBusy()) return;
+    this.accountBusy.set(true);
+    try { await this.accountActions.resetPassword(u); } finally { this.accountBusy.set(false); }
+  }
+  async toggleActive(): Promise<void> {
+    const u = this._loadedUser();
+    if (!u || this.accountBusy()) return;
+    this.accountBusy.set(true);
+    try {
+      const active = u.isActive !== false;
+      const done = active ? await this.accountActions.deactivate(u) : await this.accountActions.reactivate(u);
+      if (done) this._loadedUser.set({ ...u, isActive: !active });
+    } finally { this.accountBusy.set(false); }
+  }
   private readonly _fieldError = signal<Record<string, string>>({});
 
   readonly countryCodes = COUNTRY_CODES;
@@ -286,6 +330,7 @@ export class UserEditComponent implements OnInit {
       next: ({ users, roles }) => {
         const u = (users ?? []).find(x => x.id === this.id);
         if (u) {
+          this._loadedUser.set(u);
           this._loadedName.set(u.displayName || u.firstName || u.username || '');
           this._username.set(u.username || '');
           this._form.update(v => ({ ...v, title: u.title ?? '', firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '' }));

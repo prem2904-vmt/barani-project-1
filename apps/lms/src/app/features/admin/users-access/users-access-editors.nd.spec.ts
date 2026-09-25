@@ -39,7 +39,7 @@ const perms = [
   { id: 'p2', code: 'enter_results', name: 'Enter results', description: '' },
 ];
 
-function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean } = {}) {
+function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (...a: any[]) => Promise<boolean> } = {}) {
   if (!window.matchMedia) {
     (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   }
@@ -62,7 +62,7 @@ function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean } = {}) {
       provideRouter([]),
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
-      { provide: DialogService, useValue: { confirm: vi.fn(async () => false) } },
+      { provide: DialogService, useValue: { confirm: opts.confirm ?? vi.fn(async () => false) } },
       { provide: AuthService, useValue: { user: () => ({ id: 'me', tenantName: 'Micro World' }), hasPermission: () => true } },
       { provide: TenantStateService, useValue: { tenant: () => null } },
       { provide: NavBackService, useValue: { showBack: () => true, back: vi.fn(), backTo: vi.fn(),
@@ -142,6 +142,41 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelectorAll('.pf-uf-roles .nd-toggle[aria-checked="true"]').length).toBe(1);
     expect(el.querySelector<HTMLInputElement>('input[readonly]')!.classList.contains('nd-input')).toBe(true);
     hygiene(el);
+  });
+
+  it('Edit user: Reset password + Deactivate are band SECONDARIES that reuse the list\'s confirms', async () => {
+    const confirm = vi.fn(async () => true);
+    const { el, f, api } = render(UserEditComponent, { id: 'u1', confirm });
+    const reset = el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-reset')!;
+    const active = () => el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-active')!;
+    expect(reset.classList.contains('pf-hb-btn--ghost')).toBe(true);
+    expect(active().classList.contains('pf-hb-btn--ghost')).toBe(true);
+    expect(active().textContent).toContain('Deactivate');
+    expect(el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(1);
+
+    reset.click();
+    await new Promise(r => setTimeout(r));
+    expect((confirm.mock.calls[0] as any[])[0].title).toBe('Reset password for Dr. Prem Kumar?');
+    expect(api.post).toHaveBeenCalledWith('/api/users/u1/reset-password', expect.objectContaining({ newPassword: expect.any(String) }));
+
+    active().click();
+    await new Promise(r => setTimeout(r));
+    f.detectChanges();
+    expect(confirm.mock.calls.some((c: any[]) => c[0].title === 'Deactivate Dr. Prem Kumar?' && c[0].tone === 'danger')).toBe(true);
+    expect(api.delete).toHaveBeenCalledWith('/api/users/u1');
+    expect(active().textContent).toContain('Reactivate');
+
+    active().click();
+    await new Promise(r => setTimeout(r));
+    expect(api.patch).toHaveBeenCalledWith('/api/users/u1', { isActive: true });
+  });
+
+  it('Edit user: a cancelled confirm changes nothing', async () => {
+    const { el, api } = render(UserEditComponent, { id: 'u1' });
+    el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-active')!.click();
+    await new Promise(r => setTimeout(r));
+    expect(api.delete).not.toHaveBeenCalled();
+    expect(el.querySelector('pf-hero-band .pf-ue-active')!.textContent).toContain('Deactivate');
   });
 
   it('New role: "New role" → the typed name, pencil focuses Role name; role type nd-seg; permissions are switches', () => {
