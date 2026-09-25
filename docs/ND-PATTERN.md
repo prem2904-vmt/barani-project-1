@@ -551,6 +551,70 @@ plus (owner reviews, 2026-09-25):
   the browser (AST open, an identified organism) and answer the pick
   locally — nothing is claimed or written on the server.
 
+## 14. Editors (single-record pages)
+
+Every page that edits ONE record — `/admin/tests/:id/edit` (test, profile,
+package), `/admin/tests/new`, user invite / edit, role new / edit, workflow
+screen + field editors, and any other `:id` / `new` page — follows the band
+rules above. There are no exempt editors any more (owner, 2026-09-25). The
+canonical example is the **test editor**
+(`features/admin/tests/test-editor/`).
+
+- **Band:** back (`[back]` + `[backTo]` the parent list) · tenant · band
+  actions. Actions: a neutral save state, then secondaries (Revert to
+  master, Duplicate, Delete — `pf-hb-btn--ghost`), then the ONE primary
+  (**Save** / **Create** / **Invite**, `pf-hb-btn--primary` with an SVG so
+  it turns into a 44px icon on phones). Embedded sub-editors (notes, report
+  columns, consumables, advanced layout, formula) never carry a second
+  primary: their own saves are secondary.
+- **Save state** (`.nd-savestate`, in the band actions beside Save): muted
+  text; a violet check + "All changes saved", or a violet dot + "Unsaved
+  changes". Never green / amber. Phones keep only the mark (the words stay
+  for AT). Autosave only where it is truly authoritative — the test editor
+  is NOT (its sections save on Save), so Save stays the primary.
+- **Context bar** (`pf-hero-band [customSearch] [contextBar]`, projected
+  `<div band-search class="nd-ctx">`): the record's name as the primary
+  chip (`.nd-ctx__primary`, 15px / 600, FULL — wraps, never an ellipsis)
+  with a quiet pencil (`.nd-ctx__edit`) that opens the field; then neutral
+  key / value chips (`.nd-ctx__chip` › `.nd-ctx__k` + value): origin (no
+  coloured dot), codes in Noto tabular (`.nd-num`), department, sample,
+  price, TAT, fasting, role, status … A chip may jump to its section. The
+  unpriced price carries the one allowed mark, `.nd-dot-unpriced`. A new
+  record's primary chip says what it is ("New test", "New role"). No big
+  title, breadcrumb or subtitle anywhere on the page. `[contextBar]` lets
+  the pill grow to a second row and use the band's full width; on phones
+  the chips scroll sideways in one row.
+- **Sections = a tabs row** (`.nd-tabs[role=tablist]` ›
+  `.nd-tabs__item[role=tab][aria-selected]`: glyph + label +
+  `.nd-tabs__dot`, violet = complete, hollow = something to finish) under
+  the band — the report-designer precedent. No SECTIONS rail: the content
+  takes the full width. Phones: the row scrolls sideways.
+- **Content:** the focused section is ONE `.nd-card` (violet icon chip +
+  UPPERCASE label + a short `.nd-card__note`); only its body scrolls.
+  Fields are kit fields (`.nd-field` › `.nd-field__lbl` + `.nd-input` +
+  `.nd-field__hint`; read-only codes: `[readonly]` → dashed, chip surface,
+  `.nd-num`), `pf-select` for choices, `.nd-seg` for 2–4 options, slate
+  `.nd-toggle[role=switch]` for on / off (never checkbox pills), tick lists
+  as kit rows (`.nd-row` + `.nd-row__check`, `.nd-row--in` when ticked;
+  a visually hidden checkbox keeps keyboard + forms). Type: labels 12px /
+  500 secondary, hints 12px tertiary, sub-headings 13px / 600.
+- **Side card only when it adds info** the form can't show — the test
+  editor's LIVE PREVIEW (the printed page), 400px at ≥1024px. Below that it
+  hides behind a secondary **Preview** button at the end of the tabs row and
+  opens as a sheet (phones: `.nd-sheet`-style, above the navbar; tablets: a
+  side sheet), with a scrim; Esc / × / scrim close.
+- **Palette + font:** violet + neutrals + slate; no green / teal / amber
+  status text or pills ("Complete" = violet check, "Needs a name" = the
+  amber required dot); Noto only, tabular numbers for codes, never
+  monospace; SVG icons, never glyphs (✕ ↑ ↓ ⠿ ƒ ●).
+- **Real-layout check:** `apps/lms-e2e/src/test-editor-layout.rbac.spec.ts`
+  (seeded Lab Admin; opens BIO005 via Test Master's own list call; read
+  only) asserts ONE primary on every tab, the full name in the context bar,
+  the tabs row, the 400px preview card at 1440, no page scroll, and no
+  monospace / green computed anywhere on the editor; at 375 the tabs scroll,
+  Save is an icon and Preview opens a sheet above the navbar. Run it against
+  a build: `BASE_URL=http://localhost:4310 CORS_RELAY=1 SHOTS_DIR=…`.
+
 ## API summary
 
 ```
@@ -562,6 +626,9 @@ Select   .nd-seg / .nd-seg__item[aria-checked] · .nd-chip[aria-pressed] · .nd-
 Toggle   .nd-toggle[role=switch][aria-checked] › .nd-toggle__track › .nd-toggle__knob · .nd-toggle--urgent
 Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done
 Numbers  .nd-num (Noto Sans + tabular-nums; .nd-mono is an alias)
+Fields   .nd-field › __lbl · .nd-input(--error)[readonly] · __hint
+Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit · __chip · __k · .nd-dot-unpriced
+         .nd-tabs[role=tablist] › .nd-tabs__item[role=tab][aria-selected] › .nd-tabs__dot(--ok) · .nd-savestate(__dot)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
 AI       .nd-ai-glow[data-ai-working] · .nd-ai-glow--inset · .nd-ai-glow--ring · .nd-ai-glow-mark · --nd-ai-angle (PF Sense only)

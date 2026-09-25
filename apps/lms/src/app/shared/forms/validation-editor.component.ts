@@ -202,7 +202,7 @@ export interface ValidationPatch {
     .pf-val-label {
       font-size: 11px;
       color: var(--text-muted);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     .pf-val-clear {

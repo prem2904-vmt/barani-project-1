@@ -76,7 +76,7 @@ export type SegmentedSize = 'sm' | 'md';
     .seg-dot { width: 7px; height: 7px; border-radius: 9999px; flex-shrink: 0; }
     .seg-count {
       font-size: 11px; font-weight: 600;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       opacity: 0.8;
     }
     .seg-item:active:not(:disabled) { transform: scale(0.97); }

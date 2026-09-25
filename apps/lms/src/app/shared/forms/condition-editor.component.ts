@@ -131,7 +131,7 @@ const VISIBILITY_OPTIONS: PfSelectOption<'show' | 'hide'>[] = [
     .pf-cond-helper {
       margin: 0 0 8px 2px;
       font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       color: var(--text-muted);
       letter-spacing: 0.04em;
     }
