@@ -349,3 +349,54 @@ describe('filterTestList', () => {
     expect(result[0].customField).toBe('extra');
   });
 });
+
+import { filterTestListStrict, scoreTestSearchStrict } from './test-search';
+
+describe('filterTestListStrict (order search dropdown)', () => {
+  const T = (id: string, name: string, testCode: string, extra: any = {}) => ({ id, name, testCode, type: 'individual', ...extra });
+  const cat = [
+    T('abc', 'Absolute Basophil Count', 'HEM021'),
+    T('jak', 'JAK2 Mutation Detection', 'MOL014'),
+    T('jap', 'Japanese Encephalitis IgM', 'IMS088'),
+    T('naja', 'Ninja Marker', 'BIO900'),
+    T('sgot', 'SGOT (AST)', 'BIO101'),
+    T('lft', 'Liver Function Test', 'PRO010', { type: 'profile', shortName: 'LFT',
+      parameters: JSON.stringify({ items: [{ testId: 'sgot' }] }) }),
+    T('hb', 'Haemoglobin', 'HEM011', { shortName: 'Hb' }),
+    T('hba', 'HbA1c', 'BIO012', { shortName: 'HBA1C' }),
+    T('hem', 'Hematocrit', 'HEM010'),
+  ];
+  const ids = (q: string) => filterTestListStrict(cat, q).map((t: any) => t.id);
+
+  it('"ja" finds JAK2 (and Japanese) but not Absolute Basophil Count', () => {
+    const r = ids('ja');
+    expect(r).toContain('jak');
+    expect(r).toContain('jap');
+    expect(r).not.toContain('abc');
+    expect(r.indexOf('jak')).toBeLessThan(r.indexOf('naja'));   // word-prefix before substring
+  });
+
+  it('"LFT" matches the liver profile by short name, and its members by profile label', () => {
+    const r = ids('LFT');
+    expect(r[0]).toBe('lft');
+    expect(r).toContain('sgot');
+  });
+
+  it('ranking: exact code › code prefix › short-name prefix › name word-prefix › name substring', () => {
+    expect(ids('HEM011')[0]).toBe('hb');
+    const r = ids('hb');
+    // exact short name "Hb" › short-name prefix "HBA1C"
+    expect(r.slice(0, 2)).toEqual(['hb', 'hba']);
+    const s = ['HEM011', 'hem', 'hema'].map(q => ids(q));
+    expect(s[1][0]).toMatch(/^(hem|hb|abc)$/);          // code prefix hits first
+    expect(scoreTestSearchStrict(cat[1], 'mol0')).toBeGreaterThan(scoreTestSearchStrict(cat[1], 'mutation'));
+    expect(scoreTestSearchStrict(cat[1], 'mutation')).toBeGreaterThan(scoreTestSearchStrict(cat[3], 'nja'));
+  });
+
+  it('1-character queries only match prefixes; no fuzzy near-misses', () => {
+    expect(ids('j')).toEqual(expect.arrayContaining(['jak', 'jap']));
+    expect(ids('j')).not.toContain('naja');                 // "j" inside "Ninja" is not a prefix
+    expect(ids('hemoglobn')).toEqual([]);                    // no edit-distance matching
+    expect(ids('lfx')).toEqual([]);
+  });
+});

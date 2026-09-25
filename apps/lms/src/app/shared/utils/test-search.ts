@@ -207,3 +207,51 @@ function oneRowPerKey<T extends Test | any>(list: T[]): T[] {
     return !key || !rank || best.get(key) === t;
   });
 }
+
+/**
+ * STRICT ranked search — the order screen's search dropdown (owner: the
+ * fuzzy / acronym tiers of {@link scoreTestSearch} made "ja" return 190
+ * rows). Case-insensitive substring on code, name, short name and profile
+ * label (the typed `profile` tag + membership-derived aliases); no fuzzy,
+ * no subsequence, no acronym. A 1-character query only matches prefixes.
+ * Rank: exact code › exact short name › code prefix › short-name prefix ›
+ * name word-prefix › profile-label word-prefix › name substring ›
+ * code / short / profile substring. Ties keep catalogue order.
+ */
+export function scoreTestSearchStrict(test: Test | any, query: string, aliases: readonly string[] = []): number {
+  const q = (query ?? '').trim().toLowerCase();
+  if (!q) return 1;
+  const name = String(test?.name ?? test?.testName ?? '').toLowerCase();
+  const code = String(test?.testCode ?? test?.code ?? '').toLowerCase();
+  const short = String(test?.shortName ?? '').toLowerCase();
+  const labels = [test?.profile, ...aliases].filter(Boolean).map(x => String(x).toLowerCase());
+  const words = (s: string) => s.split(/[^a-z0-9]+/).filter(Boolean);
+  const wordPrefix = (s: string, v: string) =>
+    s.startsWith(v) || words(s).some(w => w.startsWith(v)) || (v.includes(' ') && s.includes(' ' + v));
+  const prefixOnly = q.length < 2;
+  let best = 0;
+  for (const v of spellingVariants(q)) {
+    let sc = 0;
+    if (code && code === v) sc = 100;
+    else if (short && short === v) sc = 95;
+    else if (code.startsWith(v)) sc = 90;
+    else if (short.startsWith(v)) sc = 80;
+    else if (wordPrefix(name, v)) sc = 70;
+    else if (labels.some(l => wordPrefix(l, v))) sc = 60;
+    else if (!prefixOnly && name.includes(v)) sc = 50;
+    else if (!prefixOnly && (code.includes(v) || short.includes(v) || labels.some(l => l.includes(v)))) sc = 40;
+    if (sc > best) best = sc;
+  }
+  return best;
+}
+
+/** Filter + rank with {@link scoreTestSearchStrict}. Empty query → list. */
+export function filterTestListStrict<T extends Test | any>(list: T[], query: string, catalogue: readonly (Test | any)[] = list): T[] {
+  if (!query || !query.trim()) return list;
+  const aliases = profileAliases(catalogue);
+  return oneRowPerKey(list)
+    .map((t, i) => ({ t, i, s: scoreTestSearchStrict(t, query, aliasesFor(t, aliases)) }))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map(x => x.t);
+}
