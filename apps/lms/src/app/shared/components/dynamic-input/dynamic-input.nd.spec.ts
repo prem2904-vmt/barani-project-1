@@ -33,16 +33,54 @@ describe('DynamicInputComponent — new-design markup', () => {
     expect(el.querySelector('.text-red-500')).toBeNull();
   });
 
-  it('2–4 options (Sex) → an equal-width neutral segmented control, aria-pressed, no --on class', () => {
+  it('2–4 options (Sex) → an equal-width neutral radio group, aria-checked, no --on class', () => {
     const { el, f } = create({ name: 'sex', title: 'Sex', type: 'select', options: ['Male', 'Female', 'Other'] });
-    const seg = el.querySelector('.nd-seg.pf-di-seg--fill')!;
+    const seg = el.querySelector('[role="radiogroup"].nd-seg.pf-di-seg--fill')!;
     expect(seg).not.toBeNull();
-    const items = seg.querySelectorAll<HTMLButtonElement>('.nd-seg__item');
+    const items = seg.querySelectorAll<HTMLButtonElement>('.nd-seg__item[role="radio"]');
     expect(items.length).toBe(3);
     items[1].click();
     f.detectChanges();
-    expect(items[1].getAttribute('aria-pressed')).toBe('true');
+    expect(items[1].getAttribute('aria-checked')).toBe('true');
+    expect(Array.from(items).map(b => b.getAttribute('tabindex'))).toEqual(['-1', '0', '-1']);
     expect(el.querySelector('pf-select, [class*="--on"]')).toBeNull();
+  });
+
+  it('segment keyboard: arrows move + select, a letter picks (and cycles) the matching option', () => {
+    const { el, f, c } = create({ name: 'title', title: 'Title', type: 'button_select',
+      options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby'] });
+    const g = el.querySelector<HTMLElement>('[role="radiogroup"]')!;
+    const key = (k: string) => { g.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); f.detectChanges(); };
+    key('m'); expect(c.value).toBe('Mr.');
+    key('m'); expect(c.value).toBe('Mrs.');
+    key('d'); expect(c.value).toBe('Dr.');
+    key('ArrowRight'); expect(c.value).toBe('Master');
+    key('End'); expect(c.value).toBe('Baby');
+    key('Home'); expect(c.value).toBe('Mr.');
+  });
+
+  it('a field-level error outlines the control and shows the message under it', () => {
+    const f = TestBed.createComponent(DynamicInputComponent);
+    f.componentRef.setInput('field', { name: 'first_name', title: 'First name', type: 'text', required: true });
+    f.componentRef.setInput('nd', true);
+    f.componentRef.setInput('error', 'Required');
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const input = el.querySelector('input')!;
+    expect(input.classList.contains('nd-input--error')).toBe(true);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    const msg = el.querySelector('.pf-di-err')!;
+    expect(msg.textContent!.trim()).toBe('Required');
+    expect(input.getAttribute('aria-describedby')).toBe(msg.id);
+  });
+
+  it('phone: the default country code (the tenant\'s) applies while empty', () => {
+    const f = TestBed.createComponent(DynamicInputComponent);
+    f.componentRef.setInput('field', { name: 'phone', title: 'Phone', type: 'phone' });
+    f.componentRef.setInput('nd', true);
+    f.componentRef.setInput('defaultCountryCode', '+971');
+    f.detectChanges();
+    expect(f.componentInstance.selectedCountryCode()).toBe('+971');
   });
 
   it('5+ options stay a searchable pf-select (no native select)', () => {
@@ -65,7 +103,7 @@ describe('DynamicInputComponent — new-design markup', () => {
     expect(el.querySelector('input[type="number"].nd-input.nd-num')).not.toBeNull();
     const unit = el.querySelectorAll('.pf-di-seg--unit .nd-seg__item');
     expect(Array.from(unit).map(b => b.textContent!.trim())).toEqual(['Yrs', 'Mo']);
-    expect(unit[0].getAttribute('aria-pressed')).toBe('true');
+    expect(unit[0].getAttribute('aria-checked')).toBe('true');
     let out: unknown;
     c.valueChange.subscribe(v => (out = v));
     c.onHybridAge(30);

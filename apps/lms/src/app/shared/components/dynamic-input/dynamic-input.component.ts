@@ -59,7 +59,8 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
     <ng-template #ndTpl>
       @let t = field.type;
       @let opts = normalisedOptions();
-      <div class="flex flex-col gap-1.5 nd-field pf-di-nd" [attr.data-field]="field.name">
+      @let err = error || (t === 'phone' ? phoneError() : null);
+      <div class="flex flex-col gap-1.5 nd-field pf-di-nd" [attr.data-field]="field.name" [class.pf-di-nd--error]="!!err">
         @if (t !== 'checkbox' && t !== 'toggle') {
           <label class="nd-field__lbl pf-di-lbl" [attr.for]="inputId" [id]="inputId + '-l'">
             <span>{{ field.title }}</span>
@@ -73,107 +74,121 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
         @switch (t) {
           @case ('text') {
             @if (identityFormat(); as fmt) {
-              <input #dinp [id]="inputId" type="text" inputmode="numeric" class="nd-input nd-num"
+              <input #dinp [id]="inputId" data-pf-stop type="text" inputmode="numeric" class="nd-input nd-num"
+                     [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                      [attr.maxlength]="fmt.max" [placeholder]="fmt.placeholder" [attr.aria-required]="field.required || null"
                      [ngModel]="displayIdentity(value)" (ngModelChange)="emitIdentity(dinp, $event, fmt)" />
             } @else if (digitLimit(); as lim) {
-              <input #dinp [id]="inputId" type="text" inputmode="numeric" pattern="[0-9]*" class="nd-input nd-num"
+              <input #dinp [id]="inputId" data-pf-stop type="text" inputmode="numeric" pattern="[0-9]*" class="nd-input nd-num"
+                     [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                      [attr.maxlength]="lim" [placeholder]="field.placeholder ?? ''" [attr.aria-required]="field.required || null"
                      [ngModel]="value" (ngModelChange)="emitDigits(dinp, $event, lim)" />
             } @else {
-              <input [id]="inputId" type="text" class="nd-input" [placeholder]="field.placeholder ?? ''"
+              <input [id]="inputId" data-pf-stop type="text" class="nd-input" [placeholder]="field.placeholder ?? ''"
+                     [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                      [attr.aria-required]="field.required || null"
                      [ngModel]="value" (ngModelChange)="emit($event)" />
             }
           }
           @case ('email') {
-            <input [id]="inputId" type="email" class="nd-input" [placeholder]="field.placeholder ?? ''"
+            <input [id]="inputId" data-pf-stop type="email" class="nd-input" [placeholder]="field.placeholder ?? ''"
+                   [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                    [attr.aria-required]="field.required || null" [ngModel]="value" (ngModelChange)="emit($event)" />
           }
           @case ('phone') {
-            <div class="pf-di-phone" [class.pf-di-phone--err]="phoneError() != null">
+            <div class="pf-di-phone" [class.pf-di-phone--err]="!!err">
               <pf-select class="pf-di-phone__cc" [options]="countrySelectOptionsNd" [searchable]="true"
                          [value]="selectedCountryCode()" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
               <span class="pf-di-phone__sep" aria-hidden="true"></span>
-              <input [id]="inputId" type="tel" inputmode="tel" class="pf-di-phone__num nd-num"
+              <input [id]="inputId" data-pf-stop type="tel" inputmode="tel" class="pf-di-phone__num nd-num"
                      [attr.aria-required]="field.required || null"
+                     [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                      [placeholder]="activePhoneRule().placeholder"
                      [ngModel]="phoneDigits()" (ngModelChange)="onPhoneDigitsChange($event)" />
             </div>
-            @if (phoneError(); as err) { <p class="pf-di-err">{{ err }}</p> }
           }
-          @case ('number') { <ng-container *ngTemplateOutlet="ndNumTpl"></ng-container> }
-          @case ('numeric') { <ng-container *ngTemplateOutlet="ndNumTpl"></ng-container> }
+          @case ('number') { <ng-container *ngTemplateOutlet="ndNumTpl; context: { err: err }"></ng-container> }
+          @case ('numeric') { <ng-container *ngTemplateOutlet="ndNumTpl; context: { err: err }"></ng-container> }
           @case ('textarea') {
-            <textarea [id]="inputId" class="nd-input pf-di-area" [placeholder]="field.placeholder ?? ''"
+            <textarea [id]="inputId" data-pf-stop class="nd-input pf-di-area" [placeholder]="field.placeholder ?? ''"
+                      [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                       [ngModel]="value" (ngModelChange)="emit($event)"></textarea>
           }
           @case ('date') {
             @if (isDobField()) {
               <!-- DOB ⇄ age: an exact date OR an age (Yrs / Mo), same logic as classic. -->
               <div class="pf-di-dob">
-                <input [id]="inputId" type="date" class="nd-input nd-num pf-di-dob__date" [attr.max]="todayIso"
+                <input [id]="inputId" data-pf-stop type="date" class="nd-input nd-num pf-di-dob__date" [attr.max]="todayIso"
+                       [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                        [attr.aria-required]="field.required || null"
                        [ngModel]="value" (ngModelChange)="emit($event)" />
                 <span class="pf-di-dob__or">or</span>
                 <input type="number" inputmode="numeric" class="nd-input nd-num pf-di-dob__age" min="0"
+                       [class.nd-input--error]="!!err"
                        [attr.max]="ageUnit() === 'months' ? 240 : 150" placeholder="Age"
                        [attr.aria-label]="'Age in ' + ageUnit()"
                        [ngModel]="hybridAgeDisplay()" (ngModelChange)="onHybridAge($event)" />
-                <div class="nd-seg pf-di-seg pf-di-seg--unit" role="group" aria-label="Age unit">
-                  <button type="button" class="nd-seg__item" [attr.aria-pressed]="ageUnit() === 'years'"
-                          (click)="setAgeUnit('years')">Yrs</button>
-                  <button type="button" class="nd-seg__item" [attr.aria-pressed]="ageUnit() === 'months'"
-                          (click)="setAgeUnit('months')">Mo</button>
+                <div class="nd-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
+                     (keydown)="onUnitKey($event)">
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
+                          [attr.tabindex]="ageUnit() === 'years' ? 0 : -1" (click)="setAgeUnit('years')">Yrs</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'months'"
+                          [attr.tabindex]="ageUnit() === 'months' ? 0 : -1" (click)="setAgeUnit('months')">Mo</button>
                 </div>
               </div>
-              <p class="nd-field__hint">Type either — an entered age stays current automatically.</p>
+              @if (!err) { <p class="nd-field__hint">Type either — an entered age stays current automatically.</p> }
             } @else {
-              <input [id]="inputId" type="date" class="nd-input nd-num" [ngModel]="value" (ngModelChange)="emit($event)" />
+              <input [id]="inputId" data-pf-stop type="date" class="nd-input nd-num" [class.nd-input--error]="!!err"
+                     [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+                     [ngModel]="value" (ngModelChange)="emit($event)" />
             }
           }
           @case ('datetime') {
-            <input [id]="inputId" type="datetime-local" class="nd-input nd-num" [ngModel]="value" (ngModelChange)="emit($event)" />
+            <input [id]="inputId" data-pf-stop type="datetime-local" class="nd-input nd-num" [class.nd-input--error]="!!err"
+                   [ngModel]="value" (ngModelChange)="emit($event)" />
           }
           @case ('time') {
-            <input [id]="inputId" type="time" class="nd-input nd-num" [ngModel]="value" (ngModelChange)="emit($event)" />
+            <input [id]="inputId" data-pf-stop type="time" class="nd-input nd-num" [class.nd-input--error]="!!err"
+                   [ngModel]="value" (ngModelChange)="emit($event)" />
           }
           @case ('select') {
             @if (opts.length >= 2 && opts.length <= 4) {
               <!-- 2–4 choices (Sex, …): a neutral segmented control that fills the column. -->
-              <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: true }"></ng-container>
+              <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: true, err: err }"></ng-container>
             } @else {
               <pf-select [options]="selectOptions()" [value]="value" [searchable]="opts.length > 8"
+                         [class.pf-di-select--error]="!!err"
                          [placeholder]="field.placeholder ?? 'Select…'" (valueChange)="emit($event)"></pf-select>
             }
           }
           @case ('button_select') {
-            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4 }"></ng-container>
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4, err: err }"></ng-container>
           }
           @case ('image_select') {
-            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4 }"></ng-container>
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4, err: err }"></ng-container>
           }
           @case ('radio') {
-            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4 }"></ng-container>
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4, err: err }"></ng-container>
           }
           @case ('yesno') {
-            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: yesNoOptions(), fill: true }"></ng-container>
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: yesNoOptions(), fill: true, err: err }"></ng-container>
           }
           @case ('yes_no_na') {
-            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: yesNoNaOptions, fill: true }"></ng-container>
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: yesNoNaOptions, fill: true, err: err }"></ng-container>
           }
           @case ('multi_button_select') {
             <div class="pf-di-chips" role="group" [attr.aria-labelledby]="inputId + '-l'">
-              @for (o of opts; track o.value) {
-                <button type="button" class="nd-chip pf-di-chip" [attr.aria-pressed]="isSelected(o.value)"
-                        (click)="toggleMulti(o.value)">{{ o.label }}</button>
+              @for (o of opts; track o.value; let first = $first) {
+                <button type="button" class="nd-chip pf-di-chip" [attr.data-pf-stop]="first ? '' : null"
+                        [attr.aria-pressed]="isSelected(o.value)" (click)="toggleMulti(o.value)">{{ o.label }}</button>
               }
             </div>
           }
           @case ('multiselect') {
             <div class="pf-di-chips" role="group" [attr.aria-labelledby]="inputId + '-l'">
-              @for (o of opts; track o.value) {
-                <button type="button" class="nd-chip pf-di-chip" [attr.aria-pressed]="isSelected(o.value)"
+              @for (o of opts; track o.value; let first = $first) {
+                <button type="button" class="nd-chip pf-di-chip" [attr.data-pf-stop]="first ? '' : null"
+                        [attr.aria-pressed]="isSelected(o.value)"
                         [title]="o.sublabel ?? o.label" (click)="toggleMulti(o.value)">{{ o.label }}</button>
               } @empty {
                 <p class="nd-field__hint">No options available.</p>
@@ -181,12 +196,12 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
             </div>
           }
           @case ('scan') {
-            <input [id]="inputId" type="text" class="nd-input nd-num" placeholder="Scan or type barcode"
-                   [ngModel]="value" (ngModelChange)="emit($event)" />
+            <input [id]="inputId" data-pf-stop type="text" class="nd-input nd-num" placeholder="Scan or type barcode"
+                   [class.nd-input--error]="!!err" [ngModel]="value" (ngModelChange)="emit($event)" />
           }
           @default {
             <!-- checkbox / toggle: a slate switch with its label beside it. -->
-            <button type="button" class="nd-toggle pf-di-switch" role="switch" [attr.aria-checked]="!!value"
+            <button type="button" data-pf-stop class="nd-toggle pf-di-switch" role="switch" [attr.aria-checked]="!!value"
                     (click)="emit(!value)">
               <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
               <span class="pf-di-switch__t">
@@ -199,23 +214,33 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
           }
         }
 
-        @if (field.helperText && t !== 'checkbox') {
+        @if (err) {
+          <p class="pf-di-err" [id]="inputId + '-e'" role="alert">{{ err }}</p>
+        } @else if (field.helperText && t !== 'checkbox') {
           <p class="nd-field__hint">{{ field.helperText }}</p>
         }
       </div>
     </ng-template>
 
-    <ng-template #ndNumTpl>
-      <input [id]="inputId" type="number" class="nd-input nd-num" [step]="'any'" [placeholder]="field.placeholder ?? ''"
+    <ng-template #ndNumTpl let-err="err">
+      <input [id]="inputId" data-pf-stop type="number" class="nd-input nd-num" [step]="'any'" [placeholder]="field.placeholder ?? ''"
+             [class.nd-input--error]="!!err" [attr.aria-invalid]="err ? true : null"
              [ngModel]="value" (ngModelChange)="emit($event === null ? null : $event)" />
     </ng-template>
 
-    <!-- One-of-n: a neutral segmented control, aria-pressed = the selected
-         state. fill → equal segments across the column (2–4 choices). -->
-    <ng-template #ndSegTpl let-list let-fill="fill">
-      <div class="nd-seg pf-di-seg" [class.pf-di-seg--fill]="fill" role="group" [attr.aria-labelledby]="inputId + '-l'">
-        @for (o of list; track o.value) {
-          <button type="button" class="nd-seg__item" [attr.aria-pressed]="value === o.value"
+    <!-- One-of-n: a neutral segmented RADIO GROUP. Keyboard: ←/→ (↑/↓)
+         move + select, Home / End, and a letter picks the option starting
+         with it (M → Male; again → the next "M…"). Roving tabindex: the
+         checked option (or the first) is the one Tab stop. fill → equal
+         segments across the column (2–4 choices). -->
+    <ng-template #ndSegTpl let-list let-fill="fill" let-err="err">
+      <div class="nd-seg pf-di-seg" [class.pf-di-seg--fill]="fill" [class.pf-di-seg--error]="!!err"
+           role="radiogroup" [attr.aria-labelledby]="inputId + '-l'" [attr.aria-required]="field.required || null"
+           [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+           (keydown)="onSegKey($event, list)">
+        @for (o of list; track o.value; let i = $index) {
+          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="value === o.value"
+                  [attr.tabindex]="segStop(list, i) ? 0 : -1" [attr.data-pf-stop]="segStop(list, i) ? '' : null"
                   (click)="emit(o.value)">{{ o.label }}</button>
         }
       </div>
@@ -917,7 +942,8 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
       border-color: var(--color-violet-600, #7c3aed);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
     }
-    .pf-di-phone--err { border-color: var(--red-border, #ef4444); }
+    .pf-di-phone--err, .pf-di-phone--err:hover, .pf-di-phone--err:focus-within { border-color: var(--red-border, #ef4444); }
+    .pf-di-phone--err:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-border, #ef4444) 18%, transparent); }
     .pf-di-phone__cc { flex: 0 0 92px; min-width: 0; }
     :host .pf-di-phone__cc ::ng-deep .pf-dd__trigger {
       height: 38px !important; border: 0 !important; background: transparent !important;
@@ -944,6 +970,10 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
     .pf-di-seg--fill .nd-seg__item { flex: 1 1 0; }
     .pf-di-seg--unit { flex: none; }
     .pf-di-seg--unit .nd-seg__item { min-width: 44px; padding: 0 10px; }
+    /* Field-level errors (new design): the control is outlined in error red. */
+    .pf-di-seg--error { border-color: var(--red-border, #ef4444); }
+    :host .pf-di-nd ::ng-deep pf-select.pf-di-select--error .pf-dd__trigger { border-color: var(--red-border, #ef4444) !important; }
+    .pf-di-seg .nd-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
     .pf-di-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-di-chip { height: 34px; font-size: 13px; }
     .pf-di-switch { min-height: 40px; font-size: 13.5px; white-space: normal; text-align: left; }
@@ -984,6 +1014,65 @@ export class DynamicInputComponent {
     value: r.code, label: r.code, hint: r.name,
   }));
   readonly yesNoNaOptions: FieldOption[] = ['Yes', 'No', 'N/A'].map(v => ({ value: v, label: v }));
+  /** New design: a field-level error from the host's validation (outlined
+   *  control + message under it). */
+  @Input() error: string | null = null;
+  /** New design: the tenant's dialling code — the phone field's default
+   *  until a value says otherwise. */
+  @Input() set defaultCountryCode(code: string | null) {
+    if (!code || !COUNTRY_PHONE_RULES.some(r => r.code === code)) return;
+    const v = this._value();
+    if (v == null || v === '') this._selectedCountryCode.set(code);
+  }
+
+  /** Roving tabindex: the checked option is the Tab / Enter stop (the
+   *  first one while nothing is checked). */
+  segStop(list: FieldOption[], i: number): boolean {
+    const at = list.findIndex(o => o.value === this.value);
+    return at >= 0 ? at === i : i === 0;
+  }
+
+  /** Segmented keyboard: arrows / Home / End move + select; a letter picks
+   *  the (next) option that starts with it — M / F / O on Sex. */
+  onSegKey(e: KeyboardEvent, list: FieldOption[]): void {
+    if (e.ctrlKey || e.metaKey || e.altKey || !list.length) return;
+    const at = list.findIndex(o => o.value === this.value);
+    let next = -1;
+    switch (e.key) {
+      case 'ArrowRight': case 'ArrowDown': next = at < 0 ? 0 : (at + 1) % list.length; break;
+      case 'ArrowLeft': case 'ArrowUp': next = at < 0 ? list.length - 1 : (at - 1 + list.length) % list.length; break;
+      case 'Home': next = 0; break;
+      case 'End': next = list.length - 1; break;
+      default:
+        if (e.key.length === 1 && /[a-z0-9]/i.test(e.key)) {
+          const k = e.key.toLowerCase();
+          const hits = list.map((o, i) => ({ o, i }))
+            .filter(x => String(x.o.label).replace(/^[^a-z0-9]+/i, '').toLowerCase().startsWith(k));
+          if (!hits.length) return;
+          const cur = hits.findIndex(x => x.i === at);
+          next = hits[(cur + 1) % hits.length].i;
+        }
+    }
+    if (next < 0) return;
+    e.preventDefault();
+    this.emit(list[next].value);
+    const group = e.currentTarget as HTMLElement | null;
+    setTimeout(() => group?.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus());
+  }
+
+  /** Yrs / Mo: arrows or Y / M switch the age unit. */
+  onUnitKey(e: KeyboardEvent): void {
+    const k = e.key.toLowerCase();
+    let u: 'years' | 'months' | null = null;
+    if (['arrowright', 'arrowleft', 'arrowup', 'arrowdown'].includes(k)) u = this.ageUnit() === 'years' ? 'months' : 'years';
+    else if (k === 'y') u = 'years';
+    else if (k === 'm') u = 'months';
+    if (!u) return;
+    e.preventDefault();
+    this.setAgeUnit(u);
+    const group = e.currentTarget as HTMLElement | null;
+    setTimeout(() => group?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
+  }
   private readonly _field = signal<DynamicFieldConfig | null>(null);
   private readonly _value = signal<unknown>(null);
 

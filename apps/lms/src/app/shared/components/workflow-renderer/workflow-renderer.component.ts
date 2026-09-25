@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, Input, OnChanges, SimpleChanges, computed, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Input, OnChanges, SimpleChanges, TemplateRef, computed, inject, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   ConditionLogic,
@@ -39,23 +39,43 @@ export interface WorkflowStepCompleteEvent {
     @if (!cfg || visibleSteps().length === 0) {
       <div class="pf-card text-sm text-slate-500">Nothing to render.</div>
     } @else if (singlePage() && nd()) {
-      <!-- NEW DESIGN (ND-PATTERN §14): the host shows ONE section at a time
-           (its tabs ride in the band pill) and owns the actions (the ONE
-           primary sits in the band) — so no headings and, with hideActions,
-           no action row here. Validation still covers EVERY section; the
-           (invalid) output tells the host which one to open. -->
-      @if (validationError(); as err) {
-        <p class="pf-wr-err" role="alert">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-          <span>{{ err }}</span>
-        </p>
-      }
-      @for (s of ndSteps(); track s.id) {
-        <div class="pf-wr-sec" [attr.data-step]="s.id">
-          <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
-        </div>
-      }
+      <!-- NEW DESIGN (ND-PATTERN §15): ONE form, every step visible at once
+           as its own section card (violet icon chip + label + "N required").
+           The host lays the cards out (3 / 2 / 1 columns) and owns the
+           actions (the ONE primary sits in the band). Keyboard-first: Enter
+           moves to the next field in reading order; on the last field it
+           asks the host to submit (enterSubmit). Errors are field-level. -->
+      <div class="pf-wr-cards" (keydown)="onNdKey($event)">
+        @for (s of visibleSteps(); track s.id) {
+          @let req = requiredCount(s);
+          <section class="nd-card pf-wr-card" [attr.data-step]="s.id" [attr.aria-labelledby]="'pf-wr-h-' + s.id">
+            <div class="nd-card__head pf-wr-card__head">
+              <span class="nd-card__icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  @switch (stepKind(s)) {
+                    @case ('identity') { <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/> }
+                    @case ('contact') { <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/> }
+                    @case ('more') { <path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/> }
+                    @default { <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/> }
+                  }
+                </svg>
+              </span>
+              <h2 class="nd-card__label pf-wr-card__label" [id]="'pf-wr-h-' + s.id">{{ s.title }}</h2>
+              <span class="pf-wr-card__note">
+                @if (req > 0) { <span class="nd-dot-unpriced" aria-hidden="true"></span>{{ req }} required } @else { Optional }
+              </span>
+              <span class="nd-card__spacer"></span>
+              @if (stepHeaderTpl() && stepHeaderFor() === s.id) {
+                <span class="pf-wr-card__extra"><ng-container *ngTemplateOutlet="stepHeaderTpl()!"></ng-container></span>
+              }
+            </div>
+            <div class="nd-card__body pf-wr-card__body">
+              <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
+            </div>
+          </section>
+        }
+      </div>
       @if (!hideActions()) {
         <div class="mt-5 flex flex-wrap gap-3 justify-end items-center">
           @for (action of extraActions(); track action.id) {
@@ -223,12 +243,14 @@ export interface WorkflowStepCompleteEvent {
               </div>
             </div>
           } @else {
-            <div [class]="widthClass(f.width)">
+            <div [class]="nd() ? ndSpan(f) : widthClass(f.width)">
               <pf-dynamic-input
                 [field]="fieldConfig(f)"
                 [value]="valueFor(step, f.name)"
                 [context]="context()"
                 [nd]="nd()"
+                [error]="nd() ? fieldError(step, f.name) : null"
+                [defaultCountryCode]="nd() ? $any(context()['defaultPhoneCode'] ?? null) : null"
                 (valueChange)="setValue(step, f.name, $event)"></pf-dynamic-input>
             </div>
           }
@@ -241,14 +263,30 @@ export interface WorkflowStepCompleteEvent {
     </ng-template>
   `,
   styles: [`
-    /* New design: the validation line sits at the top of the section card. */
-    .pf-wr-err {
-      display: flex; align-items: flex-start; gap: 8px; margin: 0 0 14px; padding: 10px 12px;
-      border-radius: var(--nd-radius-sm, 10px); border: 1px solid color-mix(in srgb, var(--red-border, #ef4444) 45%, transparent);
-      background: color-mix(in srgb, var(--red-border, #ef4444) 7%, transparent);
-      color: var(--red-text, #dc2626); font-size: 13px; font-weight: 500; line-height: 1.4;
+    /* New design (§15): section cards — 1 column on phones, 2 on tablets,
+       3 side by side from 1200px, where the row fills the host's height and
+       only a card BODY scrolls (never the page). */
+    .pf-wr-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+    @media (min-width: 768px) { .pf-wr-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (min-width: 1200px) {
+      .pf-wr-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr);
+        align-items: stretch; height: 100%; min-height: 0; }
+      .pf-wr-card { min-height: 0; }
     }
-    .pf-wr-err > svg { flex: none; margin-top: 2px; }
+    .pf-wr-card__head { row-gap: 8px; }
+    .pf-wr-card__note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-wr-card__extra { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+    .pf-wr-card__body { padding: 16px; container-type: inline-size; }
+    /* Fields inside a card: two columns; full-width fields span both. */
+    .pf-wr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+    .pf-wr-span { grid-column: 1 / -1; }
+    @container (max-width: 340px) { .pf-wr-grid { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 640px) {
+      .pf-wr-grid { grid-template-columns: minmax(0, 1fr); }
+      .pf-wr-card__body { padding: 14px; }
+      /* Beat the global phone h2 cap (!important): the card label is 12px. */
+      h2.nd-card__label.pf-wr-card__label { font-size: 12px !important; line-height: 1.3 !important; }
+    }
     /* Same 44px control height / 12px radius the dynamic inputs use — the
        renderer's own raw inputs and the title-prefix select must not sit a
        few pixels off from their neighbours. */
@@ -273,9 +311,12 @@ export class WorkflowRendererComponent implements OnChanges {
   /** New-design markup (ND-PATTERN §14): kit fields, no in-form headings.
    *  Only meaningful with singlePage. Off by default (workflow preview …). */
   readonly nd = input<boolean>(false);
-  /** New design: render only this step (the host's open section tab);
-   *  null = every step. Validation always covers every step. */
-  readonly activeStepId = input<string | null>(null);
+  /** New design: extra header content (e.g. ABHA buttons) for ONE card. */
+  readonly stepHeaderTpl = input<TemplateRef<unknown> | null>(null);
+  /** …the id of the step whose card carries it. */
+  readonly stepHeaderFor = input<string | null>(null);
+  /** New design: Enter on the LAST field — the host submits. */
+  readonly enterSubmit = output<void>();
   /** The host renders the actions itself (the band's ONE primary). */
   readonly hideActions = input<boolean>(false);
   /** Single-page validation failed: which step holds the first problem. */
@@ -307,6 +348,7 @@ export class WorkflowRendererComponent implements OnChanges {
 
   /** Validate required fields across ALL steps (single-page has no per-step gate). */
   private validateAll(): boolean {
+    if (this.nd()) return this.validateAllNd();
     const steps = this.visibleSteps();
     for (let i = 0; i < steps.length; i++) {
       for (const f of this.visibleFields(steps[i])) {
@@ -325,14 +367,96 @@ export class WorkflowRendererComponent implements OnChanges {
     return true;
   }
 
-  /** New design: the steps on screen — just the open section when the host
-   *  names one (and it is visible), else all of them. */
-  readonly ndSteps = computed<WorkflowStep[]>(() => {
-    const steps = this.visibleSteps();
-    const id = this.activeStepId();
-    const one = id ? steps.filter(s => s.id === id) : [];
-    return one.length ? one : steps;
-  });
+  // ── New design (§15): field-level errors + keyboard-first ──────────
+  private readonly host = inject(ElementRef<HTMLElement>);
+  /** `step.name::field` → message, for every invalid field at once. */
+  private readonly _fieldErrors = signal<Record<string, string>>({});
+  readonly fieldErrors = this._fieldErrors.asReadonly();
+  fieldError(step: WorkflowStep, name: string): string | null {
+    return this._fieldErrors()[`${step.name}::${name}`] ?? null;
+  }
+
+  /** Validate every field of every visible step; outline each invalid one
+   *  and move focus to the FIRST (in reading order), scrolled into view. */
+  private validateAllNd(): boolean {
+    const errs: Record<string, string> = {};
+    let first: { step: WorkflowStep; f: WorkflowField; message: string } | null = null;
+    for (const step of this.visibleSteps()) {
+      for (const f of this.visibleFields(step)) {
+        if (f.type === 'test_parameters') continue;
+        const err = validateFieldValue(f, this.valueFor(step, f.name));
+        if (!err) continue;
+        errs[`${step.name}::${f.name}`] = err;
+        if (!first) first = { step, f, message: `${f.title}: ${err}` };
+      }
+    }
+    this._fieldErrors.set(errs);
+    if (!first) { this._validationError.set(null); return true; }
+    this._validationError.set(first.message);
+    this.invalid.emit({ stepId: first.step.id, fieldName: first.f.name, message: first.message });
+    const name = first.f.name;
+    const stepId = first.step.id;
+    setTimeout(() => {
+      const root = this.host.nativeElement as HTMLElement;
+      const wrap = root.querySelector<HTMLElement>(`[data-step="${stepId}"] [data-field="${name}"]`)
+        ?? root.querySelector<HTMLElement>(`[data-field="${name}"]`);
+      if (!wrap) return;
+      wrap.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      WorkflowRendererComponent.stopOf(wrap)?.focus();
+    });
+    return false;
+  }
+
+  /** Required fields a card shows in its header ("2 required"). */
+  requiredCount(step: WorkflowStep): number {
+    return this.visibleFields(step).filter(f => f.isRequired).length;
+  }
+
+  /** The card glyph: the registration form's split steps by id, else generic. */
+  stepKind(step: WorkflowStep): 'identity' | 'contact' | 'more' | 'other' {
+    if (step.id.endsWith('__identity')) return 'identity';
+    if (step.id.endsWith('__contact')) return 'contact';
+    if (step.name === 'additional_info') return 'more';
+    return 'other';
+  }
+
+  /** In a card, fields sit two-up; wide controls take the whole row. */
+  ndSpan(f: WorkflowField): string {
+    const wide = f.width === 'full'
+      || ['phone', 'textarea', 'multiselect', 'multi_button_select', 'test_parameters', 'tube_collection'].includes(f.type)
+      || (f.type === 'date' && /(^|_)dob$|date_of_birth|birth_?date/i.test(f.name))
+      || (['button_select', 'image_select', 'radio'].includes(f.type) && (f.options?.length ?? 0) > 4);
+    return wide ? 'pf-wr-span' : '';
+  }
+
+  /** The control Enter / validation lands on inside a field. */
+  private static stopOf(wrap: HTMLElement): HTMLElement | null {
+    return wrap.querySelector<HTMLElement>('[data-pf-stop]:not([disabled])')
+      ?? wrap.querySelector<HTMLElement>('input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), button:not([disabled])');
+  }
+
+  /** Enter = next field in reading order (card by card, top to bottom);
+   *  on the last field it submits. Textareas keep Enter for new lines and
+   *  an open pf-select keeps it for picking. */
+  onNdKey(e: KeyboardEvent): void {
+    if (e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+    const t = e.target as HTMLElement | null;
+    if (!t || t.tagName === 'TEXTAREA' || t.closest('pf-select')) return;
+    const wrap = t.closest<HTMLElement>('[data-field]');
+    if (!wrap) return;
+    e.preventDefault();
+    const root = this.host.nativeElement as HTMLElement;
+    const fields = Array.from(root.querySelectorAll<HTMLElement>('[data-field]'));
+    for (let j = fields.indexOf(wrap) + 1; j < fields.length; j++) {
+      const stop = WorkflowRendererComponent.stopOf(fields[j]);
+      if (stop) {
+        stop.focus();
+        if (stop instanceof HTMLInputElement && stop.type !== 'date') { try { stop.select(); } catch { /* not selectable */ } }
+        return;
+      }
+    }
+    this.enterSubmit.emit();
+  }
 
   /** True when every visible field of the step passes validation — the
    *  host's section-tab dot (filled = complete, ring = something to finish).
@@ -421,7 +545,7 @@ export class WorkflowRendererComponent implements OnChanges {
 
   /** Field grid: single-page (full-bleed pages) steps up to 3 columns at xl;
    *  stepped mode (drawers and narrower hosts) stays at 2. */
-  readonly gridClass = computed(() => this.singlePage()
+  readonly gridClass = computed(() => this.nd() ? 'pf-wr-grid' : this.singlePage()
     ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'
     : 'grid grid-cols-1 md:grid-cols-2 gap-4');
 
@@ -445,6 +569,11 @@ export class WorkflowRendererComponent implements OnChanges {
     this._formValues.set(next);
     this.valuesChange.emit(next);
     if (this._validationError()) this._validationError.set(null);
+    if (this._fieldErrors()[key]) {
+      const rest = { ...this._fieldErrors() };
+      delete rest[key];
+      this._fieldErrors.set(rest);
+    }
   }
 
   // ── navigation ─────────────────────────────────────────────────

@@ -124,6 +124,17 @@
   color: var(--text-secondary);
 }
 .nd-btn .pf-btn__icon { display: none; }   // billing-card buttons are text-only
+/* Quiet: a compact NEUTRAL outline (grey, never violet) for helpers that
+   sit in a card header — e.g. registration's "Fill from ABHA". */
+.nd-btn.nd-btn--quiet {
+  min-height: 32px; height: 32px; padding: 0 10px; gap: 6px;
+  background: var(--nd-card-bg); border-color: var(--nd-line); color: var(--text-primary);
+  font-size: 12.5px; font-weight: 500;
+}
+.nd-btn.nd-btn--quiet > svg { flex: none; color: var(--text-tertiary); }
+.nd-btn.nd-btn--quiet:hover:not(:disabled) { border-color: var(--nd-sel-border); background: var(--nd-chip-bg); }
+.nd-btn.nd-btn--quiet:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+@media (max-width: 640px) { .nd-btn.nd-btn--quiet { min-height: 40px; height: 40px; } }
 
 /* ── Neutral selected states ────────────────────────────────────────── */
 .nd-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--nd-radius-sm); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
@@ -186,7 +197,8 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
 }
 .nd-input[readonly] { border-style: dashed; background: var(--nd-chip-bg); color: var(--text-secondary); cursor: default; box-shadow: none; }
-.nd-input--error { border-color: var(--red-border, #ef4444); }
+.nd-input--error, .nd-input--error:hover, .nd-input--error:focus { border-color: var(--red-border, #ef4444); }
+.nd-input--error:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--red-border, #ef4444) 18%, transparent); }
 textarea.nd-input { resize: vertical; line-height: 1.45; }
 @media (max-width: 640px) { .nd-input { min-height: 44px; font-size: 16px; } }
 
