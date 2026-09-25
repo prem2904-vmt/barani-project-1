@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal, ElementRef, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -68,12 +68,16 @@ interface PermGroupView {
             </button>
           </ng-container>
           <div band-search class="nd-ctx pf-uf-ctx">
-            <span class="nd-ctx__primary pf-uf-ctx__name">{{ editing()?.name || newRoleName().trim() || 'New role' }}</span>
-            <span class="nd-ctx__chip" data-k="Type"><span class="nd-ctx__k">Type</span><span>{{ typeLabel() }}</span></span>
-            @if (!editing()?.id) {
-              <span class="nd-ctx__chip" data-k="Kind"><span class="nd-ctx__k">Role type</span><span>{{ roleType() === 'doctor' ? 'Doctor' : 'General' }}</span></span>
-            }
-            <span class="nd-ctx__chip" data-k="Granted"><span class="nd-ctx__k">Granted</span><span class="nd-num">{{ grantedCount() }} / {{ permissions().length }}</span></span>
+            <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
+            <span class="nd-ctx__primary pf-uf-ctx__name">
+              <span class="pf-uf-ctx__text">{{ editing()?.name || newRoleName().trim() || 'New role' }}</span>
+              @if (editing()?.id) { <span class="pf-uf-ctx__badge" role="note">{{ typeLabel() }}</span> }
+              @if (!editing()?.id) {
+                <button type="button" class="nd-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              </button>
+              }
+            </span>
           </div>
         </pf-hero-band>
       }
@@ -101,7 +105,7 @@ interface PermGroupView {
                 <div class="nd-card__body">
                   <label class="nd-field">
                     <span class="nd-field__lbl">Role name <span class="pf-uf-req">*</span></span>
-                    <input type="text" class="nd-input pf-re-name" [class.nd-input--error]="!!nameError()"
+                    <input type="text" #nameInput class="nd-input pf-re-name" [class.nd-input--error]="!!nameError()"
                            [ngModel]="newRoleName()" (ngModelChange)="onNameChange($event)"
                            placeholder="e.g. Billing Supervisor" />
                     @if (nameError()) { <p class="pf-uf-err">{{ nameError() }}</p> }
@@ -258,7 +262,7 @@ interface PermGroupView {
     .re-sum__count .nd-num { color: var(--text-primary); font-weight: 500; }
 
     /* Permissions */
-    .re-search { flex: 0 1 340px; min-height: 36px; }
+    .re-search { flex: 0 1 340px; }
     .re-groups { display: flex; flex-direction: column; gap: 22px; }
     .re-group__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .re-group__title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
@@ -279,6 +283,13 @@ interface PermGroupView {
   `]
 })
 export class RoleEditorComponent implements OnInit {
+  private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  /** The pill's pencil: put the caret in the name field. */
+  editName(): void {
+    const el = this.nameInput()?.nativeElement;
+    if (el) { el.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); el.focus(); el.select(); }
+  }
+
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);

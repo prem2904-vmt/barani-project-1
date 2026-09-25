@@ -80,8 +80,7 @@ function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean } = {}) {
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
   const txt = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
-  const chip = (k: string) => el.querySelector(`pf-hero-band .nd-ctx__chip[data-k="${k}"]`);
-  return { f, el, api, c: f.componentInstance as any, txt, chip };
+  return { f, el, api, c: f.componentInstance as any, txt };
 }
 
 /** The palette / font / native-control hygiene every editor must pass. */
@@ -92,31 +91,37 @@ function hygiene(el: HTMLElement) {
   expect(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(1);
 }
 
-describe('Users & Access editors — new design', () => {
-  it('Create user: band + ONE primary; context bar = "New user" then the typed name / username / roles / branch', () => {
-    const { el, f, c, txt, chip } = render(UserInviteComponent);
+describe('Users & Access editors — new design (ND §14: pill = name only)', () => {
+  const noFacts = (el: HTMLElement) => {
+    expect(el.querySelectorAll('pf-hero-band .nd-ctx__chip').length).toBe(0);
+    expect(el.querySelectorAll('pf-hero-band .nd-ctx > *').length).toBe(1);
+  };
+
+  it('Create user: band + ONE primary; the pill is only the name ("New user" → typed) with a pencil', async () => {
+    const { el, f, c, txt } = render(UserInviteComponent);
     const primaries = el.querySelectorAll('pf-hero-band .pf-hb__actions .pf-hb-btn--primary');
     expect(primaries.length).toBe(1);
     expect(primaries[0].textContent).toContain('Create user');
-    expect(txt(el.querySelector('.nd-ctx__primary'))).toBe('New user');
-    expect(txt(chip('Roles'))).toContain('None yet');
+    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('New user');
     c.patch({ title: 'Dr.', firstName: 'Priya', fathersName: 'Raman', username: 'DrPriya' });
     f.detectChanges();
-    expect(txt(el.querySelector('.nd-ctx__primary'))).toBe('Dr. Priya Raman');
-    expect(chip('Username')!.querySelector('.nd-num')!.textContent).toBe('drpriya');
+    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Priya Raman');
+    noFacts(el);
+    (el.querySelector('.nd-ctx__edit') as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(el.querySelector('.pf-band-body input.nd-input'));
     expect(el.querySelector('pf-screen-header')!.classList.contains('pf-classic-only')).toBe(true);
     hygiene(el);
   });
 
-  it('Create user: roles are slate switches; turning one on updates the context bar and enables Create', () => {
-    const { el, f, c, txt, chip } = render(UserInviteComponent);
+  it('Create user: roles are slate switches (aria-checked, no --on class); one on enables Create', () => {
+    const { el, f, c } = render(UserInviteComponent);
     const sw = el.querySelectorAll<HTMLButtonElement>('.pf-uf-roles .nd-toggle[role="switch"]');
     expect(sw.length).toBe(2);
     expect(sw[0].getAttribute('aria-checked')).toBe('false');
     sw[0].click();
     f.detectChanges();
     expect(sw[0].getAttribute('aria-checked')).toBe('true');
-    expect(txt(chip('Roles'))).toContain('Lab Technician');
+    expect(el.querySelector('button[class*="--on"], label[class*="--on"], a[class*="--on"]')).toBeNull();
     c.patch({ username: 'drpriya', password: 'secret123' });
     f.detectChanges();
     expect((el.querySelector('pf-hero-band .pf-hb-btn--primary') as HTMLButtonElement).disabled).toBe(false);
@@ -129,41 +134,42 @@ describe('Users & Access editors — new design', () => {
     expect(el.querySelector('.pf-uf-phone pf-select')).not.toBeNull();
   });
 
-  it('Edit user: context bar shows the user (full name, username in tabular numbers, roles, branch); Save changes is the primary', () => {
-    const { el, txt, chip } = render(UserEditComponent, { id: 'u1' });
-    expect(txt(el.querySelector('.nd-ctx__primary'))).toBe('Dr. Prem Kumar');
-    expect(chip('Username')!.querySelector('.nd-num')!.textContent).toBe('drprem');
-    expect(txt(chip('Roles'))).toContain('Lab Technician');
-    expect(txt(chip('Branch'))).toContain('Main Lab');
+  it('Edit user: the pill is the full name only; Save changes is the primary; roles pre-switched', () => {
+    const { el, txt } = render(UserEditComponent, { id: 'u1' });
+    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Prem Kumar');
+    noFacts(el);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save changes');
-    const on = el.querySelectorAll('.pf-uf-roles .nd-toggle[aria-checked="true"]');
-    expect(on.length).toBe(1);
-    const user = el.querySelector<HTMLInputElement>('input[readonly]')!;
-    expect(user.classList.contains('nd-input')).toBe(true);
+    expect(el.querySelectorAll('.pf-uf-roles .nd-toggle[aria-checked="true"]').length).toBe(1);
+    expect(el.querySelector<HTMLInputElement>('input[readonly]')!.classList.contains('nd-input')).toBe(true);
     hygiene(el);
   });
 
-  it('New role: "New role" → the typed name; role type is a neutral nd-seg; permissions are slate switches', () => {
-    const { el, f, c, txt, chip } = render(RoleEditorComponent);
-    expect(txt(el.querySelector('.nd-ctx__primary'))).toBe('New role');
+  it('New role: "New role" → the typed name, pencil focuses Role name; role type nd-seg; permissions are switches', () => {
+    const { el, f, c, txt } = render(RoleEditorComponent);
+    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('New role');
     c.onNameChange('Billing Supervisor');
     f.detectChanges();
-    expect(txt(el.querySelector('.nd-ctx__primary'))).toBe('Billing Supervisor');
+    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Billing Supervisor');
+    noFacts(el);
+    expect(el.querySelector('.pf-uf-ctx__badge')).toBeNull();
+    (el.querySelector('.nd-ctx__edit') as HTMLButtonElement).click();
+    expect(document.activeElement?.classList.contains('pf-re-name')).toBe(true);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Create role');
     expect(el.querySelectorAll('.re-type.nd-seg [role="radio"]').length).toBe(2);
     const sw = el.querySelectorAll<HTMLButtonElement>('.re-perm-grid .nd-toggle[role="switch"]');
     expect(sw.length).toBe(2);
     sw[1].click();
     f.detectChanges();
-    expect(chip('Granted')!.querySelector('.nd-num')!.textContent).toBe('1 / 2');
+    expect(c.grantedCount()).toBe(1);
     hygiene(el);
   });
 
-  it('Edit role: the role name + Pre-seeded type chip; granted count from the server', () => {
-    const { el, txt, chip } = render(RoleEditorComponent, { id: 'r1' });
-    expect(txt(el.querySelector('.nd-ctx__primary'))).toBe('Lab Technician');
-    expect(txt(chip('Type'))).toContain('Pre-seeded');
-    expect(txt(chip('Granted'))).toContain('1 / 2');
+  it('Edit role: the role name + ONE tiny muted badge (Pre-seeded), no pencil (the name is locked), no fact chips', () => {
+    const { el, txt } = render(RoleEditorComponent, { id: 'r1' });
+    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Lab Technician');
+    expect(txt(el.querySelector('.pf-uf-ctx__badge'))).toBe('Pre-seeded');
+    expect(el.querySelector('.nd-ctx__edit')).toBeNull();
+    noFacts(el);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save');
     hygiene(el);
   });

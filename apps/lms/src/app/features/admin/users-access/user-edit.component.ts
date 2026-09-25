@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, ElementRef, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -58,12 +58,14 @@ interface EditForm {
             </button>
           </ng-container>
           <div band-search class="nd-ctx pf-uf-ctx">
-            <span class="nd-ctx__primary pf-uf-ctx__name">{{ displayPreview() || loadedName() || 'User' }}</span>
-            @if (username()) {
-              <span class="nd-ctx__chip" data-k="Username"><span class="nd-ctx__k">Username</span><span class="nd-num">{{ username() }}</span></span>
-            }
-            <span class="nd-ctx__chip" data-k="Roles"><span class="nd-ctx__k">Roles</span><span>{{ rolesSummary() }}</span></span>
-            <span class="nd-ctx__chip" data-k="Branch"><span class="nd-ctx__k">Branch</span><span>{{ scopeLabel() }}</span></span>
+            <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
+            <span class="nd-ctx__primary pf-uf-ctx__name">
+              <span class="pf-uf-ctx__text">{{ displayPreview() || loadedName() || 'User' }}</span>
+              
+              <button type="button" class="nd-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              </button>
+            </span>
           </div>
         </pf-hero-band>
       }
@@ -96,7 +98,7 @@ interface EditForm {
                   </div>
                   <label class="nd-field">
                     <span class="nd-field__lbl">First name</span>
-                    <input type="text" pfAlpha class="nd-input" [class.nd-input--error]="!!fieldError()['firstName']"
+                    <input type="text" pfAlpha #nameInput class="nd-input" [class.nd-input--error]="!!fieldError()['firstName']"
                            placeholder="e.g. Prem" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
                     @if (fieldError()['firstName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
                   </label>
@@ -175,6 +177,13 @@ interface EditForm {
   styles: [USER_FORM_STYLES]
 })
 export class UserEditComponent implements OnInit {
+  private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  /** The pill's pencil: put the caret in the name field. */
+  editName(): void {
+    const el = this.nameInput()?.nativeElement;
+    if (el) { el.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); el.focus(); el.select(); }
+  }
+
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
@@ -212,17 +221,6 @@ export class UserEditComponent implements OnInit {
   readonly displayPreview = computed(() => {
     const f = this._form();
     return [f.title, f.firstName, f.fathersName].map(x => (x ?? '').trim()).filter(Boolean).join(' ');
-  });
-  readonly rolesSummary = computed(() => {
-    const ids = this._form().roleIds;
-    if (!ids.length) return 'None';
-    const names = this._roles().filter(r => ids.includes(r.id)).map(r => r.name);
-    return names.length ? names.join(', ') : `${ids.length}`;
-  });
-  readonly scopeLabel = computed(() => {
-    const v = this.scopeValue();
-    const o = this.scopeOptions().find(x => x.value === v);
-    return (o?.label ?? 'All branches').replace(/^\s*→\s*/, '').trim() || 'All branches';
   });
 
   readonly scopeOptions = computed<PfSelectOption<string>[]>(() => {

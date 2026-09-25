@@ -43,6 +43,10 @@ export const USER_FORM_STYLES = `
   .pf-uf-tag__x:hover { color: var(--text-primary); background: var(--nd-card-bg); }
 
   .pf-uf-ctx__name { overflow-wrap: anywhere; }
+  /* The one tiny muted badge the pill may carry (a role's Pre-seeded / Custom). */
+  .pf-uf-ctx__badge { flex: none; margin-left: 4px; padding: 1px 7px; border-radius: 6px;
+    background: var(--nd-chip-bg); border: 1px solid var(--nd-line);
+    font-size: 11px; font-weight: 500; line-height: 1.5; color: var(--text-tertiary); }
 
   @media (max-width: 640px) {
     .pf-uf-card .nd-card__body { padding: 12px; }
