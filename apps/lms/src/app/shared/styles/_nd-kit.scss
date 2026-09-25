@@ -174,6 +174,33 @@
   .nd-anim-pop, .nd-anim-in, .nd-anim-rise, .nd-toggle__track, .nd-toggle__knob, .nd-btn { animation: none !important; transition: none !important; }
 }
 
+/* ── Row actions: TEXT on web, ICON on touch ─────────────────────────
+   Per-row actions (Delegate, Print, Edit…). The component picks the mode
+   with webPointerSignal() (shared/utils/pointer-mode.ts — the Order &
+   Payments query) and adds .nd-rowact--icon on touch. Markup:
+   <button class="nd-rowact" [class.nd-rowact--icon]="!web()" aria-label="…">
+     <svg …/><span class="nd-rowact__t">Delegate</span></button> */
+.nd-rowact {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: none;
+  height: 32px; min-height: 32px; padding: 0 12px;
+  border-radius: var(--nd-radius-sm); @include nd.btn-secondary;
+  font: inherit; font-size: 12.5px; font-weight: 600; line-height: 1; white-space: nowrap;
+  cursor: pointer; transition: background var(--nd-dur-fast) ease, border-color var(--nd-dur-fast) ease;
+}
+.nd-rowact:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
+.nd-rowact:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.nd-rowact:disabled { opacity: 0.5; cursor: not-allowed; }
+.nd-rowact > svg { display: none; flex: none; }
+.nd-rowact.nd-rowact--icon {
+  width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0;
+  border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-secondary);
+}
+.nd-rowact.nd-rowact--icon:hover:not(:disabled) { background: var(--nd-card-bg); border-color: var(--nd-sel-border); color: var(--text-primary); }
+.nd-rowact.nd-rowact--icon > svg { display: block; }
+.nd-rowact.nd-rowact--icon .nd-rowact__t {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+
 /* ── Mobile: sticky bottom bar + tall sheet (both above the nav) ────── */
 .nd-bottombar { display: none; }
 .nd-sheet__handle { display: none; }
