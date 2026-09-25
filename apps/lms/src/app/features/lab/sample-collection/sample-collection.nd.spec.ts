@@ -128,7 +128,7 @@ describe('Collect sample — rendered on the nd pattern', () => {
     expect(drawer.querySelector('.pf-drawer__head, .pf-drawer__hint')).toBeNull();
   });
 
-  it('context bar: FULL patient name (no truncation), order ID, sample ID, filters, counter', async () => {
+  it('context bar: FULL patient name (no truncation), order ID, sample ID, counter — and NO filter control', async () => {
     const { drawer } = await renderDrawer([S('a')]);
     const ctx = drawer.querySelector('.pf-sc-ctx') as HTMLElement;
     const name = ctx.querySelector('.pf-sc-chip__name') as HTMLElement;
@@ -137,8 +137,8 @@ describe('Collect sample — rendered on the nd pattern', () => {
     expect(name.className).not.toMatch(/truncate/);
     expect(ctx.querySelector('.pf-sc-chip--order')?.textContent).toContain('LAB-2609-000085');
     expect(ctx.querySelector('.pf-sc-chip--samples')?.textContent).toContain('B-a');
-    expect([...ctx.querySelectorAll('.pf-sc-ctx__filters [role="radio"]')].map(b => b.textContent?.replace(/\s+/g, ' ').trim()))
-      .toEqual(['All 1', 'Pending 1', 'Drawn 0', 'External 0']);
+    expect(ctx.querySelector('.nd-seg, [role="radiogroup"], .pf-sc-ctx__filters')).toBeNull();
+    expect(drawer.querySelector('.pf-sc-vials__filters')).toBeNull();
     expect(ctx.querySelector('.pf-sc-ctx__count')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('0/1 drawn');
   });
 
@@ -151,16 +151,6 @@ describe('Collect sample — rendered on the nd pattern', () => {
     const pop = drawer.querySelector('.pf-sc-samples__pop') as HTMLElement;
     expect(pop.classList).toContain('pf-sc-samples__pop--open');
     expect(pop.textContent).toContain('B-b');
-  });
-
-  it('the status filter narrows the vial tiles', async () => {
-    const { drawer, f } = await renderDrawer([S('a'), S('b', 'collected')]);
-    expect(drawer.querySelectorAll('.pf-sc-tile').length).toBe(2);
-    const drawn = [...drawer.querySelectorAll('.pf-sc-ctx__filters [role="radio"]')].find(b => b.textContent?.includes('Drawn')) as HTMLButtonElement;
-    drawn.click();
-    f.detectChanges();
-    expect(drawer.querySelectorAll('.pf-sc-tile').length).toBe(1);
-    expect(drawn.getAttribute('aria-checked')).toBe('true');
   });
 
   it('tiles keep the ORIGINAL tube illustration (cap + blood fill) as the hero', async () => {
@@ -231,7 +221,7 @@ describe('nd-kit — the Collect screen is built from the kit classes', () => {
     const { drawer } = await renderDrawer([S('a'), S('b', 'collected')]);
     for (const cls of ['nd-page', 'nd-body', 'nd-body--split', 'nd-card', 'nd-card__head', 'nd-card__icon',
       'nd-card__label', 'nd-card__body', 'nd-card__foot', 'nd-btn', 'nd-btn--secondary', 'nd-btn--icon',
-      'nd-seg', 'nd-seg__item', 'nd-chip', 'nd-band-chip', 'nd-row', 'nd-row--done', 'nd-num', 'nd-bottombar']) {
+      'nd-chip', 'nd-chip--static', 'nd-band-chip', 'nd-num', 'nd-bottombar']) {
       expect(drawer.querySelector('.' + cls), cls).not.toBeNull();
     }
   });
@@ -297,6 +287,66 @@ describe('Collect sample — palette + one font family', () => {
     expect(drawer.querySelector('.font-mono, .nd-mono, [font-family*="monospace"]')).toBeNull();
     expect(drawer.querySelector('.pf-sc-chip--order .nd-num')?.textContent).toBe('LAB-2609-000085');
     expect(drawer.querySelector('.pf-sc-tile .pf-tube__code .nd-num')?.textContent).toBe('B-a');
-    expect(drawer.querySelector('.pf-sc-sumrow__state .nd-num')).not.toBeNull();
+    expect(drawer.querySelector('.pf-sc-tile .pf-tube__stamp.nd-num')).not.toBeNull();
+  });
+});
+
+describe('Collect sample — symmetric tiles, lean COLLECTION panel', () => {
+  afterEach(() => document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove()));
+  const JAR = (id: string, status = 'pending') =>
+    S(id, status, { specimenType: 'Urine', department: 'CPY', tests: [{ test: { name: 'Urine Routine', sampleType: 'Urine' } }] });
+
+  it('every tile has the same fixed illustration box (tube and jar alike), bottom-aligned SVGs', async () => {
+    const { drawer } = await renderDrawer([S('a'), JAR('b')]);
+    const tiles = [...drawer.querySelectorAll('.pf-sc-tile')];
+    expect(tiles.length).toBe(2);
+    for (const t of tiles) {
+      const box = t.querySelector(':scope > .pf-sc-illo') as HTMLElement;
+      expect(box).not.toBeNull();
+      const svg = box.querySelector('svg.pf-vial') as SVGElement;
+      expect(svg.getAttribute('preserveAspectRatio')).toBe('xMidYMax meet');
+      // text block comes right after the box in both tiles → rows align
+      expect(box.nextElementSibling?.classList).toContain('pf-tube__body');
+    }
+    // same size class drives the same box for both container types
+    expect(drawer.querySelector('.pf-sc-grid')!.classList).toContain('pf-sc-grid--xl');
+  });
+
+  it('the check badge sits in the same corner of the box for every container type', async () => {
+    const { drawer } = await renderDrawer([S('a', 'collected'), JAR('b', 'collected')]);
+    const checks = [...drawer.querySelectorAll('.pf-sc-illo > .pf-sc-illo__check')];
+    expect(checks.length).toBe(2);
+  });
+
+  it('COLLECTION: one status line, no per-tube list', async () => {
+    const { drawer } = await renderDrawer([S('a'), S('b', 'collected')]);
+    const side = drawer.querySelector('.pf-sc-side') as HTMLElement;
+    expect(side.querySelector('.pf-sc-summary, .pf-sc-sumrow')).toBeNull();
+    expect(side.querySelector('.pf-sc-status')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('1 of 2 remaining');
+  });
+
+  it('status line reads "All vials collected" when done', async () => {
+    const { drawer } = await renderDrawer([S('a', 'collected')]);
+    expect(drawer.querySelector('.pf-sc-status')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('All vials collected');
+  });
+
+  it('extra info renders only when the data exists', async () => {
+    let r = await renderDrawer([S('a')]);
+    expect(r.drawer.querySelector('.pf-sc-info')).toBeNull();
+    r.drawer.remove();
+    TestBed.resetTestingModule();
+    const rich = S('b', 'pending', {
+      tests: [{ test: { name: 'Glucose Fasting', fastingRequired: true } }],
+      order: { orderNumber: 'LAB-2609-000085', priority: 'Urgent', refDoctorName: 'Dr. A. Sharma',
+               patient: { id: 'p1', displayName: 'Ms. Paravai Munusamy', age: 44, sex: 'Female', mrn: 'AA0007' } },
+    });
+    r = await renderDrawer([rich]);
+    const info = r.drawer.querySelector('.pf-sc-info') as HTMLElement;
+    expect(info).not.toBeNull();
+    const text = info.textContent!.replace(/\s+/g, ' ');
+    expect(text).toContain('Urgent');
+    expect(text).toContain('Required for Glucose Fasting');
+    expect(text).toContain('Dr. A. Sharma');
+    expect(text).not.toContain('Hospital');
   });
 });
