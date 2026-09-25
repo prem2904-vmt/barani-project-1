@@ -189,6 +189,16 @@ pill. Functional exceptions — these are data or warnings, not decoration:
   numbers (`.nd-num` = Noto Sans + `font-variant-numeric: tabular-nums`),
   never a system monospace (`monospace` / `ui-monospace` renders as Courier).
 
+### Work queues: adaptive tile grid, 3/2/1 columns by container width
+
+Queue / My Work / Completed / Culture lists use `<ul [ndTileGrid]="…">`
+(`shared/directives/tile-grid.directive.ts` + kit `.nd-tilegrid`). The LIST's
+own width decides — never the window, because side panes can be pinned:
+≥1100px → 3 columns, ≥640px → 2, below → 1. Tiles in a row share a height,
+names wrap (never truncate), the row action sits at the tile's bottom-right,
+and group headers (URGENT / HIGH / NORMAL) span the full width above each
+group's grid. **Search results stay one per row** (section 6).
+
 ## 7. Search: one mode per device type
 
 - **Web / desktop** (`(hover: hover) and (pointer: fine)`): results only in

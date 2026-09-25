@@ -6,6 +6,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
+import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
+import { ThemeService } from '../../../core/services/theme.service';
 
 /** One stage inside a culture case (mirrors the backend CultureStage JSON). */
 export interface CultureStageView {
@@ -66,7 +68,7 @@ export interface CultureCaseView {
 @Component({
   selector: 'pf-culture-panel',
   standalone: true,
-  imports: [TileComponent, SkeletonComponent],
+  imports: [TileComponent, SkeletonComponent, TileGridDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading() && cases().length === 0) {
@@ -85,7 +87,7 @@ export interface CultureCaseView {
         </p>
       </pf-tile>
     } @else {
-      <ul class="flex flex-col gap-3 list-none p-0 m-0">
+      <ul class="flex flex-col gap-3 list-none p-0 m-0" [ndTileGrid]="theme.isNewDesign()">
         @for (c of cases(); track c.orderTestId) {
           @let inc = incubatingStage(c);
           <li class="pf-cc" [class.pf-cc--incub]="!!inc">
@@ -157,6 +159,8 @@ export class CulturePanelComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
+  /** New design: cases lay out in the adaptive 3/2/1 tile grid. */
+  protected readonly theme = inject(ThemeService);
 
   readonly cases = signal<CultureCaseView[]>([]);
   readonly loading = signal(false);

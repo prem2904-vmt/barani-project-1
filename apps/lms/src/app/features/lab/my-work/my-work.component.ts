@@ -37,6 +37,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
 import { plural } from '../../../shared/utils/plural';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
@@ -66,6 +67,7 @@ const COUNTERS: CounterSpec[] = [
   selector: 'pf-my-work',
   standalone: true,
   imports: [
+    TileGridDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
     AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, SegmentedComponent,
     ScanIconComponent],
@@ -592,7 +594,7 @@ const COUNTERS: CounterSpec[] = [
           </p>
         </pf-tile>
       } @else {
-        <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
           @for (tube of completedTubes(); track tube.sampleId) {
             <li>
               <div class="pf-tq pf-tq--done">
@@ -700,7 +702,7 @@ const COUNTERS: CounterSpec[] = [
             <!-- Group by patient/order so a single patient with 3 tests is one
                  expandable card, not 3 floating cards across columns. -->
             @if (!labCfg.sampleFocused()) {
-            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
               @for (g of patientGroups(bucket.items); track g.orderId) {
                 <li>
                   <pf-tile [tone]="toneFor(bucket.level)" padding="md" class="block">
@@ -838,7 +840,7 @@ const COUNTERS: CounterSpec[] = [
                  Sample ID. The tube (sample) is the bold headline; the patient
                  is demoted to a small secondary line. Same tests + same actions
                  and CSS as the patient-first tube tile. -->
-            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
               @for (tube of sampleRows(bucket.items); track tube.sampleId) {
                 <li>
                   <!-- Designed for touch FIRST, so the mouse gets the same
@@ -2655,6 +2657,19 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-dot[data-level='normal'] { background: var(--nd-toggle-on, #aeb8c2); box-shadow: none; }
     :host-context(.design-new) .pf-dot[data-level='urgent'],
     :host-context(.design-new) .pf-dot[data-level='high'] { box-shadow: none; }
+
+    /* ════ Adaptive tile grid (owner): 3 / 2 / 1 by the LIST's width ════
+       In a grid cell the tile stacks: content on top (name wraps, never
+       truncates), the trailing zone becomes a bottom row with the action
+       at the bottom-right — so "Delegate" never squeezes the name. */
+    :host-context(.design-new) .nd-tilegrid .pf-tq { flex-direction: column; height: 100%; }
+    :host-context(.design-new) .nd-tilegrid .pf-tq__main { flex: 1 1 auto; }
+    :host-context(.design-new) .nd-tilegrid .pf-tq__sub { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    :host-context(.design-new) .nd-tilegrid .pf-tq__side {
+      border-left: 0; padding: 0 10px 10px 14px; justify-content: flex-start; flex-wrap: wrap;
+    }
+    :host-context(.design-new) .nd-tilegrid .pf-tq__side > :last-child { margin-left: auto; }
+    :host-context(.design-new) .nd-tilegrid .pf-tq__side:empty { display: none; }
 
   `]
 })
