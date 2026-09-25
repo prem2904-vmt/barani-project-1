@@ -602,6 +602,44 @@
                     }
                   </dl>
                 }
+                <!-- What each tube is for (the tiles hide their test lists). -->
+                <section class="pf-sc-sec" aria-label="Tests by tube">
+                  <h3 class="pf-sc-sec__title">Tests</h3>
+                  <ul class="pf-sc-tests">
+                    @for (smp of orderedSamples(g); track smp.id) {
+                      <li class="pf-sc-tests__tube">
+                        <p class="pf-sc-tests__head">
+                          <span class="pf-sc-dot" [style.background]="container(smp).kind !== 'vacutainer' ? container(smp).color : tube(smp).color" aria-hidden="true"></span>
+                          <span>{{ tube(smp).label }}</span>
+                        </p>
+                        <ul class="pf-sc-tests__list">
+                          @for (t of tubeTests(smp); track $index) {
+                            <li><span>{{ t.name }}</span>@if (t.vol) { <span class="pf-sc-tests__vol nd-num">{{ t.vol }} mL</span> }</li>
+                          }
+                        </ul>
+                      </li>
+                    }
+                  </ul>
+                </section>
+
+                <!-- Progress of this order over time. -->
+                <section class="pf-sc-sec" aria-label="Timeline">
+                  <h3 class="pf-sc-sec__title">Timeline</h3>
+                  <ol class="pf-sc-timeline">
+                    @for (st of collectTimeline(g); track st.key) {
+                      <li class="pf-sc-timeline__step" [class.pf-sc-timeline__step--done]="st.done">
+                        <span class="pf-sc-timeline__mark" aria-hidden="true"></span>
+                        <span class="pf-sc-timeline__label">{{ st.label }}</span>
+                        <span class="pf-sc-timeline__at nd-num">
+                          @if (st.at && st.done) { {{ st.at | date:'shortTime' }} }
+                          @else if (st.note) { {{ st.note }} }
+                          @else { — }
+                        </span>
+                      </li>
+                    }
+                  </ol>
+                </section>
+
                 <p class="pf-sc-labelinfo">
                   {{ scan.manualEntry() ? 'Manual mode: write each sample ID on its container (Label by hand).' : 'Print a barcode + QR label for each tube (Print labels).' }}
                 </p>

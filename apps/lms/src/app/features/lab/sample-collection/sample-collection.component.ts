@@ -826,6 +826,34 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       refHospital: (o?.refHospitalName ?? "").trim(),
     };
   }
+  /** Tests carried by one tube (the tile hides them; the panel lists them
+   *  so the collector sees what each tube is for + the volume to draw). */
+  tubeTests(smp: OrderSample): Array<{ name: string; vol: number | null }> {
+    return (smp.tests ?? [])
+      .map((t) => ({
+        name: (t as { test?: { name?: string } }).test?.name ?? t.name,
+        vol: (t as { test?: { sampleVolumeMl?: number | null } }).test?.sampleVolumeMl ?? null,
+      }))
+      .filter((x) => !!x.name);
+  }
+
+  /** Order → drawn → dispatched, from the timestamps the payload carries. */
+  collectTimeline(g: OrderGroup): Array<{ key: string; label: string; at: string | null; done: boolean; note?: string }> {
+    const o = g.samples.find((x) => !!x.order)?.order;
+    const drawnAts = g.samples.map((x) => x.collectedAt).filter((x): x is string => !!x).sort();
+    const dispAts = g.samples.map((x) => x.dispatchedAt).filter((x): x is string => !!x).sort();
+    const allDrawn = g.collected === g.totalVials;
+    return [
+      { key: "ordered", label: "Ordered", at: o?.createdAt ?? g.createdAt ?? null, done: true },
+      {
+        key: "drawn", label: "Drawn", done: allDrawn,
+        at: allDrawn ? drawnAts[drawnAts.length - 1] ?? null : null,
+        note: allDrawn ? undefined : `${g.collected} of ${g.totalVials}`,
+      },
+      { key: "dispatched", label: "Dispatched", done: this.isDispatched(g), at: dispAts[dispAts.length - 1] ?? null },
+    ];
+  }
+
   hasCollectInfo(g: OrderGroup): boolean {
     const i = this.collectInfo(g);
     return i.urgent || i.fasting.length > 0 || !!i.refDoctor || !!i.refHospital;

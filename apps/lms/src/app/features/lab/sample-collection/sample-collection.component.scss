@@ -1964,3 +1964,44 @@
     .pf-sc-info__row dt { flex: none; width: 92px; color: var(--text-tertiary); }
     .pf-sc-info__row dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-sc-info__urgent { color: var(--error-text, #b91c1c) !important; font-weight: 600; }
+
+    /* ════ Round 4 (owner): calmer type + a useful COLLECTION panel ════
+       Same family, lighter weights, smaller sizes. The panel fills its
+       space with what the tiles DON'T show: tests per tube (+ volume) and
+       the order's timeline. */
+    .pf-drawer--nd .nd-band-chip { font-size: 12.5px; gap: 5px; }
+    .pf-drawer--nd .nd-band-chip strong { font-size: 13.5px; font-weight: 500; }
+    .pf-drawer--nd .pf-sc-chip__name { font-weight: 500; }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-tile .pf-tube__label { font-size: 13.5px; font-weight: 500; }
+    .pf-sc-grid--xl .pf-tube__label { font-size: 14px !important; }
+    .pf-sc-status { font-weight: 500; font-size: 12.5px; height: 32px; }
+    .pf-drawer--nd .nd-card__label { font-weight: 500; letter-spacing: 0.1em; font-size: 12px; }
+
+    .pf-sc-sec { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
+    .pf-sc-sec__title {
+      margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .pf-sc-tests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    .pf-sc-tests__head { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .pf-sc-tests__list { list-style: none; margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 3px; }
+    .pf-sc-tests__list li { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.35; }
+    .pf-sc-tests__vol { flex: none; color: var(--text-muted); }
+
+    .pf-sc-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+    .pf-sc-timeline__step {
+      position: relative; display: flex; align-items: center; gap: 10px;
+      min-height: 30px; font-size: 12.5px; color: var(--text-tertiary);
+    }
+    .pf-sc-timeline__step:not(:last-child)::after {
+      content: ''; position: absolute; left: 4px; top: 21px; bottom: -9px; width: 1px; background: var(--nd-line);
+    }
+    .pf-sc-timeline__mark {
+      flex: none; width: 9px; height: 9px; border-radius: 999px;
+      border: 1.5px solid var(--nd-sel-border); background: var(--nd-card-bg);
+    }
+    .pf-sc-timeline__step--done { color: var(--text-primary); }
+    .pf-sc-timeline__step--done .pf-sc-timeline__mark { border-color: var(--color-violet-600, #7c3aed); background: var(--color-violet-600, #7c3aed); }
+    .pf-sc-timeline__label { flex: 1 1 auto; }
+    .pf-sc-timeline__at { flex: none; color: var(--text-tertiary); }
+    .pf-sc-labelinfo { padding-top: 12px; border-top: 1px solid var(--nd-line); }
