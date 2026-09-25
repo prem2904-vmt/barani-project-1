@@ -135,7 +135,7 @@ const COUNTERS: CounterSpec[] = [
                better phone control — rendering both would be two tab rows
                stacked on a 390px screen. -->
           @if (!isPhone()) {
-          <pf-segmented [options]="tabOptions()" [value]="tab()" size="sm"
+          <pf-segmented class="pf-mw-seg" [options]="tabOptions()" [value]="tab()" size="sm"
                         (valueChange)="setTab($any($event))"></pf-segmented>
           }
         </ng-container>
@@ -2605,6 +2605,61 @@ const COUNTERS: CounterSpec[] = [
       content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed);
     }
     :host-context(.design-new) .pf-tq--done .pf-tq__stat { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+    /* ════ Round 4 (owner): selected tab = icon chip only, no full fill ════
+       The badge (count) stays — with the KPI strip gone it is the only
+       at-a-glance number. What goes is the whole-pill violet fill on the
+       selected tab: only its icon gets the BILLING-style chip, the word
+       just steps up to primary text. Desktop band tabs + phone icon strip. */
+    :host-context(.design-new) ::ng-deep pf-segmented.pf-mw-seg .seg-item {
+      background: transparent !important; background-image: none !important;
+      box-shadow: none !important; color: var(--text-secondary) !important;
+      gap: 6px; padding: 0 10px 0 4px;
+    }
+    :host-context(.design-new) ::ng-deep pf-segmented.pf-mw-seg .seg-ico {
+      display: block; width: 24px; height: 24px; padding: 4px; box-sizing: border-box;
+      border-radius: 7px; color: var(--text-tertiary) !important;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    :host-context(.design-new) ::ng-deep pf-segmented.pf-mw-seg .seg-item.is-selected {
+      color: var(--text-primary) !important; font-weight: 600;
+    }
+    :host-context(.design-new) ::ng-deep pf-segmented.pf-mw-seg .seg-item.is-selected .seg-ico {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      color: var(--violet-text, #7c3aed) !important;
+    }
+    :host-context(.design-new) ::ng-deep pf-segmented.pf-mw-seg .seg-count {
+      font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 500;
+      font-size: 11px; opacity: 1; color: var(--text-tertiary);
+      padding: 1px 7px; border-radius: 9999px; background: var(--nd-chip-bg, rgba(100,116,139,0.12));
+    }
+    :host-context(.design-new) ::ng-deep pf-segmented.pf-mw-seg .seg-item.is-selected .seg-count {
+      color: var(--text-primary);
+    }
+
+    /* Phone icon strip: same language. */
+    :host-context(.design-new) .pf-mtab,
+    :host-context(.design-new) .pf-mtab.pf-mtab--on {
+      background: transparent !important; background-image: none !important;
+      box-shadow: none !important; color: var(--text-secondary) !important;
+    }
+    :host-context(.design-new) .pf-mtab__ico {
+      width: 28px; height: 28px; padding: 5px; box-sizing: border-box; border-radius: 8px;
+      color: var(--text-tertiary);
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    :host-context(.design-new) .pf-mtab--on .pf-mtab__ico {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      color: var(--violet-text, #7c3aed);
+    }
+    :host-context(.design-new) .pf-mtab__count,
+    :host-context(.design-new) .pf-mtab--on .pf-mtab__count {
+      font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 500;
+      font-size: 11px; letter-spacing: 0; padding: 1px 7px;
+      background: var(--nd-chip-bg, rgba(100,116,139,0.12)); border: 0;
+      color: var(--text-tertiary);
+    }
+    :host-context(.design-new) .pf-mtab--on .pf-mtab__count { color: var(--text-primary); }
+
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -2664,13 +2719,20 @@ export class MyWorkComponent implements OnInit {
     // New design: palette only — no colour dots, the counts carry it.
     const nd = this.theme.isNewDesign();
     const dot = (c: string) => (nd ? undefined : c);
+    // New design: each tab carries the same icon as its pane header. The
+    // selected tab lights ONLY that icon's chip (owner) — no whole-pill fill.
+    const ico = (d: string[]) => (nd ? d : undefined);
     const opts: SegmentedOption<Tab>[] = [
-      { value: 'service_queue', label: 'Queue', dot: dot('#a78bfa'), count: this.countFor('service_queue') },
-      { value: 'my_work', label: 'My Work', dot: dot('#f59e0b'), count: this.countFor('my_work') },
-      { value: 'completed', label: 'Completed', dot: dot('#10b981'), count: this.countFor('completed') },
+      { value: 'service_queue', label: 'Queue', dot: dot('#a78bfa'), count: this.countFor('service_queue'),
+        iconPath: ico(['M4 6h16M4 12h16M4 18h10']) },
+      { value: 'my_work', label: 'My Work', dot: dot('#f59e0b'), count: this.countFor('my_work'),
+        iconPath: ico(['M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z', 'M14 3v5h5', 'm9 14 2 2 4-4']) },
+      { value: 'completed', label: 'Completed', dot: dot('#10b981'), count: this.countFor('completed'),
+        iconPath: ico(['M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'm8.5 12.5 2.5 2.5 4.5-5']) },
     ];
     if (this.cultureAsTab()) {
-      opts.push({ value: 'culture', label: 'Culture', dot: dot('#38bdf8'), count: this.cultureCount() });
+      opts.push({ value: 'culture', label: 'Culture', dot: dot('#38bdf8'), count: this.cultureCount(),
+        iconPath: ico(['M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0', 'M8.4 10a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0-3.2 0', 'M13.5 13.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0-2.2 0']) });
     }
     return opts;
   });

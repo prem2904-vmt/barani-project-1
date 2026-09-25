@@ -49,12 +49,15 @@ describe('My Work — new-design remap', () => {
     for (const o of opts) {
       expect(o.dot).toBeUndefined();
       expect(typeof o.count).toBe('number');
+      // Selected state is the icon chip, so every tab needs an icon.
+      expect(o.iconPath?.length).toBeGreaterThan(0);
     }
   });
 
   it('classic keeps its colour dots', () => {
     const c = make(false);
     expect(c.tabOptions().every((o: any) => !!o.dot)).toBe(true);
+    expect(c.tabOptions().every((o: any) => o.iconPath === undefined)).toBe(true);
   });
 });
 
