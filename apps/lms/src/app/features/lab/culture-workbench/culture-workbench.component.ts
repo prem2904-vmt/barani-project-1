@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, afterRenderEffect, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -52,56 +52,18 @@ interface StageField { name: string; title: string; type: string; options: strin
               <span class="pf-cse-tech__name">{{ techName() || 'Technician' }}</span>
             </span>
             <span class="pf-cse-techavatar" role="img" [title]="techName()" [attr.aria-label]="'Technician ' + techName()">{{ techInitials() }}</span>
-            @if (cc.incubateUntil) {
-              <span class="nd-chip nd-chip--static pf-cse-incub" [class.pf-cse-incub--done]="incubDone()" aria-live="polite">
-                @if (incubDone()) {
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                } @else {
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                }
-                <span class="nd-num">{{ incubDone() ? 'Incubation complete' : ('Ready in ' + incubReadyIn()) }}</span>
-              </span>
-            }
-            <span class="pf-cse__incubwrap">
-              <button type="button" class="pf-hb-btn pf-cse-act pf-cse-incubbtn press"
-                      [class.pf-hb-btn--primary]="incubIsPrimary()" [class.pf-hb-btn--ghost]="!incubIsPrimary()"
-                      [disabled]="busy()" (click)="incubOpen.set(!incubOpen())"
-                      [attr.aria-label]="cc.incubateUntil ? 'Add incubation hours' : 'Inoculate and incubate'"
-                      [title]="cc.incubateUntil ? 'Add hours to the incubation timer' : 'Start the incubation reference timer'">
-                <svg class="pf-cse-act__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg>
-                <span class="pf-cse-act__t">{{ cc.incubateUntil ? '+ Hours' : 'Inoculate & incubate' }}</span>
-              </button>
-              @if (incubOpen()) {
-                <div class="pf-cse__incubpop" role="dialog" aria-label="Incubation">
-                  <p class="pf-cse__incublbl">{{ cc.incubateUntil && !incubDone() ? 'Extend incubation by' : 'Incubate for' }}</p>
-                  <div class="pf-cse__incubchips">
-                    @for (h of incubPresets; track h) {
-                      <button type="button" class="nd-chip pf-cse__incubchip press" (click)="applyIncubation(h)"><span class="nd-num">+{{ h }}h</span></button>
-                    }
-                  </div>
-                  <div class="pf-cse__incubcustom">
-                    <input type="number" class="pf-cse__incubinp" min="1" max="336" placeholder="Hours" aria-label="Custom hours"
-                           [ngModel]="incubCustom()" (ngModelChange)="incubCustom.set($event)"
-                           (keydown.enter)="incubCustom() && applyIncubation(incubCustom()!)" />
-                    <button type="button" class="nd-btn nd-btn--secondary pf-cse__incubgo press" [disabled]="!incubCustom()"
-                            (click)="applyIncubation(incubCustom()!)">Set</button>
-                  </div>
-                  @if (cc.incubateUntil) {
-                    <button type="button" class="nd-btn nd-btn--tertiary pf-cse__incubstop press" [disabled]="busy()"
-                            (click)="stopIncubation()">Stop incubation</button>
-                  }
-                </div>
-              }
-            </span>
             @if (cc.caseState === 'awaiting_signout') {
               <span class="nd-chip nd-chip--static pf-cse-await">Awaiting sign-out</span>
-            } @else if (allDone()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-cse-act pf-cse-signout press" [disabled]="busy()"
+            } @else {
+              <!-- THE page primary: submit (or validate) the whole case —
+                   the existing sign-out actions, enabled once every stage is done. -->
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-cse-act pf-cse-signout press"
+                      [disabled]="busy() || !allDone()"
                       (click)="canValidate() ? submitAndValidate() : submitForSignout()"
-                      [attr.aria-label]="canValidate() ? 'Validate and submit' : 'Submit for sign-out'"
-                      [title]="canValidate() ? 'Validate & submit' : 'Submit for sign-out'">
+                      aria-label="Submit all results"
+                      [title]="allDone() ? (canValidate() ? 'Validate and submit the whole case' : 'Submit the whole case for sign-out') : 'Submit every stage first'">
                 <svg class="pf-cse-act__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                <span class="pf-cse-act__t">{{ canValidate() ? 'Validate & submit' : 'Submit for sign-out' }}</span>
+                <span class="pf-cse-act__t">Submit all results</span>
               </button>
             }
           }
@@ -151,27 +113,53 @@ interface StageField { name: string; title: string; type: string; options: strin
               <button type="button" class="nd-btn nd-btn--tertiary pf-cse-navbtn pf-cse-navbtn--muted press" [disabled]="busy()"
                       (click)="deleteBranch()" title="Delete this subculture">Delete branch</button>
             }
-            <span #stageTabs class="nd-seg pf-cse-tabs" role="tablist" aria-label="Stages">
-              <span class="pf-cse-tabs__ind" aria-hidden="true"></span>
-              @for (s of cc.stages; track s.key) {
-                <button type="button" class="nd-seg__item pf-cse-tab" role="tab"
-                        [attr.data-stage]="s.key"
-                        [attr.aria-selected]="activeStageKey() === s.key"
-                        [attr.aria-pressed]="activeStageKey() === s.key"
-                        [attr.aria-label]="s.label + (s.state === 'done' ? ' — done' : '')"
-                        (click)="selectStage(s.key)">
-                  @if (s.state === 'done') {
-                    <svg class="pf-cse-tab__check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                  } @else if (isMine(s)) {
-                    <span class="pf-cse-tab__dot" aria-hidden="true"></span>
+            <!-- Incubation lives in the nav row (the band holds the page
+                 primary): status chip · Inoculate / + Hours (secondary). -->
+            <span class="pf-cse-incubgrp">
+              @if (cc.incubateUntil) {
+                <span class="nd-chip nd-chip--static pf-cse-incub" [class.pf-cse-incub--done]="incubDone()" aria-live="polite">
+                  @if (incubDone()) {
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  } @else {
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                   }
-                  <span>{{ s.label }}</span>
-                </button>
+                  <span class="nd-num">{{ incubDone() ? 'Incubation complete' : ('Ready in ' + incubReadyIn()) }}</span>
+                </span>
               }
+              <span class="pf-cse__incubwrap">
+                <button type="button" class="nd-btn nd-btn--secondary pf-cse-incubbtn press"
+                        [disabled]="busy()" (click)="incubOpen.set(!incubOpen())"
+                        [attr.aria-label]="cc.incubateUntil ? 'Add incubation hours' : 'Inoculate and incubate'"
+                        [title]="cc.incubateUntil ? 'Add hours to the incubation timer' : 'Start the incubation reference timer'">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg>
+                  <span>{{ cc.incubateUntil ? '+ Hours' : 'Inoculate & incubate' }}</span>
+                </button>
+                @if (incubOpen()) {
+                  <div class="pf-cse__incubpop" role="dialog" aria-label="Incubation">
+                    <p class="pf-cse__incublbl">{{ cc.incubateUntil && !incubDone() ? 'Extend incubation by' : 'Incubate for' }}</p>
+                    <div class="pf-cse__incubchips">
+                      @for (h of incubPresets; track h) {
+                        <button type="button" class="nd-chip pf-cse__incubchip press" (click)="applyIncubation(h)"><span class="nd-num">+{{ h }}h</span></button>
+                      }
+                    </div>
+                    <div class="pf-cse__incubcustom">
+                      <input type="number" class="pf-cse__incubinp" min="1" max="336" placeholder="Hours" aria-label="Custom hours"
+                             [ngModel]="incubCustom()" (ngModelChange)="incubCustom.set($event)"
+                             (keydown.enter)="incubCustom() && applyIncubation(incubCustom()!)" />
+                      <button type="button" class="nd-btn nd-btn--secondary pf-cse__incubgo press" [disabled]="!incubCustom()"
+                              (click)="applyIncubation(incubCustom()!)">Set</button>
+                    </div>
+                    @if (cc.incubateUntil) {
+                      <button type="button" class="nd-btn nd-btn--tertiary pf-cse__incubstop press" [disabled]="busy()"
+                              (click)="stopIncubation()">Stop incubation</button>
+                    }
+                  </div>
+                }
+              </span>
             </span>
           </div>
 
-          @for (s of shownStages(); track s.key) {
+          @for (s of cc.stages; track s.key) {
             <section class="nd-card pf-stg"
                      [class.pf-stg--done]="s.state === 'done'"
                      [class.pf-stg--locked]="lockedByOther(s)"
@@ -188,7 +176,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                     Done{{ s.doneByName ? ' · ' + s.doneByName : '' }}
                   </span>
                 } @else if (isMine(s)) {
-                  <span class="pf-stg__state">You{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span>
+                  <span class="pf-stg__state"><span class="pf-cse-dot" aria-hidden="true"></span>You{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span>
                 } @else if (lockedByOther(s)) {
                   <span class="pf-stg__state">{{ s.holderName || 'In progress' }}{{ elapsed(s) ? ' · ' + elapsed(s) : '' }}</span>
                 }
@@ -201,8 +189,9 @@ interface StageField { name: string; title: string; type: string; options: strin
                   </button>
                   @if (isMine(s) && s.state !== 'done') {
                     <button type="button" class="nd-btn nd-btn--tertiary pf-stg__btn press" [disabled]="busy()" (click)="drop(s)">Drop</button>
-                    <button type="button" class="nd-btn nd-btn--secondary pf-stg__btn press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
-                    <button type="button" class="nd-btn nd-btn--primary pf-stg__btn pf-stg__submit press" [disabled]="busy()" (click)="submit(s)">Submit</button>
+                    <button type="button" class="nd-btn nd-btn--tertiary pf-stg__btn press" [disabled]="busy()" (click)="startDelegate(s)">Delegate</button>
+                    <button type="button" class="nd-btn nd-btn--secondary pf-stg__btn pf-stg__submit press" [disabled]="busy()" (click)="submit(s)"
+                            [attr.aria-label]="'Submit ' + s.label">Submit</button>
                   }
                   @if (s.state === 'done' && cc.caseState === 'active') {
                     <!-- Submitted ≠ sealed: editable until the case leaves for sign-out. -->
@@ -258,8 +247,10 @@ interface StageField { name: string; title: string; type: string; options: strin
                             </span>
                             <span class="pf-cse-row__ctl">
                               @if (g.kind === 'matrix' || f.options.length) {
-                                <span class="nd-seg pf-cse-opts" role="radiogroup" [attr.aria-label]="f.title">
-                                  @for (o of (f.options.length ? f.options : g.options); track o) {
+                                @let opts = f.options.length ? f.options : g.options;
+                                <span class="nd-seg pf-cse-opts pf-cse-opts--fill" role="radiogroup" [attr.aria-label]="f.title"
+                                      [class.pf-cse-opts--many]="opts.length > 4" [style.--n]="opts.length">
+                                  @for (o of opts; track o) {
                                     <button type="button" class="nd-seg__item pf-cse-opt press" role="radio"
                                             [attr.aria-checked]="fieldValue(s.key, f.name) === o"
                                             (click)="ensurePicked(s); toggleField(s.key, f.name, o)">{{ o }}</button>
@@ -391,20 +382,10 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse-spec { display: inline-flex; align-items: center; gap: 8px; }
     .pf-cse-spec__lbl { font-size: 13px; color: var(--text-tertiary); }
     .pf-cse__specsel { width: 200px; }
-    .pf-cse-branches, .pf-cse-tabs { flex: none; }
-    .pf-cse-branch, .pf-cse-tab { height: 32px; font-size: 13px; white-space: nowrap; }
+    .pf-cse-branches { flex: none; }
+    .pf-cse-branch { height: 32px; font-size: 13px; white-space: nowrap; }
     .pf-cse-navbtn { height: 32px; min-height: 32px; font-size: 13px; }
     .pf-cse-navbtn--muted { color: var(--text-secondary); }
-    .pf-cse-tabs { position: relative; margin-left: auto; max-width: 100%; overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
-    .pf-cse-tabs::-webkit-scrollbar { display: none; }
-    .pf-cse-tabs__ind { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 0; pointer-events: none;
-      border-radius: 8px; background: var(--nd-card-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18); opacity: 0; }
-    .pf-cse-tabs--ind .pf-cse-tabs__ind { opacity: 1; }
-    .pf-cse-tabs--anim .pf-cse-tabs__ind { transition: transform var(--nd-dur, 320ms) var(--nd-spring), width var(--nd-dur, 320ms) var(--nd-spring); }
-    .pf-cse-tabs--ind .pf-cse-tab[aria-pressed='true'] { background: transparent; box-shadow: none; }
-    .pf-cse-tab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; flex: none; }
-    .pf-cse-tab__check { color: var(--color-violet-600, #7c3aed); flex: none; }
-    .pf-cse-tab__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); flex: none; }
 
     /* ── Stage card ── */
     .pf-stg { flex: none; }
@@ -424,6 +405,10 @@ interface StageField { name: string; title: string; type: string; options: strin
 
     /* Quiet neutral icon button — the note pencil (one tap opens a focused
        inline note). */
+    /* Incubation group (nav row, right). */
+    .pf-cse-incubgrp { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-cse-incubbtn { height: 36px; min-height: 36px; font-size: 13px; }
+    .pf-cse-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); flex: none; }
     .pf-cse-note { display: inline-flex; align-items: center; justify-content: center; flex: none;
       width: 32px; height: 32px; border-radius: var(--nd-radius-sm, 10px); cursor: pointer;
       color: var(--text-tertiary); background: transparent; border: 1px solid var(--nd-line); }
@@ -440,11 +425,16 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse-row__ctl { min-width: 0; display: flex; align-items: center; }
     /* Options: a COMPACT segmented control sized to its content — never
        stretched across the row. Many options wrap inside the cell. */
-    .pf-cse-opts { display: inline-flex; flex-wrap: wrap; width: auto; max-width: 100%; }
-    .pf-cse-opt { height: 32px; font-size: 13px; white-space: nowrap; }
-    .pf-cse-orgs { width: min(100%, 520px); }
+    /* Options FILL the control column: equal-width segments, one row up to
+       4 options; more wrap into balanced rows (auto-fit, ≥110px). */
+    .pf-cse-opts.pf-cse-opts--fill { display: grid; width: 100%; box-sizing: border-box;
+      grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
+    .pf-cse-opts.pf-cse-opts--many { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+    .pf-cse-opt { height: 38px; font-size: 13px; min-width: 0; padding: 0 8px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-cse-orgs { width: 100%; }
     /* Kit fields: a comfortable width (~60%), not the whole row. */
-    .pf-cse-field { width: 60%; min-width: 240px; min-height: 40px; padding: 8px 12px; box-sizing: border-box;
+    .pf-cse-field { width: 100%; min-width: 0; min-height: 40px; padding: 8px 12px; box-sizing: border-box;
       border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
       font: inherit; font-size: 14px; color: var(--text-primary); outline: none; }
     .pf-cse-field::placeholder { color: var(--text-muted); }
@@ -476,7 +466,8 @@ interface StageField { name: string; title: string; type: string; options: strin
     /* ── Touch ── */
     @media (pointer: coarse) {
       .pf-cse-note { width: 44px; height: 44px; }
-      .pf-cse-opt, .pf-cse-branch, .pf-cse-tab { height: 40px; }
+      .pf-cse-opt, .pf-cse-branch { height: 44px; }
+      .pf-cse-incubbtn { height: 44px; min-height: 44px; }
       .pf-stg__btn, .pf-cse-navbtn { height: 44px; min-height: 44px; }
     }
 
@@ -484,7 +475,7 @@ interface StageField { name: string; title: string; type: string; options: strin
     @media (max-width: 640px) {
       .pf-cse { padding: 0 12px; --pf-hb-bleed: 12px; }
       .pf-cse-chip--test, .pf-cse-ctx__grow { display: none; }
-      .pf-cse-tech, .pf-cse-incub { display: none; }
+      .pf-cse-tech { display: none; }
       .pf-cse-techavatar { display: inline-flex; }
       .pf-cse-band .pf-cse-act { width: 44px; min-width: 44px; height: 44px; padding: 0; gap: 0; border-radius: 12px; }
       .pf-cse-band .pf-cse-act__i { display: block; }
@@ -492,7 +483,11 @@ interface StageField { name: string; title: string; type: string; options: strin
       .pf-cse-nav { flex-wrap: wrap; }
       .pf-cse-spec { width: 100%; }
       .pf-cse__specsel { flex: 1; width: auto; min-width: 0; }
-      .pf-cse-tabs { order: 5; width: 100%; margin-left: 0; }
+      .pf-cse-incubgrp { width: 100%; margin-left: 0; }
+      .pf-cse-incubgrp .pf-cse__incubwrap { flex: 1 1 auto; }
+      .pf-cse-incubbtn { width: 100%; }
+      .pf-cse__incubpop { left: 0; right: auto; }
+      .pf-cse-opts.pf-cse-opts--many { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
       .pf-cse-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'name note' 'ctl ctl'; gap: 8px; }
       .pf-cse-row__name { grid-area: name; }
       .pf-cse-row__ctl { grid-area: ctl; }
@@ -502,7 +497,7 @@ interface StageField { name: string; title: string; type: string; options: strin
       .pf-stg__thread--field { padding-left: 0; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .pf-cse-tabs__ind, .pf-rh::after { transition: none !important; }
+      .pf-rh::after { transition: none !important; }
     }
   `],
 })
@@ -757,54 +752,9 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   /** The band's back chevron runs the page's own back (My Work fallback). */
   readonly backFn = () => this.back();
 
-  // ── Stage tabs (one stage card at a time; a sliding neutral indicator) ──
-  /** The tab the tech picked (null = follow the default below). */
-  readonly stageSel = signal<string | null>(null);
-  /** The stage on screen: the pick, else ?stage=, else the one I hold, else
-   *  the first not done, else the first. */
-  readonly activeStageKey = computed<string | null>(() => {
-    const st = this.view()?.stages ?? [];
-    if (!st.length) return null;
-    const has = (k: string | null) => !!k && st.some(s => s.key === k);
-    const sel = this.stageSel();
-    if (has(sel)) return sel;
-    const f = this.focusStage();
-    if (has(f)) return f;
-    return (st.find(s => this.isMine(s)) ?? st.find(s => s.state !== 'done') ?? st[0]).key;
-  });
-  readonly shownStages = computed(() => {
-    const k = this.activeStageKey();
-    return (this.view()?.stages ?? []).filter(s => s.key === k);
-  });
-  selectStage(key: string) { this.stageSel.set(key); }
-  /** Band primary: Inoculate & incubate is THE action until incubation runs
-   *  or the case is ready to leave (then the sign-out button is primary). */
-  readonly incubIsPrimary = computed(() => !this.view()?.incubateUntil && !this.allDone()
-    && this.view()?.caseState !== 'awaiting_signout');
   readonly techInitials = computed(() => (this.techName() || 'T').split(/\s+/).filter(Boolean)
     .slice(0, 2).map(w => w[0]!.toUpperCase()).join(''));
 
-  private readonly stageTabsEl = viewChild<ElementRef<HTMLElement>>('stageTabs');
-  private readonly _ind = afterRenderEffect(() => {
-    this.activeStageKey();
-    this.view();
-    this.placeIndicator();
-  });
-  /** Slide the neutral indicator under the selected tab (first placement is
-   *  instant; later moves animate on --nd-spring). */
-  private placeIndicator() {
-    const host = this.stageTabsEl()?.nativeElement;
-    if (!host) return;
-    const ind = host.querySelector<HTMLElement>('.pf-cse-tabs__ind');
-    const on = host.querySelector<HTMLElement>('.pf-cse-tab[aria-selected="true"]');
-    if (!ind || !on) { host.classList.remove('pf-cse-tabs--ind', 'pf-cse-tabs--anim'); return; }
-    if (host.classList.contains('pf-cse-tabs--ind')) host.classList.add('pf-cse-tabs--anim');
-    ind.style.width = on.offsetWidth + 'px';
-    ind.style.height = on.offsetHeight + 'px';
-    ind.style.transform = `translate(${on.offsetLeft}px, ${on.offsetTop}px)`;
-    host.classList.add('pf-cse-tabs--ind');
-    try { on.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* jsdom */ }
-  }
 
   // ── Draft autosave (per stage, in localStorage) ─────────────────────────
   private draftKey(key: string) { return `pf.cw.draft.${this.id}.${this.selCaseId() ?? 'root'}.${key}`; }

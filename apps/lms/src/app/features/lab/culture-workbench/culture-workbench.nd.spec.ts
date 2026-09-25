@@ -79,22 +79,32 @@ describe('Culture case — band + context bar', () => {
     expect(ctx.querySelector('.pf-cse-chip--progress')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('0/4 stages');
   });
 
-  it('the band has exactly ONE primary: Inoculate & incubate (violet), tech chip neutral', () => {
+  it('the band has exactly ONE primary: "Submit all results" (disabled until every stage is done)', () => {
     const { el } = render();
     const prim = el.querySelectorAll('.pf-hb__actions .pf-hb-btn--primary');
     expect(prim.length).toBe(1);
-    expect(prim[0].textContent).toContain('Inoculate & incubate');
+    expect(prim[0].textContent?.trim()).toBe('Submit all results');
+    expect((prim[0] as HTMLButtonElement).disabled).toBe(true);
     expect(el.querySelector('.pf-cse-tech')?.classList.contains('nd-chip--static')).toBe(true);
-    expect(el.querySelector('.pf-cse__tech-dot')).toBeNull();
+    expect(el.querySelector('.pf-hb__actions .pf-cse-incubbtn')).toBeNull();
   });
 
-  it('once every stage is done the sign-out button is the one primary; incubate goes secondary', () => {
+  it('"Submit all results" enables once every stage is done and runs the case sign-out', () => {
     const done = CASE.stages.map(s => ({ ...s, state: 'done' }));
-    const { el } = render({ stages: done });
-    const prim = el.querySelectorAll('.pf-hb__actions .pf-hb-btn--primary');
-    expect(prim.length).toBe(1);
-    expect(prim[0].classList.contains('pf-cse-signout')).toBe(true);
-    expect(el.querySelector('.pf-cse-incubbtn')?.classList.contains('pf-hb-btn--ghost')).toBe(true);
+    const { el, cmp } = render({ stages: done });
+    const spy = vi.spyOn(cmp, 'submitAndValidate').mockImplementation(() => {});
+    const btn = el.querySelector<HTMLButtonElement>('.pf-hb__actions .pf-hb-btn--primary')!;
+    expect(btn.disabled).toBe(false);
+    btn.click();
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('Inoculate & incubate lives in the nav row as a SECONDARY button', () => {
+    const { el } = render();
+    const btn = el.querySelector('.pf-cse-nav .pf-cse-incubgrp .pf-cse-incubbtn')!;
+    expect(btn.textContent).toContain('Inoculate & incubate');
+    expect(btn.classList.contains('nd-btn--secondary')).toBe(true);
+    expect(btn.classList.contains('pf-hb-btn--primary')).toBe(false);
   });
 
   it('no green, no amber, no monospace, no spaced caps eyebrow', () => {
@@ -106,40 +116,48 @@ describe('Culture case — band + context bar', () => {
 });
 
 describe('Culture case — stage tabs + rows', () => {
-  it('stage tabs: one tab per stage, the selected one shows its card; switching swaps the card', () => {
-    const { f, el } = render();
-    const tabs = el.querySelectorAll<HTMLButtonElement>('.pf-cse-tabs .pf-cse-tab');
-    expect(tabs.length).toBe(4);
-    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
-    expect(el.querySelectorAll('section.pf-stg').length).toBe(1);
-    expect(el.querySelector('.pf-stg__name')?.textContent?.trim()).toBe('Gram / Direct smear');
-    tabs[1].click();
-    f.detectChanges();
-    expect(el.querySelector('.pf-stg__name')?.textContent?.trim()).toBe('Growth check');
-    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+  it('no stage tabs: every stage renders as its own stacked card, in order', () => {
+    const { el } = render();
+    expect(el.querySelector('.pf-cse-tabs, [role="tablist"]')).toBeNull();
+    const names = [...el.querySelectorAll('section.pf-stg .pf-stg__name')].map(n => n.textContent?.trim());
+    expect(names).toEqual(['Gram / Direct smear', 'Growth check', 'Organism identification', 'Antibiotic sensitivity']);
   });
 
-  it('done stages carry a small violet check in their tab', () => {
+  it('each stage I hold has its own secondary Submit (plus Drop / Delegate)', () => {
+    const held = CASE.stages.map(s => ({ ...s, state: 'picked', holderUserId: 'me' }));
+    const { el } = render({ stages: held });
+    const cards = el.querySelectorAll('section.pf-stg');
+    expect(cards.length).toBe(4);
+    cards.forEach(c => {
+      const sub = c.querySelector('.pf-stg__submit')!;
+      expect(sub.textContent?.trim()).toBe('Submit');
+      expect(sub.classList.contains('nd-btn--secondary')).toBe(true);
+    });
+    expect(el.querySelectorAll('section.pf-stg .nd-btn--primary').length).toBe(0);
+  });
+
+  it('a done stage shows a violet-check "Done" chip in its header', () => {
     const st = CASE.stages.map((s, i) => (i === 0 ? { ...s, state: 'done' } : s));
     const { el } = render({ stages: st });
-    const first = el.querySelector('.pf-cse-tab[data-stage="gram"]')!;
-    expect(first.querySelector('.pf-cse-tab__check')).toBeTruthy();
+    expect(el.querySelector('section.pf-stg .pf-stg__state--done svg')).toBeTruthy();
   });
 
-  it('options are a compact segmented control sized to content (not full width), neutral selection', () => {
+  it('option controls FILL the column with equal-width segments (many wrap into balanced rows)', () => {
     const { el } = render();
-    const opts = el.querySelectorAll('.pf-cse-opts');
+    const opts = el.querySelectorAll<HTMLElement>('.pf-cse-opts');
     expect(opts.length).toBe(2);
-    expect(opts[0].classList.contains('nd-seg')).toBe(true);
-    expect(opts[0].querySelectorAll('.pf-cse-opt').length).toBe(4);
-    expect(css()).toMatch(/\.pf-cse-opts[^{]*\{[^}]*display:\s*inline-flex[^}]*flex-wrap:\s*wrap[^}]*width:\s*auto/);
-    expect(css()).not.toMatch(/\.pf-cse-opts[^{]*\{[^}]*(?<!-)width:\s*100%/);
+    expect(opts[0].classList.contains('pf-cse-opts--fill')).toBe(true);
+    expect(opts[0].style.getPropertyValue('--n')).toBe('4');
+    expect(opts[1].classList.contains('pf-cse-opts--many')).toBe(true);   // Morphology's 7
+    const s = css();
+    expect(s).toMatch(/\.pf-cse-opts--fill[^{]*\{[^}]*display:\s*grid[^}]*width:\s*100%[^}]*repeat\(var\(--n, 4\), minmax\(0, 1fr\)\)/);
+    expect(s).toMatch(/\.pf-cse-opts--many[^{]*\{[^}]*repeat\(auto-fit, minmax\(110px, 1fr\)\)/);
   });
 
-  it('free-text fields are kit fields at a comfortable width (~60%)', () => {
+  it('free-text fields fill the column', () => {
     const { el } = render();
     expect(el.querySelector('textarea.pf-cse-field')).toBeTruthy();
-    expect(css()).toMatch(/\.pf-cse-field\[_ngcontent-%COMP%\]\s*\{[^}]*width:\s*60%/);
+    expect(css()).toMatch(/\.pf-cse-field\[_ngcontent-%COMP%\]\s*\{[^}]*width:\s*100%/);
   });
 
   it('one tap on a row pencil opens the inline note composer', () => {
