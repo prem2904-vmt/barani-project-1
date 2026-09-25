@@ -72,6 +72,18 @@ mark), information the main card lacks (only fields the data really has —
 e.g. priority, fasting, referral), a short explanation line, and the footer
 actions.
 
+### Card headers and row actions
+
+- Every card / pane header is the BILLING header: a violet icon chip
+  (`.nd-card__icon`) + the UPPERCASE title. Nothing else unless it is a real
+  control for that card (toggles in slate). Counts are plain muted text on
+  the right — never a pill.
+- Per-row actions (Delegate, Print, Edit, favourite) are QUIET: a neutral
+  32px icon button with an `aria-label` + tooltip (44px on touch). Never a
+  loud outline / gradient repeated on every row — that is the page CTA's job.
+- Status on rows (Validated, Submitted, Draft) = neutral chips; a violet
+  dot/check marks "done". Red only for real warnings (Re-entry).
+
 ### Tiles in a row are symmetric
 
 Tiles in a size class share a fixed illustration box (same width + height

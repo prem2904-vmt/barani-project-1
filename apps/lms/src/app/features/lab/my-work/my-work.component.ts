@@ -384,6 +384,7 @@ const COUNTERS: CounterSpec[] = [
         <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            @if (theme.isNewDesign()) { <span class="nd-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v14a2 2 0 0 0 4 0V3"/></svg></span> }
             <span class="pf-mw-pane__title">Collect</span>
           </header>
           <div class="pf-mw-pane__body">
@@ -408,6 +409,7 @@ const COUNTERS: CounterSpec[] = [
         <section class="pf-mw-pane" [style.flex-basis.%]="mwSplitPct()"
                  [class.pf-mobile-hide]="mobileTab() !== 'intake'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            @if (theme.isNewDesign()) { <span class="nd-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/></svg></span> }
             <span class="pf-mw-pane__title">Lab Intake</span>
             <!-- Pin = keep it open next time; chevron = back to the rail. -->
             @if (theme.isNewDesign() && !isPhone()) {
@@ -500,6 +502,16 @@ const COUNTERS: CounterSpec[] = [
                    control; the header just names what you're looking at.
                    Classic keeps the tab strip here. -->
               @if (theme.isNewDesign()) {
+                <span class="nd-card__icon pf-mw-icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    @switch (tab()) {
+                      @case ('service_queue') { <path d="M4 6h16M4 12h16M4 18h10"/> }
+                      @case ('completed') { <circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/> }
+                      @case ('culture') { <circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/> }
+                      @default { <path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/> }
+                    }
+                  </svg>
+                </span>
                 <span class="pf-mw-pane__title">{{ tabLabel() }}</span>
               } @else {
               <button type="button" role="tab" class="pf-mw-tab press"
@@ -528,7 +540,7 @@ const COUNTERS: CounterSpec[] = [
               }
               <!-- Supervisor view: also show tubes other techs already claimed,
                    so stuck work (tech on leave) can be found and delegated. -->
-              @if (tab() === 'service_queue') {
+              @if (tab() === 'service_queue' && !theme.isNewDesign()) {
                 <button type="button" class="pf-mw-claimed-toggle press"
                         [class.pf-mw-claimed-toggle--on]="showClaimed()"
                         (click)="toggleShowClaimed()">
@@ -590,7 +602,8 @@ const COUNTERS: CounterSpec[] = [
                      (keydown.enter)="viewCompletedTube(tube)">
                   <div class="pf-tq__line">
                     <span class="pf-tq__id">{{ tube.barcode || tube.sampleId }}</span>
-                    <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status === 'entered'">
+                    <span class="pf-tq__tag" [class.pf-tq__tag--warn]="tube.status === 'entered' && !theme.isNewDesign()"
+                          [class.pf-tq__tag--validated]="tube.status === 'validated'">
                       {{ tube.status === 'validated' ? 'Validated' : 'Submitted' }}
                     </span>
                   </div>
@@ -612,7 +625,7 @@ const COUNTERS: CounterSpec[] = [
                   </span>
                   <div class="pf-tq__acts">
                   @if (tube.status === 'validated') {
-                    <button type="button" class="pf-tq__act pf-tq__act--print"
+                    <button type="button" class="pf-tq__act pf-tq__act--print" title="Print report"
                             [disabled]="printingTubeId() === tube.sampleId"
                             [attr.aria-label]="'Print report for ' + (tube.barcode || tube.sampleId)"
                             (click)="printCompletedTube(tube)">
@@ -626,7 +639,7 @@ const COUNTERS: CounterSpec[] = [
                     </button>
                   }
                   @if (canEditResult()) {
-                    <button type="button" class="pf-tq__act"
+                    <button type="button" class="pf-tq__act" title="Edit results"
                             [disabled]="reopeningTubeId() === tube.sampleId"
                             [attr.aria-label]="'Edit ' + (tube.barcode || tube.sampleId)"
                             (click)="editCompletedTube(tube)">
@@ -890,7 +903,7 @@ const COUNTERS: CounterSpec[] = [
                         </span>
                       }
                       @if (tab() === 'service_queue' ? canReassign() : !tube.allDone) {
-                        <button type="button" class="pf-tq__act"
+                        <button type="button" class="pf-tq__act" title="Delegate"
                                 [attr.aria-label]="'Delegate ' + (tube.barcode || tube.sampleId)"
                                 (click)="openDelegate(tube.tests); $event.stopPropagation()">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1010,6 +1023,7 @@ const COUNTERS: CounterSpec[] = [
                  [style.--culture-w.px]="cultureWidth()"
                  [class.pf-mobile-hide]="mobileTab() !== 'culture'">
           <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            @if (theme.isNewDesign()) { <span class="nd-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/></svg></span> }
             <span class="pf-mw-pane__title">Culture Bench</span>
             <span class="pf-mw-culture__count">{{ cultureCount() }}</span>
           </header>
@@ -2543,6 +2557,54 @@ const COUNTERS: CounterSpec[] = [
     @media (pointer: coarse) {
       :host-context(.design-new) .pf-tq__act { min-height: 44px; }
     }
+
+    /* ════ Round 3 (owner): exactly the BILLING header + calm rows ════ */
+    /* Pane header = BILLING header: violet icon chip + the title only. */
+    :host-context(.design-new) .pf-mw-pane__hdr { gap: 10px; }
+    :host-context(.design-new) .pf-mw-icon { flex: none; }
+    :host-context(.design-new) .pf-mw-pane .pf-mw-pane__title {
+      font-size: 13px !important; font-weight: 600 !important; letter-spacing: 0.08em !important;
+      color: var(--text-secondary) !important; text-transform: uppercase;
+    }
+    /* The item count is plain muted text on the right — no pill. */
+    :host-context(.design-new) .pf-mw-pane__meta {
+      margin: 0 0 0 auto; padding: 0; background: none; border: 0; border-radius: 0;
+      font-size: 12px; font-weight: 400; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+      font-family: inherit; letter-spacing: 0; text-transform: none;
+    }
+    :host-context(.design-new) .pf-mw-culture__count {
+      background: none; padding: 0; border-radius: 0; font-weight: 400; color: var(--text-tertiary);
+    }
+    /* Row actions (Delegate / Print / Edit): quiet, like the catalogue row's
+       star — a neutral 32px icon button (label kept for AT + tooltip);
+       touch 44px. Never a loud repeated outline on every row. */
+    :host-context(.design-new) .pf-tq__act {
+      width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0;
+      border-radius: var(--nd-radius-sm, 10px);
+      border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      color: var(--text-secondary); font-size: 0; gap: 0;
+    }
+    :host-context(.design-new) .pf-tq__act .pf-tq__act-t {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+    }
+    :host-context(.design-new) .pf-tq__act:hover {
+      background: var(--nd-card-bg); border-color: var(--nd-sel-border); color: var(--text-primary);
+    }
+    @media (pointer: coarse) {
+      :host-context(.design-new) .pf-tq__act { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+    }
+    /* Completed: palette only — neutral status chips (validated = violet
+       check-dot), no green / red, no colour stripe. */
+    :host-context(.design-new) .pf-tq--done .pf-tq__cap { background: transparent; }
+    :host-context(.design-new) .pf-tq--done .pf-tq__tag,
+    :host-context(.design-new) .pf-tq--done .pf-tq__tag--warn {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--nd-chip-bg) !important; color: var(--text-secondary) !important;
+    }
+    :host-context(.design-new) .pf-tq__tag--validated::before {
+      content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed);
+    }
+    :host-context(.design-new) .pf-tq--done .pf-tq__stat { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
   `]
 })
 export class MyWorkComponent implements OnInit {
