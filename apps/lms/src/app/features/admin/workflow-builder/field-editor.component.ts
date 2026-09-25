@@ -83,18 +83,13 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
               {{ mode() === 'edit' ? 'Save changes' : 'Add field' }}
             </button>
           </ng-container>
+          <!-- The pill = the field label + a tiny muted Type badge (ND-PATTERN
+               §14). Form / step / key are shown in the form itself. -->
           <div band-search class="nd-ctx pf-fe-ctx">
-            <span class="nd-ctx__primary">{{ draft().title?.trim() || (mode() === 'edit' ? 'Edit field' : 'New field') }}</span>
-            @if (screenLabel()) {
-              <span class="nd-ctx__chip" data-k="Form"><span class="nd-ctx__k">Form</span>{{ screenLabel() }}</span>
-            }
-            @if (stepTitle()) {
-              <span class="nd-ctx__chip" data-k="Step"><span class="nd-ctx__k">Step</span>{{ stepTitle() }}</span>
-            }
-            <span class="nd-ctx__chip" data-k="Type"><span class="nd-ctx__k">Type</span>{{ typeLabel() }}</span>
-            @if (draft().name) {
-              <span class="nd-ctx__chip" data-k="Key"><span class="nd-ctx__k">Key</span><span class="nd-num">{{ draft().name }}</span></span>
-            }
+            <span class="nd-ctx__primary">
+              <span class="pf-fe-ctx__name">{{ draft().title?.trim() || (mode() === 'edit' ? 'Edit field' : 'New field') }}</span>
+              <span class="pf-fe-ctx__badge" data-k="Type" title="Field type">{{ typeLabel() }}</span>
+            </span>
           </div>
         </pf-hero-band>
       }
@@ -115,6 +110,7 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
         <div class="nd-card__head">
           <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 12 22l-8.59-8.59A2 2 0 0 1 3 12V5a2 2 0 0 1 2-2h7a2 2 0 0 1 1.41.59L22 12z"/><circle cx="7.5" cy="7.5" r=".5"/></svg></span>
           <h2 class="nd-card__label pf-fe-h">Basics</h2>
+          @if (stepTitle()) { <span class="nd-card__note">{{ screenLabel() }} · step “{{ stepTitle() }}”</span> }
         </div>
         <div class="nd-card__body pf-fe-cardbody">
           <div class="pf-fe-grid2">
@@ -307,6 +303,8 @@ const WIDTHS: Array<{ value: FieldWidth; label: string }> = [
     </section>
   `,
   styles: [`
+    .pf-fe-ctx__badge { flex: none; margin-left: 6px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--nd-line);
+      background: var(--nd-chip-bg); font-size: 11px; font-weight: 500; line-height: 1.4; color: var(--text-tertiary); }
     .pf-fe-body { display: flex; flex-direction: column; gap: 14px; }
     .pf-fe-card .nd-card__body { overflow: visible; }
     .pf-fe-cardbody { gap: 14px; padding: 14px 16px 16px; }

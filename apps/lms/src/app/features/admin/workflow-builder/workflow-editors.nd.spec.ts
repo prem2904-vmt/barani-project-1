@@ -33,6 +33,7 @@ const getFor = (u: string) => (u === '/api/workflows/patient_register' ? record 
 const txt = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
 const hygiene = (el: HTMLElement) => {
   expect(el.querySelector('select, datalist, code, .font-mono, pf-chip, pf-toggle, input[type=checkbox]')).toBeNull();
+  expect(el.querySelector('button[class*="--on"], label[class*="--on"], a[class*="--on"]')).toBeNull();
   expect(/[✕✓✔⠿↑↓●]/.test(el.textContent ?? '')).toBe(false);
   expect(el.innerHTML).not.toMatch(/emerald|#34d399|#10b981|amber-text/);
 };
@@ -55,26 +56,50 @@ describe('Workflow screen editor — new design', () => {
     expect(p.el.querySelector('pf-hero-band .nd-savestate')).not.toBeNull();
   });
 
-  it('context bar: the workflow title + form / version / status / steps chips (key in tabular Noto)', () => {
+  it('pill = title ✎ + a tiny "Published v4" badge | step tabs — no fact chips', () => {
     const p = make();
     const ctx = p.el.querySelector('pf-hero-band .nd-ctx')!;
-    expect(txt(ctx.querySelector('.nd-ctx__primary'))).toBe('Patient registration');
-    expect(ctx.querySelector('.nd-ctx__chip[data-k="Form"] .nd-num')?.textContent).toBe('patient_register');
-    expect(txt(ctx.querySelector('.nd-ctx__chip[data-k="Version"]'))).toContain('v4');
-    expect(txt(ctx.querySelector('.nd-ctx__chip[data-k="Steps"]'))).toBe('2 steps');
+    expect(txt(ctx.querySelector('.pf-wfe-ctx__nametext'))).toBe('Patient registration');
+    expect(txt(ctx.querySelector('.pf-wfe-ctx__badge'))).toBe('Published v4');
+    expect(ctx.querySelector('.nd-ctx__edit[aria-label="Edit workflow title"]')).not.toBeNull();
+    expect(ctx.querySelectorAll('.nd-ctx__chip').length).toBe(0);
+    const tabs = ctx.querySelectorAll('[role="tablist"].pf-wfe-tabs [role="tab"]');
+    expect(tabs.length).toBe(2);
+    expect(ctx.querySelector('.pf-wfe-tabs__ind')).not.toBeNull();
   });
 
-  it('steps are a tabs row (no rail); a tab switches the step cards', async () => {
+  it('the pencil edits the title inline (Enter commits, marks dirty)', async () => {
+    const p = make();
+    (p.el.querySelector('.nd-ctx__edit[aria-label="Edit workflow title"]') as HTMLButtonElement).click();
+    p.f.detectChanges();
+    const input = p.el.querySelector<HTMLInputElement>('.pf-wfe-titlein')!;
+    input.value = 'Registration v2';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    p.f.detectChanges();
+    expect(txt(p.el.querySelector('.pf-wfe-ctx__nametext'))).toBe('Registration v2');
+    expect(p.cmp.builder.isDirty()).toBe(true);
+  });
+
+  it('step tabs live IN the pill (no rail, no separate tabs row); a tab switches the step cards', async () => {
     const p = make();
     expect(p.el.querySelector('.pf-wfe-rail')).toBeNull();
-    const tabs = p.el.querySelectorAll('[role="tablist"].nd-tabs [role="tab"]');
-    expect(tabs.length).toBe(2);
+    expect(p.el.querySelector('.pf-wfe-tabsrow')).toBeNull();
+    const tabs = p.el.querySelectorAll('pf-hero-band [role="tab"]');
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
     (tabs[1] as HTMLButtonElement).click();
     p.f.detectChanges();
     expect(p.el.querySelector('[role="tab"][data-step="s2"]')!.getAttribute('aria-selected')).toBe('true');
     await p.f.whenStable();
     expect(p.el.querySelector<HTMLInputElement>('.pf-wfe-detail input.nd-input')!.value).toBe('Contact');
+  });
+
+  it('steps reorder from the Step card (Move earlier / later)', () => {
+    const p = make();
+    const later = p.el.querySelector<HTMLButtonElement>('.pf-wfe-mv[aria-label="Move step later"]')!;
+    expect(p.el.querySelector<HTMLButtonElement>('.pf-wfe-mv[aria-label="Move step earlier"]')!.disabled).toBe(true);
+    later.click();
+    p.f.detectChanges();
+    expect(p.cmp.builder.workflow().steps.map((s: any) => s.id)).toEqual(['s2', 's1']);
   });
 
   it('step cards: slate switches, fields as kit rows with text row actions on web / icons on touch', () => {
@@ -125,23 +150,23 @@ describe('Field editor — new design', () => {
     return p;
   };
 
-  it('edit: band with ONE primary "Save changes"; context bar = field label + form / step / type / key', () => {
+  it('edit: band with ONE primary "Save changes"; pill = field label + a tiny Type badge only', () => {
     const p = make({ screen: 'patient_register', stepId: 's1', fieldId: 'f2' });
     const prim = p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary');
     expect(prim.length).toBe(1);
     expect(txt(prim[0])).toBe('Save changes');
     const ctx = p.el.querySelector('pf-hero-band .nd-ctx')!;
-    expect(txt(ctx.querySelector('.nd-ctx__primary'))).toBe('Blood group');
-    expect(txt(ctx.querySelector('[data-k="Form"]'))).toContain('Patient registration');
-    expect(txt(ctx.querySelector('[data-k="Step"]'))).toContain('Identity');
-    expect(txt(ctx.querySelector('[data-k="Type"]'))).toContain('Dropdown');
-    expect(ctx.querySelector('[data-k="Key"] .nd-num')?.textContent).toBe('blood_group');
+    expect(txt(ctx.querySelector('.pf-fe-ctx__name'))).toBe('Blood group');
+    expect(txt(ctx.querySelector('.pf-fe-ctx__badge'))).toBe('Dropdown');
+    expect(ctx.querySelectorAll('.nd-ctx__chip').length).toBe(0);
+    // Where the field lives moved into the form (Basics card note).
+    expect(txt(p.el.querySelector('.pf-fe-card .nd-card__note'))).toContain('Identity');
     expect(p.el.querySelector('pf-screen-header')?.classList.contains('pf-classic-only')).toBe(true);
   });
 
   it('new: "New field" + "Add field"; nd-cards, kit fields, slate switches, no native controls', () => {
     const p = make({ screen: 'patient_register', stepId: 's1' });
-    expect(txt(p.el.querySelector('.nd-ctx__primary'))).toBe('New field');
+    expect(txt(p.el.querySelector('.pf-fe-ctx__name'))).toBe('New field');
     expect(txt(p.el.querySelector('.pf-hb-btn--primary'))).toBe('Add field');
     expect(p.el.querySelectorAll('.pf-fe-card.nd-card').length).toBeGreaterThanOrEqual(2);
     const sw = p.el.querySelectorAll('.nd-toggle[role="switch"]');

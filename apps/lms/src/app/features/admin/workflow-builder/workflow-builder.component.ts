@@ -1,6 +1,6 @@
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -163,12 +163,41 @@ interface HistoryRow {
               </button>
             </ng-container>
 
+            <!-- The pill = [workflow title ✎ · "Published v4"] | [step tabs]
+                 (ND-PATTERN §14). Nothing else: the step card shows the rest. -->
             <div band-search class="nd-ctx pf-wfe-ctx">
-              <span class="nd-ctx__primary">{{ wf.title }}</span>
-              <span class="nd-ctx__chip" data-k="Form"><span class="nd-ctx__k">Form</span><span class="nd-num">{{ screenName() }}</span></span>
-              <span class="nd-ctx__chip" data-k="Version"><span class="nd-ctx__k">Version</span><span class="nd-num">v{{ builder.record()?.version ?? '—' }}</span></span>
-              <span class="nd-ctx__chip" data-k="Status"><span class="nd-ctx__k">Status</span>{{ builder.record()?.status ?? '—' }}</span>
-              <span class="nd-ctx__chip" data-k="Steps"><span class="nd-num">{{ wf.steps.length }}</span> {{ wf.steps.length === 1 ? 'step' : 'steps' }}</span>
+              <span class="nd-ctx__primary pf-wfe-ctx__name">
+                @if (titleEditing()) {
+                  <input #titleIn class="nd-input pf-wfe-titlein" [value]="wf.title" aria-label="Workflow title"
+                         (keydown.enter)="commitTitle(titleIn.value)" (keydown.escape)="titleEditing.set(false)"
+                         (blur)="commitTitle(titleIn.value)" />
+                } @else {
+                  <span class="pf-wfe-ctx__nametext">{{ wf.title }}</span>
+                  <span class="pf-wfe-ctx__badge nd-num" [title]="'Version ' + (builder.record()?.version ?? '—') + ' · ' + (builder.record()?.status ?? '')">{{ statusBadge() }}</span>
+                  <button type="button" class="nd-ctx__edit press" (click)="editTitle()" aria-label="Edit workflow title" title="Edit title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                  </button>
+                }
+              </span>
+              <span class="pf-wfe-ctx__div" aria-hidden="true"></span>
+              <!-- Steps: a neutral segmented control with a sliding indicator. -->
+              <div class="pf-wfe-tabs" role="tablist" aria-label="Steps" #tabsEl>
+                <span class="pf-wfe-tabs__ind" aria-hidden="true"
+                      [style.transform]="'translateX(' + tabInd().x + 'px)'" [style.width.px]="tabInd().w"
+                      [style.opacity]="tabInd().w ? 1 : 0"></span>
+                @for (s of wf.steps; track s.id) {
+                  <button type="button" class="pf-wfe-tab" role="tab"
+                          [attr.aria-selected]="builder.selectedStepId() === s.id" [attr.data-step]="s.id"
+                          [attr.aria-label]="s.title + ', ' + s.fields.length + ' fields'"
+                          (click)="builder.selectStep(s.id)">
+                    <span>{{ s.title }}</span>
+                    <span class="nd-num pf-wfe-tab__n" aria-hidden="true">{{ s.fields.length }}</span>
+                  </button>
+                }
+              </div>
+              <button type="button" class="nd-ctx__edit pf-wfe-addstep press" (click)="addStep()" aria-label="Add step" title="Add step">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              </button>
             </div>
           </pf-hero-band>
         }
@@ -186,24 +215,6 @@ interface HistoryRow {
         </pf-screen-header>
 
         <div class="pf-wfe-body" [class.pf-band-body]="theme.isNewDesign()">
-        @if (theme.isNewDesign()) {
-          <!-- Steps = a TABS ROW (was a rail). Drag a tab to reorder. -->
-          <div class="pf-wfe-tabsrow">
-            <div class="nd-tabs pf-wfe-tabs" role="tablist" aria-label="Steps"
-                 cdkDropList cdkDropListOrientation="horizontal" (cdkDropListDropped)="onStepDrop($event)">
-              @for (s of wf.steps; track s.id) {
-                <button type="button" cdkDrag class="nd-tabs__item pf-wfe-tab" role="tab"
-                        [attr.aria-selected]="builder.selectedStepId() === s.id" [attr.data-step]="s.id"
-                        (click)="builder.selectStep(s.id)">
-                  <span>{{ s.title }}</span>
-                  <span class="nd-num pf-wfe-tab__n" [attr.aria-label]="s.fields.length + ' fields'">{{ s.fields.length }}</span>
-                </button>
-              }
-            </div>
-            <button type="button" class="nd-btn nd-btn--tertiary pf-wfe-addstep" (click)="addStep()">+ Step</button>
-          </div>
-        }
-
         <div class="pf-wfe-grid" [class.pf-wfe-grid--nd]="theme.isNewDesign()">
           @if (!theme.isNewDesign()) {
           <!-- ──────── Steps panel (classic rail) ──────── -->
@@ -238,7 +249,18 @@ interface HistoryRow {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
                   </span>
                   <span class="nd-card__label">Step</span>
+                  <span class="nd-card__note nd-num">{{ stepIndex(step.id) + 1 }} of {{ wf.steps.length }}</span>
                   <span class="nd-card__spacer"></span>
+                  <button type="button" class="nd-rowact pf-wfe-mv" [class.nd-rowact--icon]="!web()" [disabled]="stepIndex(step.id) === 0"
+                          (click)="moveStep(step.id, -1)" aria-label="Move step earlier" title="Move earlier">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                    <span class="nd-rowact__t">Move earlier</span>
+                  </button>
+                  <button type="button" class="nd-rowact pf-wfe-mv" [class.nd-rowact--icon]="!web()" [disabled]="stepIndex(step.id) === wf.steps.length - 1"
+                          (click)="moveStep(step.id, 1)" aria-label="Move step later" title="Move later">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                    <span class="nd-rowact__t">Move later</span>
+                  </button>
                   <button type="button" class="nd-rowact pf-wfe-delstep" [class.nd-rowact--icon]="!web()"
                           (click)="deleteStep(step.id)" aria-label="Delete step" title="Delete step">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
@@ -377,7 +399,7 @@ interface HistoryRow {
               </section>
             </div>
           } @else {
-            <div class="nd-card pf-wfe-empty"><p>{{ theme.isNewDesign() ? 'Pick a step above.' : 'Select a step on the left.' }}</p></div>
+            <div class="nd-card pf-wfe-empty"><p>{{ theme.isNewDesign() ? 'Pick a step in the bar above.' : 'Select a step on the left.' }}</p></div>
           }
         </div>
         </div>
@@ -485,11 +507,39 @@ interface HistoryRow {
 
     /* Editor */
     .pf-wfe-body { display: flex; flex-direction: column; gap: 14px; }
-    .pf-wfe-tabsrow { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .pf-wfe-tabs { flex: 0 1 auto; }
+    /* The pill: [title ✎ · badge] | [step tabs] + — one line on web; phones
+       stack the name over a sideways-scrolling tabs row (ND-PATTERN §14). */
+    .pf-wfe-ctx.nd-ctx { flex-wrap: nowrap; gap: 12px; padding: 2px 0; overflow: visible; }
+    .pf-wfe-ctx__name { flex: 0 1 auto; min-width: 120px; max-width: 40%; }
+    .pf-wfe-ctx__badge { flex: none; margin-left: 4px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--nd-line);
+      background: var(--nd-chip-bg); font-size: 11px; font-weight: 500; line-height: 1.4; color: var(--text-tertiary); text-transform: capitalize; }
+    .pf-wfe-titlein { min-width: 220px; font-size: 15px; font-weight: 600; }
+    .pf-wfe-ctx__div { flex: none; width: 1px; align-self: stretch; margin: 4px 0; background: var(--nd-line); }
+    .pf-wfe-tabs { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 2px; padding: 3px;
+      border-radius: 12px; background: var(--nd-chip-bg); border: 1px solid var(--nd-line);
+      overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .pf-wfe-tabs::-webkit-scrollbar { display: none; }
+    .pf-wfe-tabs__ind { position: absolute; top: 3px; bottom: 3px; left: 0; z-index: 0; border-radius: 9px;
+      background: var(--nd-card-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+      transition: transform var(--nd-dur) var(--nd-spring), width var(--nd-dur) var(--nd-spring), opacity var(--nd-dur-fast) ease; }
+    .pf-wfe-tab { position: relative; z-index: 1; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+      height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--text-secondary);
+      font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: color var(--nd-dur-fast) ease; }
+    .pf-wfe-tab:hover { color: var(--text-primary); }
+    .pf-wfe-tab[aria-selected='true'] { color: var(--text-primary); font-weight: 600; }
+    .pf-wfe-tab:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
     .pf-wfe-tab__n { font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-wfe-tab.cdk-drag-preview { box-shadow: var(--nd-shadow-sm); }
-    .pf-wfe-addstep { flex: none; height: 36px; min-height: 36px; }
+    .pf-wfe-addstep { flex: none; align-self: center; }
+    .pf-wfe-mv { flex: none; }
+    @media (prefers-reduced-motion: reduce) { .pf-wfe-tabs__ind, .pf-wfe-tab { transition: none; } }
+    @media (max-width: 640px) {
+      .pf-wfe-ctx.nd-ctx { flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 0 6px; overflow: visible; }
+      .pf-wfe-ctx__name { flex: 1 1 100%; max-width: none; min-width: 0; }
+      .pf-wfe-ctx__div { display: none; }
+      .pf-wfe-tabs { flex: 1 1 0; }
+      .pf-wfe-tab { height: 38px; }
+      .pf-wfe-titlein { min-width: 0; width: 100%; }
+    }
     .pf-wfe-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
     @media (min-width: 768px) { .pf-wfe-grid:not(.pf-wfe-grid--nd) { grid-template-columns: 240px minmax(0, 1fr); } }
     .pf-wfe-rail { align-self: start; }
@@ -560,8 +610,6 @@ interface HistoryRow {
       .pf-wfe-more { display: none; }
       .pf-wfe-morewrap { display: inline-flex; }
       .pf-wfe-grid2, .pf-route-row { grid-template-columns: 1fr; }
-      .pf-wfe-tabsrow { flex-wrap: nowrap; }
-      .pf-wfe-tabs { flex: 1 1 auto; }
       .pf-wfe-overlay { padding: 0; align-items: flex-end; }
       .pf-preview-modal { border-radius: 20px 20px 0 0; max-height: 92%; }
       .pf-wf-row { padding: 8px 10px; }
@@ -587,6 +635,56 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
   protected readonly web = webPointerSignal();
   /** Phones: Preview / History / Reset live in a "More" menu in the band. */
   protected readonly moreOpen = signal(false);
+
+  // ── Pill: title ✎ + step tabs with a sliding indicator (ND-PATTERN §14) ──
+  protected readonly titleEditing = signal(false);
+  private readonly titleIn = viewChild<ElementRef<HTMLInputElement>>('titleIn');
+  editTitle(): void {
+    this.titleEditing.set(true);
+    setTimeout(() => { const el = this.titleIn()?.nativeElement; if (el) { el.focus(); el.select(); } });
+  }
+  commitTitle(v: string): void {
+    if (!this.titleEditing()) return;
+    this.titleEditing.set(false);
+    const t = (v ?? '').trim();
+    if (t && t !== this.builder.workflow()?.title) this.builder.updateWorkflow({ title: t });
+  }
+  /** "Published v4" / "Draft v3" — the one tiny muted badge on the name. */
+  readonly statusBadge = computed(() => {
+    const r = this.builder.record();
+    const st = (r?.status ?? '').toString();
+    return `${st ? st[0].toUpperCase() + st.slice(1) : ''} v${r?.version ?? '—'}`.trim();
+  });
+  private readonly tabsEl = viewChild<ElementRef<HTMLElement>>('tabsEl');
+  readonly tabInd = signal<{ x: number; w: number }>({ x: 0, w: 0 });
+  private readonly _tabIndFx = effect(() => {
+    this.builder.selectedStepId(); this.builder.workflow(); this.tabsEl();
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this.measureTab());
+    else this.measureTab();
+  });
+  @HostListener('window:resize')
+  onResizeTabs(): void {
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this.measureTab());
+  }
+  measureTab(): void {
+    const box = this.tabsEl()?.nativeElement;
+    const on = box?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!box || !on) { this.tabInd.set({ x: 0, w: 0 }); return; }
+    this.tabInd.set({ x: on.offsetLeft, w: on.offsetWidth });
+    const l = on.offsetLeft, r = l + on.offsetWidth;
+    if (l < box.scrollLeft) box.scrollLeft = Math.max(0, l - 8);
+    else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8;
+  }
+  stepIndex(stepId: string): number {
+    return (this.builder.workflow()?.steps ?? []).findIndex(s => s.id === stepId);
+  }
+  /** Reorder from the Step card (the pill tabs don't drag). */
+  moveStep(stepId: string, dir: -1 | 1): void {
+    const i = this.stepIndex(stepId);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= (this.builder.workflow()?.steps.length ?? 0)) return;
+    this.builder.reorderSteps(i, j);
+  }
   /** Band pill search over the screen forms (name, status). */
   readonly q = signal('');
   readonly visibleScreens = computed(() =>

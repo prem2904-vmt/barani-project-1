@@ -44,12 +44,12 @@ const OPERATORS: OperatorOption[] = [
         <div class="cb-fields">
           <div class="nd-field cb-field">
             <span class="nd-field__lbl">Field</span>
-            <pf-select [options]="fieldOptions()" [value]="rule.field" placeholder="— pick —" size="sm"
+            <pf-select [options]="fieldOptions()" [value]="rule.field" placeholder="— pick —"
                        (valueChange)="patch(i, { field: $any($event) })"></pf-select>
           </div>
           <div class="nd-field cb-operator">
             <span class="nd-field__lbl">Operator</span>
-            <pf-select [options]="operatorOptions" [value]="rule.operator" size="sm"
+            <pf-select [options]="operatorOptions" [value]="rule.operator"
                        (valueChange)="patch(i, { operator: $any($event) })"></pf-select>
           </div>
           @if (needsValue(rule.operator)) {
