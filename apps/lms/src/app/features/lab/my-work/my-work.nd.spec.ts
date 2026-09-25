@@ -42,19 +42,24 @@ function make(newDesign: boolean) {
 }
 
 describe('My Work — new-design remap', () => {
-  it('band tabs carry counts but no colour dots in the new design', () => {
+  it('band tabs carry neither colour dots nor count badges in the new design', () => {
     const c = make(true);
     const opts = c.tabOptions();
     expect(opts.length).toBeGreaterThanOrEqual(3);
     for (const o of opts) {
       expect(o.dot).toBeUndefined();
-      expect(typeof o.count).toBe('number');
+      expect(o.count).toBeUndefined();
     }
   });
 
   it('classic keeps its colour dots', () => {
     const c = make(false);
     expect(c.tabOptions().every((o: any) => !!o.dot)).toBe(true);
+  });
+
+  it('classic keeps its count badges', () => {
+    const c = make(false);
+    expect(c.tabOptions().every((o: any) => typeof o.count === 'number')).toBe(true);
   });
 });
 
