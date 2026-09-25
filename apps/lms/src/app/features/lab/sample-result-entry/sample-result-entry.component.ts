@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  afterRenderEffect,
   computed,
   effect,
   inject,
   signal,
+  viewChild,
 } from "@angular/core";
 import { TrendTest } from "../../../shared/utils/trend-chart";
 import {
@@ -49,11 +51,12 @@ import {
 import { OrderTestComment } from "../../../shared/models/comment.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { CommentThreadComponent } from "../../../shared/components/comment-thread/comment-thread.component";
-import { LoadingLogoComponent } from "../../../shared/components/loading-logo/loading-logo.component";
 import { SelectComponent } from "../../../shared/primitives/select.component";
 import { CultureEntryComponent } from "../culture-entry/culture-entry.component";
 import { CultureResult } from "../../../shared/models/culture.model";
-import { formatPatientInfo } from "../../../shared/models/patient.model";
+import { formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
+import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
+import { sampleVtName } from "../../../core/navigation/zoom-transition";
 
 /** Live flag preview beside a numeric input — client mirror only; the
  *  backend conditions engine still decides the persisted/reported flag. */
@@ -99,8 +102,8 @@ function calcKey(testId: string, paramName: string): string {
     FormsModule,
     CommentThreadComponent,
     SelectComponent,
-    LoadingLogoComponent,
     CultureEntryComponent,
+    HeroBandComponent,
   ],
   templateUrl: "./sample-result-entry.component.html",
   styleUrl: "./sample-result-entry.component.scss",
@@ -117,7 +120,70 @@ export class SampleResultEntryComponent {
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
   private readonly tenantState = inject(TenantStateService);
-  protected readonly formatPatient = formatPatientInfo;
+
+  // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
+  /** The route's sample id, known before the tube loads — the RESULTS
+   *  skeleton carries the zoom name so the queue tile can morph into it. */
+  readonly routeSampleId = signal<string | null>(null);
+  /** view-transition-name shared with the My Work tile (zoom-transition.ts). */
+  readonly vtName = computed(() => sampleVtName(this.routeSampleId() ?? this._sample()?.id));
+
+  /** Full patient name — never cut in code (ND rule 5). */
+  readonly patientName = computed(() => patientDisplayName(this._sample()?.order?.patient) || "Patient");
+  /** "29/M · AA0012". */
+  readonly patientMeta = computed(() => formatPatientMeta(this._sample()?.order?.patient));
+
+  /** Tube tabs of this order in a FIXED order: the order's sample sequence
+   *  (series offset, then sample ID — the same order the server lists
+   *  siblings in). Switching tubes never reorders them; only the selected
+   *  indicator moves. Kept across a switch so the strip never blinks. */
+  private readonly _tubeTabs = signal<Array<{ id: string; barcode: string; tests: string; open: boolean }>>([]);
+  readonly tubeTabs = this._tubeTabs.asReadonly();
+  /** The selected tab — set on tap, before the tube loads. */
+  readonly activeTubeId = computed(() => this.routeSampleId() ?? this._sample()?.id ?? null);
+
+  private syncTubeTabs(s: OrderSample | null) {
+    if (!s?.siblings?.length) { this._tubeTabs.set([]); return; }
+    const self = {
+      id: s.id, barcode: s.barcode || "", tests: this.headerChips().join(", "), open: false,
+      off: s.repeatOffsetMin ?? -1,
+    };
+    const rest = s.siblings.map((sb) => ({
+      id: sb.id, barcode: sb.barcode || "", tests: sb.tests.join(", "), open: !!sb.hasOpenWork,
+      off: sb.repeatOffsetMin ?? -1,
+    }));
+    const all = [self, ...rest].sort((a, b) =>
+      (a.off - b.off) || a.barcode.localeCompare(b.barcode, undefined, { numeric: true }) || a.id.localeCompare(b.id));
+    this._tubeTabs.set(all.map(({ off: _off, ...t }) => t));
+  }
+
+  /** The sliding selected-tab indicator: measured after render and written
+   *  straight to the DOM (no signal → no extra change detection). */
+  private readonly tabsEl = viewChild<ElementRef<HTMLElement>>("tabsEl");
+  private placeTabIndicator() {
+    const host = this.tabsEl()?.nativeElement;
+    if (!host) return;
+    const ind = host.querySelector<HTMLElement>(".pf-sre-tabs__ind");
+    const act = host.querySelector<HTMLElement>('.pf-sre-tab[aria-selected="true"]');
+    if (!ind || !act || !act.offsetWidth) {
+      host.classList.remove("pf-sre-tabs--ind", "pf-sre-tabs--anim");
+      return;
+    }
+    // Slide only once the indicator has a position to slide FROM.
+    if (host.classList.contains("pf-sre-tabs--ind")) host.classList.add("pf-sre-tabs--anim");
+    ind.style.width = `${act.offsetWidth}px`;
+    ind.style.height = `${act.offsetHeight}px`;
+    ind.style.transform = `translate(${act.offsetLeft}px, ${act.offsetTop}px)`;
+    host.classList.add("pf-sre-tabs--ind");
+  }
+
+  /** RESULTS card label for a grid block: the profile name, the single
+   *  test's name, or "Results" for a run of single-value tests. */
+  blockLabel(blk: { title?: string | null; tests: OrderTest[] }): string {
+    if (blk.title) return blk.title;
+    if (blk.tests.length === 1) return blk.tests[0].test?.name ?? "Test";
+    return "Results";
+  }
 
   /** Signed-in technician shown on the right of the header. Properly formats
    *  displayName or falls back to full name / 'Technician'. */
@@ -320,7 +386,7 @@ export class SampleResultEntryComponent {
   private getAllFocusableInputs(container: HTMLElement): HTMLElement[] {
     return Array.from(
       container.querySelectorAll<HTMLElement>(
-        "input.pf-sre__ginput, input.pf-sre__input, select.pf-sre__ginput, select.pf-sre__input, textarea.pf-sre__ginput, textarea.pf-sre__input, input.pf-sre__cb, .pf-sre__select-wrap .pf-dd__trigger, .pf-sre__gselect .pf-dd__trigger",
+        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger",
       ),
     ).filter((el) => {
       const style = window.getComputedStyle(el);
@@ -356,7 +422,9 @@ export class SampleResultEntryComponent {
       // whole tube without the tech ever reaching for the scrollbar.
       next.scrollIntoView({ block: "nearest" });
     } else if (inputs.length > 0) {
-      const submitBtn = container.querySelector<HTMLElement>(".pf-sre__submit");
+      // The visible Submit (side card on desktop, bottom bar on phones).
+      const submits = Array.from(container.querySelectorAll<HTMLElement>(".pf-sre-submit"));
+      const submitBtn = submits.find((b) => b.getClientRects().length > 0) ?? submits[0];
       if (submitBtn && !submitBtn.hasAttribute("disabled")) {
         submitBtn.focus();
       } else {
@@ -524,6 +592,11 @@ export class SampleResultEntryComponent {
   private trendPatientId: string | null = null;
 
   constructor() {
+    afterRenderEffect(() => {
+      this.tubeTabs();
+      this.activeTubeId();
+      this.placeTabIndicator();
+    });
     effect(() => {
       const pid = this.sample()?.order?.patient?.id ?? null;
       if (pid && pid !== this.trendPatientId) {
@@ -854,23 +927,6 @@ export class SampleResultEntryComponent {
     return choiceOptionsFor(p);
   }
 
-  /** Grid vs form view — grid is the default (mirrors report PDF columns).
-   *  Persisted across sessions in localStorage. */
-  private readonly _viewMode = signal<"grid" | "form">(
-    (typeof localStorage !== "undefined" &&
-      (localStorage.getItem("pf-sre-view") as "grid" | "form")) ||
-      "grid",
-  );
-  readonly viewMode = this._viewMode.asReadonly();
-  setViewMode(mode: "grid" | "form") {
-    this._viewMode.set(mode);
-    try {
-      localStorage.setItem("pf-sre-view", mode);
-    } catch {
-      /* no-op */
-    }
-  }
-
   /** Per-test "show overall observation thread" toggle. The thread block
    *  is heavy (composer textarea + buttons), so we keep it collapsed until
    *  the tech clicks the compact "+ Note" pill in the test header. Threads
@@ -1136,6 +1192,17 @@ export class SampleResultEntryComponent {
     }, 500);
   }
 
+  private flushLocalDraft() {
+    if (this.draftTimer === null || !this.draftKey) return;
+    clearTimeout(this.draftTimer);
+    this.draftTimer = null;
+    try {
+      localStorage.setItem(this.draftKey, JSON.stringify(this._values()));
+    } catch {
+      /* private mode */
+    }
+  }
+
   private restoreDraft() {
     if (!this.draftKey) return;
     try {
@@ -1249,6 +1316,7 @@ export class SampleResultEntryComponent {
 
   async ngOnInit() {
     const id = this.route.snapshot.paramMap.get("sampleId");
+    this.routeSampleId.set(id);
     this.validateMode.set(this.route.snapshot.queryParamMap.get('validate') === '1');
     this.viewOnly.set(this.route.snapshot.queryParamMap.get('view') === '1');
     if (!id) {
@@ -1262,9 +1330,13 @@ export class SampleResultEntryComponent {
    *  the route param is snapshot-read, so update the URL and reload state
    *  in place (OPS-51: FBS/PPBS live in different tubes of one order). */
   async openSibling(id: string) {
-    await this.router.navigate(["/lab/sample", id], { replaceUrl: false });
+    if (!id || id === this.activeTubeId()) return;
+    // Park the current tube's pending local draft under ITS key before the
+    // key moves to the next tube.
+    this.flushLocalDraft();
+    this.routeSampleId.set(id);          // the tab indicator moves now
     this._loading.set(true);
-    this._sample.set(null);
+    await this.router.navigate(["/lab/sample", id], { replaceUrl: false });
     await this.load(id);
   }
 
@@ -1275,6 +1347,7 @@ export class SampleResultEntryComponent {
         this.api.get<OrderSample>(`/api/samples/${id}/tests`),
       );
       this._sample.set(this.normalizeSample(sample ?? null));
+      this.syncTubeTabs(this._sample());
       // Pre-fill from any existing currentResult JSON so the tech can edit
       // a previously-entered value rather than starting from blank.
       this.prefillValues(sample ?? null);

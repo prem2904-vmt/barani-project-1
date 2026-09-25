@@ -2752,3 +2752,34 @@ html.pf-vt-back::view-transition-new(root)    { animation: pf-vt-in-left 300ms c
 @media (prefers-reduced-motion: reduce) {
   html::view-transition-old(root), html::view-transition-new(root) { animation: none !important; }
 }
+
+/* ═══ Queue → sample ZOOM (core/navigation/zoom-transition.ts) ═══
+   The tapped My Work tile and the first RESULTS card share
+   view-transition-name sample-<id>: the browser morphs one into the other
+   (the ::view-transition-group) on the nd spring, ~400ms. The page behind
+   recedes slightly and fades; back (pf-vt-zoom-out) reverses it. Only
+   navigations zoomDirection() allows get the class; reduced motion skips. */
+@keyframes pf-vt-recede  { to   { opacity: 0; transform: scale(0.97); } }
+@keyframes pf-vt-emerge  { from { opacity: 0; transform: scale(0.97); } }
+@keyframes pf-vt-fade-in  { from { opacity: 0; } }
+@keyframes pf-vt-fade-out { to   { opacity: 0; } }
+html.pf-vt-zoom-in::view-transition-group(*),
+html.pf-vt-zoom-out::view-transition-group(*) {
+  animation-duration: 400ms; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+html.pf-vt-zoom-in::view-transition-old(*),
+html.pf-vt-zoom-in::view-transition-new(*),
+html.pf-vt-zoom-out::view-transition-old(*),
+html.pf-vt-zoom-out::view-transition-new(*) {
+  animation-duration: 400ms; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* The small tile's snapshot would stretch blurry — hand over to the card fast. */
+html.pf-vt-zoom-in::view-transition-old(*.pf-zoom)  { animation: pf-vt-fade-out 160ms ease-out both; }
+html.pf-vt-zoom-out::view-transition-new(*.pf-zoom) { animation: pf-vt-fade-in 240ms 160ms ease-out both; }
+html.pf-vt-zoom-in::view-transition-old(root)  { animation: pf-vt-recede 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-zoom-in::view-transition-new(root)  { animation: pf-vt-fade-in 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-zoom-out::view-transition-old(root) { animation: pf-vt-fade-out 280ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-zoom-out::view-transition-new(root) { animation: pf-vt-emerge 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  html::view-transition-group(*), html::view-transition-old(*), html::view-transition-new(*) { animation: none !important; }
+}

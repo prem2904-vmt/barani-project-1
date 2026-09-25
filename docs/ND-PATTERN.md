@@ -299,6 +299,49 @@ serves every scan point. Redesign it, never fork it per screen.
   is the manual view's Confirm. Red only for the wrong-vial warning; no
   green, no pink, no spaced monospace caps.
 
+## 12. Result entry
+
+`/lab/sample/:id` (`features/lab/sample-result-entry/`) — the tube is the
+unit of work. It follows the band rules above with these specifics
+(owner review, 2026-09-25):
+
+- **Band:** back + tenant, and the page's actions in the band's actions
+  slot (top-right, like every band page): secondary **Save draft** and the
+  ONE primary **Submit results** (validation mode: Reject + Validate (n);
+  a finished tube: Edit result). The disabled rules are unchanged. On
+  phones the band actions don't fit, so the same two buttons ride a
+  compact `.nd-bottombar` above the always-visible navbar. A quiet
+  "Saved 14:02" autosave note sits beside them on web.
+- **Context bar (the pill):** patient chip with the FULL name +
+  "29/M · AA0012"; the sample ID as the primary chip + department
+  ("26123 · MOL", tabular numbers); the order ID where it fits (≥1280px);
+  the technician chip (name + Reg). Phones: patient + sample in one row.
+- **Tube tabs** (other tubes of the same order) sit in the band's tools
+  slot as a neutral `.nd-seg`, in a **fixed order** — the order's sample
+  sequence (series offset, then sample ID). Switching tubes never reorders
+  them; only the selected indicator moves, sliding on `--nd-spring` (off
+  under reduced motion). An open-work dot is violet. Phones: the strip
+  scrolls on its own row.
+- **No side panel.** The RESULTS cards take the full width: one `.nd-card`
+  per test (a profile = one card) — violet icon chip, the test name as the
+  label, "+ Note" as the small secondary button. The table is the calm row
+  style: 1px `--nd-line` rows, parameter at weight 500, range / unit /
+  method muted, results as kit inputs or `pf-select`, the note pencil a
+  quiet neutral icon button. H / L / critical flag chips keep their
+  functional colours; calculated-value chips are neutral.
+- **Grid only.** There is no Grid / Form switch. Enter walks the fields in
+  order and lands on Submit.
+- Order-level extras appear above the cards only when they apply: the
+  validator's "Submitted …" line, the slate **Include Trendogram** toggle
+  (+ range picker), and the flags the last submit raised.
+- **Zoom from the queue:** My Work tiles carry `data-vt-sample="<id>"`;
+  `core/navigation/zoom-transition.ts` names ONLY the tapped tile
+  `sample-<id>` for the transition, and the first RESULTS card (or its
+  loading skeleton) carries the same `view-transition-name`, so the tile
+  morphs into the card (~400ms, nd spring). Back / submit / save draft to
+  My Work reverses it. No View Transitions API or reduced motion → an
+  instant swap.
+
 ## API summary
 
 ```

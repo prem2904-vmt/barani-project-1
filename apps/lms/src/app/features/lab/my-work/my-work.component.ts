@@ -598,7 +598,7 @@ const COUNTERS: CounterSpec[] = [
         <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
           @for (tube of completedTubes(); track tube.sampleId) {
             <li>
-              <div class="pf-tq pf-tq--done">
+              <div class="pf-tq pf-tq--done" [attr.data-vt-sample]="tube.sampleId">
                 <span class="pf-tq__cap" aria-hidden="true"></span>
                 <div class="pf-tq__main pf-tq__main--link" role="link" tabindex="0"
                      [attr.aria-label]="'View results for ' + (tube.barcode || tube.sampleId)"
@@ -736,7 +736,7 @@ const COUNTERS: CounterSpec[] = [
                            tube for combined entry (Fix 6 contract). -->
                       <ul class="mt-3 space-y-2 pl-2 sm:pl-12">
                         @for (tube of tubesIn(g.items); track tube.sampleId) {
-                          <li class="rounded-lg p-2.5 pf-tube-tile pf-tube-tile--tappable"
+                          <li class="rounded-lg p-2.5 pf-tube-tile pf-tube-tile--tappable" [attr.data-vt-sample]="tube.sampleId"
                               [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
                               [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
                               role="button" tabindex="0"
@@ -852,7 +852,7 @@ const COUNTERS: CounterSpec[] = [
                        area. Hover and press only add FEEDBACK — never reveal
                        content — so the card is identical on a bench tablet and
                        a desktop. -->
-                  <div class="pf-tq"
+                  <div class="pf-tq" [attr.data-vt-sample]="tube.sampleId"
                        [class.pf-tq--urgent]="bucket.level === 'urgent'"
                        [class.pf-tq--high]="bucket.level === 'high'"
                        [class.pf-tq--rejected]="tube.rejections.length > 0"
