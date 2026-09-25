@@ -540,6 +540,30 @@ plus (owner reviews, 2026-09-25):
     table** writes each coded disk's mm into its drug row (matched by code),
     keeps the photo + session (rings, codes, ruler), then posts
     `/disk-read/{auditId}/confirm` (errors ignored).
+  - **Plate BEFORE the organism (microbiology SME, 2026-09-25) — an extra
+    path; the organism-first path stays.** On the culture case the AST area
+    opens with a **PLATE** block (neutral card: 11px uppercase label, a
+    secondary **Measure plate** / **Re-measure plate**, then one static chip
+    per measured antibiotic — "AMC 30 · 6 mm" — and a muted line saying what
+    happens next). Measure runs the same modal, but PF Sense reads the codes
+    against the lab's **whole antibiotic master** (every drug's printed codes
+    + potency, `masterCandidates` in `disk-codes.ts`; the backend takes up
+    to 400, listed one per line). A drug is used once — two printed aliases
+    of one drug ("CFS 105" / "CFS 75/30") count as the same.
+    - **Held on the case:** after Review → Apply, the reading (disk → code →
+      antibiotic → zone mm, photo, rings, PF Sense audit id) is saved on the
+      branch's AST stage as `plateJson` inside the case's StagesJson (`PUT
+      /api/microbiology/culture/{id}/stage/ast/plate`, `?caseId=` for a
+      subculture) — no schema change; it survives reloads.
+    - **When the organism is identified** the table is built from the plate:
+      ONLY the plate's antibiotics, zones filled, S / I / R from that
+      organism's CLSI breakpoints. A plate antibiotic the organism has no
+      breakpoint for stays, with a muted "No CLSI breakpoint for
+      <organism>" line and no verdict. Changing the organism keeps the same
+      zones and recomputes every verdict (manual overrides reset — they were
+      for the old organism). + Add antibiotic works as before. An organism
+      that already has entered results is never overwritten by a plate.
+    - Automatic plate changes don't count as the technician's edits.
   - **Real-plate check:** `apps/lms-e2e/src/culture-measure-read.rbac.spec.ts`
     (`PLATE_JPG=…/plate.jpg SHOTS_DIR=…`): uploads the real plate, runs
     OpenCV in the browser from the bundled asset (CDNs are blocked; exactly

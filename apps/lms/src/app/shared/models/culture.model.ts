@@ -28,6 +28,10 @@ export interface CultureOrganism {
   /** The measure-assist session (calibration + fitted circles, image px) so
    *  reopening Measure restores every ring instead of starting over. */
   plateMeasure?: PlateMeasureSession | null;
+  /** The rows came from the case's PLATE READING (measured before the
+   *  organism): the table shows only the plate's antibiotics, and changing
+   *  the organism re-maps breakpoints onto the same zones. */
+  fromPlate?: boolean;
 }
 
 /** A saved plate-measure session — everything needed to re-edit later. */

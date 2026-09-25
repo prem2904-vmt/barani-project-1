@@ -245,7 +245,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                     @if (astOpen()) {
                       <div class="pf-cse__astwrap">
                         <pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
-                                          [seedOrganisms]="identifiedOrganisms()" [embedded]="true" [orderTestId]="id"
+                                          [seedOrganisms]="identifiedOrganisms()" [embedded]="true" [orderTestId]="id" [plateCaseId]="selCaseId()"
                                           [reportHidden]="reportHidden()"
                                           (reportHiddenChange)="setReportHidden($event)"
                                           (valueChange)="astValue.set($event)"></pf-culture-entry>

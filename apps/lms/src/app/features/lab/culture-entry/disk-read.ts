@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map, timeout } from 'rxjs';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ApiError, ApiResponse } from '../../../shared/models/api-response.model';
-import { DiskCandidate, normCode } from './disk-codes';
+import { DiskCandidate, drugForCode, normCode } from './disk-codes';
 import { mosaicLayout, MosaicLayout } from './plate-vision';
 
 /**
@@ -85,9 +85,10 @@ export interface CodeSlot {
  * Fold the AI answer into the rows. `tileToId` maps the tile number sent
  * (n) to the row id AT CALL TIME — rows may have been added or removed
  * while the call ran. Rules: a row the technician already coded is never
- * touched; a code off the panel (or UNKNOWN) stays unknown; a code is used
- * at most once (the most confident tile keeps it, a code the technician
- * already placed stays theirs). An unread tile may carry the backend's
+ * touched; a code off the panel (or UNKNOWN) stays unknown; a DRUG is used
+ * at most once — two printed aliases of one drug ("CFS 105" / "CFS 75/30")
+ * count as the same — the most confident tile keeps it, a drug the
+ * technician already placed stays theirs. An unread tile may carry the backend's
  * `suggestedCode` — kept as `suggested` only while no other disk holds it.
  */
 export function mapAiRead<T extends CodeSlot>(rows: T[], res: Pick<DiskReadResult, 'disks'>, tileToId: Map<number, number>, candidates: DiskCandidate[]): T[] {
@@ -99,24 +100,25 @@ export function mapAiRead<T extends CodeSlot>(rows: T[], res: Pick<DiskReadResul
     const c = normCode(d.code), sg = normCode(d.suggestedCode);
     byId.set(id, { code: allowed.has(c) ? c : null, conf: d.confidence ?? null, sug: allowed.has(sg) ? sg : null });
   }
-  const techCodes = new Set(rows.filter(r => r.codeSrc === 'tech' && r.code).map(r => r.code));
-  // Duplicate claims: keep the most confident per code.
+  const drugOf = (c: string | null | undefined) => (c ? drugForCode(c, candidates) ?? c : null);
+  const techDrugs = new Set(rows.filter(r => r.codeSrc === 'tech' && r.code).map(r => drugOf(r.code)));
+  // Duplicate claims: keep the most confident per DRUG.
   const winner = new Map<string, { id: number; conf: number }>();
   for (const [id, v] of byId) {
     if (!v.code) continue;
     const row = rows.find(r => r.id === id);
     if (!row || row.codeSrc === 'tech' || row.notDisk) continue;
-    const w = winner.get(v.code), conf = v.conf ?? 0;
-    if (!w || conf > w.conf) winner.set(v.code, { id, conf });
+    const d = drugOf(v.code)!, w = winner.get(d), conf = v.conf ?? 0;
+    if (!w || conf > w.conf) winner.set(d, { id, conf });
   }
   const mapped = rows.map(r => {
     if (r.codeSrc === 'tech' || r.notDisk || !byId.has(r.id)) return r;
     const v = byId.get(r.id)!;
-    const keep = !!v.code && winner.get(v.code)?.id === r.id && !techCodes.has(v.code);
+    const keep = !!v.code && winner.get(drugOf(v.code)!)?.id === r.id && !techDrugs.has(drugOf(v.code));
     return { ...r, code: keep ? v.code : null, codeSrc: 'ai' as const, aiConf: keep ? v.conf : null, suggested: keep ? null : v.sug };
   });
-  const used = new Set(mapped.map(r => r.code).filter(Boolean));
-  return mapped.map(r => r.suggested && used.has(r.suggested) ? { ...r, suggested: null } : r);
+  const used = new Set(mapped.map(r => drugOf(r.code)).filter(Boolean));
+  return mapped.map(r => r.suggested && used.has(drugOf(r.suggested)) ? { ...r, suggested: null } : r);
 }
 
 // ── Mosaic (canvas) ──────────────────────────────────────────────────

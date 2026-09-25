@@ -624,6 +624,9 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   @Input() antibiotics: string[] = [];
   /** Drug → breakpoint short label ("AZA 30") for drugs the code table lacks. */
   @Input() codeHints: Record<string, string> = {};
+  /** The candidate codes, given outright (the plate read BEFORE an organism:
+   *  the lab's whole antibiotic master). Null = derive from `antibiotics`. */
+  @Input() candidateList: DiskCandidate[] | null = null;
   /** The culture case (order test) — sent with the AI read for the audit. */
   @Input() orderTestId: string | null = null;
   /** The lab's default plate size (mm). */
@@ -634,7 +637,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   /** Live interpretation: (antibiotic, zone mm) → S/I/R (existing breakpoint logic). */
   @Input() srI?: (antibiotic: string, zoneMm: number) => 'S' | 'I' | 'R' | '';
 
-  @Output() applied = new EventEmitter<{ measurements: PlateMeasurement[]; imageUrl: string | null; session: PlateMeasureSession }>();
+  @Output() applied = new EventEmitter<{ measurements: PlateMeasurement[]; imageUrl: string | null; session: PlateMeasureSession; auditId?: string | null }>();
   @Output() cancel = new EventEmitter<void>();
 
   readonly fullscreen = signal(false);
@@ -954,17 +957,18 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   });
 
   // ── AI: ONE background read of the printed codes ─────────────────
-  readonly candidates = computed<DiskCandidate[]>(() => panelCandidates(this.antibiotics, this.codeHints));
+  readonly candidates = computed<DiskCandidate[]>(() => this.candidateList ?? panelCandidates(this.antibiotics, this.codeHints));
   /** Each row's pick list: the panel's codes; a code already on another
    *  disk is marked "on disk n" (picking it moves it here). */
   readonly codeOptions = computed(() => {
     const rows = this.rows();
-    const where = new Map(rows.filter(r => r.code).map(r => [r.code as string, r]));
+    // By DRUG: a printed alias of a drug already on a disk is "on disk n" too.
+    const where = new Map(rows.filter(r => r.code).map(r => [this.drugOf(r) ?? (r.code as string), r]));
     const out = new Map<number, PfSelectOption<string>[]>();
     for (const r of rows) {
       out.set(r.id, [
         ...this.candidates().map(c => {
-          const other = where.get(c.code);
+          const other = where.get(c.drug);
           return { value: c.code, label: c.code, hint: other && other.id !== r.id ? `${c.drug} · on disk ${other.n}` : c.drug };
         }),
         { value: NOT_A_DISK, label: 'Not a disk' },
@@ -1039,12 +1043,14 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   pickCode(id: number, value: string) {
     this.snapshot();
     const code = value === NOT_A_DISK ? null : normCode(value) || null;
+    const drug = code ? drugForCode(code, this.candidates()) ?? code : null;
+    const drugOfCode = (c: string | null | undefined) => (c ? drugForCode(c, this.candidates()) ?? c : null);
     this.rows.update(list => list.map(r => {
       if (r.id === id) return { ...r, code, codeSrc: 'tech' as const, aiConf: null, notDisk: value === NOT_A_DISK, suggested: null };
       // One disk per code: a code picked here leaves any other disk (and
       // stops being anyone's "probably").
-      if (code && r.code === code) return { ...r, code: null, codeSrc: 'tech' as const, aiConf: null };
-      if (code && r.suggested === code) return { ...r, suggested: null };
+      if (drug && drugOfCode(r.code) === drug) return { ...r, code: null, codeSrc: 'tech' as const, aiConf: null };
+      if (drug && drugOfCode(r.suggested) === drug) return { ...r, suggested: null };
       return r;
     }));
     this.selectedId.set(id);
@@ -1121,7 +1127,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
       const disks = this.rows().map(r => ({ n: r.n, code: r.notDisk ? null : r.code }));
       this.diskApi.confirm(this.auditId, disks).subscribe({ error: () => { /* audit only */ } });
     }
-    this.applied.emit({ measurements, imageUrl: this.uploadedUrl, session });
+    this.applied.emit({ measurements, imageUrl: this.uploadedUrl, session, auditId: this.auditId });
     this.busy.set(false);
   }
   private upload(blob: Blob): Promise<string> {

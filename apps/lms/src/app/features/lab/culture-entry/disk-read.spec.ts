@@ -1,5 +1,5 @@
 import { aiFallbackMessage, CodeSlot, formatTokens, mapAiRead } from './disk-read';
-import { baseDrug, drugForCode, normCode, panelCandidates } from './disk-codes';
+import { baseDrug, drugForCode, masterCandidates, normCode, panelCandidates } from './disk-codes';
 
 /** The ONE AI call: panel → candidate codes, the answer → rows (suggestions
  *  only), and the manual fallback when the endpoint is absent. */
@@ -35,6 +35,18 @@ describe('panel → disk codes', () => {
     expect(drugForCode('AZA 30', c)).toBe('Aztreonam-Avibactam 30');
   });
 
+  it('the WHOLE master: every drug\'s printed codes; breakpoint label + content, else short name', () => {
+    const c = masterCandidates(
+      [{ name: 'Ceftriaxone', shortName: 'CRO' }, { name: 'Aztreonam-Avibactam', shortName: 'AZA' }, { name: 'Dalbavancin', shortName: 'DAL' },
+       { name: 'Fancy-new', shortName: 'FNW' }],
+      [{ antibiotic: 'Aztreonam-Avibactam 30', shortLabel: 'AZA 30', diskLabel: '30 μg' }, { antibiotic: 'Dalbavancin', shortLabel: 'DAL' },
+       { antibiotic: 'Fancy-new', diskLabel: '15 μg' }]);
+    const codes = c.map(x => x.code);
+    expect(codes).toEqual(expect.arrayContaining(['CTR 30', 'CRO 30', 'AZA 30', 'DAL', 'FNW 15']));
+    expect(drugForCode('AZA 30', c)).toBe('Aztreonam-Avibactam');
+    expect(new Set(codes).size).toBe(codes.length);
+  });
+
   it('names normalise', () => {
     expect(baseDrug('Amoxicillin/Clavulanate')).toBe('amoxicillin-clavulanate');
     expect(baseDrug('Cefuroxime (oral)')).toBe('cefuroxime');
@@ -68,6 +80,17 @@ describe('AI result → rows', () => {
     const out = mapAiRead(rs, { disks: [{ n: 2, code: 'CTR 30', confidence: 0.6 }, { n: 5, code: 'CTR 30', confidence: 0.9 }] }, tiles(rs), cands);
     expect(out[1].code).toBeNull();
     expect(out[4].code).toBe('CTR 30');
+  });
+
+  it('two printed aliases of ONE drug count as the same (live flash-lite read: CFS 105 + CFS 75/30)', () => {
+    const rs = rows();
+    const out = mapAiRead(rs, { disks: [
+      { n: 3, code: 'CFS 105', confidence: 0.8 },           // really CAZ 30 — misread
+      { n: 8, code: 'CFS 75/30', confidence: 1.0 },          // the real CFS disk
+    ] }, tiles(rs), cands);
+    expect(out[7].code).toBe('CFS 75/30');
+    expect(out[2].code).toBeNull();
+    expect(out[2].codeSrc).toBe('ai');
   });
 
   it('never overrides the technician — rows they coded, codes they placed', () => {

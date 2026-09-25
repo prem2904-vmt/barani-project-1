@@ -4,6 +4,8 @@ import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, PlateMeasureSession, panelForSpecimen } from '../../../shared/models/culture.model';
 import { PlateMeasureComponent } from './plate-measure.component';
+import { MasterAntibiotic, masterCandidates } from './disk-codes';
+import { PlateReading, parsePlate, plateJsonFromCase, plateRows, readingFromMeasure } from './plate-reading';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 
@@ -53,6 +55,38 @@ interface Breakpoint {
       }
 
       @if (!m().noGrowth) {
+        @if (plateOn()) {
+          <!-- The PLATE, measured BEFORE the organism (SME flow): OpenCV
+               measures every zone, PF Sense reads the codes against the whole
+               antibiotic master; held on the case until the organism is known. -->
+          <section class="ce-plate" aria-label="Plate">
+            <div class="ce-plate__head">
+              <span class="ce-plate__ttl">Plate</span>
+              @if (plate(); as p) {
+                <span class="ce-plate__meta nd-num">{{ p.disks.length }} {{ p.disks.length === 1 ? 'antibiotic' : 'antibiotics' }} measured</span>
+              }
+              <span class="ce-plate__grow"></span>
+              <button type="button" class="nd-btn nd-btn--secondary ce-plate__btn" (click)="openPlateMeasure()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v11H4V7z"/><path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
+                {{ plate() ? 'Re-measure plate' : 'Measure plate' }}
+              </button>
+            </div>
+            @if (plate(); as p) {
+              <ul class="ce-plate__chips" aria-label="Antibiotics on the plate">
+                @for (d of p.disks; track d.drug) {
+                  <li class="nd-chip nd-chip--static ce-plate__chip" [title]="d.drug"><span class="nd-num">{{ d.code || d.drug }}</span><span class="ce-plate__mm nd-num">{{ d.mm }} mm</span></li>
+                }
+              </ul>
+              <p class="ce-plate__note">
+                {{ plateOrgName() ? 'On the table for ' + plateOrgName() + ' — S / I / R from its CLSI breakpoints.'
+                   : 'Identify the organism — the table fills with these antibiotics and works out S / I / R.' }}
+              </p>
+            } @else {
+              <p class="ce-plate__note">Measure the AST plate now, before the organism is known. PF Sense reads each disk against the whole antibiotic list; the table fills in once the organism is identified.</p>
+            }
+            @if (plateError()) { <p class="ce-plate__err" role="alert">{{ plateError() }}</p> }
+          </section>
+        }
         @if (!embedded) {
           <div class="flex items-center justify-between">
             <span class="pf-label">Organisms isolated</span>
@@ -152,6 +186,9 @@ interface Breakpoint {
                       }
                       <span class="ce-abx__name">{{ ab.name }}</span>
                     </span>
+                    @if (noBreakpoint(org, ab)) {
+                      <span class="ce-abx__nobp">No CLSI breakpoint for {{ org.name }}</span>
+                    }
                     @if (micRef(org.name, ab); as m) {
                       <span class="ce-abx__mic" title="MIC breakpoints only — CLSI defines no disk zone for this drug/organism. Set S/I/R by hand (or enter your own zone cutoffs).">
                         MIC µg/mL · <em class="ce-abx__col--s">{{ m.s }}</em> · <em class="ce-abx__col--i">{{ m.i }}</em> · <em class="ce-abx__col--r">{{ m.r }}</em>
@@ -336,6 +373,17 @@ interface Breakpoint {
         </div>
       </div>
 
+      @if (measuringPlate()) {
+        <pf-plate-measure
+          [antibiotics]="abxNames()"
+          [candidateList]="masterCands()"
+          [existingImageUrl]="plate()?.imageUrl"
+          [existingSession]="plate()?.session"
+          [orderTestId]="orderTestId"
+          [srI]="plateSrI"
+          (applied)="onPlateMeasured($event)"
+          (cancel)="measuringPlate.set(false)" />
+      }
       @if (measureOrg() !== null) {
         <pf-plate-measure
           [antibiotics]="activeAbNames()"
@@ -534,6 +582,21 @@ interface Breakpoint {
     :host-context(.light) .ce-abx__row:hover { background: #eef0f3; border-color: transparent; }
     /* On the light row the breakpoint chips / zone field sit on white. */
     :host-context(.light) .ce-abx__bpwide .ce-abx__bpbox { background: var(--nd-card-bg, #fff); border-color: var(--nd-line); }
+    /* ── The plate, measured before the organism ── */
+    .ce-plate { border: 1px solid var(--nd-line, var(--border-subtle)); border-radius: 14px; padding: 12px 14px; background: var(--nd-card-bg); }
+    .ce-plate__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ce-plate__ttl { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
+    .ce-plate__meta { font-size: 12.5px; color: var(--text-secondary); }
+    .ce-plate__grow { flex: 1 1 auto; }
+    .ce-plate__btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; font-size: 13.5px; }
+    .ce-plate__chips { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .ce-plate__chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
+    .ce-plate__mm { font-weight: 400; color: var(--text-secondary); }
+    .ce-plate__note { margin: 8px 0 0; font-size: 12.5px; color: var(--text-tertiary); text-wrap: pretty; }
+    .ce-plate__err { margin: 6px 0 0; font-size: 12.5px; color: var(--red-text, #b91c1c); }
+    .ce-abx__nobp { display: block; margin-top: 2px; font-size: 12px; color: var(--text-tertiary); }
+    @media (hover: none), (pointer: coarse) { .ce-plate__btn { height: 44px; } }
+    @media (max-width: 640px) { .ce-plate__btn { width: 100%; justify-content: center; } }
 `]
 })
 export class CultureEntryComponent implements OnInit {
@@ -551,6 +614,16 @@ export class CultureEntryComponent implements OnInit {
   @Input() reportHidden: string[] | null = null;
   /** The culture case (order test) — the plate's AI code read is audited against it. */
   @Input() orderTestId: string | null = null;
+  /** The culture branch (subculture case id; null = the primary) whose AST
+   *  stage holds the plate reading. */
+  private _plateCaseId: string | null = null;
+  @Input() set plateCaseId(v: string | null | undefined) {
+    const next = v ?? null;
+    if (next === this._plateCaseId && this.plateLoaded) return;
+    this._plateCaseId = next;
+    if (this.plateLoaded) this.loadPlate();
+  }
+  get plateCaseId(): string | null { return this._plateCaseId; }
   @Output() reportHiddenChange = new EventEmitter<string[]>();
   rhOn(): boolean { return this.reportHidden !== null; }
   isShown(key: string): boolean { return !(this.reportHidden ?? []).includes(key); }
@@ -601,6 +674,18 @@ export class CultureEntryComponent implements OnInit {
   @Input() set seedOrganisms(names: string[] | null | undefined) {
     const wanted = (names ?? []).map(n => n.trim()).filter(Boolean);
     if (!wanted.length) return;                     // cleared upstream → rows stay (remove via ×)
+    // A plate organism whose identification CHANGED keeps its plate zones and
+    // takes the new organism's breakpoints (S / I / R recomputed).
+    {
+      const orgs0 = this._m().organisms ?? [];
+      const have0 = new Set(orgs0.map(o => o.name.trim().toLowerCase()));
+      const pi = orgs0.findIndex(o => o.fromPlate);
+      const newName = wanted.find(n => !have0.has(n.toLowerCase()));
+      if (pi >= 0 && newName && !wanted.some(n => n.toLowerCase() === orgs0[pi].name.trim().toLowerCase())) {
+        this.remapPlateOrganism(pi, newName);
+        this.valueChange.emit(this._m());
+      }
+    }
     const cur = this._m();
     const old = cur.organisms ?? [];
     const wantedSet = new Set(wanted.map(n => n.toLowerCase()));
@@ -628,19 +713,32 @@ export class CultureEntryComponent implements OnInit {
     this.manual.clear();
     for (const k of remapped) this.manual.add(k);
 
-    const organisms = [...keptWithIndex.map(({ o }) => o), ...missing.map(name => ({
-      name, antibiotics: this.clsiRows(name),
-    }))];
-    const next: CultureResult = { ...cur, noGrowth: false, organisms };
+    // The case's plate goes onto the FIRST new organism when no organism
+    // carries it yet: ONLY the plate's antibiotics, zones filled.
+    const plate = this.plate();
+    let plateUsed = keptWithIndex.some(({ o }) => o.fromPlate);
+    const organisms: CultureOrganism[] = [...keptWithIndex.map(({ o }) => o), ...missing.map(name => {
+      if (plate && !plateUsed) {
+        plateUsed = true;
+        return { name, antibiotics: plateRows(plate), fromPlate: true, plateImageUrl: plate.imageUrl, plateMeasure: plate.session };
+      }
+      return { name, antibiotics: this.clsiRows(name) };
+    })];
+    const next: CultureResult = { ...cur, noGrowth: false, organisms, ...(plate && plateUsed ? { astMode: 'zone' as const } : {}) };
     this._m.set(next);
-    this.valueChange.emit(next);
+    this.quietly(() => organisms.forEach((o, oi) => { if (o.fromPlate) o.antibiotics.forEach((_, abi) => this.autoInterpret(oi, abi)); }));
+    this.valueChange.emit(this._m());
     this.organismsOpen.set(organisms.length > 0);
   }
 
   /** The AST antibiotic vocabulary — names come ONLY from this master. */
   readonly abxNames = signal<string[]>([]);
+  /** The antibiotic master with short names (PF Sense candidates for a plate
+   *  read before the organism). */
+  readonly abxMaster = signal<MasterAntibiotic[]>([]);
 
   ngOnInit() {
+    this.loadPlate();
     this.api.get<{ name: string; group?: string | null }[]>('/api/microbiology/organisms').subscribe({
       next: rows => {
         const m = new Map<string, string>();
@@ -650,8 +748,11 @@ export class CultureEntryComponent implements OnInit {
       },
       error: () => { /* falls back to the name heuristic */ }
     });
-    this.api.get<{ name: string }[]>('/api/microbiology/antibiotics').subscribe({
-      next: rows => this.abxNames.set((rows ?? []).map(a => a.name).filter(Boolean)),
+    this.api.get<{ name: string; shortName?: string | null }[]>('/api/microbiology/antibiotics').subscribe({
+      next: rows => {
+        this.abxNames.set((rows ?? []).map(a => a.name).filter(Boolean));
+        this.abxMaster.set((rows ?? []).filter(a => !!a.name).map(a => ({ name: a.name, shortName: a.shortName ?? null })));
+      },
       error: () => { /* master unavailable → picker shows an empty-state note */ }
     });
     this.api.get<Breakpoint[]>('/api/microbiology/breakpoints').subscribe({
@@ -660,6 +761,8 @@ export class CultureEntryComponent implements OnInit {
         // are resolved PER ORGANISM: a row pinned to the isolate outranks its
         // group row, and only then does the enabled filter apply.
         this.bpList = list ?? [];
+        // Breakpoints just arrived → a plate organism's verdicts can be computed.
+        this.quietly(() => (this._m().organisms ?? []).forEach((o, oi) => { if (o.fromPlate) o.antibiotics.forEach((_, abi) => this.autoInterpret(oi, abi)); }));
         // Organisms seeded before the breakpoints arrived have empty panels —
         // fill them now that we know which drugs CLSI covers.
         this.backfillClsiPanels();
@@ -669,6 +772,94 @@ export class CultureEntryComponent implements OnInit {
   }
 
   readonly organismsOpen = signal(false);
+
+  // ── The PLATE, measured before the organism (SME flow) ───────────
+  /** The case's plate reading (AST stage `plateJson`), null = not measured. */
+  readonly plate = signal<PlateReading | null>(null);
+  readonly measuringPlate = signal(false);
+  readonly plateSaving = signal(false);
+  readonly plateError = signal('');
+  private plateLoaded = false;
+  /** Plate-before-organism is a case feature: the workbench, editable. */
+  plateOn(): boolean { return this.embedded && !this.readonly && !!this.orderTestId; }
+  private caseQ(): string { return this._plateCaseId ? `?caseId=${this._plateCaseId}` : ''; }
+  loadPlate() {
+    this.plateLoaded = true;
+    if (!this.plateOn()) return;
+    this.api.get<unknown>(`/api/microbiology/culture/${this.orderTestId}`).subscribe({
+      next: c => {
+        this.plate.set(parsePlate(plateJsonFromCase(c, this._plateCaseId)));
+        if (this.plate()) this.applyPlate();
+      },
+      error: () => { /* no plate — the manual path is untouched */ },
+    });
+  }
+  /** PF Sense candidates: EVERY antibiotic in the master (code + potency). */
+  masterCands() { return masterCandidates(this.abxMaster(), this.bpList); }
+  plateOrgName(): string | null {
+    const o = (this._m().organisms ?? []).find(x => x.fromPlate);
+    return o?.name?.trim() || null;
+  }
+  openPlateMeasure() { this.plateError.set(''); this.measuringPlate.set(true); }
+  /** Measure → Review → Apply: store the reading on the case, then build the
+   *  organism's table from it (if the organism is known yet). */
+  onPlateMeasured(e: { measurements: PlateMeasurement[]; imageUrl: string | null; session: PlateMeasureSession; auditId?: string | null }) {
+    const reading = readingFromMeasure(e, this.abxNames());
+    this.measuringPlate.set(false);
+    this.plate.set(reading);
+    this.savePlate(reading);
+    this.applyPlate(true);
+  }
+  private savePlate(r: PlateReading | null) {
+    if (!this.orderTestId) return;
+    this.plateSaving.set(true);
+    this.api.put(`/api/microbiology/culture/${this.orderTestId}/stage/ast/plate${this.caseQ()}`, { plateJson: r ? JSON.stringify(r) : null }).subscribe({
+      next: () => { this.plateSaving.set(false); this.plateError.set(''); },
+      error: e => { this.plateSaving.set(false); this.plateError.set((e as { message?: string })?.message || 'Couldn’t save the plate — it stays on this screen.'); },
+    });
+  }
+  /**
+   * Put the plate onto an organism: the one already built from it, else the
+   * first organism with nothing entered. Its rows become ONLY the plate's
+   * antibiotics (zones filled), S / I / R from ITS breakpoints. `remeasured`
+   * replaces a plate organism's rows with the new reading.
+   */
+  applyPlate(remeasured = false) { this.quietly(() => this.applyPlateNow(remeasured)); }
+  private applyPlateNow(remeasured: boolean) {
+    const r = this.plate();
+    if (!r) return;
+    const orgs = this._m().organisms ?? [];
+    let oi = orgs.findIndex(o => o.fromPlate);
+    if (oi >= 0 && !remeasured) return;               // already built — keep the tech's edits
+    if (oi < 0) oi = orgs.findIndex(o => o.name.trim() && o.antibiotics.every(a => a.zoneSize == null && !a.interpretation && !a.micValue));
+    if (oi < 0) return;                                 // no organism yet (or all touched) — the plate waits
+    this.buildFromPlate(oi, orgs[oi].name);
+  }
+  private buildFromPlate(oi: number, name: string) {
+    const r = this.plate();
+    if (!r) return;
+    this.clearManual(oi);
+    this.updateOrg(oi, o => ({ ...o, name, antibiotics: plateRows(r), fromPlate: true, plateImageUrl: r.imageUrl ?? o.plateImageUrl ?? null, plateMeasure: r.session }));
+    if (this.mode() !== 'zone') this.patch({ astMode: 'zone' });
+    (this._m().organisms?.[oi]?.antibiotics ?? []).forEach((_, abi) => this.autoInterpret(oi, abi));
+  }
+  /** A plate organism renamed (identification changed): same zones, the NEW
+   *  organism's breakpoints — every verdict recomputed. */
+  private remapPlateOrganism(oi: number, name: string) { this.quietly(() => this.remapNow(oi, name)); }
+  private remapNow(oi: number, name: string) {
+    this.clearManual(oi);
+    this.updateOrg(oi, o => ({ ...o, name, antibiotics: o.antibiotics.map(a => ({ ...a, interpretation: '' as const, sMin: null, rMax: null })) }));
+    (this._m().organisms?.[oi]?.antibiotics ?? []).forEach((_, abi) => this.autoInterpret(oi, abi));
+  }
+  private clearManual(oi: number) {
+    for (const k of [...this.manual]) if (k.startsWith(`${oi}:`)) this.manual.delete(k);
+  }
+  /** "No CLSI breakpoint for <organism>" — a plate antibiotic the organism's
+   *  CLSI table doesn't cover (no S / I / R; set by hand if needed). */
+  noBreakpoint(org: CultureOrganism, ab: AstRow): boolean {
+    return !!org.fromPlate && !!org.name.trim() && ab.sMin == null && ab.rMax == null
+      && this.effectiveRow(org.name, ab.name) === undefined;
+  }
 
   private readonly _m = signal<CultureResult>(this.normalize(null));
   readonly m = this._m.asReadonly();
@@ -682,11 +873,16 @@ export class CultureEntryComponent implements OnInit {
       organisms: (v?.organisms ?? []).map(o => ({
         name: o.name, antibiotics: [...(o.antibiotics ?? [])],
         plateImageUrl: o.plateImageUrl ?? null, plateMeasure: o.plateMeasure ?? null,
+        ...(o.fromPlate ? { fromPlate: true } : {}),
       }))
     };
   }
 
-  private commit(next: CultureResult) { this.userEdited = true; this._m.set(next); this.valueChange.emit(next); }
+  private commit(next: CultureResult) { if (!this.quiet) this.userEdited = true; this._m.set(next); this.valueChange.emit(next); }
+  /** Automatic changes (building the table from the case's plate) are not
+   *  the user's edits — they must not freeze re-seeding from the parent. */
+  private quiet = 0;
+  private quietly(fn: () => void) { this.quiet++; try { fn(); } finally { this.quiet--; } }
   patch(p: Partial<CultureResult>) { this.commit({ ...this._m(), ...p }); }
   setNoGrowth(v: boolean) { this.patch({ noGrowth: v }); }
 
@@ -707,6 +903,7 @@ export class CultureEntryComponent implements OnInit {
   }
 
   setOrgName(i: number, name: string) {
+    if (this._m().organisms?.[i]?.fromPlate) { this.remapNow(i, name); return; }   // the user renamed it
     this.updateOrg(i, o => {
       // Nothing entered yet → the panel follows the organism (its CLSI set).
       const untouched = o.antibiotics.every(a => a.zoneSize == null && !a.interpretation);
@@ -1064,6 +1261,14 @@ export class CultureEntryComponent implements OnInit {
     const org = this._m().organisms?.[i];
     const row = org?.antibiotics.find(a => a.name === abName);
     const bp = row ? this.effBp(org?.name, row) : this.bpFor(org?.name, abName);
+    if (!bp || mm == null) return '';
+    return mm >= bp.s ? 'S' : mm <= bp.r ? 'R' : 'I';
+  };
+
+  /** S / I / R in the plate modal: against the plate organism once known. */
+  readonly plateSrI = (abName: string, mm: number): 'S' | 'I' | 'R' | '' => {
+    const org = this.plateOrgName();
+    const bp = org ? this.bpFor(org, abName) : undefined;
     if (!bp || mm == null) return '';
     return mm >= bp.s ? 'S' : mm <= bp.r ? 'R' : 'I';
   };

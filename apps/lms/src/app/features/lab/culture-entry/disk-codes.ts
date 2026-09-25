@@ -144,3 +144,40 @@ export function drugForCode(code: string | null | undefined, candidates: DiskCan
   if (!c) return null;
   return candidates.find(x => x.code === c)?.drug ?? null;
 }
+
+/** One antibiotic-master row (the lab's own list). */
+export interface MasterAntibiotic { name: string; shortName?: string | null; }
+/** One breakpoint row, for its printed disk label ("AZA 30") and content. */
+export interface BreakpointLabel { antibiotic: string; shortLabel?: string | null; diskLabel?: string | null; }
+
+/**
+ * Candidate codes for a plate read BEFORE any organism exists: EVERY drug in
+ * the lab's antibiotic master, each with its printed codes (maker + CLSI,
+ * from the table above). A drug the table lacks falls back to a breakpoint's
+ * short label with its disk content ("AZA 30"), else the master's short name
+ * (+ the disk content when a breakpoint knows it). Codes are unique.
+ */
+export function masterCandidates(master: MasterAntibiotic[], breakpoints: BreakpointLabel[] = []): DiskCandidate[] {
+  const byBase = new Map<string, BreakpointLabel[]>();
+  for (const b of breakpoints) {
+    const k = baseDrug(b.antibiotic);
+    byBase.set(k, [...(byBase.get(k) ?? []), b]);
+  }
+  const content = (b?: BreakpointLabel) => { const m = /(\d+(?:\.\d+)?)/.exec(b?.diskLabel ?? ''); return m ? m[1] : null; };
+  const hints: Record<string, string> = {};
+  for (const m of master) {
+    if (!m.name?.trim()) continue;
+    const rows = byBase.get(baseDrug(m.name)) ?? [];
+    const labelled = rows.find(r => r.shortLabel?.trim());
+    const withContent = rows.find(r => content(r) != null);
+    if (labelled?.shortLabel) {
+      const sl = labelled.shortLabel.trim();
+      const pot = content(labelled) ?? content(withContent);
+      hints[m.name] = /\d/.test(sl) || !pot ? sl : `${sl} ${pot}`;
+    } else if (m.shortName?.trim()) {
+      const pot = content(withContent);
+      hints[m.name] = pot ? `${m.shortName.trim()} ${pot}` : m.shortName.trim();
+    }
+  }
+  return panelCandidates(master.map(m => m.name), hints);
+}
