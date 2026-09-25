@@ -2006,6 +2006,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  measured from window.visualViewport, which shrinks when a keyboard
    *  opens on iPad / phones. null = CSS default. */
   readonly dropMaxH = signal<number | null>(null);
+  /** Panel geometry: exactly the PILL's width, aligned to its left/right
+   *  edges and hanging from its bottom (px, relative to the .pf-us box the
+   *  panel is positioned in). null = CSS fallback. */
+  readonly dropBox = signal<{ left: number; top: number; width: number } | null>(null);
   private readonly _onViewport = () => this.sizeDropdown();
   /** The visible pill: the band's search bar, or on phones its field row. */
   private pillBox(): HTMLElement | null {
@@ -2019,16 +2023,17 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  shrinks when an on-screen keyboard opens). */
   sizeDropdown(): void {
     if (typeof window === 'undefined') return;
+    const us = this.pillEl()?.nativeElement;
     const pill = this.pillBox();
-    if (!pill) return;
-    // Width / left / top come from CSS: the panel is anchored to the pill
-    // itself (the band's search bar is its containing block). Only the
-    // height needs the visual viewport, so it stays above a keyboard.
+    if (!us || !pill) return;
+    const u = us.getBoundingClientRect();
     const p = pill.getBoundingClientRect();
+    if (p.width > 0) this.dropBox.set({ left: p.left - u.left, top: p.bottom - u.top + 8, width: p.width });
     const vv = window.visualViewport;
     const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
     this.dropMaxH.set(Math.max(160, Math.floor(viewBottom - (p.bottom + 8) - 12)));
   }
+
   /** Keyboard-highlighted dropdown row. */
   readonly scopeHighlight = signal(0);
   /** Phone: the compact scope picker menu (the tiles collapse into it). */
@@ -2093,23 +2098,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.scopeQuery.set('');
     this.scope.set('tests');
   }
-
-  /** ←/→ (Home/End) between the scope tabs — roving focus over the enabled
-   *  tabs; Enter / Space / click activates. */
-  moveTab(ev: Event, from: SearchScope, dir: number): void {
-    const enabled = SEARCH_SCOPES.filter(k => this.scopeEnabled(k));
-    if (!enabled.length) return;
-    ev.preventDefault();
-    const i = Math.max(0, enabled.indexOf(from));
-    const next = dir <= -99 ? enabled[0] : dir >= 99 ? enabled[enabled.length - 1]
-      : enabled[(i + dir + enabled.length) % enabled.length];
-    const host = this.pillEl()?.nativeElement;
-    const btn = host?.querySelector(`[data-scope-tab="${next}"]`) as HTMLElement | null;
-    btn?.focus();
-    this.focusedTab.set(next);
-  }
-  /** The tab holding keyboard focus (roving tabindex follows it). */
-  readonly focusedTab = signal<SearchScope | null>(null);
 
   /** × on a tile. */
   clearScope(k: SearchScope, ev?: Event): void {
