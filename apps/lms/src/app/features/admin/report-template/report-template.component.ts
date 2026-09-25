@@ -9,7 +9,6 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { ToggleComponent } from '../../../shared/primitives/toggle.component';
 import { SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
@@ -35,7 +34,6 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     DragDropModule,
     SegmentedComponent,
     SelectComponent,
-    ToggleComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
     ImageUploadComponent,
@@ -133,11 +131,11 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                   </div>
                   <div class="space-y-3">
                     <div><label class="pf-label">Lab name</label>
-                      <input type="text" class="pf-input"
+                      <input type="text" class="nd-input"
                              [ngModel]="tpl().labName"
                              (ngModelChange)="patch({ labName: $event })" /></div>
                     <div><label class="pf-label">Tagline</label>
-                      <input type="text" class="pf-input"
+                      <input type="text" class="nd-input"
                              placeholder="e.g. Accurate | Caring | Instant"
                              [ngModel]="tpl().tagline"
                              (ngModelChange)="patch({ tagline: $event })" /></div>
@@ -150,20 +148,20 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                   <div class="space-y-3">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div><label class="pf-label">Phone</label>
-                        <input type="tel" class="pf-input"
+                        <input type="tel" class="nd-input"
                                [ngModel]="tpl().phone"
                                (ngModelChange)="patch({ phone: $event })" /></div>
                       <div><label class="pf-label">Email</label>
-                        <input type="email" autocapitalize="none" class="pf-input"
+                        <input type="email" autocapitalize="none" class="nd-input"
                                [ngModel]="tpl().email"
                                (ngModelChange)="patch({ email: $event })" /></div>
                     </div>
                     <div><label class="pf-label">Website</label>
-                      <input type="text" class="pf-input"
+                      <input type="text" class="nd-input"
                              [ngModel]="tpl().website"
                              (ngModelChange)="patch({ website: $event })" /></div>
                     <div><label class="pf-label">Address</label>
-                      <input type="text" class="pf-input"
+                      <input type="text" class="nd-input"
                              [ngModel]="tpl().address"
                              (ngModelChange)="patch({ address: $event })" /></div>
                   </div>
@@ -177,15 +175,16 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                       <p class="font-semibold text-[13px]" style="color: var(--text-primary);">NABL accredited</p>
                       <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Display NABL badge on the report header.</p>
                     </div>
-                    <pf-toggle [checked]="tpl().nablAccredited"
-                               (checkedChange)="patch({ nablAccredited: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().nablAccredited)"
+                            aria-label="NABL accredited" (click)="patch({ nablAccredited: !(tpl().nablAccredited) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
 
                   @if (tpl().nablAccredited) {
                     <div class="grid grid-cols-2 gap-3 pf-nabl-grid">
                       <div><label class="pf-label">NABL number</label>
-                        <input type="text" class="pf-input"
+                        <input type="text" class="nd-input"
                                [ngModel]="tpl().nablNumber"
                                (ngModelChange)="patch({ nablNumber: $event })" /></div>
                       <div>
@@ -217,7 +216,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                       <div class="pf-wys-thumbs">
                         @for (o of headerPresetOptions; track o.value) {
                           <button type="button" class="pf-wys-thumb press"
-                                  [class.pf-wys-thumb--on]="(tpl().headerPreset ?? 'drlogy') === o.value"
+                                  [attr.aria-pressed]="(tpl().headerPreset ?? 'drlogy') === o.value"
                                   (click)="patch({ headerPreset: $any(o.value) })">
                             <span class="pf-wys-thumb__paper" [class]="'pf-wys-thumb__paper--' + o.value">
                               <span class="pf-wys-thumb__logo"></span>
@@ -259,9 +258,10 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                       <p class="font-semibold text-[13px]" style="color: var(--text-primary);">Top accent bar</p>
                       <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Thin colored strip beneath the letterhead.</p>
                     </div>
-                    <pf-toggle [checked]="tpl().topAccentBar ?? true"
-                               (checkedChange)="patch({ topAccentBar: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().topAccentBar ?? true)"
+                            aria-label="Top accent bar" (click)="patch({ topAccentBar: !(tpl().topAccentBar ?? true) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
 
                   <!-- ── Pre-printed letterpad mode ── -->
@@ -270,18 +270,19 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                       <p class="font-semibold text-[13px]" style="color: var(--text-primary);">Pre-printed letterpad</p>
                       <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Print onto your own letterhead stationery — leaves the header &amp; footer blank on every page and prints only the results in between.</p>
                     </div>
-                    <pf-toggle [checked]="tpl().letterpadMode ?? false"
-                               (checkedChange)="patch({ letterpadMode: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().letterpadMode ?? false)"
+                            aria-label="Pre-printed letterpad" (click)="patch({ letterpadMode: !(tpl().letterpadMode ?? false) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                   @if (tpl().letterpadMode) {
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div><label class="pf-label">Header blank space (mm)</label>
-                        <input type="number" min="0" max="120" class="pf-input"
+                        <input type="number" min="0" max="120" class="nd-input"
                                [ngModel]="tpl().letterpadHeaderMm ?? 45"
                                (ngModelChange)="patch({ letterpadHeaderMm: +$event })" /></div>
                       <div><label class="pf-label">Footer blank space (mm)</label>
-                        <input type="number" min="0" max="120" class="pf-input"
+                        <input type="number" min="0" max="120" class="nd-input"
                                [ngModel]="tpl().letterpadFooterMm ?? 30"
                                (ngModelChange)="patch({ letterpadFooterMm: +$event })" /></div>
                     </div>
@@ -323,11 +324,12 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                                  (valueChange)="onPatientScopeChange($any($event))"></pf-select>
                     </div>
                     @if (patientScope() !== 'default') {
-                      @if (deptPatientConfigured()) { <span class="pf-pt-chip">CONFIGURED</span> }
-                      <button type="button" class="pf-pt-btn press"
+                      @if (deptPatientConfigured()) { <span class="pf-pt-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Configured</span> }
+                      <button type="button" class="nd-btn nd-btn--tertiary pf-pt-btn press"
                               [disabled]="!deptPatientConfigured()"
                               (click)="resetDeptPatient()">Reset to default</button>
-                      <button type="button" class="pf-pt-btn pf-pt-btn--primary press"
+                      <!-- Secondary: the band's Save owns the ONE primary. -->
+                      <button type="button" class="nd-btn nd-btn--secondary pf-pt-btn press"
                               [disabled]="!deptPatientDirty() || deptPatientSaving()"
                               (click)="saveDeptPatient()">{{ deptPatientSaving() ? 'Saving…' : 'Save for department' }}</button>
                     }
@@ -445,7 +447,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                     <div class="pf-wys-fonts">
                       @for (o of fontOptions; track o.value) {
                         <button type="button" class="pf-wys-font press"
-                                [class.pf-wys-font--on]="(tpl().fontFamily ?? 'helvetica') === o.value"
+                                [attr.aria-pressed]="(tpl().fontFamily ?? 'helvetica') === o.value"
                                 [style.fontFamily]="fontCss($any(o.value))"
                                 (click)="patch({ fontFamily: $any(o.value) })">
                           <span class="pf-wys-font__sample">AaBb123</span>
@@ -468,7 +470,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                     <div class="pf-wys-thumbs">
                       @for (o of tableStyleOptions; track o.value) {
                         <button type="button" class="pf-wys-thumb press"
-                                [class.pf-wys-thumb--on]="(tpl().tableStyle ?? 'plain') === o.value"
+                                [attr.aria-pressed]="(tpl().tableStyle ?? 'plain') === o.value"
                                 (click)="patch({ tableStyle: $any(o.value) })">
                           <span class="pf-wys-mini" [class]="'pf-wys-mini--' + o.value">
                             <i></i><i></i><i></i><i></i>
@@ -480,9 +482,10 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Zebra rows</span>
-                    <pf-toggle [checked]="tpl().zebraRows ?? false"
-                               (checkedChange)="patch({ zebraRows: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().zebraRows ?? false)"
+                            aria-label="Zebra rows" (click)="patch({ zebraRows: !(tpl().zebraRows ?? false) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                 </div>
                 </div>
@@ -558,24 +561,27 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Group by department</span>
-                    <pf-toggle [checked]="tpl().groupByDepartment"
-                               (checkedChange)="patch({ groupByDepartment: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().groupByDepartment)"
+                            aria-label="Group by department" (click)="patch({ groupByDepartment: !(tpl().groupByDepartment) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                   <div class="pf-toggle-row">
                     <div class="flex flex-col pr-3">
                       <span class="text-[13px]" style="color: var(--text-primary);">Each department on a new page</span>
                       <span class="text-[12px]" style="color: var(--text-tertiary);">Start every department's tests on a fresh page.</span>
                     </div>
-                    <pf-toggle [checked]="tpl().departmentPageBreak ?? false"
-                               (checkedChange)="patch({ departmentPageBreak: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().departmentPageBreak ?? false)"
+                            aria-label="Each department on a new page" (click)="patch({ departmentPageBreak: !(tpl().departmentPageBreak ?? false) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Show method line</span>
-                    <pf-toggle [checked]="tpl().showMethod"
-                               (checkedChange)="patch({ showMethod: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showMethod)"
+                            aria-label="Show method line" (click)="patch({ showMethod: !(tpl().showMethod) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                 </div>
                 </div>
@@ -602,27 +608,27 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                 <div class="space-y-3">
                   <div>
                     <label class="pf-label">Disclaimer (small print)</label>
-                    <textarea class="pf-input min-h-[64px]"
+                    <textarea class="nd-input min-h-[64px]"
                               [ngModel]="tpl().disclaimer"
                               (ngModelChange)="patch({ disclaimer: $event })"></textarea>
                   </div>
                   <div>
                     <label class="pf-label">Footer text (legal / contact line)</label>
-                    <input class="pf-input"
+                    <input class="nd-input"
                            [ngModel]="tpl().footerText"
                            (ngModelChange)="patch({ footerText: $event })" />
                   </div>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label class="pf-label">"End of Report" marker text</label>
-                      <input class="pf-input"
+                      <input class="nd-input"
                              placeholder="****End of Report****"
                              [ngModel]="tpl().endOfReportText"
                              (ngModelChange)="patch({ endOfReportText: $event })" />
                     </div>
                     <div>
                       <label class="pf-label">Watermark text (page 1)</label>
-                      <input class="pf-input"
+                      <input class="nd-input"
                              placeholder="e.g. DRAFT, COPY"
                              [ngModel]="tpl().watermarkText"
                              (ngModelChange)="patch({ watermarkText: $event })" />
@@ -646,27 +652,31 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Sample Collection band</span>
-                    <pf-toggle [checked]="tpl().showSampleCollectionBand ?? true"
-                               (checkedChange)="patch({ showSampleCollectionBand: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showSampleCollectionBand ?? true)"
+                            aria-label="Sample Collection band" (click)="patch({ showSampleCollectionBand: !(tpl().showSampleCollectionBand ?? true) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">"Powered by Prefrontal" line</span>
-                    <pf-toggle [checked]="tpl().showPoweredBy"
-                               (checkedChange)="patch({ showPoweredBy: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showPoweredBy)"
+                            aria-label="&quot;Powered by Prefrontal&quot; line" (click)="patch({ showPoweredBy: !(tpl().showPoweredBy) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">QR code (verify online)</span>
-                    <pf-toggle [checked]="tpl().showQrCode"
-                               (checkedChange)="patch({ showQrCode: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showQrCode)"
+                            aria-label="QR code (verify online)" (click)="patch({ showQrCode: !(tpl().showQrCode) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                   <div class="pf-toggle-row">
                     <span class="text-[13px]" style="color: var(--text-primary);">Show pathologist name (legacy)</span>
-                    <pf-toggle [checked]="tpl().showPathologistName"
-                               (checkedChange)="patch({ showPathologistName: $event })">
-                    </pf-toggle>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showPathologistName)"
+                            aria-label="Show pathologist name (legacy)" (click)="patch({ showPathologistName: !(tpl().showPathologistName) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -676,8 +686,16 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
         </div>
 
         <!-- ── Right: live PDF preview, shared by every section. ─────── -->
-        <aside class="pf-rt-aside">
+        <aside class="pf-rt-aside" [class.nd-card]="theme.isNewDesign()" aria-label="Live preview">
+          @if (theme.isNewDesign()) {
+            <div class="nd-card__head pf-rt-aside__head">
+              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span class="nd-card__label">Live preview</span>
+              <span class="nd-card__note">{{ rendering() ? 'Rendering…' : 'PDF' }}</span>
+            </div>
+          } @else {
           <p class="pf-rt-aside__k">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
+          }
           <div class="pf-pdf-frame">
             @if (previewSafe()) {
               <iframe [src]="previewSafe()" title="Report PDF preview"
@@ -707,7 +725,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-wys-thumb { display: flex; flex-direction: column; align-items: center; gap: 6px;
       padding: 8px; border-radius: 12px; cursor: pointer; background: transparent;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
-    .pf-wys-thumb--on { border-color: var(--violet-500, #8b5cf6); background: rgba(139,92,246,0.12); }
+    .pf-wys-thumb[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
     .pf-wys-thumb__name { font-size: 11px; font-weight: 600; color: var(--text-secondary, #cbd5e1); }
     .pf-wys-thumb__paper { position: relative; width: 116px; height: 62px; border-radius: 6px; background: #fff;
       display: block; overflow: hidden; border: 1px solid rgba(0,0,0,0.1); }
@@ -728,7 +746,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-wys-font { display: flex; flex-direction: column; align-items: center; gap: 1px;
       padding: 8px 6px; border-radius: 11px; cursor: pointer; background: transparent;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
-    .pf-wys-font--on { border-color: var(--violet-500, #8b5cf6); background: rgba(139,92,246,0.12); }
+    .pf-wys-font[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
     .pf-wys-font__sample { font-size: 15px; }
     .pf-wys-font__name { font-size: 10.5px; color: var(--text-tertiary, #94a3b8); font-family: system-ui, sans-serif; }
 
@@ -769,11 +787,11 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
       border-top: 1px solid var(--glass-border, rgba(148,163,184,0.14)); }
     .pf-rtb:first-child { border-top: 0; padding-top: 2px; }
     .pf-rtb:last-child { padding-bottom: 0; }
-    .pf-rtb-h { margin: 0 0 2px; font-size: 13px; font-weight: 700; color: var(--text-primary, #e2e8f0); }
-    .pf-rtb-s { margin: 0 0 12px; font-size: 11.5px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
+    .pf-rtb-h { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--text-primary, #e2e8f0); }
+    .pf-rtb-s { margin: 0 0 12px; font-size: 12px; line-height: 1.45; color: var(--text-tertiary, #94a3b8); }
 
     /* Compact field vocabulary inside the panel (test-editor density). */
-    .pf-rt-work .pf-label { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 600;
+    .pf-rt-work .pf-label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: 500;
       color: var(--text-tertiary, #94a3b8); }
     .pf-rt-work .pf-input { padding: 8px 12px; font-size: 13.5px; border-radius: 10px; }
     .pf-rt-work textarea.pf-input { font-size: 13px; line-height: 1.5; }
@@ -833,9 +851,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-rt-flat + .pf-rt-flat .pf-rtb:first-child { border-top: 1px solid var(--glass-border); }
 
     .pf-rt-aside { min-width: 0; }
-    .pf-rt-aside__k { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .12em;
-      text-transform: uppercase; color: var(--text-tertiary); font-family: ui-monospace, monospace; }
-    .pf-rt-aside__hint { margin: 8px 0 0; font-size: 10.5px; color: var(--text-tertiary); }
+    .pf-rt-aside__k { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-tertiary); }
+    /* New design: the preview is an nd-card side card (header + framed PDF). */
+    .pf-rt-aside.nd-card .pf-pdf-frame { margin: 12px; }
+    .pf-rt-aside.nd-card .pf-rt-aside__hint { margin: 0 14px 12px; }
+    .pf-rt-aside__head { flex: none; }
+    .pf-rt-aside__hint { margin: 8px 0 0; font-size: 12px; color: var(--text-tertiary); }
 
     /* Desktop: the page holds still; work panel + preview scroll internally. */
     @media (min-width: 1181px) {
@@ -869,25 +891,23 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
       overflow: hidden; cursor: pointer; }
     .pf-color-field input[type="color"] { width: 42px; height: 46px; margin: -4px 0 -4px -4px;
       border: 0; padding: 0; background: transparent; cursor: pointer; }
-    .pf-color-field__hex { padding: 0 10px; font-family: ui-monospace, monospace; font-size: 12px;
+    .pf-color-field__hex { padding: 0 10px; font-variant-numeric: tabular-nums; font-size: 12px;
       color: var(--text-secondary, #cbd5e1); }
 
-    .pf-rt-work input[type="range"] { width: 100%; accent-color: #a855f7; }
+    .pf-rt-work input[type="range"] { width: 100%; accent-color: var(--nd-toggle-on, #aeb8c2); }
     .pf-rt-datesgrid { display: flex; flex-direction: column; gap: 12px; }
 
     /* Department scope row for the patient strip */
     .pf-pt-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .pf-pt-scope__sel { flex: 1 1 240px; min-width: 220px; }
-    .pf-pt-chip { font-size: 10px; font-weight: 800; letter-spacing: .1em; padding: 4px 9px;
-      border-radius: 999px; color: #34d399; border: 1px solid rgba(52,211,153,.4);
-      background: rgba(52,211,153,.08); font-family: ui-monospace, monospace; }
-    .pf-pt-btn { height: 34px; padding: 0 14px; border-radius: 10px; font-size: 12.5px;
-      font-weight: 700; cursor: pointer; border: 1px solid var(--glass-border);
-      background: var(--glass-bg); color: var(--text-primary); }
-    .pf-pt-btn:disabled { opacity: .45; cursor: default; }
-    .pf-pt-btn--primary { border-color: transparent; color: #fff;
-      background: linear-gradient(135deg, #8b5cf6, #ec4899); }
+    .pf-pt-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 4px 10px;
+      border-radius: var(--nd-radius-chip, 8px); color: var(--text-secondary); border: 1px solid var(--nd-line); background: var(--nd-chip-bg); }
+    .pf-pt-chip svg { color: var(--violet-text, #7c3aed); }
+    .pf-pt-btn { height: 36px; min-height: 36px; }
 
+    .pf-rt-sw { flex-shrink: 0; }
+    /* New design: the focused section is an nd-card surface (kit line/shadow). */
+    :host-context(.design-new) .pf-rt-work { background: var(--nd-card-bg); border-color: var(--nd-line); box-shadow: var(--nd-shadow-sm); }
     .pf-color-picker { height: 36px; width: 56px; border-radius: 8px;
       border: 1px solid var(--glass-border); cursor: pointer;
       background: var(--glass-bg); }

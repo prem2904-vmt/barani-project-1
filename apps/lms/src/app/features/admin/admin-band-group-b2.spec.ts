@@ -120,17 +120,46 @@ describe('Admin band B2 — Organization & Identity', () => {
     expect(pillTabs(p).labels()).toEqual(['Identity', 'Patient ID', 'Sample ID', 'Order ID']);
   });
 
-  it('pill tabs swap the cards; each card keeps its own Save', () => {
+  it('pill tabs swap the cards; the open tab Save is the band ONE primary', () => {
     const p = make();
     const t = () => titles(p, '.pf-ls__title');
     expect(t()).toEqual(['Organization name', 'Organization login handle']);
+    const primary = () => p.el.querySelectorAll('pf-hero-band .pf-hb__actions .pf-hb-btn--primary');
+    expect(primary().length).toBe(1);
+    expect((primary()[0] as HTMLButtonElement).disabled).toBe(true);   // nothing changed yet
     pillTabs(p).click('Patient ID');
     expect(t()).toEqual(['Patient ID format']);
+    expect(primary()[0].textContent).toContain('Save format');
     pillTabs(p).click('Sample ID');
     expect(t()).toEqual(['Sample ID format']);
     pillTabs(p).click('Order ID');
     expect(t()).toEqual(['Order ID format']);
-    expect(p.actions().length).toBe(0);
+    expect(p.actions().length).toBe(1);
+  });
+
+  it('kit controls: nd-card sections, pf-select (no native select), slate switches', () => {
+    const p = make();
+    expect(p.body()!.querySelectorAll('section.nd-card').length).toBe(2);
+    pillTabs(p).click('Order ID');
+    expect(p.el.querySelector('select')).toBeNull();
+    expect(p.body()!.querySelector('pf-select')).not.toBeNull();
+    const sw = p.body()!.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    sw.click(); p.f.detectChanges();
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    expect(p.body()!.querySelector('pf-select + *, .pf-ls__letters pf-select')).not.toBeNull();
+    expect(p.el.querySelector('input[type="checkbox"], .font-mono')).toBeNull();
+  });
+
+  it('identity Save saves whichever of name / handle changed', () => {
+    const p = make();
+    p.cmp.orgName.set('Micro World Labs');
+    p.f.detectChanges();
+    const btn = p.el.querySelector<HTMLButtonElement>('pf-hero-band .pf-hb-btn--primary')!;
+    expect(btn.disabled).toBe(false);
+    btn.click();
+    expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/current', { name: 'Micro World Labs' });
+    expect(p.api.patch).toHaveBeenCalledTimes(1);
   });
 });
 

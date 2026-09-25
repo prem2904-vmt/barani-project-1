@@ -5,10 +5,9 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
-import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 
 /** Band pill tabs — one per independently-saved identity setting. */
@@ -18,18 +17,25 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 @Component({
   selector: 'pf-organization-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band (owner): no search here — the cards become tabs in a
-             tabs-only pill. Each card keeps its own Save (they save
-             independent things), so the band has no page-level action. -->
+        <!-- Band (owner): no search here — the sections are tabs in a
+             tabs-only pill; the open tab's Save is the band's ONE primary. -->
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
             <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
                           (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ls__bandsave press"
+                    [disabled]="bandSaveDisabled()" (click)="saveTab()"
+                    [attr.aria-label]="bandSaveLabel()" [title]="bandSaveLabel()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+              {{ bandSaving() ? 'Saving…' : bandSaveLabel() }}
+            </button>
           </ng-container>
         </pf-hero-band>
       }
@@ -40,317 +46,252 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
       </pf-screen-header>
 
       <div class="pf-band-body">
+      <div class="pf-ls__col">
       @if (showSec('identity')) {
       <!-- Organization display NAME — distinct from the login handle below.
            The page used to show only the handle, so "arun-labs" read as if
            it were the organization's name (UAT item 16). -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Organization name</h3>
-        <p class="pf-ls__hint">
-          The display name shown across the app, on reports and invoices —
-          e.g. "Arun Labs". The lowercase sign-in handle below is separate.
-        </p>
-        <div class="flex flex-wrap items-end gap-3 mt-4">
-          <label class="block grow max-w-md">
-            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Name</span>
-            <input class="pf-input mt-1 w-full" maxlength="80" [ngModel]="orgName()" (ngModelChange)="orgName.set($event)"
-                   placeholder="e.g. Arun Labs" />
-          </label>
-          <button type="button" class="px-4 py-2 rounded-xl text-sm font-bold text-white"
-                  style="background: var(--violet-600, #7c3aed);"
-                  [disabled]="orgNameSaving() || !orgName().trim() || orgName().trim() === orgNameOriginal()"
-                  (click)="saveOrgName()">
-            {{ orgNameSaving() ? 'Saving…' : 'Save name' }}
-          </button>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head">
+          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <h3 class="nd-card__label pf-ls__title">Organization name</h3>
         </div>
-      </pf-tile>
+        <div class="nd-card__body pf-ls__body">
+          <p class="pf-ls__hint">
+            The display name shown across the app, on reports and invoices —
+            e.g. "Arun Labs". The lowercase sign-in handle below is separate.
+          </p>
+          <div class="pf-ls__row">
+            <label class="nd-field pf-ls__grow">
+              <span class="nd-field__lbl">Name</span>
+              <input class="nd-input" maxlength="80" [ngModel]="orgName()" (ngModelChange)="orgName.set($event)"
+                     placeholder="e.g. Arun Labs" />
+            </label>
+            <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press"
+                    [disabled]="orgNameSaving() || !orgName().trim() || orgName().trim() === orgNameOriginal()"
+                    (click)="saveOrgName()">
+              {{ orgNameSaving() ? 'Saving…' : 'Save name' }}
+            </button>
+          </div>
+        </div>
+      </section>
       }
 
       @if (showSec('identity')) {
       <!-- Organization login handle (tenant "username") — OPS-13 -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Organization login handle</h3>
-        <p class="pf-ls__hint">
-          This is the organization name your staff type on the sign-in screen.
-          <strong>Changing it changes how everyone logs in</strong> — old links and saved credentials that use the previous handle will stop working.
-        </p>
-        <div class="flex flex-wrap items-end gap-3 mt-4">
-          <label class="block">
-            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Handle</span>
-            <input class="pf-input mt-1" maxlength="40" [ngModel]="slug()" (ngModelChange)="onSlugInput($event)"
-                   placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
-          </label>
-          <button type="button" class="pf-save-slug px-4 py-2 rounded-xl text-sm font-bold text-white"
-                  style="background: var(--violet-600, #7c3aed);"
-                  [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" (click)="saveSlug()">
-            {{ slugSaving() ? 'Saving…' : 'Save handle' }}
-          </button>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head">
+          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span>
+          <h3 class="nd-card__label pf-ls__title">Organization login handle</h3>
         </div>
-      </pf-tile>
+        <div class="nd-card__body pf-ls__body">
+          <p class="pf-ls__hint">
+            This is the organization name your staff type on the sign-in screen.
+            <strong>Changing it changes how everyone logs in</strong> — old links and saved credentials that use the previous handle will stop working.
+          </p>
+          <div class="pf-ls__row">
+            <label class="nd-field pf-ls__grow">
+              <span class="nd-field__lbl">Handle</span>
+              <input class="nd-input" maxlength="40" [ngModel]="slug()" (ngModelChange)="onSlugInput($event)"
+                     placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
+            </label>
+            <button type="button" class="nd-btn nd-btn--primary pf-save-slug pf-ls__save pf-classic-only press"
+                    [disabled]="slugSaving() || !slug() || slug() === slugOriginal()" (click)="saveSlug()">
+              {{ slugSaving() ? 'Saving…' : 'Save handle' }}
+            </button>
+          </div>
+        </div>
+      </section>
       }
 
       @if (showSec('patient')) {
       <!-- Patient ID format -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h3 class="pf-ls__title">Patient ID format</h3>
-            <p class="pf-ls__hint">
-              Choose how new patient IDs are generated. The running number is <strong>continuous</strong>
-              (never resets); the date is just a prefix. Existing patient IDs are never changed.
-            </p>
-          </div>
-          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="pidEnabled()">
-            <input type="checkbox" [checked]="pidEnabled()" (change)="pidEnabled.set($any($event.target).checked)" />
-            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-          </label>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head">
+          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h2M15 12h2M7 16h10"/></svg></span>
+          <h3 class="nd-card__label pf-ls__title">Patient ID format</h3>
+          <span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidEnabled()" aria-label="Custom patient ID format"
+                  (click)="pidEnabled.set(!pidEnabled())"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
         </div>
+        <div class="nd-card__body pf-ls__body">
+          <p class="pf-ls__hint">
+            Choose how new patient IDs are generated. The running number is <strong>continuous</strong>
+            (never resets); the date is just a prefix. Existing patient IDs are never changed.
+          </p>
 
         @if (pidEnabled()) {
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Date prefix</span>
-              <select class="pf-input mt-1" [ngModel]="pidDate()" (ngModelChange)="pidDate.set($event)">
-                <option value="yymmdd">YYMMDD</option>
-                <option value="ddmmyy">DDMMYY</option>
-                <option value="mmdd">MMDD</option>
-                <option value="yymm">YYMM</option>
-                <option value="mmyy">MMYY</option>
-                <option value="yy">YY</option>
-                <option value="dd">DD</option>
-                <option value="none">None</option>
-              </select>
+          <div class="pf-ls__grid pf-ls__grid--4">
+            <div class="nd-field">
+              <span class="nd-field__lbl">Date prefix</span>
+              <pf-select [options]="dateOptions" [value]="pidDate()" (valueChange)="pidDate.set($any($event))"></pf-select>
+            </div>
+            <label class="nd-field">
+              <span class="nd-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
+              <input class="nd-input nd-num" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="none" />
             </label>
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Separator <span style="text-transform:none;font-weight:500;opacity:.7">(blank = none)</span></span>
-              <input class="pf-input mt-1" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="none" />
+            <label class="nd-field">
+              <span class="nd-field__lbl">{{ pidSerial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="nd-input nd-num" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="onPidPadChange($event)" (keydown)="preventMinus($event)" />
             </label>
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ pidSerial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="pf-input mt-1" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="onPidPadChange($event)" (keydown)="preventMinus($event)" />
-            </label>
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Prefix (optional)</span>
-              <input class="pf-input mt-1" maxlength="16" [ngModel]="pidPrefix()" (ngModelChange)="pidPrefix.set($event)" placeholder="e.g. LAB" />
+            <label class="nd-field">
+              <span class="nd-field__lbl">Prefix <span class="pf-ls__opt">(optional)</span></span>
+              <input class="nd-input nd-num" maxlength="16" [ngModel]="pidPrefix()" (ngModelChange)="pidPrefix.set($event)" placeholder="e.g. LAB" />
             </label>
           </div>
 
           <!-- Letters are optional: ON → alphanumeric odometer, OFF → plain numbers. -->
-          <label class="pf-ls__inline-toggle mt-4">
+          <div class="pf-ls__inline-toggle">
             <span class="pf-ls__inline-toggle-text">
-              <strong>Include letters</strong> <span style="opacity:.7">— alphanumeric IDs (a001 … then b, c …). Off = plain numbers.</span>
+              <strong>Include letters</strong> <span class="pf-ls__opt">— alphanumeric IDs (a001 … then b, c …). Off = plain numbers.</span>
             </span>
-            <span class="pf-ls__toggle" [class.pf-ls__toggle--on]="pidSerial() === 'alpha'">
-              <input type="checkbox" [checked]="pidSerial() === 'alpha'" (change)="pidSerial.set($any($event.target).checked ? 'alpha' : 'numeric')" />
-              <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-            </span>
-          </label>
+            <button type="button" class="nd-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidSerial() === 'alpha'" aria-label="Include letters"
+                    (click)="pidSerial.set(pidSerial() === 'alpha' ? 'numeric' : 'alpha')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+          </div>
 
           @if (pidSerial() === 'alpha') {
-            <label class="block mt-4 max-w-[220px]">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Letters</span>
-              <select class="pf-input mt-1" [ngModel]="pidLetters()" (ngModelChange)="pidLetters.set(+$event)">
-                <option [ngValue]="1">A (1 letter)</option>
-                <option [ngValue]="2">AA (2 letters)</option>
-                <option [ngValue]="3">AAA (3 letters)</option>
-                <option [ngValue]="4">AAAA (4 letters)</option>
-              </select>
-            </label>
-            <p class="pf-ls__hint mt-3">
+            <div class="nd-field pf-ls__letters">
+              <span class="nd-field__lbl">Letters</span>
+              <pf-select [options]="letterOptions" [value]="pidLetters()" (valueChange)="pidLetters.set(+$any($event))"></pf-select>
+            </div>
+            <p class="pf-ls__hint">
               Alphanumeric odometer: the number runs up to <strong>6 digits</strong> (max 999999), then the
               <strong>uppercase</strong> letters advance at the chosen fixed width. Example (AA):
-              <span class="font-mono">AA001 … AA999999, AB001 …, ZZ999999</span>.
+              <span class="nd-num">AA001 … AA999999, AB001 …, ZZ999999</span>.
             </p>
           }
-          <p class="mt-3 text-[13px]" style="color: var(--text-secondary);">
-            Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ pidPreview() }}</strong>
-          </p>
+          <p class="pf-ls__preview">Preview: <strong class="nd-num">{{ pidPreview() }}</strong></p>
         } @else {
-          <p class="pf-ls__hint mt-2">Using the built-in format (e.g. <span class="font-mono">DEL-2606-000042-7</span>).</p>
+          <p class="pf-ls__hint">Using the built-in format (e.g. <span class="nd-num">DEL-2606-000042-7</span>).</p>
         }
-        <button type="button" class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white"
-                style="background: var(--violet-600, #7c3aed);" [disabled]="pidSaving()" (click)="savePatientId()">
-          {{ pidSaving() ? 'Saving…' : 'Save format' }}
-        </button>
-      </pf-tile>
+          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="pidSaving()" (click)="savePatientId()">
+            {{ pidSaving() ? 'Saving…' : 'Save format' }}
+          </button>
+        </div>
+      </section>
       }
 
       @if (showSec('sample')) {
       <!-- Sample ID format (prefix = space code) -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <div class="min-w-0">
-          <h3 class="pf-ls__title">Sample ID format</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head">
+          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v17a3 3 0 0 0 6 0V2"/><path d="M8 2h8M9 12h6"/></svg></span>
+          <h3 class="nd-card__label pf-ls__title">Sample ID format</h3>
+        </div>
+        <div class="nd-card__body pf-ls__body">
           <p class="pf-ls__hint">
-            Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="font-mono">MIC-2607-00001</span>).
+            Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="nd-num">MIC-2607-00001</span>).
             The <strong>space code</strong> comes from Branches → “Departments &amp; lab spaces”. The number restarts <strong>each month per space</strong>.
           </p>
-        </div>
-        @if (idSection(sampleFmt); as f) {
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Date</span>
-              <select class="pf-input mt-1" [ngModel]="f.date()" (ngModelChange)="f.date.set($event)">
-                <option value="yymmdd">YYMMDD</option><option value="ddmmyy">DDMMYY</option>
-                <option value="mmdd">MMDD</option><option value="yymm">YYMM</option>
-                <option value="mmyy">MMYY</option><option value="yy">YY</option>
-                <option value="dd">DD</option><option value="none">None</option>
-              </select>
+          <div class="pf-ls__grid pf-ls__grid--3">
+            <div class="nd-field">
+              <span class="nd-field__lbl">Date</span>
+              <pf-select [options]="dateOptions" [value]="sampleFmt.date()" (valueChange)="sampleFmt.date.set($any($event))"></pf-select>
+            </div>
+            <label class="nd-field">
+              <span class="nd-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
+              <input class="nd-input nd-num" maxlength="3" [ngModel]="sampleFmt.sep()" (ngModelChange)="sampleFmt.sep.set($event)" placeholder="none" />
             </label>
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Separator <span style="text-transform:none;font-weight:500;opacity:.7">(blank = none)</span></span>
-              <input class="pf-input mt-1" maxlength="3" [ngModel]="f.sep()" (ngModelChange)="f.sep.set($event)" placeholder="none" />
-            </label>
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ f.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="pf-input mt-1" type="number" min="1" [attr.max]="f.serial() === 'alpha' ? 6 : 10" [ngModel]="f.pad()" (ngModelChange)="onFormatPadChange(f, $event)" (keydown)="preventMinus($event)" />
+            <label class="nd-field">
+              <span class="nd-field__lbl">{{ sampleFmt.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="nd-input nd-num" type="number" min="1" [attr.max]="sampleFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="sampleFmt.pad()" (ngModelChange)="onFormatPadChange(sampleFmt, $event)" (keydown)="preventMinus($event)" />
             </label>
           </div>
-          <label class="pf-ls__inline-toggle mt-4">
-            <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span style="opacity:.7">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
-            <span class="pf-ls__toggle" [class.pf-ls__toggle--on]="f.serial() === 'alpha'">
-              <input type="checkbox" [checked]="f.serial() === 'alpha'" (change)="f.serial.set($any($event.target).checked ? 'alpha' : 'numeric')" />
-              <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-            </span>
-          </label>
-          @if (f.serial() === 'alpha') {
-            <label class="block mt-4 max-w-[220px]">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Letters</span>
-              <select class="pf-input mt-1" [ngModel]="f.letters()" (ngModelChange)="f.letters.set(+$event)">
-                <option [ngValue]="1">A</option><option [ngValue]="2">AA</option><option [ngValue]="3">AAA</option><option [ngValue]="4">AAAA</option>
-              </select>
-            </label>
+          <div class="pf-ls__inline-toggle">
+            <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span class="pf-ls__opt">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
+            <button type="button" class="nd-toggle pf-ls__sw" role="switch" [attr.aria-checked]="sampleFmt.serial() === 'alpha'" aria-label="Include letters"
+                    (click)="sampleFmt.serial.set(sampleFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+          </div>
+          @if (sampleFmt.serial() === 'alpha') {
+            <div class="nd-field pf-ls__letters">
+              <span class="nd-field__lbl">Letters</span>
+              <pf-select [options]="letterShortOptions" [value]="sampleFmt.letters()" (valueChange)="sampleFmt.letters.set(+$any($event))"></pf-select>
+            </div>
           }
-          <p class="mt-3 text-[13px]" style="color: var(--text-secondary);">
-            Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ f.preview() }}</strong>
-          </p>
-          <button type="button" class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white"
-                  style="background: var(--violet-600, #7c3aed);" [disabled]="f.saving()" (click)="saveIdFormat(f)">
-            {{ f.saving() ? 'Saving…' : 'Save format' }}
+          <p class="pf-ls__preview">Preview: <strong class="nd-num">{{ sampleFmt.preview() }}</strong></p>
+          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="sampleFmt.saving()" (click)="saveIdFormat(sampleFmt)">
+            {{ sampleFmt.saving() ? 'Saving…' : 'Save format' }}
           </button>
-        }
-      </pf-tile>
+        </div>
+      </section>
       }
 
       @if (showSec('order')) {
       <!-- Order ID format (prefix = module code) -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <div class="min-w-0">
-          <h3 class="pf-ls__title">Order ID format</h3>
-          <p class="pf-ls__hint">
-            Each order's ID is <strong>MODULE-DATE-NUMBER</strong> (e.g. <span class="font-mono">LAB-2607-000042</span>).
-            The <strong>module</strong> is set automatically (lab orders → <span class="font-mono">LAB</span>; OPD/IPD later). The number restarts <strong>each month per module</strong>.
-          </p>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head">
+          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span>
+          <h3 class="nd-card__label pf-ls__title">Order ID format</h3>
         </div>
-        @if (idSection(orderFmt); as f) {
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Date</span>
-              <select class="pf-input mt-1" [ngModel]="f.date()" (ngModelChange)="f.date.set($event)">
-                <option value="yymmdd">YYMMDD</option><option value="ddmmyy">DDMMYY</option>
-                <option value="mmdd">MMDD</option><option value="yymm">YYMM</option>
-                <option value="mmyy">MMYY</option><option value="yy">YY</option>
-                <option value="dd">DD</option><option value="none">None</option>
-              </select>
+        <div class="nd-card__body pf-ls__body">
+          <p class="pf-ls__hint">
+            Each order's ID is <strong>MODULE-DATE-NUMBER</strong> (e.g. <span class="nd-num">LAB-2607-000042</span>).
+            The <strong>module</strong> is set automatically (lab orders → <span class="nd-num">LAB</span>; OPD/IPD later). The number restarts <strong>each month per module</strong>.
+          </p>
+          <div class="pf-ls__grid pf-ls__grid--3">
+            <div class="nd-field">
+              <span class="nd-field__lbl">Date</span>
+              <pf-select [options]="dateOptions" [value]="orderFmt.date()" (valueChange)="orderFmt.date.set($any($event))"></pf-select>
+            </div>
+            <label class="nd-field">
+              <span class="nd-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
+              <input class="nd-input nd-num" maxlength="3" [ngModel]="orderFmt.sep()" (ngModelChange)="orderFmt.sep.set($event)" placeholder="none" />
             </label>
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Separator <span style="text-transform:none;font-weight:500;opacity:.7">(blank = none)</span></span>
-              <input class="pf-input mt-1" maxlength="3" [ngModel]="f.sep()" (ngModelChange)="f.sep.set($event)" placeholder="none" />
-            </label>
-            <label class="block">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">{{ f.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="pf-input mt-1" type="number" min="1" [attr.max]="f.serial() === 'alpha' ? 6 : 10" [ngModel]="f.pad()" (ngModelChange)="onFormatPadChange(f, $event)" (keydown)="preventMinus($event)" />
+            <label class="nd-field">
+              <span class="nd-field__lbl">{{ orderFmt.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+              <input class="nd-input nd-num" type="number" min="1" [attr.max]="orderFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="orderFmt.pad()" (ngModelChange)="onFormatPadChange(orderFmt, $event)" (keydown)="preventMinus($event)" />
             </label>
           </div>
-          <label class="pf-ls__inline-toggle mt-4">
-            <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span style="opacity:.7">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
-            <span class="pf-ls__toggle" [class.pf-ls__toggle--on]="f.serial() === 'alpha'">
-              <input type="checkbox" [checked]="f.serial() === 'alpha'" (change)="f.serial.set($any($event.target).checked ? 'alpha' : 'numeric')" />
-              <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-            </span>
-          </label>
-          @if (f.serial() === 'alpha') {
-            <label class="block mt-4 max-w-[220px]">
-              <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Letters</span>
-              <select class="pf-input mt-1" [ngModel]="f.letters()" (ngModelChange)="f.letters.set(+$event)">
-                <option [ngValue]="1">A</option><option [ngValue]="2">AA</option><option [ngValue]="3">AAA</option><option [ngValue]="4">AAAA</option>
-              </select>
-            </label>
+          <div class="pf-ls__inline-toggle">
+            <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span class="pf-ls__opt">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
+            <button type="button" class="nd-toggle pf-ls__sw" role="switch" [attr.aria-checked]="orderFmt.serial() === 'alpha'" aria-label="Include letters"
+                    (click)="orderFmt.serial.set(orderFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+          </div>
+          @if (orderFmt.serial() === 'alpha') {
+            <div class="nd-field pf-ls__letters">
+              <span class="nd-field__lbl">Letters</span>
+              <pf-select [options]="letterShortOptions" [value]="orderFmt.letters()" (valueChange)="orderFmt.letters.set(+$any($event))"></pf-select>
+            </div>
           }
-          <p class="mt-3 text-[13px]" style="color: var(--text-secondary);">
-            Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ f.preview() }}</strong>
-          </p>
-          <button type="button" class="mt-4 px-4 py-2 rounded-xl text-sm font-bold text-white"
-                  style="background: var(--violet-600, #7c3aed);" [disabled]="f.saving()" (click)="saveIdFormat(f)">
-            {{ f.saving() ? 'Saving…' : 'Save format' }}
+          <p class="pf-ls__preview">Preview: <strong class="nd-num">{{ orderFmt.preview() }}</strong></p>
+          <button type="button" class="nd-btn nd-btn--primary pf-ls__save pf-classic-only press" [disabled]="orderFmt.saving()" (click)="saveIdFormat(orderFmt)">
+            {{ orderFmt.saving() ? 'Saving…' : 'Save format' }}
           </button>
-        }
-      </pf-tile>
+        </div>
+      </section>
       }
+      </div>
       </div>
     </section>
   `,
   styles: [`
-    .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
-    .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
-
-    .pf-ls__toggle { cursor: pointer; display: inline-flex; align-items: center; }
-    .pf-ls__toggle input { position: absolute; opacity: 0; pointer-events: none; }
-    .pf-ls__toggle-track {
-      position: relative; width: 44px; height: 24px; border-radius: 9999px;
-      background: var(--border-muted); transition: background 0.2s ease;
-    }
-    .pf-ls__toggle-thumb {
-      position: absolute; top: 3px; left: 3px;
-      width: 18px; height: 18px; border-radius: 9999px;
-      background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-      transition: transform 0.2s ease;
-    }
-    .pf-ls__toggle--on .pf-ls__toggle-track { background: var(--gradient-primary); }
-    .pf-ls__toggle--on .pf-ls__toggle-thumb { transform: translateX(20px); }
-
-    .pf-ls__inline-toggle {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 16px; cursor: pointer;
-    }
+    /* nd-kit cards in a readable column; the band body scrolls, never the page. */
+    .pf-ls__col { display: flex; flex-direction: column; gap: 16px; max-width: 56rem; margin-inline: auto; width: 100%; }
+    .pf-ls__card { overflow: visible; }
+    .pf-ls__body { overflow: visible; gap: 14px; padding: 14px 16px 18px; }
+    .pf-ls__title { margin: 0; }
+    .pf-ls__hint  { margin: 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
+    .pf-ls__opt { font-weight: 400; color: var(--text-tertiary); }
+    .pf-ls__row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+    .pf-ls__grow { flex: 1 1 260px; max-width: 28rem; }
+    .pf-ls__grid { display: grid; gap: 12px; }
+    .pf-ls__grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .pf-ls__grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .pf-ls__letters { max-width: 220px; }
+    .pf-ls__preview { margin: 0; font-size: 13px; color: var(--text-secondary); }
+    .pf-ls__preview strong { color: var(--text-primary); font-weight: 600; }
+    .pf-ls__save { align-self: flex-start; }
+    .pf-ls__sw { flex-shrink: 0; }
+    .pf-ls__inline-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .pf-ls__inline-toggle-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+    .pf-ls__inline-toggle-text strong { color: var(--text-primary); font-weight: 600; }
 
-    /* ── Cross-platform overrides — additive only, never touch base rules ── */
-
-    /* Coarse-pointer (touch) sizing: make the toggle a >=44px tap target
-       without changing its visual track size. Scoped to this page's toggle. */
-    @media (pointer: coarse) {
-      :host .pf-ls__toggle { min-width: 44px; min-height: 44px; justify-content: flex-end; }
-      :host .pf-ls__inline-toggle .pf-ls__toggle { min-width: 0; }
-
-      /* This page's own action button (Save format): the toolbar primitives
-         already meet 44px, but this inline button is sized with small Tailwind
-         padding — bump its hit area. */
-      :host button[type="button"] { min-height: 44px; }
-      :host .pf-ls__inline-toggle .pf-ls__toggle { min-height: 44px; align-items: center; }
-    }
-
-    /* Phone (<=640): keep iOS from auto-zooming form fields by ensuring
-       a >=16px font on this page's own controls. Targets element selectors
-       under :host so the shared .pf-input primitive is left untouched. */
+    /* iPad: the 4-up grid goes 2-up; phones stack. */
+    @media (max-width: 1023px) { .pf-ls__grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 640px) {
-      :host .px-4 { padding-left: 16px; padding-right: 16px; }
-      :host select,
-      :host input[type="text"],
-      :host input[type="number"],
-      :host input:not([type]) { font-size: 16px; }
-
-      /* Patient-ID grid: 2 cols can crowd narrow phones — go single column. */
-      :host .grid.grid-cols-2 { grid-template-columns: 1fr; }
-
-      /* Header rows: the title/copy + toggle stay on one row but allow
-         the copy to shrink so the toggle never gets pushed off-screen. */
-      :host .pf-ls__inline-toggle { align-items: flex-start; }
-    }
-
-    /* iPad (641–1279): use the width — show the patient-ID fields as a
-       2-up grid rather than the desktop 4-up, which would be too tight. */
-    @media (min-width: 641px) and (max-width: 1279px) {
-      :host .grid.grid-cols-2.md\\:grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+      .pf-ls__grid--3, .pf-ls__grid--4 { grid-template-columns: 1fr; }
+      .pf-ls__inline-toggle { align-items: flex-start; }
+      .pf-ls__grow { max-width: none; }
     }
   `]
 })
@@ -370,6 +311,48 @@ export class OrganizationSettingsComponent implements OnInit {
   readonly tab = signal<OrgSettingsTab>('identity');
   showSec(key: OrgSettingsTab): boolean {
     return !this.theme.isNewDesign() || this.tab() === key;
+  }
+
+  /** pf-select options (no native select). */
+  readonly dateOptions: PfSelectOption[] = [
+    { value: 'yymmdd', label: 'YYMMDD' }, { value: 'ddmmyy', label: 'DDMMYY' },
+    { value: 'mmdd', label: 'MMDD' }, { value: 'yymm', label: 'YYMM' },
+    { value: 'mmyy', label: 'MMYY' }, { value: 'yy', label: 'YY' },
+    { value: 'dd', label: 'DD' }, { value: 'none', label: 'None' },
+  ];
+  readonly letterOptions: PfSelectOption<number>[] = [
+    { value: 1, label: 'A (1 letter)' }, { value: 2, label: 'AA (2 letters)' },
+    { value: 3, label: 'AAA (3 letters)' }, { value: 4, label: 'AAAA (4 letters)' },
+  ];
+  readonly letterShortOptions: PfSelectOption<number>[] = [
+    { value: 1, label: 'A' }, { value: 2, label: 'AA' }, { value: 3, label: 'AAA' }, { value: 4, label: 'AAAA' },
+  ];
+
+  // ── Band Save (new design): the open tab's save is the ONE primary ──
+  private readonly nameDirty = computed(() => !!this.orgName().trim() && this.orgName().trim() !== this.orgNameOriginal());
+  private readonly slugDirty = computed(() => !!this.slug() && this.slug() !== this.slugOriginal());
+  readonly bandSaveLabel = computed(() => this.tab() === 'identity' ? 'Save' : 'Save format');
+  readonly bandSaving = computed(() => {
+    switch (this.tab()) {
+      case 'identity': return this.orgNameSaving() || this.slugSaving();
+      case 'patient': return this.pidSaving();
+      case 'sample': return this.sampleFmt.saving();
+      default: return this.orderFmt.saving();
+    }
+  });
+  readonly bandSaveDisabled = computed(() =>
+    this.bandSaving() || (this.tab() === 'identity' && !this.nameDirty() && !this.slugDirty()));
+  /** Identity saves whichever of name / handle changed (independent PATCHes). */
+  saveTab(): void {
+    switch (this.tab()) {
+      case 'identity':
+        if (this.nameDirty()) this.saveOrgName();
+        if (this.slugDirty()) this.saveSlug();
+        break;
+      case 'patient': this.savePatientId(); break;
+      case 'sample': this.saveIdFormat(this.sampleFmt); break;
+      case 'order': this.saveIdFormat(this.orderFmt); break;
+    }
   }
 
   // ── Organization display name ──

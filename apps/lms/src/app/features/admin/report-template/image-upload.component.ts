@@ -25,7 +25,7 @@ import { ImageEditorComponent } from '../../../shared/components/image-editor/im
         @if (url) {
           <img [src]="resolvedSrc()" alt="" onerror="this.style.display='none'" />
         } @else {
-          <span class="text-[10px] uppercase tracking-wider" style="color: var(--text-tertiary);">No image</span>
+          <span class="pf-image-none">No image</span>
         }
       </div>
       <div class="flex-1 min-w-0">
@@ -37,7 +37,7 @@ import { ImageEditorComponent } from '../../../shared/components/image-editor/im
         @if (url) {
           <button type="button" class="pf-remove-link" (click)="clear()">Remove</button>
         }
-        <p class="text-[10px] mt-1" style="color: var(--text-tertiary);">
+        <p class="pf-image-hint">
           PNG / JPG / SVG / WEBP · max 5 MB
         </p>
       </div>
@@ -45,24 +45,27 @@ import { ImageEditorComponent } from '../../../shared/components/image-editor/im
   `,
   styles: [`
     .pf-image-drop { display: flex; align-items: center; gap: 12px;
-      padding: 10px; border: 1px dashed var(--glass-border); border-radius: 10px;
-      background: var(--glass-bg); }
+      padding: 10px; border: 1px dashed var(--nd-line); border-radius: var(--nd-radius-sm, 10px);
+      background: var(--nd-card-bg); }
+    .pf-image-none { font-size: 11px; color: var(--text-tertiary); }
+    .pf-image-hint { margin: 4px 0 0; font-size: 12px; color: var(--text-tertiary); }
     .pf-image-thumb { width: 64px; height: 64px; flex-shrink: 0;
-      border-radius: 8px; background: rgba(255,255,255,0.06);
+      border-radius: 8px; background: var(--nd-chip-bg);
       display: flex; align-items: center; justify-content: center; overflow: hidden; }
     .pf-image-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .pf-file-btn { display: inline-block; padding: 6px 12px; border-radius: 8px;
-      background: rgba(168,85,247,0.12); color: #c4b5fd; cursor: pointer;
-      font-size: 12px; font-weight: 600; border: 1px solid rgba(168,85,247,0.3); }
+    /* Kit secondary (outline) button; Remove = tertiary text in error red. */
+    .pf-file-btn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: var(--nd-radius-sm, 10px);
+      background: transparent; color: var(--violet-text, #6d28d9); cursor: pointer;
+      font-size: 13px; font-weight: 600; border: 1px solid var(--color-violet-600, #7c3aed); }
     .pf-remove-link { margin-left: 8px; background: transparent; border: none;
-      color: #ef4444; cursor: pointer; font-size: 12px; text-decoration: underline; }
+      color: var(--red-text, #b91c1c); cursor: pointer; font-size: 13px; font-weight: 600; }
 
     /* ── Additive cross-platform overrides only — desktop-web (>=1280)
          stays byte-identical. ──────────────────────────────────────── */
 
     /* Gate hover so taps on touch devices don't leave a stuck-hover. */
     @media (hover: hover) {
-      .pf-file-btn:hover { background: rgba(168,85,247,0.20); }
+      .pf-file-btn:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
     }
 
     /* Coarse pointers: give the upload/remove controls a >=44px tap
