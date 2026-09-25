@@ -2,7 +2,7 @@
   <!-- Hero band (designer system). No page title: the band + navbar carry
        the context. Back chevron top-left; the unified search pill (Option A)
        overlaps the band edge: scope tiles · one input · Urgent · cart · scan. -->
-  <pf-hero-band class="pf-oc-band" [customSearch]="true" [back]="true" backTo="/frontdesk">
+  <pf-hero-band class="pf-oc-band" [class.pf-oc-band--focus]="dropOpen()" [customSearch]="true" [back]="true" backTo="/frontdesk">
     <ng-container band-actions>
       @if (tatLabel()) {
       <span class="pf-oc-tat" [title]="tatLabel()">
@@ -138,10 +138,41 @@
            from the visual viewport so it stays above an on-screen keyboard. -->
       @if (dropOpen()) {
       <div id="pf-us-drop" class="pf-us__drop" role="listbox" [attr.aria-label]="scopeLabels[scope()] + ' matches'"
-        [style.max-height.px]="dropMaxH()">
+        [style.max-height.px]="dropMaxH()" (keydown.escape)="onPillEscape(); focusSearchInput()">
+        <!-- Sticky top: title + (Tests) filter chips that narrow ONLY these
+             results. Tab from the input reaches the chips. -->
+        <div class="pf-us__drop-top">
         <div class="pf-us__drop-head">
           <span>{{ scope() === 'tests' ? testsTitle() : scopeTitle() }}</span>
           <button type="button" class="pf-us__drop-esc" (click)="onPillEscape()" aria-label="Close">Esc</button>
+        </div>
+        @if (scope() === 'tests') {
+        <div class="pf-us__filters">
+          <div class="pf-us__chips" role="group" aria-label="Filter by type">
+            @for (k of searchTypeDefs; track k.id) {
+            <button type="button" class="pf-us__chip" [attr.aria-pressed]="searchType() === k.id"
+              (click)="setSearchType(k.id); focusSearchInput()">
+              {{ k.label }} <span class="pf-us__chip-n">{{ searchTypeCounts()[k.id] ?? 0 }}</span>
+            </button>
+            }
+          </div>
+          @if (deptChips().length > 0) {
+          <div class="pf-us__chips pf-us__chips--scroll" role="group" aria-label="Filter by department">
+            <button type="button" class="pf-us__chip" [attr.aria-pressed]="searchDept() === ''"
+              (click)="setSearchDept(''); focusSearchInput()">
+              All <span class="pf-us__chip-n">{{ searchTypeTotalInType() }}</span>
+            </button>
+            @for (d of deptChips(); track d.name) {
+            <button type="button" class="pf-us__chip" [attr.aria-pressed]="searchDept() === d.name" [title]="d.name"
+              [attr.aria-label]="d.name + ', ' + (searchDeptCounts()[d.name] ?? 0) + ' matches'"
+              (click)="setSearchDept(d.name); focusSearchInput()">
+              {{ d.code || d.name }} <span class="pf-us__chip-n">{{ searchDeptCounts()[d.name] ?? 0 }}</span>
+            </button>
+            }
+          </div>
+          }
+        </div>
+        }
         </div>
         @if (scope() === 'tests') {
         @for (t of searchResults(); track t.id; let i = $index) {
@@ -167,7 +198,10 @@
         </button>
         }
         @if (searchResults().length === 0) {
-        <p class="pf-us__drop-note">No tests, profiles or packages match “{{ query() }}”.</p>
+        <p class="pf-us__drop-note">
+          No {{ searchType() === 'all' ? 'tests, profiles or packages' : searchType() === 'individual' ? 'tests' : searchType() + 's' }}
+          match “{{ query() }}”{{ searchDept() ? ' in ' + searchDept() : '' }}.
+        </p>
         }
         }
         @switch (patientStatus()) {
@@ -236,6 +270,10 @@
       </button>
     </ng-container>
   </pf-hero-band>
+
+  <!-- Focus mode: while the results dropdown is open the page behind it
+       recedes. The band + pill sit above; tapping the scrim closes. -->
+  <div class="pf-oc-scrim" [class.pf-oc-scrim--on]="dropOpen()" aria-hidden="true" (click)="closeScope()"></div>
 
   <!-- Phone: the picks the compact scope picker hides, as removable chips. -->
   @if (tilePick('patient') || tilePick('doctor') || tilePick('hospital')) {

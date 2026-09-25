@@ -1051,10 +1051,63 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Tests-scope matches shown in the dropdown under the pill: the whole
    *  orderable catalogue (tests, profiles, packages; profile aliases like
    *  "LFT" resolve), capped so the panel stays quick. ↑/↓ walk it, ⏎ adds. */
-  readonly searchResults = computed<Test[]>(() => {
+  readonly searchResults = computed<Test[]>(() =>
+    this.searchBase()
+      .filter(t => this.matchesSearchType(t) && this.matchesSearchDept(t))
+      .slice(0, 50));
+  /** Every match for the query, before the dropdown's own filters. */
+  private readonly searchBase = computed<Test[]>(() => {
     const q = this._query().trim();
-    return q ? this.filterTestList(this._tests(), q).slice(0, 50) : [];
+    return q ? this.filterTestList(this._tests(), q) : [];
   });
+
+  // ── Dropdown filters (focus mode): type + department chips that narrow
+  //    ONLY the dropdown results (never the catalogue grid). ──
+  readonly searchType = signal<'all' | 'individual' | 'profile' | 'package'>('all');
+  /** Department name ('' = all). */
+  readonly searchDept = signal<string>('');
+  readonly searchTypeDefs = [
+    { id: 'all' as const, label: 'All' },
+    { id: 'individual' as const, label: 'Tests' },
+    { id: 'profile' as const, label: 'Profiles' },
+    { id: 'package' as const, label: 'Packages' },
+  ];
+  private matchesSearchType(t: Test): boolean {
+    const k = this.searchType();
+    return k === 'all' || (t.type ?? 'individual') === k;
+  }
+  private matchesSearchDept(t: Test): boolean {
+    const d = this.searchDept();
+    return !d || (t.department?.name?.trim() || '') === d;
+  }
+  /** Chip counts: each type within the current department, and each
+   *  department within the current type (so the counts answer "what would
+   *  I get if I tapped this"). */
+  readonly searchTypeCounts = computed<Record<string, number>>(() => {
+    const base = this.searchBase().filter(t => this.matchesSearchDept(t));
+    const out: Record<string, number> = { all: base.length, individual: 0, profile: 0, package: 0 };
+    for (const t of base) out[t.type ?? 'individual'] = (out[t.type ?? 'individual'] ?? 0) + 1;
+    return out;
+  });
+  readonly searchDeptCounts = computed<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    for (const t of this.searchBase()) {
+      if (!this.matchesSearchType(t)) continue;
+      const d = t.department?.name?.trim() || '';
+      out[d] = (out[d] ?? 0) + 1;
+    }
+    return out;
+  });
+  readonly searchTypeTotalInType = computed(() =>
+    this.searchBase().filter(t => this.matchesSearchType(t)).length);
+  setSearchType(k: 'all' | 'individual' | 'profile' | 'package'): void {
+    this.searchType.set(k);
+    this.activeResult.set(0);
+  }
+  setSearchDept(name: string): void {
+    this.searchDept.set(this.searchDept() === name ? '' : name);
+    this.activeResult.set(0);
+  }
   /** Id of the highlighted match (null when not searching). */
   readonly activeTestId = computed<string | null>(() => {
     const list = this.searchResults();

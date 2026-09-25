@@ -3083,3 +3083,109 @@
 @media (prefers-reduced-motion: reduce) {
   .pf-oc-phase { animation: none; }
 }
+
+/* ════ Round 5 (owner): search focus mode ════ */
+
+/* Filters at the top of the dropdown, sticky inside the panel. */
+.pf-us__drop-top {
+  position: sticky;
+  top: -8px;               /* cancel the panel's 8px padding */
+  z-index: 1;
+  margin: -8px -8px 4px;
+  padding: 8px 8px 6px;
+  background: var(--bg-card-solid);
+  border-bottom: 1px solid var(--border-muted);
+}
+.pf-us__filters { display: flex; flex-direction: column; gap: 6px; padding: 0 2px 2px; }
+.pf-us__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-us__chips--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.pf-us__chips--scroll::-webkit-scrollbar { display: none; }
+.pf-us__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-muted);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.pf-us__chip:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); color: var(--text-primary); }
+.pf-us__chip[aria-pressed='true'] {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+  color: var(--violet-text, #6d28d9);
+  font-weight: 600;
+}
+.pf-us__chip:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 1px; }
+.pf-us__chip-n { font-size: 10.5px; font-variant-numeric: tabular-nums; opacity: 0.7; }
+@media (pointer: coarse) {
+  .pf-us__chip { height: 38px; min-height: 38px; }
+}
+
+/* Pill lifts while searching: slight scale, stronger shadow, violet ring. */
+:host ::ng-deep .pf-oc-band .pf-hb__search,
+:host ::ng-deep .pf-oc-band .pf-hb__field {
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 200ms ease;
+}
+:host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search {
+  transform: scale(1.01);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-violet-500, #8b5cf6) 28%, transparent),
+    0 14px 36px rgba(76, 29, 149, 0.24);
+}
+
+/* Band above the scrim; scrim above the cards, cart bar and bottom nav. */
+.pf-oc-band { position: relative; z-index: 71; }
+.pf-oc-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(15, 10, 30, 0.28);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
+}
+:host-context(.dark) .pf-oc-scrim,
+:host-context([data-theme='dark']) .pf-oc-scrim { background: rgba(0, 0, 0, 0.5); }
+.pf-oc-scrim--on {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 200ms ease, visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host ::ng-deep .pf-oc-band .pf-hb__search,
+  :host ::ng-deep .pf-oc-band .pf-hb__field { transition: none; }
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search { transform: none; }
+  .pf-oc-scrim, .pf-oc-scrim--on { transition: none; }
+}
+@media (max-width: 640px) {
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search { transform: none; box-shadow: none; }
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field {
+    transform: scale(1.01);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--color-violet-500, #8b5cf6) 28%, transparent),
+      0 14px 36px rgba(76, 29, 149, 0.24);
+  }
+}
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field { transform: none; }
+}
