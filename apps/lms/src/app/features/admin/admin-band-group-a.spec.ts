@@ -95,6 +95,29 @@ function renderTm() {
 }
 
 describe('Admin band — Test Master', () => {
+  it('Pricing: unsaved prices put Save (the ONE primary) + Discard in the band; no separate save bar', async () => {
+    const p = renderTm();
+    p.cmp.openPricingView();
+    p.f.detectChanges();
+    await new Promise(r => setTimeout(r));
+    p.f.detectChanges();
+    const table = p.cmp.pricingTable();
+    expect(table).toBeTruthy();
+    expect(p.el.querySelector('.pf-tm-pricesave')).toBeNull();
+    table.setPrice('t1', 175);
+    p.f.detectChanges();
+    const primaries = Array.from(p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary'));
+    expect(primaries.length).toBe(1);
+    expect(primaries[0].classList.contains('pf-tm-pricesave')).toBe(true);
+    expect(p.el.querySelector('pf-hero-band .pf-tm-pricediscard')).not.toBeNull();
+    expect(p.el.querySelector('.pf-pricing__savebar')).toBeNull();
+    // Create steps down while prices are unsaved.
+    expect(p.actions().find(b => b.getAttribute('aria-label') === 'Create')!.classList.contains('pf-hb-btn--ghost')).toBe(true);
+    (p.el.querySelector('.pf-tm-pricediscard') as HTMLButtonElement).click();
+    p.f.detectChanges();
+    expect(p.el.querySelector('.pf-tm-pricesave')).toBeNull();
+  });
+
   it('band + fill body in the grid view; header and old tab bar are classic-only', () => {
     const p = renderTm();
     expect(p.band()).not.toBeNull();

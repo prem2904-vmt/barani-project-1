@@ -52,6 +52,27 @@
             Save changes ({{ dirtyCount() }})
           </button>
         }
+        @if (pricingView() && pricingDirty() > 0) {
+          <!-- Pricing edits: the band owns Save (the ONE primary) + Discard. -->
+          <span class="nd-savestate pf-tm-pricestate" role="status" aria-live="polite">
+            <span class="nd-savestate__dot" aria-hidden="true"></span>
+            <span class="nd-num">{{ pricingDirty() }}</span>&nbsp;unsaved
+          </span>
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-tm-pricediscard press" [disabled]="pricingSaving()"
+                  (click)="pricingTable()?.discard()" title="Discard price changes" aria-label="Discard price changes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            Discard
+          </button>
+          <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-tm-pricesave press" [disabled]="pricingSaving()"
+                  (click)="pricingTable()?.save()" title="Save price changes" aria-label="Save price changes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
+            </svg>
+            {{ pricingSaving() ? 'Saving…' : 'Save changes' }}
+          </button>
+        }
         @if (ogView()) {
           <!-- ONE primary: while grid edits wait "Save changes" is it; while a
                panel editor is open, that editor's save is it. -->
@@ -153,7 +174,8 @@
   } @else if (pricingView()) {
     <!-- The per-tenant pricing table: the ONE place prices live (₹1 default,
          per-branch when the tenant runs branch isolation). -->
-    <pf-pricing [embedded]="true" [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
+    <pf-pricing #pricingTable [embedded]="true" [bandActions]="theme.isNewDesign()"
+                [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
                 (editingChange)="panelEditing.set($event)"></pf-pricing>
   } @else {
   <!-- Test Master updates for tests this lab changed (one per copy, branch

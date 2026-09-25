@@ -158,7 +158,9 @@ export interface PriceRow {
       </div>
 
       <!-- ── Sticky save bar (only when there are unsaved edits) ──── -->
-      @if (dirtyCount() > 0) {
+      <!-- In Test Master's new design the host's BAND carries Save / Discard
+           (owner): no separate bar. -->
+      @if (dirtyCount() > 0 && !bandActions()) {
         <div class="pf-pricing__savebar">
           <span class="nd-savestate"><span class="nd-savestate__dot" aria-hidden="true"></span>
             <span class="nd-num">{{ dirtyCount() }}</span> unsaved change{{ dirtyCount() === 1 ? '' : 's' }}
@@ -262,6 +264,9 @@ export class PricingComponent implements OnInit {
   /** When rendered inside another screen (e.g. the Tests "Pricing" tab) hide the
    *  own header and flow naturally instead of the fixed-page / inner-scroll. */
   readonly embedded = input(false);
+  /** The host band renders this table's Save (primary) + Discard; the
+   *  sticky save bar is not shown (Test Master, new design). */
+  readonly bandActions = input(false);
   /** Unsaved price edits: the host (Test Master's band) steps its Create
    *  down so this save bar's "Save changes" is the view's ONE primary. */
   readonly editingChange = output<boolean>();

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ViewChild, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ViewChild, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { TubeColorEditorComponent } from '../tube-color-editor.component';
 import { PfSelectOption } from '../../../../shared/primitives/select.component';
 import { FormsModule } from '@angular/forms';
@@ -831,6 +831,10 @@ export class TestsComponent implements OnInit {
    *  open or unsaved edits —
    *  its own save is then the view's ONE primary. */
   readonly panelEditing = signal(false);
+  /** Pricing view (new design): the band carries the table's Save + Discard. */
+  readonly pricingTable = viewChild<PricingComponent>('pricingTable');
+  readonly pricingDirty = computed(() => this.pricingTable()?.dirtyCount() ?? 0);
+  readonly pricingSaving = computed(() => this.pricingTable()?.saving() ?? false);
   /** The band's Create / New steps down to secondary when another primary
    *  owns the view (pending grid edits, or an open panel editor). */
   readonly bandPrimaryElsewhere = computed(() =>
