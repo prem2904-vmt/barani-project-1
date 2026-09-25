@@ -15,6 +15,9 @@ import { VendorsComponent } from './vendors/vendors.component';
 import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
 import { ReferringNetworkComponent } from './referring-network/referring-network.component';
 import { InventoryComponent } from './inventory/inventory.component';
+import { AppointmentsConfigComponent } from './appointments-config/appointments-config.component';
+import { AppointmentQueueService } from '../../core/services/appointment-queue.service';
+import { of } from 'rxjs';
 import { provideHttpClient } from '@angular/common/http';
 
 /**
@@ -349,5 +352,39 @@ describe('ND audit D — Inventory', () => {
       expect(seg.querySelectorAll('[role="radio"]').length).toBe(3);
       expect(p.el.querySelector('.seg__i--on')).toBeNull();
     }
+  });
+});
+
+describe('ND audit D — Appointments & queue', () => {
+  const cfg = {
+    queueMode: 'token_queue', slotMinutes: 30, maxConcurrentSlots: 1, open24h: true, weeklyScheduleJson: null,
+    queueOptions: { baseAppointment: 100, baseWalkin: 50, baseFollowup: 80, waitWeight: 1, appointmentGraceMinutes: 10,
+      latePenalty: 50, noShowThresholdMinutes: 30, avgCollectionMinutes: 5, urgentOverrideScore: 1000 },
+  };
+  const render = () => renderBandPage(AppointmentsConfigComponent, {
+    providers: [{ provide: AppointmentQueueService, useValue: { getConfig: vi.fn(() => of(cfg)), saveConfig: vi.fn((c: unknown) => of(c)) } }],
+  });
+
+  it('queue mode = neutral selected tiles (role=radio), kit card, ONE primary', () => {
+    const p = render();
+    expect(primaries(p.el)).toBe(1);
+    const card = p.el.querySelector('.pf-ap-card.nd-card')!;
+    expect(card.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
+    const radios = card.querySelectorAll('.pf-mode-btn[role="radio"]');
+    expect(radios.length).toBeGreaterThanOrEqual(2);
+    expect(card.querySelectorAll('.pf-mode-btn[aria-checked="true"]').length).toBe(1);
+    expect(p.el.querySelector('pf-tile')).toBeNull();
+    hygiene(p.el);
+  });
+
+  it('Open 24×7 is a slate switch; turning it off shows kit time fields', () => {
+    const p = render();
+    p.cmp.tab.set('slots'); p.f.detectChanges();
+    const sw = p.el.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    sw.click(); p.f.detectChanges();
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    expect(p.el.querySelectorAll('input[type="time"].nd-input').length).toBe(2);
+    hygiene(p.el);
   });
 });
