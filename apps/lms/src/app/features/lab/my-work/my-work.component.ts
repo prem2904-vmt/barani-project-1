@@ -286,9 +286,9 @@ const COUNTERS: CounterSpec[] = [
            Selecting My Work / Queue drives the existing internal tab via
            setMobileTab → setTab so the right pane loads the right data. -->
       <!-- New design shows ICONS, not words (owner): five labelled tabs on a
-           390px phone left "CULTU…" truncated and every label cramped. No
-           count badge either (owner) — counts live in the pane header / Stats.
-           Classic keeps its words and counts (CSS swaps which shows). -->
+           390px phone left "CULTU…" truncated and every label cramped. The
+           count stays — that is the part you actually read. Classic keeps
+           its words (CSS swaps which of the two shows). -->
       <div class="pf-mtabs" role="tablist" aria-label="Sections">
         @if (showCollect()) {
         <button type="button" role="tab" class="pf-mtab press"
@@ -325,7 +325,7 @@ const COUNTERS: CounterSpec[] = [
             <path d="M4 6h16M4 12h16M4 18h10"/>
           </svg>
           <span class="pf-mtab__label">Queue</span>
-          @if (!theme.isNewDesign()) { <span class="pf-mtab__count">{{ countFor('service_queue') }}</span> }
+          <span class="pf-mtab__count">{{ countFor('service_queue') }}</span>
         </button>
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'mywork'"
@@ -338,7 +338,7 @@ const COUNTERS: CounterSpec[] = [
             <path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/>
           </svg>
           <span class="pf-mtab__label">My Work</span>
-          @if (!theme.isNewDesign()) { <span class="pf-mtab__count">{{ countFor('my_work') }}</span> }
+          <span class="pf-mtab__count">{{ countFor('my_work') }}</span>
         </button>
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'completed'"
@@ -350,7 +350,7 @@ const COUNTERS: CounterSpec[] = [
             <circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>
           </svg>
           <span class="pf-mtab__label">Done</span>
-          @if (!theme.isNewDesign()) { <span class="pf-mtab__count">{{ countFor('completed') }}</span> }
+          <span class="pf-mtab__count">{{ countFor('completed') }}</span>
         </button>
         @if (showCulturePane() || cultureAsTab()) {
           <button type="button" role="tab" class="pf-mtab press"
@@ -364,7 +364,7 @@ const COUNTERS: CounterSpec[] = [
               <circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/>
             </svg>
             <span class="pf-mtab__label">{{ cultureAsTab() ? 'Culture' : 'Culture Bench' }}</span>
-            @if (!theme.isNewDesign()) { <span class="pf-mtab__count">{{ cultureCount() }}</span> }
+            <span class="pf-mtab__count">{{ cultureCount() }}</span>
           </button>
         }
       </div>
@@ -2661,19 +2661,16 @@ export class MyWorkComponent implements OnInit {
   /** The workbench tabs as the search bar's filter strip (new design). The
    *  dots double as the legend for the queue's own colour coding. */
   readonly tabOptions = computed<SegmentedOption<Tab>[]>(() => {
-    // New design: palette only — no colour dots, and no count badge on the
-    // tabs (owner): the pane header already says "N items" for the list on
-    // screen, so a pill on every tab only repeated it. Classic keeps both.
+    // New design: palette only — no colour dots, the counts carry it.
     const nd = this.theme.isNewDesign();
     const dot = (c: string) => (nd ? undefined : c);
-    const count = (v: number) => (nd ? undefined : v);
     const opts: SegmentedOption<Tab>[] = [
-      { value: 'service_queue', label: 'Queue', dot: dot('#a78bfa'), count: count(this.countFor('service_queue')) },
-      { value: 'my_work', label: 'My Work', dot: dot('#f59e0b'), count: count(this.countFor('my_work')) },
-      { value: 'completed', label: 'Completed', dot: dot('#10b981'), count: count(this.countFor('completed')) },
+      { value: 'service_queue', label: 'Queue', dot: dot('#a78bfa'), count: this.countFor('service_queue') },
+      { value: 'my_work', label: 'My Work', dot: dot('#f59e0b'), count: this.countFor('my_work') },
+      { value: 'completed', label: 'Completed', dot: dot('#10b981'), count: this.countFor('completed') },
     ];
     if (this.cultureAsTab()) {
-      opts.push({ value: 'culture', label: 'Culture', dot: dot('#38bdf8'), count: count(this.cultureCount()) });
+      opts.push({ value: 'culture', label: 'Culture', dot: dot('#38bdf8'), count: this.cultureCount() });
     }
     return opts;
   });
