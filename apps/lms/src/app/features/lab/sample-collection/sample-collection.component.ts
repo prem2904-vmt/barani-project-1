@@ -809,6 +809,28 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (f === 'external') return list.filter(s => s.source === 'external');
     return list;
   }
+  /** Collection info the vial tiles DON'T already show — only fields the
+   *  collect payload actually carries (order priority, referral, per-test
+   *  fasting flag). Nothing is invented; empty → the panel stays lean. */
+  collectInfo(g: OrderGroup): { urgent: boolean; fasting: string[]; refDoctor: string; refHospital: string } {
+    const o = g.samples.find((x) => !!x.order)?.order;
+    const fasting = new Set<string>();
+    for (const smp of g.samples)
+      for (const t of smp.tests ?? [])
+        if ((t as { test?: { fastingRequired?: boolean; name?: string } }).test?.fastingRequired)
+          fasting.add((t as { test?: { name?: string } }).test?.name ?? "Test");
+    return {
+      urgent: (o?.priority ?? "").toLowerCase() === "urgent",
+      fasting: [...fasting],
+      refDoctor: (o?.refDoctorName ?? "").trim(),
+      refHospital: (o?.refHospitalName ?? "").trim(),
+    };
+  }
+  hasCollectInfo(g: OrderGroup): boolean {
+    const i = this.collectInfo(g);
+    return i.urgent || i.fasting.length > 0 || !!i.refDoctor || !!i.refHospital;
+  }
+
   /** Full patient name for the context chip (falls back to the list name). */
   patientFullName(g: OrderGroup): string {
     return g.patientFull || this.patientTitle(g.patientName);

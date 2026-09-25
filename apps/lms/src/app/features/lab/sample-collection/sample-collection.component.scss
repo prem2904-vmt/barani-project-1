@@ -1911,3 +1911,56 @@
     .pf-drawer--nd .pf-tube:hover:not([disabled]),
     .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:hover { border-color: var(--nd-sel-border); }
     .pf-drawer--nd .pf-tube:focus-visible { outline-color: var(--color-violet-500, #8b5cf6); }
+
+    /* ════ Round 3 (owner): symmetric tiles, lean COLLECTION panel ════ */
+    /* Fixed illustration box per size class — identical for tube and jar.
+       The original SVG is only SCALED into it (preserveAspectRatio
+       xMidYMax meet → bottom-centred); fill timing / easing / colour
+       untouched. */
+    .pf-sc-illo {
+      position: relative; flex: none; display: block;
+      width: var(--pf-illo-w, 90px); height: var(--pf-illo-h, 124px);
+    }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-illo .pf-vial,
+    .pf-drawer--nd .pf-sc-grid .pf-sc-illo .pf-vial--cup {
+      width: 100%; height: 100%; aspect-ratio: auto; display: block;
+    }
+    /* One check badge, same corner of the box for every container type
+       (the in-SVG tick is hidden; it appears after the 0.6s fill). */
+    .pf-drawer--nd .pf-sc-illo .pf-vial__tick { display: none; }
+    .pf-sc-illo__check {
+      position: absolute; top: 4px; right: 4px; z-index: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 999px;
+      background: var(--color-violet-600, #7c3aed); color: #fff;
+      box-shadow: 0 0 0 2px var(--nd-card-bg);
+      animation: pf-tick-pop 0.3s cubic-bezier(0.2, 0.85, 0.3, 1) 0.6s both;
+    }
+    .pf-sc-grid--xl { --pf-illo-w: 150px; --pf-illo-h: clamp(170px, 30dvh, 240px); }
+    .pf-sc-grid--lg { --pf-illo-w: 120px; --pf-illo-h: clamp(130px, 22dvh, 170px); }
+    .pf-sc-grid--md { --pf-illo-w: 96px;  --pf-illo-h: clamp(104px, 15dvh, 124px); }
+    .pf-sc-grid--sm { --pf-illo-w: 80px;  --pf-illo-h: 90px; }
+    /* Same height per row; text rows start at the same y and align. */
+    .pf-drawer--nd .pf-sc-grid { align-items: stretch; }
+    .pf-drawer--nd .pf-sc-grid .pf-tube.pf-sc-tile { flex: 1 1 auto; }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-tile .pf-tube__label {
+      min-height: 2.6em; line-height: 1.3;
+      display: flex; align-items: flex-start; justify-content: center;
+    }
+    @media (max-width: 640px) {
+      .pf-sc-grid--xl, .pf-sc-grid--lg, .pf-sc-grid--md, .pf-sc-grid--sm { --pf-illo-w: 80px; --pf-illo-h: 100px; }
+      .pf-sc-grid--xl:has(> :only-child) { --pf-illo-w: 110px; --pf-illo-h: 150px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pf-sc-illo__check { animation: none; }
+    }
+
+    /* COLLECTION: action + info only. */
+    .pf-sc-status { align-self: flex-start; height: 34px; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-sc-status svg { color: var(--violet-text, #6d28d9); }
+    .pf-sc-status__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); }
+    .pf-sc-info { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .pf-sc-info__row { display: flex; gap: 12px; font-size: 13px; }
+    .pf-sc-info__row dt { flex: none; width: 92px; color: var(--text-tertiary); }
+    .pf-sc-info__row dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-sc-info__urgent { color: var(--error-text, #b91c1c) !important; font-weight: 600; }

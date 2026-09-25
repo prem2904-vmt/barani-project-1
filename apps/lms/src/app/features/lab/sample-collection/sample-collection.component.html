@@ -200,12 +200,6 @@
                 </span>
               }
               <span class="pf-sc-ctx__grow"></span>
-              <div class="nd-seg pf-sc-ctx__filters" role="radiogroup" aria-label="Show vials">
-                @for (f of vialFilterOpts(g); track f.id) {
-                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="vialFilter() === f.id"
-                          (click)="vialFilter.set(f.id)">{{ f.label }} <span class="pf-sc-n">{{ f.count }}</span></button>
-                }
-              </div>
               <span class="nd-band-chip pf-sc-ctx__count" aria-live="polite">
                 <strong>@for (n of [g.collected]; track n) {<span class="pf-tick">{{ n }}</span>}/{{ g.totalVials }}</strong> drawn
               </span>
@@ -225,13 +219,6 @@
                 </span>
                 <span class="nd-card__label">Vials</span>
                 <span class="nd-card__note">Tap a vial when drawn. Mark a brought-in specimen External to skip its draw.</span>
-                <!-- Phones: the status filter moves here from the band pill. -->
-                <div class="nd-seg pf-sc-vials__filters" role="radiogroup" aria-label="Show vials">
-                  @for (f of vialFilterOpts(g); track f.id) {
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="vialFilter() === f.id"
-                            (click)="vialFilter.set(f.id)">{{ f.label }} <span class="pf-sc-n">{{ f.count }}</span></button>
-                  }
-                </div>
               </header>
               <div class="nd-card__body">
                 <div class="pf-sc-grid" [attr.data-size]="tileSize(g)" [class]="'pf-sc-grid pf-sc-grid--' + tileSize(g)">
@@ -270,14 +257,22 @@
                     </svg>
                   </span>
                 }
-                <!-- The ORIGINAL tube illustration + blood-fill animation, kept
-                     exactly (owner). Scaled down in the compact tile. -->
+                <!-- Fixed illustration box (same size for every container
+                     type in a size class): the ORIGINAL tube / jar + its
+                     blood-fill animation is only scaled into it, bottom-
+                     centred, so the text rows below align across tiles. -->
+                <span class="pf-sc-illo">
+                @if (s.status !== 'pending') {
+                  <span class="pf-sc-illo__check" aria-hidden="true">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>
+                  </span>
+                }
                 @if (container(s).kind !== 'vacutainer') {
                   <!-- Specimen cup/jar: shorter cylinder, wide rim, screw-cap
                        lid. Urine cups fill amber; sterile jars (body fluid,
                        stool, CSF …) fill a neutral grey — same silhouette, a
                        cylindrical container, never a test tube. -->
-                  <svg class="pf-vial pf-vial--cup" viewBox="0 0 140 220" aria-hidden="true"
+                  <svg class="pf-vial pf-vial--cup" viewBox="0 0 140 220" aria-hidden="true" preserveAspectRatio="xMidYMax meet"
                        [style.--tube-color]="container(s).color">
                     <defs>
                       <linearGradient [attr.id]="'lid-' + s.id" x1="0" y1="0" x2="1" y2="0">
@@ -365,7 +360,7 @@
                 <!-- Vacutainer — proportioned ~ 13×75 mm (1:5.8), with
                      colored rubber stopper, glass body, hemispherical base,
                      realistic highlights and a blood fill that rises on tap. -->
-                <svg class="pf-vial" viewBox="0 0 80 320" aria-hidden="true"
+                <svg class="pf-vial" viewBox="0 0 80 320" aria-hidden="true" preserveAspectRatio="xMidYMax meet"
                      [style.--tube-color]="container(s).color">
                   <defs>
                     <!-- Stopper (cap) shading -->
@@ -478,6 +473,7 @@
                 </svg>
                 }
 
+                </span>
                 <div class="pf-tube__body">
                   <p class="pf-tube__label">{{ tube(s).label }}
                     @if (captionOffset(s); as off) {
@@ -574,38 +570,38 @@
                 </button>
               </header>
               <div class="nd-card__body">
-                @if (isDispatched(g)) {
-                  <span class="pf-drawer__done-stamp">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M5 18H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h11v12M14 9h4l3 3v5a1 1 0 0 1-1 1h-2"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="17.5" cy="18.5" r="1.5"/>
-                    </svg>
+                <!-- ONE status line (neutral chip, violet mark). The tiles
+                     already show each vial, so there is no per-tube list. -->
+                <span class="nd-chip nd-chip--static pf-sc-status">
+                  @if (isDispatched(g)) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
                     Dispatched to lab
-                  </span>
-                } @else if (g.collected === g.totalVials) {
-                  <span class="pf-drawer__done-stamp">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+                  } @else if (g.collected === g.totalVials) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
                     All vials collected
-                  </span>
-                } @else {
-                  <p class="pf-sc-remaining"><strong>{{ g.totalVials - g.collected }}</strong> of {{ g.totalVials }} remaining</p>
-                }
-                <ul class="pf-sc-summary" aria-label="Tubes">
-                  @for (s of orderedSamples(g); track s.id) {
-                    <li class="nd-row pf-sc-sumrow" [class.nd-row--done]="s.status !== 'pending'">
-                      <span class="pf-sc-dot" [style.background]="container(s).kind !== 'vacutainer' ? container(s).color : tube(s).color" aria-hidden="true"></span>
-                      <span class="nd-row__name">{{ tube(s).label }}</span>
-                      @if (s.status !== 'pending') {
-                        <svg class="pf-sc-sumrow__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
-                      }
-                      <span class="nd-row__value pf-sc-sumrow__state">
-                        @if (s.status === 'pending') { Pending }
-                        @else if (s.source === 'external') { Brought in }
-                        @else if (s.status === 'collected') { Drawn <span class="nd-num">{{ s.collectedAt | date:'shortTime' }}</span> }
-                        @else { Dispatched }
-                      </span>
-                    </li>
+                  } @else {
+                    <span class="pf-sc-status__dot" aria-hidden="true"></span>
+                    <span class="nd-num">{{ g.totalVials - g.collected }} of {{ g.totalVials }}</span> remaining
                   }
-                </ul>
+                </span>
+                <!-- Collection info the tiles don't show (only when present). -->
+                @if (hasCollectInfo(g)) {
+                  @let info = collectInfo(g);
+                  <dl class="pf-sc-info">
+                    @if (info.urgent) {
+                      <div class="pf-sc-info__row"><dt>Priority</dt><dd class="pf-sc-info__urgent">Urgent</dd></div>
+                    }
+                    @if (info.fasting.length) {
+                      <div class="pf-sc-info__row"><dt>Fasting</dt><dd>Required for {{ info.fasting.join(', ') }}</dd></div>
+                    }
+                    @if (info.refDoctor) {
+                      <div class="pf-sc-info__row"><dt>Referred by</dt><dd>{{ info.refDoctor }}</dd></div>
+                    }
+                    @if (info.refHospital) {
+                      <div class="pf-sc-info__row"><dt>Hospital</dt><dd>{{ info.refHospital }}</dd></div>
+                    }
+                  </dl>
+                }
                 <p class="pf-sc-labelinfo">
                   {{ scan.manualEntry() ? 'Manual mode: write each sample ID on its container (Label by hand).' : 'Print a barcode + QR label for each tube (Print labels).' }}
                 </p>
