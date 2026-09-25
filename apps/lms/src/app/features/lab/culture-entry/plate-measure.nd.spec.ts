@@ -74,6 +74,11 @@ describe('Measure zones modal — kit shell', () => {
     expect(el.querySelector('.pm-capture label.nd-btn--secondary')?.textContent).toContain('Upload a photo instead');
   });
 
+  it('primaries are the kit gradient: no component rule paints a solid violet button', () => {
+    const rules = css().split('}').filter(r => /\.pm-btn/.test(r));
+    for (const r of rules) expect(r).not.toMatch(/background:\s*#7c3aed/i);
+  });
+
   it('calibrate: Measure is the one primary (auto-detect is secondary)', () => {
     const { f, el, c } = render();
     c.imageSrc.set('data:image/png;base64,x');

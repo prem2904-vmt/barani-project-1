@@ -322,12 +322,12 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
     .pm-unassign { color: var(--red-text); background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
     .pm-ghost { position: fixed; z-index: 1001; transform: translate(-50%, -50%); pointer-events: none; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; background: #7c3aed; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
     .pm-controls { padding: 12px 14px; border-top: 1px solid var(--border-subtle); flex-shrink: 0; }
+    /* Every pm-btn is also an nd-btn: the kit owns colour + border (the
+       primary is the kit gradient); this only sets shape. */
     .pm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-      padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+      padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
     .pm-btn svg { flex-shrink: 0; }
     .pm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .pm-btn--primary { background: #7c3aed; color: #fff; }
-    .pm-btn--ghost { background: transparent; border-color: var(--border-subtle); color: var(--text-secondary); }
     .pf-input--compact { padding: 4px 8px; font-size: 12px; }
     @media (max-width: 820px) {
       .pm-backdrop { padding: 0; }
