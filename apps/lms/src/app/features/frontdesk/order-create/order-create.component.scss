@@ -3183,8 +3183,8 @@
    results fade + scale up from 0.97 with rows staggered ~18ms, and on touch
    a Cancel slides in. Close is the reverse, quicker. Reduced motion: none. */
 :host {
-  --pf-spring: cubic-bezier(0.32, 0.72, 0, 1);
-  --pf-spring-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --pf-spring: var(--nd-spring);
+  --pf-spring-bounce: var(--nd-spring-bounce);
 }
 
 /* Match the stock band input + icon (hero-band's .pf-hb__input / __glass). */
@@ -3313,23 +3313,14 @@
 }
 
 /* ════ Round 10 (owner): primary only for the main CTA; neutral controls ════ */
+/* Tokens come from the nd-kit (shared/styles/_nd-kit.scss, light + dark). */
 :host {
-  --pf-neutral-sel-bg: #eceff2;
-  --pf-neutral-sel-border: #9aa4ae;
-  --pf-neutral-chip-bg: #f3f4f6;
-  /* Designer toggle (Figma): slate track, white knob, small shadow. */
-  --pf-toggle-on: #aeb8c2;
-  --pf-toggle-off: #e3e7eb;
-  --pf-toggle-urgent: #d0706f;
-}
-:host-context(.dark),
-:host-context([data-theme='dark']) {
-  --pf-neutral-sel-bg: rgba(255, 255, 255, 0.12);
-  --pf-neutral-sel-border: rgba(255, 255, 255, 0.4);
-  --pf-neutral-chip-bg: rgba(255, 255, 255, 0.1);
-  --pf-toggle-on: #6b7784;
-  --pf-toggle-off: rgba(255, 255, 255, 0.16);
-  --pf-toggle-urgent: #a9524f;
+  --pf-neutral-sel-bg: var(--nd-sel-bg);
+  --pf-neutral-sel-border: var(--nd-sel-border);
+  --pf-neutral-chip-bg: var(--nd-chip-bg);
+  --pf-toggle-on: var(--nd-toggle-on);
+  --pf-toggle-off: var(--nd-toggle-off);
+  --pf-toggle-urgent: var(--nd-toggle-urgent);
 }
 
 /* Active scope tile: a subtle violet tint, not a solid primary fill. */

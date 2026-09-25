@@ -2747,3 +2747,6 @@ html.pf-design-mode {
   html.pf-collect-immersive .pf-bottom-nav,
   html.cap-native.pf-collect-immersive .pf-bottom-nav { display: none !important; }
 }
+
+/* ═══ nd-kit: the new-design pattern (docs/ND-PATTERN.md) ═══ */
+@import './app/shared/styles/nd-kit';
