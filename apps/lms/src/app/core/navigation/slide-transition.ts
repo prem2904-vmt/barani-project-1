@@ -1,5 +1,6 @@
 import { inject } from '@angular/core';
 import { Router, ViewTransitionInfo } from '@angular/router';
+import { runZoom, zoomDirection } from './zoom-transition';
 
 /** Which step-to-step navigations slide, and in which direction. A flow
  *  moves FORWARD (current screen exits left, next enters from the right)
@@ -16,7 +17,8 @@ export function slideDirection(from: string, to: string): 'forward' | 'back' | n
 
 /** Router `onViewTransitionCreated` hook (runs in an injection context):
  *  tags <html> with the direction for the duration of the transition so the
- *  global ::view-transition CSS can slide; skips it otherwise (and under
+ *  global ::view-transition CSS can slide; My Work ⇄ result entry zooms
+ *  instead (zoom-transition.ts); skips everything else (and all of it under
  *  reduced motion). */
 export function slideTransition(info: ViewTransitionInfo): void {
   const router = inject(Router);
@@ -24,7 +26,12 @@ export function slideTransition(info: ViewTransitionInfo): void {
   const to = nav ? router.serializeUrl(nav.finalUrl ?? nav.extractedUrl) : '';
   const dir = slideDirection(router.url, to);
   const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!dir || reduce) { info.transition.skipTransition(); return; }
+  if (reduce) { info.transition.skipTransition(); return; }
+  if (!dir) {
+    const zoom = zoomDirection(router.url, to);
+    if (!zoom || !runZoom(info, zoom)) info.transition.skipTransition();
+    return;
+  }
   const root = document.documentElement;
   const cls = dir === 'forward' ? 'pf-vt-forward' : 'pf-vt-back';
   root.classList.add(cls);
