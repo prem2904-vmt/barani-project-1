@@ -601,6 +601,10 @@
       </div>
       }
 
+      <!-- Two phases that follow the flow: CART (build the order; the list
+           gets the whole body) then PAYMENT (cart collapses to one line). -->
+      @if (billPhaseView() === 'cart') {
+      <div class="pf-oc-phase" data-phase="cart">
       <div class="pf-oc-bill__meta">
         <span>{{ selected().length }} test{{ selected().length === 1 ? '' : 's' }}</span>
         @if (priority() === 'Urgent') {
@@ -615,68 +619,53 @@
         }
       </div>
 
-      <ul class="pf-cart-list">
+      <!-- Compact single-line rows (>=44px): name · code · price · x. -->
+      <ul class="pf-cart-list pf-cart-list--compact">
         @if (selected().length === 0) {
-        <li class="pf-cart-empty">No tests selected yet</li>
+        <li class="pf-cart-empty">No tests selected yet. Pick them from the catalogue or the search.</li>
         }
         @for (id of selected(); track id) {
         @if (findTest(id); as t) {
-        <li class="pf-cart-row" [class.opacity-90]="isCollected(t.id)"
-          [class.pf-cart-row--included]="isCoveredMember(t.id)">
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <p class="pf-cart-name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
-              @if (isCollected(t.id)) {
-              <span class="pf-cart-collected" title="Sample already collected, cannot remove">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-                Sample collected
-              </span>
-              }
-            </div>
+        <li class="pf-crt" [class.pf-crt--included]="isCoveredMember(t.id)"
+          [title]="testDisplayName(t) + (isCoveredMember(t.id) ? ' · included in ' + coveringPackageName(t.id) : '') + (isCollected(t.id) ? ' · sample collected' : '')">
+          <div class="pf-crt__line">
+            <span class="pf-crt__name">{{ testDisplayName(t) }}</span>
+            <span class="pf-crt__code">{{ shortCode(t) }}</span>
             @if (isCoveredMember(t.id)) {
-            <p class="pf-cart-meta pf-cart-meta--included">Included in {{ coveringPackageName(t.id) }}</p>
-            } @else if (t.department?.name) {
-            <p class="pf-cart-meta">{{ t.department?.name }}</p>
-            }
-            @if (isCultureTest(t) && specimenOpts().length) {
-            <!-- Culture tests: the desk picks WHICH specimen this order is for
-                 (urine vs pus vs blood) — the bench can refine it later. -->
-            @if (isReadOnly() || isCollected(t.id)) {
-            @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenOf(t.id) }}</p> }
+            <span class="pf-crt__price pf-cart-amount--included">Included</span>
             } @else {
-            <div class="pf-cart-spec" (click)="$event.stopPropagation()">
-              <pf-select size="sm" [searchable]="true" [options]="specimenOpts()" [value]="specimenOf(t.id)"
-                placeholder="Specimen…" (valueChange)="setSpecimen(t.id, $event)"></pf-select>
-            </div>
+            <span class="pf-crt__price"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
+            }
+            @if (!paidOrderId() && !isReadOnly()) {
+            @if (isCollected(t.id)) {
+            <span class="pf-cart-lock" title="Sample collected, test locked">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </span>
+            } @else {
+            <button type="button" (click)="removeTest(t.id)" class="pf-cart-remove press"
+              [attr.aria-label]="'Remove ' + testDisplayName(t)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
             }
             }
           </div>
-          @if (isCoveredMember(t.id)) {
-          <span class="pf-cart-amount pf-cart-amount--included"
-            [title]="'Covered by ' + coveringPackageName(t.id) + ', not billed separately'">Included</span>
+          @if (isCultureTest(t) && specimenOpts().length) {
+          <!-- Culture tests: the desk picks WHICH specimen (urine vs pus vs
+               blood); the bench can refine it later. -->
+          @if (isReadOnly() || isCollected(t.id)) {
+          @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenOf(t.id) }}</p> }
           } @else {
-          <span class="pf-cart-amount"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
-          }
-          @if (!paidOrderId() && !isReadOnly()) {
-          @if (isCollected(t.id)) {
-          <span class="pf-cart-lock" title="Sample collected, test locked">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </span>
-          } @else {
-          <button type="button" (click)="removeTest(t.id)" class="pf-cart-remove press"
-            [attr.aria-label]="'Remove ' + testDisplayName(t)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6 6l12 12M18 6 6 18" />
-            </svg>
-          </button>
+          <div class="pf-cart-spec" (click)="$event.stopPropagation()">
+            <pf-select size="sm" [searchable]="true" [options]="specimenOpts()" [value]="specimenOf(t.id)"
+              placeholder="Specimen…" (valueChange)="setSpecimen(t.id, $event)"></pf-select>
+          </div>
           }
           }
         </li>
@@ -716,6 +705,20 @@
       </div>
       }
 
+      </div>
+      } @else {
+      <div class="pf-oc-phase" data-phase="pay">
+        <button type="button" class="pf-oc-sum press" (click)="editCart()"
+          [attr.aria-label]="'Cart: ' + selected().length + ' tests, ' + (total() | inr) + '. ' + (isReadOnly() || paidOrderId() ? 'Show tests' : 'Edit cart')">
+          <span class="pf-oc-sum__text">{{ selected().length }} test{{ selected().length === 1 ? '' : 's' }} · {{ total() | inr }}</span>
+          @if (priority() === 'Urgent') {
+          <span class="pf-oc-urgent-tag"><span class="pf-oc-urgent-badge__dot" aria-hidden="true"></span>Urgent</span>
+          }
+          <span class="pf-oc-bill__spacer"></span>
+          <span class="pf-oc-sum__edit">{{ isReadOnly() || paidOrderId() ? 'Show' : 'Edit' }}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
       <div class="pf-cart-totals">
         <div class="pf-cart-line">
           <span>Subtotal</span>
@@ -879,11 +882,32 @@
       <p class="pf-oc-bill__hint">Pick a patient and tests to collect payment.</p>
       }
       }
+      </div>
+      }
     </div>
 
     <!-- Pinned footer: Save as draft + the primary action. -->
-    <footer class="pf-oc-bill__foot">
-      @if (paidOrderId() || (isReadOnly() && currentBill() && (currentBill()?.balance ?? 0) <= 0)) {
+    <footer class="pf-oc-bill__foot" [class.pf-oc-bill__foot--cart]="billPhaseView() === 'cart'">
+      @if (billPhaseView() === 'cart') {
+      <div class="pf-oc-foot-total">
+        <span>Total</span>
+        <span class="tabular-nums">{{ total() | inr }}</span>
+      </div>
+      @if (!isReadOnly() && !paidOrderId()) {
+      <button type="button" class="pf-oc-btn pf-oc-btn--ghost press" (click)="onSaveDraftClick()"
+        [disabled]="!!patient() && selected().length === 0">Save as draft</button>
+      <button type="button" class="pf-oc-btn pf-oc-btn--primary press" (click)="continueToPayment()"
+        [disabled]="selected().length === 0">
+        Continue to payment
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14m-5-6 6 6-6 6" />
+        </svg>
+      </button>
+      } @else {
+      <button type="button" class="pf-oc-btn pf-oc-btn--primary press" (click)="billPhase.set('pay')">Back to payment</button>
+      }
+      } @else if (paidOrderId() || (isReadOnly() && currentBill() && (currentBill()?.balance ?? 0) <= 0)) {
       <button type="button" class="pf-oc-btn pf-oc-btn--ghost press" (click)="startNewOrder()">New order</button>
       @if (canCollectHere()) {
       <button type="button" class="pf-oc-btn pf-oc-btn--primary press" (click)="collectPaidSample()">

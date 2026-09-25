@@ -2992,3 +2992,94 @@
 @media (pointer: coarse) {
   .pf-crow__star { width: 40px; height: 40px; min-width: 40px; min-height: 40px; margin-right: 2px; }
 }
+
+/* ════ Round 4 (owner): two-phase billing card — CART then PAYMENT ════ */
+.pf-oc-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  animation: pf-oc-phase-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pf-oc-phase[data-phase='pay'] { animation-name: pf-oc-phase-in-up; }
+@keyframes pf-oc-phase-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pf-oc-phase-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Phase 1: compact single-line cart rows (>=44px), ~8-10 fit. */
+.pf-cart-list--compact { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pf-crt {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+}
+.pf-crt__line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pf-crt__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-crt__code {
+  flex-shrink: 0;
+  font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+.pf-crt__price { flex-shrink: 0; font-size: 12.5px; }
+.pf-crt--included { background: color-mix(in srgb, var(--color-success, #10b981) 5%, transparent); }
+.pf-crt .pf-cart-remove,
+.pf-crt .pf-cart-lock { width: 32px; height: 32px; flex-shrink: 0; }
+
+/* Phase 2: the cart as one line. */
+.pf-oc-sum {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, transparent);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-oc-sum:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+.pf-oc-sum__text { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pf-oc-sum__edit { font-size: 12px; color: var(--violet-text, #7c3aed); }
+.pf-oc-sum svg { color: var(--violet-text, #7c3aed); flex-shrink: 0; }
+
+/* Phase 1 footer: Total line + Save as draft / Continue. */
+.pf-oc-foot-total {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.pf-oc-bill__foot--cart > .pf-oc-btn:only-of-type { grid-column: 1 / -1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-oc-phase { animation: none; }
+}

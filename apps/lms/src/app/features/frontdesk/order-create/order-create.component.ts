@@ -806,6 +806,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const orderId = this.route.snapshot.queryParamMap.get('orderId');
     if (orderId) {
       this.viewOrderId.set(orderId);
+      this.billPhase.set('pay');
       this.api.get<Order>(`/api/orders/${orderId}`).subscribe({
         next: o => {
           this._order.set(o);
@@ -1112,9 +1113,33 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       if (!next.includes(s.package.id)) next.push(s.package.id);
       return next;
     });
+    this.showCart();
     this.toasts.success(`Switched to ${s.package.name} — saving ₹${s.savings}`);
   }
   findTest(id: string): Test | undefined { return this._tests().find(t => t.id === id); }
+
+  // ── Billing card phases: CART → PAYMENT ─────────────────────────────
+  /** The billing card follows the flow: 'cart' while building the order
+   *  (the list gets the whole body), 'pay' for totals + how it is paid.
+   *  No manual expand toggle; see billPhaseView for the rules. */
+  readonly billPhase = signal<'cart' | 'pay'>('cart');
+  /** Phase actually shown: a paid order is always on payment; an empty
+   *  cart on a new order is always the cart. */
+  readonly billPhaseView = computed<'cart' | 'pay'>(() => {
+    if (this.paidOrderId()) return this.billPhase() === 'cart' ? 'cart' : 'pay';
+    if (!this.isReadOnly() && this._selected().length === 0) return 'cart';
+    return this.billPhase();
+  });
+  /** "Continue to payment": needs tests, and a patient (else the nudge). */
+  continueToPayment(): void {
+    if (this._selected().length === 0) return;
+    if (this.requirePatient()) return;
+    this.billPhase.set('pay');
+  }
+  /** The one-line cart summary in the payment phase → back to the cart. */
+  editCart(): void { this.billPhase.set('cart'); }
+  /** Any change to the cart shows the cart, so the change is visible. */
+  private showCart(): void { if (!this.orderLocked()) this.billPhase.set('cart'); }
 
   /** Blocks every cart mutation once the order is complete. The template also
    *  swaps the catalogue for a read-only summary, so this is the belt-and-braces
@@ -1135,6 +1160,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     this._selected.update(cur => cur.includes(t.id) ? cur.filter(id => id !== t.id) : [...cur, t.id]);
+    this.showCart();
   }
   removeTest(id: string) {
     if (this.rejectIfLocked()) return;
@@ -1144,9 +1170,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     this._selected.update(cur => cur.filter(x => x !== id));
+    this.showCart();
   }
   clearCart() {
     if (this.rejectIfLocked()) return;
+    this.showCart();
     const collected = this.collectedTestIds();
     if (collected.size > 0) {
       const kept = this._selected().filter(id => collected.has(id));
@@ -1174,6 +1202,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._selected.update(cur =>
       cur.includes(pkg.id) ? cur.filter(id => id !== pkg.id) : [...cur, pkg.id]
     );
+    this.showCart();
   }
 
   toggleCart() { this._cartOpen.update(v => !v); }
@@ -1433,6 +1462,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       this._hasDraft.set(false);
       this._paidBill.set(latest);
       this.paidOrderId.set(order.id);
+      this.billPhase.set('pay');
       this.toasts.success(
         d.mode !== 'later' ? 'Payment collected'
           : (d.advanceAmount && d.advanceAmount > 0) ? 'Advance collected — balance pending'
@@ -1541,6 +1571,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Reset the screen for the next patient after a completed order. */
   startNewOrder() {
     this.paidOrderId.set(null);
+    this.billPhase.set('cart');
     this._paidBill.set(null);
     this._selected.set([]);
     this._patient.set(null);
