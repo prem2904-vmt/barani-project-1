@@ -26,9 +26,12 @@ const CATALOGUE = [
     department: { name: 'Packages' }, parameters: JSON.stringify({ items: [{ testId: 't1' }] }) },
 ];
 
-function render() {
-  // lg+ desktop: the billing card is a persistent column.
-  (window as any).matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+function render(opts: { web?: boolean } = {}) {
+  // lg+ desktop: the billing card is a persistent column. `web` = a mouse +
+  // hover device (dropdown search); false = touch (results in the card).
+  const web = opts.web ?? true;
+  (window as any).matchMedia = (q: string) => ({
+    matches: q.includes('hover') ? web : true, addEventListener() {}, removeEventListener() {} });
   TestBed.configureTestingModule({
     imports: [OrderCreateComponent],
     providers: [
@@ -307,5 +310,86 @@ describe('Order & Payments — dropdown is one result per row', () => {
     expect(c.activeTestId()).toBe(order[1]);
     c.onPillArrow(new Event('keydown'), 1);
     expect(c.activeTestId()).toBe(order[2]);
+  });
+});
+
+describe('Order & Payments — one search mode per device', () => {
+  it('web: the catalogue card does not change at all while the dropdown is open', () => {
+    const { el, f, c } = render({ web: true });
+    c.setCategoryTab('all');
+    f.detectChanges();
+    const cat = el.querySelector('.pf-oc-cat') as HTMLElement;
+    const before = cat.innerHTML;
+    c.onPillInput('01');
+    f.detectChanges();
+    expect(el.querySelector('#pf-us-drop')).not.toBeNull();
+    expect(cat.innerHTML).toBe(before);
+    expect(el.querySelector('.pf-oc-cat__results')).toBeNull();
+  });
+
+  it('touch: no dropdown; the card becomes the results (header, filters, rows)', () => {
+    const { el, f, c } = render({ web: false });
+    c.onPillInput('01');
+    f.detectChanges();
+    expect(el.querySelector('#pf-us-drop')).toBeNull();
+    expect(el.querySelector('.pf-oc-cat .pf-tabs')).toBeNull();
+    expect(el.querySelector('.pf-oc-res__title')?.textContent).toContain('4 results for “01”');
+    expect(el.querySelector('.pf-oc-cat__results .pf-us__filters')).not.toBeNull();
+    const rows = el.querySelectorAll('.pf-oc-cat .pf-us__tlist .pf-us__trow');
+    expect(rows.length).toBe(4);
+    expect(rows[0].querySelector('.pf-us__tname')).not.toBeNull();
+    expect(el.querySelector('.pf-oc-bill')!.classList).toContain('pf-oc-bill--recede');
+    expect(el.querySelector('.pf-us__cancel')?.textContent?.trim()).toBe('Cancel');
+    (el.querySelector('.pf-us__cancel') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(el.querySelector('.pf-oc-cat .pf-tabs')).not.toBeNull();
+    expect(el.querySelector('.pf-oc-cat__results')).toBeNull();
+  });
+
+  it('switching device mode at runtime swaps dropdown ↔ in-card', () => {
+    const { el, f, c } = render({ web: true });
+    c.onPillInput('01');
+    f.detectChanges();
+    expect(el.querySelector('#pf-us-drop')).not.toBeNull();
+    c._onWebChange({ matches: false });
+    f.detectChanges();
+    expect(el.querySelector('#pf-us-drop')).toBeNull();
+    expect(el.querySelector('.pf-oc-cat__results')).not.toBeNull();
+  });
+});
+
+describe('Order & Payments — standard pill + animation hooks', () => {
+  it('at rest the pill is the stock band search (no activation class, no inline styling)', () => {
+    const { el, f, c } = render();
+    const band = el.querySelector('pf-hero-band') as HTMLElement;
+    expect(band.classList).not.toContain('pf-oc-band--focus');
+    const search = band.querySelector('.pf-hb__search') as HTMLElement;
+    expect(search).not.toBeNull();
+    expect(search.getAttribute('style')).toBeNull();
+    expect(search.querySelector('.pf-us__input')).not.toBeNull();
+    c.onPillFocus();
+    f.detectChanges();
+    expect(band.classList).toContain('pf-oc-band--focus');
+  });
+
+  it('billing phases carry the sheet-rise / cart-drop animation classes', () => {
+    const { el, f, c } = render();
+    c._patient.set({ id: 'x', displayName: 'P' });
+    c._selected.set(['t1']);
+    f.detectChanges();
+    expect(el.querySelector('.pf-oc-phase')!.classList).toContain('pf-oc-phase--cart');
+    c.continueToPayment();
+    f.detectChanges();
+    const pay = el.querySelector('.pf-oc-phase')!;
+    expect(pay.classList).toContain('pf-oc-phase--pay');
+    expect(pay.classList).toContain('pf-oc-phase--rise');
+  });
+
+  it('dropdown rows carry a stagger index', () => {
+    const { el, f, c } = render();
+    c.onPillInput('01');
+    f.detectChanges();
+    const rows = [...el.querySelectorAll('#pf-us-drop .pf-us__trow')] as HTMLElement[];
+    expect(rows.map(r => r.style.getPropertyValue('--pf-i'))).toEqual(['0', '1', '2', '3']);
   });
 });

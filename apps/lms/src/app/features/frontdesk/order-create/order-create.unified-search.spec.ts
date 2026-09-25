@@ -58,6 +58,7 @@ function make(tests: any[] = [], perms: string[] = []) {
   });
   const c = TestBed.runInInjectionContext(() => new OrderCreateComponent()) as any;
   c._tests.set(tests);
+  c.isWebSearch.set(true);          // web / desktop mode unless a test says otherwise
   return { c, api, router };
 }
 
@@ -486,5 +487,74 @@ describe('Search focus mode — dropdown filters', () => {
     expect(c.activeResult()).toBe(2);
     c.setSearchType('individual');
     expect(c.activeResult()).toBe(0);
+  });
+});
+
+describe('Search mode per device type', () => {
+  const tests = [
+    T('uglu', 'Urine Glucose', 'Clinical Pathology'),
+    T('uket', 'Urine Ketones', 'Clinical Pathology'),
+    T('hb', 'Haemoglobin', 'Haematology'),
+  ];
+
+  it('mode follows the (hover: hover) and (pointer: fine) media query, reactively', () => {
+    const { c } = make(tests);
+    expect(c.searchMode()).toBe('dropdown');
+    c._onWebChange({ matches: false });
+    expect(c.searchMode()).toBe('incard');
+    c._onWebChange({ matches: true });
+    expect(c.searchMode()).toBe('dropdown');
+  });
+
+  it('web: typing opens the dropdown only; the catalogue lists never change', () => {
+    const { c } = make(tests);
+    c.setCategoryTab('all');
+    const before = { all: c.filteredTests().map((t: any) => t.id), recent: c.recentTests(), pk: c.packages(), pr: c.profiles() };
+    c.onPillInput('urine');
+    expect(c.dropOpen()).toBe(true);
+    expect(c.inCardSearch()).toBe(false);
+    expect(c.filteredTests().map((t: any) => t.id)).toEqual(before.all);
+    expect(c.recentTests()).toEqual(before.recent);
+    expect(c.packages()).toEqual(before.pk);
+    expect(c.profiles()).toEqual(before.pr);
+    expect(c.categoryTab()).toBe('all');
+  });
+
+  it('touch: NO dropdown for tests; the card shows the results; clearing restores browse', () => {
+    const { c } = make(tests);
+    c.isWebSearch.set(false);
+    c.onPillInput('urine');
+    expect(c.dropOpen()).toBe(false);
+    expect(c.inCardSearch()).toBe(true);
+    expect(c.searchResults().map((t: any) => t.id).sort()).toEqual(['uglu', 'uket']);
+    c.onPillEscape();
+    expect(c.inCardSearch()).toBe(false);
+  });
+
+  it('touch: Patient / Doctor / Hospital still use the dropdown', () => {
+    const { c } = make(tests);
+    c.isWebSearch.set(false);
+    c.selectScope('doctor');
+    expect(c.dropOpen()).toBe(true);
+  });
+
+  it('touch: Cancel shows while searching and clears everything', () => {
+    const { c } = make(tests);
+    c.isWebSearch.set(false);
+    c.onPillFocus();
+    expect(c.showCancel()).toBe(true);
+    c.onPillInput('urine');
+    c.cancelSearch();
+    expect(c.query()).toBe('');
+    expect(c.inCardSearch()).toBe(false);
+    expect(c.showCancel()).toBe(false);
+  });
+
+  it('web: no Cancel button; activation state follows focus / results', () => {
+    const { c } = make(tests);
+    expect(c.showCancel()).toBe(false);
+    expect(c.searchActive()).toBe(false);
+    c.onPillFocus();
+    expect(c.searchActive()).toBe(true);
   });
 });
