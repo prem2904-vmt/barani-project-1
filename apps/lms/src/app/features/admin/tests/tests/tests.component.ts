@@ -670,6 +670,8 @@ export class TestsComponent implements OnInit {
     wrap.style.cssText = 'display:flex;align-items:center;gap:8px;height:100%;min-width:0;';
 
     const dot = document.createElement('span');
+    // A tube-cap colour is DATA (ND §2 functional exception), not decoration.
+    dot.dataset['functional'] = 'tube-cap';
     dot.style.cssText = 'flex:0 0 auto;width:11px;height:11px;border-radius:50%;box-sizing:border-box;background:'
       + (tColor ? tColor.hex : 'transparent')
       + (tColor ? ';' : ';border:1px solid rgba(148,163,184,0.5);');
