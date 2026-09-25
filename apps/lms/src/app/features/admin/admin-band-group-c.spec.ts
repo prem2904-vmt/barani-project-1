@@ -1,4 +1,3 @@
-import './jsdom-path2d.spec-helpers';
 import { provideHttpClient } from '@angular/common/http';
 import { renderBandPage } from './admin-band.spec-helpers';
 import { BranchesComponent } from './branches/branches.component';

@@ -195,10 +195,16 @@ export class BarcodeDisplayComponent implements AfterViewInit, OnChanges {
 
   // The canonical Prefrontal glyph (viewBox 0 0 228 292) — same two paths as
   // pf-logo-mark, kept in sync here so we can paint it onto a raster canvas.
-  private static readonly GLYPH = new Path2D(
+  // Built lazily on first paint (not in a static initializer): Path2D is a
+  // browser API, and creating it at class-load time breaks any environment
+  // without it (jsdom specs that merely import a page embedding this).
+  private static glyph: Path2D | null = null;
+  private static readonly GLYPH_D =
     'M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z' +
-    'M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z'
-  );
+    'M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z';
+  private static get GLYPH(): Path2D {
+    return (BarcodeDisplayComponent.glyph ??= new Path2D(BarcodeDisplayComponent.GLYPH_D));
+  }
 
   /** Paint the PF mark on a white tile at the centre of a rendered QR. Skipped
    *  on tiny QRs so small inline tracking codes stay unobstructed. */
