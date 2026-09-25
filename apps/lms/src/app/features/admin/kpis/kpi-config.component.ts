@@ -128,7 +128,7 @@ const CATEGORY_LABELS: Record<string, string> = {
           @for (s of screens; track s.id) {
             <button type="button"
                     class="pf-kpi-screen-tab"
-                    [class.pf-kpi-screen-tab--on]="selectedScreen() === s.id"
+                    [attr.aria-pressed]="selectedScreen() === s.id"
                     (click)="selectScreen(s.id)">
               <span class="pf-kpi-screen-tab__label">{{ s.label }}</span>
               <span class="pf-kpi-screen-tab__hint">{{ s.hint }}</span>
@@ -354,7 +354,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       color: var(--text-primary);
       background: var(--glass-bg-hover);
     }
-    .pf-kpi-screen-tab--on {
+    .pf-kpi-screen-tab[aria-pressed='true'] {
       color: white;
       background: linear-gradient(135deg, rgba(139, 92, 246, 0.32), rgba(217, 70, 239, 0.18));
       border-color: rgba(168, 85, 247, 0.5);
@@ -369,7 +369,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       font-size: 11.5px;
       color: var(--text-tertiary);
     }
-    .pf-kpi-screen-tab--on .pf-kpi-screen-tab__hint { color: rgba(255,255,255,0.7); }
+    .pf-kpi-screen-tab[aria-pressed='true'] .pf-kpi-screen-tab__hint { color: rgba(255,255,255,0.7); }
     .pf-kpi-screen-tab__count {
       position: absolute;
       top: 8px;
@@ -388,7 +388,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       font-variant-numeric: tabular-nums;
       color: #d8b4fe;
     }
-    .pf-kpi-screen-tab--on .pf-kpi-screen-tab__count {
+    .pf-kpi-screen-tab[aria-pressed='true'] .pf-kpi-screen-tab__count {
       background: rgba(255,255,255,0.18);
       border-color: rgba(255,255,255,0.32);
       color: white;
@@ -692,7 +692,7 @@ const CATEGORY_LABELS: Record<string, string> = {
        states. Desktop (hover-capable) keeps its existing base hovers. */
     @media (hover: none) {
       .pf-kpi-screen-tab:hover { color: var(--text-secondary); background: var(--glass-bg); }
-      .pf-kpi-screen-tab--on:hover { color: white; background: linear-gradient(135deg, rgba(139, 92, 246, 0.32), rgba(217, 70, 239, 0.18)); }
+      .pf-kpi-screen-tab[aria-pressed='true']:hover { color: white; background: linear-gradient(135deg, rgba(139, 92, 246, 0.32), rgba(217, 70, 239, 0.18)); }
       .pf-kpi-cat__row:hover:not(:disabled) { background: transparent; }
       .pf-kpi-tile:hover { border-color: var(--glass-border); }
       .pf-kpi-btn--ghost:hover:not([disabled]) { background: transparent; color: var(--text-secondary); }

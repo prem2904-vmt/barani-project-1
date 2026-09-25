@@ -151,7 +151,7 @@ const PALETTE_COLORS = ['#7c3aed', '#64748b'];
                   @if (iconMenuLane() === li) {
                     <div class="pb-iconmenu" role="menu">
                       @for (ic of workAreaIcons; track ic.key) {
-                        <button type="button" class="pb-iconopt" [class.pb-iconopt--on]="lane.cat.icon === ic.key"
+                        <button type="button" class="pb-iconopt" [attr.aria-pressed]="lane.cat.icon === ic.key"
                                 (click)="setIcon(li, ic.key)" [title]="ic.label" [attr.aria-label]="ic.label">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
                             @for (p of ic.path; track $index) { <path [attr.d]="p" /> }
@@ -177,7 +177,7 @@ const PALETTE_COLORS = ['#7c3aed', '#64748b'];
                 <span class="pb-roles-lbl">Who</span>
                 @if (roleMenuLane() === li) {
                   @for (r of roles(); track r) {
-                    <button type="button" class="pb-role" [class.pb-role--on]="laneHasRole(li, r)" (click)="toggleRole(li, r)">{{ r }}</button>
+                    <button type="button" class="pb-role" [attr.aria-pressed]="laneHasRole(li, r)" (click)="toggleRole(li, r)">{{ r }}</button>
                   }
                   <button type="button" class="pb-role-add pb-role-add--done" (click)="roleMenuLane.set(-1)">done</button>
                 } @else {
@@ -310,7 +310,7 @@ const PALETTE_COLORS = ['#7c3aed', '#64748b'];
       transition: background .12s, border-color .12s, color .12s;
     }
     .pb-iconopt:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
-    .pb-iconopt--on { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--violet-text, #7c3aed); }
+    .pb-iconopt[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--violet-text, #7c3aed); }
     .pb-mini { width: 23px; height: 23px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer; font-size: 13px; line-height: 1; transition: background .15s, color .15s; }
     .pb-mini:hover:not(:disabled) { background: rgba(255,255,255,0.07); color: var(--text-primary); }
     .pb-mini:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -323,7 +323,7 @@ const PALETTE_COLORS = ['#7c3aed', '#64748b'];
     .pb-roles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 7px 9px; border-bottom: 1px solid var(--glass-border); }
     .pb-roles-lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-right: 2px; }
     .pb-role { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; border: 1px solid var(--glass-border); background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .pb-role--on { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--text-primary); }
+    .pb-role--on, .pb-role[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--text-primary); }
     .pb-role-all { font-size: 10px; color: var(--text-tertiary); font-style: italic; }
     .pb-role-add { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px dashed var(--glass-border); background: transparent; color: var(--text-secondary); cursor: pointer; }
     .pb-role-add:hover { color: var(--text-primary); border-color: var(--text-tertiary); }

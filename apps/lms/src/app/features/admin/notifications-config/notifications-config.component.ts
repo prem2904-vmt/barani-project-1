@@ -64,13 +64,13 @@ const MODULE_LABELS: Record<string, string> = {
       <div class="pf-band-body">
       <!-- Module filter chips (classic; the new design has them in the pill) -->
       <div class="pf-nc-chips pf-classic-only mb-5">
-        <button type="button" class="pf-nc-chip" [class.pf-nc-chip--on]="moduleFilter() === null"
+        <button type="button" class="pf-nc-chip" [attr.aria-pressed]="moduleFilter() === null"
                 (click)="setModuleFilter(null)">
           All
           <span class="pf-nc-chip__count">{{ rows().length }}</span>
         </button>
         @for (m of modules(); track m) {
-          <button type="button" class="pf-nc-chip" [class.pf-nc-chip--on]="moduleFilter() === m"
+          <button type="button" class="pf-nc-chip" [attr.aria-pressed]="moduleFilter() === m"
                   (click)="setModuleFilter(m)">
             {{ moduleLabel(m) }}
             <span class="pf-nc-chip__count">{{ countFor(m) }}</span>
@@ -172,7 +172,7 @@ const MODULE_LABELS: Record<string, string> = {
       transition: border-color .15s ease, color .15s ease;
     }
     .pf-nc-chip:hover { color: var(--text-primary); }
-    .pf-nc-chip--on {
+    .pf-nc-chip[aria-pressed='true'] {
       color: var(--text-primary);
       border-color: var(--nd-sel-border);
       background: var(--nd-sel-bg);
@@ -185,7 +185,7 @@ const MODULE_LABELS: Record<string, string> = {
       background: rgba(255, 255, 255, 0.08);
       color: var(--text-muted);
     }
-    .pf-nc-chip--on .pf-nc-chip__count { color: var(--text-secondary); }
+    .pf-nc-chip[aria-pressed='true'] .pf-nc-chip__count { color: var(--text-secondary); }
 
     .pf-nc-section {
       display: flex;
