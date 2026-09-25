@@ -8,7 +8,8 @@ import { loginAs } from './support/auth';
  * Signs in as the seeded Micro World Lab Admin, opens a culture case with
  * the AST stage rewritten open in the browser (organism E. coli, nothing
  * written on the server — the pick is answered locally), opens Measure,
- * UPLOADS the plate photo (PLATE_JPG) and lets OpenCV.js (lazy, CDN) find
+ * UPLOADS the plate photo (PLATE_JPG) and lets OpenCV.js (lazy, the BUNDLED
+ * same-origin asset — any CDN request is blocked and fails the test) find
  * the rim, the disks and the zones. Asserts the overlays (disk badges after
  * glare filtering), that the PIT disk (lower right, the one with a zone)
  * reads above 6 mm, and that the code list renders.
@@ -134,8 +135,15 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
     };
     await page.route(/\/api\/culture\/ast\/disk-read\/.*\/confirm/, route => route.fulfill({ status: 200, body: '{}' }));
 
+    // OpenCV must come from the app itself: block every CDN, record the load.
+    const cdnHits: string[] = [];
+    await page.route(/cdn\.jsdelivr\.net\/npm\/@techstark|cdnjs\.cloudflare\.com|unpkg\.com/, route => { cdnHits.push(route.request().url()); return route.abort(); });
+    const cvLoads: string[] = [];
+    page.on('requestfinished', r => { if (/opencv\.js/.test(r.url())) cvLoads.push(r.url()); });
+
     const opened = await openCase(page);
     test.skip(!opened, 'No culture case to open (set CULTURE_ORDER_TEST_ID).');
+    expect(cvLoads, 'OpenCV is lazy — not loaded with the page').toEqual([]);
     const ast = page.locator('section.pf-stg').filter({ hasText: /sensitivity/i }).first();
     await expect(ast).toBeVisible({ timeout: 20_000 });
     const openBtn = ast.locator('.pf-cse__astbtn');
@@ -154,6 +162,11 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
     // Calibrate: OpenCV loads (CDN) and finds the rim.
     await expect(modal.locator('.pm-step[data-state="active"] .pm-step__lbl')).toHaveText('Calibrate');
     await expect(modal.locator('circle.pm-plate')).toHaveCount(1, { timeout: 120_000 });
+    const origin = new URL(page.url()).origin;
+    expect(cvLoads.length).toBe(1);
+    expect(cvLoads[0]).toBe(`${origin}/assets/vendor/opencv/opencv.js`);
+    expect(cdnHits).toEqual([]);
+    console.log(`[measure] OpenCV loaded from ${cvLoads[0]}`);
     await expect(modal.locator('.pm-seg .nd-seg__item[aria-checked="true"]')).toHaveText(/90 mm/);
     await shots(page, 'calibrate-1440');
 

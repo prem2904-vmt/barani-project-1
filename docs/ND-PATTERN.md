@@ -418,17 +418,23 @@ plus (owner reviews, 2026-09-25):
   Inoculate in the nav row as secondary, options filling the column with
   equal segments at 1440, stacked rows + 44px band icons at 375.
   `SHOTS_DIR=…` saves 1440 / 375, dark + light.
-- **AST table** (`culture-entry`): "Reading method" is a normal-case label
-  + a kit `.nd-seg` (Zone (mm) · MIC (µg/mL)); column headers normal case;
-  the zone field is a kit field (Noto, tabular); × is a quiet labelled icon
-  button; "Hide organism / sensitivity" is tertiary. The S · I · R result
-  is a segmented radio group whose state is a class (`.ce-sir-picked`),
-  never inline colours.
-  - **Light mode has no traffic lights** (owner: eye strain): muted
-    breakpoint headers, neutral breakpoint chips, a muted MIC line, no row
-    tints; the picked S / I / R is the neutral selected state + its letter.
-    The ONLY colour left is a 5px red dot on a picked **R**.
-  - **Dark mode keeps** its S green / I amber / R red verdict colours.
+- **AST table** (`culture-entry`) — **result S / I / R subtle colour when
+  picked, breakpoints neutral** (owner, both themes):
+  - Breakpoint headers, breakpoint chips (neutral kit chips, normal text)
+    and the MIC line under a drug are NEUTRAL in light AND dark. No row
+    tints by verdict.
+  - The PICKED S / I / R carries a subtle tint + dark text (≥4.5:1):
+    light S `rgba(16,185,129,.13)` / #065f46, I `rgba(245,158,11,.14)` /
+    #92400e, R `rgba(239,68,68,.12)` / #991b1b; dark the same hues at 20%
+    with pale text (#6ee7b7 / #fcd34d / #fca5a5). Unpicked stays neutral.
+    Class-driven (`.ce-sir-picked.ce-sir--s|i|r`), never inline colours;
+    the small-screen cells share the tints.
+  - Every antimicrobial row is its own subtle card in both themes: 10px
+    radius, 6px gap, a stronger hover (light `#f6f7f9` → `#eef0f3`, dark
+    the glass surface).
+  - "Reading method" is a normal-case label + a kit `.nd-seg`; headers
+    normal case; the zone field a kit field (Noto, tabular); × a quiet
+    labelled icon button; "Hide organism / sensitivity" tertiary.
 - **Measure zones modal** (`plate-measure`), like the scanner: an nd-card
   modal (phones: a tall sheet above the navbar, camera full width) with the
   violet icon chip + "MEASURE ZONES", neutral full-screen / × icon buttons,
@@ -440,14 +446,22 @@ plus (owner reviews, 2026-09-25):
   primary per step (Capture / Measure / Review / **Apply to table**),
   everything else secondary.
 - **Measure & read (owner, 2026-09-25): OpenCV measures, ONE AI call reads.**
-  - **OpenCV.js 4.10**, lazy: `opencv-loader.ts` injects
-    `cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1` the first
-    time the modal needs it (~10 MB, ~3.4 MB gzipped, browser-cached; 0 bytes
-    in the app bundle). OpenCV does grayscale, blur and Hough (plate rim,
-    disk candidates) in `plate-detect.ts`; everything that DECIDES and
-    MEASURES is pure TS in `plate-vision.ts` (unit-tested on synthetic
-    plates). The Emscripten module is a thenable — strip `then` before
-    resolving it (awaiting it loops forever).
+  - **OpenCV.js 4.10, BUNDLED and lazy (owner, 2026-09-25).** The
+    unmodified single-file build of `@techstark/opencv-js@4.10.0-release.1`
+    is vendored at `apps/lms/public/assets/vendor/opencv/opencv.js` (+ its
+    Apache-2.0 `LICENSE`, `README.md`) and ships as the same-origin static
+    asset `assets/vendor/opencv/opencv.js` in every build (web, Electron,
+    Capacitor: `cap sync` copies `dist/apps/lms/browser`), so it works
+    offline. `opencv-loader.ts` injects it (resolved against the document
+    base) the first time the modal needs it: ~10 MB (~3.4 MB gzipped),
+    browser-cached, 0 bytes in the main / initial bundle. **No CDN
+    fallback**; if the local load fails the calibrate line says "Couldn’t
+    load the measuring tools…" and the manual rim + ring tools carry on.
+    OpenCV does grayscale, blur and Hough (plate rim, disk candidates) in
+    `plate-detect.ts`; everything that DECIDES and MEASURES is pure TS in
+    `plate-vision.ts` (unit-tested on synthetic plates). The Emscripten
+    module is a thenable — strip `then` before resolving it (awaiting it
+    loops forever).
   - **Calibrate:** the rim is found automatically (dashed violet circle, two
     draggable ends; tapping two rim edges still works). Plate size is a
     neutral `.nd-seg` (90 · 100 · 150 mm), default = the saved session, the
@@ -494,7 +508,9 @@ plus (owner reviews, 2026-09-25):
     `/disk-read/{auditId}/confirm` (errors ignored).
   - **Real-plate check:** `apps/lms-e2e/src/culture-measure-read.rbac.spec.ts`
     (`PLATE_JPG=…/plate.jpg SHOTS_DIR=…`): uploads the real plate, runs
-    OpenCV in the browser, asserts ≥8 disk badges, the PIT zone > 6 mm and
+    OpenCV in the browser from the bundled asset (CDNs are blocked; exactly
+    one same-origin `opencv.js` load, none before the modal), asserts ≥8
+    disk badges, the PIT zone > 6 mm and
     the code list pending → manual (404) → filled (the prototype's read,
     answered in the browser).
 - **AST screenshots** in the real-layout check rewrite the case response in

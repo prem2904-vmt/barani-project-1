@@ -33,7 +33,7 @@ export interface DiskRow extends CodeSlot {
   zoneFound: boolean;
 }
 
-type PlateState = 'idle' | 'loading' | 'finding' | 'found' | 'not-found' | 'unavailable';
+type PlateState = 'idle' | 'loading' | 'finding' | 'found' | 'not-found' | 'unavailable' | 'load-failed';
 type AiState = 'idle' | 'pending' | 'done' | 'failed';
 
 const NOT_A_DISK = '__not_a_disk';
@@ -818,7 +818,9 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   async findPlate() {
     this.plateState.set('loading');
     try {
-      const v = await this.ensureVision();
+      let v: PlateVision | null;
+      try { v = await this.ensureVision(); }
+      catch { this.plateState.set('load-failed'); return; }   // the bundled asset didn't load
       if (!v) { this.plateState.set('unavailable'); return; }
       this.plateState.set('finding');
       await nextFrame();
@@ -837,6 +839,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
       case 'found': return 'Plate rim found. Drag an end to adjust, or tap two opposite rim edges.';
       case 'not-found': return 'Couldn’t find the rim — tap two opposite rim edges.';
       case 'unavailable': return 'Auto-measure is unavailable here — tap two opposite rim edges, then draw each zone.';
+      case 'load-failed': return 'Couldn’t load the measuring tools — tap two opposite rim edges, then draw each zone.';
       default: return 'Tap two opposite rim edges.';
     }
   }
