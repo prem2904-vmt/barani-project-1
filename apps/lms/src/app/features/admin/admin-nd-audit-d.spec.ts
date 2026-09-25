@@ -46,9 +46,16 @@ export const primaries = (el: HTMLElement) =>
   Array.from(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn .v-primary'))
     .filter(b => !b.closest('.pf-classic-only')).length;
 
+/** A real /api/tenants/modules payload: the entitlements service parses the
+ *  response, so the generic [] stub would throw an unhandled error. */
+const modulesWire = { modulesJson: null, legacy: { messages: true, homeCollection: true, reports: true, inventory: true } };
+const renderModules = () => renderBandPage(AdminModulesComponent, {
+  getFor: (url) => (url.startsWith('/api/tenants/modules') ? modulesWire : []),
+});
+
 describe('ND audit D — Modules', () => {
   it('module + feature toggles are slate switches (role=switch); the On/Off filter is a neutral kit segment', () => {
-    const p = renderBandPage(AdminModulesComponent);
+    const p = renderModules();
     p.cmp.state.set({ opd: { enabled: true, features: {} } });
     p.f.detectChanges();
     const sw = p.el.querySelectorAll('.pf-mod .nd-toggle[role="switch"]');
@@ -63,7 +70,7 @@ describe('ND audit D — Modules', () => {
   });
 
   it('a switch click flips the module (persist is called)', () => {
-    const p = renderBandPage(AdminModulesComponent);
+    const p = renderModules();
     const spy = vi.spyOn(p.cmp as any, 'persist').mockImplementation(() => {});
     (p.el.querySelector('.pf-mod .pf-mod__head .nd-toggle') as HTMLButtonElement).click();
     expect(spy).toHaveBeenCalled();
