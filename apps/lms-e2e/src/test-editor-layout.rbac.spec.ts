@@ -31,6 +31,9 @@ async function relayCors(page: Page) {
 }
 
 async function setTheme(page: Page, theme: 'dark' | 'light') {
+  // The app's ThemeService follows the system scheme in its default 'system'
+  // mode — emulate it so JS-themed surfaces (AG-Grid) flip too.
+  await page.emulateMedia({ colorScheme: theme });
   await page.evaluate((t) => {
     const r = document.documentElement;
     r.classList.toggle('dark', t === 'dark');
@@ -106,13 +109,36 @@ test.describe('Test editor — real layout', () => {
   test('1440 + 375: band + context bar, one primary, tabs row, preview side card / sheet', async ({ page }) => {
     await relayCors(page);
     await loginAs(page, 'admin');
+    test.info().annotations.push({ type: 'note', description: 'read-only' });
     await page.setViewportSize({ width: 1440, height: 900 });
     const opened = await openEditor(page);
+    if (SHOTS && opened) {
+      const editUrl = page.url();
+      await page.goto('/admin/tests');
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await page.waitForTimeout(800);
+      await shoot(page, 'test-master-1440');
+      await page.setViewportSize({ width: 375, height: 812 });
+      await page.waitForTimeout(500);
+      await shoot(page, 'test-master-375');
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(editUrl);
+    }
     test.skip(!opened, `No ${CODE} in this tenant's Test Master (set TEST_ID).`);
 
     const ctx = page.locator('pf-hero-band .nd-ctx');
     await expect(ctx.locator('.nd-ctx__primary')).toBeVisible({ timeout: 20_000 });
-    await expect(ctx.locator('.nd-ctx__chip[data-k="Code"]')).toContainText(CODE);
+    await expect(ctx.locator('.pf-te2-ctx__nametext')).not.toHaveText(/^(New|Edit) (test|profile|package)$/, { timeout: 20_000 });
+    // Pill = name + tabs ONLY (no fact chips), on ONE line at 1440.
+    await expect(ctx.locator('.nd-ctx__chip')).toHaveCount(0);
+    await expect(ctx.locator('[role="tablist"] [role="tab"]').first()).toBeVisible();
+    const pillH = (await page.locator('pf-hero-band .pf-hb__search').boundingBox())!.height;
+    expect(pillH).toBeLessThanOrEqual(62);
+    const nameBox = (await ctx.locator('.nd-ctx__primary').boundingBox())!;
+    const tabBox = (await ctx.locator('[role="tablist"]').boundingBox())!;
+    expect(Math.abs((nameBox.y + nameBox.height / 2) - (tabBox.y + tabBox.height / 2))).toBeLessThan(8);
+    // No title tooltip on the preview frame (it floated over the pill).
+    await expect(page.locator('iframe.pf-pdfprev__frame[title]')).toHaveCount(0);
     const name = (await ctx.locator('.pf-te2-ctx__nametext').innerText()).trim();
     expect(name.length).toBeGreaterThan(3);
     expect(name.endsWith('…')).toBe(false);
@@ -123,8 +149,9 @@ test.describe('Test editor — real layout', () => {
     await expect(page.locator('pf-hero-band .pf-hb__actions .pf-hb-btn--primary')).toContainText('Save');
     await expect(page.locator('pf-hero-band .nd-savestate')).toBeVisible();
 
-    // Sections: a tabs row, no rail, no title block.
-    const tabs = page.locator('[role="tablist"].pf-te2-tabs [role="tab"]');
+    // Sections: tabs in the pill, no rail / tabs row, no title block.
+    await expect(page.locator('.pf-te2-tabsrow')).toHaveCount(0);
+    const tabs = page.locator('pf-hero-band [role="tablist"].pf-te2-tabs [role="tab"]');
     expect(await tabs.count()).toBeGreaterThanOrEqual(4);
     await expect(page.locator('.pf-te2-nav')).toHaveCount(0);
     await expect(page.locator('.pf-te2-head')).toHaveCount(0);
@@ -189,5 +216,6 @@ test.describe('Test editor — real layout', () => {
     await shoot(page, 'test-editor-375-preview');
     await page.keyboard.press('Escape');
     await expect(aside).toBeHidden();
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
   });
 });

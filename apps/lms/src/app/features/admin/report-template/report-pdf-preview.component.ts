@@ -46,7 +46,8 @@ export interface PreviewProfileMember {
              refreshes the page's Back button needed 2-3 clicks (each popping a
              revoked blob → WebKitBlobResource errors). replace() swaps the
              document with no history growth. -->
-        <iframe #frame class="pf-pdfprev__frame" title="Report preview"></iframe>
+        <!-- aria-label, not title: a title shows as a floating native tooltip. -->
+        <iframe #frame class="pf-pdfprev__frame" aria-label="Report preview"></iframe>
       } @else {
         <p class="pf-pdfprev__empty">Rendering…</p>
       }

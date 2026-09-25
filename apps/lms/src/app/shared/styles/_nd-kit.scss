@@ -190,6 +190,28 @@
 textarea.nd-input { resize: vertical; line-height: 1.45; }
 @media (max-width: 640px) { .nd-input { min-height: 44px; font-size: 16px; } }
 
+/* Field parity on new-design band pages: pf-select triggers and
+   pf-number-input boxes match .nd-input (height, radius, surface, border)
+   so a form row lines up. The small (sm) variants keep their size. */
+:root.design-new .pf-band-page pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger,
+:root.design-new .pf-band-page pf-number-input .root:not([data-size='sm']) {
+  height: 40px; border-radius: var(--nd-radius-sm);
+  border-color: color-mix(in srgb, var(--text-primary) 22%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg));
+}
+:root.design-new .pf-band-page pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger:hover:not(:disabled),
+:root.design-new .pf-band-page pf-number-input .root:not([data-size='sm']):hover {
+  border-color: color-mix(in srgb, var(--text-primary) 38%, transparent);
+}
+:root.design-new .pf-band-page pf-number-input .root.is-focused:not([data-size='sm']) {
+  border-color: var(--color-violet-600, #7c3aed);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+}
+@media (max-width: 640px) {
+  :root.design-new .pf-band-page pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger,
+  :root.design-new .pf-band-page pf-number-input .root:not([data-size='sm']) { height: 44px; }
+}
+
 /* ── Context bar: an EDITOR's pill (single-record pages) ─────────────
    The band pill shows WHO/WHAT is open as read-only chips: the record's
    name is the primary chip (full, wraps, never truncated) with a quiet
@@ -319,6 +341,13 @@ button.nd-ctx__chip:hover { border-color: var(--nd-sel-border); }
 /* ── Mobile: sticky bottom bar + tall sheet (both above the nav) ────── */
 .nd-bottombar { display: none; }
 .nd-sheet__handle { display: none; }
+/* Backdrop exists only where the sheet is a sheet (phones); above that a
+   stray backdrop element must not take up a grid / flex cell. */
+@media (min-width: 641px) { .nd-sheet-backdrop { display: none; } }
+/* A visually hidden native checkbox inside a kit row (keyboard + forms);
+   the row's .nd-row__check draws the state. */
+.nd-row__native { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.nd-row:has(.nd-row__native:focus-visible) { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 @media (max-width: 640px) {
   .nd-bottombar {
     position: fixed; left: 12px; right: 12px; bottom: calc(var(--nd-nav-h) + 10px); z-index: 46;

@@ -77,6 +77,9 @@ async function relayCors(page: Page) {
 }
 
 async function setTheme(page: Page, theme: 'dark' | 'light') {
+  // The app's ThemeService follows the system scheme in its default 'system'
+  // mode — emulate it so JS-themed surfaces (AG-Grid) flip too.
+  await page.emulateMedia({ colorScheme: theme });
   await page.evaluate((t) => {
     const r = document.documentElement;
     r.classList.toggle('dark', t === 'dark');

@@ -257,7 +257,8 @@ select.pf-input--compact {
   border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); transition: border-color .15s, color .15s, background .15s;
 }
 .pf-tube:hover { border-color: rgba(168,85,247,.4); }
-.pf-tube--on { border-color: rgba(168,85,247,.7); color: var(--text-primary); background: rgba(168,85,247,.1); font-weight: 600; }
+/* State via ARIA (a global rule paints button[class*='--on'] violet). */
+.pf-tube[aria-pressed='true'] { border-color: var(--nd-sel-border); color: var(--text-primary); background: var(--nd-sel-bg); font-weight: 600; }
 .pf-tube__dot { width: 15px; height: 15px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset; flex-shrink: 0; }
 .pf-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; }
 
@@ -847,8 +848,8 @@ select.pf-input--compact {
   transition: border-color .15s ease, color .15s ease, background .15s ease; }
 .pf-qr__chip:hover { border-color: var(--nd-sel-border); }
 .pf-qr__chip:active { transform: scale(0.96); transition: transform 100ms ease-out; }
-.pf-qr__chip--on { color: var(--text-primary); border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
-.pf-qr__chip--on svg { color: var(--violet-text, #7c3aed); }
+.pf-qr__chip[aria-pressed='true'] { color: var(--text-primary); border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+.pf-qr__chip[aria-pressed='true'] svg { color: var(--violet-text, #7c3aed); }
 .pf-qr__chip--off { opacity: .45; text-decoration: line-through; }
 .pf-qr__row { display: flex; align-items: center; gap: 12px; }
 .pf-qr__summary { flex: 1; font-size: 13px; color: var(--text-secondary, #475569); line-height: 1.5; }
@@ -941,9 +942,6 @@ select.pf-input--compact {
 .pf-te2-page--nd {
   height: 100%;
   .pf-te2-bodywrap { gap: 12px; }
-  .pf-te2-tabsrow { flex: none; display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .pf-te2-tabs { flex: 0 1 auto; }
-  .pf-te2-previewbtn { flex: none; margin-left: auto; height: 40px; min-height: 40px; }
 
   .pf-te2 {
     flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr);
@@ -990,7 +988,6 @@ select.pf-input--compact {
   .pf-te2-adv { border-top-color: var(--nd-line); }
   .pf-picker-summary, .pf-picker-summary--on { background: var(--nd-chip-bg); border-color: var(--nd-line); color: var(--text-secondary); }
   .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__count { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
-  .pf-tube--on { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); color: var(--text-primary); }
   .pf-option-count { background: var(--nd-chip-bg); color: var(--text-secondary); }
 
   /* Live preview = the side card. */
@@ -1008,7 +1005,7 @@ select.pf-input--compact {
   }
   /* <1024px: the preview is a sheet behind "Preview", above the navbar. */
   @media (max-width: 1023px) {
-    .pf-te2-previewscrim { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h); z-index: 79; background: rgba(0, 0, 0, 0.45); animation: nd-fade-scale var(--nd-dur-fast) ease both; }
+    .pf-te2-previewscrim { display: block; position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h); z-index: 79; background: rgba(0, 0, 0, 0.45); animation: nd-fade-scale var(--nd-dur-fast) ease both; }
     .pf-te2-aside--open {
       display: flex; flex-direction: column; position: fixed; z-index: 80;
       left: 0; right: 0; bottom: var(--nd-nav-h); top: auto;
@@ -1023,8 +1020,6 @@ select.pf-input--compact {
   }
   @media (max-width: 640px) {
     .pf-te2-bodywrap { gap: 10px; }
-    .pf-te2-tabs { flex: 1 1 auto; }
-    .pf-te2-previewbtn { width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 0; gap: 0; }
     .pf-te2-sec__label { padding: 10px 12px; }
     /* beats the global phone h2 cap (styles.scss (H), !important) */
     h2.pf-te2-sec__title.pf-te2-sec__h { font-size: 12px !important; line-height: 1.3 !important; }
@@ -1039,8 +1034,48 @@ select.pf-input--compact {
 
 /* Band pieces (projected into pf-hero-band — they carry this component's
    encapsulation attribute, so plain selectors work). */
-.pf-te2-ctx { gap: 6px 8px; }
-.pf-te2-ctx__chip[data-k='Code'] .nd-num { font-weight: 600; }
+/* The pill: [Test name ✎ · origin] | [section tabs] — ONE line at 1440;
+   narrower, the tabs scroll inside the pill; phones stack name over tabs. */
+.pf-te2-ctx.nd-ctx { flex-wrap: nowrap; gap: 12px; padding: 2px 0; overflow: visible; }
+.pf-te2-ctx__name { flex: 0 1 auto; min-width: 120px; max-width: 42%; }
+.pf-te2-ctx__origin {
+  flex: none; margin-left: 4px; padding: 1px 6px; border-radius: 6px;
+  border: 1px solid var(--nd-line); background: var(--nd-chip-bg);
+  font-size: 11px; font-weight: 500; letter-spacing: 0.01em; line-height: 1.4; color: var(--text-tertiary);
+}
+.pf-te2-ctx__div { flex: none; width: 1px; align-self: stretch; margin: 4px 0; background: var(--nd-line); }
+.pf-te2-tabs {
+  position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 2px; padding: 3px;
+  border-radius: 12px; background: var(--nd-chip-bg); border: 1px solid var(--nd-line);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.pf-te2-tabs::-webkit-scrollbar { display: none; }
+.pf-te2-tabs__ind {
+  position: absolute; top: 3px; bottom: 3px; left: 0; z-index: 0; border-radius: 9px;
+  background: var(--nd-card-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  transition: transform var(--nd-dur) var(--nd-spring), width var(--nd-dur) var(--nd-spring), opacity var(--nd-dur-fast) ease;
+}
+.pf-te2-tab {
+  position: relative; z-index: 1; flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent;
+  color: var(--text-secondary); font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  transition: color var(--nd-dur-fast) ease;
+}
+.pf-te2-tab:hover { color: var(--text-primary); }
+.pf-te2-tab[aria-selected='true'] { color: var(--text-primary); font-weight: 600; }
+.pf-te2-tab:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+.pf-te2-tab__dot { flex: none; width: 6px; height: 6px; border-radius: 999px; border: 1.5px solid var(--color-violet-600, #7c3aed); opacity: 0.55; }
+.pf-te2-tab__dot--ok { border-color: transparent; background: var(--color-violet-600, #7c3aed); opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .pf-te2-tabs__ind, .pf-te2-tab { transition: none; } }
+@media (max-width: 1100px) { .pf-te2-tab { flex: 0 0 auto; } }
+@media (max-width: 640px) {
+  .pf-te2-ctx.nd-ctx { flex-direction: column; align-items: stretch; gap: 6px; overflow: visible; padding: 8px 0 6px; }
+  .pf-te2-ctx.nd-ctx > * { flex-shrink: 1; }
+  .pf-te2-ctx__name { max-width: none; min-width: 0; }
+  .pf-te2-ctx__div { display: none; }
+  .pf-te2-tabs { flex: none; margin-right: 8px; }
+  .pf-te2-tab { height: 38px; }
+}
 .pf-te2-savestate { margin-right: 2px; }
 @media (max-width: 640px) {
   .pf-te2-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

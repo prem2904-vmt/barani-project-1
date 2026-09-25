@@ -447,7 +447,9 @@ export class TestsComponent implements OnInit {
             return tColor ? `Container: ${tColor.label}` : undefined;
           },
         },
-        { headerName: 'Name', field: 'name', editable: true, minWidth: 180, flex: 2, pinned: 'left', cellRenderer: this.plainNameRenderer },
+        // Wide enough that names don't truncate (ND §5); uniform row height.
+        { headerName: 'Name', field: 'name', editable: true, width: 300, minWidth: 200, pinned: 'left',
+          cellRenderer: this.plainNameRenderer, tooltipField: 'name' },
         this.originColDef(),
         { headerName: 'Short', field: 'shortName', editable: true, minWidth: 120 },
         { headerName: 'Section', field: 'section', editable: true, minWidth: 130 },
@@ -520,10 +522,10 @@ export class TestsComponent implements OnInit {
    *  from the first value's bands. The flat column is never shown. */
   private derivedRangeColDef(): ColDef<TestRow> {
     return {
-      headerName: 'Reference range', colId: 'referenceRange', minWidth: 165,
+      headerName: 'Reference range', colId: 'referenceRange', minWidth: 200, flex: 2,
       editable: false,
       valueGetter: p => this.derivedRange(p.data),
-      tooltipValueGetter: () => 'Comes from the test\'s values — edit ranges in the test editor',
+      tooltipValueGetter: p => this.derivedRange(p.data) || 'Comes from the test\'s values — edit ranges in the test editor',
     };
   }
 

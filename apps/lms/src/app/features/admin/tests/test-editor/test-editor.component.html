@@ -41,6 +41,13 @@
             {{ reverting() ? 'Reverting…' : 'Revert to master' }}
           </button>
         }
+        <!-- Below 1024px the live preview hides behind this (a sheet). -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-te2-previewbtn press"
+                [attr.aria-expanded]="previewOpen()" aria-controls="pf-te2-preview" (click)="previewOpen.set(true)"
+                aria-label="Preview" title="Live preview">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          Preview
+        </button>
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-te2-save press"
                 [disabled]="saving()" (click)="saveTest()"
                 [attr.aria-label]="saving() ? 'Saving' : 'Save'" title="Save">
@@ -49,29 +56,35 @@
         </button>
       </ng-container>
 
+      <!-- The pill = [Test name ✎ · origin] | [section tabs]. Nothing else:
+           code, dept, sample, price… live in the sections (no duplication). -->
       <div band-search class="nd-ctx pf-te2-ctx">
         <span class="nd-ctx__primary pf-te2-ctx__name">
           <span class="pf-te2-ctx__nametext">{{ d.name || ((d.id ? 'Edit ' : 'New ') + (d.type === 'package' ? 'package' : d.type === 'profile' ? 'profile' : 'test')) }}</span>
+          @if (originChip(); as o) {
+            <span class="pf-te2-ctx__origin" role="note" [title]="o.hint" [attr.aria-label]="o.label + '. ' + o.hint">{{ o.label }}</span>
+          }
           <button type="button" class="nd-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
           </button>
         </span>
-        @if (originChip(); as o) {
-          <span class="nd-ctx__chip pf-te2-ctx__chip pf-te2-ctx__origin" role="note" [title]="o.hint" [attr.aria-label]="o.label + '. ' + o.hint">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="o.icon"/></svg>
-            {{ o.label }}
-          </span>
-        }
-        @for (c of metaChips(); track c.k) {
-          @if (c.k !== 'Origin') {
-            <button type="button" class="nd-ctx__chip pf-te2-ctx__chip press" [attr.data-k]="c.k"
-                    (click)="jumpToSection(c.sec)" [title]="'Go to ' + c.k">
-              <span class="nd-ctx__k">{{ c.k }}</span>
-              @if (c.k === 'Price' && priceIsDefault()) { <span class="nd-dot-unpriced" aria-hidden="true"></span> }
-              <span [class.nd-num]="c.k === 'Code' || c.k === 'Price' || c.k === 'TAT'">{{ c.v }}</span>
+        <span class="pf-te2-ctx__div" aria-hidden="true"></span>
+        <!-- Sections: a neutral segmented control with a sliding indicator. -->
+        <div class="pf-te2-tabs" role="tablist" aria-label="Sections" #tabsEl>
+          <span class="pf-te2-tabs__ind" aria-hidden="true"
+                [style.transform]="'translateX(' + tabInd().x + 'px)'" [style.width.px]="tabInd().w"
+                [style.opacity]="tabInd().w ? 1 : 0"></span>
+          @for (s of sectionNav(); track s.id) {
+            <button type="button" class="pf-te2-tab" role="tab"
+                    [attr.aria-selected]="section() === s.id" [attr.aria-controls]="'sec-' + s.id"
+                    [attr.data-sec]="s.id" (click)="jumpToSection(s.id)">
+              <span>{{ s.label }}</span>
+              <span class="pf-te2-tab__dot" [class.pf-te2-tab__dot--ok]="s.ok"
+                    [attr.aria-label]="s.ok ? 'complete' : 'something to finish'"
+                    [title]="s.ok ? 'Complete' : 'Something to finish here'"></span>
             </button>
           }
-        }
+        </div>
       </div>
     </pf-hero-band>
   }
@@ -118,32 +131,6 @@
   }
 
   <div class="pf-te2-bodywrap" [class.pf-band-body]="nd()" [class.pf-band-body--fill]="nd()">
-  @if (nd()) {
-    <!-- Sections as a TABS ROW (the report-designer precedent): the rail is
-         gone and the content takes the full width. Dots: violet = complete,
-         hollow = something to finish. Below 1024px the preview sits behind
-         the Preview button (a sheet). -->
-    <div class="pf-te2-tabsrow">
-      <div class="nd-tabs pf-te2-tabs" role="tablist" aria-label="Sections">
-        @for (s of sectionNav(); track s.id) {
-          <button type="button" class="nd-tabs__item pf-te2-tab" role="tab"
-                  [attr.aria-selected]="section() === s.id" [attr.aria-controls]="'sec-' + s.id"
-                  [attr.data-sec]="s.id" (click)="jumpToSection(s.id)">
-            <ng-container *ngTemplateOutlet="secIco; context: { $implicit: s.id }"></ng-container>
-            <span>{{ s.label }}</span>
-            <span class="nd-tabs__dot" [class.nd-tabs__dot--ok]="s.ok"
-                  [attr.aria-label]="s.ok ? 'complete' : 'something to finish'"
-                  [title]="s.ok ? 'Complete' : 'Something to finish here'"></span>
-          </button>
-        }
-      </div>
-      <button type="button" class="nd-btn nd-btn--secondary pf-te2-previewbtn press"
-              [attr.aria-expanded]="previewOpen()" aria-controls="pf-te2-preview" (click)="previewOpen.set(true)">
-        <ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'preview' }"></ng-container>
-        Preview
-      </button>
-    </div>
-  }
 
   <div class="pf-te2" [class.pf-te2--norail]="railHidden() || nd()">
     <!-- ═══════════ Section rail (classic): one task at a time ═══════════ -->
@@ -380,7 +367,7 @@
               <label class="pf-uf__lbl">Tube colour</label>
               <div class="pf-tube-swatches">
                 @for (c of tubeColors; track c.key) {
-                  <button type="button" class="pf-tube" [class.pf-tube--on]="d.tubeColor === c.key"
+                  <button type="button" class="pf-tube"
                           (click)="patch({ tubeColor: d.tubeColor === c.key ? '' : c.key })"
                           [attr.aria-pressed]="d.tubeColor === c.key" [title]="c.label">
                     <span class="pf-tube__dot" [style.background]="c.hex"></span>
@@ -588,7 +575,7 @@
                     <div class="pf-qr__chips">
                       @for (row of rowsFor(qf.i); track row.value) {
                         <button type="button" class="pf-qr__chip press"
-                                [class.pf-qr__chip--on]="row.normal === true"
+                                [attr.aria-pressed]="row.normal === true"
                                 [class.pf-qr__chip--off]="row.active === false"
                                 [title]="row.normal === true ? 'Expected (normal) — tap to unmark' : 'Tap to mark as expected (normal)'"
                                 (click)="toggleQualNormal(qf.i, row.value)">

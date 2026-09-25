@@ -217,6 +217,29 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const t = { origin: o, catalogMode: this.catalogMode() };
     return { label: originLabel(t), hint: originHint(t), icon: ORIGIN_ICON_PATHS[k] };
   });
+  /** The section tabs in the pill + their sliding indicator (x / width of
+   *  the selected tab, measured after render; slides on --nd-spring). */
+  private readonly tabsEl = viewChild<ElementRef<HTMLElement>>('tabsEl');
+  readonly tabInd = signal<{ x: number; w: number }>({ x: 0, w: 0 });
+  private readonly _tabIndFx = effect(() => {
+    this.section(); this.sectionNav(); this.tabsEl();
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this.measureTab());
+    else this.measureTab();
+  });
+  @HostListener('window:resize')
+  onResizeTabs(): void {
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this.measureTab());
+  }
+  measureTab(): void {
+    const box = this.tabsEl()?.nativeElement;
+    const on = box?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!box || !on) { this.tabInd.set({ x: 0, w: 0 }); return; }
+    this.tabInd.set({ x: on.offsetLeft, w: on.offsetWidth });
+    // Keep the open tab visible when the strip scrolls (narrow widths).
+    const l = on.offsetLeft, r = l + on.offsetWidth;
+    if (l < box.scrollLeft) box.scrollLeft = Math.max(0, l - 8);
+    else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8;
+  }
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   /** The context bar's pencil: open Basics and put the caret in Name. */
   editName(): void {

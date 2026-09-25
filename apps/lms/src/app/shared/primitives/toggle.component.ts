@@ -38,6 +38,10 @@ export type ToggleSize = 'sm' | 'md';
       border-color: transparent;
       box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
     }
+    /* New design: toggles are SLATE (ND-PATTERN §4) — never violet. */
+    :host-context(.design-new) button { background: var(--nd-toggle-off); border-color: transparent; }
+    :host-context(.design-new) button.on { background: var(--nd-toggle-on); box-shadow: none; }
+    @media (prefers-reduced-motion: reduce) { button, .knob { transition: none; } }
 
     .knob {
       position: absolute;

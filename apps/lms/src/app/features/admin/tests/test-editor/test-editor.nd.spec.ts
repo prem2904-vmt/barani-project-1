@@ -89,33 +89,20 @@ describe('Test editor — new design: band + context bar', () => {
     expect(el.querySelector('h1')).toBeNull();
   });
 
-  it('context bar: the FULL test name is the primary chip with a quiet pencil; neutral chips follow', () => {
+  it('pill = ONLY the full test name (+ tiny origin badge, quiet pencil) and the section tabs — no fact chips', () => {
     const { el, txt } = render();
     const ctx = el.querySelector('pf-hero-band .nd-ctx')!;
     expect(ctx).not.toBeNull();
-    expect(txt(ctx.querySelector('.nd-ctx__primary'))).toContain('Oral Glucose Challenge Test');
+    expect(txt(ctx.querySelector('.pf-te2-ctx__nametext'))).toBe('Oral Glucose Challenge Test');
     expect(ctx.querySelector('.nd-ctx__primary .nd-ctx__edit[aria-label="Edit name"]')).not.toBeNull();
-    // Key + value are separate spans (the gap is CSS): read them as "K V".
-    const chips = Array.from(ctx.querySelectorAll('.nd-ctx__chip')).map(ch =>
-      Array.from(ch.childNodes).filter(n => n.nodeType !== 8).map(n => txt(n as Element)).filter(Boolean).join(' '));
-    expect(chips).toContain('Master');
-    expect(chips).toContain('Code BIO005');
-    expect(chips).toContain('Dept Biochemistry');
-    expect(chips.some(c => c.startsWith('Sample Serum'))).toBe(true);
-    expect(chips.some(c => c.startsWith('TAT 2 hrs'))).toBe(true);
-    expect(chips).toContain('Fasting No');
-    // Code in Noto tabular numbers, never a mono face.
-    const code = ctx.querySelector('.nd-ctx__chip[data-k="Code"] .nd-num');
-    expect(code?.textContent).toBe('BIO005');
-  });
-
-  it('the unpriced price shows the ONE allowed amber mark (a dot), no pill', () => {
-    const { el } = render();
-    const price = el.querySelector('.nd-ctx__chip[data-k="Price"]')!;
-    expect(price.querySelector('.nd-dot-unpriced')).not.toBeNull();
-    TestBed.resetTestingModule();
-    const priced = render({ test: OGTT({ price: 450, priceIsDefault: false }) });
-    expect(priced.el.querySelector('.nd-ctx__chip[data-k="Price"] .nd-dot-unpriced')).toBeNull();
+    expect(txt(ctx.querySelector('.pf-te2-ctx__origin'))).toBe('Master');
+    // Code / Dept / Sample / Price / TAT / Fasting live in the sections, not the pill.
+    expect(ctx.querySelectorAll('.nd-ctx__chip').length).toBe(0);
+    expect(/BIO005|Biochemistry|Fasting|TAT/.test(txt(ctx))).toBe(false);
+    // The tabs ride INSIDE the pill, after the name.
+    const tabs = ctx.querySelector('[role="tablist"].pf-te2-tabs')!;
+    expect(tabs).not.toBeNull();
+    expect(tabs.querySelector('.pf-te2-tabs__ind')).not.toBeNull();
   });
 
   it('the pencil opens Basics and focuses the Name field', async () => {
@@ -142,14 +129,16 @@ describe('Test editor — new design: band + context bar', () => {
 });
 
 describe('Test editor — new design: sections as tabs, cards, preview', () => {
-  it('the SECTIONS rail is gone; sections are a tabs row with violet/neutral dots', () => {
+  it('the SECTIONS rail and the separate tabs row are gone; the pill tabs carry small violet dots', () => {
     const { el } = render();
     expect(el.querySelector('.pf-te2-nav')).toBeNull();
-    const tabs = el.querySelectorAll('[role="tablist"].nd-tabs [role="tab"]');
+    expect(el.querySelector('.pf-te2-tabsrow')).toBeNull();
+    expect(el.querySelectorAll('[role="tablist"]').length).toBe(1);
+    const tabs = el.querySelectorAll('pf-hero-band [role="tablist"] [role="tab"]');
     expect(Array.from(tabs).map(t => t.textContent!.trim())).toEqual(
       ['Basics', 'Price & sample', 'Result entry', 'Printed report', 'Consumables']);
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
-    expect(el.querySelectorAll('.nd-tabs__dot').length).toBe(5);
+    expect(el.querySelectorAll('.pf-te2-tab__dot').length).toBe(5);
     expect(el.querySelector('.pf-te2-nav__dot--ok')).toBeNull();
   });
 
@@ -214,12 +203,10 @@ describe('Test editor — new design: sections as tabs, cards, preview', () => {
 describe('Test editor — profile / package variants and classic', () => {
   const PROFILE = OGTT({ name: 'Diabetes Panel', type: 'profile', testCode: 'PRO012', price: 900,
     parameters: JSON.stringify({ items: [] }) });
-  it('profile: the same band + context bar, no Sample / Fasting chips, "Members" tab', () => {
+  it('profile: the same band + name-and-tabs pill, "Members" tab', () => {
     const { el, txt } = render({ test: PROFILE, type: 'profile' });
     expect(txt(el.querySelector('.nd-ctx__primary'))).toContain('Diabetes Panel');
-    const keys = Array.from(el.querySelectorAll('.nd-ctx__chip .nd-ctx__k')).map(txt);
-    expect(keys).not.toContain('Sample');
-    expect(keys).not.toContain('Fasting');
+    expect(el.querySelectorAll('.nd-ctx__chip').length).toBe(0);
     const tabs = Array.from(el.querySelectorAll('[role="tab"]')).map(t => t.textContent!.trim());
     expect(tabs).toContain('Members');
     expect(el.querySelectorAll('.pf-hb-btn--primary').length).toBe(1);

@@ -2413,6 +2413,15 @@ html.pf-design-mode {
   background: rgba(139, 92, 246, 0.25) !important;
   color: #ddd6fe !important;
 }
+/* Admin band pages (ND-PATTERN §3): segmented controls are NEUTRAL — the
+   selected segment is a raised card surface with normal text, both themes. */
+:root.design-new .pf-band-page pf-segmented .seg-item.is-selected {
+  background: var(--nd-card-bg) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18), inset 0 0 0 1px var(--nd-line) !important;
+}
+:root.design-new .pf-band-page pf-segmented .bar { background: var(--nd-chip-bg); }
 :root.dark.design-new .pf-mw-scan__btn,
 /* Avatars in dark-new: soft violet disc, violet-tinted initials —
    the dark twin of the light designer disc. */
