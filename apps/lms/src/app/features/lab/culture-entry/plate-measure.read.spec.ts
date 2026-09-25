@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { readFileSync } from 'node:fs';
 import { HttpClient } from '@angular/common/http';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { PlateMeasureComponent } from './plate-measure.component';
@@ -80,6 +81,9 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(req.candidates).toEqual(expect.arrayContaining(['AMC 30', 'CFM 5', 'CAZ 30', 'IPM 10']));
     expect(req.candidates).not.toContain('VA 30');
     expect(c.ai()).toBe('pending');
+    const pill = el.querySelector('.pm-sense.nd-ai-glow[data-ai-working="true"]');
+    expect(pill?.textContent).toContain('PF Sense · reading…');
+    expect(pill?.querySelector('pf-logo-mark')).toBeTruthy();
     expect(el.querySelectorAll('.pm-codesel--pending').length).toBe(4);
     expect(el.querySelector('.pm-codesel .pf-dd__value')?.textContent?.trim()).toBe('Reading…');
     // The technician keeps working meanwhile: editing a zone is fine.
@@ -95,10 +99,10 @@ describe('Measure & read — the ONE background AI call', () => {
       c.startAiRead();
       vi.advanceTimersByTime(14_000);
       f.detectChanges();
-      expect(el.querySelector('.pm-status')?.textContent).toContain('Reading disk codes');
+      expect(el.querySelector('.pm-sense')?.textContent).toContain('PF Sense · reading…');
       vi.advanceTimersByTime(2_000);
       f.detectChanges();
-      expect(el.querySelector('.pm-status')?.textContent).toContain('Still reading');
+      expect(el.querySelector('.pm-sense')?.textContent).toContain('PF Sense · still reading…');
       expect(DiskReadApi.TIMEOUT_MS).toBe(60_000);
     } finally { vi.useRealTimers(); }
   });
@@ -108,7 +112,7 @@ describe('Measure & read — the ONE background AI call', () => {
     c.startAiRead();
     f.detectChanges();
     expect(c.ai()).toBe('failed');
-    expect(el.querySelector('.pm-note--manual')?.textContent?.trim()).toBe('AI reading isn’t available — pick each disk’s code');
+    expect(el.querySelector('.pm-note--manual')?.textContent?.trim()).toBe('PF Sense isn’t available — pick each disk’s code');
     expect(el.querySelector('.pm-status')).toBeNull();
     expect(el.querySelector('.pm-codesel .pf-dd__value')?.textContent?.trim()).toBe('Unknown — tap to pick');
     expect(el.querySelectorAll('.pm-codesel--pending').length).toBe(0);
@@ -120,10 +124,13 @@ describe('Measure & read — the ONE background AI call', () => {
     f.detectChanges();
     const codes = c.rows().map((r: any) => r.code);
     expect(codes).toEqual(['AMC 30', null, 'CAZ 30', 'IPM 10']);
-    expect(el.querySelectorAll('.pm-ai').length).toBe(3);
+    const marks = el.querySelectorAll('.pm-pf[aria-label="Read by PF Sense"]');
+    expect(marks.length).toBe(3);                            // the PF mark, never the letters "AI"
+    expect(marks[0].querySelector('pf-logo-mark svg')).toBeTruthy();
     expect(c.sirOf(c.rows()[3])).toBe('S');                 // IPM 10 at 22 mm
     expect(el.querySelector('.pm-drow[data-n="4"] .pm-sir')?.textContent?.trim()).toBe('S');
-    expect(el.querySelector('.pm-usage')?.textContent).toContain('AI reads this month: 1.2M / 2M tokens');
+    expect(el.querySelector('.pm-usage')?.textContent).toContain('PF Sense this month: 1.2M / 2M tokens');
+    expect(el.querySelector('.pm-status')?.textContent).toContain('3 of 4 codes read by PF Sense');
   });
 
   it('"Probably CFM 5 — confirm": a neutral one-tap chip, never applied by itself', () => {
@@ -180,7 +187,7 @@ describe('Measure & read — the ONE background AI call', () => {
     c.startAiRead();
     c.goReview();
     f.detectChanges();
-    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('AI reading isn’t available');
+    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('PF Sense isn’t available');
     const pickers = el.querySelectorAll('.pm-drow pf-select.pm-codesel');
     expect(pickers.length).toBe(4);                          // not a static "No code" chip
     expect(el.querySelector('.pm-drow[data-n="1"] .pf-dd__value')?.textContent?.trim()).toBe('Unknown — tap to pick');
@@ -204,7 +211,7 @@ describe('Measure & read — the ONE background AI call', () => {
     const { f, c, el } = setup(() => throwError(() => ({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } })));
     c.startAiRead();
     f.detectChanges();
-    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('AI limit reached this month');
+    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('PF Sense limit reached this month');
   });
 
   it('disks without a code are left out of Apply (and the review says so)', async () => {
@@ -218,5 +225,61 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(c.reviewLine()).toContain('3 without a code are left out');
     await c.apply();
     expect(emitted[0].measurements).toEqual([{ index: 3, zoneMm: 22 }]);
+  });
+
+  it('AI glow: on stage, list, pending code cells and badges while the read runs; off after the result', () => {
+    const pending = new Subject<DiskReadResult>();
+    const { f, c, el } = setup(() => pending);
+    const working = () => [...el.querySelectorAll('[data-ai-working="true"]')];
+    expect(working().length).toBe(0);
+    c.startAiRead();
+    f.detectChanges();
+    const stage = el.querySelector('.pm-stage')!, list = el.querySelector('.pm-list')!;
+    expect(stage.classList.contains('nd-ai-glow')).toBe(true);
+    expect(stage.getAttribute('data-ai-working')).toBe('true');
+    expect(list.classList.contains('nd-ai-glow')).toBe(true);
+    expect(list.getAttribute('data-ai-working')).toBe('true');
+    expect(el.querySelectorAll('pf-select.pm-codesel.nd-ai-glow[data-ai-working="true"]').length).toBe(4);
+    expect(el.querySelectorAll('circle.pm-badge.nd-ai-glow-mark[data-ai-working="true"]').length).toBe(4);
+    pending.next(RESULT); pending.complete();
+    f.detectChanges();
+    expect(working().length).toBe(0);                        // fades out (the class stays for the fade)
+    expect(el.querySelectorAll('.pm-drow--settle').length).toBe(3);   // the rows that got codes settle
+  });
+
+  it('AI glow: off after an error too', () => {
+    const pending = new Subject<DiskReadResult>();
+    const { f, c, el } = setup(() => pending);
+    c.startAiRead();
+    f.detectChanges();
+    expect(el.querySelectorAll('[data-ai-working="true"]').length).toBeGreaterThan(0);
+    pending.error({ status: 404 });
+    f.detectChanges();
+    expect(el.querySelectorAll('[data-ai-working="true"]').length).toBe(0);
+  });
+
+  it('kit: .nd-ai-glow rotates a conic rainbow, never blocks taps, and is static under reduced motion', () => {
+    const kit = readFileSync('apps/lms/src/app/shared/styles/_nd-kit.scss', 'utf8');
+    expect(kit).toMatch(/@property --nd-ai-angle/);
+    const base = /\.nd-ai-glow::before, \.nd-ai-glow::after \{([^}]*)\}/.exec(kit)?.[1] ?? '';
+    expect(base).toMatch(/conic-gradient\(from var\(--nd-ai-angle\)/);
+    expect(base).toMatch(/pointer-events: none/);
+    expect(base).toMatch(/animation: nd-ai-spin 3\.5s linear infinite/);
+    expect(kit).toMatch(/\.nd-ai-glow\[data-ai-working='true'\]::before/);
+    const rm = kit.slice(kit.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(rm).toMatch(/\.nd-ai-glow::before, \.nd-ai-glow::after[^{]*\{[^}]*animation: none/);
+  });
+
+  it('no user-facing "AI" text anywhere in the modal (branded PF Sense)', () => {
+    const pending = new Subject<DiskReadResult>();
+    const { f, c, el } = setup(() => pending);
+    const noAi = () => {
+      const txt = (el.textContent ?? '') + [...el.querySelectorAll('[title],[aria-label]')]
+        .map(n => (n.getAttribute('title') ?? '') + ' ' + (n.getAttribute('aria-label') ?? '')).join(' ');
+      expect(txt).not.toMatch(/\bAI\b/);
+    };
+    c.startAiRead(); f.detectChanges(); noAi();
+    pending.next(RESULT); pending.complete(); f.detectChanges(); noAi();
+    c.goReview(); f.detectChanges(); noAi();
   });
 });

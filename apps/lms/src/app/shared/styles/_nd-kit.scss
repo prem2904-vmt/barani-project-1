@@ -247,3 +247,51 @@
    sit on top of the nav. */
 :root { --nd-nav-h: var(--pf-botbar-h, 0px); }
 .nd-fullscreen { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h); }
+
+/* ── AI in progress: the rainbow glow ──────────────────────────────────
+   The ONE multicolour in the kit — AI working ONLY, never decorative
+   (ND-PATTERN §2). Put `.nd-ai-glow` on the element and toggle
+   `data-ai-working="true"` while the AI call is in flight; removing the
+   attribute fades it out. A thin conic ring + a soft blurred halo rotate
+   (~3.5 s a turn). Pseudo-elements only, pointer-events: none — nothing
+   underneath stops being interactive.
+   • default: the halo sits OUTSIDE the element (small items: a field).
+   • `--inset`: ring + halo drawn INSIDE (a frame or panel that clips /
+     scrolls — the photo stage, a side list).
+   • `.nd-ai-glow-mark`: SVG / tiny marks — a hue-cycling violet glow.
+   Reduced motion: a static soft rainbow ring, no rotation. */
+@property --nd-ai-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+:root { --nd-ai-ring-o: 0.6; --nd-ai-halo-o: 0.45; --nd-ai-halo-sm-o: 0.3; --nd-ai-ring: 1.5px; --nd-ai-blur: 12px; }
+:root.dark, :root[data-theme='dark'] { --nd-ai-ring-o: 0.8; --nd-ai-halo-o: 0.6; --nd-ai-halo-sm-o: 0.35; }
+.nd-ai-glow { position: relative; isolation: isolate; }
+.nd-ai-glow::before, .nd-ai-glow::after {
+  content: ''; position: absolute; inset: calc(-1 * var(--nd-ai-ring)); border-radius: inherit; pointer-events: none;
+  background: conic-gradient(from var(--nd-ai-angle), #8b5cf6, #3b82f6, #06b6d4, #22c55e, #eab308, #f97316, #ec4899, #8b5cf6);
+  opacity: 0; transition: opacity 240ms ease;
+  animation: nd-ai-spin 3.5s linear infinite; animation-play-state: paused;
+}
+/* crisp ring: the gradient masked down to a border */
+.nd-ai-glow::before {
+  padding: var(--nd-ai-ring); z-index: 1;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+/* soft halo behind */
+.nd-ai-glow::after { z-index: -1; filter: blur(8px); }
+.nd-ai-glow[data-ai-working='true']::before { opacity: var(--nd-ai-ring-o); animation-play-state: running; transition-duration: var(--nd-dur); }
+.nd-ai-glow[data-ai-working='true']::after { opacity: var(--nd-ai-halo-sm-o); animation-play-state: running; transition-duration: var(--nd-dur); }
+.nd-ai-glow--inset[data-ai-working='true']::after { opacity: var(--nd-ai-halo-o); }
+.nd-ai-glow--inset::before { inset: 0; z-index: 5; --nd-ai-ring: 2px; }
+.nd-ai-glow--inset::after {
+  inset: 0; z-index: 5; filter: blur(var(--nd-ai-blur));
+  padding: 10px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.nd-ai-glow-mark { transition: filter 240ms ease; }
+.nd-ai-glow-mark[data-ai-working='true'] { filter: drop-shadow(0 0 3px #a78bfa); animation: nd-ai-hue 3.5s linear infinite; }
+@keyframes nd-ai-spin { to { --nd-ai-angle: 360deg; } }
+@keyframes nd-ai-hue { to { filter: drop-shadow(0 0 3px #a78bfa) hue-rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .nd-ai-glow::before, .nd-ai-glow::after, .nd-ai-glow-mark[data-ai-working='true'] { animation: none !important; transition: none !important; }
+}

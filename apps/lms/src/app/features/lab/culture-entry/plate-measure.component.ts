@@ -7,6 +7,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { PlateMeasurement, PlateMeasureSession } from '../../../shared/models/culture.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
+import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 import { loadOpenCv } from './opencv-loader';
 import { PlateVision, RejectedCircle } from './plate-detect';
 import {
@@ -50,7 +51,7 @@ const NOT_A_DISK = '__not_a_disk';
 @Component({
   selector: 'pf-plate-measure',
   standalone: true,
-  imports: [SelectComponent],
+  imports: [SelectComponent, LogoMarkComponent],
   host: { '(window:keydown)': 'onKey($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -143,7 +144,7 @@ const NOT_A_DISK = '__not_a_disk';
 
         @if (mode() !== 'capture' && imageSrc()) {
           <div class="pm-body" [class.pm-body--cal]="mode() === 'calibrate'">
-            <div class="pm-stage">
+            <div class="pm-stage nd-ai-glow nd-ai-glow--inset" [attr.data-ai-working]="aiWorking() ? 'true' : null">
               <img #img class="pm-dim" [src]="imageSrc()" (load)="onImgLoad($event)" alt="" />
               <svg #svg class="pm-svg" [attr.viewBox]="viewBox()" preserveAspectRatio="xMidYMid meet"
                    role="img" [attr.aria-label]="stageLabel()"
@@ -188,7 +189,7 @@ const NOT_A_DISK = '__not_a_disk';
                         <path [attr.d]="delPath(d)" stroke="#fff" [attr.stroke-width]="unit()*0.6" stroke-linecap="round" />
                       }
                       <!-- numbered neutral badge -->
-                      <circle class="pm-badge" [attr.cx]="badgeX(d)" [attr.cy]="badgeY(d)" [attr.r]="unit()*2.7" fill="#ffffff" stroke="rgba(15,17,24,0.35)" [attr.stroke-width]="unit()*0.3" />
+                      <circle class="pm-badge nd-ai-glow-mark" [attr.data-ai-working]="isPending(d) ? 'true' : null" [attr.cx]="badgeX(d)" [attr.cy]="badgeY(d)" [attr.r]="unit()*2.7" fill="#ffffff" stroke="rgba(15,17,24,0.35)" [attr.stroke-width]="unit()*0.3" />
                       <text class="pm-svgtxt" [attr.x]="badgeX(d)" [attr.y]="badgeY(d)" dominant-baseline="central" text-anchor="middle"
                             [attr.font-size]="unit()*3" font-weight="600" fill="#111827">{{ d.n }}</text>
                       <!-- mm label chip -->
@@ -257,9 +258,16 @@ const NOT_A_DISK = '__not_a_disk';
             </div>
 
             @if (mode() === 'measure' || mode() === 'review') {
-              <aside class="pm-list" aria-label="Disks">
+              <aside class="pm-list nd-ai-glow nd-ai-glow--inset" aria-label="Disks" [attr.data-ai-working]="aiWorking() ? 'true' : null">
+               <div class="pm-list__in">
                 <div class="pm-list__hd">
                   <span class="pm-list__ttl">{{ mode() === 'review' ? 'Review' : 'Disks' }}</span>
+                  @if (aiWorking()) {
+                    <span class="pm-sense nd-ai-glow" data-ai-working="true" role="status">
+                      <span class="pm-pf" aria-hidden="true"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
+                      PF Sense · {{ aiSlow() ? 'still reading…' : 'reading…' }}
+                    </span>
+                  }
                   <span class="pm-list__count nd-num">{{ activeRows().length }} {{ activeRows().length === 1 ? 'disk' : 'disks' }}</span>
                 </div>
                 @if (manualHint(); as hint) {
@@ -267,11 +275,8 @@ const NOT_A_DISK = '__not_a_disk';
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                     <span class="pm-note__t">{{ hint }}</span>
                   </div>
-                } @else {
-                  <p class="pm-status" role="status" [attr.data-ai]="ai()">
-                    @if (ai() === 'pending') { <span class="pm-status__dot" aria-hidden="true"></span> }
-                    {{ aiLine() }}
-                  </p>
+                } @else if (aiLine()) {
+                  <p class="pm-status" [attr.data-ai]="ai()">{{ aiLine() }}</p>
                 }
                 @for (w of warnings(); track w.text) {
                   <div class="pm-note" role="note">
@@ -286,17 +291,19 @@ const NOT_A_DISK = '__not_a_disk';
                 }
                 <ul class="pm-disks">
                   @for (d of rows(); track d.id) {
-                    <li class="pm-drow" [attr.aria-selected]="d.id === selectedId()" [class.pm-drow--off]="d.notDisk"
+                    <li class="pm-drow" [attr.aria-selected]="d.id === selectedId()" [class.pm-drow--off]="d.notDisk" [class.pm-drow--settle]="justRead().has(d.id)"
                         [attr.data-n]="d.n" (click)="select(d.id)">
                       <span class="pm-drow__n nd-num" aria-hidden="true">{{ d.n }}</span>
                       <div class="pm-drow__code">
                         <div class="pm-drow__pick">
-                          <pf-select class="pm-codesel" [class.pm-codesel--pending]="isPending(d)" [class.pm-codesel--set]="!!d.code || d.notDisk"
+                          <pf-select class="pm-codesel nd-ai-glow" [attr.data-ai-working]="isPending(d) ? 'true' : null" [class.pm-codesel--pending]="isPending(d)" [class.pm-codesel--set]="!!d.code || d.notDisk"
                                      [options]="codeOptions().get(d.id) ?? []" [value]="codeValue(d)" [searchable]="true" size="sm"
                                      [placeholder]="isPending(d) ? (aiSlow() ? 'Still reading…' : 'Reading…') : 'Unknown — tap to pick'"
                                      [attr.aria-label]="'Disk ' + d.n + ' code'"
                                      (valueChange)="pickCode(d.id, $any($event))"></pf-select>
-                          @if (d.codeSrc === 'ai' && d.code) { <span class="pm-ai" title="Read by AI — check it">AI</span> }
+                          @if (d.codeSrc === 'ai' && d.code) {
+                            <span class="pm-pf" role="img" aria-label="Read by PF Sense" title="Read by PF Sense — check it"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
+                          }
                         </div>
                         @if (!d.code && !d.notDisk && d.suggested) {
                           <button type="button" class="pm-sug" (click)="$event.stopPropagation(); pickCode(d.id, d.suggested)"
@@ -329,6 +336,7 @@ const NOT_A_DISK = '__not_a_disk';
                   }
                 </ul>
                 @if (usageLine()) { <p class="pm-usage nd-num">{{ usageLine() }}</p> }
+               </div>
               </aside>
             }
           </div>
@@ -471,7 +479,7 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-tool-sep { width: 1px; background: rgba(255,255,255,0.14); margin: 4px 2px; }
     .pm-busy { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 3; display: inline-flex; align-items: center; gap: 8px;
       padding: 7px 12px; border-radius: 999px; font-size: 13px; color: #fff; background: rgba(15,17,24,0.78); }
-    .pm-busy__dot, .pm-status__dot { width: 7px; height: 7px; border-radius: 999px; background: #a78bfa; animation: pm-pulse 1.2s ease-in-out infinite; flex: none; }
+    .pm-busy__dot { width: 7px; height: 7px; border-radius: 999px; background: #a78bfa; animation: pm-pulse 1.2s ease-in-out infinite; flex: none; }
     @keyframes pm-pulse { 50% { opacity: 0.35; } }
     .pm-hint { position: absolute; inset: 0; z-index: 6; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
     .pm-hint-card { max-width: 340px; padding: 16px 18px; border-radius: var(--nd-radius, 12px); background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
@@ -480,8 +488,9 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-hint-list b { color: var(--text-primary); font-weight: 600; }
 
     /* Disk list (side on web, under the plate on phones) */
-    .pm-list { width: 400px; flex-shrink: 0; border-left: 1px solid var(--nd-line); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-    .pm-list__hd { display: flex; align-items: baseline; gap: 8px; }
+    .pm-list { width: 400px; flex-shrink: 0; border-left: 1px solid var(--nd-line); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+    .pm-list__in { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .pm-list__hd { display: flex; align-items: center; gap: 8px; min-height: 28px; }
     .pm-list__ttl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
     .pm-list__count { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
     .pm-status { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); }
@@ -503,9 +512,20 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-drow__code > .pm-sug { align-self: flex-start; }
     .pm-drow__drug { font-size: 12.5px; color: var(--text-secondary); min-width: 0; padding-left: 2px; }
     .pm-drow__drug--none { color: var(--text-tertiary); }
-    .pm-codesel { flex: 1 1 auto; min-width: 0; }
-    .pm-ai { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-tertiary);
-      padding: 1px 5px; border-radius: 6px; border: 1px solid var(--nd-line); }
+    .pm-codesel { display: block; flex: 1 1 auto; min-width: 0; border-radius: var(--nd-radius-chip, 999px); }
+    /* A row the AI just coded: a brief shimmer that settles. */
+    .pm-drow--settle { animation: pm-settle 900ms var(--nd-spring, ease) both; }
+    @keyframes pm-settle {
+      0% { background: linear-gradient(90deg, transparent, var(--nd-sel-bg), transparent) -100% 0 / 200% 100% no-repeat; }
+      70% { background: linear-gradient(90deg, transparent, var(--nd-sel-bg), transparent) 100% 0 / 200% 100% no-repeat; }
+      100% { background: transparent; } }
+    /* PF Sense mark (the brand glyph, mono) — never the letters "AI". */
+    .pm-pf { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: var(--color-violet-600, #7c3aed); }
+    :host-context(.dark) .pm-pf { color: #a78bfa; }
+    .pm-pf pf-logo-mark ::ng-deep .pill { width: 14px; height: 14px; }
+    .pm-pf pf-logo-mark ::ng-deep .glyph { width: 11px; height: 14px; }
+    .pm-sense { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 7px; border-radius: 999px;
+      font-size: 12px; font-weight: 500; color: var(--text-primary); background: var(--nd-card-bg); border: 1px solid var(--nd-line); white-space: nowrap; }
     .pm-sug { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 4px 0 10px; border-radius: var(--nd-radius-chip, 999px);
       border: 1px solid var(--nd-line); background: var(--nd-chip-bg); color: var(--text-secondary); font: inherit; font-size: 12.5px; cursor: pointer; }
     .pm-sug b { font-weight: 600; color: var(--text-primary); }
@@ -571,7 +591,7 @@ const NOT_A_DISK = '__not_a_disk';
       .pm-sub { display: none; }
       .pm-steps { margin-top: 6px; }
       .pm-stage { height: 34dvh; min-height: 200px; }
-      .pm-list { padding: 10px 12px; }
+      .pm-list__in { padding: 10px 12px; }
       .pm-controls { padding: 8px 12px 10px; }
       .pm-row--wrap { gap: 6px; }
       .pm-row--wrap > .pm-btn--aux { height: 44px; padding: 0 12px; font-size: 13px; }
@@ -584,9 +604,10 @@ const NOT_A_DISK = '__not_a_disk';
       .pm-mm__u { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .pm-sweep, .pm-panel, .pm-busy__dot, .pm-status__dot { animation: none; }
+      .pm-sweep, .pm-panel, .pm-busy__dot { animation: none; }
       .pm-sweep { display: none; }
       .pm-codesel--pending ::ng-deep .pf-dd__trigger { animation: none; }
+      .pm-drow--settle { animation: none; }
       .pm-level__bubble { transition: none; }
     }
   `]
@@ -702,6 +723,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     this.stopCamera();
     this.aiSub?.unsubscribe();
     if (this.slowTimer) clearTimeout(this.slowTimer);
+    if (this.settleTimer) clearTimeout(this.settleTimer);
     this.vision?.dispose();
     try { this.host.nativeElement.remove(); } catch { /* */ }
   }
@@ -971,20 +993,29 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: res => {
         this.auditId = res.auditId || null;
+        const before = new Map(this.rows().map(r => [r.id, r.code]));
         this.rows.update(list => mapAiRead(list, res, tileToId, this.candidates()));
+        this.justRead.set(new Set(this.rows().filter(r => r.code && r.code !== before.get(r.id)).map(r => r.id)));
+        if (this.settleTimer) clearTimeout(this.settleTimer);
+        this.settleTimer = setTimeout(() => this.justRead.set(new Set()), 1000);
         this.ai.set('done');
         this.diskApi.usage().subscribe({ next: u => this.usage.set(u), error: () => { /* */ } });
       },
       error: e => { this.ai.set('failed'); this.aiMsg.set(aiFallbackMessage(e)); },
     });
   }
+  /** The AI read is in flight — drives the rainbow glow (nd-ai-glow). */
+  readonly aiWorking = computed(() => this.ai() === 'pending');
+  /** Rows the AI just coded — a brief shimmer-to-settled. */
+  readonly justRead = signal<Set<number>>(new Set());
+  private settleTimer: ReturnType<typeof setTimeout> | null = null;
   isPending(d: DiskRow): boolean { return this.ai() === 'pending' && !d.code && !d.notDisk && d.codeSrc !== 'tech'; }
   aiLine(): string {
     const rows = this.activeRows();
     const coded = rows.filter(r => r.code).length;
     switch (this.ai()) {
-      case 'pending': return this.aiSlow() ? 'Still reading… keep checking the zones.' : 'Reading disk codes… keep checking the zones.';
-      case 'done': return `${coded} of ${rows.length} codes read — check each one.`;
+      case 'pending': return 'Keep checking the zones — codes fill in as they are read.';
+      case 'done': return `${coded} of ${rows.length} codes read by PF Sense — check each one.`;
       case 'failed': return this.aiMsg() || 'Codes: pick manually';
       default: return rows.length ? 'Codes: pick manually' : '';
     }
@@ -992,13 +1023,13 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   /** Manual fallback: a short neutral hint at the top of the list. */
   manualHint(): string | null {
     if (this.ai() !== 'failed') return null;
-    return this.aiMsg().startsWith('AI limit')
-      ? 'AI limit reached this month — pick each disk’s code'
-      : 'AI reading isn’t available — pick each disk’s code';
+    return this.aiMsg().startsWith('PF Sense limit')
+      ? 'PF Sense limit reached this month — pick each disk’s code'
+      : 'PF Sense isn’t available — pick each disk’s code';
   }
   readonly usageLine = computed(() => {
     const u = this.usage();
-    return u && u.capTokens > 0 ? `AI reads this month: ${formatTokens(u.monthTokens)} / ${formatTokens(u.capTokens)} tokens` : '';
+    return u && u.capTokens > 0 ? `PF Sense this month: ${formatTokens(u.monthTokens)} / ${formatTokens(u.capTokens)} tokens` : '';
   });
 
   // ── Rows ─────────────────────────────────────────────────────────

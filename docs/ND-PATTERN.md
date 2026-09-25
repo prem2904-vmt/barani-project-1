@@ -135,7 +135,28 @@ pill. Functional exceptions — these are data or warnings, not decoration:
 - tube cap colours and the red blood-fill animation (Collect);
 - the muted-red **Urgent** toggle (`.nd-toggle--urgent`);
 - error red for validation / short payments;
-- the amber **unpriced / required** dot.
+- the amber **unpriced / required** dot;
+- the **AI-in-progress rainbow glow** (`.nd-ai-glow`, below) — the ONE
+  allowed multicolour: **AI in progress only; never decorative.**
+
+### PF Sense: AI in progress
+
+- **AI features are branded PF Sense; show the PF mark, not "AI".** No
+  user-facing "AI" text, tag or label anywhere — internal names may stay.
+  The mark is the canonical glyph (`pf-logo-mark variant="mono"`, ~14px,
+  violet / current colour) with tooltip + aria-label "Read by PF Sense" on
+  things PF Sense filled in. Copy: "PF Sense · reading…", "PF Sense isn't
+  available — pick …", "PF Sense this month: 1.2M / 2M tokens".
+- **While an AI call is in flight** put `.nd-ai-glow` on the surfaces it
+  affects and toggle `data-ai-working="true"`: a thin conic rainbow ring
+  (violet → blue → cyan → green → yellow → orange → pink) + a soft blurred
+  halo, rotating via `@property --nd-ai-angle` (~3.5 s a turn), ~0.6
+  opacity (stronger in dark). `.nd-ai-glow--inset` draws ring + halo
+  INSIDE a frame / panel that clips or scrolls; `.nd-ai-glow-mark` gives SVG
+  marks a hue-cycling glow. Removing the attribute fades it out (keep the
+  class for the fade). Pseudo-elements only, `pointer-events: none` — the
+  user keeps working underneath. Reduced motion: a static soft rainbow
+  ring, no rotation.
 
 ✅ Do: "All vials collected" = neutral chip with a violet check icon.
 ❌ Don't: mint tile tint, green check badge, green time chip.
@@ -445,7 +466,7 @@ plus (owner reviews, 2026-09-25):
   centre crosshair + a slow violet sweep (off under reduced motion). ONE
   primary per step (Capture / Measure / Review / **Apply to table**),
   everything else secondary.
-- **Measure & read (owner, 2026-09-25): OpenCV measures, ONE AI call reads.**
+- **Measure & read (owner, 2026-09-25): OpenCV measures, ONE PF Sense call reads.**
   - **OpenCV.js 4.10, BUNDLED and lazy (owner, 2026-09-25).** The
     unmodified single-file build of `@techstark/opencv-js@4.10.0-release.1`
     is vendored at `apps/lms/public/assets/vendor/opencv/opencv.js` (+ its
@@ -486,22 +507,34 @@ plus (owner reviews, 2026-09-25):
     `[` `]` on the keyboard, undo / redo.
   - **The list** (side card at ≥820px, under the plate on phones), one row
     per disk: number · code chip (a `pf-select` of the case's own panel as
-    disk codes + "Not a disk"; "Reading…" shimmer while the AI runs, "Still
-    reading…" after 15 s; "Unknown — tap to pick"; a muted **AI** tag on AI
-    codes; "Probably CPM 30 · Confirm" as a neutral one-tap chip — never
-    applied by itself) · the zone mm (editable field) · S / I / R from the
-    existing breakpoint logic (neutral + a 5px red dot on R in light mode).
-    A code used on another disk is marked "on disk n" in the list; picking
-    it moves it. The monthly AI usage is one muted line ("AI reads this
-    month: 1.2M / 2M tokens").
-  - **ONE AI call, in the background:** a canvas mosaic of numbered 256px
+    disk codes + "Not a disk"; "Reading…" shimmer while PF Sense runs,
+    "Still reading…" after 15 s; "Unknown — tap to pick"; the small **PF
+    mark** on codes PF Sense filled in; "Probably CPM 30 · Confirm" as a
+    neutral one-tap chip — never applied by itself) · the zone mm (editable
+    field) · S / I / R from the existing breakpoint logic (neutral + a 5px
+    red dot on R in light mode). A code used on another disk is marked "on
+    disk n" in the list; picking it moves it. The monthly usage is one muted
+    line ("PF Sense this month: 1.2M / 2M tokens").
+  - **While reading:** a "PF Sense · reading…" pill (PF mark) by the DISKS
+    header, and `.nd-ai-glow` on the plate frame, the list panel, each code
+    cell still reading and (`.nd-ai-glow-mark`) the disk badges. It fades
+    when the call returns; rows that got a code do a brief shimmer that
+    settles. The technician keeps adjusting zones throughout.
+  - **No PF Sense** (404 / unavailable / error): a neutral note at the top
+    of the list, "PF Sense isn't available — pick each disk's code" (the
+    monthly cap has its own line).
+  - **Review keeps the picker:** every disk's code is the same `pf-select`
+    as Measure & read, with the drug (or "Not applied — pick a code") under
+    it; picking there updates "N zones go to the AST table" and enables
+    **Apply to table**.
+  - **ONE PF Sense call, in the background:** a canvas mosaic of numbered 256px
     disk crops (4 per row, JPEG 0.9) → `POST /api/culture/ast/disk-read`
     `{ orderTestId, image, tiles, candidates }` (candidates = the panel's
     printed codes — maker + CLSI, `disk-codes.ts` — minus codes the
     technician already placed); 60 s client timeout. The technician keeps
-    working meanwhile. 404 / `ai_unavailable` / errors → "Codes: pick
-    manually"; `ai_cap_reached` says so.
-  - **Nothing is written until Apply.** AI codes are suggestions. Review
+    working meanwhile. 404 / `ai_unavailable` / errors → the "PF Sense
+    isn't available" note; `ai_cap_reached` says so.
+  - **Nothing is written until Apply.** PF Sense codes are suggestions. Review
     lists code → drug, mm, S / I / R and says what is left out; **Apply to
     table** writes each coded disk's mm into its drug row (matched by code),
     keeps the photo + session (rings, codes, ruler), then posts
@@ -530,6 +563,7 @@ Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row
 Numbers  .nd-num (Noto Sans + tabular-nums; .nd-mono is an alias)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
+AI       .nd-ai-glow[data-ai-working] · .nd-ai-glow--inset · .nd-ai-glow-mark · --nd-ai-angle (PF Sense only)
 Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .nd-fullscreen · --nd-nav-h
 Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line
          --nd-shadow-sm · --nd-chip-bg · --nd-sel-bg · --nd-sel-border · --nd-in-tint · --nd-done-tint

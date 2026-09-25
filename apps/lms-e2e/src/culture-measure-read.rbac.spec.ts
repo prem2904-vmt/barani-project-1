@@ -196,14 +196,17 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
     console.log(`[measure] all zones: ${others.join(', ')}`);
 
     await expect(modal.locator('.pm-codesel--pending').first()).toBeVisible({ timeout: 10_000 });
-    await expect(modal.locator('.pm-status')).toContainText('Reading disk codes');
+    await expect(modal.locator('.pm-sense')).toContainText('PF Sense · reading…');
+    await expect(modal.locator('.pm-stage.nd-ai-glow')).toHaveAttribute('data-ai-working', 'true');
+    await expect(modal.locator('.pm-list.nd-ai-glow')).toHaveAttribute('data-ai-working', 'true');
     expect(lastRequest?.tiles?.length).toBe(count);
     expect(String(lastRequest?.image ?? '')).not.toMatch(/^data:/);
     await shots(page, 'read-pending-1440');
 
     // Absent backend → manual fallback.
     await held!.fulfill({ status: 404, body: '' });
-    await expect(modal.locator('.pm-note--manual')).toContainText('AI reading isn’t available — pick each disk’s code');
+    await expect(modal.locator('[data-ai-working="true"]')).toHaveCount(0);
+    await expect(modal.locator('.pm-note--manual')).toContainText('PF Sense isn’t available — pick each disk’s code');
     await expect(modal.locator('.pm-codesel .pf-dd__value').first()).toHaveText('Unknown — tap to pick');
     await shots(page, 'read-manual-1440');
     // Review keeps the picker: pick PIT's code there → Apply enables.
@@ -224,8 +227,9 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
     aiMode = 'real';
     await modal.getByRole('button', { name: 'Recalibrate' }).click();
     await modal.locator('.pm-controls .nd-btn--primary').click();
-    await expect(modal.locator('.pm-ai').first()).toBeVisible({ timeout: 30_000 });
-    const filled = await modal.locator('.pm-ai').count();
+    await expect(modal.locator('.pm-pf[aria-label="Read by PF Sense"]').first()).toBeVisible({ timeout: 30_000 });
+    const filled = await modal.locator('.pm-pf[aria-label="Read by PF Sense"]').count();
+    expect(await modal.textContent()).not.toMatch(/\bAI\b/);
     console.log(`[measure] codes filled by the mocked read: ${filled}; candidates sent: ${(lastRequest?.candidates ?? []).length}`);
     await shots(page, 'read-filled-1440');
     await modal.locator('.pm-controls .nd-btn--primary').click();   // Review
@@ -242,7 +246,7 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
     const list = (await modal.locator('.pm-list').boundingBox())!;
     expect(list.y).toBeGreaterThanOrEqual(stage.y + stage.height - 1);
     await shots(page, 'read-filled-375');
-    await modal.locator('.pm-list').evaluate(e => e.scrollTo(0, 99999));
+    await modal.locator('.pm-list__in').evaluate(e => e.scrollTo(0, 99999));
     await shots(page, 'read-filled-375-list');
     await modal.locator('.pm-x').click();
   });

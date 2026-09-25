@@ -103,7 +103,7 @@ describe('API absent → manual fallback', () => {
   it('404 / ai_unavailable → "Codes: pick manually"; cap → says so', () => {
     expect(aiFallbackMessage({ status: 404, error: {} })).toBe('Codes: pick manually');
     expect(aiFallbackMessage({ status: 503, error: { error: 'ai_unavailable', message: 'off' } })).toBe('Codes: pick manually');
-    expect(aiFallbackMessage({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } })).toMatch(/limit reached.*pick manually/);
+    expect(aiFallbackMessage({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } })).toMatch(/PF Sense limit reached.*pick manually/);
     expect(aiFallbackMessage({ status: 500, error: { error: 'ai_failed', message: 'x' } })).toMatch(/pick manually/);
   });
 
