@@ -5,8 +5,9 @@ import { loginAs } from './support/auth';
  * Culture case — REAL layout (jsdom can't lay out). Signs in as the seeded
  * Micro World Lab Admin (support/auth ROLE_CREDS), opens the first culture
  * case from My Work's Culture tab, and checks the nd pattern at 1440 and
- * 375: the context bar, one band primary, compact option controls (sized to
- * content, never the full row), stacked phone rows. Read-only: it never taps
+ * 375: the context bar, ONE band primary ("Submit all results"), every stage
+ * stacked (no tabs), Inoculate in the nav row, option controls FILLING the
+ * control column with equal segments, stacked phone rows. Read-only: it never taps
  * an option, so no stage is picked. Screenshots into $SHOTS_DIR when set.
  */
 
@@ -45,24 +46,30 @@ async function shoot(page: Page, w: number) {
 }
 
 test.describe('Culture case — real layout', () => {
-  test('1440 + 375: context bar, one primary, compact options, stacked phone rows', async ({ page }) => {
+  test('1440 + 375: context bar, one primary, stacked stages, filling options, stacked phone rows', async ({ page }) => {
     await loginAs(page, 'admin');
     await page.setViewportSize({ width: 1440, height: 900 });
     const opened = await openCase(page);
     test.skip(!opened, 'No culture case to open (set CULTURE_ORDER_TEST_ID).');
 
     await expect(page.locator('.pf-cse-ctx .pf-cse-chip--id')).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator('pf-hero-band .pf-hb-btn--primary')).toHaveCount(1);
-    await expect(page.locator('.pf-cse-tabs .pf-cse-tab').first()).toBeVisible();
+    const primary = page.locator('pf-hero-band .pf-hb-btn--primary');
+    await expect(primary).toHaveCount(1);
+    await expect(primary).toContainText('Submit all results');
+    await expect(page.locator('[role="tablist"].pf-cse-tabs')).toHaveCount(0);
+    expect(await page.locator('section.pf-stg').count()).toBeGreaterThanOrEqual(2);
+    await expect(page.locator('.pf-cse-nav .pf-cse-incubbtn.nd-btn--secondary')).toBeVisible();
 
-    // Options sized to content — never the whole row.
-    const row = page.locator('.pf-cse-row').filter({ has: page.locator('.pf-cse-opts') }).first();
+    // Options FILL the control column, segments equal width.
+    const row = page.locator('.pf-cse-row').filter({ has: page.locator('.pf-cse-opts--fill:not(.pf-cse-opts--many)') }).first();
     if (await row.count()) {
-      const rw = (await row.boundingBox())!.width;
+      const cw = (await row.locator('.pf-cse-row__ctl').boundingBox())!.width;
       const ow = (await row.locator('.pf-cse-opts').boundingBox())!.width;
-      expect(ow).toBeLessThan(rw * 0.75);
+      expect(ow).toBeGreaterThanOrEqual(cw - 2);
+      const widths = await row.locator('.pf-cse-opt').evaluateAll(els => els.map(e => e.getBoundingClientRect().width));
+      expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(2);
       const h = (await row.locator('.pf-cse-opt').first().boundingBox())!.height;
-      expect(h).toBeLessThanOrEqual(42);
+      expect(h).toBeGreaterThanOrEqual(36);
     }
     await shoot(page, 1440);
 
