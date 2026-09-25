@@ -1428,6 +1428,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
             mrn,
             deptCode: (s.department?.code ?? "").toUpperCase(),
             tube: `${spec.label} · ${spec.volume}`,
+            outsourced: !!s.outsourcedVendorId,
           },
           opts,
         )

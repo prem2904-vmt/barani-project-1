@@ -196,6 +196,7 @@ export class PostPaymentComponent implements OnInit {
         mrn: mrn ?? undefined,
         deptCode: (s.department?.code ?? '').toUpperCase(),
         tube: `${spec.label} · ${spec.volume}`,
+        outsourced: !!s.outsourcedVendorId,
       }, opts).catch(e => ({ ok: false, direct: true, error: e?.message }));
       if (res.ok) ok++; else { fail++; if (res.error) this.toasts.error(res.error); }
     }

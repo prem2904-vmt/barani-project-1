@@ -2019,3 +2019,9 @@
     .pf-sc-skel__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 300px)); justify-content: center; gap: 16px; }
     @keyframes pf-sc-shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
     @media (prefers-reduced-motion: reduce) { .pf-sc-skel__bar, .pf-sc-skel__tile { animation: none; } }
+
+
+/* Outsourced tube: identical tile; a small neutral "Outsourced" mark sits at
+   the top (nd-chip — no new colours). */
+.pf-tube__out { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 1;
+  height: 20px; padding: 0 8px; font-size: 10.5px; pointer-events: none; }

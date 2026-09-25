@@ -406,3 +406,27 @@ describe('Collect sample — layering + seamless arrival', () => {
     expect(el.querySelector('pf-loading-logo')).toBeNull();
   });
 });
+
+describe('Collect sample — an outsourced tube is just a tube with a small mark', () => {
+  afterEach(() => {
+    document.documentElement.classList.remove('pf-collect-immersive');
+    document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove());
+  });
+
+  it('same tile + tube, plus ONLY a neutral "Outsourced" chip (no partner name, no split banner)', async () => {
+    const { drawer } = await renderDrawer([S('a'), S('b', 'pending', { outsourcedVendorId: 'lab-1', tubeColor: 'red' })]);
+    const tiles = [...drawer.querySelectorAll('.pf-tube.pf-sc-tile')] as HTMLElement[];
+    expect(tiles.length).toBe(2);
+    const marks = tiles.map(t => t.querySelector('.pf-tube__out'));
+    expect(marks[0]).toBeNull();
+    expect(marks[1]?.textContent?.trim()).toBe('Outsourced');
+    expect(marks[1]?.classList).toContain('nd-chip');
+    // Same tube illustration + tap-to-draw state as the in-house tile.
+    expect(tiles[1].querySelector('.pf-sc-illo')).not.toBeNull();
+    expect(tiles[1].querySelector('.pf-tube__stamp--pending')?.textContent?.trim())
+      .toBe(tiles[0].querySelector('.pf-tube__stamp--pending')?.textContent?.trim());
+    // No split banner / create-tube button anywhere.
+    expect(drawer.querySelector('.pf-sc__splits, .pf-sc__split-btn')).toBeNull();
+    expect(drawer.textContent).not.toContain('Draw/split');
+  });
+});

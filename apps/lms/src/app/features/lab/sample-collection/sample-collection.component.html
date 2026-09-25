@@ -280,6 +280,11 @@
                      type in a size class): the ORIGINAL tube / jar + its
                      blood-fill animation is only scaled into it, bottom-
                      centred, so the text rows below align across tiles. -->
+                <!-- Outsourced tube: the SAME tile, tube and tap-to-draw flow —
+                     only this small neutral mark at the top differs. -->
+                @if (s.outsourcedVendorId) {
+                  <span class="nd-chip nd-chip--static pf-tube__out">Outsourced</span>
+                }
                 <span class="pf-sc-illo">
                 @if (s.status !== 'pending') {
                   <span class="pf-sc-illo__check" aria-hidden="true">

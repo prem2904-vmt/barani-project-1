@@ -25,6 +25,25 @@ export interface LabelData {
   mrn?: string;
   deptCode?: string;
   tube?: string;
+  /** Tube goes to a partner (referral) lab — the label is otherwise
+   *  identical; "OUTSOURCED" prints prominently on top. */
+  outsourced?: boolean;
+}
+
+/** The label's text lines, top to bottom (px at the 20 mm baseline × s).
+ *  Pure — unit-tested. An outsourced tube adds only the heavy "OUTSOURCED"
+ *  line on top; every other line is exactly the normal label's. */
+export function labelTextLines(data: LabelData, s: number): { text: string; px: number; heavy: boolean; mono: boolean }[] {
+  const lines: { text: string; px: number; heavy: boolean; mono: boolean }[] = [];
+  if (data.outsourced) lines.push({ text: 'OUTSOURCED', px: Math.round(18 * s), heavy: true, mono: false });
+  if (data.patientName) lines.push({ text: `${data.patientName}${data.ageSex ? '  ' + data.ageSex : ''}`, px: Math.round(20 * s), heavy: true, mono: false });
+  if (data.mrn) lines.push({ text: `MRN ${data.mrn}`, px: Math.round(14 * s), heavy: false, mono: true });
+  // Dept then Sample ID (OPS-36): department reads immediately above the
+  // sample id so the label groups by dept → sample id.
+  if (data.deptCode) lines.push({ text: data.deptCode, px: Math.round(15 * s), heavy: false, mono: false });
+  lines.push({ text: data.code, px: Math.round(22 * s), heavy: true, mono: true });
+  if (data.tube) lines.push({ text: data.tube, px: Math.round(13 * s), heavy: false, mono: false });
+  return lines;
 }
 
 export interface PackedBitmap {
@@ -105,14 +124,7 @@ export function renderLabelBitmap(
   // ── shared text layout: stack the present lines and centre the block
   //    vertically within [top, bottom] so the label isn't top-heavy. ──
   function layoutText(left: number, top: number, maxW: number, bottom: number) {
-    const lines: { text: string; px: number; heavy: boolean; mono: boolean }[] = [];
-    if (data.patientName) lines.push({ text: `${data.patientName}${data.ageSex ? '  ' + data.ageSex : ''}`, px: Math.round(20 * s), heavy: true, mono: false });
-    if (data.mrn) lines.push({ text: `MRN ${data.mrn}`, px: Math.round(14 * s), heavy: false, mono: true });
-    // Dept then Sample ID (OPS-36): department reads immediately above the
-    // sample id so the label groups by dept → sample id.
-    if (data.deptCode) lines.push({ text: data.deptCode, px: Math.round(15 * s), heavy: false, mono: false });
-    lines.push({ text: data.code, px: Math.round(22 * s), heavy: true, mono: true });
-    if (data.tube) lines.push({ text: data.tube, px: Math.round(13 * s), heavy: false, mono: false });
+    const lines = labelTextLines(data, s);
 
     const gap = Math.round(6 * s);
     const totalH = lines.reduce((sum, l) => sum + l.px, 0) + gap * (lines.length - 1);

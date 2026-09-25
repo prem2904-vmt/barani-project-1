@@ -104,7 +104,7 @@ function deptTube(s: OrderSample): TubeSpec {
           Label {{ num }}
           <span class="pf-lc__dept">· {{ deptName }}</span>
           @if (isOutsourced) {
-            <span class="pf-lc__out">⇗ {{ vendorName || 'OUTSOURCED' }}</span>
+            <span class="pf-lc__out">OUTSOURCED</span>
           }
         </span>
         <span class="pf-lc__tube-chip" [attr.data-color]="spec.color">
@@ -117,6 +117,10 @@ function deptTube(s: OrderSample): TubeSpec {
            Codes (barcode / QR / both per admin) with the dept code beneath. -->
       <div class="pf-lc__preview" [attr.data-color]="spec.color">
         <div class="pf-lc__stripe"></div>
+        @if (isOutsourced) {
+          <!-- Same label as any tube — only this word is added (owner). -->
+          <p class="pf-lc__outsourced">OUTSOURCED</p>
+        }
         <p class="pf-lc__pname">
           {{ patientName }}
           @if (agesex) { <span class="pf-lc__agesex"> {{ agesex }}</span> }
@@ -293,6 +297,15 @@ function deptTube(s: OrderSample): TubeSpec {
     .pf-lc__preview[data-color='green']    .pf-lc__stripe { background: #6ee7b7; }
     .pf-lc__preview[data-color='container'] .pf-lc__stripe { background: #e5e7eb; }
 
+    /* Printed on the label itself — black on the white label, bold caps. */
+    .pf-lc__outsourced {
+      margin: 0 0 1px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      color: #000;
+      line-height: 1.2;
+    }
     .pf-lc__pname {
       margin: 0;
       font-size: 13.5px;
@@ -363,9 +376,9 @@ function deptTube(s: OrderSample): TubeSpec {
       font-size: 9px;
       font-weight: 700;
       letter-spacing: 0.04em;
-      background: rgba(236, 72, 153, 0.16);
-      color: #ec4899;
-      border: 1px solid rgba(236, 72, 153, 0.4);
+      background: var(--nd-chip-bg, rgba(100, 116, 139, 0.12));
+      color: var(--text-secondary);
+      border: 1px solid var(--nd-line, var(--border-primary));
       white-space: nowrap;
     }
 
