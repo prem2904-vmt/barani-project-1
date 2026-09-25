@@ -127,13 +127,25 @@ test.describe('Culture case — real layout', () => {
     const table = page.locator('.ce-abx').first();
     const hasTable = await table.waitFor({ timeout: 8_000 }).then(() => true).catch(() => false);
     if (hasTable) {
-      // Light: no traffic-light colours on the verdict / breakpoints.
-      await setTheme(page, 'light');
-      await page.waitForTimeout(200);
-      const picked = page.locator('.ce-sir-picked').first();
-      if (await picked.count()) {
-        const bg = await picked.evaluate(e => getComputedStyle(e).backgroundColor);
-        expect(bg).not.toMatch(/rgb\((16, 185, 129|245, 158, 11|239, 68, 68)\)/);
+      // Give one row a picked result (local only) so the subtle tint shows.
+      const zone = page.locator('.ce-abx__row').first().locator('.ce-sirseg [data-v="R"]');
+      if (await zone.count()) await zone.click();
+      // BOTH themes: breakpoints / headers / MIC line neutral; the picked
+      // result a subtle tint; every row its own shaded card.
+      for (const theme of ['light', 'dark'] as const) {
+        await setTheme(page, theme);
+        await page.waitForTimeout(200);
+        const picked = page.locator('.ce-sir-picked').first();
+        if (await picked.count()) {
+          const bg = await picked.evaluate(e => getComputedStyle(e).backgroundColor);
+          expect(bg).toMatch(/rgba\(239, 68, 68, 0\.(12|2)\)/);   // soft red tint, not a solid fill
+        }
+        const colours = await page.evaluate(() => [...document.querySelectorAll(
+          '.ce-abx__head span, .ce-abx__bpbox, .ce-abx__mic, .ce-abx__mic em')]
+          .flatMap(e => [getComputedStyle(e).color, getComputedStyle(e).backgroundColor]));
+        for (const c of colours) expect(c).not.toMatch(/rgba?\((16, 185, 129|52, 211, 153|245, 158, 11|251, 191, 36|239, 68, 68|248, 113, 113)/);
+        const rowBg = await page.locator('.ce-abx__row').first().evaluate(e => getComputedStyle(e).backgroundColor);
+        expect(rowBg).not.toBe('rgba(0, 0, 0, 0)');
       }
       if (SHOTS) {
         for (const theme of ['light', 'dark'] as const) {

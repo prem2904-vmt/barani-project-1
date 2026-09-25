@@ -215,6 +215,9 @@ interface Breakpoint {
                       <button type="button" class="nd-seg__item ce-abx__sirbtn" role="radio"
                         [attr.data-v]="v"
                         [class.ce-sir-picked]="ab.interpretation === v"
+                        [class.ce-sir--s]="ab.interpretation === v && v === 'S'"
+                        [class.ce-sir--i]="ab.interpretation === v && v === 'I'"
+                        [class.ce-sir--r]="ab.interpretation === v && v === 'R'"
                         [attr.aria-checked]="ab.interpretation === v"
                         [attr.aria-label]="ab.name + ': ' + v"
                         (click)="setInterp(oi, abi, $any(v))">{{ v }}</button>
@@ -358,7 +361,6 @@ interface Breakpoint {
     .ce-org__prog { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
       color: var(--text-tertiary); border: 1px solid var(--border-subtle); white-space: nowrap;
       font-variant-numeric: tabular-nums; }
-    .ce-org__prog--done { color: #34d399; border-color: rgba(52,211,153,.4); }
     .ce-org__spacer { flex: 1; }
     .ce-org__abxpick { width: 220px; flex-shrink: 0; }
 
@@ -371,16 +373,10 @@ interface Breakpoint {
     .ce-abx__head { padding: 2px 12px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
       text-transform: uppercase; color: var(--text-tertiary, #64748b); }
     .ce-abx__head .ce-abx__col--s, .ce-abx__head .ce-abx__col--i, .ce-abx__head .ce-abx__col--r { text-align: center; }
-    .ce-abx__col--s { color: #34d399; }
-    .ce-abx__col--i { color: #fbbf24; }
-    .ce-abx__col--r { color: #f87171; }
     .ce-abx__row { padding: 6px 12px; border-radius: 12px;
       border: 1px solid var(--border-subtle); background: var(--glass-bg);
       transition: border-color .15s ease, background .2s ease; }
     .ce-abx__row:hover { border-color: rgba(139,92,246,.45); }
-    .ce-abx__row[data-interp="S"] { background: rgba(16,185,129,.06); }
-    .ce-abx__row[data-interp="I"] { background: rgba(245,158,11,.06); }
-    .ce-abx__row[data-interp="R"] { background: rgba(239,68,68,.07); }
     .ce-abx__namewrap { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     /* Checkbox sits INLINE with the drug name (owner: "checkbox value", never stacked). */
     .ce-abx__nameline { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
@@ -416,13 +412,7 @@ interface Breakpoint {
       transition: background .15s ease, border-color .15s ease, transform .12s cubic-bezier(0.16,1,0.3,1); }
     .ce-abx__cell:active { transform: scale(0.96); }
     .ce-abx__celllbl { font-size: 11px; font-weight: 800; }
-    .ce-abx__cell--s .ce-abx__celllbl { color: #34d399; }
-    .ce-abx__cell--i .ce-abx__celllbl { color: #fbbf24; }
-    .ce-abx__cell--r .ce-abx__celllbl { color: #f87171; }
     .ce-abx__cellunit { font-size: 10px; font-weight: 600; color: var(--text-tertiary, #64748b); }
-    .ce-abx__cell--s.ce-abx__cell--on { background: #10b981; border-color: #10b981; }
-    .ce-abx__cell--i.ce-abx__cell--on { background: #f59e0b; border-color: #f59e0b; }
-    .ce-abx__cell--r.ce-abx__cell--on { background: #ef4444; border-color: #ef4444; }
     .ce-abx__cell--on .ce-abx__celllbl, .ce-abx__cell--on .ce-abx__cellunit,
     .ce-abx__cell--on .ce-abx__iwin, .ce-abx__cell--on .ce-abx__bpin { color: #fff; }
     .ce-abx__cell--on .ce-abx__bpin::placeholder { color: rgba(255,255,255,.7); }
@@ -461,7 +451,6 @@ interface Breakpoint {
     .ce-abx__unit { font-size: 11px; font-weight: 600; color: var(--text-tertiary, #64748b); }
     .ce-abx__x { width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
       color: var(--text-tertiary); background: transparent; font-size: 14px; line-height: 1; }
-    .ce-abx__x:hover { color: #ef4444; background: rgba(239,68,68,.12); }
 
     /* Add-antibiotic AS a row: dashed, full width, same shape as the rows. */
     .ce-abx__addrow { padding: 2px 0 0; }
@@ -494,10 +483,6 @@ interface Breakpoint {
     .ce-sirseg { gap: 2px; }
     .ce-abx__sirbtn { width: 36px; height: 32px; border: 0; border-radius: 8px; padding: 0;
       font: inherit; font-size: 13px; font-weight: 600; color: var(--text-secondary); background: transparent; }
-    /* Dark keeps its traffic-light verdict (owner: dark is fine). */
-    .ce-sir-picked[data-v='S'] { background: #10b981; color: #fff; }
-    .ce-sir-picked[data-v='I'] { background: #f59e0b; color: #fff; }
-    .ce-sir-picked[data-v='R'] { background: #ef4444; color: #fff; }
     .ce-abx__zone { font-family: inherit; border-radius: var(--nd-radius-sm, 10px);
       background: var(--nd-card-bg, var(--input-bg)); border: 1px solid var(--nd-line, var(--input-border)); color: var(--text-primary); }
     .ce-abx__zone:focus { border-color: var(--color-violet-600, #7c3aed);
@@ -509,38 +494,46 @@ interface Breakpoint {
     .ce-abx__x:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
     @media (pointer: coarse) { .ce-abx__x { width: 44px; height: 44px; } }
 
-    /* ══ LIGHT mode: no traffic lights (owner: eye strain). Neutral headers,
-       neutral breakpoint chips, muted MIC line, neutral S/I/R selection —
-       a small red dot on a selected R is the only colour left. ══ */
-    :host-context(.light) .ce-abx__col--s,
-    :host-context(.light) .ce-abx__col--i,
-    :host-context(.light) .ce-abx__col--r { color: var(--text-tertiary); }
-    :host-context(.light) .ce-abx__bpwide .ce-abx__bpbox { color: var(--text-primary);
+    /* ══ AST (owner, both themes): breakpoints / headers / MIC line NEUTRAL;
+       the PICKED S / I / R result carries a SUBTLE colour (soft tint + dark
+       text, ≥4.5:1) — unselected S / I / R stay neutral. ══ */
+    .ce-abx__col--s,
+    .ce-abx__col--i,
+    .ce-abx__col--r { color: var(--text-tertiary); }
+    .ce-abx__bpwide .ce-abx__bpbox { color: var(--text-primary);
       background: var(--nd-chip-bg); border-color: transparent; }
-    :host-context(.light) .ce-abx__mic,
-    :host-context(.light) .ce-abx__mic em { color: var(--text-tertiary); font-weight: 400; }
-    :host-context(.light) .ce-abx__row[data-interp] { background: var(--nd-card-bg, #fff); }
-    :host-context(.light) .ce-abx__row:hover { border-color: var(--nd-sel-border); }
-    :host-context(.light) .ce-sir-picked[data-v] {
-      background: var(--nd-card-bg, #fff); color: var(--text-primary); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18); }
-    :host-context(.light) .ce-sir-picked[data-v='R'] { position: relative; }
-    :host-context(.light) .ce-sir-picked[data-v='R']::after {
-      content: ''; position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 999px; background: #dc2626; }
-    :host-context(.light) .ce-abx__celllbl,
-    :host-context(.light) .ce-abx__cell--s .ce-abx__celllbl,
-    :host-context(.light) .ce-abx__cell--i .ce-abx__celllbl,
-    :host-context(.light) .ce-abx__cell--r .ce-abx__celllbl { color: var(--text-tertiary); }
-    :host-context(.light) .ce-abx__cell--on,
-    :host-context(.light) .ce-abx__cell--s.ce-abx__cell--on,
-    :host-context(.light) .ce-abx__cell--i.ce-abx__cell--on,
-    :host-context(.light) .ce-abx__cell--r.ce-abx__cell--on { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
-    :host-context(.light) .ce-abx__cell--on .ce-abx__celllbl,
-    :host-context(.light) .ce-abx__cell--on .ce-abx__cellunit,
-    :host-context(.light) .ce-abx__cell--on .ce-abx__bpin { color: var(--text-primary); }
-    :host-context(.light) .ce-abx__cell--r.ce-abx__cell--on { position: relative; }
-    :host-context(.light) .ce-abx__cell--r.ce-abx__cell--on::after {
-      content: ''; position: absolute; top: 6px; right: 6px; width: 5px; height: 5px; border-radius: 999px; background: #dc2626; }
-    :host-context(.light) .ce-org__prog--done { color: var(--violet-text, #6d28d9); border-color: var(--nd-sel-border); }
+    .ce-abx__bpin { color: var(--text-primary); }
+    .ce-abx__mic,
+    .ce-abx__mic em { color: var(--text-tertiary); font-weight: 400; }
+    /* Picked result tints — light: 13% tint + deep text; dark: 20% tint +
+       pale text. Shared by the wide buttons and the small-screen cells. */
+    .ce-sir-picked[data-v], .ce-abx__cell--on { box-shadow: none; }
+    :host-context(.light) .ce-sir-picked.ce-sir--s, :host-context(.light) .ce-abx__cell--s.ce-abx__cell--on { background: rgba(16,185,129,0.13); color: #065f46; }
+    :host-context(.light) .ce-sir-picked.ce-sir--i, :host-context(.light) .ce-abx__cell--i.ce-abx__cell--on { background: rgba(245,158,11,0.14); color: #92400e; }
+    :host-context(.light) .ce-sir-picked.ce-sir--r, :host-context(.light) .ce-abx__cell--r.ce-abx__cell--on { background: rgba(239,68,68,0.12); color: #991b1b; }
+    :host-context(.dark) .ce-sir-picked.ce-sir--s, :host-context(.dark) .ce-abx__cell--s.ce-abx__cell--on { background: rgba(16,185,129,0.20); color: #6ee7b7; }
+    :host-context(.dark) .ce-sir-picked.ce-sir--i, :host-context(.dark) .ce-abx__cell--i.ce-abx__cell--on { background: rgba(245,158,11,0.20); color: #fcd34d; }
+    :host-context(.dark) .ce-sir-picked.ce-sir--r, :host-context(.dark) .ce-abx__cell--r.ce-abx__cell--on { background: rgba(239,68,68,0.20); color: #fca5a5; }
+    .ce-abx__celllbl,
+    .ce-abx__cell--s .ce-abx__celllbl,
+    .ce-abx__cell--i .ce-abx__celllbl,
+    .ce-abx__cell--r .ce-abx__celllbl { color: var(--text-tertiary); }
+    .ce-abx__cell--on { border-color: transparent; }
+    .ce-abx__cell--on .ce-abx__celllbl,
+    .ce-abx__cell--on .ce-abx__cellunit,
+    .ce-abx__cell--on .ce-abx__bpin { color: inherit; }
+    .ce-org__prog--done { color: var(--violet-text, #6d28d9); border-color: var(--nd-sel-border); }
+
+    /* ══ Row surface — every antimicrobial row is its own subtle card in
+       BOTH themes: 10px radius, a small gap, a slightly stronger hover. ══ */
+    .ce-abx { gap: 6px; }
+    .ce-abx__row { border-radius: 10px; }
+    :host-context(.dark) .ce-abx__row { background: var(--glass-bg); }
+    :host-context(.dark) .ce-abx__row:hover { background: rgba(255,255,255,0.07); border-color: var(--nd-line); }
+    :host-context(.light) .ce-abx__row { background: #f6f7f9; border-color: transparent; }
+    :host-context(.light) .ce-abx__row:hover { background: #eef0f3; border-color: transparent; }
+    /* On the light row the breakpoint chips / zone field sit on white. */
+    :host-context(.light) .ce-abx__bpwide .ce-abx__bpbox { background: var(--nd-card-bg, #fff); border-color: var(--nd-line); }
 `]
 })
 export class CultureEntryComponent implements OnInit {
@@ -1015,7 +1008,6 @@ export class CultureEntryComponent implements OnInit {
     this.commit({ ...this._m(), organisms: orgs });
   }
 
-  toneColor(v: string): string { return v === 'S' ? '#10b981' : v === 'R' ? '#ef4444' : '#f59e0b'; }
 
   // ── Camera measure-assist ────────────────────────────────────────
   openMeasure(i: number) { this.measureOrg.set(i); }

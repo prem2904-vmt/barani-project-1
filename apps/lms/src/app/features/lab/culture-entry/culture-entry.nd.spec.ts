@@ -68,27 +68,42 @@ describe('AST table — kit restyle (both themes)', () => {
   });
 });
 
-describe('AST table — LIGHT mode has no traffic lights', () => {
-  it('no green / amber / red in any light rule, except the small dot on a selected R', () => {
-    const traffic = /#10b981|#34d399|#f59e0b|#fbbf24|#ef4444|#f87171|#dc2626|16,\s*185,\s*129|245,\s*158,\s*11|239,\s*68,\s*68/i;
-    for (const r of lightRules()) {
+describe('AST table — picked result subtle colour, breakpoints neutral (both themes)', () => {
+  const traffic = /#10b981|#34d399|#f59e0b|#fbbf24|#ef4444|#f87171|#dc2626|16,\s*185,\s*129|245,\s*158,\s*11|239,\s*68,\s*68|52,\s*211,\s*153/i;
+
+  it('traffic colours appear ONLY in the picked-result tint rules (no R dot any more)', () => {
+    for (const r of css().split('}')) {
       if (!traffic.test(r)) continue;
-      // Only allowed: the ::after dot on a selected R (wide button or small-screen cell).
-      expect(r).toMatch(/(data-v=["']?R["']?\]|cell--r)[^{]*::after/);
-      expect(r).toMatch(/width:\s*5px[^}]*height:\s*5px/);
+      expect(r).toMatch(/ce-sir--[sir]|ce-abx__cell--[sir]\.ce-abx__cell--on/);
+      expect(r).not.toMatch(/::after/);
     }
   });
 
-  it('light: headers muted, breakpoint chips neutral, MIC line muted, selection neutral', () => {
-    const light = lightRules().join('\n');
-    expect(light).toMatch(/\.ce-abx__col--r[^{]*\{[^}]*color:\s*var\(--text-tertiary\)/);
-    expect(light).toMatch(/\.ce-abx__bpbox[^{]*\{[^}]*background:\s*var\(--nd-chip-bg\)/);
-    expect(light).toMatch(/\.ce-abx__mic[^{]*\{[^}]*color:\s*var\(--text-tertiary\)/);
-    expect(light).toMatch(/\.ce-sir-picked\[data-v\][^{]*\{[^}]*background:\s*var\(--nd-card-bg/);
+  it('the picked result carries its subtle tint class in BOTH themes', () => {
+    const { el } = render();
+    const r = el.querySelector('.ce-sirseg [data-v="R"]')!;
+    expect(r.classList.contains('ce-sir--r')).toBe(true);
+    expect(el.querySelector('.ce-sirseg [data-v="S"]')!.classList.contains('ce-sir--s')).toBe(false);
+    const s = css();
+    for (const theme of ['light', 'dark']) {
+      for (const v of ['s', 'i', 'r']) {
+        expect(s).toMatch(new RegExp('\\.' + theme + '[^{]*\\.ce-sir--' + v + '[^{]*\\{[^}]*background:\\s*rgba\\([^)]*0\\.(1[0-4]|2\\d?)\\)[^}]*color:\\s*#'));
+      }
+    }
   });
 
-  it('dark keeps its verdict colours (base rules)', () => {
-    expect(css()).toMatch(/\.ce-sir-picked\[data-v=["']?S["']?\][^{]*\{[^}]*#10b981/);
-    expect(css()).toMatch(/\.ce-sir-picked\[data-v=["']?R["']?\][^{]*\{[^}]*#ef4444/);
+  it('breakpoints / headers / MIC line stay neutral (not theme-scoped)', () => {
+    const s = css();
+    expect(s).toMatch(/\.ce-abx__col--r[^{]*\{[^}]*color:\s*var\(--text-tertiary\)/);
+    expect(s).toMatch(/\.ce-abx__bpbox[^{]*\{[^}]*background:\s*var\(--nd-chip-bg\)/);
+    expect(s).toMatch(/\.ce-abx__mic[^{]*\{[^}]*color:\s*var\(--text-tertiary\)/);
+  });
+
+  it('every row is a subtle card in BOTH themes (radius, gap, fill, stronger hover)', () => {
+    const s = css();
+    expect(s).toMatch(/\.ce-abx__row\[_ngcontent-%COMP%\]\s*\{[^}]*border-radius:\s*10px/);
+    expect(s).toMatch(/\.light[^{]*\.ce-abx__row\[_ngcontent-%COMP%\]\s*\{[^}]*background:\s*#f6f7f9/);
+    expect(s).toMatch(/\.light[^{]*\.ce-abx__row[^{]*:hover[^{]*\{[^}]*background:\s*#eef0f3/);
+    expect(s).toMatch(/\.dark[^{]*\.ce-abx__row\[_ngcontent-%COMP%\]\s*\{[^}]*background:\s*var\(--glass-bg\)/);
   });
 });
