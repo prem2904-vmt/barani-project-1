@@ -203,7 +203,7 @@ describe('Admin band — Inventory', () => {
     p.f.detectChanges();
     return p;
   };
-  const rows = (el: HTMLElement) => Array.from(el.querySelectorAll('tbody tr td:first-child b')).map(b => text(b));
+  const rows = (el: HTMLElement) => Array.from(el.querySelectorAll('tbody tr td:first-child .pf-inv-name')).map(b => text(b));
 
   it('band present, custom header classic-only, tabs + category filter in the pill', async () => {
     const p = await render();

@@ -14,6 +14,7 @@ import { BranchesComponent } from './branches/branches.component';
 import { VendorsComponent } from './vendors/vendors.component';
 import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
 import { ReferringNetworkComponent } from './referring-network/referring-network.component';
+import { InventoryComponent } from './inventory/inventory.component';
 import { provideHttpClient } from '@angular/common/http';
 
 /**
@@ -301,5 +302,52 @@ describe('ND audit D — Referring network', () => {
     expect(m.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
     expect(m.querySelectorAll('input.nd-input').length).toBeGreaterThanOrEqual(5);
     expect(m.querySelectorAll('.nd-btn--primary').length).toBe(1);
+  });
+});
+
+describe('ND audit D — Inventory', () => {
+  const items = [
+    { id: 'i1', sku: 'EDTA-3', name: 'EDTA tube 3ml', category: 'consumable', uom: 'piece', reorderLevel: 100, nearExpiryDays: 30, isActive: true, onHand: 500, lowStock: false },
+    { id: 'i2', sku: 'GLU-R', name: 'Glucose reagent', category: 'reagent', uom: 'ml', reorderLevel: 50, nearExpiryDays: 30, isActive: true, onHand: 20, lowStock: true },
+  ];
+  const render = async () => {
+    const p = renderBandPage(InventoryComponent, {
+      getFor: (url) => url === '/api/inventory/items' ? items
+        : url === '/api/inventory/alerts' ? { lowStock: [{ id: 'i2', name: 'Glucose reagent', onHand: 20, reorderLevel: 50 }], expiring: [] } : [],
+    });
+    await p.f.whenStable(); p.f.detectChanges();
+    return p;
+  };
+
+  it('ONE primary; row actions are .nd-rowact; low stock = neutral chip; alerts are kit cards', async () => {
+    const p = await render();
+    expect(primaries(p.el)).toBe(1);
+    const acts = p.el.querySelectorAll('tbody tr.pf-inv-row')[0].querySelectorAll('.nd-rowact .nd-rowact__t');
+    expect(Array.from(acts).map(a => a.textContent!.trim())).toEqual(['Receive', 'Label', 'Batches', 'Edit']);
+    expect(p.el.querySelector('.pf-inv-low.nd-chip')).not.toBeNull();
+    expect(p.el.querySelectorAll('.pf-inv-alert.nd-card .nd-card__icon').length).toBe(2);
+    hygiene(p.el);
+  });
+
+  it('item editor = kit card with kit fields + a slate Active switch; the band turns ghost so Save is the one primary', async () => {
+    const p = await render();
+    p.cmp.startNew(); p.f.detectChanges();
+    const ed = p.el.querySelector('.pf-inv-editor.nd-card')!;
+    expect(ed.querySelectorAll('input.nd-input').length).toBeGreaterThanOrEqual(5);
+    const sw = ed.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
+    expect(sw).not.toBeNull();
+    expect(primaries(p.el)).toBe(1);
+    expect(ed.querySelector('.nd-btn--primary')).not.toBeNull();
+    hygiene(p.el);
+  });
+
+  it('the label type switch is a neutral nd-seg (no gradient --on)', async () => {
+    const p = await render();
+    p.cmp.showLabel(items[0]); p.f.detectChanges();
+    const seg = p.el.querySelector('.label-wrap .nd-seg[role="radiogroup"]');
+    if (seg) {
+      expect(seg.querySelectorAll('[role="radio"]').length).toBe(3);
+      expect(p.el.querySelector('.seg__i--on')).toBeNull();
+    }
   });
 });

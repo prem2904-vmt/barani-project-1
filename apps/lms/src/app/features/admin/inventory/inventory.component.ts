@@ -13,6 +13,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 
 type InvTab = 'items' | 'bom';
 
@@ -57,7 +58,8 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           </ng-container>
           <ng-container band-actions>
             @if (tab() === 'items') {
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="startNew()" aria-label="New item">
+              <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!editing()" [class.pf-hb-btn--ghost]="editing()"
+                      (click)="startNew()" aria-label="New item">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 New item
@@ -94,84 +96,92 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
       <!-- Alerts -->
       @if (lowStock().length || expiring().length) {
         <div class="grid md:grid-cols-2 gap-3 mb-5">
-          <div class="p-4 rounded-xl border" style="background:var(--glass-bg);border-color:var(--glass-border)">
-            <div class="text-[11px] font-bold uppercase tracking-wider mb-2" style="color:var(--amber,#f59e0b)">Low stock ({{ lowStock().length }})</div>
+          <div class="nd-card pf-inv-alert">
+            <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><span class="nd-card__label">Low stock</span><span class="nd-card__spacer"></span><span class="pf-inv-count nd-num">{{ lowStock().length }}</span></div>
             @for (l of lowStock(); track l.id) {
-              <div class="flex justify-between text-sm py-0.5 alert-row"><span class="alert-row__name">{{ l.name }}</span><span class="font-mono" style="color:var(--text-tertiary)">{{ l.onHand | number:'1.0-2' }} / {{ l.reorderLevel | number:'1.0-2' }}</span></div>
-            } @empty { <p class="text-sm" style="color:var(--text-muted)">All good.</p> }
+              <div class="flex justify-between text-sm py-0.5 alert-row"><span class="alert-row__name">{{ l.name }}</span><span class="nd-num" style="color:var(--text-tertiary)">{{ l.onHand | number:'1.0-2' }} / {{ l.reorderLevel | number:'1.0-2' }}</span></div>
+            } @empty { <p class="pf-inv-muted">All good.</p> }
           </div>
-          <div class="p-4 rounded-xl border" style="background:var(--glass-bg);border-color:var(--glass-border)">
-            <div class="text-[11px] font-bold uppercase tracking-wider mb-2" style="color:var(--red,#ef4444)">Expiring soon ({{ expiring().length }})</div>
+          <div class="nd-card pf-inv-alert">
+            <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="nd-card__label">Expiring soon</span><span class="nd-card__spacer"></span><span class="pf-inv-count nd-num">{{ expiring().length }}</span></div>
             @for (e of expiring(); track e.id) {
-              <div class="flex justify-between text-sm py-0.5 alert-row"><span class="alert-row__name">{{ e.item }} <span style="color:var(--text-muted)">{{ e.lotNumber }}</span></span><span class="font-mono" [style.color]="e.daysLeft < 0 ? 'var(--red)' : 'var(--text-tertiary)'">{{ e.daysLeft < 0 ? 'expired' : e.daysLeft + 'd' }}</span></div>
-            } @empty { <p class="text-sm" style="color:var(--text-muted)">Nothing expiring.</p> }
+              <div class="flex justify-between text-sm py-0.5 alert-row"><span class="alert-row__name">{{ e.item }} <span style="color:var(--text-muted)">{{ e.lotNumber }}</span></span><span class="nd-num" [style.color]="e.daysLeft < 0 ? 'var(--red-text, #b91c1c)' : 'var(--text-tertiary)'">{{ e.daysLeft < 0 ? 'expired' : e.daysLeft + 'd' }}</span></div>
+            } @empty { <p class="pf-inv-muted">Nothing expiring.</p> }
           </div>
         </div>
       }
 
       <!-- Edit / new item -->
       @if (editing()) {
-        <div class="p-4 rounded-xl border mb-5" style="background:var(--bg-card-solid);border-color:var(--glass-border-hover)">
-          <div class="text-sm font-bold mb-3">{{ form().id ? 'Edit item' : 'New item' }}</div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <label class="block"><span class="lbl">SKU *</span><input class="inp" [class.inp--err]="itemError()?.field==='sku'||itemError()?.field==='code'" [ngModel]="form().sku" (ngModelChange)="setF('sku',$event)"/>
+        <section class="nd-card nd-anim-in pf-inv-editor" [attr.aria-label]="form().id ? 'Edit item' : 'New item'">
+          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><h3 class="nd-card__label">{{ form().id ? 'Edit item' : 'New item' }}</h3>
+            @if (form().id && form().name) { <span class="nd-card__note">{{ form().name }}</span> }</div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pf-inv-editor__body">
+            <label class="block"><span class="nd-field__lbl lbl">SKU *</span><input class="nd-input" [class.nd-input--error]="itemError()?.field==='sku'||itemError()?.field==='code'" [ngModel]="form().sku" (ngModelChange)="setF('sku',$event)"/>
               @if (itemError()?.field==='sku'||itemError()?.field==='code') { <span class="fld-err">{{ itemError()!.message }}</span> }
             </label>
-            <label class="block md:col-span-2"><span class="lbl">Name *</span><input class="inp" [class.inp--err]="itemError()?.field==='name'" [ngModel]="form().name" (ngModelChange)="setF('name',$event)"/>
+            <label class="block md:col-span-2"><span class="nd-field__lbl lbl">Name *</span><input class="nd-input" [class.nd-input--error]="itemError()?.field==='name'" [ngModel]="form().name" (ngModelChange)="setF('name',$event)"/>
               @if (itemError()?.field==='name') { <span class="fld-err">{{ itemError()!.message }}</span> }
             </label>
-            <label class="block"><span class="lbl">Category</span>
+            <label class="block"><span class="nd-field__lbl lbl">Category</span>
               <pf-select [options]="categoryOptions" [value]="form().category ?? 'consumable'"
                          (valueChange)="setF('category',$event)" aria-label="Category"></pf-select>
             </label>
-            <label class="block"><span class="lbl">Unit (UoM)</span><input class="inp" [ngModel]="form().uom" (ngModelChange)="setF('uom',$event)" placeholder="piece"/></label>
-            <label class="block"><span class="lbl">Reorder level</span><input class="inp" type="number" [ngModel]="form().reorderLevel" (ngModelChange)="setF('reorderLevel',+$event)"/></label>
-            <label class="block"><span class="lbl">Near-expiry (days)</span><input class="inp" type="number" [ngModel]="form().nearExpiryDays" (ngModelChange)="setF('nearExpiryDays',+$event)"/></label>
-            <label class="flex items-center gap-2 mt-5"><input type="checkbox" [ngModel]="form().isActive" (ngModelChange)="setF('isActive',$event)"/><span class="text-sm">Active</span></label>
+            <label class="block"><span class="nd-field__lbl lbl">Unit (UoM)</span><input class="nd-input" [ngModel]="form().uom" (ngModelChange)="setF('uom',$event)" placeholder="piece"/></label>
+            <label class="block"><span class="nd-field__lbl lbl">Reorder level</span><input class="nd-input nd-num" type="number" [ngModel]="form().reorderLevel" (ngModelChange)="setF('reorderLevel',+$event)"/></label>
+            <label class="block"><span class="nd-field__lbl lbl">Near-expiry (days)</span><input class="nd-input nd-num" type="number" [ngModel]="form().nearExpiryDays" (ngModelChange)="setF('nearExpiryDays',+$event)"/></label>
+            <div class="flex items-end pb-2">
+              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!!form().isActive" (click)="setF('isActive', !form().isActive)">
+                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span><span>Active</span>
+              </button>
+            </div>
           </div>
-          <div class="flex gap-2 mt-4">
-            <button class="px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="!canSave()" (click)="saveItem()">Save</button>
-            <button class="px-3 py-2 rounded-lg text-sm" style="background:var(--glass-bg)" (click)="editing.set(false)">Cancel</button>
+          <div class="nd-card__foot">
+            <button type="button" class="nd-btn nd-btn--tertiary press" (click)="editing.set(false)">Cancel</button>
+            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!canSave()" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
           </div>
-        </div>
+        </section>
       }
 
       <!-- Items -->
       @if (loading()) { <p class="text-sm" style="color:var(--text-tertiary)">Loading…</p> }
       @else {
-        <div class="rounded-xl border overflow-hidden inv-table-wrap" style="border-color:var(--glass-border)">
+        <div class="nd-card inv-table-wrap">
           <table class="w-full text-sm">
-            <thead><tr style="background:var(--glass-bg);color:var(--text-muted)">
+            <thead><tr>
               <th class="text-left p-3">Item</th><th class="text-left p-3">Category</th>
               <th class="text-right p-3">On hand</th><th class="text-right p-3">Reorder</th><th class="p-3"></th>
             </tr></thead>
             <tbody>
               @for (it of visibleItems(); track it.id) {
-                <tr style="border-top:1px solid var(--glass-border)">
-                  <td class="p-3"><b>{{ it.name }}</b> <span class="font-mono text-xs" style="color:var(--text-muted)">{{ it.sku }}</span>
-                    @if (it.lowStock) { <span class="ml-2 text-[10px] px-2 py-0.5 rounded-full" style="background:rgba(245,158,11,.15);color:var(--amber,#f59e0b)">low</span> }
+                <tr class="pf-inv-row">
+                  <td class="p-3"><span class="pf-inv-name">{{ it.name }}</span> <span class="nd-num pf-inv-sku">{{ it.sku }}</span>
+                    @if (it.lowStock) { <span class="nd-chip nd-chip--static pf-inv-low">Low stock</span> }
                   </td>
                   <td class="p-3" style="color:var(--text-tertiary)">{{ it.category }}</td>
-                  <td class="p-3 text-right font-mono">{{ it.onHand | number:'1.0-2' }} <span style="color:var(--text-muted)">{{ it.uom }}</span></td>
-                  <td class="p-3 text-right font-mono" style="color:var(--text-muted)">{{ it.reorderLevel | number:'1.0-2' }}</td>
+                  <td class="p-3 text-right nd-num">{{ it.onHand | number:'1.0-2' }} <span style="color:var(--text-muted)">{{ it.uom }}</span></td>
+                  <td class="p-3 text-right nd-num" style="color:var(--text-muted)">{{ it.reorderLevel | number:'1.0-2' }}</td>
                   <td class="p-3 text-right whitespace-nowrap">
-                    <button class="rowbtn rowbtn--accent" (click)="openReceive(it)">Receive</button>
-                    <button class="rowbtn" (click)="showLabel(it)">Label</button>
-                    <button class="rowbtn" (click)="toggleBatches(it)">Batches</button>
-                    <button class="rowbtn" (click)="startEdit(it)">Edit</button>
+                    <!-- Row actions: text on web, icon on touch. -->
+                    <span class="pf-inv-acts">
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openReceive(it)" aria-label="Receive stock" title="Receive"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span class="nd-rowact__t">Receive</span></button>
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="showLabel(it)" aria-label="Label" title="Label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg><span class="nd-rowact__t">Label</span></button>
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="toggleBatches(it)" [attr.aria-expanded]="expandedId() === it.id" aria-label="Batches" title="Batches"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg><span class="nd-rowact__t">Batches</span></button>
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="startEdit(it)" aria-label="Edit item" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
+                    </span>
                   </td>
                 </tr>
                 @if (expandedId() === it.id) {
-                  <tr style="background:var(--glass-bg)"><td colspan="5" class="p-3">
+                  <tr class="pf-inv-expand"><td colspan="5" class="p-3">
                     @if (receiveFor() === it.id) {
-                      <div class="flex flex-wrap items-end gap-2 mb-3 p-3 rounded-lg rcv-form" style="background:var(--bg-card-solid)">
-                        <label class="block"><span class="lbl">Lot #</span><input class="inp" [ngModel]="rcv().lot" (ngModelChange)="setR('lot',$event)"/></label>
-                        <label class="block"><span class="lbl">Expiry</span><input class="inp" type="date" [ngModel]="rcv().expiry" (ngModelChange)="setR('expiry',$event)"/></label>
-                        <label class="block"><span class="lbl">Unit cost</span><input class="inp" type="number" [ngModel]="rcv().cost" (ngModelChange)="setR('cost',+$event)"/></label>
-                        <label class="block"><span class="lbl">Qty *</span><input class="inp" [class.inp--err]="rcvError()?.field==='qty'||rcvError()?.field==='quantity'" type="number" [ngModel]="rcv().qty" (ngModelChange)="setR('qty',+$event)"/>
+                      <div class="flex flex-wrap items-end gap-2 mb-3 p-3 rcv-form">
+                        <label class="block"><span class="nd-field__lbl lbl">Lot #</span><input class="nd-input" [ngModel]="rcv().lot" (ngModelChange)="setR('lot',$event)"/></label>
+                        <label class="block"><span class="nd-field__lbl lbl">Expiry</span><input class="nd-input nd-num" type="date" [ngModel]="rcv().expiry" (ngModelChange)="setR('expiry',$event)"/></label>
+                        <label class="block"><span class="nd-field__lbl lbl">Unit cost</span><input class="nd-input nd-num" type="number" [ngModel]="rcv().cost" (ngModelChange)="setR('cost',+$event)"/></label>
+                        <label class="block"><span class="nd-field__lbl lbl">Qty *</span><input class="nd-input" [class.nd-input--error]="rcvError()?.field==='qty'||rcvError()?.field==='quantity'" type="number" [ngModel]="rcv().qty" (ngModelChange)="setR('qty',+$event)"/>
                           @if (rcvError()?.field==='qty'||rcvError()?.field==='quantity') { <span class="fld-err">{{ rcvError()!.message }}</span> }
                         </label>
-                        <button class="px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--green,#10b981)" [disabled]="rcv().qty<=0" (click)="receive(it)">Add stock</button>
+                        <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="rcv().qty<=0" (click)="receive(it)">Add stock</button>
                       </div>
                     }
 
@@ -179,29 +189,29 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                     @if (labelCode() && expandedId() === it.id) {
                       <div class="label-wrap">
                         <div class="label-wrap__head">
-                          <span class="text-[11px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Label</span>
-                          <div class="seg">
-                            <button class="seg__i" [class.seg__i--on]="labelMode()==='both'" (click)="labelMode.set('both')">Both</button>
-                            <button class="seg__i" [class.seg__i--on]="labelMode()==='barcode'" (click)="labelMode.set('barcode')">Barcode</button>
-                            <button class="seg__i" [class.seg__i--on]="labelMode()==='qr'" (click)="labelMode.set('qr')">QR</button>
-                          </div>
+                          <span class="pf-inv-sec">Label</span>
+                          <span class="nd-seg" role="radiogroup" aria-label="Label type">
+                            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='both'" (click)="labelMode.set('both')">Both</button>
+                            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='barcode'" (click)="labelMode.set('barcode')">Barcode</button>
+                            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="labelMode()==='qr'" (click)="labelMode.set('qr')">QR</button>
+                          </span>
                         </div>
                         <div class="label-print pf-print-label">
                           <pf-barcode-display [code]="labelCode()!" [mode]="labelMode()" [showValue]="true"></pf-barcode-display>
                         </div>
                         <div class="flex gap-3 mt-2">
-                          <button class="rowbtn rowbtn--accent" (click)="printLabel()">Print label</button>
-                          <button class="rowbtn" (click)="labelCode.set(null)">Hide</button>
+                          <button type="button" class="nd-btn nd-btn--secondary press" (click)="printLabel()">Print label</button>
+                          <button type="button" class="nd-btn nd-btn--tertiary press" (click)="labelCode.set(null)">Hide</button>
                         </div>
                       </div>
                     }
 
-                    <div class="text-[11px] font-bold uppercase tracking-wider mb-1" style="color:var(--text-muted)">Batches (FEFO)</div>
+                    <div class="pf-inv-sec mb-1">Batches (FEFO)</div>
                     @for (b of batches(); track b.id) {
-                      <div class="flex items-center justify-between text-sm py-1 border-b" style="border-color:var(--glass-border)">
-                        <span>{{ b.lotNumber || '—' }} <span style="color:var(--text-muted)">exp {{ b.expiryDate ? (b.expiryDate | date) : '—' }}</span>
-                          @if (b.expired) { <span class="ml-1 text-[10px]" style="color:var(--red)">expired</span> }</span>
-                        <span class="flex items-center gap-3 font-mono">
+                      <div class="flex items-center justify-between text-sm py-1 border-b" style="border-color:var(--nd-line)">
+                        <span><span class="nd-num">{{ b.lotNumber || '—' }}</span> <span style="color:var(--text-muted)">exp <span class="nd-num">{{ b.expiryDate ? (b.expiryDate | date) : '—' }}</span></span>
+                          @if (b.expired) { <span class="ml-1 text-[11px]" style="color:var(--red-text, #b91c1c)">expired</span> }</span>
+                        <span class="flex items-center gap-3 nd-num">
                           <span>{{ b.qtyOnHand | number:'1.0-2' }}</span>
                           <button class="text-xs iconbtn" style="color:var(--text-tertiary)" (click)="adjust(b, -1)" aria-label="Decrease">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg>
@@ -228,15 +238,16 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 
       <!-- Per-test consumables (BOM) — drives auto-deduction at collection -->
       @if (showBom()) {
-      <div class="pf-inv-bom p-4 rounded-xl border" style="background:var(--glass-bg);border-color:var(--glass-border)">
-        <div class="text-sm font-bold mb-1" style="color:var(--text-primary)">Per-test consumables</div>
-        <p class="text-sm mb-3" style="color:var(--text-tertiary)">Map which items a test consumes. These are auto-deducted (FEFO) from this branch's stock when a sample is collected.</p>
+      <div class="pf-inv-bom nd-card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6"/></svg></span><span class="nd-card__label">Per-test consumables</span></div>
+        <div class="pf-inv-bom__body">
+        <p class="pf-inv-muted mb-3">Map which items a test consumes. These are auto-deducted (FEFO) from this branch's stock when a sample is collected.</p>
         <!-- New design: the test picker rides the band pill. -->
         <pf-select class="pf-classic-only block" style="max-width:340px" [options]="testOptions()" [value]="bomTestId()"
                    [searchable]="true" placeholder="Select a test…" (valueChange)="selectTest($event)"
                    aria-label="Test"></pf-select>
         @if (theme.isNewDesign() && !bomTestId()) {
-          <p class="text-sm" style="color:var(--text-muted)">Pick a test in the bar above to edit what it consumes.</p>
+          <p class="pf-inv-muted">Pick a test in the bar above to edit what it consumes.</p>
         }
 
         @if (bomTestId()) {
@@ -245,38 +256,61 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
               <div class="flex items-center gap-2 bom-line">
                 <pf-select class="bom-line__item" [options]="itemOptions()" [value]="line.itemId" [searchable]="true"
                            placeholder="Item…" (valueChange)="setLine($index,'itemId',$event)" aria-label="Item"></pf-select>
-                <input class="inp bom-line__qty" style="width:110px" type="number" min="0" step="0.001" [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index,'qtyPerTest',+$event)" placeholder="qty/test"/>
-                <button class="text-sm px-2 iconbtn" style="color:var(--red)" (click)="removeLine($index)" aria-label="Remove item">
+                <input class="nd-input nd-num bom-line__qty" style="width:110px" type="number" min="0" step="0.001" [ngModel]="line.qtyPerTest" (ngModelChange)="setLine($index,'qtyPerTest',+$event)" placeholder="qty/test"/>
+                <button type="button" class="text-sm px-2 iconbtn pf-inv-x" (click)="removeLine($index)" aria-label="Remove item" title="Remove item">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </div>
             }
             <div class="flex gap-2 pt-1">
-              <button class="text-xs font-semibold touch-link" style="color:var(--violet-400)" (click)="addLine()">+ Add item</button>
+              <button type="button" class="nd-btn nd-btn--tertiary touch-link" (click)="addLine()">+ Add item</button>
             </div>
             <button class="pf-classic-only mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="bomSaving()" (click)="saveBom()">{{ bomSaving() ? 'Saving…' : 'Save consumables' }}</button>
           </div>
         }
+        </div>
       </div>
       }
       </div>
     </section>
   `,
   styles: [`
-    .lbl { display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:4px; }
+    .lbl { display:block; margin-bottom:6px; }
+    /* ── ND audit: kit cards / rows ── */
+    .pf-inv-alert { padding-bottom: 10px; }
+    .pf-inv-alert > :not(.nd-card__head) { margin: 0 14px; }
+    .pf-inv-alert > .alert-row:first-of-type { margin-top: 8px; }
+    .pf-inv-count { font-size: 12px; color: var(--text-tertiary); }
+    .pf-inv-muted { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-inv-alert .pf-inv-muted { margin-top: 10px; }
+    .pf-inv-editor { margin-bottom: 20px; }
+    .pf-inv-editor__body { padding: 16px 18px; }
+    .pf-inv-name { font-weight: 600; color: var(--text-primary); }
+    .pf-inv-sku { font-size: 12px; color: var(--text-tertiary); }
+    .pf-inv-low { height: 22px; margin-left: 8px; font-size: 11px; }
+    .pf-inv-row { border-top: 1px solid var(--nd-line); }
+    .pf-inv-expand { background: var(--nd-chip-bg); }
+    .pf-inv-acts { display: inline-flex; gap: 6px; }
+    .pf-inv-sec { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
+    .pf-inv-x { color: var(--text-tertiary); }
+    .pf-inv-x:hover { color: var(--red-text, #b91c1c); }
+    .pf-inv-bom__body { padding: 14px 18px 18px; }
+    .rcv-form { border-radius: var(--nd-radius); background: var(--nd-card-bg); border: 1px solid var(--nd-line); }
+    .rcv-form .nd-btn { height: 40px; min-height: 40px; }
     .inp { width:100%; padding:9px 11px; border-radius:10px; background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text-primary); font-size:13.5px; }
     .inp:focus { outline:none; border-color:var(--violet-500,#8b5cf6); box-shadow:0 0 0 3px rgba(124,58,237,.16); }
     .inp--err { border-color:var(--red,#ef4444); }
     .fld-err { display:block; font-size:11px; color:var(--red,#ef4444); margin-top:4px; }
-    table tbody tr:hover td { background:rgba(139,92,246,.06); }
-    thead th { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+    table tbody tr.pf-inv-row:hover td { background:var(--nd-chip-bg); }
+    thead th { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-tertiary);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
     .rowbtn { font-size:12px; font-weight:700; padding:5px 10px; border-radius:8px; margin-left:6px; border:1px solid var(--glass-border); background:var(--glass-bg); color:var(--text-secondary); transition:color .14s, border-color .14s; }
     .rowbtn:hover { color:var(--text-primary); border-color:var(--glass-border-hover); }
     .rowbtn--accent { color:var(--violet-300); border-color:rgba(124,58,237,.4); background:rgba(124,58,237,.12); }
     .seg { display:inline-flex; gap:2px; padding:2px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg); }
     .seg__i { font-size:11px; font-weight:700; padding:4px 10px; border-radius:6px; border:0; background:transparent; color:var(--text-tertiary); }
     .seg__i--on { color:#fff; background:var(--gradient-primary); }
-    .label-wrap { margin:4px 0 14px; padding:14px; border-radius:12px; border:1px solid var(--glass-border-hover); background:var(--bg-card-solid); }
+    .label-wrap { margin:4px 0 14px; padding:14px; border-radius:var(--nd-radius); border:1px solid var(--nd-line); background:var(--nd-card-bg); }
     .label-wrap__head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
     .label-print { display:inline-block; padding:12px; border-radius:12px; background:#fff; }
 
@@ -327,7 +361,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
     @media (max-width: 1279px) {
       :host .bom-line__item { min-width: 0; }
       :host .alert-row { gap: 12px; }
-      :host .alert-row__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      :host .alert-row__name { min-width: 0; overflow-wrap: anywhere; }
     }
 
     /* Touch devices (any width): give every interactive element a comfortable
@@ -349,7 +383,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
     /* Hover affordances only where a real pointer exists (prevents sticky :hover on touch). */
     @media (hover: none) {
       :host table tbody tr:hover td { background: transparent; }
-      :host .rowbtn:hover { color: var(--text-secondary); border-color: var(--glass-border); }
+
     }
   `]
 })
@@ -358,6 +392,8 @@ export class InventoryComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   protected readonly navBack = inject(NavBackService);
   protected readonly theme = inject(ThemeService);
+  /** Row actions: text on web, icon on touch (ND-PATTERN). */
+  protected readonly web = webPointerSignal();
   readonly categories = CATEGORIES;
   readonly categoryOptions: PfSelectOption[] = CATEGORIES.map(c => ({ value: c, label: c[0].toUpperCase() + c.slice(1) }));
 
