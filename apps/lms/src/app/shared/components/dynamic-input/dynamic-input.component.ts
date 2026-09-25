@@ -43,6 +43,185 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
   imports: [FormsModule, NgTemplateOutlet, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (ndOn()) {
+      <ng-container *ngTemplateOutlet="ndTpl"></ng-container>
+    } @else {
+      <ng-container *ngTemplateOutlet="classicTpl"></ng-container>
+    }
+
+    <!-- NEW DESIGN (ND-PATTERN §14 fields) — opt-in via [nd]. Kit fields:
+         .nd-field › .nd-field__lbl (+ the amber REQUIRED dot) › .nd-input;
+         choices of 2–4 (and one-tap pills) are a neutral .nd-seg driven by
+         aria-pressed (never an --on class); on/off is a slate .nd-toggle.
+         Noto only; ID / phone / age numbers in tabular numbers. The value
+         logic (phone rules, identity grouping, DOB ⇄ age) is shared with
+         the classic template below — only the markup differs. -->
+    <ng-template #ndTpl>
+      @let t = field.type;
+      @let opts = normalisedOptions();
+      <div class="flex flex-col gap-1.5 nd-field pf-di-nd" [attr.data-field]="field.name">
+        @if (t !== 'checkbox' && t !== 'toggle') {
+          <label class="nd-field__lbl pf-di-lbl" [attr.for]="inputId" [id]="inputId + '-l'">
+            <span>{{ field.title }}</span>
+            @if (field.unit) { <span class="pf-di-unit">({{ field.unit }})</span> }
+            @if (field.required) {
+              <span class="nd-dot-unpriced pf-di-req" role="img" aria-label="required" title="Required"></span>
+            }
+          </label>
+        }
+
+        @switch (t) {
+          @case ('text') {
+            @if (identityFormat(); as fmt) {
+              <input #dinp [id]="inputId" type="text" inputmode="numeric" class="nd-input nd-num"
+                     [attr.maxlength]="fmt.max" [placeholder]="fmt.placeholder" [attr.aria-required]="field.required || null"
+                     [ngModel]="displayIdentity(value)" (ngModelChange)="emitIdentity(dinp, $event, fmt)" />
+            } @else if (digitLimit(); as lim) {
+              <input #dinp [id]="inputId" type="text" inputmode="numeric" pattern="[0-9]*" class="nd-input nd-num"
+                     [attr.maxlength]="lim" [placeholder]="field.placeholder ?? ''" [attr.aria-required]="field.required || null"
+                     [ngModel]="value" (ngModelChange)="emitDigits(dinp, $event, lim)" />
+            } @else {
+              <input [id]="inputId" type="text" class="nd-input" [placeholder]="field.placeholder ?? ''"
+                     [attr.aria-required]="field.required || null"
+                     [ngModel]="value" (ngModelChange)="emit($event)" />
+            }
+          }
+          @case ('email') {
+            <input [id]="inputId" type="email" class="nd-input" [placeholder]="field.placeholder ?? ''"
+                   [attr.aria-required]="field.required || null" [ngModel]="value" (ngModelChange)="emit($event)" />
+          }
+          @case ('phone') {
+            <div class="pf-di-phone" [class.pf-di-phone--err]="phoneError() != null">
+              <pf-select class="pf-di-phone__cc" [options]="countrySelectOptionsNd" [searchable]="true"
+                         [value]="selectedCountryCode()" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
+              <span class="pf-di-phone__sep" aria-hidden="true"></span>
+              <input [id]="inputId" type="tel" inputmode="tel" class="pf-di-phone__num nd-num"
+                     [attr.aria-required]="field.required || null"
+                     [placeholder]="activePhoneRule().placeholder"
+                     [ngModel]="phoneDigits()" (ngModelChange)="onPhoneDigitsChange($event)" />
+            </div>
+            @if (phoneError(); as err) { <p class="pf-di-err">{{ err }}</p> }
+          }
+          @case ('number') { <ng-container *ngTemplateOutlet="ndNumTpl"></ng-container> }
+          @case ('numeric') { <ng-container *ngTemplateOutlet="ndNumTpl"></ng-container> }
+          @case ('textarea') {
+            <textarea [id]="inputId" class="nd-input pf-di-area" [placeholder]="field.placeholder ?? ''"
+                      [ngModel]="value" (ngModelChange)="emit($event)"></textarea>
+          }
+          @case ('date') {
+            @if (isDobField()) {
+              <!-- DOB ⇄ age: an exact date OR an age (Yrs / Mo), same logic as classic. -->
+              <div class="pf-di-dob">
+                <input [id]="inputId" type="date" class="nd-input nd-num pf-di-dob__date" [attr.max]="todayIso"
+                       [attr.aria-required]="field.required || null"
+                       [ngModel]="value" (ngModelChange)="emit($event)" />
+                <span class="pf-di-dob__or">or</span>
+                <input type="number" inputmode="numeric" class="nd-input nd-num pf-di-dob__age" min="0"
+                       [attr.max]="ageUnit() === 'months' ? 240 : 150" placeholder="Age"
+                       [attr.aria-label]="'Age in ' + ageUnit()"
+                       [ngModel]="hybridAgeDisplay()" (ngModelChange)="onHybridAge($event)" />
+                <div class="nd-seg pf-di-seg pf-di-seg--unit" role="group" aria-label="Age unit">
+                  <button type="button" class="nd-seg__item" [attr.aria-pressed]="ageUnit() === 'years'"
+                          (click)="setAgeUnit('years')">Yrs</button>
+                  <button type="button" class="nd-seg__item" [attr.aria-pressed]="ageUnit() === 'months'"
+                          (click)="setAgeUnit('months')">Mo</button>
+                </div>
+              </div>
+              <p class="nd-field__hint">Type either — an entered age stays current automatically.</p>
+            } @else {
+              <input [id]="inputId" type="date" class="nd-input nd-num" [ngModel]="value" (ngModelChange)="emit($event)" />
+            }
+          }
+          @case ('datetime') {
+            <input [id]="inputId" type="datetime-local" class="nd-input nd-num" [ngModel]="value" (ngModelChange)="emit($event)" />
+          }
+          @case ('time') {
+            <input [id]="inputId" type="time" class="nd-input nd-num" [ngModel]="value" (ngModelChange)="emit($event)" />
+          }
+          @case ('select') {
+            @if (opts.length >= 2 && opts.length <= 4) {
+              <!-- 2–4 choices (Sex, …): a neutral segmented control that fills the column. -->
+              <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: true }"></ng-container>
+            } @else {
+              <pf-select [options]="selectOptions()" [value]="value" [searchable]="opts.length > 8"
+                         [placeholder]="field.placeholder ?? 'Select…'" (valueChange)="emit($event)"></pf-select>
+            }
+          }
+          @case ('button_select') {
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4 }"></ng-container>
+          }
+          @case ('image_select') {
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4 }"></ng-container>
+          }
+          @case ('radio') {
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: opts, fill: opts.length <= 4 }"></ng-container>
+          }
+          @case ('yesno') {
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: yesNoOptions(), fill: true }"></ng-container>
+          }
+          @case ('yes_no_na') {
+            <ng-container *ngTemplateOutlet="ndSegTpl; context: { $implicit: yesNoNaOptions, fill: true }"></ng-container>
+          }
+          @case ('multi_button_select') {
+            <div class="pf-di-chips" role="group" [attr.aria-labelledby]="inputId + '-l'">
+              @for (o of opts; track o.value) {
+                <button type="button" class="nd-chip pf-di-chip" [attr.aria-pressed]="isSelected(o.value)"
+                        (click)="toggleMulti(o.value)">{{ o.label }}</button>
+              }
+            </div>
+          }
+          @case ('multiselect') {
+            <div class="pf-di-chips" role="group" [attr.aria-labelledby]="inputId + '-l'">
+              @for (o of opts; track o.value) {
+                <button type="button" class="nd-chip pf-di-chip" [attr.aria-pressed]="isSelected(o.value)"
+                        [title]="o.sublabel ?? o.label" (click)="toggleMulti(o.value)">{{ o.label }}</button>
+              } @empty {
+                <p class="nd-field__hint">No options available.</p>
+              }
+            </div>
+          }
+          @case ('scan') {
+            <input [id]="inputId" type="text" class="nd-input nd-num" placeholder="Scan or type barcode"
+                   [ngModel]="value" (ngModelChange)="emit($event)" />
+          }
+          @default {
+            <!-- checkbox / toggle: a slate switch with its label beside it. -->
+            <button type="button" class="nd-toggle pf-di-switch" role="switch" [attr.aria-checked]="!!value"
+                    (click)="emit(!value)">
+              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              <span class="pf-di-switch__t">
+                {{ t === 'checkbox' ? (field.placeholder ?? field.title) : field.title }}
+                @if (field.required) {
+                  <span class="nd-dot-unpriced pf-di-req" role="img" aria-label="required" title="Required"></span>
+                }
+              </span>
+            </button>
+          }
+        }
+
+        @if (field.helperText && t !== 'checkbox') {
+          <p class="nd-field__hint">{{ field.helperText }}</p>
+        }
+      </div>
+    </ng-template>
+
+    <ng-template #ndNumTpl>
+      <input [id]="inputId" type="number" class="nd-input nd-num" [step]="'any'" [placeholder]="field.placeholder ?? ''"
+             [ngModel]="value" (ngModelChange)="emit($event === null ? null : $event)" />
+    </ng-template>
+
+    <!-- One-of-n: a neutral segmented control, aria-pressed = the selected
+         state. fill → equal segments across the column (2–4 choices). -->
+    <ng-template #ndSegTpl let-list let-fill="fill">
+      <div class="nd-seg pf-di-seg" [class.pf-di-seg--fill]="fill" role="group" [attr.aria-labelledby]="inputId + '-l'">
+        @for (o of list; track o.value) {
+          <button type="button" class="nd-seg__item" [attr.aria-pressed]="value === o.value"
+                  (click)="emit(o.value)">{{ o.label }}</button>
+        }
+      </div>
+    </ng-template>
+
+    <ng-template #classicTpl>
     @let type = field.type;
     @let norm = normalisedOptions();
     <div class="flex flex-col gap-1.5">
@@ -441,6 +620,7 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
         <p class="text-[11px] text-slate-500">{{ field.helperText }}</p>
       }
     </div>
+    </ng-template>
 
     <ng-template #numericTpl>
       <input type="number" class="pf-input"
@@ -712,9 +892,98 @@ type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high
       cursor: pointer;
       border: none;
     }
+
+    /* ── NEW DESIGN ([nd]) — kit fields, one 40px height (44px phones). ── */
+    .pf-di-lbl { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .pf-di-unit { font-weight: 400; color: var(--text-tertiary); }
+    .pf-di-err { margin: 0; font-size: 12px; line-height: 1.4; color: var(--red-text, #dc2626); }
+    .pf-di-area { min-height: 88px; }
+    /* The classic 44px/12px trigger rule above must not win in nd. */
+    :host .pf-di-nd ::ng-deep pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger {
+      height: 40px; border-radius: var(--nd-radius-sm);
+      border-color: color-mix(in srgb, var(--text-primary) 22%, transparent);
+      background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg));
+    }
+    /* Phone: country code + number share ONE kit input shell. */
+    .pf-di-phone {
+      display: flex; align-items: center; width: 100%; min-height: 40px; box-sizing: border-box;
+      border-radius: var(--nd-radius-sm);
+      border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+      background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg));
+      transition: border-color var(--nd-dur-fast) ease, box-shadow var(--nd-dur-fast) ease;
+    }
+    .pf-di-phone:hover { border-color: color-mix(in srgb, var(--text-primary) 38%, transparent); }
+    .pf-di-phone:focus-within {
+      border-color: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+    }
+    .pf-di-phone--err { border-color: var(--red-border, #ef4444); }
+    .pf-di-phone__cc { flex: 0 0 92px; min-width: 0; }
+    :host .pf-di-phone__cc ::ng-deep .pf-dd__trigger {
+      height: 38px !important; border: 0 !important; background: transparent !important;
+      box-shadow: none !important; padding: 0 6px 0 12px;
+    }
+    .pf-di-phone__sep { flex: none; width: 1px; align-self: stretch; margin: 8px 0; background: var(--nd-line); }
+    .pf-di-phone__num {
+      flex: 1 1 auto; min-width: 0; height: 38px; padding: 0 12px; border: 0; outline: 0;
+      background: transparent; color: var(--text-primary);
+      font: inherit; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;
+    }
+    .pf-di-phone__num::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
+    /* DOB ⇄ age on one row. */
+    .pf-di-dob { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-di-dob__date { flex: 1 1 150px; width: auto; }
+    .pf-di-dob__age { flex: 0 0 84px; width: 84px; }
+    .pf-di-dob__or { flex: none; font-size: 12px; color: var(--text-tertiary); }
+    /* Segmented choices: a 40px neutral control; wraps rather than clips. */
+    .pf-di-seg { box-sizing: border-box; min-height: 40px; max-width: 100%; flex-wrap: wrap; align-items: stretch; }
+    .pf-di-seg .nd-seg__item { height: auto; min-height: 34px; min-width: 56px; padding: 0 14px; font-size: 13px; }
+    /* Pills (5+ options, e.g. Title) keep their natural width on web. */
+    .pf-di-seg:not(.pf-di-seg--fill) { align-self: flex-start; }
+    .pf-di-seg--fill { display: flex; width: 100%; }
+    .pf-di-seg--fill .nd-seg__item { flex: 1 1 0; }
+    .pf-di-seg--unit { flex: none; }
+    .pf-di-seg--unit .nd-seg__item { min-width: 44px; padding: 0 10px; }
+    .pf-di-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-di-chip { height: 34px; font-size: 13px; }
+    .pf-di-switch { min-height: 40px; font-size: 13.5px; white-space: normal; text-align: left; }
+    .pf-di-switch__t { display: inline-flex; align-items: center; gap: 6px; }
+    @media (max-width: 640px) {
+      .pf-di-phone { min-height: 44px; }
+      .pf-di-phone__num { height: 42px; font-size: 16px; }
+      :host .pf-di-phone__cc ::ng-deep .pf-dd__trigger { height: 42px !important; }
+      :host .pf-di-nd ::ng-deep pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger { height: 44px; }
+      .pf-di-seg { min-height: 44px; }
+      .pf-di-seg .nd-seg__item { min-height: 38px; }
+      /* 5+ one-tap options (Title): balanced rows of three, full width. */
+      .pf-di-seg:not(.pf-di-seg--fill):not(.pf-di-seg--unit) { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+      .pf-di-dob__date { flex-basis: 100%; }
+      .pf-di-dob__age { flex: 1 1 auto; width: auto; }
+      .pf-di-switch { min-height: 44px; }
+    }
   `]
 })
 export class DynamicInputComponent {
+  private static _seq = 0;
+  /** Stable id so the kit label's for= points at the control (getByLabel works). */
+  readonly inputId = `pf-di-${++DynamicInputComponent._seq}`;
+  /** New-design markup (ND-PATTERN §14). Off by default: every existing host
+   *  (result entry, workflow preview, …) keeps the classic look. */
+  @Input() nd = false;
+  private static readonly ND_TYPES = new Set([
+    'text', 'email', 'phone', 'number', 'numeric', 'textarea', 'date', 'datetime', 'time',
+    'select', 'button_select', 'image_select', 'radio', 'yesno', 'yes_no_na',
+    'multi_button_select', 'multiselect', 'scan', 'checkbox', 'toggle',
+  ]);
+  /** nd markup only for the types it covers; anything exotic stays classic. */
+  ndOn(): boolean {
+    return this.nd && !!this._field() && DynamicInputComponent.ND_TYPES.has(this._field()!.type);
+  }
+  /** No flag emoji in the new design: the code, with the country as the hint. */
+  readonly countrySelectOptionsNd: PfSelectOption<string>[] = COUNTRY_PHONE_RULES.map(r => ({
+    value: r.code, label: r.code, hint: r.name,
+  }));
+  readonly yesNoNaOptions: FieldOption[] = ['Yes', 'No', 'N/A'].map(v => ({ value: v, label: v }));
   private readonly _field = signal<DynamicFieldConfig | null>(null);
   private readonly _value = signal<unknown>(null);
 

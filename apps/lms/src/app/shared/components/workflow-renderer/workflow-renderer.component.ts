@@ -38,6 +38,34 @@ export interface WorkflowStepCompleteEvent {
     @let cfg = config();
     @if (!cfg || visibleSteps().length === 0) {
       <div class="pf-card text-sm text-slate-500">Nothing to render.</div>
+    } @else if (singlePage() && nd()) {
+      <!-- NEW DESIGN (ND-PATTERN §14): the host shows ONE section at a time
+           (its tabs ride in the band pill) and owns the actions (the ONE
+           primary sits in the band) — so no headings and, with hideActions,
+           no action row here. Validation still covers EVERY section; the
+           (invalid) output tells the host which one to open. -->
+      @if (validationError(); as err) {
+        <p class="pf-wr-err" role="alert">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+          <span>{{ err }}</span>
+        </p>
+      }
+      @for (s of ndSteps(); track s.id) {
+        <div class="pf-wr-sec" [attr.data-step]="s.id">
+          <ng-container *ngTemplateOutlet="stepFields; context: { $implicit: s }"></ng-container>
+        </div>
+      }
+      @if (!hideActions()) {
+        <div class="mt-5 flex flex-wrap gap-3 justify-end items-center">
+          @for (action of extraActions(); track action.id) {
+            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="submitting()"
+                    (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
+          }
+          <button type="button" class="nd-btn nd-btn--primary" [disabled]="submitting()"
+                  (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
+        </div>
+      }
     } @else if (singlePage()) {
       <!-- SINGLE-PAGE: every step is a visible, titled section (no hidden
            "Add more" reveal — configured extra fields must be discoverable).
@@ -138,6 +166,7 @@ export interface WorkflowStepCompleteEvent {
                       [field]="testParamConfig(p)"
                       [value]="valueFor(step, p.name)"
                       [context]="context()"
+                      [nd]="nd()"
                       (valueChange)="setValue(step, p.name, $event)"></pf-dynamic-input>
                   </div>
                 }
@@ -199,6 +228,7 @@ export interface WorkflowStepCompleteEvent {
                 [field]="fieldConfig(f)"
                 [value]="valueFor(step, f.name)"
                 [context]="context()"
+                [nd]="nd()"
                 (valueChange)="setValue(step, f.name, $event)"></pf-dynamic-input>
             </div>
           }
@@ -211,6 +241,14 @@ export interface WorkflowStepCompleteEvent {
     </ng-template>
   `,
   styles: [`
+    /* New design: the validation line sits at the top of the section card. */
+    .pf-wr-err {
+      display: flex; align-items: flex-start; gap: 8px; margin: 0 0 14px; padding: 10px 12px;
+      border-radius: var(--nd-radius-sm, 10px); border: 1px solid color-mix(in srgb, var(--red-border, #ef4444) 45%, transparent);
+      background: color-mix(in srgb, var(--red-border, #ef4444) 7%, transparent);
+      color: var(--red-text, #dc2626); font-size: 13px; font-weight: 500; line-height: 1.4;
+    }
+    .pf-wr-err > svg { flex: none; margin-top: 2px; }
     /* Same 44px control height / 12px radius the dynamic inputs use — the
        renderer's own raw inputs and the title-prefix select must not sit a
        few pixels off from their neighbours. */
@@ -232,6 +270,16 @@ export class WorkflowRendererComponent implements OnChanges {
    *  later steps are revealed inline by "Add more"; one Submit finishes. Used by
    *  the patient-registration form. */
   readonly singlePage = input<boolean>(false);
+  /** New-design markup (ND-PATTERN §14): kit fields, no in-form headings.
+   *  Only meaningful with singlePage. Off by default (workflow preview …). */
+  readonly nd = input<boolean>(false);
+  /** New design: render only this step (the host's open section tab);
+   *  null = every step. Validation always covers every step. */
+  readonly activeStepId = input<string | null>(null);
+  /** The host renders the actions itself (the band's ONE primary). */
+  readonly hideActions = input<boolean>(false);
+  /** Single-page validation failed: which step holds the first problem. */
+  readonly invalid = output<{ stepId: string; fieldName: string; message: string }>();
 
   @Input() initialValues: WorkflowFormValues = {};
 
@@ -266,12 +314,34 @@ export class WorkflowRendererComponent implements OnChanges {
         const v = this.valueFor(steps[i], f.name);
         const err = validateFieldValue(f, v);
         if (err) {
-          this._validationError.set(`${f.title}: ${err}`);
+          const message = `${f.title}: ${err}`;
+          this._validationError.set(message);
+          this.invalid.emit({ stepId: steps[i].id, fieldName: f.name, message });
           return false;
         }
       }
     }
     this._validationError.set(null);
+    return true;
+  }
+
+  /** New design: the steps on screen — just the open section when the host
+   *  names one (and it is visible), else all of them. */
+  readonly ndSteps = computed<WorkflowStep[]>(() => {
+    const steps = this.visibleSteps();
+    const id = this.activeStepId();
+    const one = id ? steps.filter(s => s.id === id) : [];
+    return one.length ? one : steps;
+  });
+
+  /** True when every visible field of the step passes validation — the
+   *  host's section-tab dot (filled = complete, ring = something to finish).
+   *  Pure: never touches the on-screen validation message. */
+  isStepValid(step: WorkflowStep): boolean {
+    for (const f of this.visibleFields(step)) {
+      if (f.type === 'test_parameters') continue;
+      if (validateFieldValue(f, this.valueFor(step, f.name))) return false;
+    }
     return true;
   }
 
@@ -309,6 +379,8 @@ export class WorkflowRendererComponent implements OnChanges {
   // ── honorific prefix inside the first-name cell ────────────────
   /** The step's honorific field, if it can ride inside the first-name box. */
   groupTitleField(step: WorkflowStep): WorkflowField | null {
+    // New design: Title is its own neutral segmented field, not a prefix.
+    if (this.nd()) return null;
     if (!step.fields.some(f => f.name === 'first_name')) return null;
     return this.visibleFields(step).find(f => f.name === 'title' && (f.options?.length ?? 0) > 0) ?? null;
   }
