@@ -26,10 +26,6 @@
           <span class="pf-sre-chip__name">{{ patientName() }}</span>
           @if (patientMeta()) { <span class="pf-sre-chip__meta nd-num">{{ patientMeta() }}</span> }
         </span>
-        <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--sample" title="Sample ID">
-          <span class="pf-sre-chip__id nd-num">{{ s.barcode || "—" }}</span>
-          @if (s.department?.code) { <span class="pf-sre-chip__meta">· {{ s.department?.code }}</span> }
-        </span>
         @if (s.order?.orderNumber) {
           <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--order" title="Order ID">
             <span class="pf-sre-chip__meta">Order</span><span class="nd-num pf-sre-chip__val">{{ s.order?.orderNumber }}</span>
@@ -42,12 +38,6 @@
             Read-only
           </span>
         }
-        <!-- Signed-in technician + registration ID (dash until set). -->
-        <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--tech" title="Signed-in technician">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <span class="pf-sre-chip__name">{{ techName() }}</span>
-          <span class="pf-sre-chip__meta nd-num" title="Registration ID">Reg {{ techRegId() }}</span>
-        </span>
       } @else {
         <span class="pf-sre-skel__bar" style="width: 240px" aria-hidden="true"></span>
       }
@@ -64,9 +54,9 @@
                     [attr.data-tube]="tab.id"
                     [attr.aria-selected]="tab.id === activeTubeId()"
                     [attr.aria-pressed]="tab.id === activeTubeId()"
-                    (click)="openSibling(tab.id)" [title]="tab.tests">
+                    (click)="openSibling(tab.id)" [title]="tab.tests"
+                    [attr.aria-label]="(tab.barcode || 'Tube') + (tab.tests ? ' — ' + tab.tests : '')">
               <span class="nd-num pf-sre-tab__id">{{ tab.barcode || "Tube" }}</span>
-              @if (tab.tests) { <span class="pf-sre-tab__tests">{{ tab.tests }}</span> }
               @if (tab.open && tab.id !== activeTubeId()) { <span class="pf-sre-tab__dot" aria-label="Open work"></span> }
             </button>
           }
@@ -78,6 +68,17 @@
   <!-- Save draft / Submit (or Reject / Validate) — ONE definition, shown in
        the band on web + tablet and in the phone bottom bar. -->
   <ng-template #actions let-where>
+    <!-- Signed-in technician (Reg in the tooltip on phones), left of Save draft. -->
+    <span class="nd-chip nd-chip--static pf-sre-techchip" [class.pf-sre-techchip--compact]="where === 'bar'"
+          [title]="techName() + ' · Reg ' + techRegId()" [attr.aria-label]="'Technician ' + techName() + ', Reg ' + techRegId()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      @if (where === 'bar') {
+        <span class="pf-sre-techchip__name">{{ techInitials() }}</span>
+      } @else {
+        <span class="pf-sre-techchip__name">{{ techName() }}</span>
+        <span class="pf-sre-techchip__reg nd-num">Reg {{ techRegId() }}</span>
+      }
+    </span>
     @if (validateMode()) {
       <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-reject"
               [disabled]="submitting() || enteredTests().length === 0" (click)="rejectTube()">Reject</button>
@@ -118,7 +119,7 @@
             <span class="nd-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
             </span>
-            <span class="nd-card__label">Results</span>
+            <span class="nd-card__label pf-sre-card__label">Results</span>
           </header>
           <div class="nd-card__body">
             <span class="pf-sre-skel__bar" style="width: 60%"></span>
@@ -290,7 +291,10 @@
                               }
                             </td>
                           </tr>
-                          @if (commentsFor(t.id, p.name).length > 0 || hasOpenComment(t.id, p.name) || paramNoteOpen(t.id, p.name)) {
+                          @if (paramNoteOpen(t.id, p.name)) {
+                          <tr class="pf-sre__grow-note"><td colspan="6"><ng-container *ngTemplateOutlet="quickNoteBox; context: { tid: t.id, pname: p.name, label: 'Note on ' + (p.title || p.name) }"></ng-container></td></tr>
+                        }
+                        @if (commentsFor(t.id, p.name).length > 0 || hasOpenComment(t.id, p.name)) {
                             <tr class="pf-sre__grow-comments">
                               <td colspan="6">
                                 <pf-comment-thread
@@ -309,7 +313,10 @@
                             <td colspan="6"><ng-container *ngTemplateOutlet="attachStrip; context: { $implicit: t }"></ng-container></td>
                           </tr>
                         }
-                        @if (isOverallOpen(t.id) || commentsFor(t.id, null).length > 0) {
+                        @if (isOverallOpen(t.id)) {
+                          <tr class="pf-sre__grow-note"><td colspan="6"><ng-container *ngTemplateOutlet="quickNoteBox; context: { tid: t.id, pname: null, label: 'Note on ' + (t.test?.name ?? 'this test') }"></ng-container></td></tr>
+                        }
+                        @if (commentsFor(t.id, null).length > 0) {
                           <tr class="pf-sre__grow-comments">
                             <td colspan="6">
                               <pf-comment-thread
@@ -338,10 +345,21 @@
         </span>
       </ng-template>
 
+      <!-- ONE-step note: opens focused; Enter or blur saves, Shift+Enter is
+           a new line, Esc cancels. -->
+      <ng-template #quickNoteBox let-tid="tid" let-pname="pname" let-label="label">
+        <textarea #qn class="pf-sre-quicknote" rows="2"
+                  [attr.data-quicknote]="quickNoteKey(tid, pname)"
+                  [attr.aria-label]="label"
+                  placeholder="Write a note — Enter to save, Esc to cancel"
+                  (keydown)="onQuickNoteKey($event, tid, pname)"
+                  (blur)="onQuickNoteBlur(tid, pname, qn.value)"></textarea>
+      </ng-template>
+
       <!-- Quiet neutral icon button (pencil) for a row / test note. -->
       <ng-template #noteBtn let-has="has" let-label="label" let-tid="tid" let-pname="pname">
         <button type="button" class="pf-sre__gnote" tabindex="-1" [class.pf-sre__gnote--has]="has"
-                (click)="pname ? toggleParamNote(tid, pname) : toggleOverall(tid)" [attr.aria-label]="label" [title]="label">
+                (mousedown)="$event.preventDefault()" (click)="pname ? toggleParamNote(tid, pname) : toggleOverall(tid)" [attr.aria-label]="label" [title]="label">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         </button>
       </ng-template>
@@ -489,12 +507,12 @@
                    conversation exists (it is then always visible). -->
               @if (commentsFor(t.id, null).length > 0) {
                 <button type="button" class="nd-btn nd-btn--secondary pf-sre__note-btn pf-sre__note-btn--has"
-                        (click)="toggleOverall(t.id)" [attr.aria-expanded]="true">
-                  Notes ({{ commentsFor(t.id, null).length }})
+                        (mousedown)="$event.preventDefault()" (click)="toggleOverall(t.id)" [attr.aria-expanded]="isOverallOpen(t.id)">
+                  + Note ({{ commentsFor(t.id, null).length }})
                 </button>
               } @else {
                 <button type="button" class="nd-btn nd-btn--secondary pf-sre__note-btn"
-                        (click)="toggleOverall(t.id)" [attr.aria-expanded]="isOverallOpen(t.id)">
+                        (mousedown)="$event.preventDefault()" (click)="toggleOverall(t.id)" [attr.aria-expanded]="isOverallOpen(t.id)">
                   {{ isOverallOpen(t.id) ? "Close note" : "+ Note" }}
                 </button>
               }
@@ -507,7 +525,12 @@
               @if (t.status === "re_entry" && t.rejectionReason) {
                 <p class="pf-sre__test-reject-reason"><strong>Pathologist note:</strong> {{ t.rejectionReason }}</p>
               }
-              @if (isOverallOpen(t.id) || commentsFor(t.id, null).length > 0) {
+              @if (isOverallOpen(t.id)) {
+                <div class="pf-sre__test-note">
+                  <ng-container *ngTemplateOutlet="quickNoteBox; context: { tid: t.id, pname: null, label: 'Note on ' + (t.test?.name ?? 'this test') }"></ng-container>
+                </div>
+              }
+              @if (commentsFor(t.id, null).length > 0) {
                 <div class="pf-sre__test-comments">
                   <pf-comment-thread
                     [comments]="commentsFor(t.id, null)"
@@ -566,14 +589,17 @@
                           <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
                           <td class="pf-sre__gc-method">
                             <span class="pf-sre__method">
-                              <span>{{ methodologyOf(p, t.test) }}</span>
+                              <span class="pf-sre__method-t">{{ methodologyOf(p, t.test) }}</span>
                               @if (parametersFor(t).length > 1) {
                                 <ng-container *ngTemplateOutlet="noteBtn; context: { has: commentsFor(t.id, p.name).length > 0, label: 'Note on ' + (p.title || p.name), tid: t.id, pname: p.name }"></ng-container>
                               }
                             </span>
                           </td>
                         </tr>
-                        @if (commentsFor(t.id, p.name).length > 0 || hasOpenComment(t.id, p.name) || paramNoteOpen(t.id, p.name)) {
+                        @if (paramNoteOpen(t.id, p.name)) {
+                          <tr class="pf-sre__grow-note"><td colspan="5"><ng-container *ngTemplateOutlet="quickNoteBox; context: { tid: t.id, pname: p.name, label: 'Note on ' + (p.title || p.name) }"></ng-container></td></tr>
+                        }
+                        @if (commentsFor(t.id, p.name).length > 0 || hasOpenComment(t.id, p.name)) {
                           <tr class="pf-sre__grow-comments">
                             <td colspan="5">
                               <pf-comment-thread

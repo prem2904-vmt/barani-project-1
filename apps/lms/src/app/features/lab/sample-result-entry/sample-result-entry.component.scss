@@ -14,6 +14,13 @@
 .pf-sre-band { flex: none; }
 .pf-sre-vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
+/* ── Calm type scale (owner, 2026-09-25) — same on every width ─────────
+   card label 13px/600 uppercase (12px on phones) · parameter 14px/500 ·
+   chips + tabs 13px · buttons 14px (15px in the phone bar) · meta 12px. */
+.pf-sre-card__label { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1.3; color: var(--text-secondary); }
+.pf-sre-chip, .pf-sre-tab, .pf-sre-techchip { font-size: 13px; }
+.pf-sre-act { font-size: 14px; }
+
 /* ── CONTEXT BAR (the band's pill) ─────────────────────────────────── */
 .pf-sre-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: nowrap; }
 .pf-sre-ctx__grow { flex: 1 1 auto; }
@@ -21,11 +28,15 @@
 /* The patient chip may shrink; an ellipsis only when it TRULY overflows. */
 .pf-sre-chip--patient { flex: 0 1 auto; min-width: 0; }
 .pf-sre-chip__name { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pf-sre-chip__meta { flex: none; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
-/* Sample ID = the primary line in lab contexts. */
-.pf-sre-chip__id { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
-.pf-sre-chip--tech svg, .pf-sre-chip--ro svg { flex: none; color: var(--text-tertiary); }
-.pf-sre-chip--tech { flex: 0 1 auto; min-width: 0; }
+.pf-sre-chip__meta { flex: none; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.pf-sre-chip--ro svg { flex: none; color: var(--text-tertiary); }
+
+/* Technician: a small neutral chip in the actions, left of Save draft. */
+.pf-sre-techchip { height: 34px; gap: 6px; flex: none; color: var(--text-secondary); }
+.pf-sre-techchip svg { flex: none; color: var(--text-tertiary); }
+.pf-sre-techchip__name { font-weight: 500; color: var(--text-primary); white-space: nowrap; }
+.pf-sre-techchip__reg { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.pf-sre-techchip--compact { height: 44px; padding: 0 10px; }
 
 /* Order ID: only where the pill has room. */
 @media (max-width: 1279px) { .pf-sre-chip--order { display: none; } }
@@ -35,7 +46,7 @@
    The raised "selected" surface is one indicator that SLIDES to the
    picked tab (nd spring); until it is measured the kit's own
    aria-pressed surface shows, so nothing is ever unmarked. */
-.pf-sre-tabs { position: relative; flex: 0 1 auto; min-width: 0; max-width: 520px; overflow-x: auto; scrollbar-width: none; }
+.pf-sre-tabs { position: relative; flex: 0 1 auto; min-width: 0; max-width: 520px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .pf-sre-tabs::-webkit-scrollbar { display: none; }
 .pf-sre-tabs__ind {
   position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 0; pointer-events: none;
@@ -45,9 +56,10 @@
 .pf-sre-tabs--ind .pf-sre-tabs__ind { opacity: 1; }
 .pf-sre-tabs--anim .pf-sre-tabs__ind { transition: transform var(--nd-dur, 320ms) var(--nd-spring), width var(--nd-dur, 320ms) var(--nd-spring); }
 .pf-sre-tabs--ind .pf-sre-tab[aria-pressed='true'] { background: transparent; box-shadow: none; }
-.pf-sre-tab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 240px; }
+/* A tab is ONLY the sample ID (+ the violet dot); the tests ride in the
+   tooltip / aria-label. Standard segment height. */
+.pf-sre-tab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; flex: none; height: 30px; padding: 0 12px; }
 .pf-sre-tab__id { font-weight: 600; color: var(--text-primary); }
-.pf-sre-tab__tests { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pf-sre-tab__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); }
 
 /* Band actions (projected into the band's top-right slot). */
@@ -93,9 +105,9 @@
   color: var(--text-muted); background: transparent;
   border-bottom: 1px solid var(--nd-line);
 }
-.pf-sre__gc-param { width: 28%; }
-.pf-sre__gc-result { width: 20%; }
-.pf-sre__gc-range { width: 22%; }
+.pf-sre__gc-param { width: 26%; }
+.pf-sre__gc-result { width: 24%; }
+.pf-sre__gc-range { width: 20%; }
 .pf-sre__gc-unit { width: 10%; }
 .pf-sre__gc-method { width: 20%; }
 .pf-sre__gc-note { width: 116px; text-align: right; white-space: nowrap; }
@@ -105,7 +117,7 @@
 .pf-sre__grow:focus-within td { background: var(--nd-in-tint); }
 .pf-sre__grow--flagged td { background: color-mix(in srgb, #ef4444 6%, transparent) !important; }
 .pf-sre__gc-param { color: var(--text-primary); }
-.pf-sre__gname { font-weight: 500; color: var(--text-primary); @include nd.no-truncate; }
+.pf-sre__gname { font-size: 14px; font-weight: 500; color: var(--text-primary); @include nd.no-truncate; }
 .pf-sre__gc-unit, .pf-sre__gc-range, .pf-sre__gc-method { color: var(--text-tertiary); font-size: 12.5px; @include nd.no-truncate; }
 .pf-sre__gc-range, .pf-sre__gc-unit { font-variant-numeric: tabular-nums; }
 .pf-sre__method { display: inline-flex; align-items: center; gap: 8px; }
@@ -123,20 +135,38 @@
 .pf-sre__grow-reject strong { color: var(--red-text, #b91c1c); font-weight: 600; }
 
 /* Inputs: kit surface + kit focus (violet ring), tabular numbers. */
+/* A REAL field: a visible box in both themes (never a bare caret). */
 .pf-sre__ginput {
-  width: 100%; min-height: 36px; padding: 6px 10px;
-  border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line);
-  background: var(--nd-card-bg); color: var(--text-primary);
-  font: inherit; font-size: 13.5px; font-weight: 500;
+  display: block; box-sizing: border-box;
+  width: 100%; min-width: 96px; min-height: 40px; padding: 8px 12px;
+  border-radius: var(--nd-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg)); color: var(--text-primary);
+  font: inherit; font-size: 14px; font-weight: 500;
   text-align: right; font-variant-numeric: tabular-nums;
   transition: border-color var(--nd-dur-fast) ease, box-shadow var(--nd-dur-fast) ease;
 }
-.pf-sre__ginput:hover { border-color: var(--nd-sel-border); }
+.pf-sre__ginput:hover { border-color: color-mix(in srgb, var(--text-primary) 38%, transparent); }
 .pf-sre__ginput:focus {
   outline: 0; border-color: var(--color-violet-600, #7c3aed);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
 }
 .pf-sre__ginput--ta { resize: vertical; text-align: left; font-weight: 400; }
+
+/* One-step note: an inline textarea under the row, focused on open. */
+.pf-sre__grow-note td { padding: 8px 12px 12px; border-bottom: 1px solid var(--nd-line); background: var(--nd-in-tint); }
+.pf-sre__test-note { margin: 12px 14px 0; }
+.pf-sre-quicknote {
+  display: block; box-sizing: border-box; width: 100%; min-height: 64px; padding: 10px 12px; resize: vertical;
+  border-radius: var(--nd-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+  background: var(--nd-card-bg); color: var(--text-primary);
+  font: inherit; font-size: 14px; line-height: 1.4;
+}
+.pf-sre-quicknote:focus {
+  outline: 0; border-color: var(--color-violet-600, #7c3aed);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+}
 .pf-sre__gselect { width: 100%; }
 .pf-sre__cb { width: 18px; height: 18px; accent-color: var(--color-violet-600, #7c3aed); }
 
@@ -272,50 +302,61 @@
   .pf-sre__gnote, .pf-sre__attach-btn { min-width: 44px; height: 44px; }
   .nd-btn.pf-sre__note-btn { height: 44px; min-height: 44px; }
   .pf-sre__cb { width: 22px; height: 22px; }
-  .pf-sre-chip { height: 38px; }
+  .pf-sre-chip, .pf-sre-techchip { height: 38px; }
+  .pf-sre-tab { height: 36px; }
 }
 
 /* ── Phones (<=640px, additive) ─────────────────────────────────────── */
 @media (max-width: 640px) {
-  /* Pill = patient + sample in ONE row; the technician chip leaves it.
-     The tube tabs sit on their own scrollable row (band tools). */
-  .pf-sre-chip--tech, .pf-sre-chip--ro, .pf-sre-ctx__grow { display: none; }
-  .pf-sre-chip--patient .pf-sre-chip__meta { display: none; }
+  /* Pill = the patient in ONE row. The tube tabs sit on their own row
+     (band tools) and scroll sideways when there are many. */
+  .pf-sre-chip--ro, .pf-sre-ctx__grow { display: none; }
+  .pf-sre-chip { height: 36px; }
   .pf-sre-tabs { max-width: none; }
-  /* The band's actions don't fit: Save draft / Submit move to the compact
-     bottom bar (above the always-visible navbar). */
-  .pf-sre-band .pf-sre-act, .pf-sre-band .pf-sre__autosave { display: none; }
+  /* The band's actions don't fit: technician + Save draft + Submit move to
+     the compact bottom bar (above the always-visible navbar). */
+  .pf-sre-band .pf-sre-act, .pf-sre-band .pf-sre__autosave, .pf-sre-band .pf-sre-techchip { display: none; }
   .pf-sre-body { padding: 8px 12px 84px; }   /* clears the bottom bar */
-  .pf-sre-bar { z-index: 46; justify-content: flex-end; }
-  .pf-sre-bar .pf-sre-act { height: 44px; padding: 0 16px; }
+  .pf-sre-bar { z-index: 46; gap: 8px; padding: 8px; }
+  .pf-sre-bar .pf-sre-act { height: 44px; padding: 0 14px; font-size: 15px; }
   .pf-sre-bar .pf-sre-submit { flex: 1 1 auto; justify-content: center; }
 
+  /* Calm type scale on phones. */
+  .pf-sre-card__label { font-size: 12px; }
+  .pf-sre__gname { font-size: 14px; }
+
   /* No iOS focus zoom. */
-  .pf-sre__ginput { font-size: 16px; }
+  .pf-sre__ginput, .pf-sre-quicknote { font-size: 16px; }
   :host ::ng-deep .pf-sre__test select,
   :host ::ng-deep .pf-sre__test input,
   :host ::ng-deep .pf-sre__test textarea { font-size: 16px; }
 
-  /* The table becomes one row per value: name (wraps) + result field
-     with the unit inside it. Range / unit / method columns drop. */
-  .pf-sre__gc-unit, .pf-sre__gc-range, .pf-sre__gc-method, .pf-sre__grid thead { display: none !important; }
+  /* STACKED rows: the parameter name, then a FULL-WIDTH field (>=44px, a
+     visible box), then range + unit muted underneath. */
+  .pf-sre__grid thead { display: none !important; }
   .pf-sre__grid, .pf-sre__grid tbody { display: block; width: 100%; }
   .pf-sre__grow {
-    display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box;
-    padding: 9px 12px; border-bottom: 1px solid var(--nd-line);
+    display: grid; width: 100%; box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'param method note' 'result result result' 'range range unit';
+    gap: 6px 8px; align-items: center;
+    padding: 12px; border-bottom: 1px solid var(--nd-line);
   }
-  .pf-sre__grow td { padding: 0; border: 0; background: none !important; }
-  td.pf-sre__gc-param { display: block; flex: 1 1 auto; min-width: 0; }
-  td.pf-sre__gc-note { width: auto; flex: none; }
-  td.pf-sre__gc-result {
-    display: flex; align-items: center; gap: 4px; flex: 0 0 auto; width: 136px; min-height: 44px; padding: 0 10px;
-    border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm); background: var(--nd-card-bg);
-  }
-  td.pf-sre__gc-result:focus-within { border-color: var(--color-violet-600, #7c3aed); }
-  td.pf-sre__gc-result .pf-sre__ginput { flex: 1 1 auto; min-width: 0; min-height: 0; border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 8px 0 !important; }
-  .pf-sre__gunit-inline { display: inline-flex; flex: none; font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
-  .pf-sre__grow-comments, .pf-sre__grow-reject, .pf-sre__gsub, .pf-sre__grow-attach { display: block; width: 100%; }
-  .pf-sre__grow-comments td, .pf-sre__grow-reject td, .pf-sre__gsub td, .pf-sre__grow-attach td { display: block; width: 100%; box-sizing: border-box; }
+  .pf-sre__grow > td { display: block; width: auto; padding: 0; border: 0; background: none !important; }
+  .pf-sre__grow > td.pf-sre__gc-param { grid-area: param; min-width: 0; }
+  .pf-sre__grow > td.pf-sre__gc-method { grid-area: method; }
+  .pf-sre__method-t { display: none; }            /* the pencil stays */
+  .pf-sre__grow > td.pf-sre__gc-note { grid-area: note; }
+  .pf-sre__grow > td.pf-sre__gc-result { grid-area: result; }
+  .pf-sre__grow > td.pf-sre__gc-range { grid-area: range; font-size: 12px; }
+  .pf-sre__grow > td.pf-sre__gc-unit { grid-area: unit; font-size: 12px; text-align: right; }
+  .pf-sre__gc-range:empty, .pf-sre__gc-unit:empty { display: none; }
+  .pf-sre__gc-result .pf-sre__ginput { width: 100%; min-height: 44px; padding: 10px 12px; }
+  .pf-sre__gc-result .pf-sre__gselect { width: 100%; }
+  :host ::ng-deep .pf-sre__gc-result .pf-sre__gselect .pf-dd__trigger { min-height: 44px; width: 100%; }
+  .pf-sre__gunit-inline { display: none; }
+  .pf-sre__grow-comments, .pf-sre__grow-note, .pf-sre__grow-reject, .pf-sre__gsub, .pf-sre__grow-attach { display: block; width: 100%; }
+  .pf-sre__grow-comments td, .pf-sre__grow-note td, .pf-sre__grow-reject td, .pf-sre__gsub td, .pf-sre__grow-attach td { display: block; width: 100%; box-sizing: border-box; }
 }
 
 @media (prefers-reduced-motion: reduce) {

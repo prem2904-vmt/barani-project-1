@@ -432,6 +432,10 @@ export class SampleResultEntryComponent {
       }
     }
   }
+  /** Compact technician mark for the phone action bar ("AU"). */
+  readonly techInitials = computed(() =>
+    this.techName().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "T");
+
   /** Medical registration ID beside the name — a dash until the user sets one
    *  (editable on the My signature screen). */
   readonly techRegId = computed(
@@ -763,17 +767,72 @@ export class SampleResultEntryComponent {
   /** Per-parameter note toggles — lets ANYONE start a row conversation,
    *  not just continue one that already exists (the crucial review tool:
    *  the validator questions ONE value in place, the tech answers there). */
-  private readonly _openParamNotes = signal<Set<string>>(new Set());
+  // ONE step (owner): the pencil opens an inline textarea under the row
+  // with focus in it. Enter or blur saves, Shift+Enter is a new line, Esc
+  // cancels. One quick note is open at a time.
+  private readonly _quickNote = signal<{ testId: string; param: string | null } | null>(null);
+  readonly quickNote = this._quickNote.asReadonly();
+  private quickNoteSaving = false;
   paramNoteOpen(testId: string, name: string): boolean {
-    return this._openParamNotes().has(`${testId}:${name}`);
+    const q = this._quickNote();
+    return !!q && q.testId === testId && q.param === name;
   }
   toggleParamNote(testId: string, name: string) {
-    const k = `${testId}:${name}`;
-    this._openParamNotes.update(set => {
-      const n = new Set(set);
-      if (n.has(k)) n.delete(k); else n.add(k);
-      return n;
-    });
+    this.openQuickNote(testId, name);
+  }
+  /** Stable DOM key of a quick-note box (for focus). */
+  quickNoteKey(testId: string, param: string | null): string {
+    return `${testId}::${param ?? ""}`;
+  }
+  openQuickNote(testId: string, param: string | null) {
+    if (this.paramNoteOrOverallOpen(testId, param)) { this._quickNote.set(null); return; }
+    this._quickNote.set({ testId, param });
+    // Focus after the textarea renders — on phones this opens the keyboard.
+    const key = this.quickNoteKey(testId, param);
+    const focus = () => {
+      const el = (this.host.nativeElement as HTMLElement)
+        .querySelector<HTMLTextAreaElement>(`textarea[data-quicknote="${key}"]`);
+      if (el) { el.focus(); return true; }
+      return false;
+    };
+    queueMicrotask(() => { if (!focus()) setTimeout(focus, 0); });
+  }
+  private paramNoteOrOverallOpen(testId: string, param: string | null): boolean {
+    const q = this._quickNote();
+    return !!q && q.testId === testId && q.param === param;
+  }
+  cancelQuickNote() {
+    this._quickNote.set(null);
+  }
+  /** Enter (without Shift) saves; Esc cancels. */
+  onQuickNoteKey(ev: KeyboardEvent, testId: string, param: string | null) {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      this.cancelQuickNote();
+    } else if (ev.key === "Enter" && !ev.shiftKey) {
+      ev.preventDefault();
+      void this.saveQuickNote(testId, param, (ev.target as HTMLTextAreaElement).value);
+    }
+  }
+  /** Blur saves a non-empty note; an empty one just closes. */
+  onQuickNoteBlur(testId: string, param: string | null, value: string) {
+    if (!this.paramNoteOrOverallOpen(testId, param)) return;   // already saved / cancelled
+    if (!value.trim()) { this.cancelQuickNote(); return; }
+    void this.saveQuickNote(testId, param, value);
+  }
+  async saveQuickNote(testId: string, param: string | null, value: string) {
+    const body = value.trim();
+    if (this.quickNoteSaving) return;
+    this._quickNote.set(null);
+    if (!body) return;
+    this.quickNoteSaving = true;
+    const type = this.commentRole() === "validator" ? "correction" : "observation";
+    try {
+      if (param) await this.addParameterComment(testId, param, body, type);
+      else await this.addOverallComment(testId, body, type);
+    } finally {
+      this.quickNoteSaving = false;
+    }
   }
   /** Comments author role follows the screen mode. */
   commentRole(): 'tech' | 'validator' {
@@ -931,14 +990,11 @@ export class SampleResultEntryComponent {
    *  is heavy (composer textarea + buttons), so we keep it collapsed until
    *  the tech clicks the compact "+ Note" pill in the test header. Threads
    *  with existing comments stay always-visible (see template @if). */
-  private readonly _overallOpen = signal<Set<string>>(new Set<string>());
   isOverallOpen(testId: string): boolean {
-    return this._overallOpen().has(testId);
+    return this.paramNoteOrOverallOpen(testId, null);
   }
   toggleOverall(testId: string) {
-    const next = new Set(this._overallOpen());
-    next.has(testId) ? next.delete(testId) : next.add(testId);
-    this._overallOpen.set(next);
+    this.openQuickNote(testId, null);
   }
 
   /** Pretty-formatted reference range for the grid's Range column. Handles
