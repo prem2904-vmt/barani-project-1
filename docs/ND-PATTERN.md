@@ -306,22 +306,24 @@ unit of work. It follows the band rules above with these specifics
 (owner review, 2026-09-25):
 
 - **Band:** back + tenant, and the page's actions in the band's actions
-  slot (top-right, like every band page): secondary **Save draft** and the
-  ONE primary **Submit results** (validation mode: Reject + Validate (n);
-  a finished tube: Edit result). The disabled rules are unchanged. On
-  phones the band actions don't fit, so the same two buttons ride a
-  compact `.nd-bottombar` above the always-visible navbar. A quiet
-  "Saved 14:02" autosave note sits beside them on web.
-- **Context bar (the pill):** patient chip with the FULL name +
-  "29/M · AA0012"; the sample ID as the primary chip + department
-  ("26123 · MOL", tabular numbers); the order ID where it fits (≥1280px);
-  the technician chip (name + Reg). Phones: patient + sample in one row.
-- **Tube tabs** (other tubes of the same order) sit in the band's tools
-  slot as a neutral `.nd-seg`, in a **fixed order** — the order's sample
+  slot (top-right, like every band page): the technician as a small
+  neutral chip (name + Reg), then secondary **Save draft** and the ONE
+  primary **Submit results** (validation mode: Reject + Validate (n); a
+  finished tube: Edit result). The disabled rules are unchanged. On phones
+  the band actions don't fit, so they ride a compact `.nd-bottombar` above
+  the always-visible navbar: technician initials (Reg in the tooltip),
+  Save draft, Submit. A quiet "Saved 14:02" autosave note sits beside them
+  on web.
+- **Context bar (the pill):** only the patient chip with the FULL name +
+  "29/M · AA0012", and the order ID where it fits (≥1280px). No
+  current-sample chip — the tube tabs already show which sample is open.
+- **Tube tabs** (all tubes of the same order) sit in the band's tools
+  slot as a compact neutral `.nd-seg` at the standard segment height. A
+  tab shows ONLY the sample ID (+ the violet open-work dot); the tests
+  ride in its tooltip / aria-label. They keep a **fixed order** — the order's sample
   sequence (series offset, then sample ID). Switching tubes never reorders
   them; only the selected indicator moves, sliding on `--nd-spring` (off
-  under reduced motion). An open-work dot is violet. Phones: the strip
-  scrolls on its own row.
+  under reduced motion). Phones: one row that scrolls sideways.
 - **No side panel.** The RESULTS cards take the full width: one `.nd-card`
   per test (a profile = one card) — violet icon chip, the test name as the
   label, "+ Note" as the small secondary button. The table is the calm row
@@ -330,7 +332,17 @@ unit of work. It follows the band rules above with these specifics
   quiet neutral icon button. H / L / critical flag chips keep their
   functional colours; calculated-value chips are neutral.
 - **Grid only.** There is no Grid / Form switch. Enter walks the fields in
-  order and lands on Submit.
+  order and lands on Submit. The result field is a real box (visible
+  border + background, ≥40px; 44px on touch).
+- **Phones: stacked rows** — the parameter name, then a FULL-WIDTH field
+  (kit input or `pf-select`, ≥44px), then range and unit muted underneath.
+- **Notes in ONE step:** the row pencil (or the card's "+ Note") opens an
+  inline textarea under that row with focus in it (the phone keyboard
+  opens). Enter or blur saves, Shift+Enter is a new line, Esc cancels.
+  Existing conversations still show as threads.
+- **Type scale (every width):** card label 13px / 600 uppercase (12px on
+  phones), parameter name 14px / 500, chips and tabs 13px, buttons 14px
+  (15px in the phone bar), meta 12px.
 - Order-level extras appear above the cards only when they apply: the
   validator's "Submitted …" line, the slate **Include Trendogram** toggle
   (+ range picker), and the flags the last submit raised.
