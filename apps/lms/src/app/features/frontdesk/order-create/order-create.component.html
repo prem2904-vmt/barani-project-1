@@ -556,6 +556,9 @@
       </span>
       <span class="pf-oc-bill__title">BILLING</span>
       <span class="pf-oc-bill__spacer"></span>
+      <!-- Toggles: beside the title on the desktop card; their own row in
+           the phone / tablet sheet (row 1 = title + close). -->
+      <div class="pf-oc-bill__toggles">
       <!-- Urgent = the order priority (was the Normal/Urgent switch). -->
       <button type="button" class="pf-oc-switch pf-toggle-neutral pf-oc-switch--urgent" role="switch"
         [attr.aria-checked]="priority() === 'Urgent'" [disabled]="isReadOnly()" (click)="toggleUrgent()">
@@ -573,6 +576,7 @@
         Include Trendogram
       </button>
       }
+      </div>
     </header>
 
     <div class="pf-oc-bill__body">
@@ -874,7 +878,7 @@
     </div>
 
     <!-- Pinned footer: Save as draft + the primary action. -->
-    <footer class="pf-oc-bill__foot" [class.pf-oc-bill__foot--cart]="billPhaseView() === 'cart'">
+    <footer class="pf-oc-bill__foot pf-oc-bill__foot--sticky" [class.pf-oc-bill__foot--cart]="billPhaseView() === 'cart'">
       @if (billPhaseView() === 'cart') {
       <div class="pf-oc-foot-total">
         <span>Total</span>

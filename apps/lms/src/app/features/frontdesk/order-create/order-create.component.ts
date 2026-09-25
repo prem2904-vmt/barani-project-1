@@ -27,7 +27,7 @@ import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from 
 import { waLink } from '../../../shared/utils/whatsapp';
 import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
-import { SCOPE_PLACEHOLDERS, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES } from './unified-search';
+import { SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES } from './unified-search';
 
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
@@ -167,6 +167,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly isWebSearch = signal(this._webMql ? !!this._webMql.matches : true);
   private readonly _onWebChange = (e: MediaQueryListEvent) => this.isWebSearch.set(e.matches);
   readonly searchMode = computed<'dropdown' | 'incard'>(() => this.isWebSearch() ? 'dropdown' : 'incard');
+
+  /** Phone width (≤640): short placeholders, icon-only scope segment. */
+  private static readonly PHONE_MQ = '(max-width: 640px)';
+  private readonly _phoneMql = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(OrderCreateComponent.PHONE_MQ) : null;
+  readonly isPhone = signal(!!this._phoneMql?.matches);
+  private readonly _onPhoneChange = (e: MediaQueryListEvent) => this.isPhone.set(e.matches);
+
+  /** The checkout sheet (below lg) is open → the app's bottom bar hides so
+   *  the sheet's footer (Total, Save as draft, Continue / Confirm) is never
+   *  under it. Same html-class mechanism the collect screen uses; always
+   *  restored on close / destroy. */
+  readonly sheetOpen = computed(() => this.cartOpen() && !this.isLg());
+  private readonly _sheetClass = effect(() => {
+    const open = this.sheetOpen();
+    if (typeof document !== 'undefined') document.documentElement.classList.toggle('pf-sheet-immersive', open);
+  });
   private readonly _onVisibleResync = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') this.loadOrderableTests();
   };
@@ -774,6 +790,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.loadSpecimens();
     this._lgMql?.addEventListener?.('change', this._onLgChange);
     this._webMql?.addEventListener?.('change', this._onWebChange);
+    this._phoneMql?.addEventListener?.('change', this._onPhoneChange);
     if (typeof window !== 'undefined') {
       window.visualViewport?.addEventListener('resize', this._onViewport);
       window.addEventListener('resize', this._onViewport);
@@ -1805,6 +1822,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnDestroy() {
     this._lgMql?.removeEventListener?.('change', this._onLgChange);
     this._webMql?.removeEventListener?.('change', this._onWebChange);
+    this._phoneMql?.removeEventListener?.('change', this._onPhoneChange);
+    if (typeof document !== 'undefined') document.documentElement.classList.remove('pf-sheet-immersive');
     this.keyboard.reset?.();
     if (typeof window !== 'undefined') {
       window.visualViewport?.removeEventListener('resize', this._onViewport);
@@ -2077,7 +2096,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** What the input shows: the test query in Tests scope, else the scope text. */
   readonly pillValue = computed(() => this.scope() === 'tests' ? this._query() : this.scopeQuery());
-  readonly pillPlaceholder = computed(() => SCOPE_PLACEHOLDERS[this.scope()]);
+  readonly pillPlaceholder = computed(() =>
+    (this.isPhone() ? SCOPE_PLACEHOLDERS_SHORT : SCOPE_PLACEHOLDERS)[this.scope()]);
 
   /** Can this tile be opened? Patient locks once the order exists; the
    *  referral tiles follow the OPS-58 rule (create, or "Edit referral"). */

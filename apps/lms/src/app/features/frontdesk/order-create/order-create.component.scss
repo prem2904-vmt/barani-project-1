@@ -3459,3 +3459,78 @@
   text-overflow: clip;
   line-height: 1.3;
 }
+
+/* ════ Round 11 (owner): phone sheet header + footer, one-row phone pill ════ */
+.pf-oc-bill__toggles { display: flex; align-items: center; gap: 14px; }
+
+/* Checkout sheet (below lg): row 1 = BILLING + close (40px, never over
+   content), row 2 = the two toggles. Footer is pinned with the bottom
+   safe area; the app bar is hidden while the sheet is open. */
+@media (max-width: 1023px) {
+  .pf-cart-drawer .pf-oc-bill__head { flex-wrap: wrap; row-gap: 10px; padding-right: 60px; }
+  .pf-cart-drawer .pf-oc-bill__toggles {
+    order: 3;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+  }
+  .pf-cart-drawer .pf-cart-drawer__close {
+    top: 17px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+  :host .pf-cart-drawer.pf-cart-drawer--tall { padding-bottom: 0; }
+  .pf-cart-drawer .pf-oc-bill__foot--sticky {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--bg-card-solid);
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Phone pill: ONE row, never wrapping — a compact segmented group of the 4
+   scope icons, then the input fills the rest. Height = the stock band
+   search's phone field. */
+@media (max-width: 640px) {
+  .pf-us { flex-wrap: nowrap; gap: 6px; min-width: 0; }
+  .pf-us__tiles {
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 10px;
+    background: var(--pf-neutral-chip-bg, rgba(127, 127, 127, 0.1));
+  }
+  .pf-us__tile,
+  .pf-us__tile--filled:not(.pf-us__tile--on) { background: transparent; border-radius: 8px; }
+  .pf-us__tile--on { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+  .pf-us__tile-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    padding: 0;
+  }
+  /* Required Patient: a small amber dot + a thin amber ring (no dashed box). */
+  .pf-us__tile--req:not(.pf-us__tile--on),
+  .pf-us__tile--req.pf-us__tile--on {
+    outline: none;
+    background: transparent;
+    animation: none;
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-warning, #f59e0b) 80%, transparent);
+  }
+  .pf-us__tile--req.pf-us__tile--on { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+  .pf-us__req { width: 6px; height: 6px; box-shadow: none; }
+  .pf-us__div { display: none; }
+  .pf-us__field { flex: 1 1 auto; min-width: 0; gap: 6px; }
+  .pf-us__glass { display: none; }
+  .pf-us__input { min-width: 0; }
+}
+@media (max-width: 340px) {
+  .pf-us__tile-btn { width: 32px; height: 32px; min-width: 32px !important; min-height: 32px !important; }
+  .pf-us__tiles { gap: 1px; }
+}

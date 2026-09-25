@@ -2799,3 +2799,14 @@ html.pf-design-mode {
   background: rgba(20, 184, 166, 0.10);
   box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.24);
 }
+
+/* Order & Payments checkout sheet open (phone / tablet): the sheet owns the
+   bottom of the screen, so the docked app bar / bottom nav hides — its
+   footer (Total, Save as draft, Continue / Confirm) must never sit under
+   it. Toggled on <html> by OrderCreateComponent (always removed on close
+   and on destroy). Desktop (lg+) never sets it. */
+@media (max-width: 1023px) {
+  html.pf-sheet-immersive .pf-chrome,
+  html.pf-sheet-immersive .pf-bottom-nav,
+  html.cap-native.pf-sheet-immersive .pf-bottom-nav { display: none !important; }
+}
