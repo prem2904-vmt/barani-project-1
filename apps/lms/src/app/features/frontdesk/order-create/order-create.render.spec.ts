@@ -275,3 +275,37 @@ describe('Order & Payments — dropdown rows and filter row', () => {
     expect(deptLabels.some(l => /^All/.test(l))).toBe(false);
   });
 });
+
+describe('Order & Payments — dropdown is one result per row', () => {
+  it('single column list, full names without truncation classes, department shown', () => {
+    const { el, f, c } = render();
+    c.onPillInput('01');
+    f.detectChanges();
+    expect(el.querySelector('.pf-us__tgrid')).toBeNull();
+    const list = el.querySelector('.pf-us__tlist') as HTMLElement;
+    expect(list).not.toBeNull();
+    const rows = [...list.querySelectorAll(':scope > .pf-us__trow')];
+    expect(rows.length).toBe(4);
+    const names = rows.map(r => r.querySelector('.pf-us__tname') as HTMLElement);
+    for (const n of names) {
+      expect(n.className).not.toMatch(/truncate|ellipsis|clamp/);
+      expect(n.getAttribute('title')).toBeNull();
+    }
+    expect(names.map(n => n.textContent?.trim())).toContain('Full Body Checkup');
+    const hb = rows.find(r => r.textContent?.includes('Haemoglobin'))!;
+    expect(hb.querySelector('.pf-us__tdept')?.textContent?.trim()).toBe('Haematology');
+    expect(hb.querySelector('.pf-us__tprice .pf-price')).not.toBeNull();
+  });
+
+  it('↑↓ moves one row in list order', () => {
+    const { el, f, c } = render();
+    c.onPillInput('01');
+    f.detectChanges();
+    const order = [...el.querySelectorAll('.pf-us__tlist .pf-us__trow')].map(r => r.getAttribute('data-search-row'));
+    expect(c.activeTestId()).toBe(order[0]);
+    c.onPillArrow(new Event('keydown'), 1);
+    expect(c.activeTestId()).toBe(order[1]);
+    c.onPillArrow(new Event('keydown'), 1);
+    expect(c.activeTestId()).toBe(order[2]);
+  });
+});
