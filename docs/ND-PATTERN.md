@@ -324,6 +324,9 @@ unit of work. It follows the band rules above with these specifics
   open-work dot; tests in its tooltip / aria-label), in a **fixed order**
   (series offset, then sample ID). Switching moves only the selected
   indicator, which slides on `--nd-spring` (off under reduced motion).
+- **Phones: the patient chip shows the FULL name** — the "29/M · AA0012"
+  meta moves to its tooltip, and a long name wraps to two lines; never an
+  ellipsis.
 - **Phones: no tabs control.** The pill shows the patient + the CURRENT
   sample chip ("26124", violet dot when it has open work). With 2+ tubes
   that chip carries a chevron and opens a small list (sample ID + tests,
@@ -342,7 +345,9 @@ unit of work. It follows the band rules above with these specifics
   (≥44px; free text ≈88px). Range, unit and method are not lines — the
   [i] (hidden when a row has none) opens a small peek with them that
   fades / scales in and auto-hides after ~4s, on an outside tap or a
-  second tap. (A table can't lay out at 360px: never leave phone rows on
+  second tap. The peek is a BODY-level overlay (position: fixed), width
+  min(300px, viewport − 32px), below the icon or flipped above, always
+  16px inside the viewport — never inside the card, which would clip it. (A table can't lay out at 360px: never leave phone rows on
   table columns — that collapsed the name to one letter per line.)
 - **Notes in ONE step:** the pencil (or "+ Note") opens an inline
   textarea under that row with focus in it. Enter or blur saves,
