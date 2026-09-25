@@ -222,7 +222,9 @@ const COUNTERS: CounterSpec[] = [
            behind the Stats toggle above (pf-kpi-collapsed). -->
       <!-- Inline counter filter row: not on phone (status + filtering live in
            the header Stats popover there). -->
-      @if (!isPhone()) {
+      <!-- New design: hidden (owner) — the band tabs already filter the queue
+           and carry the counts. The filter stays on 'all'. -->
+      @if (!isPhone() && !theme.isNewDesign()) {
         <div class="pf-counter-row" role="tablist" aria-label="Filter queue">
           @for (c of counters; track c.id) {
             <button type="button"

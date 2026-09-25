@@ -57,3 +57,10 @@ describe('My Work — new-design remap', () => {
     expect(c.tabOptions().every((o: any) => !!o.dot)).toBe(true);
   });
 });
+
+describe('My Work — counter row hidden in the new design', () => {
+  it('the queue filter defaults to "all" (nothing is filtered while the row is hidden)', () => {
+    const c = make(true);
+    expect(c.counter()).toBe('all');
+  });
+});
