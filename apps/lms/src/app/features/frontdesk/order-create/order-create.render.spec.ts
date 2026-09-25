@@ -26,12 +26,13 @@ const CATALOGUE = [
     department: { name: 'Packages' }, parameters: JSON.stringify({ items: [{ testId: 't1' }] }) },
 ];
 
-function render(opts: { web?: boolean; lg?: boolean } = {}) {
+function render(opts: { web?: boolean; lg?: boolean; phone?: boolean } = {}) {
   // lg+ desktop: the billing card is a persistent column. `web` = a mouse +
   // hover device (dropdown search); false = touch (results in the card).
   const web = opts.web ?? true;
   (window as any).matchMedia = (q: string) => ({
-    matches: q.includes('hover') ? web : q.includes('min-width: 1024px') ? (opts.lg ?? true) : true,
+    matches: q.includes('hover') ? web : q.includes('min-width: 1024px') ? (opts.lg ?? true)
+      : q.includes('max-width: 640px') ? (opts.phone ?? false) : true,
     addEventListener() {}, removeEventListener() {} });
   TestBed.configureTestingModule({
     imports: [OrderCreateComponent],
@@ -455,5 +456,89 @@ describe('Order & Payments — primary only for the main CTA; phone scope; sheet
     const row = sheet.querySelector('.pf-crt') as HTMLElement;
     expect(row.getAttribute('title')).toBeNull();
     expect(row.classList).toContain('pf-crt--wrap');
+  });
+});
+
+describe('Order & Payments — phone sheet + one-row phone pill', () => {
+  const phone = () => render({ web: false, lg: false, phone: true });
+  const openSheet = (r: ReturnType<typeof render>, pay = false) => {
+    r.c._patient.set({ id: 'x', displayName: 'P' });
+    r.c._selected.set(['t1']);
+    if (pay) r.c.continueToPayment();
+    r.c.toggleCart();
+    r.f.detectChanges();
+    return r.el.querySelector('.pf-cart-drawer') as HTMLElement;
+  };
+  afterEach(() => document.documentElement.classList.remove('pf-sheet-immersive'));
+
+  it('sheet header: title row + close, toggles in their own group (no overlap by structure)', () => {
+    const r = phone();
+    const sheet = openSheet(r);
+    const head = sheet.querySelector('.pf-oc-bill__head') as HTMLElement;
+    expect(head.querySelector('.pf-oc-bill__title')?.textContent).toBe('BILLING');
+    const toggles = head.querySelector('.pf-oc-bill__toggles') as HTMLElement;
+    expect(toggles.querySelectorAll('[role="switch"]').length).toBe(2);
+    const close = sheet.querySelector(':scope > .pf-cart-drawer__close') as HTMLElement;
+    expect(close.getAttribute('aria-label')).toBe('Close billing');
+    expect(head.contains(close)).toBe(false);
+  });
+
+  it('while the sheet is open the app bar is hidden (html class); restored on close and destroy', () => {
+    const r = phone();
+    openSheet(r);
+    expect(document.documentElement.classList).toContain('pf-sheet-immersive');
+    r.c.closeCart();
+    r.f.detectChanges();
+    expect(document.documentElement.classList).not.toContain('pf-sheet-immersive');
+    r.c.toggleCart();
+    r.f.detectChanges();
+    expect(document.documentElement.classList).toContain('pf-sheet-immersive');
+    r.f.destroy();
+    expect(document.documentElement.classList).not.toContain('pf-sheet-immersive');
+  });
+
+  it('desktop never hides the app bar', () => {
+    const r = render();
+    r.c._selected.set(['t1']);
+    r.c.toggleCart();
+    r.f.detectChanges();
+    expect(document.documentElement.classList).not.toContain('pf-sheet-immersive');
+  });
+
+  it('the sticky footer is inside the sheet in both phases (cart: Total + draft + Continue; pay: Confirm)', () => {
+    const r = phone();
+    let sheet = openSheet(r);
+    let foot = sheet.querySelector('.pf-oc-bill__foot') as HTMLElement;
+    expect(foot.classList).toContain('pf-oc-bill__foot--sticky');
+    const labels = [...foot.querySelectorAll('button')].map(b => b.textContent?.trim());
+    expect(labels.some(l => l?.startsWith('Save as draft'))).toBe(true);
+    expect(labels.some(l => l?.startsWith('Continue to payment'))).toBe(true);
+    expect(foot.querySelector('.pf-oc-foot-total')).not.toBeNull();
+    r.c.continueToPayment();
+    r.f.detectChanges();
+    sheet = r.el.querySelector('.pf-cart-drawer') as HTMLElement;
+    foot = sheet.querySelector('.pf-oc-bill__foot') as HTMLElement;
+    expect([...foot.querySelectorAll('button')].some(b => /Confirm|Place order|Bill/.test(b.textContent ?? ''))).toBe(true);
+  });
+
+  it('phone pill: one row = scope segment (4 icon buttons) + input; short placeholders', () => {
+    const r = phone();
+    const us = r.el.querySelector('.pf-us') as HTMLElement;
+    const kids = [...us.children].map(k => k.className.split(' ')[0]);
+    expect(kids[0]).toBe('pf-us__tiles');
+    expect(kids).toContain('pf-us__field');
+    expect(us.querySelectorAll('.pf-us__tiles > .pf-us__tile').length).toBe(4);
+    const input = us.querySelector('.pf-us__input') as HTMLInputElement;
+    expect(input.placeholder).toBe('Search tests');
+    for (const [k, ph] of [['patient', 'Find patient'], ['doctor', 'Find doctor'], ['hospital', 'Find hospital']]) {
+      r.c.selectScope(k);
+      r.f.detectChanges();
+      expect(input.placeholder).toBe(ph);
+    }
+  });
+
+  it('desktop keeps the long placeholders', () => {
+    const r = render();
+    expect((r.el.querySelector('.pf-us__input') as HTMLInputElement).placeholder).toContain('Search tests, profiles or packages');
   });
 });
