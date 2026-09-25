@@ -7,6 +7,8 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DiskReadApi } from './disk-read';
+import { AuthService } from '../../../core/auth/auth.service';
+import { reportedAstRows } from '../../../shared/utils/report-pdf';
 import { PlateReading } from './plate-reading';
 
 /**
@@ -24,9 +26,13 @@ const MASTER = [
 ];
 const BPS = [
   { organismGroup: 'Enterobacterales', antibiotic: 'Amoxicillin-Clavulanate', susceptibleMin: 18, resistantMax: 13, enabled: true },
+  { organismGroup: 'Enterobacterales', antibiotic: 'Gentamicin', susceptibleMin: 15, resistantMax: 12, enabled: true },
   { organismGroup: 'Enterobacterales', antibiotic: 'Imipenem', susceptibleMin: 23, resistantMax: 19, enabled: true },
-  { organismGroup: 'Enterobacterales', antibiotic: 'Piperacillin-Tazobactam', susceptibleMin: 25, resistantMax: 20, enabled: true },
+  // split rows: the plate's "PIT 100/10" must land on the "…100" row
+  { organismGroup: 'Enterobacterales', antibiotic: 'Piperacillin-Tazobactam 10', susceptibleMin: 20, resistantMax: 16, enabled: true },
+  { organismGroup: 'Enterobacterales', antibiotic: 'Piperacillin-Tazobactam 100', susceptibleMin: 25, resistantMax: 20, enabled: true },
   { organismGroup: 'Staphylococcus', antibiotic: 'Amoxicillin-Clavulanate', susceptibleMin: 20, resistantMax: 19, enabled: true },
+  { organismGroup: 'Staphylococcus', antibiotic: 'Vancomycin', susceptibleMin: 15, resistantMax: 14, enabled: true },
 ];
 const ORGS = [{ name: 'Escherichia coli', group: 'Enterobacterales' }, { name: 'Staphylococcus aureus', group: 'Staphylococcus' }];
 
@@ -43,7 +49,7 @@ const APPLIED = {
   ] },
 };
 
-function render(opts: { embedded?: boolean; orderTestId?: string | null; caseView?: unknown; caseId?: string | null } = {}) {
+function render(opts: { embedded?: boolean; orderTestId?: string | null; caseView?: unknown; caseId?: string | null; canEditMaster?: boolean; reportHidden?: string[] | null } = {}) {
   Object.defineProperty(window, 'matchMedia', {
     configurable: true, writable: true,
     value: (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
@@ -70,6 +76,7 @@ function render(opts: { embedded?: boolean; orderTestId?: string | null; caseVie
       { provide: CapacitorService, useValue: {} },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {}, warning() {} } },
       { provide: DiskReadApi, useValue: { usage: () => throwError(() => ({ status: 404 })), read: () => new Subject(), confirm: () => of({}) } },
+      { provide: AuthService, useValue: { hasPermission: (p: string) => !!opts.canEditMaster && p === 'manage_tests' } },
     ],
   });
   const f = TestBed.createComponent(CultureEntryComponent);
@@ -77,10 +84,14 @@ function render(opts: { embedded?: boolean; orderTestId?: string | null; caseVie
   c.embedded = opts.embedded ?? true;
   c.orderTestId = opts.orderTestId === undefined ? 'OT-1' : opts.orderTestId;
   if (opts.caseId !== undefined) c.plateCaseId = opts.caseId;
+  c.reportHidden = opts.reportHidden === undefined ? [] : opts.reportHidden;
+  c.reportHiddenChange.subscribe((h: string[]) => { c.reportHidden = h; });
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
   const rows = () => (c.m().organisms?.[0]?.antibiotics ?? []).map((a: any) => [a.name, a.zoneSize, a.interpretation]);
-  return { f, c, el, api, rows };
+  /** [name, zone, S/I/R, ticked for the report] */
+  const table = () => (c.m().organisms?.[0]?.antibiotics ?? []).map((a: any) => [a.name, a.zoneSize, a.interpretation, !(c.reportHidden ?? []).includes('ast:0:' + a.name)]);
+  return { f, c, el, api, rows, table };
 }
 
 afterEach(() => { document.querySelectorAll('pf-plate-measure').forEach(n => n.remove()); });
@@ -123,55 +134,146 @@ describe('Plate before organism — measure first', () => {
     ]);
     expect(c.m().organisms ?? []).toEqual([]);
     expect(el.querySelectorAll('.ce-plate__chip').length).toBe(4);
-    expect(el.querySelector('.ce-plate__note')?.textContent).toContain('Identify the organism');
+    expect(el.querySelector('.ce-plate__note')?.textContent).toContain('Assign the organism');
     expect(c.measuringPlate()).toBe(false);
   });
 });
 
-describe('Plate before organism — the organism picks the breakpoints', () => {
-  it('identifying the organism shows ONLY the plate\'s antibiotics, zones filled, S / I / R computed', () => {
-    const { f, el, c, rows } = render();
+describe('Plate → assign organism → CLSI', () => {
+  it('"Assign organism" sits right under the PLATE card once measured', () => {
+    const { f, el, c } = render();
+    expect(el.querySelector('.ce-plate__assign')).toBeNull();
     c.onPlateMeasured(APPLIED);
-    c.seedOrganisms = ['Escherichia coli'];
     f.detectChanges();
-    expect(rows()).toEqual([
-      ['Amoxicillin-Clavulanate', 6, 'R'], ['Cefixime', 20, ''], ['Imipenem', 25, 'S'], ['Piperacillin-Tazobactam', 10, 'R'],
+    const assign = el.querySelector('.ce-plate .ce-plate__assign')!;
+    expect(assign.querySelector('.ce-plate__assignlbl')?.textContent?.trim()).toBe('Assign organism');
+    expect(assign.querySelector('pf-select')).toBeTruthy();
+  });
+
+  it('the organism\'s FULL CLSI panel: plate drugs first (plate order, ticked, zones, S/I/R), the rest unticked', () => {
+    const { f, el, c, table } = render();
+    c.onPlateMeasured(APPLIED);
+    c.assignOrganism('Escherichia coli');
+    f.detectChanges();
+    expect(table()).toEqual([
+      ['Amoxicillin-Clavulanate', 6, 'R', true],
+      ['Cefixime', 20, '', true],                          // measured, not in the panel → added
+      ['Imipenem', 25, 'S', true],
+      ['Piperacillin-Tazobactam 100', 10, 'R', true],      // "PIT 100/10" → the 100 row
+      ['Gentamicin', null, '', false],                     // panel, not on the plate → unticked
+      ['Piperacillin-Tazobactam 10', null, '', false],
     ]);
     expect(c.m().organisms[0].fromPlate).toBe(true);
     expect(c.mode()).toBe('zone');
-    const notes = [...el.querySelectorAll('.ce-abx__nobp')].map(n => n.textContent?.trim());
-    expect(notes).toEqual(['No CLSI breakpoint for Escherichia coli']);   // Cefixime
-    expect(el.querySelector('.ce-plate__note')?.textContent).toContain('On the table for Escherichia coli');
+    expect(el.querySelector('.ce-plate__assignlbl')?.textContent?.trim()).toBe('Organism');
   });
 
-  it('changing the organism re-maps breakpoints on the SAME zones and recomputes S / I / R', () => {
-    const { f, el, c, rows } = render();
+  it('identification seeding the organism builds the same table', () => {
+    const { c, table } = render();
     c.onPlateMeasured(APPLIED);
     c.seedOrganisms = ['Escherichia coli'];
-    c.setInterp(0, 2, 'R');                                   // a manual override for E. coli…
-    c.seedOrganisms = ['Staphylococcus aureus'];              // …identification changed
+    expect(table().map((r: any[]) => [r[0], r[3]])).toEqual([
+      ['Amoxicillin-Clavulanate', true], ['Cefixime', true], ['Imipenem', true], ['Piperacillin-Tazobactam 100', true],
+      ['Gentamicin', false], ['Piperacillin-Tazobactam 10', false],
+    ]);
+  });
+
+  it('a measured drug outside the panel: editable breakpoints drive S/I/R; "Breakpoint entered manually"', () => {
+    const { f, el, c, rows } = render();
+    c.onPlateMeasured(APPLIED);
+    c.assignOrganism('Escherichia coli');
     f.detectChanges();
+    const cefRow = () => el.querySelectorAll('.ce-abx__row')[1];
+    expect(cefRow().querySelector('.ce-abx__nobp')?.textContent).toContain('No CLSI breakpoint for Escherichia coli');
+    c.setBpS(0, 1, 19);
+    c.setBpR(0, 1, 15);
+    f.detectChanges();
+    expect(rows()[1]).toEqual(['Cefixime', 20, 'S']);
+    expect(cefRow().querySelector('.ce-abx__manbp')?.textContent).toContain('Breakpoint entered manually');
+    expect(c.m().organisms[0].antibiotics[1]).toMatchObject({ sMin: 19, rMax: 15 });   // stored on this case
+  });
+
+  it('"Save to CLSI for <organism>" only with the permission → an organism-pinned lab breakpoint', () => {
+    const noPerm = render();
+    noPerm.c.onPlateMeasured(APPLIED);
+    noPerm.c.assignOrganism('Escherichia coli');
+    noPerm.c.setBpS(0, 1, 19); noPerm.c.setBpR(0, 1, 15);
+    noPerm.f.detectChanges();
+    expect(noPerm.el.querySelector('.ce-abx__savebp')).toBeNull();
+    expect(noPerm.el.querySelector('.ce-abx__manbp')?.textContent).toContain('kept on this case');
+    noPerm.c.saveBreakpointToMaster(0, 1);
+    expect(noPerm.api.post).not.toHaveBeenCalled();
+    TestBed.resetTestingModule();
+
+    const { f, el, c, api } = render({ canEditMaster: true });
+    c.onPlateMeasured(APPLIED);
+    c.assignOrganism('Escherichia coli');
+    c.setBpS(0, 1, 19); c.setBpR(0, 1, 15);
+    f.detectChanges();
+    const box = el.querySelector<HTMLInputElement>('.ce-abx__savebp input')!;
+    expect(el.querySelector('.ce-abx__savebp')?.textContent).toContain('Save to CLSI for Escherichia coli');
+    box.click();
+    f.detectChanges();
+    expect(api.post).toHaveBeenCalledWith('/api/microbiology/breakpoints', {
+      organismGroup: 'Enterobacterales', antibiotic: 'Cefixime', organism: 'Escherichia coli', susceptibleMin: 19, resistantMax: 15,
+    });
+    expect(el.querySelector('.ce-abx__manbp')).toBeNull();          // now a (lab) CLSI row — fetched like the rest
+  });
+
+  it('changing the organism re-maps: new full panel, plate drugs ticked, same zones, S/I/R recomputed; manual breakpoints kept only outside the panel', () => {
+    const { c, table } = render();
+    c.onPlateMeasured(APPLIED);
+    c.assignOrganism('Escherichia coli');
+    c.setBpS(0, 1, 19); c.setBpR(0, 1, 15);                 // Cefixime: manual
+    c.setZone(0, 2, 27);                                    // the tech corrected Imipenem's zone
+    c.setInterp(0, 0, 'S');                                 // a manual override for E. coli
+    c.assignOrganism('Staphylococcus aureus');
     expect(c.m().organisms.length).toBe(1);
     expect(c.m().organisms[0].name).toBe('Staphylococcus aureus');
-    expect(rows()).toEqual([
-      ['Amoxicillin-Clavulanate', 6, 'R'], ['Cefixime', 20, ''], ['Imipenem', 25, ''], ['Piperacillin-Tazobactam', 10, ''],
+    expect(table()).toEqual([
+      ['Amoxicillin-Clavulanate', 6, 'R', true],             // Staph cut-offs, override reset
+      ['Cefixime', 20, 'S', true],                           // still outside → manual breakpoints kept
+      ['Imipenem', 27, '', true],                            // the tech's zone kept, no Staph breakpoint
+      ['Piperacillin-Tazobactam', 10, '', true],
+      ['Vancomycin', null, '', false],
     ]);
-    expect(el.querySelectorAll('.ce-abx__nobp').length).toBe(3);
+    expect(c.m().organisms[0].antibiotics[1]).toMatchObject({ sMin: 19, rMax: 15 });
+    expect(c.m().organisms[0].antibiotics[0].sMin ?? null).toBeNull();
+  });
+
+  it('identification changing the organism re-maps the same way', () => {
+    const { c, table } = render();
+    c.onPlateMeasured(APPLIED);
+    c.seedOrganisms = ['Escherichia coli'];
+    c.seedOrganisms = ['Staphylococcus aureus'];
+    expect(c.m().organisms.map((o: any) => o.name)).toEqual(['Staphylococcus aureus']);
+    expect(table().at(-1)).toEqual(['Vancomycin', null, '', false]);
+  });
+
+  it('the report prints ONLY the ticked rows', () => {
+    const { c } = render();
+    c.onPlateMeasured(APPLIED);
+    c.assignOrganism('Escherichia coli');
+    const printed = reportedAstRows(c.m().organisms[0].antibiotics, 0, c.reportHidden).map((a: any) => a.name);
+    expect(printed).toEqual(['Amoxicillin-Clavulanate', 'Cefixime', 'Imipenem', 'Piperacillin-Tazobactam 100']);
+    c.toggleShown('ast:0:Gentamicin');                     // the tech ticks one to report it
+    expect(reportedAstRows(c.m().organisms[0].antibiotics, 0, c.reportHidden).map((a: any) => a.name)).toContain('Gentamicin');
   });
 
   it('an organism identified BEFORE the measure gets the plate when it is confirmed', () => {
-    const { c, rows } = render();
+    const { c, table } = render();
     c.seedOrganisms = ['Escherichia coli'];
-    expect(rows().map((r: any[]) => r[0])).toEqual(['Amoxicillin-Clavulanate', 'Imipenem', 'Piperacillin-Tazobactam']); // CLSI panel
+    expect(table().every((r: any[]) => r[1] == null)).toBe(true);            // plain CLSI panel
     c.onPlateMeasured(APPLIED);
-    expect(rows().map((r: any[]) => r[0])).toEqual(['Amoxicillin-Clavulanate', 'Cefixime', 'Imipenem', 'Piperacillin-Tazobactam']);
-    expect(rows()[0]).toEqual(['Amoxicillin-Clavulanate', 6, 'R']);
+    expect(table().slice(0, 4).map((r: any[]) => [r[0], r[1], r[3]])).toEqual([
+      ['Amoxicillin-Clavulanate', 6, true], ['Cefixime', 20, true], ['Imipenem', 25, true], ['Piperacillin-Tazobactam 100', 10, true],
+    ]);
   });
 
   it('more antibiotics can still be added by hand', () => {
     const { c } = render();
     c.onPlateMeasured(APPLIED);
-    c.seedOrganisms = ['Escherichia coli'];
+    c.assignOrganism('Escherichia coli');
     c.syncAbx(0, [...c.abxValuesOf(0), 'Vancomycin']);
     expect(c.m().organisms[0].antibiotics.map((a: any) => a.name)).toContain('Vancomycin');
     expect(c.m().organisms[0].antibiotics.find((a: any) => a.name === 'Imipenem').zoneSize).toBe(25);
@@ -189,7 +291,8 @@ describe('Plate before organism — survives a reload', () => {
     f.detectChanges();
     expect(el.querySelector('.ce-plate__btn')?.textContent?.trim()).toBe('Re-measure plate');
     c.seedOrganisms = ['Escherichia coli'];
-    expect(rows()).toEqual([['Amoxicillin-Clavulanate', 6, 'R'], ['Imipenem', 25, 'S']]);
+    expect(rows().slice(0, 2)).toEqual([['Amoxicillin-Clavulanate', 6, 'R'], ['Imipenem', 25, 'S']]);
+    expect(rows().slice(2).every((r: any[]) => r[1] == null)).toBe(true);
     expect(c.userEdited).toBe(false);                         // automatic — the parent can still re-seed
   });
 
@@ -206,7 +309,7 @@ describe('The manual path is unchanged', () => {
     const { el, c, rows } = render({ embedded: false, orderTestId: null });
     expect(el.querySelector('.ce-plate')).toBeNull();
     c.seedOrganisms = ['Escherichia coli'];
-    expect(rows().map((r: any[]) => r[0])).toEqual(['Amoxicillin-Clavulanate', 'Imipenem', 'Piperacillin-Tazobactam']);
+    expect(rows().map((r: any[]) => r[0])).toEqual(['Amoxicillin-Clavulanate', 'Gentamicin', 'Imipenem', 'Piperacillin-Tazobactam 10', 'Piperacillin-Tazobactam 100']);
     expect(c.m().organisms[0].fromPlate).toBeUndefined();
   });
 

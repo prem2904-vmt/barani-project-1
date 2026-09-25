@@ -4,8 +4,9 @@ import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, PlateMeasureSession, panelForSpecimen } from '../../../shared/models/culture.model';
 import { PlateMeasureComponent } from './plate-measure.component';
-import { MasterAntibiotic, masterCandidates } from './disk-codes';
-import { PlateReading, parsePlate, plateJsonFromCase, plateRows, readingFromMeasure } from './plate-reading';
+import { MasterAntibiotic, baseDrug, drugForCode, masterCandidates, panelCandidates } from './disk-codes';
+import { AuthService } from '../../../core/auth/auth.service';
+import { PlateReading, parsePlate, plateJsonFromCase, readingFromMeasure } from './plate-reading';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 
@@ -77,9 +78,15 @@ interface Breakpoint {
                   <li class="nd-chip nd-chip--static ce-plate__chip" [title]="d.drug"><span class="nd-num">{{ d.code || d.drug }}</span><span class="ce-plate__mm nd-num">{{ d.mm }} mm</span></li>
                 }
               </ul>
+              <div class="ce-plate__assign">
+                <span class="ce-plate__assignlbl" id="ce-plate-org">{{ plateOrgName() ? 'Organism' : 'Assign organism' }}</span>
+                <pf-select class="ce-plate__orgsel" size="sm" [options]="organismOptions()" [searchable]="true"
+                           [value]="plateOrgName() ?? ''" placeholder="Pick the organism…"
+                           aria-labelledby="ce-plate-org" (valueChange)="assignOrganism($any($event))"></pf-select>
+              </div>
               <p class="ce-plate__note">
-                {{ plateOrgName() ? 'On the table for ' + plateOrgName() + ' — S / I / R from its CLSI breakpoints.'
-                   : 'Identify the organism — the table fills with these antibiotics and works out S / I / R.' }}
+                {{ plateOrgName() ? 'CLSI for ' + plateOrgName() + ': the plate’s antibiotics are ticked with S / I / R; the rest of its panel is listed unticked.'
+                   : 'Assign the organism — CLSI breakpoints are applied and S / I / R is worked out.' }}
               </p>
             } @else {
               <p class="ce-plate__note">Measure the AST plate now, before the organism is known. PF Sense reads each disk against the whole antibiotic list; the table fills in once the organism is identified.</p>
@@ -187,7 +194,22 @@ interface Breakpoint {
                       <span class="ce-abx__name">{{ ab.name }}</span>
                     </span>
                     @if (noBreakpoint(org, ab)) {
-                      <span class="ce-abx__nobp">No CLSI breakpoint for {{ org.name }}</span>
+                      <span class="ce-abx__nobp">No CLSI breakpoint for {{ org.name }} — enter S ≥ and R ≤</span>
+                    } @else if (manualBreakpoint(org, ab)) {
+                      <span class="ce-abx__nobp ce-abx__manbp">
+                        Breakpoint entered manually
+                        @if (bpSavedFor(org, ab)) {
+                          · saved to CLSI for {{ org.name }}
+                        } @else if (canSaveBreakpoints()) {
+                          <label class="ce-abx__savebp">
+                            <input type="checkbox" [checked]="false" [disabled]="ab.sMin == null || ab.rMax == null || !!bpSaving()"
+                                   (change)="saveBreakpointToMaster(oi, abi)" />
+                            Save to CLSI for {{ org.name }}
+                          </label>
+                        } @else {
+                          · kept on this case
+                        }
+                      </span>
                     }
                     @if (micRef(org.name, ab); as m) {
                       <span class="ce-abx__mic" title="MIC breakpoints only — CLSI defines no disk zone for this drug/organism. Set S/I/R by hand (or enter your own zone cutoffs).">
@@ -595,6 +617,11 @@ interface Breakpoint {
     .ce-plate__note { margin: 8px 0 0; font-size: 12.5px; color: var(--text-tertiary); text-wrap: pretty; }
     .ce-plate__err { margin: 6px 0 0; font-size: 12.5px; color: var(--red-text, #b91c1c); }
     .ce-abx__nobp { display: block; margin-top: 2px; font-size: 12px; color: var(--text-tertiary); }
+    .ce-abx__savebp { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; color: var(--text-secondary); cursor: pointer; min-height: 28px; }
+    .ce-plate__assign { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .ce-plate__assignlbl { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .ce-plate__orgsel { min-width: 240px; max-width: 340px; flex: 1 1 240px; }
+    @media (hover: none), (pointer: coarse) { .ce-abx__savebp { min-height: 44px; } }
     @media (hover: none), (pointer: coarse) { .ce-plate__btn { height: 44px; } }
     @media (max-width: 640px) { .ce-plate__btn { width: 100%; justify-content: center; } }
 `]
@@ -633,6 +660,7 @@ export class CultureEntryComponent implements OnInit {
   }
   get organisms(): string[] { return this.organismNames?.length ? this.organismNames : COMMON_ORGANISMS; }
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService, { optional: true });
   private readonly platform = inject(PlatformService);
   private readonly el = inject(ElementRef<HTMLElement>);
 
@@ -716,17 +744,12 @@ export class CultureEntryComponent implements OnInit {
     // The case's plate goes onto the FIRST new organism when no organism
     // carries it yet: ONLY the plate's antibiotics, zones filled.
     const plate = this.plate();
-    let plateUsed = keptWithIndex.some(({ o }) => o.fromPlate);
-    const organisms: CultureOrganism[] = [...keptWithIndex.map(({ o }) => o), ...missing.map(name => {
-      if (plate && !plateUsed) {
-        plateUsed = true;
-        return { name, antibiotics: plateRows(plate), fromPlate: true, plateImageUrl: plate.imageUrl, plateMeasure: plate.session };
-      }
-      return { name, antibiotics: this.clsiRows(name) };
-    })];
-    const next: CultureResult = { ...cur, noGrowth: false, organisms, ...(plate && plateUsed ? { astMode: 'zone' as const } : {}) };
+    let plateAt = keptWithIndex.some(({ o }) => o.fromPlate) || !plate ? -1 : keptWithIndex.length;
+    const organisms: CultureOrganism[] = [...keptWithIndex.map(({ o }) => o), ...missing.map(name => ({ name, antibiotics: this.clsiRows(name) }))];
+    if (plateAt >= organisms.length) plateAt = -1;
+    const next: CultureResult = { ...cur, noGrowth: false, organisms };
     this._m.set(next);
-    this.quietly(() => organisms.forEach((o, oi) => { if (o.fromPlate) o.antibiotics.forEach((_, abi) => this.autoInterpret(oi, abi)); }));
+    if (plateAt >= 0) this.quietly(() => this.buildFromPlate(plateAt, organisms[plateAt].name));
     this.valueChange.emit(this._m());
     this.organismsOpen.set(organisms.length > 0);
   }
@@ -835,30 +858,123 @@ export class CultureEntryComponent implements OnInit {
     if (oi < 0) return;                                 // no organism yet (or all touched) — the plate waits
     this.buildFromPlate(oi, orgs[oi].name);
   }
-  private buildFromPlate(oi: number, name: string) {
+  /**
+   * The plate organism's table (owner, 2026-09-25): the organism's FULL CLSI
+   * panel. The plate's antibiotics come FIRST, in plate order, CHECKED, with
+   * their zones; every other panel drug follows UNCHECKED (not reported, no
+   * zone — tick it to enter one by hand). A measured drug outside the panel
+   * is still added, checked, with editable breakpoints. Plate drugs map onto
+   * the panel's own names by their printed code ("AMC 30" → "Amoxicillin-
+   * Clavulanate 20"), else by drug. `prev` (an organism change) carries the
+   * tech's zones, and manual breakpoints for drugs still outside the panel.
+   */
+  private plateTable(orgName: string, prev?: AstRow[]): { rows: AstRow[]; unchecked: string[] } {
+    const r = this.plate();
+    const panel = this.clsiPanelFor(orgName);
+    const pc = panelCandidates(panel);
+    const byName = new Map((prev ?? []).map(a => [a.name, a]));
+    const used = new Set<string>();
+    const plateRowsOut: AstRow[] = [];
+    for (const d of r?.disks ?? []) {
+      const name = (d.code ? drugForCode(d.code, pc) : null)
+        ?? panel.find(p => baseDrug(p) === baseDrug(d.drug)) ?? d.drug;
+      if (used.has(name)) continue;
+      used.add(name);
+      const old = byName.get(name) ?? byName.get(d.drug);
+      const inPanel = panel.includes(name);
+      plateRowsOut.push({
+        name, zoneSize: old?.zoneSize ?? d.mm, interpretation: '',
+        ...(!inPanel && (old?.sMin != null || old?.rMax != null) ? { sMin: old?.sMin ?? null, rMax: old?.rMax ?? null } : {}),
+      });
+    }
+    const rest = panel.filter(n => !used.has(n)).map(n => ({ name: n, zoneSize: null, interpretation: '' as const }));
+    return { rows: [...plateRowsOut, ...rest], unchecked: rest.map(x => x.name) };
+  }
+  private buildFromPlate(oi: number, name: string, prev?: AstRow[]) {
     const r = this.plate();
     if (!r) return;
     this.clearManual(oi);
-    this.updateOrg(oi, o => ({ ...o, name, antibiotics: plateRows(r), fromPlate: true, plateImageUrl: r.imageUrl ?? o.plateImageUrl ?? null, plateMeasure: r.session }));
+    const t = this.plateTable(name, prev);
+    this.updateOrg(oi, o => ({ ...o, name, antibiotics: t.rows, fromPlate: true, plateImageUrl: r.imageUrl ?? o.plateImageUrl ?? null, plateMeasure: r.session }));
+    this.setUnchecked(oi, t.unchecked);
     if (this.mode() !== 'zone') this.patch({ astMode: 'zone' });
     (this._m().organisms?.[oi]?.antibiotics ?? []).forEach((_, abi) => this.autoInterpret(oi, abi));
   }
-  /** A plate organism renamed (identification changed): same zones, the NEW
-   *  organism's breakpoints — every verdict recomputed. */
+  /** Report ticks for organism `oi`: exactly `names` unticked (the report
+   *  prints only ticked rows). No-op when the parent has the feature off. */
+  private setUnchecked(oi: number, names: string[]) {
+    if (this.reportHidden === null) return;
+    const prefix = `ast:${oi}:`;
+    const next = [...(this.reportHidden ?? []).filter(k => !k.startsWith(prefix)), ...names.map(n => prefix + n)];
+    this.reportHidden = next;
+    this.reportHiddenChange.emit(next);
+  }
+  /** A plate organism renamed (identification changed / reassigned): the
+   *  NEW organism's full panel, plate drugs checked, same zones, every
+   *  verdict recomputed; manual breakpoints kept for drugs still outside. */
   private remapPlateOrganism(oi: number, name: string) { this.quietly(() => this.remapNow(oi, name)); }
   private remapNow(oi: number, name: string) {
-    this.clearManual(oi);
-    this.updateOrg(oi, o => ({ ...o, name, antibiotics: o.antibiotics.map(a => ({ ...a, interpretation: '' as const, sMin: null, rMax: null })) }));
-    (this._m().organisms?.[oi]?.antibiotics ?? []).forEach((_, abi) => this.autoInterpret(oi, abi));
+    this.buildFromPlate(oi, name, this._m().organisms?.[oi]?.antibiotics ?? []);
   }
   private clearManual(oi: number) {
     for (const k of [...this.manual]) if (k.startsWith(`${oi}:`)) this.manual.delete(k);
   }
-  /** "No CLSI breakpoint for <organism>" — a plate antibiotic the organism's
-   *  CLSI table doesn't cover (no S / I / R; set by hand if needed). */
+
+  // ── Plate drugs outside the organism's CLSI panel ────────────────
+  private outsidePanel(org: CultureOrganism, ab: AstRow): boolean {
+    return !!org.fromPlate && !!org.name.trim() && this.effectiveRow(org.name, ab.name) === undefined;
+  }
+  /** "No CLSI breakpoint for <organism>" — enter S ≥ / R ≤ on the row. */
   noBreakpoint(org: CultureOrganism, ab: AstRow): boolean {
-    return !!org.fromPlate && !!org.name.trim() && ab.sMin == null && ab.rMax == null
-      && this.effectiveRow(org.name, ab.name) === undefined;
+    return this.outsidePanel(org, ab) && ab.sMin == null && ab.rMax == null;
+  }
+  /** The tech typed this row's breakpoints (the organism's CLSI has none). */
+  manualBreakpoint(org: CultureOrganism, ab: AstRow): boolean {
+    return this.outsidePanel(org, ab) && (ab.sMin != null || ab.rMax != null);
+  }
+  /** Saving to the breakpoint master = the Test Master permission. */
+  canSaveBreakpoints(): boolean { return !!this.auth?.hasPermission('manage_tests'); }
+  readonly bpSaving = signal<string | null>(null);
+  readonly bpSaved = signal<Set<string>>(new Set());
+  /** "Save to CLSI for <organism>": an organism-pinned lab breakpoint, so
+   *  the next case fetches it. Without the permission the breakpoints stay
+   *  on this case only (they ride on the row). */
+  saveBreakpointToMaster(oi: number, abi: number) {
+    const org = this._m().organisms?.[oi], ab = org?.antibiotics[abi];
+    if (!org || !ab || !this.canSaveBreakpoints() || ab.sMin == null || ab.rMax == null) return;
+    const key = `${org.name}|${ab.name}`;
+    const group = this.organismGroup(org.name) ?? org.name;
+    this.bpSaving.set(key);
+    this.api.post('/api/microbiology/breakpoints', {
+      organismGroup: group, antibiotic: ab.name, organism: org.name,
+      susceptibleMin: ab.sMin, resistantMax: ab.rMax,
+    }).subscribe({
+      next: () => {
+        this.bpSaving.set(null);
+        this.bpSaved.update(s => new Set([...s, key]));
+        this.bpList = [...this.bpList, { organismGroup: group, antibiotic: ab.name, organism: org.name,
+          susceptibleMin: ab.sMin ?? null, resistantMax: ab.rMax ?? null, enabled: true }];
+      },
+      error: () => this.bpSaving.set(null),
+    });
+  }
+  bpSavedFor(org: CultureOrganism, ab: AstRow): boolean { return this.bpSaved().has(`${org.name}|${ab.name}`); }
+
+  // ── Assign the organism right under the PLATE card ───────────────
+  /** The organism the plate is assigned to (picker right under the plate). */
+  assignOrganism(name: string) {
+    const n = (name ?? '').trim();
+    if (!n || !this.plate()) return;
+    const orgs = this._m().organisms ?? [];
+    const pi = orgs.findIndex(o => o.fromPlate);
+    if (pi >= 0) { if (orgs[pi].name !== n) this.remapNow(pi, n); return; }
+    let oi = orgs.findIndex(o => o.name.trim().toLowerCase() === n.toLowerCase());
+    if (oi < 0) {
+      this.commit({ ...this._m(), noGrowth: false, organisms: [...orgs, { name: n, antibiotics: [] }] });
+      oi = orgs.length;
+    }
+    this.buildFromPlate(oi, n);
+    this.organismsOpen.set(true);
   }
 
   private readonly _m = signal<CultureResult>(this.normalize(null));

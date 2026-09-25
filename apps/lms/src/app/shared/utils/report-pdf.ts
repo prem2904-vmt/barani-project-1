@@ -3251,8 +3251,7 @@ function renderCultureSection(
     for (let idx = 0; idx < organisms.length; idx++) {
       const { o: org, i: origIdx } = organisms[idx];
       if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
-      const rows = (org.antibiotics ?? [])
-        .filter(a => (a.name ?? '').trim() && !isRowHidden(`ast:${origIdx}:${a.name}`))
+      const rows = reportedAstRows(org.antibiotics ?? [], origIdx, hiddenList)
         .map(a => {
           const w = interpWord(a.interpretation);
           return [
@@ -3795,4 +3794,13 @@ function formatShort(iso: string | undefined | null): string {
     timePart = `${String(h).padStart(2, '0')}:${min} ${ampm}`;
   }
   return `${datePart}${theme.dateTimeSeparator}${timePart}`;
+}
+
+/** The AST rows a culture report prints for one organism: named rows whose
+ *  report tick is on (key `ast:<original organism index>:<drug>` absent from
+ *  the case's hidden list). A plate organism's unticked panel drugs stay off
+ *  the patient PDF this way. */
+export function reportedAstRows<T extends { name?: string | null }>(rows: T[], origIdx: number, hidden: string[] | null | undefined): T[] {
+  const h = new Set(hidden ?? []);
+  return rows.filter(a => (a.name ?? '').trim() && !h.has(`ast:${origIdx}:${a.name}`));
 }

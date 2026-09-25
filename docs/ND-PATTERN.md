@@ -555,13 +555,31 @@ plus (owner reviews, 2026-09-25):
       branch's AST stage as `plateJson` inside the case's StagesJson (`PUT
       /api/microbiology/culture/{id}/stage/ast/plate`, `?caseId=` for a
       subculture) — no schema change; it survives reloads.
-    - **When the organism is identified** the table is built from the plate:
-      ONLY the plate's antibiotics, zones filled, S / I / R from that
-      organism's CLSI breakpoints. A plate antibiotic the organism has no
-      breakpoint for stays, with a muted "No CLSI breakpoint for
-      <organism>" line and no verdict. Changing the organism keeps the same
-      zones and recomputes every verdict (manual overrides reset — they were
-      for the old organism). + Add antibiotic works as before. An organism
+    - **Assign organism** sits right under the PLATE chips (a searchable
+      `pf-select` of the organism master; "Organism" once assigned — pick
+      again to change). Identification seeding the organism does the same.
+    - **The table is the organism's FULL CLSI panel** (owner, 2026-09-25):
+      the plate's antibiotics FIRST, in plate order, **ticked** (the report
+      tick), zones filled, S / I / R from the organism's breakpoints; every
+      other drug of the panel follows **unticked** (not reported, no zone —
+      tick it to enter one by hand). Plate drugs land on the panel's own rows
+      by their printed code ("PIT 100/10" → "Piperacillin-Tazobactam 100",
+      "AMC 30" → the 20/10 row), else by drug.
+    - **A measured drug outside the panel** is still added, ticked, with its
+      zone and a muted "No CLSI breakpoint for <organism> — enter S ≥ and
+      R ≤" line; its breakpoint cells are the usual editable boxes, and S / I
+      / R computes from what is typed ("Breakpoint entered manually"). The
+      typed breakpoints ride on the row (this case only). With the Test
+      Master permission (`manage_tests`) a **Save to CLSI for <organism>**
+      checkbox writes an organism-pinned lab breakpoint (`POST
+      /api/microbiology/breakpoints`, `organism` set) so the next case fetches
+      it; without it the line says "kept on this case".
+    - **Changing the organism** rebuilds the same way on the SAME zones (the
+      tech's corrected zones kept): the new full panel, plate drugs ticked,
+      every verdict recomputed, manual overrides reset; manual breakpoints
+      are kept only for drugs still outside the new panel.
+    - The report prints only ticked rows (`reportedAstRows`, key
+      `ast:<organism>:<drug>`); + Add antibiotic works as before; an organism
       that already has entered results is never overwritten by a plate.
     - Automatic plate changes don't count as the technician's edits.
   - **Real-plate check:** `apps/lms-e2e/src/culture-measure-read.rbac.spec.ts`
