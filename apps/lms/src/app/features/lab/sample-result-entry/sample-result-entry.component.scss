@@ -1,7 +1,7 @@
 // ═════════════════════════════════════════════════════════════════════════
 // Result entry (/lab/sample/:id) on the nd pattern — docs/ND-PATTERN.md
-// → "Result entry". Band + CONTEXT BAR → RESULTS cards (main column) +
-// SAMPLE side card. Global kit classes (.nd-*) do the heavy lifting; this
+// → "Result entry". Band (back + tenant + Save draft / Submit) whose pill
+// is the CONTEXT BAR → full-width RESULTS cards. No side panel. Global kit classes (.nd-*) do the heavy lifting; this
 // file only holds what is specific to the entry table and the context bar.
 // Palette only: violet + neutrals/slate. Functional colours kept: H / L /
 // critical flags, error red, the amber autosave dot, tube cap colours.
@@ -27,30 +27,39 @@
 .pf-sre-chip--tech svg, .pf-sre-chip--ro svg { flex: none; color: var(--text-tertiary); }
 .pf-sre-chip--tech { flex: 0 1 auto; min-width: 0; }
 
-/* Tube tabs: a neutral segmented control; the open-work dot is violet. */
-.pf-sre-tabs { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+/* Order ID: only where the pill has room. */
+@media (max-width: 1279px) { .pf-sre-chip--order { display: none; } }
+.pf-sre-chip__val { font-size: 12.5px; color: var(--text-primary); }
+
+/* Tube tabs (band tools): a neutral segmented control in a FIXED order.
+   The raised "selected" surface is one indicator that SLIDES to the
+   picked tab (nd spring); until it is measured the kit's own
+   aria-pressed surface shows, so nothing is ever unmarked. */
+.pf-sre-tabs { position: relative; flex: 0 1 auto; min-width: 0; max-width: 520px; overflow-x: auto; scrollbar-width: none; }
 .pf-sre-tabs::-webkit-scrollbar { display: none; }
-.pf-sre-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 240px; }
+.pf-sre-tabs__ind {
+  position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 0; pointer-events: none;
+  border-radius: 8px; background: var(--nd-card-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  opacity: 0;
+}
+.pf-sre-tabs--ind .pf-sre-tabs__ind { opacity: 1; }
+.pf-sre-tabs--anim .pf-sre-tabs__ind { transition: transform var(--nd-dur, 320ms) var(--nd-spring), width var(--nd-dur, 320ms) var(--nd-spring); }
+.pf-sre-tabs--ind .pf-sre-tab[aria-pressed='true'] { background: transparent; box-shadow: none; }
+.pf-sre-tab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 240px; }
 .pf-sre-tab__id { font-weight: 600; color: var(--text-primary); }
 .pf-sre-tab__tests { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pf-sre-tab__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); }
-.pf-sre-tab[aria-selected='false'] { cursor: pointer; }
-.pf-sre-tubesel { display: none; }
-.pf-sre-mode { flex: none; }
 
-/* ── Body: RESULTS column + SAMPLE card ─────────────────────────────── */
+/* Band actions (projected into the band's top-right slot). */
+.pf-sre-band .pf-sre__autosave { margin-right: 4px; }
+.pf-sre-act { flex: none; }
+
+/* ── Body: full-width RESULTS column ───────────────────────────────── */
 .pf-sre-body { padding-top: 4px; }
 .pf-sre-main {
-  min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 14px;
   padding-bottom: 8px;
-}
-/* Below the split (iPad portrait): one column — RESULTS, then SAMPLE —
-   and the body scrolls as a whole so neither is squeezed. */
-@media (max-width: 1023px) {
-  .pf-sre-body { overflow-y: auto; }
-  .pf-sre-main { flex: none; overflow: visible; }
-  .pf-sre-side { flex: none; overflow: visible; }
 }
 /* One card per test, stacked: cards size to content inside the column. */
 .pf-sre-card { flex: none; view-transition-class: pf-zoom; }
@@ -62,8 +71,15 @@
 .pf-sre-card .nd-card__body > .pf-sre__test-comments,
 .pf-sre-card .nd-card__body > .pf-sre__attach-strip,
 .pf-sre-card .nd-card__body > .pf-sre__test-empty,
-.pf-sre-card .nd-card__body > pf-culture-entry,
-.pf-sre-card .nd-card__body > .pf-sre__params { margin: 12px 14px; }
+.pf-sre-card .nd-card__body > pf-culture-entry { margin: 12px 14px; }
+
+/* Order-level extras above the cards (only when they apply). */
+.pf-sre-strip { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.pf-sre-strip__meta { height: 30px; color: var(--text-secondary); }
+.pf-sre-trend { font-size: 12.5px; }
+.pf-sre-trend__n { font-weight: 400; color: var(--text-muted); }
+.pf-sre-trend__sel { min-width: 160px; }
+.pf-sre-strip .pf-sre__flags { flex: 1 1 100%; }
 
 .pf-sre-skel__bar { display: block; height: 12px; border-radius: 6px; background: var(--nd-chip-bg); animation: pf-sre-shimmer 1.2s ease-in-out infinite; }
 @keyframes pf-sre-shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
@@ -107,7 +123,7 @@
 .pf-sre__grow-reject strong { color: var(--red-text, #b91c1c); font-weight: 600; }
 
 /* Inputs: kit surface + kit focus (violet ring), tabular numbers. */
-.pf-sre__ginput, .pf-sre__input {
+.pf-sre__ginput {
   width: 100%; min-height: 36px; padding: 6px 10px;
   border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line);
   background: var(--nd-card-bg); color: var(--text-primary);
@@ -115,13 +131,12 @@
   text-align: right; font-variant-numeric: tabular-nums;
   transition: border-color var(--nd-dur-fast) ease, box-shadow var(--nd-dur-fast) ease;
 }
-.pf-sre__ginput:hover, .pf-sre__input:hover { border-color: var(--nd-sel-border); }
-.pf-sre__ginput:focus, .pf-sre__input:focus {
+.pf-sre__ginput:hover { border-color: var(--nd-sel-border); }
+.pf-sre__ginput:focus {
   outline: 0; border-color: var(--color-violet-600, #7c3aed);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
 }
-.pf-sre__ginput--ta, .pf-sre__input--ta { resize: vertical; text-align: left; font-weight: 400; }
-.pf-sre__input--ta { min-height: 56px; }
+.pf-sre__ginput--ta { resize: vertical; text-align: left; font-weight: 400; }
 .pf-sre__gselect { width: 100%; }
 .pf-sre__cb { width: 18px; height: 18px; accent-color: var(--color-violet-600, #7c3aed); }
 
@@ -130,8 +145,7 @@
 .pf-sre__input--outr { border-color: rgba(245, 158, 11, 0.7) !important; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.12); }
 .pf-sre__input--crit { border-color: rgba(239, 68, 68, 0.8) !important; background: rgba(239, 68, 68, 0.08) !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14) !important; }
 .pf-sre__input--invalid { border-style: dashed !important; border-color: rgba(239, 68, 68, 0.55) !important; }
-.pf-sre__select-wrap { border: 1px solid transparent; border-radius: 12px; }
-.pf-sre__select-wrap.pf-sre__input--flagged, .pf-sre__gselect.pf-sre__input--flagged { border-radius: 12px; }
+.pf-sre__gselect.pf-sre__input--flagged { border: 1px solid transparent; border-radius: 12px; }
 
 .pf-sre__flag-chip, .pf-sre__calc-chip {
   display: inline-flex; align-items: center; margin-left: 6px; padding: 0 7px; height: 18px;
@@ -145,7 +159,6 @@
 /* How a calculated value got there — a neutral badge. */
 .pf-sre__calc-chip { background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line); }
 .pf-sre__calc-chip[data-kind='na'] { background: transparent; color: var(--text-muted); border-style: dashed; }
-.pf-sre__flag-chip--form { align-self: flex-end; margin-top: 4px; }
 .pf-sre__param-flag {
   display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
   width: 16px; height: 16px; margin-left: 6px; border-radius: 999px;
@@ -201,57 +214,18 @@
 .pf-sre__reject-test::after { content: ':'; }
 .pf-sre__reject-reason { color: var(--text-secondary); flex: 1; min-width: 0; }
 
-/* Form view */
-.pf-sre__params { display: grid; grid-template-columns: 1fr; gap: 12px; }
-@media (min-width: 720px) { .pf-sre__params { grid-template-columns: 1fr 1fr; } }
-.pf-sre__param { display: flex; flex-direction: column; gap: 4px; }
-.pf-sre__param-label { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
-.pf-sre__unit { color: var(--text-tertiary); font-weight: 400; }
-.pf-sre__hint { font-size: 11px; color: var(--text-tertiary); }
-.pf-sre__param-wrap { display: flex; flex-direction: column; }
-.pf-sre__param-wrap--flagged { padding: 4px; margin: -4px; border-radius: 10px; background: rgba(239, 68, 68, 0.04); }
-.pf-sre__param-comments { margin-top: 8px; }
-
 .pf-sre__msg { color: var(--text-secondary); font-size: 13px; padding: 24px 0; text-align: center; }
 .pf-sre__msg--err { color: var(--red-text, #b91c1c); }
 
-/* ── SAMPLE side card ───────────────────────────────────────────────── */
-.pf-sre-side__close { display: none; }
-.pf-sre-side__body { gap: 12px; }
-.pf-sre-status { align-self: flex-start; height: 32px; gap: 8px; font-size: 12.5px; font-weight: 500; color: var(--text-primary); }
-.pf-sre-status svg { color: var(--violet-text, #6d28d9); }
-.pf-sre-status__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); }
-.pf-sre__autosave { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
+/* Background autosave (band actions). */
+.pf-sre__autosave { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
 .pf-sre__autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber-text, #f59e0b); animation: pf-sre-pulse 1s ease-in-out infinite; }
 .pf-sre__autosave-dot--ok { background: var(--color-violet-500, #8b5cf6); animation: none; }
 @keyframes pf-sre-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-.pf-sre-trend { font-size: 12px; }
-.pf-sre-trendsel { display: flex; flex-direction: column; gap: 6px; }
-
-.pf-sre-info { margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.pf-sre-info__row { display: flex; gap: 12px; font-size: 13px; }
-.pf-sre-info__row dt { flex: none; width: 92px; color: var(--text-tertiary); }
-.pf-sre-info__row dd { margin: 0; color: var(--text-primary); @include nd.no-truncate; }
-.pf-sre-info__urgent { color: var(--red-text, #b91c1c) !important; font-weight: 500; }
-/* Tube cap colour — functional (it is the physical container). */
-.pf-sre-cap { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 999px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); }
-
-.pf-sre-sec { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
-.pf-sre-sec__title { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
-.pf-sre-prev { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.pf-sre-prev__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; font-size: 12.5px; }
-.pf-sre-prev__name { color: var(--text-secondary); @include nd.no-truncate; }
-.pf-sre-prev__val { color: var(--text-primary); font-weight: 500; text-align: right; }
-.pf-sre-prev__at { grid-column: 1 / -1; font-size: 11.5px; color: var(--text-muted); }
 .pf-sre__flags { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .pf-sre__flag { padding: 8px 12px; border-radius: 8px; background: var(--nd-chip-bg); border-left: 3px solid var(--nd-sel-border); font-size: 12.5px; }
 .pf-sre__flag strong { font-weight: 500; }
 .pf-sre__flag--crit { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.07); }
-.pf-sre-side__hint { margin: 0; padding-top: 12px; border-top: 1px solid var(--nd-line); font-size: 12px; color: var(--text-tertiary); text-wrap: pretty; }
-
-/* Footer: normal-size buttons at the right, never full width. */
-.nd-card__foot.pf-sre-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
-.pf-sre-foot .nd-btn { flex: none; min-width: 112px; }
 
 /* ── Attachments ────────────────────────────────────────────────────── */
 .pf-sre__attach-btn {
@@ -294,7 +268,7 @@
 
 /* ── Touch: 44px targets (any width, incl. iPad) ────────────────────── */
 @media (pointer: coarse) {
-  .pf-sre__ginput, .pf-sre__input, .pf-sre__select-wrap { min-height: 44px; }
+  .pf-sre__ginput { min-height: 44px; }
   .pf-sre__gnote, .pf-sre__attach-btn { min-width: 44px; height: 44px; }
   .nd-btn.pf-sre__note-btn { height: 44px; min-height: 44px; }
   .pf-sre__cb { width: 22px; height: 22px; }
@@ -303,27 +277,21 @@
 
 /* ── Phones (<=640px, additive) ─────────────────────────────────────── */
 @media (max-width: 640px) {
-  /* Pill = patient + sample in ONE row; tech chip + tabs leave the pill
-     (tabs become the compact picker in the tools row). */
-  .pf-sre-chip--tech, .pf-sre-chip--ro, .pf-sre-tabs, .pf-sre-ctx__grow { display: none; }
+  /* Pill = patient + sample in ONE row; the technician chip leaves it.
+     The tube tabs sit on their own scrollable row (band tools). */
+  .pf-sre-chip--tech, .pf-sre-chip--ro, .pf-sre-ctx__grow { display: none; }
   .pf-sre-chip--patient .pf-sre-chip__meta { display: none; }
-  .pf-sre-tubesel { display: block; flex: 1 1 auto; min-width: 0; }
+  .pf-sre-tabs { max-width: none; }
+  /* The band's actions don't fit: Save draft / Submit move to the compact
+     bottom bar (above the always-visible navbar). */
+  .pf-sre-band .pf-sre-act, .pf-sre-band .pf-sre__autosave { display: none; }
   .pf-sre-body { padding: 8px 12px 84px; }   /* clears the bottom bar */
-  /* SAMPLE becomes the sheet opened from the bottom bar. */
-  .pf-sre-side { display: none; }
-  .pf-sre-side.pf-sre-side--open {
-    display: flex; position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 1002;
-    height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
-    border-radius: 20px 20px 0 0;
-    animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce, ease) both;
-  }
-  .pf-sre-side__close { display: inline-flex; }
-  .pf-sre-backdrop { z-index: 1001; }
-  .pf-sre-bar { z-index: 1000; }
-  .pf-sre-bar__cta { flex: 0 1 auto; }
+  .pf-sre-bar { z-index: 46; justify-content: flex-end; }
+  .pf-sre-bar .pf-sre-act { height: 44px; padding: 0 16px; }
+  .pf-sre-bar .pf-sre-submit { flex: 1 1 auto; justify-content: center; }
 
   /* No iOS focus zoom. */
-  .pf-sre__input, .pf-sre__ginput { font-size: 16px; }
+  .pf-sre__ginput { font-size: 16px; }
   :host ::ng-deep .pf-sre__test select,
   :host ::ng-deep .pf-sre__test input,
   :host ::ng-deep .pf-sre__test textarea { font-size: 16px; }
@@ -351,6 +319,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pf-sre-side.pf-sre-side--open, .pf-sre-skel__bar, .pf-sre__autosave-dot { animation: none; }
-  .pf-sre__ginput, .pf-sre__input, .pf-sre__gnote { transition: none; }
+  .pf-sre-skel__bar, .pf-sre__autosave-dot { animation: none; }
+  .pf-sre__ginput, .pf-sre__gnote, .pf-sre-tabs__ind { transition: none !important; }
 }

@@ -1,12 +1,24 @@
 <!-- Result entry on the nd pattern (docs/ND-PATTERN.md → "Result entry"):
-     band (back + tenant, identical on every step) whose pill is the CONTEXT
-     BAR → one RESULTS card per test (main column) + the SAMPLE side card
-     with the ONE primary CTA. Phones: SAMPLE = bottom bar + tall sheet. -->
+     band (back + tenant + actions, identical on every step) whose pill is
+     the CONTEXT BAR → full-width RESULTS cards, one per test. Save draft /
+     Submit live in the band's actions (phones: a compact bottom bar). -->
 <section class="pf-sre nd-page" [class.pf-sre--view]="viewOnly()">
   <input type="file" #attachInput hidden multiple accept="image/*,video/*"
          (change)="onAttachPicked($event)" />
 
   <pf-hero-band class="pf-sre-band" [customSearch]="true" [back]="true">
+    <!-- Actions, top-right like every band page. ONE primary. -->
+    <ng-container band-actions>
+      @if (sample() && !viewOnly()) {
+        @if (autosaving()) {
+          <span class="pf-sre__autosave" aria-live="polite"><span class="pf-sre__autosave-dot"></span>Saving…</span>
+        } @else if (lastSavedLabel(); as l) {
+          <span class="pf-sre__autosave" aria-live="polite"><span class="pf-sre__autosave-dot pf-sre__autosave-dot--ok"></span>{{ l }}</span>
+        }
+        <ng-container *ngTemplateOutlet="actions; context: { $implicit: 'band' }"></ng-container>
+      }
+    </ng-container>
+
     <!-- CONTEXT BAR: the subject as read-only chips. -->
     <div band-search class="pf-sre-ctx">
       @if (sample(); as s) {
@@ -18,21 +30,9 @@
           <span class="pf-sre-chip__id nd-num">{{ s.barcode || "—" }}</span>
           @if (s.department?.code) { <span class="pf-sre-chip__meta">· {{ s.department?.code }}</span> }
         </span>
-        @if (s.siblings?.length) {
-          <!-- Tubes of the SAME order (FBS in one tube, PPBS in the next). -->
-          <span class="nd-seg pf-sre-tabs" role="tablist" aria-label="Tubes in this order">
-            <button type="button" class="nd-seg__item pf-sre-tab" role="tab" aria-selected="true" aria-pressed="true">
-              <span class="nd-num pf-sre-tab__id">{{ s.barcode || "This tube" }}</span>
-              @if (headerChips().length) { <span class="pf-sre-tab__tests">{{ headerChips().join(", ") }}</span> }
-            </button>
-            @for (sb of s.siblings; track sb.id) {
-              <button type="button" class="nd-seg__item pf-sre-tab" role="tab" aria-selected="false" aria-pressed="false"
-                      (click)="openSibling(sb.id)" [title]="sb.tests.join(', ')">
-                <span class="nd-num pf-sre-tab__id">{{ sb.barcode || "Tube" }}</span>
-                <span class="pf-sre-tab__tests">{{ sb.tests.join(", ") }}</span>
-                @if (sb.hasOpenWork) { <span class="pf-sre-tab__dot" aria-label="Open work"></span> }
-              </button>
-            }
+        @if (s.order?.orderNumber) {
+          <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--order" title="Order ID">
+            <span class="pf-sre-chip__meta">Order</span><span class="nd-num pf-sre-chip__val">{{ s.order?.orderNumber }}</span>
           </span>
         }
         <span class="pf-sre-ctx__grow"></span>
@@ -52,22 +52,62 @@
         <span class="pf-sre-skel__bar" style="width: 240px" aria-hidden="true"></span>
       }
     </div>
+
+    <!-- Tubes of the SAME order, in a FIXED order; only the selected
+         indicator moves (it slides). Phones: its own scrollable row. -->
     <ng-container band-tools>
-      @if (tubeOptions().length) {
-        <!-- Phones: the tube tabs as one compact picker. -->
-        <pf-select class="pf-sre-tubesel" size="sm" [options]="tubeOptions()" [value]="sample()?.id ?? ''"
-                   (valueChange)="openSibling($any($event))"></pf-select>
+      @if (tubeTabs().length) {
+        <span #tabsEl class="nd-seg pf-sre-tabs" role="tablist" aria-label="Tubes in this order">
+          <span class="pf-sre-tabs__ind" aria-hidden="true"></span>
+          @for (tab of tubeTabs(); track tab.id) {
+            <button type="button" class="nd-seg__item pf-sre-tab" role="tab"
+                    [attr.data-tube]="tab.id"
+                    [attr.aria-selected]="tab.id === activeTubeId()"
+                    [attr.aria-pressed]="tab.id === activeTubeId()"
+                    (click)="openSibling(tab.id)" [title]="tab.tests">
+              <span class="nd-num pf-sre-tab__id">{{ tab.barcode || "Tube" }}</span>
+              @if (tab.tests) { <span class="pf-sre-tab__tests">{{ tab.tests }}</span> }
+              @if (tab.open && tab.id !== activeTubeId()) { <span class="pf-sre-tab__dot" aria-label="Open work"></span> }
+            </button>
+          }
+        </span>
       }
-      <span class="nd-seg pf-sre-mode" role="radiogroup" aria-label="Result view">
-        <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="viewMode() === 'grid'"
-                (click)="setViewMode('grid')">Grid</button>
-        <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="viewMode() === 'form'"
-                (click)="setViewMode('form')">Form</button>
-      </span>
     </ng-container>
   </pf-hero-band>
 
-  <div class="nd-body nd-body--split pf-sre-body">
+  <!-- Save draft / Submit (or Reject / Validate) — ONE definition, shown in
+       the band on web + tablet and in the phone bottom bar. -->
+  <ng-template #actions let-where>
+    @if (validateMode()) {
+      <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-reject"
+              [disabled]="submitting() || enteredTests().length === 0" (click)="rejectTube()">Reject</button>
+      <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit"
+              [disabled]="submitting() || enteredTests().length === 0" (click)="validateTube()">
+        {{ submitting() ? "Validating…" : "Validate (" + enteredTests().length + ")" }}
+      </button>
+    } @else {
+      @if (hasReopenable()) {
+        <!-- Finished tube (submitted or signed off): Edit asks for a reason
+             and re-opens it to this tech (audited). -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-reopen"
+                [disabled]="submitting()" (click)="reopenSample()">
+          {{ submitting() && !hasWritable() ? "Opening…" : "Edit result" }}
+        </button>
+      }
+      @if (hasWritable()) {
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-draft"
+                [disabled]="loading() || submitting() || savingDraft()" (click)="saveDraft()">
+          {{ savingDraft() ? "Saving…" : "Save draft" }}
+        </button>
+      }
+      <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit"
+              [disabled]="loading() || submitting() || savingDraft() || !hasWritable()" (click)="submitAll()">
+        {{ submitting() ? "Submitting…" : hasReopenable() && !hasWritable() ? "Submitted" : "Submit results" }}
+      </button>
+    }
+  </ng-template>
+
+  <div class="nd-body pf-sre-body">
     <!-- ─── Main column: one RESULTS card per test ─────────────────── -->
     <div class="pf-sre-main" aria-label="Results">
       @if (loading()) {
@@ -91,6 +131,47 @@
           <div class="nd-card__body"><p class="pf-sre__msg pf-sre__msg--err">Sample not found.</p></div>
         </section>
       } @else {
+        <!-- Order-level extras, only when they apply: the validator's
+             "submitted" line, the Trendogram switch (slate) and the flags
+             the last submit raised. -->
+        @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0) {
+          <div class="pf-sre-strip">
+            @if (validateMode()) {
+              <span class="nd-chip nd-chip--static pf-sre-strip__meta nd-num">Submitted{{ submittedAtLabel() ? " " + submittedAtLabel() : "" }}</span>
+            }
+            @if (trendEligible().length > 0 && !viewOnly()) {
+              <!-- Serial-result trend charts in the report (persists on the order). -->
+              <button type="button" class="nd-toggle pf-sre-trend" role="switch" [attr.aria-checked]="trendogramOn()"
+                      (click)="toggleTrendogram()">
+                <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
+                Include Trendogram
+                <span class="pf-sre-trend__n">{{ trendEligible().length }} repeat test{{ trendEligible().length === 1 ? "" : "s" }}</span>
+              </button>
+              @if (trendogramOn()) {
+                <pf-select class="pf-sre-trend__sel" size="sm"
+                           [options]="[
+                             { value: '5', label: 'Last 5 tests' },
+                             { value: '10', label: 'Last 10 tests' },
+                             { value: '3m', label: 'Last 3 months' },
+                             { value: '6m', label: 'Last 6 months' },
+                             { value: 'all', label: 'All time' }
+                           ]"
+                           [value]="trendogramDuration()"
+                           (valueChange)="setTrendDuration($event)"></pf-select>
+              }
+            }
+            @if (lastFlags().length > 0) {
+              <ul class="pf-sre__flags">
+                @for (f of lastFlags(); track f.label) {
+                  <li class="pf-sre__flag" [class.pf-sre__flag--crit]="f.critical">
+                    <strong>{{ f.label }}</strong>{{ f.note ? " · " + f.note : "" }}
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
         <!-- Tests the pathologist sent back: the why, before the fields. -->
         @if (rejectedTests().length > 0) {
           <div class="pf-sre__reject-banner" role="alert">
@@ -112,7 +193,7 @@
         }
 
         @for (blk of entryBlocks(); track blk.key; let bi = $index) {
-          @if (blk.kind === "card" || viewMode() !== "grid") {
+          @if (blk.kind === "card") {
             <ng-container *ngTemplateOutlet="testCard; context: { $implicit: blk.tests, first: bi === 0 }"></ng-container>
           } @else {
             <!-- FLAT block: a profile (titled with its name) or a run of
@@ -443,7 +524,7 @@
                 <pf-culture-entry [value]="cultureValueFor(t)" (valueChange)="setCulture(t.id, $event)"></pf-culture-entry>
               } @else if (parametersFor(t).length === 0) {
                 <p class="pf-sre__test-empty">No parameter schema — this test has no inputs.</p>
-              } @else if (viewMode() === "grid") {
+              } @else {
                 <div class="pf-sre__grid-wrap">
                   <table class="pf-sre__grid">
                     <thead>
@@ -509,98 +590,6 @@
                     </tbody>
                   </table>
                 </div>
-              } @else {
-                <!-- Form view: label + input per value (the thread sits
-                     OUTSIDE the <label> so its buttons stay clickable). -->
-                <div class="pf-sre__params">
-                  @for (p of parametersFor(t); track p.name) {
-                    <div class="pf-sre__param-wrap" [class.pf-sre__param-wrap--flagged]="hasOpenComment(t.id, p.name)">
-                      <label class="pf-sre__param">
-                        <span class="pf-sre__param-label">
-                          {{ p.title || p.name }}
-                          @if (p.unit) { <span class="pf-sre__unit">({{ p.unit }})</span> }
-                          @if (hasOpenComment(t.id, p.name)) {
-                            <ng-container *ngTemplateOutlet="commentMark"></ng-container>
-                          }
-                        </span>
-                        @switch (inputKindFor(p)) {
-                          @case ("number") {
-                            <input type="text" inputmode="decimal"
-                                   class="pf-sre__input pf-sre__input--num"
-                                   [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                                   [class.pf-sre__input--outr]="isOutOfRange(t, p)"
-                                   [class.pf-sre__input--crit]="isCriticalValue(t, p)"
-                                   [class.pf-sre__input--invalid]="isInvalidNumber(t, p)"
-                                   [ngModel]="getValue(t.id, p.name)"
-                                   (ngModelChange)="setValue(t.id, p.name, $event)"
-                                   (keydown)="allowOnlyNumbers($event)"
-                                   (keydown.enter)="onEnterKey($event)"
-                                   (paste)="onNumericPaste($event, t.id, p.name)" />
-                            @if (calcChip(t, p); as c) {
-                              <span class="pf-sre__calc-chip pf-sre__flag-chip--form" [attr.data-kind]="c.kind">{{ c.label }}</span>
-                            }
-                            @if (flagFor(t, p); as f) {
-                              <span class="pf-sre__flag-chip pf-sre__flag-chip--form" [attr.data-tone]="f.tone" [attr.title]="flagChipTitle(f)">{{ f.label }}</span>
-                            }
-                          }
-                          @case ("textarea") {
-                            <textarea class="pf-sre__input pf-sre__input--ta" rows="2"
-                                      [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                                      [ngModel]="getValue(t.id, p.name)"
-                                      (ngModelChange)="setValue(t.id, p.name, $event)"
-                                      (keydown.enter)="onEnterKey($event)"></textarea>
-                          }
-                          @case ("select") {
-                            <div class="pf-sre__select-wrap" [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                                 [attr.data-sre-param]="t.id + '::' + p.name">
-                              <pf-select [options]="[{ value: '', label: '—' }, ...selectOptionsFor(p).map((o) => ({ value: o, label: o }))]"
-                                         [value]="getValue(t.id, p.name)"
-                                         (valueChange)="setValue(t.id, p.name, $event)"></pf-select>
-                            </div>
-                          }
-                          @case ("checkbox") {
-                            <input type="checkbox" class="pf-sre__cb"
-                                   [ngModel]="!!getValue(t.id, p.name)"
-                                   (ngModelChange)="setValue(t.id, p.name, $event)"
-                                   (keydown.enter)="onEnterKey($event)" />
-                          }
-                          @case ("date") {
-                            <input type="date" class="pf-sre__input"
-                                   [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                                   [ngModel]="getValue(t.id, p.name)"
-                                   (ngModelChange)="setValue(t.id, p.name, $event)"
-                                   (keydown.enter)="onEnterKey($event)" />
-                          }
-                          @default {
-                            <input type="text" class="pf-sre__input pf-sre__input--num"
-                                   [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                                   [ngModel]="getValue(t.id, p.name)"
-                                   (ngModelChange)="setValue(t.id, p.name, $event)"
-                                   (keydown.enter)="onEnterKey($event)" />
-                          }
-                        }
-                        @if (p.normalValue || p.criticalLow != null || p.criticalHigh != null) {
-                          <span class="pf-sre__hint nd-num">
-                            @if (p.normalValue) { Normal: {{ p.normalValue }} }
-                            @if (p.criticalLow != null) { · Crit&lt; {{ p.criticalLow }} }
-                            @if (p.criticalHigh != null) { · Crit&gt; {{ p.criticalHigh }} }
-                          </span>
-                        }
-                      </label>
-                      @if (commentsFor(t.id, p.name).length > 0 || hasOpenComment(t.id, p.name)) {
-                        <div class="pf-sre__param-comments">
-                          <pf-comment-thread
-                            [comments]="commentsFor(t.id, p.name)"
-                            [currentRole]="commentRole()"
-                            [composeLabel]="'Add note on this parameter'"
-                            (add)="addParameterComment(t.id, p.name, $event.body, $event.type)"
-                            (reply)="replyToParameter(t.id, p.name, $event.parentId, $event.body)">
-                          </pf-comment-thread>
-                        </div>
-                      }
-                    </div>
-                  }
-                </div>
               }
             </div>
           </section>
@@ -608,209 +597,13 @@
       </ng-template>
     </div>
 
-    <!-- ─── Side card: SAMPLE (like BILLING). Phones: the sheet. ─────── -->
-    @if (sheetOpen()) { <div class="nd-sheet-backdrop pf-sre-backdrop" (click)="sheetOpen.set(false)"></div> }
-    <aside class="nd-card pf-sre-side" [class.pf-sre-side--open]="sheetOpen()" aria-label="Sample">
-      <span class="nd-sheet__handle" aria-hidden="true"></span>
-      <header class="nd-card__head">
-        <span class="nd-card__icon" aria-hidden="true">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v14a2 2 0 0 0 4 0V3"/></svg>
-        </span>
-        <span class="nd-card__label">Sample</span>
-        <span class="nd-card__spacer"></span>
-        @if (trendEligible().length > 0 && !viewOnly()) {
-          <!-- Include serial-result trend charts in the report (slate toggle,
-               like the BILLING header). Persists on the order. -->
-          <button type="button" class="nd-toggle pf-sre-trend" role="switch" [attr.aria-checked]="trendogramOn()"
-                  (click)="toggleTrendogram()"
-                  [title]="trendEligible().length + ' repeat test' + (trendEligible().length === 1 ? '' : 's') + ' · trend charts'">
-            <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
-            Include Trendogram
-          </button>
-        }
-        <button type="button" class="nd-btn nd-btn--icon pf-sre-side__close" (click)="sheetOpen.set(false)" aria-label="Close sample details">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
-      </header>
-
-      <div class="nd-card__body pf-sre-side__body">
-        @if (sample(); as s) {
-          <!-- ONE status line: a neutral chip with a violet mark. -->
-          <span class="nd-chip nd-chip--static pf-sre-status" aria-live="polite">
-            @if (validateMode()) {
-              <span class="pf-sre-status__dot" aria-hidden="true"></span>
-              Submitted{{ submittedAtLabel() ? " " + submittedAtLabel() : "" }}
-            } @else if (!hasWritable() && hasReopenable()) {
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
-              Submitted — awaiting validation
-            } @else {
-              <span class="pf-sre-status__dot" aria-hidden="true"></span>
-              <span class="nd-num">{{ progressLabel() }}</span>
-            }
-          </span>
-          @if (autosaving()) {
-            <span class="pf-sre__autosave"><span class="pf-sre__autosave-dot"></span>Saving…</span>
-          } @else if (lastSavedLabel(); as l) {
-            <span class="pf-sre__autosave"><span class="pf-sre__autosave-dot pf-sre__autosave-dot--ok"></span>{{ l }}</span>
-          }
-
-          @if (trendogramOn() && trendEligible().length > 0 && !viewOnly()) {
-            <div class="pf-sre-trendsel">
-              <span class="pf-sre-sec__title">Trendogram range</span>
-              <pf-select size="sm"
-                         [options]="[
-                           { value: '5', label: 'Last 5 tests' },
-                           { value: '10', label: 'Last 10 tests' },
-                           { value: '3m', label: 'Last 3 months' },
-                           { value: '6m', label: 'Last 6 months' },
-                           { value: 'all', label: 'All time' }
-                         ]"
-                         [value]="trendogramDuration()"
-                         (valueChange)="setTrendDuration($event)"></pf-select>
-            </div>
-          }
-
-          <!-- What the RESULTS cards don't show — only fields the tube has. -->
-          @if (sampleInfo(); as info) {
-            <dl class="pf-sre-info">
-              @if (info.priority) {
-                <div class="pf-sre-info__row"><dt>Priority</dt><dd class="pf-sre-info__urgent">{{ info.priority }}</dd></div>
-              }
-              @if (info.specimen) {
-                <div class="pf-sre-info__row"><dt>Specimen</dt><dd>{{ info.specimen }}</dd></div>
-              }
-              @if (info.container) {
-                <div class="pf-sre-info__row"><dt>Container</dt>
-                  <dd><span class="pf-sre-cap" [style.background]="info.container.hex" aria-hidden="true"></span>{{ info.container.label }}</dd></div>
-              }
-              @if (info.collectedAt || info.external) {
-                <div class="pf-sre-info__row"><dt>Collected</dt>
-                  <dd class="nd-num">{{ info.collectedAt ? (info.collectedAt | date: 'd MMM, h:mm a') : '' }}{{ info.external ? (info.collectedAt ? ' · ' : '') + 'Brought in' : '' }}</dd></div>
-              }
-              @if (info.receivedAt) {
-                <div class="pf-sre-info__row"><dt>Received</dt><dd class="nd-num">{{ info.receivedAt | date: 'd MMM, h:mm a' }}</dd></div>
-              }
-              @if (info.tatHours) {
-                <div class="pf-sre-info__row"><dt>TAT</dt>
-                  <dd class="nd-num">{{ info.tatHours }} h
-                    @if (info.dueAt) {
-                      · <span [class.pf-sre-info__urgent]="info.overdue">{{ info.overdue ? 'overdue since' : 'due' }} {{ info.dueAt | date: 'd MMM, h:mm a' }}</span>
-                    }
-                  </dd></div>
-              }
-              @if (info.orderNumber) {
-                <div class="pf-sre-info__row"><dt>Order</dt><dd class="nd-num">{{ info.orderNumber }}</dd></div>
-              }
-              @if (info.refDoctor) {
-                <div class="pf-sre-info__row"><dt>Referred by</dt><dd>{{ info.refDoctor }}</dd></div>
-              }
-              @if (info.refHospital) {
-                <div class="pf-sre-info__row"><dt>Hospital</dt><dd>{{ info.refHospital }}</dd></div>
-              }
-            </dl>
-          }
-
-          @if (previousResults().length > 0) {
-            <section class="pf-sre-sec" aria-label="Previous results">
-              <h3 class="pf-sre-sec__title">Previous results</h3>
-              <ul class="pf-sre-prev">
-                @for (r of previousResults(); track r.key) {
-                  <li class="pf-sre-prev__row">
-                    <span class="pf-sre-prev__name">{{ r.test }}@if (r.param) { · {{ r.param }} }</span>
-                    <span class="pf-sre-prev__val nd-num">{{ r.value }}@if (r.unit) { {{ r.unit }} }</span>
-                    <span class="pf-sre-prev__at nd-num">{{ r.date | date: 'd MMM y' }}</span>
-                  </li>
-                }
-              </ul>
-            </section>
-          }
-
-          @if (lastFlags().length > 0) {
-            <section class="pf-sre-sec" aria-label="Flags">
-              <h3 class="pf-sre-sec__title">Flags</h3>
-              <ul class="pf-sre__flags">
-                @for (f of lastFlags(); track f.label) {
-                  <li class="pf-sre__flag" [class.pf-sre__flag--crit]="f.critical">
-                    <strong>{{ f.label }}</strong>{{ f.note ? " · " + f.note : "" }}
-                  </li>
-                }
-              </ul>
-            </section>
-          }
-
-          <p class="pf-sre-side__hint">
-            @if (validateMode()) {
-              Review every value, then validate the tube or send it back to the technician.
-            } @else if (viewOnly()) {
-              Read-only view — nothing here can be changed.
-            } @else {
-              Enter moves to the next field. Typing is saved as you go; Submit sends the tube for validation.
-            }
-          </p>
-        } @else {
-          <span class="pf-sre-skel__bar" style="width: 60%"></span>
-          <span class="pf-sre-skel__bar"></span>
-        }
-      </div>
-
-      @if (sample() && !viewOnly()) {
-        <!-- ONE primary per view; normal-size buttons, never full width. -->
-        <footer class="nd-card__foot pf-sre-foot">
-          @if (validateMode()) {
-            <button type="button" class="nd-btn nd-btn--secondary pf-sre-reject"
-                    [disabled]="submitting() || enteredTests().length === 0" (click)="rejectTube()">Reject</button>
-            <button type="button" class="nd-btn nd-btn--primary pf-sre-submit"
-                    [disabled]="submitting() || enteredTests().length === 0" (click)="validateTube()">
-              {{ submitting() ? "Validating…" : "Validate (" + enteredTests().length + ")" }}
-            </button>
-          } @else {
-            @if (hasReopenable()) {
-              <!-- Finished tube (submitted or signed off): Edit asks for a
-                   reason and re-opens it to this tech (audited). -->
-              <button type="button" class="nd-btn nd-btn--secondary pf-sre-reopen"
-                      [disabled]="submitting()" (click)="reopenSample()">
-                {{ submitting() && !hasWritable() ? "Opening…" : "Edit result" }}
-              </button>
-            }
-            @if (hasWritable()) {
-              <button type="button" class="nd-btn nd-btn--secondary pf-sre-draft"
-                      [disabled]="submitting() || savingDraft()" (click)="saveDraft()">
-                {{ savingDraft() ? "Saving…" : "Save draft" }}
-              </button>
-              <button type="button" class="nd-btn nd-btn--primary pf-sre-submit"
-                      [disabled]="submitting() || savingDraft()" (click)="submitAll()">
-                {{ submitting() ? "Submitting…" : "Submit results" }}
-              </button>
-            }
-          }
-        </footer>
-      }
-    </aside>
   </div>
 
-  <!-- Phones: SAMPLE as a sticky bottom bar (above the navbar). -->
-  @if (sample(); as s) {
+  <!-- Phones: the band's actions don't fit, so Save draft / Submit ride a
+       compact sticky bar above the (always visible) navbar. -->
+  @if (sample() && !viewOnly()) {
     <div class="nd-bottombar pf-sre-bar">
-      <span class="nd-bottombar__info nd-num">{{ progressLabel() }}</span>
-      <button type="button" class="nd-btn nd-btn--icon" (click)="sheetOpen.set(true)" aria-label="Sample details and actions">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
-      </button>
-      @if (!viewOnly()) {
-        @if (validateMode()) {
-          <button type="button" class="nd-btn nd-btn--primary pf-sre-bar__cta pf-sre-submit"
-                  [disabled]="submitting() || enteredTests().length === 0" (click)="validateTube()">
-            {{ submitting() ? "Validating…" : "Validate" }}
-          </button>
-        } @else if (hasWritable()) {
-          <button type="button" class="nd-btn nd-btn--primary pf-sre-bar__cta pf-sre-submit"
-                  [disabled]="submitting() || savingDraft()" (click)="submitAll()">
-            {{ submitting() ? "Submitting…" : "Submit results" }}
-          </button>
-        } @else if (hasReopenable()) {
-          <button type="button" class="nd-btn nd-btn--secondary pf-sre-bar__cta"
-                  [disabled]="submitting()" (click)="reopenSample()">Edit result</button>
-        }
-      }
+      <ng-container *ngTemplateOutlet="actions; context: { $implicit: 'bar' }"></ng-container>
     </div>
   }
 </section>

@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  afterRenderEffect,
   computed,
   effect,
   inject,
   signal,
+  viewChild,
 } from "@angular/core";
 import { TrendTest } from "../../../shared/utils/trend-chart";
 import {
@@ -52,11 +54,8 @@ import { CommentThreadComponent } from "../../../shared/components/comment-threa
 import { SelectComponent } from "../../../shared/primitives/select.component";
 import { CultureEntryComponent } from "../culture-entry/culture-entry.component";
 import { CultureResult } from "../../../shared/models/culture.model";
-import { formatPatientInfo, formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
+import { formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
-import { tubeColor } from "../../../shared/utils/tube-colors";
-import { plural } from "../../../shared/utils/plural";
-import { webPointerSignal } from "../../../shared/utils/pointer-mode";
 import { sampleVtName } from "../../../core/navigation/zoom-transition";
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -121,34 +120,62 @@ export class SampleResultEntryComponent {
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
   private readonly tenantState = inject(TenantStateService);
-  protected readonly formatPatient = formatPatientInfo;
 
   // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
-  /** Web (fine pointer + hover) vs touch — row actions / tap targets. */
-  readonly web = webPointerSignal();
   /** The route's sample id, known before the tube loads — the RESULTS
    *  skeleton carries the zoom name so the queue tile can morph into it. */
   readonly routeSampleId = signal<string | null>(null);
   /** view-transition-name shared with the My Work tile (zoom-transition.ts). */
-  readonly vtName = computed(() => sampleVtName(this._sample()?.id ?? this.routeSampleId()));
-  /** Phone: the SAMPLE side card opens as the tall sheet. */
-  readonly sheetOpen = signal(false);
+  readonly vtName = computed(() => sampleVtName(this.routeSampleId() ?? this._sample()?.id));
 
   /** Full patient name — never cut in code (ND rule 5). */
   readonly patientName = computed(() => patientDisplayName(this._sample()?.order?.patient) || "Patient");
   /** "29/M · AA0012". */
   readonly patientMeta = computed(() => formatPatientMeta(this._sample()?.order?.patient));
 
-  /** Sample tabs (this tube + its siblings) for the phone pf-select. */
-  readonly tubeOptions = computed(() => {
-    const s = this._sample();
-    if (!s?.siblings?.length) return [];
-    const self = { value: s.id, label: `${s.barcode || "This tube"} · ${this.headerChips().join(", ")}` };
-    return [self, ...s.siblings.map((sb) => ({
-      value: sb.id,
-      label: `${sb.barcode || "Tube"} · ${sb.tests.join(", ")}${sb.hasOpenWork ? " (open)" : ""}`,
-    }))];
-  });
+  /** Tube tabs of this order in a FIXED order: the order's sample sequence
+   *  (series offset, then sample ID — the same order the server lists
+   *  siblings in). Switching tubes never reorders them; only the selected
+   *  indicator moves. Kept across a switch so the strip never blinks. */
+  private readonly _tubeTabs = signal<Array<{ id: string; barcode: string; tests: string; open: boolean }>>([]);
+  readonly tubeTabs = this._tubeTabs.asReadonly();
+  /** The selected tab — set on tap, before the tube loads. */
+  readonly activeTubeId = computed(() => this.routeSampleId() ?? this._sample()?.id ?? null);
+
+  private syncTubeTabs(s: OrderSample | null) {
+    if (!s?.siblings?.length) { this._tubeTabs.set([]); return; }
+    const self = {
+      id: s.id, barcode: s.barcode || "", tests: this.headerChips().join(", "), open: false,
+      off: s.repeatOffsetMin ?? -1,
+    };
+    const rest = s.siblings.map((sb) => ({
+      id: sb.id, barcode: sb.barcode || "", tests: sb.tests.join(", "), open: !!sb.hasOpenWork,
+      off: sb.repeatOffsetMin ?? -1,
+    }));
+    const all = [self, ...rest].sort((a, b) =>
+      (a.off - b.off) || a.barcode.localeCompare(b.barcode, undefined, { numeric: true }) || a.id.localeCompare(b.id));
+    this._tubeTabs.set(all.map(({ off: _off, ...t }) => t));
+  }
+
+  /** The sliding selected-tab indicator: measured after render and written
+   *  straight to the DOM (no signal → no extra change detection). */
+  private readonly tabsEl = viewChild<ElementRef<HTMLElement>>("tabsEl");
+  private placeTabIndicator() {
+    const host = this.tabsEl()?.nativeElement;
+    if (!host) return;
+    const ind = host.querySelector<HTMLElement>(".pf-sre-tabs__ind");
+    const act = host.querySelector<HTMLElement>('.pf-sre-tab[aria-selected="true"]');
+    if (!ind || !act || !act.offsetWidth) {
+      host.classList.remove("pf-sre-tabs--ind", "pf-sre-tabs--anim");
+      return;
+    }
+    // Slide only once the indicator has a position to slide FROM.
+    if (host.classList.contains("pf-sre-tabs--ind")) host.classList.add("pf-sre-tabs--anim");
+    ind.style.width = `${act.offsetWidth}px`;
+    ind.style.height = `${act.offsetHeight}px`;
+    ind.style.transform = `translate(${act.offsetLeft}px, ${act.offsetTop}px)`;
+    host.classList.add("pf-sre-tabs--ind");
+  }
 
   /** RESULTS card label for a grid block: the profile name, the single
    *  test's name, or "Results" for a run of single-value tests. */
@@ -157,95 +184,6 @@ export class SampleResultEntryComponent {
     if (blk.tests.length === 1) return blk.tests[0].test?.name ?? "Test";
     return "Results";
   }
-
-  /** Entry progress across the tube: every parameter field counts once; a
-   *  culture test counts once (any structured value = entered). */
-  readonly progress = computed(() => {
-    const all = this._values();
-    let done = 0, total = 0;
-    const filled = (v: unknown) => v !== undefined && v !== null && v !== false && String(v).trim() !== "";
-    for (const t of this._sample()?.tests ?? []) {
-      if (this.isCultureTest(t)) {
-        total++;
-        if (Object.keys(all[t.id] ?? {}).length > 0) done++;
-        continue;
-      }
-      for (const p of this.parametersFor(t)) {
-        total++;
-        if (filled(all[t.id]?.[p.name])) done++;
-      }
-    }
-    return { done, total };
-  });
-  readonly progressLabel = computed(() => {
-    const { done, total } = this.progress();
-    return `${done} of ${plural(total, "parameter")} entered`;
-  });
-
-  /** SAMPLE side card: ONLY what the RESULTS cards don't show, and only the
-   *  fields the tube really carries (GET /api/samples/:id/tests). */
-  readonly sampleInfo = computed(() => {
-    const s = this._sample();
-    if (!s) return null;
-    const tests = s.tests ?? [];
-    const uniq = (xs: Array<string | null | undefined>) =>
-      [...new Set(xs.map((x) => (x ?? "").trim()).filter(Boolean))];
-    const specimen = uniq(tests.map((t) => t.test?.sampleType)).join(", ") || null;
-    const tc = tubeColor(s.tubeColor ?? tests.find((t) => t.test?.tubeColor)?.test?.tubeColor);
-    // TAT runs from lab receipt — the same clock My Work's queue uses.
-    const tatHours = Math.max(0, ...tests.map((t) => t.test?.tatHours ?? 0)) || null;
-    const dueAt = tatHours && s.receivedAtLab
-      ? new Date(new Date(s.receivedAtLab).getTime() + tatHours * 3_600_000).toISOString() : null;
-    const o = s.order;
-    const pr = (o?.priority ?? "").trim().toLowerCase();
-    return {
-      specimen,
-      container: tc ? { label: tc.label, hex: tc.hex } : null,
-      external: s.source === "external",
-      collectedAt: s.collectedAt ?? null,
-      receivedAt: s.receivedAtLab ?? null,
-      tatHours,
-      dueAt,
-      overdue: !!dueAt && Date.parse(dueAt) < Date.now(),
-      priority: pr && pr !== "routine" && pr !== "normal" ? o!.priority : null,
-      orderNumber: o?.orderNumber?.trim() || null,
-      refDoctor: o?.refDoctorName?.trim() || null,
-      refHospital: o?.refHospitalName?.trim() || null,
-    };
-  });
-
-  /** Previous result for the same test (the patient's lab-trends series —
-   *  numeric values from EARLIER orders only). Empty when the endpoint gives
-   *  nothing (single prior result, no permission, non-numeric tests). */
-  readonly previousResults = computed(() => {
-    const s = this._sample();
-    const before = s?.order?.createdAt ? Date.parse(s.order.createdAt) : NaN;
-    if (!s || Number.isNaN(before)) return [];
-    const out: Array<{ key: string; test: string; param: string; value: number; unit: string | null; date: string }> = [];
-    const seen = new Set<string>();
-    for (const t of s.tests ?? []) {
-      if (seen.has(t.testId)) continue;
-      seen.add(t.testId);
-      const tr = this.trendEligible().find((x) => x.testId === t.testId);
-      if (!tr) continue;
-      const params = this.parametersFor(t);
-      for (const tp of tr.parameters) {
-        const prior = tp.points.filter((pt) => Date.parse(pt.date) < before);
-        const last = prior[prior.length - 1];
-        if (!last) continue;
-        const def = params.find((p) => p.name === tp.parameter);
-        out.push({
-          key: t.testId + "::" + tp.parameter,
-          test: tr.testName,
-          param: params.length > 1 ? def?.title || tp.parameter : "",
-          value: last.value,
-          unit: tp.unit ?? def?.unit ?? null,
-          date: last.date,
-        });
-      }
-    }
-    return out.slice(0, 8);
-  });
 
   /** Signed-in technician shown on the right of the header. Properly formats
    *  displayName or falls back to full name / 'Technician'. */
@@ -448,7 +386,7 @@ export class SampleResultEntryComponent {
   private getAllFocusableInputs(container: HTMLElement): HTMLElement[] {
     return Array.from(
       container.querySelectorAll<HTMLElement>(
-        "input.pf-sre__ginput, input.pf-sre__input, select.pf-sre__ginput, select.pf-sre__input, textarea.pf-sre__ginput, textarea.pf-sre__input, input.pf-sre__cb, .pf-sre__select-wrap .pf-dd__trigger, .pf-sre__gselect .pf-dd__trigger",
+        "input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger",
       ),
     ).filter((el) => {
       const style = window.getComputedStyle(el);
@@ -654,6 +592,11 @@ export class SampleResultEntryComponent {
   private trendPatientId: string | null = null;
 
   constructor() {
+    afterRenderEffect(() => {
+      this.tubeTabs();
+      this.activeTubeId();
+      this.placeTabIndicator();
+    });
     effect(() => {
       const pid = this.sample()?.order?.patient?.id ?? null;
       if (pid && pid !== this.trendPatientId) {
@@ -984,23 +927,6 @@ export class SampleResultEntryComponent {
     return choiceOptionsFor(p);
   }
 
-  /** Grid vs form view — grid is the default (mirrors report PDF columns).
-   *  Persisted across sessions in localStorage. */
-  private readonly _viewMode = signal<"grid" | "form">(
-    (typeof localStorage !== "undefined" &&
-      (localStorage.getItem("pf-sre-view") as "grid" | "form")) ||
-      "grid",
-  );
-  readonly viewMode = this._viewMode.asReadonly();
-  setViewMode(mode: "grid" | "form") {
-    this._viewMode.set(mode);
-    try {
-      localStorage.setItem("pf-sre-view", mode);
-    } catch {
-      /* no-op */
-    }
-  }
-
   /** Per-test "show overall observation thread" toggle. The thread block
    *  is heavy (composer textarea + buttons), so we keep it collapsed until
    *  the tech clicks the compact "+ Note" pill in the test header. Threads
@@ -1266,6 +1192,17 @@ export class SampleResultEntryComponent {
     }, 500);
   }
 
+  private flushLocalDraft() {
+    if (this.draftTimer === null || !this.draftKey) return;
+    clearTimeout(this.draftTimer);
+    this.draftTimer = null;
+    try {
+      localStorage.setItem(this.draftKey, JSON.stringify(this._values()));
+    } catch {
+      /* private mode */
+    }
+  }
+
   private restoreDraft() {
     if (!this.draftKey) return;
     try {
@@ -1393,11 +1330,13 @@ export class SampleResultEntryComponent {
    *  the route param is snapshot-read, so update the URL and reload state
    *  in place (OPS-51: FBS/PPBS live in different tubes of one order). */
   async openSibling(id: string) {
-    if (!id || id === this._sample()?.id) return;
-    await this.router.navigate(["/lab/sample", id], { replaceUrl: false });
-    this.routeSampleId.set(id);
+    if (!id || id === this.activeTubeId()) return;
+    // Park the current tube's pending local draft under ITS key before the
+    // key moves to the next tube.
+    this.flushLocalDraft();
+    this.routeSampleId.set(id);          // the tab indicator moves now
     this._loading.set(true);
-    this._sample.set(null);
+    await this.router.navigate(["/lab/sample", id], { replaceUrl: false });
     await this.load(id);
   }
 
@@ -1408,6 +1347,7 @@ export class SampleResultEntryComponent {
         this.api.get<OrderSample>(`/api/samples/${id}/tests`),
       );
       this._sample.set(this.normalizeSample(sample ?? null));
+      this.syncTubeTabs(this._sample());
       // Pre-fill from any existing currentResult JSON so the tech can edit
       // a previously-entered value rather than starting from blank.
       this.prefillValues(sample ?? null);

@@ -15,8 +15,9 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 
 /**
  * Result entry on the nd pattern (docs/ND-PATTERN.md → "Result entry"):
- * band + CONTEXT BAR, one RESULTS card per test, the SAMPLE side card with
- * ONE primary, and the zoom name shared with the queue tile.
+ * band (back + tenant + Save draft / Submit) + CONTEXT BAR, full-width
+ * RESULTS cards (grid only, no side panel), tube tabs in a FIXED order, and
+ * the zoom name shared with the queue tile.
  */
 const FULL_NAME = 'Mr. Sathish Kumaravel Ramasamy';
 const PARAMS = JSON.stringify({
@@ -50,12 +51,24 @@ function sampleFixture(rich: boolean): any {
   };
 }
 
+/** The sibling tube: the server lists ITS siblings (the first tube). */
+function siblingFixture(): any {
+  const s = sampleFixture(false);
+  return {
+    ...s, id: 'smp-2', barcode: '26124',
+    siblings: [{ id: 'smp-1', barcode: '26123', tests: ['Bacterial PCR Detection'], hasOpenWork: true }],
+    tests: [{ ...s.tests[0], id: 'ot2', subOrderId: 'smp-2', testId: 't2', name: 'Bacterial Identification',
+      test: { ...s.tests[0].test, id: 't2', name: 'Bacterial Identification' } }],
+  };
+}
+
 async function render(opts: { rich?: boolean; hold?: boolean } = {}) {
   const sample = sampleFixture(!!opts.rich);
   let release!: () => void;
   const gate = new Promise<void>(r => (release = r));
   const api = {
     get: vi.fn((url: string) => {
+      if (url.endsWith('/smp-2/tests')) return of(siblingFixture());
       if (url.endsWith('/tests')) return opts.hold ? { subscribe: (o: any) => { gate.then(() => o.next(sample)); return { unsubscribe() {} }; } } as any : of(sample);
       if (url.includes('lab-trends')) return of({ tests: [] });
       return of([]);
@@ -108,15 +121,53 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     expect(ctx.querySelector('.pf-sre-chip--tech')!.textContent).toContain('Admin User');
     expect(ctx.querySelector('.pf-sre-chip--tech')!.textContent).toContain('123434');
 
-    const mode = el.querySelector('pf-hero-band .pf-sre-mode') as HTMLElement;
-    expect(mode.classList).toContain('nd-seg');
-    const on = mode.querySelector('.nd-seg__item[aria-checked="true"]')!;
-    expect(on.textContent!.trim()).toBe('Grid');
+  });
+
+  it('grid only: no Grid / Form control anywhere', async () => {
+    const { el, c } = await render();
+    expect(el.querySelector('.pf-sre-mode')).toBeNull();
+    const labels = Array.from(el.querySelectorAll('button')).map(b => b.textContent!.trim());
+    expect(labels).not.toContain('Grid');
+    expect(labels).not.toContain('Form');
+    expect(c.setViewMode).toBeUndefined();
+    expect(el.querySelector('.pf-sre__params')).toBeNull();
+  });
+
+  it('the band carries Save draft (secondary) + Submit results (the single primary)', async () => {
+    const { el } = await render();
+    const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
+    const draft = actions.querySelector('.pf-sre-draft') as HTMLButtonElement;
+    const submit = actions.querySelector('.pf-sre-submit') as HTMLButtonElement;
+    expect(draft.textContent!.trim()).toBe('Save draft');
+    expect(draft.classList).toContain('pf-hb-btn--ghost');
+    expect(submit.textContent!.trim()).toBe('Submit results');
+    expect(submit.classList).toContain('pf-hb-btn--primary');
+    expect(submit.disabled).toBe(false);
+    expect(actions.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary').length).toBe(1);
+    // The old huge gradient bar is gone.
+    expect(el.querySelector('.pf-sre__footer')).toBeNull();
+  });
+
+  it('Submit keeps its disabled logic (nothing writable → disabled)', async () => {
+    const { f, el, c } = await render();
+    c._sample.update((s: any) => ({ ...s, tests: s.tests.map((t: any) => ({ ...t, status: 'validated' })) }));
+    f.detectChanges();
+    const submit = el.querySelector('pf-hero-band .pf-sre-submit') as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(el.querySelector('pf-hero-band .pf-sre-draft')).toBeNull();
+  });
+
+  it('phones: the same two actions in a compact bottom bar above the navbar', async () => {
+    const { el } = await render();
+    const bar = el.querySelector('.nd-bottombar.pf-sre-bar') as HTMLElement;
+    expect(bar.querySelector('.pf-sre-draft')!.textContent!.trim()).toBe('Save draft');
+    expect(bar.querySelector('.pf-sre-submit')!.textContent!.trim()).toBe('Submit results');
+    expect(css()).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-band\s+\.pf-sre-act[^{]*\{\s*display:\s*none/);
   });
 
   it('sample tabs: this tube + siblings as a neutral segmented control; open work = violet dot', async () => {
     const { el } = await render();
-    const tabs = el.querySelector('.pf-sre-ctx .pf-sre-tabs') as HTMLElement;
+    const tabs = el.querySelector('pf-hero-band .pf-sre-tabs') as HTMLElement;
     expect(tabs.classList).toContain('nd-seg');
     const items = tabs.querySelectorAll('[role="tab"]');
     expect(items.length).toBe(2);
@@ -126,9 +177,27 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     expect(items[1].textContent).toContain('Bacterial Identification');
     expect(items[1].querySelector('.pf-sre-tab__dot')).not.toBeNull();
     expect(css()).toMatch(/\.pf-sre-tab__dot[^{]*\{[^}]*background:\s*var\(--color-violet-500/);
-    // Phones: the same tubes as one pf-select (never a native <select>).
-    expect(el.querySelector('pf-select.pf-sre-tubesel')).not.toBeNull();
     expect(el.querySelector('select')).toBeNull();
+  });
+
+  it('tab order is FIXED: switching tubes moves only the selection, never the tabs', async () => {
+    const { f, el, c } = await render();
+    const order = () => Array.from(el.querySelectorAll('.pf-sre-tabs [role="tab"]')).map(b => b.getAttribute('data-tube'));
+    const selected = () => el.querySelector('.pf-sre-tabs [aria-selected="true"]')!.getAttribute('data-tube');
+    expect(order()).toEqual(['smp-1', 'smp-2']);
+    expect(selected()).toBe('smp-1');
+    const firstBtn = el.querySelector('.pf-sre-tabs [data-tube="smp-1"]');
+    await c.openSibling('smp-2');
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect(order()).toEqual(['smp-1', 'smp-2']);          // same positions
+    expect(selected()).toBe('smp-2');                     // only the indicator moved
+    expect(el.querySelector('.pf-sre-tabs [data-tube="smp-1"]')).toBe(firstBtn);   // same DOM node
+    expect(el.querySelector('.pf-sre-chip--sample')!.textContent).toContain('26124');
+    // The indicator slides on the nd spring; off under reduced motion.
+    expect(css()).toMatch(/\.pf-sre-tabs--anim\s+\.pf-sre-tabs__ind\s*\{[^}]*transition:\s*transform[^;]*var\(--nd-spring\)/);
+    expect(css()).toMatch(/prefers-reduced-motion[\s\S]*\.pf-sre-tabs__ind[^{]*\{[^}]*transition:\s*none/);
   });
 
   it('the patient name is FULL — never cut in code', async () => {
@@ -178,72 +247,27 @@ describe('Result entry (nd) — RESULTS cards', () => {
     expect(css()).not.toMatch(/monospace/);
   });
 
-  it('Grid / Form stay: Form renders the same test as a labelled field card', async () => {
-    const { f, el, c } = await render();
-    c.setViewMode('form');
-    f.detectChanges();
-    expect(el.querySelectorAll('.pf-sre-card .pf-sre__param').length).toBe(3);
-    expect(el.querySelector('.pf-sre-mode .nd-seg__item[aria-checked="true"]')!.textContent!.trim()).toBe('Form');
-    c.setViewMode('grid');
-  });
 });
 
-describe('Result entry (nd) — SAMPLE side card', () => {
-  it('shows only what the cards do not: specimen, container, times, TAT/due, order, referrer', async () => {
+describe('Result entry (nd) — no side panel', () => {
+  it('RESULTS take the full width: no SAMPLE card, no split body, no sheet', async () => {
     const { el } = await render({ rich: true });
-    const side = el.querySelector('aside.nd-card.pf-sre-side') as HTMLElement;
-    expect(side.querySelector('.nd-card__label')!.textContent!.trim()).toBe('Sample');
-    const dts = Array.from(side.querySelectorAll('.pf-sre-info__row dt')).map(d => d.textContent!.trim());
-    expect(dts).toEqual(['Specimen', 'Container', 'Collected', 'Received', 'TAT', 'Order', 'Referred by']);
-    expect(side.textContent).toContain('Nasal swab');
-    expect(side.textContent).toContain('Sterile Container');
-    expect(side.textContent).toContain('Dr. Meera Rao');
-    expect(side.textContent).toContain('24 h');
-    // No repetition of the RESULTS card (no per-parameter list here).
-    expect(side.textContent).not.toContain('Target Detection');
+    expect(el.querySelector('aside')).toBeNull();
+    expect(el.querySelector('.pf-sre-side')).toBeNull();
+    expect(el.querySelector('.nd-body--split')).toBeNull();
+    expect(el.querySelector('.nd-sheet, .nd-sheet-backdrop')).toBeNull();
+    expect(el.querySelector('.pf-sre-body .pf-sre-main')).not.toBeNull();
+    expect(el.textContent).not.toContain('parameters entered');
   });
 
-  it('never invents: a bare tube shows no info rows at all', async () => {
-    const { el } = await render({ rich: false });
-    const side = el.querySelector('aside.pf-sre-side') as HTMLElement;
-    expect(side.querySelectorAll('.pf-sre-info__row').length).toBe(0);
-    expect(side.querySelector('.pf-sre-prev')).toBeNull();
-    expect(side.textContent).not.toContain('Referred by');
-  });
-
-  it('carries ONE status line with the entry progress', async () => {
+  it('Trendogram (slate toggle) shows above the cards only when the patient has repeat tests', async () => {
     const { f, el, c } = await render();
-    expect(el.querySelector('.pf-sre-status')!.textContent).toContain('0 of 3 parameters entered');
-    c.setValue('ot1', 'target', 'Detected');
+    expect(el.querySelector('.pf-sre-strip')).toBeNull();
+    c.trendEligible.set([{ testId: 't1', testName: 'X', count: 2, parameters: [] }]);
     f.detectChanges();
-    expect(el.querySelector('.pf-sre-status')!.textContent).toContain('1 of 3 parameters entered');
-    c.clearDraft?.();
-  });
-
-  it('footer: secondary Save draft + ONE primary Submit results, normal size (not full width)', async () => {
-    const { el } = await render();
-    const foot = el.querySelector('aside.pf-sre-side .nd-card__foot') as HTMLElement;
-    expect(foot.classList).toContain('pf-sre-foot');
-    const primaries = foot.querySelectorAll('.nd-btn--primary');
-    expect(primaries.length).toBe(1);
-    expect(primaries[0].textContent!.trim()).toBe('Submit results');
-    expect(primaries[0].classList).not.toContain('nd-span');
-    expect(foot.querySelector('.nd-btn--secondary')!.textContent!.trim()).toBe('Save draft');
-    // The footer is a right-aligned flex row, so buttons keep their size.
-    expect(css()).toMatch(/\.nd-card__foot\.pf-sre-foot\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*flex-end/);
-    // The old huge gradient bar is gone.
-    expect(el.querySelector('.pf-sre__footer')).toBeNull();
-  });
-
-  it('phones: the SAMPLE card is the bottom bar + sheet', async () => {
-    const { f, el, c } = await render();
-    const bar = el.querySelector('.nd-bottombar.pf-sre-bar') as HTMLElement;
-    expect(bar.querySelector('.nd-bottombar__info')!.textContent).toContain('of 3 parameters entered');
-    (bar.querySelector('.nd-btn--icon') as HTMLElement).click();
-    f.detectChanges();
-    expect(c.sheetOpen()).toBe(true);
-    expect(el.querySelector('aside.pf-sre-side')!.classList).toContain('pf-sre-side--open');
-    expect(el.querySelector('.nd-sheet-backdrop')).not.toBeNull();
+    const t = el.querySelector('.pf-sre-strip .nd-toggle[role="switch"]') as HTMLElement;
+    expect(t.textContent).toContain('Include Trendogram');
+    expect(t.getAttribute('aria-checked')).toBe('false');
   });
 });
 
