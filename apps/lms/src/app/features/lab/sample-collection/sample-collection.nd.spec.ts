@@ -381,3 +381,28 @@ describe('Collect sample — COLLECTION panel fills with what the tiles do not s
     expect(drawn.querySelector('.pf-sc-timeline__at')!.textContent!.trim()).not.toBe('—');
   });
 });
+
+describe('Collect sample — layering + seamless arrival', () => {
+  afterEach(() => document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove()));
+
+  it('new design: the drawer stays inside the page (not teleported) under the app bar (z below 40)', async () => {
+    const { drawer, f } = await renderDrawer([S('a')]);
+    expect((f.nativeElement as HTMLElement).contains(drawer)).toBe(true);
+    expect(drawer.parentElement).not.toBe(document.body);
+  });
+
+  it('deep-link loading shows the band + card skeleton (not a full-screen loader)', async () => {
+    make([], false, []);
+    const f = TestBed.createComponent(SampleCollectionComponent);
+    const c = f.componentInstance as any;
+    c._deepLinkMode.set(true);      // what ?orderId= sets in ngOnInit
+    c._openOrderId.set('o9');       // order not loaded yet → no activeGroup
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const skel = el.querySelector('.pf-sc-skel') as HTMLElement;
+    expect(skel).not.toBeNull();
+    expect(skel.querySelector('pf-hero-band')).not.toBeNull();
+    expect(skel.querySelectorAll('.nd-card').length).toBe(2);
+    expect(el.querySelector('pf-loading-logo')).toBeNull();
+  });
+});
