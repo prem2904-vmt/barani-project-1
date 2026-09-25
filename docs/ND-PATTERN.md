@@ -418,6 +418,32 @@ plus (owner reviews, 2026-09-25):
   Inoculate in the nav row as secondary, options filling the column with
   equal segments at 1440, stacked rows + 44px band icons at 375.
   `SHOTS_DIR=…` saves 1440 / 375, dark + light.
+- **AST table** (`culture-entry`): "Reading method" is a normal-case label
+  + a kit `.nd-seg` (Zone (mm) · MIC (µg/mL)); column headers normal case;
+  the zone field is a kit field (Noto, tabular); × is a quiet labelled icon
+  button; "Hide organism / sensitivity" is tertiary. The S · I · R result
+  is a segmented radio group whose state is a class (`.ce-sir-picked`),
+  never inline colours.
+  - **Light mode has no traffic lights** (owner: eye strain): muted
+    breakpoint headers, neutral breakpoint chips, a muted MIC line, no row
+    tints; the picked S / I / R is the neutral selected state + its letter.
+    The ONLY colour left is a 5px red dot on a picked **R**.
+  - **Dark mode keeps** its S green / I amber / R red verdict colours.
+- **Measure zones modal** (`plate-measure`), like the scanner: an nd-card
+  modal (phones: a tall sheet above the navbar, camera full width) with the
+  violet icon chip + "MEASURE ZONES", neutral full-screen / × icon buttons,
+  the title at 18px / 600, and a neutral stepper over the real steps
+  (Capture → Calibrate → Measure zones; violet active dot, "Step n of 3").
+  The camera is 12px-rounded with the outside of the plate dimmed; the
+  reticle is a thin SOLID white circle (`.pm-reticle`) + a small centre
+  crosshair + a slow violet sweep (off under reduced motion). ONE primary
+  per step (Capture / Measure / Apply n zones), everything else secondary.
+  Overlays use the violet accent (calibration, unassigned rings, the
+  delete handle); in light mode assigned rings are neutral white — S / I /
+  R rides in the ring label.
+- **AST screenshots** in the real-layout check rewrite the case response in
+  the browser (AST open, an identified organism) and answer the pick
+  locally — nothing is claimed or written on the server.
 
 ## API summary
 

@@ -45,6 +45,9 @@ async function shoot(page: Page, w: number) {
   }
 }
 
+// A fake camera so the Measure modal's live reticle renders headless.
+test.use({ launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] } });
+
 test.describe('Culture case — real layout', () => {
   test('1440 + 375: context bar, one primary, stacked stages, filling options, stacked phone rows', async ({ page }) => {
     await loginAs(page, 'admin');
@@ -84,5 +87,84 @@ test.describe('Culture case — real layout', () => {
     const aBox = (await act.boundingBox())!;
     expect(Math.round(aBox.width)).toBeGreaterThanOrEqual(44);
     await shoot(page, 375);
+  });
+
+  test('AST table (light + dark) and the Measure zones modal (1440 + 375)', async ({ page }) => {
+    await loginAs(page, 'admin');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // READ-ONLY: the case response is rewritten in the browser so the AST
+    // stage is open with an identified organism, and the first-touch pick
+    // is answered locally — nothing is claimed or written on the server.
+    let lastCase: any = null;
+    await page.route(/\/api\/microbiology\/culture\/[^/?]+(\?.*)?$/, async route => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const res = await route.fetch();
+      const body = await res.json();
+      const openIt = (c: any) => {
+        for (const st of c?.stages ?? []) {
+          if (st.key === 'identification') {
+            st.state = 'done';
+            st.valuesJson = JSON.stringify({ fields: [{ name: 'organism', title: 'Organism', value: 'Staphylococcus aureus' }] });
+          }
+          if (st.key === 'ast') { st.state = 'open'; st.holderUserId = null; st.holderName = null; st.valuesJson = null; }
+        }
+      };
+      const c = body?.data ?? body;   // ApiService envelope
+      openIt(c);
+      for (const sub of c?.subCultures ?? []) openIt(sub);
+      lastCase = body;
+      await route.fulfill({ response: res, json: body });
+    });
+    await page.route(/\/api\/microbiology\/culture\/.*\/stage\/ast\/pick/, route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lastCase) }));
+    const opened = await openCase(page);
+    test.skip(!opened, 'No culture case to open (set CULTURE_ORDER_TEST_ID).');
+    const ast = page.locator('section.pf-stg').filter({ hasText: /sensitivity/i }).first();
+    await expect(ast).toBeVisible({ timeout: 20_000 });
+    const openBtn = ast.locator('.pf-cse__astbtn');
+    test.skip(!(await openBtn.count()), 'AST stage not editable.');
+    await openBtn.click();
+    const table = page.locator('.ce-abx').first();
+    const hasTable = await table.waitFor({ timeout: 8_000 }).then(() => true).catch(() => false);
+    if (hasTable) {
+      // Light: no traffic-light colours on the verdict / breakpoints.
+      await setTheme(page, 'light');
+      await page.waitForTimeout(200);
+      const picked = page.locator('.ce-sir-picked').first();
+      if (await picked.count()) {
+        const bg = await picked.evaluate(e => getComputedStyle(e).backgroundColor);
+        expect(bg).not.toMatch(/rgb\((16, 185, 129|245, 158, 11|239, 68, 68)\)/);
+      }
+      if (SHOTS) {
+        for (const theme of ['light', 'dark'] as const) {
+          await setTheme(page, theme);
+          await page.waitForTimeout(250);
+          await table.scrollIntoViewIfNeeded();
+          await page.screenshot({ path: `${SHOTS}/ast-1440-${theme}.png` });
+        }
+      }
+      const measure = page.locator('.ce-org pf-touch-btn').filter({ hasText: 'Measure' }).first();
+      if (await measure.count()) {
+        await setTheme(page, 'light');
+        await measure.click();
+        const modal = page.locator('pf-plate-measure .pm-panel');
+        await expect(modal).toBeVisible();
+        await expect(modal.locator('.pm-head__label')).toHaveText(/Measure zones/i);
+        await expect(modal.locator('.pm-step')).toHaveCount(3);
+        await page.waitForTimeout(1200);   // fake camera frames + reticle
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/measure-1440-light.png` });
+        await page.setViewportSize({ width: 375, height: 812 });
+        await page.waitForTimeout(400);
+        const box = (await modal.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(370);   // full-width sheet
+        expect(box.y).toBeGreaterThanOrEqual(0);         // header on screen, above the nav
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/measure-375-light.png` });
+        await setTheme(page, 'dark');
+        await page.waitForTimeout(200);
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/measure-375-dark.png` });
+        await modal.locator('.pm-x').click();
+        await page.setViewportSize({ width: 1440, height: 900 });
+      }
+    }
   });
 });
