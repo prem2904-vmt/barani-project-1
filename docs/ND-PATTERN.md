@@ -303,56 +303,69 @@ serves every scan point. Redesign it, never fork it per screen.
 
 `/lab/sample/:id` (`features/lab/sample-result-entry/`) — the tube is the
 unit of work. It follows the band rules above with these specifics
-(owner review, 2026-09-25):
+(owner reviews, 2026-09-25):
 
 - **Band:** back + tenant, and the page's actions in the band's actions
-  slot (top-right, like every band page): the technician as a small
-  neutral chip (name + Reg), then secondary **Save draft** and the ONE
-  primary **Submit results** (validation mode: Reject + Validate (n); a
-  finished tube: Edit result). The disabled rules are unchanged. On phones
-  the band actions don't fit, so they ride a compact `.nd-bottombar` above
-  the always-visible navbar: technician initials (Reg in the tooltip),
-  Save draft, Submit. A quiet "Saved 14:02" autosave note sits beside them
-  on web.
-- **Context bar (the pill):** only the patient chip with the FULL name +
-  "29/M · AA0012", and the order ID where it fits (≥1280px). No
-  current-sample chip — the tube tabs already show which sample is open.
-- **Tube tabs** (all tubes of the same order) sit in the band's tools
-  slot as a compact neutral `.nd-seg` at the standard segment height. A
-  tab shows ONLY the sample ID (+ the violet open-work dot); the tests
-  ride in its tooltip / aria-label. They keep a **fixed order** — the order's sample
-  sequence (series offset, then sample ID). Switching tubes never reorders
-  them; only the selected indicator moves, sliding on `--nd-spring` (off
-  under reduced motion). Phones: one row that scrolls sideways.
-- **No side panel.** The RESULTS cards take the full width: one `.nd-card`
-  per test (a profile = one card) — violet icon chip, the test name as the
-  label, "+ Note" as the small secondary button. The table is the calm row
-  style: 1px `--nd-line` rows, parameter at weight 500, range / unit /
-  method muted, results as kit inputs or `pf-select`, the note pencil a
-  quiet neutral icon button. H / L / critical flag chips keep their
-  functional colours; calculated-value chips are neutral.
-- **Grid only.** There is no Grid / Form switch. Enter walks the fields in
-  order and lands on Submit. The result field is a real box (visible
-  border + background, ≥40px; 44px on touch).
-- **Phones: stacked rows** — the parameter name, then a FULL-WIDTH field
-  (kit input or `pf-select`, ≥44px), then range and unit muted underneath.
-- **Notes in ONE step:** the row pencil (or the card's "+ Note") opens an
-  inline textarea under that row with focus in it (the phone keyboard
-  opens). Enter or blur saves, Shift+Enter is a new line, Esc cancels.
-  Existing conversations still show as threads.
-- **Type scale (every width):** card label 13px / 600 uppercase (12px on
-  phones), parameter name 14px / 500, chips and tabs 13px, buttons 14px
-  (15px in the phone bar), meta 12px.
-- Order-level extras appear above the cards only when they apply: the
+  slot (top-right): the technician, then secondary **Save draft** and the
+  ONE primary **Submit results** (validation mode: Reject + Validate (n);
+  a finished tube: Edit result). The disabled rules are unchanged.
+  - Web + tablet: text buttons, the technician as a small neutral chip
+    (name + Reg), and a quiet "Saved 14:02" note.
+  - Phones: the same actions as 44px ICON buttons at the top (save icon,
+    violet check = the primary; aria-label + tooltip keep the words; a
+    tiny violet dot on the save icon = saved, time in its tooltip) and the
+    technician as an initials avatar ("AU", Reg in the tooltip) — it fits
+    at 320px. No bottom action bar.
+- **Context bar (the pill):** the patient chip with the FULL name +
+  "29/M · AA0012"; the order ID where it fits (≥1280px). Web + tablet show
+  no current-sample chip — the tube tabs say which sample is open.
+- **Tube tabs** (web + tablet, band tools slot): a compact neutral
+  `.nd-seg`, standard height, each tab ONLY the sample ID (+ the violet
+  open-work dot; tests in its tooltip / aria-label), in a **fixed order**
+  (series offset, then sample ID). Switching moves only the selected
+  indicator, which slides on `--nd-spring` (off under reduced motion).
+- **Phones: no tabs control.** The pill shows the patient + the CURRENT
+  sample chip ("26124", violet dot when it has open work). With 2+ tubes
+  that chip carries a chevron and opens a small list (sample ID + tests,
+  fixed order); picking one switches tube. One tube = a plain chip.
+- **No side panel.** RESULTS cards take the full width: one `.nd-card` per
+  test (a profile = one card) — violet icon chip, the test name as the
+  label, "+ Note" as the small secondary button. Web: the calm row table
+  (1px `--nd-line` rows, parameter 14px / 500, range / unit / method
+  muted), results as kit fields or `pf-select`, the note pencil a quiet
+  neutral icon button. Flag chips keep their functional colours.
+- **Grid only.** No Grid / Form switch. Enter walks the fields and lands
+  on Submit. The result field is a real box (visible border + background,
+  ≥40px; 44px on touch); free text is a growing multi-line box.
+- **Phones: stacked rows, EVERY row type:** name (wrapping normally)
+  with **[i]** and the pencil on its right, then a FULL-WIDTH field
+  (≥44px; free text ≈88px). Range, unit and method are not lines — the
+  [i] (hidden when a row has none) opens a small peek with them that
+  fades / scales in and auto-hides after ~4s, on an outside tap or a
+  second tap. (A table can't lay out at 360px: never leave phone rows on
+  table columns — that collapsed the name to one letter per line.)
+- **Notes in ONE step:** the pencil (or "+ Note") opens an inline
+  textarea under that row with focus in it. Enter or blur saves,
+  Shift+Enter is a new line, Esc cancels.
+- **Type scale:** card label 13px / 600 uppercase (12px on phones — it
+  must beat the global phone `h2` cap), parameter 14px / 500, chips and
+  tabs 13px, buttons 14px, meta 12px. Watch global phone rules with
+  `!important` (`[role='tablist']`, `h2`): component rules that must win
+  need the specificity.
+- Order-level extras above the cards only when they apply: the
   validator's "Submitted …" line, the slate **Include Trendogram** toggle
-  (+ range picker), and the flags the last submit raised.
-- **Zoom from the queue:** My Work tiles carry `data-vt-sample="<id>"`;
+  (+ range picker), the flags the last submit raised.
+- **Zoom from the queue:** tiles carry `data-vt-sample="<id>"`;
   `core/navigation/zoom-transition.ts` names ONLY the tapped tile
-  `sample-<id>` for the transition, and the first RESULTS card (or its
-  loading skeleton) carries the same `view-transition-name`, so the tile
-  morphs into the card (~400ms, nd spring). Back / submit / save draft to
-  My Work reverses it. No View Transitions API or reduced motion → an
-  instant swap.
+  `sample-<id>` for the transition; the first RESULTS card (or its
+  skeleton) carries the same `view-transition-name`, so the tile morphs
+  into it (~400ms, nd spring); back reverses it. No View Transitions or
+  reduced motion → instant.
+- **Real-layout check:** `apps/lms-e2e/src/result-entry-layout.rbac.spec.ts`
+  (seeded Lab Admin; opens a tube via My Work's band search) asserts at
+  375px: name cell ≥200px, full-width ≥44px field, 44px band icons, no
+  bottom bar, no tabs, 12px card label. `SHOTS_DIR=… ` saves 375 / 768 /
+  1440 screenshots.
 
 ## API summary
 
