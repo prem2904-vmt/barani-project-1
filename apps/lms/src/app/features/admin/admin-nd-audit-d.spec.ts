@@ -16,6 +16,7 @@ import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
 import { ReferringNetworkComponent } from './referring-network/referring-network.component';
 import { InventoryComponent } from './inventory/inventory.component';
 import { AppointmentsConfigComponent } from './appointments-config/appointments-config.component';
+import { HomeCollectionAgentsComponent } from './home-collection/home-collection-agents.component';
 import { AppointmentQueueService } from '../../core/services/appointment-queue.service';
 import { of } from 'rxjs';
 import { provideHttpClient } from '@angular/common/http';
@@ -385,6 +386,36 @@ describe('ND audit D — Appointments & queue', () => {
     sw.click(); p.f.detectChanges();
     expect(sw.getAttribute('aria-checked')).toBe('false');
     expect(p.el.querySelectorAll('input[type="time"].nd-input').length).toBe(2);
+    hygiene(p.el);
+  });
+});
+
+describe('ND audit D — Home-collection agents', () => {
+  const agents = [{ id: 'a1', userId: 'u1', areaMode: 'pincode', pincodesJson: '["600001","600028"]', weightage: 2, isActive: true,
+    user: { name: 'Karthikeyan Subramaniam Ramasamy', email: 'k@x.in' } }];
+  const render = () => renderBandPage(HomeCollectionAgentsComponent, {
+    providers: [{ provide: AppointmentQueueService, useValue: { listAgents: vi.fn(() => of(agents)), upsertAgent: vi.fn(() => of({})), removeAgent: vi.fn(() => of({})) } }],
+  });
+
+  it('agent cards: kit card, full name (no truncate), neutral weight chip, Edit / Remove .nd-rowact; ONE primary', () => {
+    const p = render();
+    expect(primaries(p.el)).toBe(1);
+    const card = p.el.querySelector('.pf-hc-card.nd-card')!;
+    expect(card.querySelector('.pf-hc-name')!.textContent).toContain('Karthikeyan Subramaniam Ramasamy');
+    expect(card.querySelector('.truncate')).toBeNull();
+    expect(card.querySelector('.pf-hc-chip.nd-chip')!.textContent).toContain('Weight');
+    expect(Array.from(card.querySelectorAll('.nd-rowact .nd-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Remove']);
+    hygiene(p.el);
+  });
+
+  it('agent editor = kit card; coverage is a neutral nd-seg; the band turns a quiet Cancel', () => {
+    const p = render();
+    p.cmp.toggleForm(); p.f.detectChanges();
+    const form = p.el.querySelector('.pf-hc-form.nd-card')!;
+    expect(form.querySelectorAll('.nd-seg [role="radio"]').length).toBe(2);
+    expect(form.querySelector('input.nd-input')).not.toBeNull();
+    expect(primaries(p.el)).toBe(1);
+    expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
     hygiene(p.el);
   });
 });

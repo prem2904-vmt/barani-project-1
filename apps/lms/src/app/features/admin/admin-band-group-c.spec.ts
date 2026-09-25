@@ -253,7 +253,7 @@ describe('Admin band — Home-collection agents', () => {
   const render = () => renderBandPage(HomeCollectionAgentsComponent, {
     getFor: (url) => url.startsWith('/api/home-collection/agents') ? agents : [],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body p.font-semibold')).map(n => text(n));
+  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-hc-name')).map(n => text(n));
 
   it('band present, header classic-only, agents in the band body', () => {
     const p = render();
