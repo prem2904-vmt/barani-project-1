@@ -2025,7 +2025,6 @@
    ════════════════════════════════════════════════════════════════════ */
 
 /* The band's pill hugs our tiles (designer: 8px inset, 6px rhythm). */
-:host ::ng-deep .pf-oc-band .pf-hb__search { padding-left: 8px; gap: 6px; }
 
 /* ── Pill contents ─────────────────────────────────────────── */
 .pf-us {
@@ -2633,7 +2632,6 @@
   /* The global phone rule gives .pf-page a 12px gutter — the band bleeds
      through it; the cards use it as their gutter. */
   .pf-oc { --pf-hb-bleed: max(12px, env(safe-area-inset-left)); }
-  :host ::ng-deep .pf-oc-band .pf-hb__field { padding-left: 6px; gap: 4px; }
   .pf-us__tiles { display: none; }
   .pf-us__compact { display: block; }
   .pf-us__div { margin: 0 2px; }
@@ -2697,21 +2695,6 @@
 
 /* ════ Round 2 (owner): required patient, touch-first dropdown, focus ring ════ */
 
-/* Pill focus: a subtle violet ring expands while the search is active. */
-:host ::ng-deep .pf-oc-band .pf-hb__search {
-  transition: box-shadow 200ms ease;
-}
-:host ::ng-deep .pf-oc-band .pf-hb__search:focus-within {
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--color-violet-500, #8b5cf6) 22%, transparent),
-    0 8px 28px rgba(76, 29, 149, 0.16);
-}
-@media (max-width: 640px) {
-  :host ::ng-deep .pf-oc-band .pf-hb__field { transition: box-shadow 200ms ease; }
-  :host ::ng-deep .pf-oc-band .pf-hb__field:focus-within {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-violet-500, #8b5cf6) 22%, transparent);
-  }
-}
 
 /* Patient required: amber dashed outline, a dot, and a gentle pulse. */
 .pf-us__tile--req:not(.pf-us__tile--on) {
@@ -2849,7 +2832,6 @@
   .pf-oc-need,
   .pf-us__tile--req:not(.pf-us__tile--on),
   .pf-us__tile--nudge { animation: none; }
-  :host ::ng-deep .pf-oc-band .pf-hb__search { transition: none; }
 }
 
 /* ════ Round 3 (owner): readable catalogue rows ════
@@ -3136,17 +3118,6 @@
   .pf-us__chip { height: 38px; min-height: 38px; }
 }
 
-/* Pill lifts while searching: slight scale, stronger shadow, violet ring. */
-:host ::ng-deep .pf-oc-band .pf-hb__search,
-:host ::ng-deep .pf-oc-band .pf-hb__field {
-  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 200ms ease;
-}
-:host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search {
-  transform: scale(1.01);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--color-violet-500, #8b5cf6) 28%, transparent),
-    0 14px 36px rgba(76, 29, 149, 0.24);
-}
 
 /* Band above the scrim; scrim above the cards, cart bar and bottom nav. */
 .pf-oc-band { position: relative; z-index: 71; }
@@ -3171,24 +3142,6 @@
   transition: opacity 200ms ease, visibility 0s;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  :host ::ng-deep .pf-oc-band .pf-hb__search,
-  :host ::ng-deep .pf-oc-band .pf-hb__field { transition: none; }
-  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search { transform: none; }
-  .pf-oc-scrim, .pf-oc-scrim--on { transition: none; }
-}
-@media (max-width: 640px) {
-  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search { transform: none; box-shadow: none; }
-  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field {
-    transform: scale(1.01);
-    box-shadow:
-      0 0 0 3px color-mix(in srgb, var(--color-violet-500, #8b5cf6) 28%, transparent),
-      0 14px 36px rgba(76, 29, 149, 0.24);
-  }
-}
-@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
-  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field { transform: none; }
-}
 
 /* ════ Round 6 (owner): full-width dropdown, one filter row ════ */
 /* Panel spans the pill exactly (left/top/width bound from TS). */
@@ -3268,4 +3221,141 @@
     overflow: hidden;
   }
   .pf-us__tdept { display: none; }
+}
+
+/* ════ Round 9 (owner): standard band pill + Apple-style search activation ════
+   At rest the pill is the stock pf-hero-band search (height, radius, border,
+   shadow, font, icon) — only the scope tiles and the cart are this screen's.
+   Activation (focus / results open) is a behaviour on top: the field grows
+   a touch and settles on a spring, the page dims + blurs progressively,
+   results fade + scale up from 0.97 with rows staggered ~18ms, and on touch
+   a Cancel slides in. Close is the reverse, quicker. Reduced motion: none. */
+:host {
+  --pf-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --pf-spring-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+
+/* Match the stock band input + icon (hero-band's .pf-hb__input / __glass). */
+.pf-us__input { font-size: 14px; font-weight: 500; color: #111928; }
+:host-context(.dark) .pf-us__input,
+:host-context([data-theme='dark']) .pf-us__input { color: var(--text-primary, #e5e7eb); }
+.pf-us__input::placeholder { color: #9ca3af; font-weight: 500; }
+.pf-us__glass { color: #5c7185; }
+:host-context(.dark) .pf-us__glass,
+:host-context([data-theme='dark']) .pf-us__glass { color: var(--text-secondary); }
+
+/* Field grows slightly and settles (spring); back quicker. */
+:host ::ng-deep .pf-oc-band .pf-hb__search,
+:host ::ng-deep .pf-oc-band .pf-hb__field {
+  transition: transform 200ms ease-out;
+}
+:host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search {
+  transform: scale(1.012);
+  transition: transform 340ms var(--pf-spring-bounce);
+}
+@media (max-width: 640px) {
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search { transform: none; }
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field {
+    transform: scale(1.012);
+    transition: transform 340ms var(--pf-spring-bounce);
+  }
+}
+
+/* Background dims + blurs progressively; lifts faster on close. */
+.pf-oc-scrim {
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
+  transition: opacity 200ms ease-in, backdrop-filter 200ms ease-in, -webkit-backdrop-filter 200ms ease-in, visibility 0s linear 200ms;
+}
+.pf-oc-scrim--on {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  transition: opacity 340ms var(--pf-spring), backdrop-filter 340ms var(--pf-spring), -webkit-backdrop-filter 340ms var(--pf-spring), visibility 0s;
+}
+
+/* Results panel: fade + scale up from 0.97 on a spring. */
+.pf-us__drop { transform-origin: top center; animation: pf-us-results-in 320ms var(--pf-spring) both; }
+@keyframes pf-us-results-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+/* Rows arrive staggered (~18ms each, capped). */
+.pf-us__trow { animation: pf-us-row-in 300ms var(--pf-spring) both; animation-delay: calc(var(--pf-i, 0) * 18ms); }
+@keyframes pf-us-row-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Touch: the catalogue card becomes the results. */
+.pf-oc-cat__results {
+  flex: none;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--border-muted);
+  animation: pf-us-results-in 320ms var(--pf-spring) both;
+}
+.pf-oc-res__head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.pf-oc-res__title { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.pf-oc-cat__results .pf-us__filters { padding: 0; }
+.pf-oc-res__list { padding-top: 8px; }
+/* The billing card recedes while the card shows results. */
+.pf-oc-bill { transition: opacity 200ms ease-in, filter 200ms ease-in; }
+.pf-oc-bill--recede {
+  opacity: 0.45;
+  filter: blur(2px);
+  transition: opacity 340ms var(--pf-spring), filter 340ms var(--pf-spring);
+}
+
+/* Cancel (touch): slides in at the field's right. */
+.pf-us__cancel {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 4px 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--violet-text, #6d28d9);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  animation: pf-us-cancel-in 300ms var(--pf-spring) both;
+}
+@keyframes pf-us-cancel-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Billing: payment rises like an iOS sheet (slight overshoot); the cart
+   collapses up into its summary line; Edit reverses (cart drops back in). */
+.pf-oc-phase--rise { animation: pf-oc-sheet-up 360ms var(--pf-spring-bounce) both; }
+@keyframes pf-oc-sheet-up {
+  from { opacity: 0; transform: translateY(32px); }
+  to { opacity: 1; transform: none; }
+}
+.pf-oc-phase--rise .pf-oc-sum { transform-origin: top center; animation: pf-oc-sum-collapse 300ms var(--pf-spring) both; }
+@keyframes pf-oc-sum-collapse {
+  from { transform: scaleY(1.8); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+.pf-oc-phase--cart { animation: pf-oc-cart-down 340ms var(--pf-spring) both; }
+@keyframes pf-oc-cart-down {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Phones: full-width pill, 16px input (no iOS zoom), safe-area aware. */
+@media (max-width: 640px) {
+  .pf-us__input { font-size: 16px; }
+  .pf-oc { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pf-oc-cat__results { padding: 10px 12px 8px; }
+  .pf-oc-res__list { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host ::ng-deep .pf-oc-band .pf-hb__search,
+  :host ::ng-deep .pf-oc-band .pf-hb__field,
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__search,
+  :host ::ng-deep .pf-oc-band.pf-oc-band--focus .pf-hb__field { transition: none; transform: none; }
+  .pf-oc-scrim, .pf-oc-scrim--on, .pf-oc-bill, .pf-oc-bill--recede { transition: none; }
+  .pf-us__drop, .pf-us__trow, .pf-oc-cat__results, .pf-us__cancel,
+  .pf-oc-phase--rise, .pf-oc-phase--rise .pf-oc-sum, .pf-oc-phase--cart { animation: none; }
 }
