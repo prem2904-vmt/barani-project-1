@@ -26,12 +26,13 @@ const CATALOGUE = [
     department: { name: 'Packages' }, parameters: JSON.stringify({ items: [{ testId: 't1' }] }) },
 ];
 
-function render(opts: { web?: boolean } = {}) {
+function render(opts: { web?: boolean; lg?: boolean } = {}) {
   // lg+ desktop: the billing card is a persistent column. `web` = a mouse +
   // hover device (dropdown search); false = touch (results in the card).
   const web = opts.web ?? true;
   (window as any).matchMedia = (q: string) => ({
-    matches: q.includes('hover') ? web : true, addEventListener() {}, removeEventListener() {} });
+    matches: q.includes('hover') ? web : q.includes('min-width: 1024px') ? (opts.lg ?? true) : true,
+    addEventListener() {}, removeEventListener() {} });
   TestBed.configureTestingModule({
     imports: [OrderCreateComponent],
     providers: [
@@ -61,7 +62,7 @@ describe('Order & Payments — rendered band, pill and billing header', () => {
     expect(el.querySelector('[aria-label="New patient"]')).toBeNull();
     expect(el.querySelector('[aria-label^="Scan"]')).toBeNull();
     expect(el.querySelector('.pf-us__urgent')).toBeNull();
-    expect(el.querySelector('.pf-us__cart')).not.toBeNull();
+    expect(el.querySelector('.pf-us__cart')).toBeNull();
   });
 
   it('Urgent is a switch next to Include Trendogram in the billing header', () => {
@@ -391,5 +392,68 @@ describe('Order & Payments — standard pill + animation hooks', () => {
     f.detectChanges();
     const rows = [...el.querySelectorAll('#pf-us-drop .pf-us__trow')] as HTMLElement[];
     expect(rows.map(r => r.style.getPropertyValue('--pf-i'))).toEqual(['0', '1', '2', '3']);
+  });
+});
+
+describe('Order & Payments — primary only for the main CTA; phone scope; sheet', () => {
+  it('no cart icon anywhere in the search pill', () => {
+    const { el } = render();
+    const pill = el.querySelector('pf-hero-band .pf-hb__search') as HTMLElement;
+    expect(pill.querySelector('.pf-us__cart, [aria-label^="Cart"]')).toBeNull();
+  });
+
+  it('the pill holds the four scope buttons on every width (no separate phone picker)', () => {
+    const { el } = render({ web: false, lg: false });
+    const btns = [...el.querySelectorAll('.pf-us__tiles .pf-us__tile-btn')] as HTMLButtonElement[];
+    expect(btns.length).toBe(4);
+    for (const b of btns) expect(b.getAttribute('aria-label')).toBeTruthy();
+    expect(el.querySelector('.pf-us__compact, .pf-us__compact-btn, .pf-us__menu')).toBeNull();
+  });
+
+  it('a filled scope carries the phone dot; the active one is the tinted tile', () => {
+    const { el, f, c } = render();
+    c.pickRefDoctor('Dr. R. Iyer');
+    f.detectChanges();
+    const tiles = [...el.querySelectorAll('.pf-us__tile')];
+    expect(tiles[2].querySelector('.pf-us__filled-dot')).not.toBeNull();
+    expect(tiles[3].querySelector('.pf-us__filled-dot')).toBeNull();
+    expect(tiles[0].classList).toContain('pf-us__tile--on');
+  });
+
+  it('Urgent and Include Trendogram are neutral toggles (not primary)', () => {
+    const { el, f, c } = render();
+    const toggles = [...el.querySelectorAll('.pf-oc-bill__head [role="switch"]')];
+    expect(toggles.length).toBe(2);
+    for (const t of toggles) expect(t.classList).toContain('pf-toggle-neutral');
+    c.toggleUrgent();
+    f.detectChanges();
+    const urgent = toggles[0];
+    expect(urgent.getAttribute('aria-checked')).toBe('true');
+    expect(urgent.classList).toContain('pf-toggle-neutral');
+    expect(urgent.classList).toContain('pf-oc-switch--urgent');
+  });
+
+  it('discount unit and department chips use state attributes, not the primary "--on" class', () => {
+    const { el, f, c } = render();
+    c._patient.set({ id: 'x', displayName: 'P' });
+    c._selected.set(['t1']);
+    c.continueToPayment();
+    f.detectChanges();
+    expect(el.querySelector('.pf-cart-disc__kind--on, .pf-deptpill--on')).toBeNull();
+    expect(el.querySelector('.pf-cart-disc__kind [aria-checked="true"]')).not.toBeNull();
+    expect(el.querySelector('.pf-deptpill[aria-pressed="true"]')).not.toBeNull();
+  });
+
+  it('phone checkout sheet is the tall variant with a grab handle; rows have no native tooltip on touch', () => {
+    const { el, f, c } = render({ web: false, lg: false });
+    c._selected.set(['t1']);
+    c.toggleCart();
+    f.detectChanges();
+    const sheet = el.querySelector('.pf-cart-drawer') as HTMLElement;
+    expect(sheet.classList).toContain('pf-cart-drawer--tall');
+    expect(sheet.querySelector('.pf-sheet-handle')).not.toBeNull();
+    const row = sheet.querySelector('.pf-crt') as HTMLElement;
+    expect(row.getAttribute('title')).toBeNull();
+    expect(row.classList).toContain('pf-crt--wrap');
   });
 });
