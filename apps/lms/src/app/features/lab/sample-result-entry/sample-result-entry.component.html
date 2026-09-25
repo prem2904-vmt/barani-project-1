@@ -15,7 +15,7 @@
         } @else if (lastSavedLabel(); as l) {
           <span class="pf-sre__autosave" aria-live="polite"><span class="pf-sre__autosave-dot pf-sre__autosave-dot--ok"></span>{{ l }}</span>
         }
-        <ng-container *ngTemplateOutlet="actions; context: { $implicit: 'band' }"></ng-container>
+        <ng-container *ngTemplateOutlet="actions"></ng-container>
       }
     </ng-container>
 
@@ -26,6 +26,39 @@
           <span class="pf-sre-chip__name">{{ patientName() }}</span>
           @if (patientMeta()) { <span class="pf-sre-chip__meta nd-num">{{ patientMeta() }}</span> }
         </span>
+        <!-- PHONES only: the current sample ID. With more than one tube it
+             is the tube switcher (the tabs control is desktop / tablet). -->
+        @if (tubeTabs().length > 1) {
+          <span class="pf-sre-switch pf-sre-phone">
+            <button type="button" class="nd-chip pf-sre-chip pf-sre-chip--sample pf-sre-chip--switch"
+                    aria-haspopup="listbox" [attr.aria-expanded]="tubeMenuOpen()"
+                    [attr.aria-label]="'Sample ' + activeBarcode() + ' — switch tube'"
+                    (click)="tubeMenuOpen.set(!tubeMenuOpen())">
+              <span class="nd-num pf-sre-chip__id">{{ activeBarcode() }}</span>
+              @if (hasWritable()) { <span class="pf-sre-tab__dot" aria-hidden="true"></span> }
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            @if (tubeMenuOpen()) {
+              <span class="pf-sre-switch__scrim" (click)="tubeMenuOpen.set(false)" aria-hidden="true"></span>
+              <span class="pf-sre-switch__menu" role="listbox" aria-label="Tubes in this order">
+                @for (tab of tubeTabs(); track tab.id) {
+                  <button type="button" class="pf-sre-switch__opt" role="option"
+                          [attr.data-tube]="tab.id" [attr.aria-selected]="tab.id === activeTubeId()"
+                          (click)="pickTube(tab.id)">
+                    <span class="nd-num pf-sre-switch__id">{{ tab.barcode || "Tube" }}</span>
+                    @if (tab.tests) { <span class="pf-sre-switch__tests">{{ tab.tests }}</span> }
+                    @if (tab.open && tab.id !== activeTubeId()) { <span class="pf-sre-tab__dot" aria-label="Open work"></span> }
+                  </button>
+                }
+              </span>
+            }
+          </span>
+        } @else {
+          <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--sample pf-sre-phone" title="Sample ID">
+            <span class="nd-num pf-sre-chip__id">{{ s.barcode || "—" }}</span>
+            @if (hasWritable()) { <span class="pf-sre-tab__dot" aria-hidden="true"></span> }
+          </span>
+        }
         @if (s.order?.orderNumber) {
           <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--order" title="Order ID">
             <span class="pf-sre-chip__meta">Order</span><span class="nd-num pf-sre-chip__val">{{ s.order?.orderNumber }}</span>
@@ -65,45 +98,56 @@
     </ng-container>
   </pf-hero-band>
 
-  <!-- Save draft / Submit (or Reject / Validate) — ONE definition, shown in
-       the band on web + tablet and in the phone bottom bar. -->
-  <ng-template #actions let-where>
-    <!-- Signed-in technician (Reg in the tooltip on phones), left of Save draft. -->
-    <span class="nd-chip nd-chip--static pf-sre-techchip" [class.pf-sre-techchip--compact]="where === 'bar'"
+  <!-- Band actions: technician, Save draft (secondary), Submit (the ONE
+       primary). Web + tablet: text buttons + the technician chip. Phones:
+       44px ICON buttons (label kept for AT + tooltip) + an initials avatar. -->
+  <ng-template #actions>
+    <span class="nd-chip nd-chip--static pf-sre-techchip"
           [title]="techName() + ' · Reg ' + techRegId()" [attr.aria-label]="'Technician ' + techName() + ', Reg ' + techRegId()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      @if (where === 'bar') {
-        <span class="pf-sre-techchip__name">{{ techInitials() }}</span>
-      } @else {
-        <span class="pf-sre-techchip__name">{{ techName() }}</span>
-        <span class="pf-sre-techchip__reg nd-num">Reg {{ techRegId() }}</span>
-      }
+      <span class="pf-sre-techchip__name">{{ techName() }}</span>
+      <span class="pf-sre-techchip__reg nd-num">Reg {{ techRegId() }}</span>
     </span>
+    <span class="pf-sre-techavatar" role="img"
+          [title]="techName() + ' · Reg ' + techRegId()" [attr.aria-label]="'Technician ' + techName() + ', Reg ' + techRegId()">{{ techInitials() }}</span>
     @if (validateMode()) {
       <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-reject"
-              [disabled]="submitting() || enteredTests().length === 0" (click)="rejectTube()">Reject</button>
+              aria-label="Reject" title="Reject — send back to the technician"
+              [disabled]="submitting() || enteredTests().length === 0" (click)="rejectTube()">
+        <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span class="pf-sre-act__t">Reject</span>
+      </button>
       <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit"
+              [attr.aria-label]="'Validate ' + enteredTests().length" [title]="'Validate (' + enteredTests().length + ')'"
               [disabled]="submitting() || enteredTests().length === 0" (click)="validateTube()">
-        {{ submitting() ? "Validating…" : "Validate (" + enteredTests().length + ")" }}
+        <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        <span class="pf-sre-act__t">{{ submitting() ? "Validating…" : "Validate (" + enteredTests().length + ")" }}</span>
       </button>
     } @else {
       @if (hasReopenable()) {
         <!-- Finished tube (submitted or signed off): Edit asks for a reason
              and re-opens it to this tech (audited). -->
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-reopen"
+                aria-label="Edit result" title="Edit result"
                 [disabled]="submitting()" (click)="reopenSample()">
-          {{ submitting() && !hasWritable() ? "Opening…" : "Edit result" }}
+          <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          <span class="pf-sre-act__t">{{ submitting() && !hasWritable() ? "Opening…" : "Edit result" }}</span>
         </button>
       }
       @if (hasWritable()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-draft"
+                aria-label="Save draft" [title]="lastSavedLabel() ? 'Save draft · ' + lastSavedLabel() : 'Save draft'"
                 [disabled]="loading() || submitting() || savingDraft()" (click)="saveDraft()">
-          {{ savingDraft() ? "Saving…" : "Save draft" }}
+          <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+          <span class="pf-sre-act__t">{{ savingDraft() ? "Saving…" : "Save draft" }}</span>
+          @if (lastSavedLabel() && !autosaving()) { <span class="pf-sre-act__saved" aria-hidden="true"></span> }
         </button>
       }
       <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit"
+              aria-label="Submit results" title="Submit results"
               [disabled]="loading() || submitting() || savingDraft() || !hasWritable()" (click)="submitAll()">
-        {{ submitting() ? "Submitting…" : hasReopenable() && !hasWritable() ? "Submitted" : "Submit results" }}
+        <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        <span class="pf-sre-act__t">{{ submitting() ? "Submitting…" : hasReopenable() && !hasWritable() ? "Submitted" : "Submit results" }}</span>
       </button>
     }
   </ng-template>
@@ -262,13 +306,18 @@
                                 <span class="pf-sre__flag-chip" [attr.data-tone]="f.tone" [attr.title]="flagChipTitle(f)">{{ f.label }}</span>
                               }
                             </td>
+                            <td class="pf-sre__gc-info">
+                              @if (hasInfo(t, p)) {
+                                <ng-container *ngTemplateOutlet="infoPeek; context: { t, p }"></ng-container>
+                              }
+                            </td>
                             <td class="pf-sre__gc-result">
                               <ng-container *ngTemplateOutlet="resultInput; context: { t, p }"></ng-container>
                               @if (p.unit) { <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span> }
                             </td>
-                            <td class="pf-sre__gc-range">{{ refLabelFor(p) || "—" }}</td>
-                            <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
-                            <td class="pf-sre__gc-method">{{ methodologyOf(p, t.test) }}</td>
+                            <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p)">{{ refLabelFor(p) || "—" }}</td>
+                            <td class="pf-sre__gc-unit" [class.pf-sre__gc--empty]="!p.unit">{{ p.unit || "—" }}</td>
+                            <td class="pf-sre__gc-method"><span class="pf-sre__method-t">{{ methodologyOf(p, t.test) }}</span></td>
                             <td class="pf-sre__gc-note">
                               <!-- One note affordance per single-value test (the
                                    test-level one); multi-value rows get their own. -->
@@ -354,6 +403,26 @@
                   placeholder="Write a note — Enter to save, Esc to cancel"
                   (keydown)="onQuickNoteKey($event, tid, pname)"
                   (blur)="onQuickNoteBlur(tid, pname, qn.value)"></textarea>
+      </ng-template>
+
+      <!-- PHONES: range · unit · method live behind a small "i" on the name
+           line; the peek auto-hides after ~4s, on an outside tap, or on a
+           second tap. (Web / tablet show them as columns.) -->
+      <ng-template #infoPeek let-t="t" let-p="p">
+        <span class="pf-sre__info">
+          <button type="button" class="pf-sre__info-btn" tabindex="-1"
+                  aria-label="Details" [attr.aria-expanded]="infoOpen(t.id, p.name)"
+                  (click)="toggleInfo(t.id, p.name)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+          </button>
+          @if (infoOpen(t.id, p.name)) {
+            <span class="pf-sre__peek" role="tooltip">
+              @if (refLabelFor(p)) { <span class="pf-sre__peek-row"><span class="pf-sre__peek-k">Range</span><span class="nd-num">{{ refLabelFor(p) }}</span></span> }
+              @if (p.unit) { <span class="pf-sre__peek-row"><span class="pf-sre__peek-k">Unit</span><span>{{ p.unit }}</span></span> }
+              @if (methodologyOf(p, t.test) !== '—') { <span class="pf-sre__peek-row"><span class="pf-sre__peek-k">Method</span><span>{{ methodologyOf(p, t.test) }}</span></span> }
+            </span>
+          }
+        </span>
       </ng-template>
 
       <!-- Quiet neutral icon button (pencil) for a row / test note. -->
@@ -444,7 +513,8 @@
             </div>
           }
           @case ("textarea") {
-            <textarea class="pf-sre__ginput pf-sre__ginput--ta" rows="1"
+            <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
+                      (input)="autoGrow($event)"
                       [attr.aria-label]="p.title || p.name"
                       [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
                       [ngModel]="getValue(t.id, p.name)"
@@ -467,12 +537,15 @@
                    (keydown.enter)="onEnterKey($event)" />
           }
           @default {
-            <input type="text" class="pf-sre__ginput pf-sre__ginput--num"
-                   [attr.aria-label]="p.title || p.name"
-                   [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                   [ngModel]="getValue(t.id, p.name)"
-                   (ngModelChange)="setValue(t.id, p.name, $event)"
-                   (keydown.enter)="onEnterKey($event)" />
+            <!-- Free text: a multi-line box that grows with the text (tall on
+                 phones); Enter still moves to the next field. -->
+            <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
+                      [attr.aria-label]="p.title || p.name"
+                      [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                      [ngModel]="getValue(t.id, p.name)"
+                      (ngModelChange)="setValue(t.id, p.name, $event)"
+                      (input)="autoGrow($event)"
+                      (keydown.enter)="onEnterKey($event)"></textarea>
           }
         }
       </ng-template>
@@ -581,12 +654,17 @@
                               <span class="pf-sre__flag-chip" [attr.data-tone]="f.tone" [attr.title]="flagChipTitle(f)">{{ f.label }}</span>
                             }
                           </td>
-                          <td class="pf-sre__gc-result">
+                          <td class="pf-sre__gc-info">
+                              @if (hasInfo(t, p)) {
+                                <ng-container *ngTemplateOutlet="infoPeek; context: { t, p }"></ng-container>
+                              }
+                            </td>
+                            <td class="pf-sre__gc-result">
                             <ng-container *ngTemplateOutlet="resultInput; context: { t, p }"></ng-container>
                             @if (p.unit) { <span class="pf-sre__gunit-inline" aria-hidden="true">{{ p.unit }}</span> }
                           </td>
-                          <td class="pf-sre__gc-range">{{ refLabelFor(p) || "—" }}</td>
-                          <td class="pf-sre__gc-unit">{{ p.unit || "—" }}</td>
+                          <td class="pf-sre__gc-range" [class.pf-sre__gc--empty]="!refLabelFor(p)">{{ refLabelFor(p) || "—" }}</td>
+                          <td class="pf-sre__gc-unit" [class.pf-sre__gc--empty]="!p.unit">{{ p.unit || "—" }}</td>
                           <td class="pf-sre__gc-method">
                             <span class="pf-sre__method">
                               <span class="pf-sre__method-t">{{ methodologyOf(p, t.test) }}</span>
@@ -625,11 +703,4 @@
 
   </div>
 
-  <!-- Phones: the band's actions don't fit, so Save draft / Submit ride a
-       compact sticky bar above the (always visible) navbar. -->
-  @if (sample() && !viewOnly()) {
-    <div class="nd-bottombar pf-sre-bar">
-      <ng-container *ngTemplateOutlet="actions; context: { $implicit: 'bar' }"></ng-container>
-    </div>
-  }
 </section>

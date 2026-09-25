@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  HostListener,
   afterRenderEffect,
   computed,
   effect,
@@ -175,6 +176,60 @@ export class SampleResultEntryComponent {
     ind.style.height = `${act.offsetHeight}px`;
     ind.style.transform = `translate(${act.offsetLeft}px, ${act.offsetTop}px)`;
     host.classList.add("pf-sre-tabs--ind");
+  }
+
+  /** PHONES: the sample-ID chip doubles as the tube switcher. */
+  readonly tubeMenuOpen = signal(false);
+  readonly activeBarcode = computed(() => {
+    const id = this.activeTubeId();
+    return this._tubeTabs().find((t) => t.id === id)?.barcode || this._sample()?.barcode || "—";
+  });
+  pickTube(id: string) {
+    this.tubeMenuOpen.set(false);
+    void this.openSibling(id);
+  }
+
+  // ── PHONES: the per-row "i" peek (range · unit · method) ────────────
+  private readonly _info = signal<string | null>(null);
+  private infoTimer: ReturnType<typeof setTimeout> | null = null;
+  hasInfo(t: OrderTest, p: TestParameter): boolean {
+    return !!this.refLabelFor(p) || !!p.unit || this.methodologyOf(p, t.test) !== "—";
+  }
+  infoOpen(testId: string, name: string): boolean {
+    return this._info() === `${testId}::${name}`;
+  }
+  /** One peek at a time; a second tap closes; auto-hides after ~4s. */
+  toggleInfo(testId: string, name: string) {
+    const k = `${testId}::${name}`;
+    const wasOpen = this._info() === k;
+    this.closeInfo();
+    if (wasOpen) return;
+    if (this._lastInfoClosed === k) { this._lastInfoClosed = null; return; }
+    this._info.set(k);
+    this.infoTimer = setTimeout(() => this.closeInfo(), 4000);
+  }
+  private _lastInfoClosed: string | null = null;
+  closeInfo() {
+    if (this.infoTimer !== null) { clearTimeout(this.infoTimer); this.infoTimer = null; }
+    this._info.set(null);
+  }
+  /** Tapping anywhere else closes the peek. The icon's own pointerdown is
+   *  remembered so its click toggles it shut instead of re-opening. */
+  @HostListener("document:pointerdown", ["$event"])
+  onDocPointerDown(ev: Event) {
+    const open = this._info();
+    if (!open) { this._lastInfoClosed = null; return; }
+    const inside = (ev.target as HTMLElement | null)?.closest?.(".pf-sre__info");
+    this._lastInfoClosed = inside ? open : null;
+    this.closeInfo();
+  }
+
+  /** Free-text / long results grow with their content. */
+  autoGrow(ev: Event) {
+    const el = ev.target as HTMLTextAreaElement | null;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
   }
 
   /** RESULTS card label for a grid block: the profile name, the single

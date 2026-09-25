@@ -104,7 +104,7 @@ const css = () => ((SampleResultEntryComponent as any).ɵcmp.styles as string[])
   .replace(/\[_ng(content|host)-%COMP%\]/g, '');
 
 describe('Result entry (nd) — band + CONTEXT BAR', () => {
-  it('the band keeps back + tenant; the pill carries ONLY the patient (no current-sample chip)', async () => {
+  it('the band keeps back + tenant; on web the pill carries ONLY the patient (no current-sample chip)', async () => {
     const { el } = await render();
     expect(el.querySelector('pf-hero-band')).not.toBeNull();
     // The old big header block is gone.
@@ -114,8 +114,11 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     const ctx = el.querySelector('pf-hero-band .pf-sre-ctx') as HTMLElement;
     expect(ctx).not.toBeNull();
     expect(ctx.querySelector('.pf-sre-chip--patient .pf-sre-chip__meta')!.textContent!.trim()).toBe('29/M · AA0012');
-    // The tabs already say which tube is open — no separate sample chip.
-    expect(el.querySelector('.pf-sre-chip--sample')).toBeNull();
+    // Web/tablet: the tabs already say which tube is open — the sample chip
+    // is PHONE-only (hidden >640px).
+    const chip = el.querySelector('.pf-sre-chip--sample')!;
+    expect(chip.closest('.pf-sre-phone')).not.toBeNull();
+    expect(css()).toMatch(/\.pf-sre-phone\s*\{\s*display:\s*none\s*!important/);
     expect(ctx.textContent).not.toContain('MOL');
     // The technician is not in the pill any more…
     expect(ctx.querySelector('.pf-sre-techchip, .pf-sre-chip--tech')).toBeNull();
@@ -131,10 +134,10 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     const kids = Array.from(actions.querySelectorAll('.pf-sre-techchip, .pf-sre-draft, .pf-sre-submit'));
     expect(kids.map(k => k.classList.contains('pf-sre-techchip') ? 'tech' : k.classList.contains('pf-sre-draft') ? 'draft' : 'submit'))
       .toEqual(['tech', 'draft', 'submit']);
-    // Phones: compact (initials, Reg in the tooltip) in the bottom bar.
-    const barChip = el.querySelector('.pf-sre-bar .pf-sre-techchip') as HTMLElement;
-    expect(barChip.textContent!.trim()).toBe('AU');
-    expect(barChip.getAttribute('title')).toContain('123434');
+    // Phones: an initials avatar in the band (Reg in the tooltip).
+    const av = actions.querySelector('.pf-sre-techavatar') as HTMLElement;
+    expect(av.textContent!.trim()).toBe('AU');
+    expect(av.getAttribute('title')).toContain('123434');
 
   });
 
@@ -172,12 +175,33 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     expect(el.querySelector('pf-hero-band .pf-sre-draft')).toBeNull();
   });
 
-  it('phones: the same two actions in a compact bottom bar above the navbar', async () => {
+  it('phones: Save draft + Submit are 44px ICON buttons in the band (Submit primary); no bottom bar', async () => {
     const { el } = await render();
-    const bar = el.querySelector('.nd-bottombar.pf-sre-bar') as HTMLElement;
-    expect(bar.querySelector('.pf-sre-draft')!.textContent!.trim()).toBe('Save draft');
-    expect(bar.querySelector('.pf-sre-submit')!.textContent!.trim()).toBe('Submit results');
-    expect(css()).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-band\s+\.pf-sre-act[^{]*\{\s*display:\s*none/);
+    expect(el.querySelector('.nd-bottombar')).toBeNull();
+    const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
+    const draft = actions.querySelector('.pf-sre-draft') as HTMLElement;
+    const submit = actions.querySelector('.pf-sre-submit') as HTMLElement;
+    expect(draft.getAttribute('aria-label')).toBe('Save draft');
+    expect(submit.getAttribute('aria-label')).toBe('Submit results');
+    expect(draft.getAttribute('title')).toContain('Save draft');
+    expect(submit.getAttribute('title')).toBe('Submit results');
+    expect(draft.querySelector('svg.pf-sre-act__i')).not.toBeNull();
+    expect(submit.querySelector('svg.pf-sre-act__i')).not.toBeNull();
+    expect(submit.classList).toContain('pf-hb-btn--primary');
+    const c = css();
+    expect(c).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-band\s+\.pf-sre-act\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/);
+    expect(c).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-band\s+\.pf-sre-act__i\s*\{\s*display:\s*block/);
+    // Web keeps the TEXT buttons: the icon is hidden by default.
+    expect(c).toMatch(/\.pf-sre-act__i\s*\{\s*display:\s*none/);
+  });
+
+  it('the saved state shows as a dot on the save icon, with the time in its tooltip', async () => {
+    const { f, el, c } = await render();
+    c._lastSavedAt.set(new Date(2026, 8, 25, 14, 2));
+    f.detectChanges();
+    const draft = el.querySelector('pf-hero-band .pf-sre-draft') as HTMLElement;
+    expect(draft.querySelector('.pf-sre-act__saved')).not.toBeNull();
+    expect(draft.getAttribute('title')).toBe('Save draft · Saved 14:02');
   });
 
   it('sample tabs: this tube + siblings as a neutral segmented control; open work = violet dot', async () => {
@@ -214,6 +238,38 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     // The indicator slides on the nd spring; off under reduced motion.
     expect(css()).toMatch(/\.pf-sre-tabs--anim\s+\.pf-sre-tabs__ind\s*\{[^}]*transition:\s*transform[^;]*var\(--nd-spring\)/);
     expect(css()).toMatch(/prefers-reduced-motion[\s\S]*\.pf-sre-tabs__ind[^{]*\{[^}]*transition:\s*none/);
+  });
+
+  it('phones: no tabs control; the current sample chip is the tube switcher (2+ tubes)', async () => {
+    const { f, el, c } = await render();
+    expect(css()).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-tabs\[role=['"]?tablist['"]?\]\s*\{\s*display:\s*none\s*!important/);
+    const chip = el.querySelector('.pf-sre-ctx .pf-sre-chip--switch') as HTMLButtonElement;
+    expect(chip.tagName).toBe('BUTTON');
+    expect(chip.textContent).toContain('26123');
+    expect(chip.querySelector('svg')).not.toBeNull();             // the chevron
+    chip.click();
+    f.detectChanges();
+    const opts = Array.from(el.querySelectorAll('.pf-sre-switch__menu [role="option"]')) as HTMLElement[];
+    expect(opts.map(o => o.getAttribute('data-tube'))).toEqual(['smp-1', 'smp-2']);   // fixed order
+    expect(opts[1].querySelector('.pf-sre-switch__tests')!.textContent).toContain('Bacterial Identification');
+    opts[1].click();
+    await f.whenStable();
+    f.detectChanges();
+    expect(c.activeTubeId()).toBe('smp-2');
+    expect(el.querySelector('.pf-sre-switch__menu')).toBeNull();
+    expect(el.querySelector('.pf-sre-chip--switch')!.textContent).toContain('26124');
+  });
+
+  it('a single tube: the sample chip is a plain chip — no chevron, not tappable', async () => {
+    const { f, el, c } = await render();
+    c._sample.update((s: any) => ({ ...s, siblings: [] }));
+    c.syncTubeTabs(c._sample());
+    f.detectChanges();
+    expect(el.querySelector('.pf-sre-chip--switch')).toBeNull();
+    const chip = el.querySelector('.pf-sre-chip--sample') as HTMLElement;
+    expect(chip.tagName).toBe('SPAN');
+    expect(chip.querySelector('svg')).toBeNull();
+    expect(chip.textContent).toContain('26123');
   });
 
   it('the patient name is FULL — never cut in code', async () => {
@@ -334,8 +390,58 @@ describe('Result entry (nd) — one-step notes', () => {
 describe('Result entry (nd) — phone rows + type scale', () => {
   it('phones stack each row: name, then a FULL-WIDTH >=44px field, then range + unit', () => {
     const c = css();
-    expect(c).toMatch(/@media \(max-width: 640px\)[\s\S]*grid-template-areas:\s*"param method note" "result result result" "range range unit"/);
+    expect(c).toMatch(/@media \(max-width: 640px\)[\s\S]*grid-template-areas:\s*"param info act" "result result result"/);
+    // No range / unit / method LINES on phones — they live in the peek.
+    expect(c).toMatch(/@media \(max-width: 640px\)[\s\S]*td\.pf-sre__gc-range,\s*\.pf-sre__grow\s*>\s*td\.pf-sre__gc-unit\s*\{\s*display:\s*none\s*!important/);
+    expect(c).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre__gc-method\s+\.pf-sre__method-t\s*\{\s*display:\s*none/);
+    // The name never collapses: the first column is the full row width.
+    expect(c).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) auto/);
+    // Free text is a tall, growing box on phones.
+    expect(c).toMatch(/\.pf-sre__gc-result\s+\.pf-sre__ginput--text\s*\{\s*min-height:\s*88px/);
     expect(c).toMatch(/\.pf-sre__gc-result\s+\.pf-sre__ginput\s*\{[^}]*width:\s*100%[^}]*min-height:\s*44px/);
+  });
+
+  it('phones: the "i" peek shows range, unit and method; auto-hides; closes on an outside tap', async () => {
+    const { f, el } = await render();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const row = el.querySelector('.pf-sre__grow') as HTMLElement;
+      const btn = row.querySelector('.pf-sre__gc-info .pf-sre__info-btn') as HTMLButtonElement;
+      expect(btn.getAttribute('aria-label')).toBe('Details');
+      btn.click();
+      f.detectChanges();
+      const peek = row.querySelector('.pf-sre__peek') as HTMLElement;
+      expect(peek.textContent).toContain('Method');
+      expect(peek.textContent).toContain('Real-Time PCR');
+      // Auto-hides after ~4s.
+      vi.advanceTimersByTime(4100);
+      f.detectChanges();
+      expect(row.querySelector('.pf-sre__peek')).toBeNull();
+      // Re-open, then tap elsewhere.
+      btn.click();
+      f.detectChanges();
+      expect(row.querySelector('.pf-sre__peek')).not.toBeNull();
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      f.detectChanges();
+      expect(row.querySelector('.pf-sre__peek')).toBeNull();
+      // A second tap on the icon closes it.
+      btn.click(); f.detectChanges();
+      btn.dispatchEvent(new Event('pointerdown', { bubbles: true })); btn.click(); f.detectChanges();
+      expect(row.querySelector('.pf-sre__peek')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the "i" is hidden when a row has no range, unit or method', async () => {
+    const { el } = await render();
+    const rows = el.querySelectorAll('.pf-sre__grow');
+    // Row 1 has a method; rows 2–3 have nothing to peek at.
+    expect(rows[0].querySelector('.pf-sre__info-btn')).not.toBeNull();
+    expect(rows[1].querySelector('.pf-sre__info-btn')).toBeNull();
+    expect(rows[2].querySelector('.pf-sre__info-btn')).toBeNull();
+    // Web keeps the columns: the info cell is phone-only.
+    expect(css()).toMatch(/\.pf-sre__gc-info\s*\{\s*display:\s*none/);
   });
 
   it('the result field is a real box (visible border + background), never a bare caret', () => {
@@ -345,7 +451,7 @@ describe('Result entry (nd) — phone rows + type scale', () => {
   it('calm type scale: label 13px/600 (12px on phones), parameter 14px/500, chips + tabs 13px, buttons 14px', () => {
     const c = css();
     expect(c).toMatch(/\.pf-sre-card__label\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*600/);
-    expect(c).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-card__label\s*\{\s*font-size:\s*12px/);
+    expect(c).toMatch(/@media \(max-width: 640px\)[\s\S]*\.pf-sre-card__label\s*\{\s*font-size:\s*12px\s*!important/);
     expect(c).toMatch(/\.pf-sre__gname\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*500/);
     expect(c).toMatch(/\.pf-sre-chip,\s*\.pf-sre-tab,\s*\.pf-sre-techchip\s*\{\s*font-size:\s*13px/);
     expect(c).toMatch(/\.pf-sre-act\s*\{\s*font-size:\s*14px/);

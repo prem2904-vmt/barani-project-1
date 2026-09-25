@@ -36,7 +36,17 @@
 .pf-sre-techchip svg { flex: none; color: var(--text-tertiary); }
 .pf-sre-techchip__name { font-weight: 500; color: var(--text-primary); white-space: nowrap; }
 .pf-sre-techchip__reg { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-.pf-sre-techchip--compact { height: 44px; padding: 0 10px; }
+/* Phones only: the technician as a small initials avatar in the band. */
+.pf-sre-techavatar {
+  display: none; align-items: center; justify-content: center; flex: none;
+  width: 32px; height: 32px; border-radius: 999px;
+  background: var(--nd-chip-bg); border: 1px solid var(--nd-line);
+  color: var(--text-secondary); font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+}
+/* Band action buttons: text on web + tablet, a 44px icon on phones. */
+.pf-sre-act { position: relative; justify-content: center; }
+.pf-sre-act__i { display: none; flex: none; }
+.pf-sre-act__saved { display: none; }
 
 /* Order ID: only where the pill has room. */
 @media (max-width: 1279px) { .pf-sre-chip--order { display: none; } }
@@ -46,7 +56,34 @@
    The raised "selected" surface is one indicator that SLIDES to the
    picked tab (nd spring); until it is measured the kit's own
    aria-pressed surface shows, so nothing is ever unmarked. */
-.pf-sre-tabs { position: relative; flex: 0 1 auto; min-width: 0; max-width: 520px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.pf-sre-tabs {
+  position: relative; flex: 0 1 auto; min-width: 0; max-width: 520px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+  /* Compact, not boxy: a quiet track, no outline. */
+  border: 0; padding: 2px; background: var(--nd-chip-bg);
+}
+
+/* PHONES only: the current-sample chip / tube switcher. */
+.pf-sre-phone { display: none !important; }
+.pf-sre-switch { position: relative; flex: none; }
+.pf-sre-chip--switch { gap: 6px; cursor: pointer; }
+.pf-sre-chip--switch svg { color: var(--text-tertiary); }
+.pf-sre-chip--sample .pf-sre-chip__id { font-weight: 600; color: var(--text-primary); }
+.pf-sre-switch__scrim { position: fixed; inset: 0; z-index: 90; }
+.pf-sre-switch__menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 91;
+  display: flex; flex-direction: column; min-width: 220px; max-width: calc(100vw - 32px); padding: 4px;
+  background: var(--nd-card-bg); border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  animation: nd-fade-scale var(--nd-dur-fast) var(--nd-spring) both;
+}
+.pf-sre-switch__opt {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px;
+  min-height: 44px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--text-primary); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.pf-sre-switch__opt[aria-selected='true'] { background: var(--nd-sel-bg); }
+.pf-sre-switch__id { font-weight: 600; }
+.pf-sre-switch__tests { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
 .pf-sre-tabs::-webkit-scrollbar { display: none; }
 .pf-sre-tabs__ind {
   position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: 0; pointer-events: none;
@@ -74,7 +111,10 @@
   padding-bottom: 8px;
 }
 /* One card per test, stacked: cards size to content inside the column. */
-.pf-sre-card { flex: none; view-transition-class: pf-zoom; }
+.pf-sre-card { flex: none; view-transition-class: pf-zoom; overflow: visible; }
+/* overflow: visible lets the "i" peek escape the card; the tinted header
+   keeps the card's top corners itself. */
+.pf-sre-card > .nd-card__head { border-radius: var(--nd-radius-card) var(--nd-radius-card) 0 0; }
 .pf-sre-card .nd-card__body.pf-sre-card__body { overflow: visible; flex: none; padding: 0; gap: 0; }
 .pf-sre-card__label { margin: 0; @include nd.no-truncate; }
 .pf-sre-card__count { font-size: 12px; color: var(--text-muted); }
@@ -121,6 +161,21 @@
 .pf-sre__gc-unit, .pf-sre__gc-range, .pf-sre__gc-method { color: var(--text-tertiary); font-size: 12.5px; @include nd.no-truncate; }
 .pf-sre__gc-range, .pf-sre__gc-unit { font-variant-numeric: tabular-nums; }
 .pf-sre__method { display: inline-flex; align-items: center; gap: 8px; }
+/* The "i" peek cell exists for phones only (web shows the columns). */
+.pf-sre__gc-info { display: none; }
+.pf-sre__info { position: relative; display: inline-flex; }
+.pf-sre__peek {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  display: flex; flex-direction: column; gap: 4px; min-width: 200px; max-width: min(300px, calc(100vw - 48px));
+  padding: 10px 12px; border-radius: var(--nd-radius-sm);
+  background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  font-size: 12.5px; line-height: 1.4; color: var(--text-primary); text-align: left; white-space: normal;
+  transform-origin: top right;
+  animation: nd-fade-scale var(--nd-dur-fast, 200ms) var(--nd-spring) both;
+}
+.pf-sre__peek-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); column-gap: 8px; }
+.pf-sre__peek-row > :last-child { overflow-wrap: break-word; }
+.pf-sre__peek-k { color: var(--text-muted); font-size: 11.5px; }
 .pf-sre__gunit-inline { display: none; }
 .pf-sre__grow-comments td { padding: 8px 12px; background: var(--nd-in-tint); border-bottom: 1px solid var(--nd-line); }
 .pf-sre__grow-attach td { padding: 6px 12px 10px; border-bottom: 1px solid var(--nd-line); }
@@ -195,15 +250,15 @@
   background: rgba(239, 68, 68, 0.16); color: var(--red-text, #b91c1c);
 }
 
-/* Row / test note: a quiet neutral icon button. */
-.pf-sre__gnote {
+/* Row / test note (and the phone "i"): a quiet neutral icon button. */
+.pf-sre__gnote, .pf-sre__info-btn {
   display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
   width: 30px; height: 30px; padding: 0; border-radius: 8px;
   border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer;
   transition: color var(--nd-dur-fast) ease, border-color var(--nd-dur-fast) ease;
 }
-.pf-sre__gnote:hover { color: var(--text-primary); border-color: var(--nd-line); background: var(--nd-card-bg); }
-.pf-sre__gnote:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pf-sre__gnote:hover, .pf-sre__info-btn:hover, .pf-sre__info-btn[aria-expanded='true'] { color: var(--text-primary); border-color: var(--nd-line); background: var(--nd-card-bg); }
+.pf-sre__gnote:focus-visible, .pf-sre__info-btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 .pf-sre__gnote--has { color: var(--violet-text, #6d28d9); }
 .pf-sre__gc-note .pf-sre__gnote + .pf-sre__gnote, .pf-sre__gc-note .pf-sre__attach-btn { margin-left: 4px; }
 .pf-sre__gdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
@@ -308,21 +363,34 @@
 
 /* ── Phones (<=640px, additive) ─────────────────────────────────────── */
 @media (max-width: 640px) {
-  /* Pill = the patient in ONE row. The tube tabs sit on their own row
-     (band tools) and scroll sideways when there are many. */
-  .pf-sre-chip--ro, .pf-sre-ctx__grow { display: none; }
+  /* Pill = patient (full name, age/sex, ID) + the CURRENT sample chip,
+     which switches tubes when the order has several. No tabs control. */
+  .pf-sre-chip--ro, .pf-sre-ctx__grow, .pf-sre-chip--order { display: none !important; }
+  /* Beats the global phone rule [role='tablist'] { display: flex !important }. */
+  .pf-sre .pf-sre-tabs[role='tablist'] { display: none !important; }
+  .pf-sre-phone { display: inline-flex !important; }
   .pf-sre-chip { height: 36px; }
-  .pf-sre-tabs { max-width: none; }
   /* The band's actions don't fit: technician + Save draft + Submit move to
      the compact bottom bar (above the always-visible navbar). */
-  .pf-sre-band .pf-sre-act, .pf-sre-band .pf-sre__autosave, .pf-sre-band .pf-sre-techchip { display: none; }
-  .pf-sre-body { padding: 8px 12px 84px; }   /* clears the bottom bar */
-  .pf-sre-bar { z-index: 46; gap: 8px; padding: 8px; }
-  .pf-sre-bar .pf-sre-act { height: 44px; padding: 0 14px; font-size: 15px; }
-  .pf-sre-bar .pf-sre-submit { flex: 1 1 auto; justify-content: center; }
+  .pf-sre-band .pf-sre__autosave, .pf-sre-band .pf-sre-techchip { display: none; }
+  .pf-sre-techavatar { display: inline-flex; }
+  .pf-sre-body { padding: 8px 12px 16px; }
+  /* Save draft / Submit (Reject / Validate) = 44px ICON buttons at the top
+     (tooltip + aria-label keep the words). Submit stays the one primary. */
+  .pf-sre-band .pf-sre-act { width: 44px; min-width: 44px; height: 44px; padding: 0; gap: 0; border-radius: 12px; }
+  .pf-sre-band .pf-sre-act__i { display: block; }
+  .pf-sre-band .pf-sre-act__t {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  /* "Saved" state: a tiny violet dot on the save icon (time in the tooltip). */
+  .pf-sre-band .pf-sre-act__saved {
+    display: block; position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 999px;
+    background: var(--color-violet-500, #8b5cf6); box-shadow: 0 0 0 2px var(--nd-card-bg);
+  }
 
-  /* Calm type scale on phones. */
-  .pf-sre-card__label { font-size: 12px; }
+  /* Calm type scale on phones. !important: the global phone heading cap
+     (styles.scss (H): h2 → up to 20px !important) must not win here. */
+  .pf-sre-card__label { font-size: 12px !important; line-height: 1.3 !important; letter-spacing: 0.06em; }
   .pf-sre__gname { font-size: 14px; }
 
   /* No iOS focus zoom. */
@@ -331,35 +399,51 @@
   :host ::ng-deep .pf-sre__test input,
   :host ::ng-deep .pf-sre__test textarea { font-size: 16px; }
 
-  /* STACKED rows: the parameter name, then a FULL-WIDTH field (>=44px, a
-     visible box), then range + unit muted underneath. */
+  /* STACKED rows for EVERY row type (numeric, select, free text,
+     textarea, date, checkbox, calculated): a table can't lay out at
+     360px — its fixed column widths collapsed the name to ~0px. So the
+     table is plain blocks and each row a single-column-first grid:
+       name .................... [i] [pencil]
+       [ full-width field, >=44px            ]
+     Range · unit · method sit behind the [i] peek. */
+  .pf-sre__grid { table-layout: auto; }
   .pf-sre__grid thead { display: none !important; }
-  .pf-sre__grid, .pf-sre__grid tbody { display: block; width: 100%; }
+  .pf-sre__grid, .pf-sre__grid tbody, .pf-sre__grid tr { display: block; width: 100%; }
   .pf-sre__grow {
-    display: grid; width: 100%; box-sizing: border-box;
+    display: grid !important; box-sizing: border-box; width: 100%;
     grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: 'param method note' 'result result result' 'range range unit';
-    gap: 6px 8px; align-items: center;
+    grid-template-areas: "param info act" "result result result";
+    column-gap: 8px; row-gap: 6px; align-items: center;
     padding: 12px; border-bottom: 1px solid var(--nd-line);
   }
-  .pf-sre__grow > td { display: block; width: auto; padding: 0; border: 0; background: none !important; }
-  .pf-sre__grow > td.pf-sre__gc-param { grid-area: param; min-width: 0; }
-  .pf-sre__grow > td.pf-sre__gc-method { grid-area: method; }
-  .pf-sre__method-t { display: none; }            /* the pencil stays */
-  .pf-sre__grow > td.pf-sre__gc-note { grid-area: note; }
-  .pf-sre__grow > td.pf-sre__gc-result { grid-area: result; }
-  .pf-sre__grow > td.pf-sre__gc-range { grid-area: range; font-size: 12px; }
-  .pf-sre__grow > td.pf-sre__gc-unit { grid-area: unit; font-size: 12px; text-align: right; }
-  .pf-sre__gc-range:empty, .pf-sre__gc-unit:empty { display: none; }
+  .pf-sre__grow > td {
+    display: block; width: auto !important; min-width: 0; max-width: none;
+    padding: 0; border: 0; background: none !important; text-align: left;
+  }
+  .pf-sre__grow > td.pf-sre__gc-param { grid-area: param; white-space: normal; word-break: normal; overflow-wrap: break-word; }
+  .pf-sre__grow > td.pf-sre__gc-note { grid-area: act; text-align: right; white-space: nowrap; }
+  .pf-sre__grow > td.pf-sre__gc-result { grid-area: result; width: 100% !important; }
+  /* Range, unit and method are NOT lines under the field on phones —
+     they sit behind the "i" peek on the name line. */
+  .pf-sre__grow > td.pf-sre__gc-range, .pf-sre__grow > td.pf-sre__gc-unit { display: none !important; }
+  .pf-sre__grow > td.pf-sre__gc-info { display: block; grid-area: info; }
+  /* Card tables keep the pencil inside the method cell: lift it to the
+     name line; the method text itself hides (it is in the peek). */
+  .pf-sre__grow > td.pf-sre__gc-method { display: contents; }
+  .pf-sre__gc-method .pf-sre__method { display: contents; }
+  .pf-sre__gc-method .pf-sre__method-t { display: none; }
+  .pf-sre__gc-method .pf-sre__gnote { grid-area: act; justify-self: end; }
+  .pf-sre__info-btn, .pf-sre__grow .pf-sre__gnote { width: 44px; height: 44px; }
   .pf-sre__gc-result .pf-sre__ginput { width: 100%; min-height: 44px; padding: 10px 12px; }
+  .pf-sre__gc-result .pf-sre__ginput--num { text-align: left; }
+  .pf-sre__gc-result .pf-sre__ginput--text { min-height: 88px; }
   .pf-sre__gc-result .pf-sre__gselect { width: 100%; }
   :host ::ng-deep .pf-sre__gc-result .pf-sre__gselect .pf-dd__trigger { min-height: 44px; width: 100%; }
   .pf-sre__gunit-inline { display: none; }
-  .pf-sre__grow-comments, .pf-sre__grow-note, .pf-sre__grow-reject, .pf-sre__gsub, .pf-sre__grow-attach { display: block; width: 100%; }
   .pf-sre__grow-comments td, .pf-sre__grow-note td, .pf-sre__grow-reject td, .pf-sre__gsub td, .pf-sre__grow-attach td { display: block; width: 100%; box-sizing: border-box; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pf-sre-skel__bar, .pf-sre__autosave-dot { animation: none; }
+  .pf-sre-skel__bar, .pf-sre__autosave-dot, .pf-sre__peek, .pf-sre-switch__menu { animation: none; }
   .pf-sre__ginput, .pf-sre__gnote, .pf-sre-tabs__ind { transition: none !important; }
 }
