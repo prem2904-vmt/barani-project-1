@@ -15,8 +15,9 @@ import { AuthService } from '../../../core/auth/auth.service';
 
 /**
  * Unified search pill (Option A): scope tiles + one input. Picking a match
- * fills the tile and returns the scope to Tests; the Urgent chip is the order
- * priority; the Tests scope filters the catalogue in the page.
+ * fills the tile and returns the scope to Tests. Every scope's results open
+ * in one dropdown under the pill (touch-first); the grid stays a browse view.
+ * Urgent is a switch in the billing card; the patient is required.
  */
 const PATIENTS = [
   { id: 'p1', displayName: 'Ms. Sansa Stark', age: 27, sex: 'Female', mrn: 'AA0009', phone: '+91 76545' },
@@ -207,7 +208,7 @@ describe('Unified search — clearing', () => {
   });
 });
 
-describe('Unified search — Urgent chip', () => {
+describe('Urgent switch (billing card)', () => {
   it('toggles the same order-priority field the Normal/Urgent switch set', () => {
     const { c } = make();
     expect(c.priority()).toBe('Normal');
@@ -217,7 +218,7 @@ describe('Unified search — Urgent chip', () => {
     expect(c.priority()).toBe('Normal');
   });
 
-  it('is inert on a read-only order', () => {
+  it('is locked on a read-only order', () => {
     const { c } = make();
     c.viewOrderId.set('o1');
     c.toggleUrgent();
@@ -235,45 +236,118 @@ describe('Unified search — Urgent chip', () => {
   });
 });
 
-describe('Unified search — Tests scope filters the catalogue in the page', () => {
+describe('Tests scope — results in the dropdown under the pill', () => {
   const tests = [
     T('esr', 'Erythrocyte Sedimentation Rate', 'Haematology'),
     T('hb', 'Haemoglobin', 'Haematology'),
     T('uglu', 'Urine Glucose', 'Clinical Pathology'),
     T('uket', 'Urine Ketones', 'Clinical Pathology'),
+    T('pkg', 'Urine Routine Package', 'Clinical Pathology', { type: 'package' }),
   ];
 
-  it('typing narrows the in-page list (and switches to the All tests tab)', () => {
+  it('typing opens the dropdown with matches (tests, profiles and packages)', () => {
     const { c } = make(tests);
+    expect(c.dropOpen()).toBe(false);
     c.onPillInput('urine');
-    expect(c.categoryTab()).toBe('all');
-    expect(c.filteredTests().map((t: any) => t.id).sort()).toEqual(['uglu', 'uket']);
-    expect(c.searchResults().map((t: any) => t.id)).toEqual(['uglu', 'uket']);
+    expect(c.dropOpen()).toBe(true);
+    expect(c.searchResults().map((t: any) => t.id).sort()).toEqual(['pkg', 'uglu', 'uket']);
+    expect(c.testsTitle()).toBe('TESTS · 3 MATCHES');
   });
 
-  it('the department chip narrows the matches too', () => {
+  it('the catalogue grid is NOT filtered by the query (browse view by tab + department)', () => {
     const { c } = make(tests);
+    c.setCategoryTab('recent');
+    c.onPillInput('urine');
+    expect(c.categoryTab()).toBe('recent');
+    expect(c.filteredTests().map((t: any) => t.id).sort()).toEqual(['esr', 'hb', 'uglu', 'uket']);
     c.setDeptFilter('Haematology');
-    c.onPillInput('e');
-    expect(c.filteredTests().every((t: any) => t.department.name === 'Haematology')).toBe(true);
+    expect(c.filteredTests().map((t: any) => t.id).sort()).toEqual(['esr', 'hb']);
   });
 
-  it('↓ + ⏎ adds the highlighted in-page match and clears the query', () => {
+  it('tap adds (✓) and keeps the panel open; tap again removes', () => {
     const { c } = make(tests);
     c.onPillInput('urine');
-    expect(c.activeTestId()).toBe('uglu');
+    const uglu = c.searchResults().find((t: any) => t.id === 'uglu');
+    c.addSearchResult(uglu);
+    expect(c.isSelected('uglu')).toBe(true);
+    expect(c.dropOpen()).toBe(true);
+    expect(c.query()).toBe('urine');
+    c.addSearchResult(uglu);
+    expect(c.isSelected('uglu')).toBe(false);
+  });
+
+  it('↓ + ⏎ adds the highlighted match, clears the field and closes the panel', () => {
+    const { c } = make(tests);
+    c.onPillInput('urine');
+    const first = c.activeTestId();
     c.onPillArrow(new Event('keydown'), 1);
-    expect(c.activeTestId()).toBe('uket');
+    const second = c.activeTestId();
+    expect(second).not.toBe(first);
     c.onPillEnter(new Event('keydown'));
-    expect(c.selected()).toEqual(['uket']);
+    expect(c.selected()).toEqual([second]);
     expect(c.query()).toBe('');
+    expect(c.dropOpen()).toBe(false);
   });
 
-  it('clearing the query restores the unfiltered catalogue', () => {
+  it('Esc clears and closes; an empty field shows no panel', () => {
     const { c } = make(tests);
     c.onPillInput('urine');
-    c.onPillInput('');
-    expect(c.filteredTests().length).toBe(4);
-    expect(c.searchResults()).toEqual([]);
+    c.onPillEscape();
+    expect(c.query()).toBe('');
+    expect(c.dropOpen()).toBe(false);
+    c.onPillFocus();
+    expect(c.dropOpen()).toBe(false);
+  });
+});
+
+describe('Patient is required', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('with no patient the Patient tile is flagged required; attaching clears it', () => {
+    const { c } = make();
+    expect(c.patientMissing()).toBe(true);
+    c._patient.set(PATIENTS[0]);
+    expect(c.patientMissing()).toBe(false);
+  });
+
+  it('not flagged on a read-only order', () => {
+    const { c } = make();
+    c.viewOrderId.set('o1');
+    expect(c.patientMissing()).toBe(false);
+  });
+
+  it('Confirm without a patient nudges the tile, opens its dropdown and posts nothing', () => {
+    const { c, api } = make([T('esr', 'ESR', 'Haematology')]);
+    c._selected.set(['esr']);
+    c.onConfirmClick();
+    vi.advanceTimersByTime(1);
+    expect(c.patientNudge()).toBe(true);
+    expect(c.scope()).toBe('patient');
+    expect(c.dropOpen()).toBe(true);
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('Save as draft and Proceed without a patient nudge too', () => {
+    const { c, api, router } = make([T('esr', 'ESR', 'Haematology')]);
+    c._selected.set(['esr']);
+    c.onSaveDraftClick();
+    vi.advanceTimersByTime(1);
+    expect(c.patientNudge()).toBe(true);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    c.onProceedClick();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('picking the patient clears the nudge', () => {
+    const { c } = make();
+    c.requirePatient();
+    vi.advanceTimersByTime(1);
+    c.onPillInput('sa');
+    vi.advanceTimersByTime(250);
+    c.onPillEnter(new Event('keydown'));
+    expect(c.patient()?.id).toBe('p1');
+    expect(c.patientNudge()).toBe(false);
+    expect(c.patientMissing()).toBe(false);
   });
 });
