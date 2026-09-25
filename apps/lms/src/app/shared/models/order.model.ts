@@ -81,6 +81,9 @@ export interface OrderSample {
    *  current tech, My Work opens the tube without demanding a re-scan. */
   scanVerifiedAt?: string | null;
   scanVerifiedBy?: string | null;
+  /** Server JSON metadata. A tube split out of a drawn tube (outsourcing
+   *  changed after collection) carries { splitFrom: <barcode> }. */
+  metadata?: string | null;
   createdAt: string;
   department?: Department;
   tests: OrderTest[];

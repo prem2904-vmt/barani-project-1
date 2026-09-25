@@ -59,6 +59,12 @@ import {
   sortForCollection,
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
+import {
+  OutsourceSplit,
+  outsourcedTag as outsourcedTagOf,
+  splitFromOf,
+  splitPrompt as splitPromptOf,
+} from "./outsourcing";
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 
 /**
@@ -630,6 +636,71 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly pending = this._pending.asReadonly();
   readonly openOrderId = this._openOrderId.asReadonly();
 
+  // ── Outsourced tubes ─────────────────────────────────────────────────
+  /** Referral-lab id → name, for the "Outsourced · <partner>" tag. */
+  private readonly _partnerNames = signal<Record<string, string>>({});
+  /** Lines whose outsourcing changed AFTER their tube was drawn — each needs
+   *  a separate tube (the backend never moves drawn blood silently). */
+  private readonly _splits = signal<OutsourceSplit[]>([]);
+  readonly splits = this._splits.asReadonly();
+  readonly splitBusy = signal<string | null>(null);
+
+  outsourcedTag(s: OrderSample): string | null {
+    return outsourcedTagOf(s, this._partnerNames());
+  }
+  splitFrom(s: OrderSample): string | null {
+    return splitFromOf(s);
+  }
+  splitPrompt(x: OutsourceSplit): string {
+    return splitPromptOf(x, this._partnerNames());
+  }
+  splitsFor(orderId: string): OutsourceSplit[] {
+    return this._splits().filter((x) => x.orderId === orderId);
+  }
+
+  private loadOutsourcing(): void {
+    if (Object.keys(this._partnerNames()).length === 0) {
+      this.api
+        .get<{ id: string; name: string }[]>("/api/referral-labs?includeInactive=true")
+        .subscribe({
+          next: (labs) =>
+            this._partnerNames.set(Object.fromEntries((labs ?? []).map((l) => [l.id, l.name]))),
+          error: () => { /* tag falls back to "Outsourced" */ },
+        });
+    }
+    this.api.get<OutsourceSplit[]>("/api/samples/outsource-splits").subscribe({
+      next: (l) => this._splits.set(l ?? []),
+      error: () => this._splits.set([]),
+    });
+  }
+
+  /** The collector's explicit split: a NEW pending tube (new barcode + label)
+   *  for the line; the drawn tube and its other tests stay as they are. */
+  async splitTube(x: OutsourceSplit): Promise<void> {
+    if (this.splitBusy()) return;
+    this.splitBusy.set(x.orderTestId);
+    try {
+      const created = await firstValueFrom(
+        this.api.post<OrderSample[]>(`/api/samples/${x.sampleId}/split-outsourced`, {
+          orderTestIds: [x.orderTestId],
+        }),
+      );
+      this._splits.update((l) => l.filter((y) => y.orderTestId !== x.orderTestId));
+      const order = this._pending().find((s) => s.orderId === x.orderId)?.order;
+      const fresh = (created ?? []).map((s) => ({ ...s, order: s.order ?? order }) as OrderSample);
+      this._pending.update((list) => {
+        const have = new Set(list.map((s) => s.id));
+        return [...list, ...fresh.filter((s) => !have.has(s.id))];
+      });
+      this.toasts.success(`Separate tube created for ${x.testName} — print its label`);
+      if (!this._openOrderId()) this.refresh();
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.splitBusy.set(null);
+    }
+  }
+
   readonly groups = computed<OrderGroup[]>(() => {
     const byOrder = new Map<string, OrderGroup>();
     for (const s of this._pending()) {
@@ -1054,6 +1125,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     });
     // Per-branch label config (size + code) for direct-to-printer label print.
     this.labCfg.ensureLoaded();
+    // Partner-lab names + any "draw a separate tube" lines (best-effort).
+    this.loadOutsourcing();
     // Load the lab's configured container colours (best-effort — falls back to
     // the built-in conventions if it fails or a department has none set).
     this.api
@@ -1384,6 +1457,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.api.get<OrderSample[]>("/api/samples/pending-collection").subscribe({
       next: (l) => this._pending.set(l ?? []),
     });
+    this.loadOutsourcing();
   }
 
   /** Print every tube label for this order (barcode + QR). The hidden
