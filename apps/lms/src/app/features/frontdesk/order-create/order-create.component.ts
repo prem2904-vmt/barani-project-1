@@ -886,10 +886,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    // Back from registration (ND-PATTERN §15): the cart stashed before it.
+    const resumed = this.route.snapshot.queryParamMap.get('resume') === 'registration' && this.adoptPendingOrder();
     if (pid) {
       this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${pid}`).subscribe({
         next: res => {
           this._patient.set(res.patient);
+          if (resumed) return;
           // Preselection priority:
           //   1) localStorage draft for this patient
           //   2) ?fromOrderId=… (Repeat flow from a prior order)
@@ -2293,10 +2296,50 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   // existing registration screen (workflow + permission gated).
   readonly canRegisterPatient = computed(() =>
     this.process.isEnabled?.('patient_registration') !== false && this.auth.hasPermission('register_patient'));
-  newPatient(): void { this.router.navigate(['/frontdesk/patients/new']); }
+  // Registration opened from a half-built order comes BACK here with the
+  // patient attached (?patientId=…&resume=registration); the cart it had is
+  // stashed first and restored on return (ND-PATTERN §15).
+  newPatient(): void {
+    this.stashPendingOrder();
+    this.router.navigate(['/frontdesk/patients/new'], { queryParams: { returnTo: 'order' } });
+  }
   editPatient(): void {
     const p = this._patient();
-    if (p) this.router.navigate(['/frontdesk/patients/new'], { queryParams: { patientId: p.id } });
+    if (!p) return;
+    this.stashPendingOrder();
+    this.router.navigate(['/frontdesk/patients/new'], { queryParams: { patientId: p.id, returnTo: 'order' } });
+  }
+
+  /** The in-progress cart while the frontdesk registers / edits the patient. */
+  static readonly PENDING_KEY = 'pf:order-draft:pending-registration';
+  private stashPendingOrder(): void {
+    const testIds = this._selected();
+    const doctor = this.refDoctorName();
+    const hospital = this.refHospitalName();
+    try {
+      if (!testIds.length && !doctor && !hospital) { localStorage.removeItem(OrderCreateComponent.PENDING_KEY); return; }
+      localStorage.setItem(OrderCreateComponent.PENDING_KEY, JSON.stringify({
+        savedAt: Date.now(), testIds, priority: this._priority(), refDoctorName: doctor, refHospitalName: hospital,
+      }));
+    } catch { /* storage unavailable — the order simply starts empty */ }
+  }
+  /** Restore the stashed cart (only on ?resume=registration). One-shot:
+   *  the stash is removed; anything older than a day is ignored. */
+  private adoptPendingOrder(): boolean {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(OrderCreateComponent.PENDING_KEY); localStorage.removeItem(OrderCreateComponent.PENDING_KEY); }
+    catch { return false; }
+    if (!raw) return false;
+    try {
+      const d = JSON.parse(raw) as { savedAt?: number; testIds?: string[]; priority?: Priority; refDoctorName?: string; refHospitalName?: string };
+      if (!d?.savedAt || Date.now() - d.savedAt > 24 * 60 * 60 * 1000) return false;
+      const ids = (d.testIds ?? []).filter(id => typeof id === 'string');
+      if (ids.length) this._selected.set(ids);
+      if (d.priority) this._priority.set(d.priority);
+      if (d.refDoctorName) this.refDoctorName.set(d.refDoctorName);
+      if (d.refHospitalName) this.refHospitalName.set(d.refHospitalName);
+      return ids.length > 0 || !!d.refDoctorName || !!d.refHospitalName;
+    } catch { return false; }
   }
 
   /** "Urgent" switch in the billing card — the same order-priority field the
