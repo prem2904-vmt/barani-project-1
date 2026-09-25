@@ -24,6 +24,12 @@ describe('panel → disk codes', () => {
     expect(drugForCode('PIT 100/10', c)).toBe('Piperacillin-Tazobactam 100');
   });
 
+  it('"AMC 30" is the 20/10 disk — it belongs to the "…20" row', () => {
+    const c = panelCandidates(['Amoxicillin-Clavulanate 20', 'Amoxicillin-Clavulanate 10']);
+    expect(drugForCode('AMC 30', c)).toBe('Amoxicillin-Clavulanate 20');
+    expect(drugForCode('AMC 20/10', c)).toBe('Amoxicillin-Clavulanate 20');
+  });
+
   it('breakpoint short labels cover drugs outside the table', () => {
     const c = panelCandidates(['Aztreonam-Avibactam 30'], { 'Aztreonam-Avibactam 30': 'AZA 30' });
     expect(drugForCode('AZA 30', c)).toBe('Aztreonam-Avibactam 30');

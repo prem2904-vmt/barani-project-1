@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable, map, timeout } from 'rxjs';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ApiError, ApiResponse } from '../../../shared/models/api-response.model';
 import { DiskCandidate, normCode } from './disk-codes';
@@ -38,8 +38,10 @@ export class DiskReadApi {
   private readonly platform = inject(PlatformService);
   private url(p: string) { return `${this.platform.getApiUrl()}/api/culture/ast${p}`; }
 
+  /** The read takes ~6–10 s; give up after 60 s (→ pick manually). */
+  static readonly TIMEOUT_MS = 60_000;
   read(req: DiskReadRequest): Observable<DiskReadResult> {
-    return this.http.post<ApiResponse<DiskReadResult>>(this.url('/disk-read'), req).pipe(map(r => {
+    return this.http.post<ApiResponse<DiskReadResult>>(this.url('/disk-read'), req).pipe(timeout(DiskReadApi.TIMEOUT_MS), map(r => {
       if (!r?.success || !r.data) throw new ApiError(r?.message || 'AI read failed', r?.error || 'ai_failed');
       return r.data;
     }));

@@ -19,19 +19,23 @@ export function loadOpenCv(timeoutMs = 90_000): Promise<CV> {
   if (pending) return pending;
   pending = new Promise<CV>((resolve, reject) => {
     const w = window as unknown as { cv?: CV };
+    // The Emscripten module is a THENABLE whose then() hands back itself:
+    // resolving a promise with it (or awaiting it) loops forever. Strip
+    // `then` before handing it on.
+    const timer = setTimeout(() => reject(new Error('OpenCV load timed out')), timeoutMs);
+    const done = (cv: CV) => { clearTimeout(timer); try { delete cv.then; } catch { /* */ } resolve(cv); };
     const settle = (cv: CV) => {
       if (!cv) { reject(new Error('OpenCV unavailable')); return; }
-      if (typeof cv.then === 'function') { (cv as Promise<CV>).then(c => settle(c), reject); return; }
-      if (cv.Mat) { resolve(cv); return; }
-      cv.onRuntimeInitialized = () => resolve(cv);
+      if (cv.Mat) { done(cv); return; }
+      if (typeof cv.then === 'function') { cv.then((c: CV) => done(c)); return; }
+      cv.onRuntimeInitialized = () => done(cv);
     };
     if (w.cv) { settle(w.cv); return; }
-    const timer = setTimeout(() => reject(new Error('OpenCV load timed out')), timeoutMs);
     const s = document.createElement('script');
     s.src = OPENCV_URL;
     s.async = true;
     s.crossOrigin = 'anonymous';
-    s.onload = () => { clearTimeout(timer); settle(w.cv); };
+    s.onload = () => settle(w.cv);
     s.onerror = () => { clearTimeout(timer); reject(new Error('OpenCV failed to load')); };
     document.head.appendChild(s);
   }).catch(e => { pending = null; throw e; });

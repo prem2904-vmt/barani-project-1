@@ -150,7 +150,7 @@ test.describe('Culture case — real layout', () => {
         const modal = page.locator('pf-plate-measure .pm-panel');
         await expect(modal).toBeVisible();
         await expect(modal.locator('.pm-head__label')).toHaveText(/Measure zones/i);
-        await expect(modal.locator('.pm-step')).toHaveCount(3);
+        await expect(modal.locator('.pm-step')).toHaveCount(4);
         await page.waitForTimeout(1200);   // fake camera frames + reticle
         if (SHOTS) await page.screenshot({ path: `${SHOTS}/measure-1440-light.png` });
         await page.setViewportSize({ width: 375, height: 812 });

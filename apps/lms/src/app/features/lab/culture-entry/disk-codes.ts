@@ -92,9 +92,17 @@ export function normCode(code: string | null | undefined): string {
   return (code ?? '').toUpperCase().replace(/\s+/g, ' ').replace(/\s*\/\s*/g, '/').trim();
 }
 
-/** Leading potency number of a code or a drug label ("PIT 100/10" → 100). */
+/** Printed codes whose number is the TOTAL content: the split behind it
+ *  ("AMC 30" is amoxicillin 20 + clavulanate 10). */
+const CONTENT: Record<string, string> = {
+  'AMC 30': '20/10', 'CFS 105': '75/30', 'COT 25': '23.75/1.25', 'SXT 25': '23.75/1.25', 'CZA 30': '30/20',
+};
+
+/** Leading potency number of a code or a drug label ("PIT 100/10" → 100,
+ *  "AMC 30" → 20 — its first component). */
 function potency(s: string): number | null {
-  const m = /(\d+(?:\.\d+)?)/.exec(s.replace(/^[A-Za-z/-]+\s*/, ''));
+  const body = CONTENT[normCode(s)] ?? s.replace(/^[A-Za-z/-]+\s*/, '');
+  const m = /(\d+(?:\.\d+)?)/.exec(body);
   return m ? Number(m[1]) : null;
 }
 

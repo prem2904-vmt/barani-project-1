@@ -433,14 +433,70 @@ plus (owner reviews, 2026-09-25):
   modal (phones: a tall sheet above the navbar, camera full width) with the
   violet icon chip + "MEASURE ZONES", neutral full-screen / × icon buttons,
   the title at 18px / 600, and a neutral stepper over the real steps
-  (Capture → Calibrate → Measure zones; violet active dot, "Step n of 3").
-  The camera is 12px-rounded with the outside of the plate dimmed; the
-  reticle is a thin SOLID white circle (`.pm-reticle`) + a small centre
-  crosshair + a slow violet sweep (off under reduced motion). ONE primary
-  per step (Capture / Measure / Apply n zones), everything else secondary.
-  Overlays use the violet accent (calibration, unassigned rings, the
-  delete handle); in light mode assigned rings are neutral white — S / I /
-  R rides in the ring label.
+  (**Capture → Calibrate → Measure & read → Review**; violet active dot,
+  "Step n of 4"). The camera is 12px-rounded with the outside of the plate
+  dimmed; the reticle is a thin SOLID white circle (`.pm-reticle`) + a small
+  centre crosshair + a slow violet sweep (off under reduced motion). ONE
+  primary per step (Capture / Measure / Review / **Apply to table**),
+  everything else secondary.
+- **Measure & read (owner, 2026-09-25): OpenCV measures, ONE AI call reads.**
+  - **OpenCV.js 4.10**, lazy: `opencv-loader.ts` injects
+    `cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1` the first
+    time the modal needs it (~10 MB, ~3.4 MB gzipped, browser-cached; 0 bytes
+    in the app bundle). OpenCV does grayscale, blur and Hough (plate rim,
+    disk candidates) in `plate-detect.ts`; everything that DECIDES and
+    MEASURES is pure TS in `plate-vision.ts` (unit-tested on synthetic
+    plates). The Emscripten module is a thenable — strip `then` before
+    resolving it (awaiting it loops forever).
+  - **Calibrate:** the rim is found automatically (dashed violet circle, two
+    draggable ends; tapping two rim edges still works). Plate size is a
+    neutral `.nd-seg` (90 · 100 · 150 mm), default = the saved session, the
+    lab default input, the last pick on this device, else 90.
+  - **The disks are the ruler.** Paper disks (≈6 mm) are refined onto their
+    edge and kept only with a crisp round rim, printed text inside (more
+    texture in than around — glare speckle is the same), the expected size
+    and a round shape. Rejected glare shows as faint dashed circles behind
+    the slate **Show rejected** toggle (tap one to promote it to a disk). The
+    median disk (6 mm) is a second scale: plate vs disks off by > 8% → a
+    neutral note "Plate size looks different — is it 100 mm?" (tertiary
+    "Use 100 mm") and the disks win. Each zone is measured against its OWN
+    disk's outline sized by the disk + its two nearest neighbours (local
+    tilt correction), along the long and short axis, averaged. Plate-wide
+    disk ellipse > 1.15 → "Retake from directly above". No zone = 6 mm.
+  - **Overlays:** each disk a numbered neutral badge; each zone a thin ring
+    (an ellipse on a tilted photo) with a mm chip in Noto tabular numbers —
+    violet for the selected disk or one without a code, neutral otherwise
+    (dark mode keeps S / I / R ring colours). The view fits the plate. Rings
+    stay editable: drag the edge (zone) or centre (move), double-tap to
+    re-measure, tap an empty spot and drag to add a missed disk, arrows /
+    `[` `]` on the keyboard, undo / redo.
+  - **The list** (side card at ≥820px, under the plate on phones), one row
+    per disk: number · code chip (a `pf-select` of the case's own panel as
+    disk codes + "Not a disk"; "Reading…" shimmer while the AI runs, "Still
+    reading…" after 15 s; "Unknown — tap to pick"; a muted **AI** tag on AI
+    codes; "Probably CPM 30 · Confirm" as a neutral one-tap chip — never
+    applied by itself) · the zone mm (editable field) · S / I / R from the
+    existing breakpoint logic (neutral + a 5px red dot on R in light mode).
+    A code used on another disk is marked "on disk n" in the list; picking
+    it moves it. The monthly AI usage is one muted line ("AI reads this
+    month: 1.2M / 2M tokens").
+  - **ONE AI call, in the background:** a canvas mosaic of numbered 256px
+    disk crops (4 per row, JPEG 0.9) → `POST /api/culture/ast/disk-read`
+    `{ orderTestId, image, tiles, candidates }` (candidates = the panel's
+    printed codes — maker + CLSI, `disk-codes.ts` — minus codes the
+    technician already placed); 60 s client timeout. The technician keeps
+    working meanwhile. 404 / `ai_unavailable` / errors → "Codes: pick
+    manually"; `ai_cap_reached` says so.
+  - **Nothing is written until Apply.** AI codes are suggestions. Review
+    lists code → drug, mm, S / I / R and says what is left out; **Apply to
+    table** writes each coded disk's mm into its drug row (matched by code),
+    keeps the photo + session (rings, codes, ruler), then posts
+    `/disk-read/{auditId}/confirm` (errors ignored).
+  - **Real-plate check:** `apps/lms-e2e/src/culture-measure-read.rbac.spec.ts`
+    (`PLATE_JPG=…/plate.jpg SHOTS_DIR=…`): uploads the real plate, runs
+    OpenCV in the browser, asserts ≥8 disk badges, the PIT zone > 6 mm and
+    the code list pending → manual (404) → filled (the prototype's read,
+    answered in the browser).
 - **AST screenshots** in the real-layout check rewrite the case response in
   the browser (AST open, an identified organism) and answer the pick
   locally — nothing is claimed or written on the server.

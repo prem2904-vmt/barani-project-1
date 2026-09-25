@@ -87,6 +87,22 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(c.mmOf(c.rows()[0])).toBe(12);
   });
 
+  it('a slow read says "Still reading…" after 15 s; the client gives up at 60 s', () => {
+    vi.useFakeTimers();
+    try {
+      const pending = new Subject<DiskReadResult>();
+      const { f, c, el } = setup(() => pending);
+      c.startAiRead();
+      vi.advanceTimersByTime(14_000);
+      f.detectChanges();
+      expect(el.querySelector('.pm-status')?.textContent).toContain('Reading disk codes');
+      vi.advanceTimersByTime(2_000);
+      f.detectChanges();
+      expect(el.querySelector('.pm-status')?.textContent).toContain('Still reading');
+      expect(DiskReadApi.TIMEOUT_MS).toBe(60_000);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('API absent (404) → "Codes: pick manually", unknown chips, no crash', () => {
     const { f, c, el } = setup(() => throwError(() => ({ status: 404, error: {} })));
     c.startAiRead();

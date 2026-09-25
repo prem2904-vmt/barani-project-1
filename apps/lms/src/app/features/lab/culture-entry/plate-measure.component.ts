@@ -286,7 +286,7 @@ const NOT_A_DISK = '__not_a_disk';
                         @if (mode() === 'measure') {
                           <pf-select class="pm-codesel" [class.pm-codesel--pending]="isPending(d)" [class.pm-codesel--set]="!!d.code || d.notDisk"
                                      [options]="codeOptions().get(d.id) ?? []" [value]="codeValue(d)" [searchable]="true" size="sm"
-                                     [placeholder]="isPending(d) ? 'Reading…' : 'Unknown — tap to pick'"
+                                     [placeholder]="isPending(d) ? (aiSlow() ? 'Still reading…' : 'Reading…') : 'Unknown — tap to pick'"
                                      [attr.aria-label]="'Disk ' + d.n + ' code'"
                                      (valueChange)="pickCode(d.id, $any($event))"></pf-select>
                           @if (d.codeSrc === 'ai' && d.code) { <span class="pm-ai" title="Read by AI — check it">AI</span> }
@@ -350,11 +350,11 @@ const NOT_A_DISK = '__not_a_disk';
             <div class="pm-row pm-row--wrap">
               <button type="button" class="nd-toggle pm-rejtoggle" role="switch" [attr.aria-checked]="showRejected()" (click)="showRejected.set(!showRejected())">
                 <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
-                Show rejected{{ rejected().length ? ' (' + rejected().length + ')' : '' }}
+                <span><span class="pm-wide">Show rejected</span><span class="pm-narrow">Rejected</span>{{ rejected().length ? ' (' + rejected().length + ')' : '' }}</span>
               </button>
               <span class="pm-grow"></span>
-              <button type="button" class="nd-btn nd-btn--secondary pm-btn" (click)="mode.set('calibrate')">Recalibrate</button>
-              <button type="button" class="nd-btn nd-btn--secondary pm-btn" (click)="retake()">Retake</button>
+              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--aux" (click)="recalibrate()">Recalibrate</button>
+              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--aux" (click)="retake()">Retake</button>
               <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="!activeRows().length" (click)="goReview()">Review</button>
             </div>
           </div>
@@ -473,7 +473,7 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-hint-list b { color: var(--text-primary); font-weight: 600; }
 
     /* Disk list (side on web, under the plate on phones) */
-    .pm-list { width: 360px; flex-shrink: 0; border-left: 1px solid var(--nd-line); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .pm-list { width: 400px; flex-shrink: 0; border-left: 1px solid var(--nd-line); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
     .pm-list__hd { display: flex; align-items: baseline; gap: 8px; }
     .pm-list__ttl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
     .pm-list__count { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
@@ -500,6 +500,7 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-sug { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 4px 0 10px; border-radius: var(--nd-radius-chip, 999px);
       border: 1px solid var(--nd-line); background: var(--nd-chip-bg); color: var(--text-secondary); font: inherit; font-size: 12.5px; cursor: pointer; }
     .pm-sug b { font-weight: 600; color: var(--text-primary); }
+    .pm-sug__t { white-space: nowrap; }
     .pm-sug__ok { padding: 3px 8px; border-radius: 999px; background: var(--nd-card-bg); border: 1px solid var(--nd-line); color: var(--text-primary); font-weight: 500; }
     .pm-codechip { display: inline-flex; align-items: center; height: 26px; padding: 0 9px; border-radius: var(--nd-radius-chip, 999px);
       font-size: 13px; font-weight: 600; color: var(--text-primary); background: var(--nd-chip-bg); white-space: nowrap; }
@@ -521,6 +522,7 @@ const NOT_A_DISK = '__not_a_disk';
     .pm-empty { font-size: 13px; color: var(--text-tertiary); padding: 12px 4px; }
     .pm-usage { margin: auto 0 0; padding-top: 6px; font-size: 11.5px; color: var(--text-tertiary); }
     .pm-rejtoggle { min-height: 36px; font-size: 13px; }
+    .pm-narrow { display: none; }
 
     /* The code picker trigger IS the code chip. */
     .pm-codesel ::ng-deep .pf-dd__trigger { min-height: 34px; height: auto; border-radius: var(--nd-radius-chip, 999px); padding: 0 10px;
@@ -560,8 +562,20 @@ const NOT_A_DISK = '__not_a_disk';
       .pm-camwrap { max-width: none; }
       .pm-actions { max-width: none; }
       .pm-icon { width: 44px; height: 44px; }
-      .pm-stage { height: 40dvh; }
+      .pm-sub { display: none; }
+      .pm-steps { margin-top: 6px; }
+      .pm-stage { height: 34dvh; min-height: 200px; }
+      .pm-list { padding: 10px 12px; }
+      .pm-controls { padding: 8px 12px 10px; }
+      .pm-row--wrap { gap: 6px; }
+      .pm-row--wrap > .pm-btn--aux { height: 44px; padding: 0 12px; font-size: 13px; }
+      .pm-row--wrap > .pm-grow { display: none; }
+      .pm-rejtoggle { flex: 1 1 auto; }
+      .pm-wide { display: none; }
+      .pm-narrow { display: inline; }
       .pm-row--wrap > .pm-apply { flex: 1 1 100%; }
+      .pm-drow { grid-template-columns: 24px minmax(0, 1fr) auto 30px; gap: 6px; padding: 6px 2px; }
+      .pm-mm__u { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
       .pm-sweep, .pm-panel, .pm-busy__dot, .pm-status__dot { animation: none; }
@@ -621,6 +635,9 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   readonly plateState = signal<PlateState>('idle');
   readonly ai = signal<AiState>('idle');
   readonly aiMsg = signal('');
+  /** The read is taking longer than usual (> 15 s). */
+  readonly aiSlow = signal(false);
+  private slowTimer: ReturnType<typeof setTimeout> | null = null;
   readonly usage = signal<AiUsage | null>(null);
   private auditId: string | null = null;
   private aiSub: Subscription | null = null;
@@ -678,6 +695,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.stopCamera();
     this.aiSub?.unsubscribe();
+    if (this.slowTimer) clearTimeout(this.slowTimer);
     this.vision?.dispose();
     try { this.host.nativeElement.remove(); } catch { /* */ }
   }
@@ -782,7 +800,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     const img = ev.target as HTMLImageElement;
     const sameSize = this.natW() === img.naturalWidth && this.natH() === img.naturalHeight;
     this.natW.set(img.naturalWidth); this.natH.set(img.naturalHeight);
-    if (!sameSize) this.view.set({ x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight });
+    if (!sameSize) this.resetView();
     if (this.mode() === 'capture') this.mode.set('calibrate');
     if (this.mode() === 'calibrate' && this.calPts().length === 0) void this.findPlate();
   }
@@ -831,6 +849,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   /** Plate scale (mm per image px). */
   readonly plateMmPerPx = computed(() => { const c = this.plateCircle(); return c && c.r > 0 ? this.dishMm() / (2 * c.r) : 0; });
   resetCalibration() { this.calPts.set([]); this.plateCircleAuto = false; this.plateState.set('idle'); }
+  recalibrate() { this.mode.set('calibrate'); void nextFrame().then(() => nextFrame()).then(() => this.resetView()); }
   setDish(mm: number) {
     this.dishMm.set(mm);
     try { localStorage.setItem('pf-plate-mm', String(mm)); } catch { /* */ }
@@ -847,6 +866,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
       else if (!this.rows().length) this.toasts.info?.('Auto-measure unavailable — tap each disk and drag out its zone.');
       this.mode.set('measure');
       this.startAiRead();
+      void nextFrame().then(() => nextFrame()).then(() => this.resetView());
     } finally { this.measuring.set(false); }
   }
   private async detectDisks(v: PlateVision) {
@@ -934,7 +954,9 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     try { mosaic = buildMosaic(img, rows.map(r => ({ cx: r.cx, cy: r.cy, r: (r.own.rx + r.own.ry) / 2, n: r.n }))); }
     catch { this.ai.set('failed'); this.aiMsg.set('Codes: pick manually'); return; }
     const tileToId = new Map(rows.map(r => [r.n, r.id]));
-    this.ai.set('pending'); this.aiMsg.set('');
+    this.ai.set('pending'); this.aiMsg.set(''); this.aiSlow.set(false);
+    if (this.slowTimer) clearTimeout(this.slowTimer);
+    this.slowTimer = setTimeout(() => { if (this.ai() === 'pending') this.aiSlow.set(true); }, 15_000);
     this.aiSub = this.diskApi.read({
       orderTestId: this.orderTestId ?? '', image: mosaic.base64, tiles: mosaic.tiles, candidates: cands.map(c => c.code),
     }).subscribe({
@@ -952,7 +974,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     const rows = this.activeRows();
     const coded = rows.filter(r => r.code).length;
     switch (this.ai()) {
-      case 'pending': return `Reading disk codes… keep checking the zones.`;
+      case 'pending': return this.aiSlow() ? 'Still reading… keep checking the zones.' : 'Reading disk codes… keep checking the zones.';
       case 'done': return `${coded} of ${rows.length} codes read — check each one.`;
       case 'failed': return this.aiMsg() || 'Codes: pick manually';
       default: return rows.length ? 'Codes: pick manually' : '';
@@ -1085,24 +1107,43 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     const p = pt.matrixTransform(ctm.inverse());
     return { x: p.x, y: p.y };
   }
+  /** The stage's aspect (h / w) — the view box follows it so the plate
+   *  fills the stage instead of the photo's own (often portrait) shape. */
+  private stageAspect(): number {
+    const r = this.svgEl()?.nativeElement.getBoundingClientRect();
+    return r && r.width > 0 && r.height > 0 ? r.height / r.width : (this.natH() / this.natW() || 1);
+  }
   private zoomAt(factor: number, clientX: number, clientY: number) {
     const svg = this.svgEl()?.nativeElement; if (!svg) return;
     const p = this.toLocal(svg, clientX, clientY); if (!p) return;
-    const v = this.view(), W = this.natW(), H = this.natH();
-    let nw = v.w / factor; nw = Math.min(W, Math.max(W * 0.08, nw)); const nh = nw * (H / W);
-    let nx = p.x - (p.x - v.x) * (nw / v.w), ny = p.y - (p.y - v.y) * (nh / v.h);
-    nx = Math.min(W - nw, Math.max(0, nx)); ny = Math.min(H - nh, Math.max(0, ny));
-    this.view.set({ x: nx, y: ny, w: nw, h: nh });
+    const v = this.view(), W = this.natW(), H = this.natH(), a = v.h / v.w;
+    const nw = Math.min(Math.max(W, H / a) * 1.1, Math.max(W * 0.08, v.w / factor)), nh = nw * a;
+    this.view.set(this.clampView({ x: p.x - (p.x - v.x) * (nw / v.w), y: p.y - (p.y - v.y) * (nh / v.h), w: nw, h: nh }));
+  }
+  /** Keep at least half the view on the photo. */
+  private clampView(v: Box): Box {
+    const W = this.natW(), H = this.natH();
+    return { ...v, x: Math.min(W - v.w / 2, Math.max(-v.w / 2, v.x)), y: Math.min(H - v.h / 2, Math.max(-v.h / 2, v.y)) };
   }
   onWheel(ev: WheelEvent) { ev.preventDefault(); this.zoomAt(ev.deltaY < 0 ? 1.15 : 1 / 1.15, ev.clientX, ev.clientY); }
   zoomBtn(factor: number) { const r = this.svgEl()?.nativeElement.getBoundingClientRect(); if (r) this.zoomAt(factor, r.left + r.width / 2, r.top + r.height / 2); }
-  resetView() { this.view.set({ x: 0, y: 0, w: this.natW(), h: this.natH() }); }
+  /** Fit: the plate (with a margin) once measuring, else the whole photo. */
+  resetView() {
+    const W = this.natW(), H = this.natH(), pc = this.plateCircle(), a = this.stageAspect();
+    if (!W || !H) return;
+    const plate = pc && this.mode() !== 'calibrate';
+    const cx = plate ? pc!.cx : W / 2, cy = plate ? pc!.cy : H / 2;
+    const bw = plate ? pc!.r * 2.24 : W, bh = plate ? pc!.r * 2.24 : H;
+    const w = Math.max(bw, bh / a), h = w * a;
+    this.view.set({ x: cx - w / 2, y: cy - h / 2, w, h });
+  }
   private panByClient(dx: number, dy: number) {
     const svg = this.svgEl()?.nativeElement; if (!svg) return;
     const ctm = svg.getScreenCTM(); if (!ctm) return;
-    const v = this.view(), W = this.natW(), H = this.natH();
-    this.view.set({ ...v, x: Math.min(W - v.w, Math.max(0, v.x - dx / ctm.a)), y: Math.min(H - v.h, Math.max(0, v.y - dy / ctm.d)) });
+    const v = this.view();
+    this.view.set(this.clampView({ ...v, x: v.x - dx / ctm.a, y: v.y - dy / ctm.d }));
   }
+
 
   // ── Ring editing + multi-touch ───────────────────────────────────
   private capture(el: Element, ev: PointerEvent) { try { el.setPointerCapture(ev.pointerId); } catch { /* */ } }
