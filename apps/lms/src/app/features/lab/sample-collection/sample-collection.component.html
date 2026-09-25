@@ -184,18 +184,18 @@
                 </span>
               }
               <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--order" title="Order ID">
-                <span class="pf-sc-chip__meta">Order</span><span class="nd-mono">{{ g.orderNo }}</span>
+                <span class="pf-sc-chip__meta">Order</span><span class="nd-num">{{ g.orderNo }}</span>
               </span>
               @if (g.samples.length === 1) {
                 <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--samples" title="Sample ID">
-                  <span class="pf-sc-chip__meta">Sample</span><span class="nd-mono">{{ g.samples[0].barcode ?? '—' }}</span>
+                  <span class="pf-sc-chip__meta">Sample</span><span class="nd-num">{{ g.samples[0].barcode ?? '—' }}</span>
                 </span>
               } @else {
                 <span class="pf-sc-samples">
                   <button type="button" class="nd-chip pf-sc-chip pf-sc-chip--samples" [attr.aria-expanded]="samplesOpen()"
                           (click)="samplesOpen.set(!samplesOpen())">{{ g.samples.length }} samples</button>
                   <span class="pf-sc-samples__pop" [class.pf-sc-samples__pop--open]="samplesOpen()" role="list">
-                    @for (x of g.samples; track x.id) { <span class="nd-mono" role="listitem">{{ x.barcode ?? '—' }}</span> }
+                    @for (x of g.samples; track x.id) { <span class="nd-num" role="listitem">{{ x.barcode ?? '—' }}</span> }
                   </span>
                 </span>
               }
@@ -346,7 +346,7 @@
                           [attr.fill]="'url(#cup-' + s.id + ')'"/>
 
                     <!-- Volume tick marks on the right (50 / 100 mL) -->
-                    <g opacity="0.4" stroke="rgba(255,255,255,0.4)" stroke-width="0.8" stroke-linecap="round" font-family="ui-monospace, monospace">
+                    <g opacity="0.4" stroke="rgba(255,255,255,0.4)" stroke-width="0.8" stroke-linecap="round" font-family="'Noto Sans', sans-serif">
                       <line x1="116" y1="110" x2="122" y2="110"/>
                       <line x1="116" y1="150" x2="122" y2="150"/>
                       <line x1="116" y1="190" x2="122" y2="190"/>
@@ -355,7 +355,7 @@
                     <!-- Tick badge when collected -->
                     @if (s.status !== 'pending') {
                       <g class="pf-vial__tick">
-                        <circle cx="118" cy="58" r="18" fill="#10b981"/>
+                        <circle cx="118" cy="58" r="18" fill="#7c3aed"/>
                         <circle cx="118" cy="58" r="18" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
                         <path d="M110 58 l6 6 l12 -12" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                       </g>
@@ -470,7 +470,7 @@
                        above both the cap and the tube body. -->
                   @if (s.status !== 'pending') {
                     <g class="pf-vial__tick">
-                      <circle cx="62" cy="46" r="16" fill="#10b981"/>
+                      <circle cx="62" cy="46" r="16" fill="#7c3aed"/>
                       <circle cx="62" cy="46" r="16" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
                       <path d="M55 46 l5 5 l10 -10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                     </g>
@@ -492,10 +492,10 @@
                        the column height; holding the vial ~2s peeks it. No
                        textual hint and no draw-volume pill — the card carries
                        only the container name and the sample id. -->
-                  <p class="pf-tube__code">Sample ID&nbsp;<span class="nd-mono">{{ s.barcode ?? '—' }}</span></p>
+                  <p class="pf-tube__code">Sample ID&nbsp;<span class="nd-num">{{ s.barcode ?? '—' }}</span></p>
 
                   @if (s.status !== 'pending') {
-                    <span class="pf-tube__stamp">
+                    <span class="pf-tube__stamp nd-num">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                         <path d="m5 12 4 4L19 6"/>
                       </svg>
@@ -594,10 +594,13 @@
                     <li class="nd-row pf-sc-sumrow" [class.nd-row--done]="s.status !== 'pending'">
                       <span class="pf-sc-dot" [style.background]="container(s).kind !== 'vacutainer' ? container(s).color : tube(s).color" aria-hidden="true"></span>
                       <span class="nd-row__name">{{ tube(s).label }}</span>
+                      @if (s.status !== 'pending') {
+                        <svg class="pf-sc-sumrow__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+                      }
                       <span class="nd-row__value pf-sc-sumrow__state">
                         @if (s.status === 'pending') { Pending }
                         @else if (s.source === 'external') { Brought in }
-                        @else if (s.status === 'collected') { Drawn {{ s.collectedAt | date:'shortTime' }} }
+                        @else if (s.status === 'collected') { Drawn <span class="nd-num">{{ s.collectedAt | date:'shortTime' }}</span> }
                         @else { Dispatched }
                       </span>
                     </li>

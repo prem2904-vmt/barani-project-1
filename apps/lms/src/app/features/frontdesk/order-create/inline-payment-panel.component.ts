@@ -295,7 +295,7 @@ interface MethodDef {
       .pf-ipp__qr img { display: block; width: 76px; height: 76px; }
       .pf-ipp__upi-text { display: flex; flex-direction: column; gap: 3px; }
       .pf-ipp__upi-text strong { font-size: 15px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-      .pf-ipp__mono { font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary); }
+      .pf-ipp__mono { font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
 
       .pf-ipp__input {
         width: 100%; height: 32px; box-sizing: border-box; padding: 0 10px;
@@ -315,8 +315,8 @@ interface MethodDef {
       .pf-ipp__quick button:hover { border-color: var(--card-hover-border, var(--glass-border-hover)); color: var(--text-primary); }
       .pf-ipp__change { margin: 0; font-size: 12px; color: var(--text-tertiary); display: flex; justify-content: space-between; gap: 8px; }
       .pf-ipp__change strong { font-size: 14px; font-variant-numeric: tabular-nums; }
-      .pf-ipp__change[data-kind='change'], .pf-ipp__change[data-kind='exact'] { color: var(--success-text, #10b981); }
-      .pf-ipp__change[data-kind='change'] strong { color: var(--success-text, #10b981); }
+      .pf-ipp__change[data-kind='change'], .pf-ipp__change[data-kind='exact'] { color: var(--violet-text, #6d28d9); }
+      .pf-ipp__change[data-kind='change'] strong { color: var(--violet-text, #6d28d9); }
       .pf-ipp__change[data-kind='short'], .pf-ipp__change[data-kind='short'] strong { color: var(--error-text, #ef4444); }
 
       .pf-ipp__splitrow { display: flex; align-items: center; gap: 6px; }
@@ -325,7 +325,7 @@ interface MethodDef {
 
       .pf-ipp__muted { margin: 0; font-size: 12px; color: var(--text-tertiary); }
       .pf-ipp__muted strong { color: var(--text-primary); }
-      .pf-ipp__muted[data-kind='ok'] { color: var(--success-text, #10b981); }
+      .pf-ipp__muted[data-kind='ok'] { color: var(--violet-text, #6d28d9); }
       .pf-ipp__muted[data-kind='short'] { color: var(--error-text, #ef4444); }
 
       .pf-ipp__vendor {

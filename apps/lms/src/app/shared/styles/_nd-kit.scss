@@ -18,7 +18,8 @@
   --nd-sel-bg: #eceff2;
   --nd-sel-border: #9aa4ae;
   --nd-in-tint: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--nd-card-bg));
-  --nd-done-tint: color-mix(in srgb, var(--color-success, #10b981) 7%, var(--nd-card-bg));
+  /* Palette only: 'done' is a light violet tint, never green. */
+  --nd-done-tint: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--nd-card-bg));
   /* Designer toggle (Figma): slate track, white knob. */
   --nd-toggle-on: #aeb8c2;
   --nd-toggle-off: #e3e7eb;
@@ -62,7 +63,9 @@
 /* Title + meta: NEVER truncated while there is room — they wrap. */
 .nd-head__title { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.25; color: var(--text-primary); @include nd.no-truncate; }
 .nd-head__meta { margin: 2px 0 0; font-size: 13px; color: var(--text-secondary); @include nd.no-truncate; }
-.nd-head__meta .nd-mono, .nd-mono { font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace; }
+/* ONE font family (Noto Sans): IDs, codes, times, counts = tabular numbers,
+   never a system monospace. .nd-mono is kept as an alias of .nd-num. */
+.nd-num, .nd-mono { font-family: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
 .nd-head__actions { display: flex; align-items: center; gap: 10px; flex: none; }
 .nd-band-chip {
   display: inline-flex; align-items: baseline; gap: 6px;
@@ -152,13 +155,13 @@
   color: inherit; font: inherit; text-align: left;
 }
 .nd-row__check { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--nd-line); color: var(--nd-card-bg); }
-.nd-row__code { flex: none; font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--violet-text, #7c3aed); }
+.nd-row__code { flex: none; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--violet-text, #7c3aed); }
 .nd-row__name { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 500; line-height: 1.3; color: var(--text-primary); @include nd.no-truncate; }
 .nd-row__meta { flex: none; font-size: 11.5px; color: var(--text-muted); }
 .nd-row__value { flex: none; margin-left: auto; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .nd-row--in { background: var(--nd-in-tint); border-color: var(--nd-sel-border); }
 .nd-row--in .nd-row__check { background: var(--text-primary); border-color: transparent; }
-.nd-row--done { background: var(--nd-done-tint); border-color: color-mix(in srgb, var(--color-success, #10b981) 45%, transparent); }
+.nd-row--done { background: var(--nd-done-tint); border-color: var(--nd-sel-border); }
 
 /* ── Motion ─────────────────────────────────────────────────────────── */
 @keyframes nd-pop { 0% { transform: scale(0.97); } 60% { transform: scale(1.015); } 100% { transform: none; } }
