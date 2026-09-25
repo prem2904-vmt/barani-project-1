@@ -36,7 +36,13 @@ export interface PlateMeasureSession {
   /** The two rim calibration points (image px). */
   calPts: { x: number; y: number }[];
   /** Fitted circles; abName (not index) so panel reordering can't misassign. */
-  zones: { cx: number; cy: number; r: number; abName: string | null }[];
+  zones: {
+    cx: number; cy: number; r: number; abName: string | null;
+    /** Disk-ruler sessions (OpenCV measure): the printed disk code, the
+     *  local 6 mm ruler radius (image px) the zone was measured with, the
+     *  zone diameter (mm) and the disk's badge number. Absent on old rings. */
+    code?: string | null; diskR?: number; mm?: number; n?: number;
+  }[];
 }
 
 /** One zone measured off the plate photo, mapped back to an antibiotic row

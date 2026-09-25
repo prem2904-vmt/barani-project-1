@@ -223,7 +223,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                     @if (astOpen()) {
                       <div class="pf-cse__astwrap">
                         <pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
-                                          [seedOrganisms]="identifiedOrganisms()" [embedded]="true"
+                                          [seedOrganisms]="identifiedOrganisms()" [embedded]="true" [orderTestId]="id"
                                           [reportHidden]="reportHidden()"
                                           (reportHiddenChange)="setReportHidden($event)"
                                           (valueChange)="astValue.set($event)"></pf-culture-entry>
@@ -583,7 +583,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   private readonly now = signal(Date.now());
   private timer?: ReturnType<typeof setInterval>;
 
-  private id = '';
+  protected id = '';
 
   /** The stage the tech came in to work (from ?stage=…) — the entry focuses on
    *  just this one, styled like the standard result-entry. Null = full case. */

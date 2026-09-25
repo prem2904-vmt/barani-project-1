@@ -4,13 +4,15 @@ import { PlateMeasureComponent } from './plate-measure.component';
 import { PlatformService } from '../../../core/services/platform.service';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { of, throwError, Subject } from 'rxjs';
+import { DiskReadApi } from './disk-read';
 
 /** Measure-zones modal on the kit (owner): nd-card / phone sheet, BILLING
  *  header, neutral stepper, solid-circle reticle, ONE primary per step. */
 
 const css = () => ((PlateMeasureComponent as any).ɵcmp.styles as string[]).join('\n');
 
-function render(withCam = false) {
+function render(withCam = false, api: Partial<Record<keyof DiskReadApi, unknown>> = {}) {
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true, value: { getUserMedia: () => new Promise(() => { /* pending */ }) },
   });
@@ -22,6 +24,7 @@ function render(withCam = false) {
       { provide: PlatformService, useValue: { isCapacitor: () => false } },
       { provide: CapacitorService, useValue: {} },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {} } },
+      { provide: DiskReadApi, useValue: { usage: () => throwError(() => ({ status: 404 })), read: () => new Subject(), confirm: () => of({}), ...api } },
     ],
   });
   const f = TestBed.createComponent(PlateMeasureComponent);
@@ -45,12 +48,12 @@ describe('Measure zones modal — kit shell', () => {
     expect(css()).toMatch(/\.pm-title[^{]*\{[^}]*font-weight:\s*600/);
   });
 
-  it('neutral stepper over the real steps: Capture → Calibrate → Measure zones', () => {
+  it('neutral stepper over the real steps: Capture → Calibrate → Measure & read → Review', () => {
     const { f, el, c } = render();
     const steps = el.querySelectorAll('.pm-step');
-    expect([...steps].map(s => s.querySelector('.pm-step__lbl')?.textContent?.trim())).toEqual(['Capture', 'Calibrate', 'Measure zones']);
+    expect([...steps].map(s => s.querySelector('.pm-step__lbl')?.textContent?.trim())).toEqual(['Capture', 'Calibrate', 'Measure & read', 'Review']);
     expect(steps[0].getAttribute('data-state')).toBe('active');
-    expect(el.querySelector('.pm-sub')?.textContent).toContain('Step 1 of 3');
+    expect(el.querySelector('.pm-sub')?.textContent).toContain('Step 1 of 4');
     c.mode.set('measure');
     f.detectChanges();
     const s2 = el.querySelectorAll('.pm-step');
@@ -98,12 +101,13 @@ describe('Measure zones modal — kit shell', () => {
     expect(phone).toMatch(/\.pm-backdrop[^{]*\{[^}]*bottom:\s*var\(--nd-nav-h/);
   });
 
-  it('light mode: assigned rings are neutral white; unassigned = violet accent', () => {
+  it('light mode: coded rings are neutral white; unassigned = violet accent', () => {
     const { c } = render();
     const light = vi.spyOn(c, 'isLight').mockReturnValue(true);
     c.srI = () => 'R';
-    expect(c.zoneStroke({ cx: 0, cy: 0, r: 5, abIndex: 0, auto: false })).toBe('#ffffff');
-    expect(c.zoneStroke({ cx: 0, cy: 0, r: 5, abIndex: null, auto: false })).toBe('#a78bfa');
+    const row = (code: string | null) => ({ id: 9, n: 1, cx: 0, cy: 0, own: { rx: 5, ry: 5, angle: 0 }, ruler: { rx: 5, ry: 5, angle: 0 }, k: 2, zoneFound: true, code, codeSrc: null, aiConf: null, notDisk: false });
+    expect(c.ringStroke(row('CTR 30'))).toBe('#ffffff');
+    expect(c.ringStroke(row(null))).toBe('#a78bfa');
     light.mockReturnValue(false);
   });
 });

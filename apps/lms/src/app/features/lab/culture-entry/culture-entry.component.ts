@@ -10,7 +10,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 interface Breakpoint {
   organismGroup: string; antibiotic: string;
   susceptibleMin: number | null; resistantMax: number | null;
-  shortLabel?: string | null; enabled?: boolean; organism?: string | null;
+  shortLabel?: string | null; diskLabel?: string | null; enabled?: boolean; organism?: string | null;
   micS?: string | null; micI?: string | null; micR?: string | null;
 }
 
@@ -338,6 +338,8 @@ interface Breakpoint {
           [antibiotics]="activeAbNames()"
           [existingImageUrl]="activePlateUrl()"
           [existingSession]="activeSession()"
+          [orderTestId]="orderTestId"
+          [codeHints]="activeCodeHints()"
           [srI]="plateInterpret"
           (applied)="onMeasured($event)"
           (cancel)="measureOrg.set(null)" />
@@ -554,6 +556,8 @@ export class CultureEntryComponent implements OnInit {
    *  parent has hidden — null = feature OFF (no checkboxes rendered). The
    *  parent owns persistence (culture case report-hidden endpoint). */
   @Input() reportHidden: string[] | null = null;
+  /** The culture case (order test) — the plate's AI code read is audited against it. */
+  @Input() orderTestId: string | null = null;
   @Output() reportHiddenChange = new EventEmitter<string[]>();
   rhOn(): boolean { return this.reportHidden !== null; }
   isShown(key: string): boolean { return !(this.reportHidden ?? []).includes(key); }
@@ -1031,6 +1035,22 @@ export class CultureEntryComponent implements OnInit {
   activeSession(): PlateMeasureSession | null {
     const i = this.measureOrg();
     return i == null ? null : this._m().organisms?.[i]?.plateMeasure ?? null;
+  }
+
+  /** Drug → the breakpoint's short label + disk content ("AZA 30") — the
+   *  plate reader's fallback disk code for drugs outside its code table. */
+  activeCodeHints(): Record<string, string> {
+    const i = this.measureOrg();
+    const org = i == null ? null : this._m().organisms?.[i];
+    const out: Record<string, string> = {};
+    for (const a of org?.antibiotics ?? []) {
+      const b = this.effectiveRow(org?.name, a.name);
+      const sl = b?.shortLabel?.trim();
+      if (!sl) continue;
+      const pot = this.num(b?.diskLabel);
+      out[a.name] = /\d/.test(sl) || pot == null ? sl : `${sl} ${pot}`;
+    }
+    return out;
   }
 
   /** Apply measured zones: each drops into its antibiotic row via setZone, which
