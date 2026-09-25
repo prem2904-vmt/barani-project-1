@@ -17,6 +17,12 @@ import { ReferringNetworkComponent } from './referring-network/referring-network
 import { InventoryComponent } from './inventory/inventory.component';
 import { AppointmentsConfigComponent } from './appointments-config/appointments-config.component';
 import { HomeCollectionAgentsComponent } from './home-collection/home-collection-agents.component';
+import { LabSettingsComponent } from './lab-settings/lab-settings.component';
+import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
+import { AuthService } from '../../core/auth/auth.service';
+import { TenantStateService } from '../../core/services/tenant-state.service';
+import { signal } from '@angular/core';
 import { AppointmentQueueService } from '../../core/services/appointment-queue.service';
 import { of } from 'rxjs';
 import { provideHttpClient } from '@angular/common/http';
@@ -416,6 +422,42 @@ describe('ND audit D — Home-collection agents', () => {
     expect(form.querySelector('input.nd-input')).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
     expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
+    hygiene(p.el);
+  });
+});
+
+describe('ND audit D — Lab settings', () => {
+  const render = () => renderBandPage(LabSettingsComponent, {
+    getFor: (url) => (url === '/api/tenants/branch-lab-config' ? { labStructure: 'auto' } : []),
+    providers: [
+      { provide: AuthService, useValue: { user: () => ({ tenantName: 'Micro World', branchId: null, permissions: [] }), activeBranchId: () => null,
+        hasPermission: () => true, hasAnyPermission: () => true, isAuthenticated: () => true, waitForAuth: async () => undefined } },
+      { provide: TenantStateService, useValue: { tenant: () => null, ensureLoaded: vi.fn(), update: vi.fn() } },
+      { provide: BranchLabConfigService, useValue: { collectionMode: signal('front_desk'), billingMode: signal('front_desk'), ensureLoaded: vi.fn(), update: vi.fn() } },
+      { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true, ensureLoaded: vi.fn() } },
+    ],
+  });
+
+  it('autosave is stated in the band (neutral + violet check); no primary; cards have the BILLING header', () => {
+    const p = render();
+    const st = p.el.querySelector('pf-hero-band .pf-hb__actions .nd-savestate')!;
+    expect(st.textContent).toContain('Changes save automatically');
+    expect(st.querySelector('svg')).not.toBeNull();
+    expect(primaries(p.el)).toBe(0);
+    const cards = p.body()!.querySelectorAll('.pf-ls__card.nd-card');
+    expect(cards.length).toBeGreaterThan(2);
+    expect(Array.from(cards).every(c => !!c.querySelector('.nd-card__head .nd-card__icon'))).toBe(true);
+    hygiene(p.el);
+  });
+
+  it('option cards are NEUTRAL radios (aria-checked, no --on class); rule switches are slate role=switch', () => {
+    const p = render();
+    expect(p.el.querySelector('.pf-ls__gate[role="radiogroup"] .pf-ls__gate-opt[role="radio"]')).not.toBeNull();
+    expect(p.el.querySelector('[class*="gate-opt--on"]')).toBeNull();
+    p.cmp.tab.set('rules'); p.f.detectChanges();
+    const sw = p.el.querySelectorAll('.pf-ls__card .nd-toggle[role="switch"]');
+    expect(sw.length).toBeGreaterThanOrEqual(3);
+    expect(p.el.querySelectorAll('input.nd-input.nd-num').length).toBe(3);
     hygiene(p.el);
   });
 });

@@ -13,7 +13,6 @@ import { Role, User } from '../../../shared/models/user.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -37,7 +36,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -48,6 +47,14 @@ interface AutoAssignConfig {
           <ng-container band-tools>
             <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
                           (valueChange)="tab.set($event)"></pf-segmented>
+          </ng-container>
+          <!-- Autosave is authoritative here (no Save button): the band says
+               so as the neutral save state with a violet check. -->
+          <ng-container band-actions>
+            <span class="nd-savestate pf-ls__savestate" role="status" title="Every change saves as you make it">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              <span class="pf-ls__savestate-t">Changes save automatically</span>
+            </span>
           </ng-container>
         </pf-hero-band>
       }
@@ -61,7 +68,7 @@ interface AutoAssignConfig {
       <!-- This page has no Save button by design: every change persists the
            moment you make it (OPS-15). Make that explicit so it doesn't read as
            unsaved. -->
-      <div class="pf-ls__autosave" role="status">
+      <div class="pf-ls__autosave pf-classic-only" role="status">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
         <span>Changes are saved automatically</span>
@@ -69,37 +76,40 @@ interface AutoAssignConfig {
 
       @if (showSec('collection')) {
       <!-- Counters & collection — now driven by the Workflow (single source) -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Counters &amp; collection</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18v4H3zM5 7v14h14V7M9 11h6"/></svg></span><h3 class="nd-card__label pf-ls__title">Counters &amp; collection</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Whether <strong>billing</strong> and <strong>sample collection</strong> run at a separate
           counter is now set in the <strong>Workflow</strong>: drop the action into its own menu for a
           separate counter, or keep it inside Frontdesk to run inline. These stay in sync automatically.
         </p>
         <div class="flex flex-wrap items-center gap-2 mt-3">
-          <span class="text-[12px] px-3 py-1 rounded-full" style="background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary);">
+          <span class="nd-chip nd-chip--static pf-ls__chipm">
             Billing — <strong style="color: var(--text-primary);">{{ billingMode() === 'separate_counter' ? 'Separate counter' : 'Front desk' }}</strong>
           </span>
-          <span class="text-[12px] px-3 py-1 rounded-full" style="background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary);">
+          <span class="nd-chip nd-chip--static pf-ls__chipm">
             Collection — <strong style="color: var(--text-primary);">{{ collectionMode() === 'dedicated_counter' ? 'Dedicated counter' : 'Front desk' }}</strong>
           </span>
-          <button type="button" class="text-[12px] font-semibold text-violet-400 hover:text-violet-300" (click)="goWorkflow()">Edit in Workflow →</button>
+          <button type="button" class="nd-btn nd-btn--tertiary pf-ls__wfbtn" (click)="goWorkflow()">Edit in Workflow</button>
         </div>
-      </pf-tile>
+      </div>
+      </section>
       }
 
       @if (showSec('collection')) {
       <!-- Sample identification mode (tenant-wide) — governs the lab screens. -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Sample identification</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg></span><h3 class="nd-card__label pf-ls__title">Sample identification</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How techs identify a sample on the lab screens. <strong>Scan</strong> shows the camera
           QR/barcode scanner (a hardware scanner also types into the field). <strong>Manual</strong>
           hides the scanner and shows the <strong>sample number</strong> to read and type by hand.
         </p>
-        <div class="pf-ls__gate">
+        <div class="pf-ls__gate" role="radiogroup">
           @for (opt of scanModeOptions; track opt.value) {
-            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="scanMode() === opt.value"
+            <button type="button" class="pf-ls__gate-opt" role="radio" [attr.aria-checked]="scanMode() === opt.value"
                     (click)="setScanMode(opt.value)">
               <span class="pf-ls__gate-radio"></span>
               <span class="pf-ls__gate-text">
@@ -109,22 +119,24 @@ interface AutoAssignConfig {
             </button>
           }
         </div>
-      </pf-tile>
+      </div>
+      </section>
       }
 
       @if (showSec('queues')) {
       <!-- Queue focus (per-branch) — how the lab worklists group work. -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Queue focus</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="nd-card__label pf-ls__title">Queue focus</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How the technician worklist, lab intake and result-entry queues group work.
           <strong>Patient</strong> lists patients with their tests nested; <strong>Sample</strong>
           keys each row by Sample ID (patient shown small). By default this follows the
           <strong>Lab structure</strong> below — pick one to override it.
         </p>
-        <div class="pf-ls__gate">
+        <div class="pf-ls__gate" role="radiogroup">
           @for (opt of queueFocusOptions; track opt.value) {
-            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="queueFocusSelected() === opt.value"
+            <button type="button" class="pf-ls__gate-opt" role="radio" [attr.aria-checked]="queueFocusSelected() === opt.value"
                     (click)="setQueueFocusMode(opt.value)">
               <span class="pf-ls__gate-radio"></span>
               <span class="pf-ls__gate-text">
@@ -144,13 +156,15 @@ interface AutoAssignConfig {
             Reset — follow the lab structure
           </button>
         }
-      </pf-tile>
+      </div>
+      </section>
       }
 
       @if (showSec('queues')) {
       <!-- Lab structure (per-branch): integrated / standalone / auto -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Lab structure</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><h3 class="nd-card__label pf-ls__title">Lab structure</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How this branch's tubes group into spaces.
           <strong>Auto</strong> (default) = arrange freely on the Branches board —
@@ -160,9 +174,9 @@ interface AutoAssignConfig {
           <strong>Standalone</strong> = every department is its own space with its
           own sample-ID prefix.
         </p>
-        <div class="pf-ls__gate">
+        <div class="pf-ls__gate" role="radiogroup">
           @for (opt of labStructureOptions; track opt.value) {
-            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="labStructure() === opt.value"
+            <button type="button" class="pf-ls__gate-opt" role="radio" [attr.aria-checked]="labStructure() === opt.value"
                     (click)="setLabStructure(opt.value)">
               <span class="pf-ls__gate-radio"></span>
               <span class="pf-ls__gate-text">
@@ -177,37 +191,41 @@ interface AutoAssignConfig {
           dedicated space) on the default "Lab" lane in <strong>Branches</strong> —
           leave it blank for no prefix.
         </p>
-      </pf-tile>
+      </div>
+      </section>
       }
 
       @if (showSec('collection')) {
       <!-- Sample ID — short sample barcode number width (tenant-wide) -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Sample ID</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg></span><h3 class="nd-card__label pf-ls__title">Sample ID</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           The short sample barcode is <strong>DD</strong>(dept) + <strong>YY</strong>(year) +
-          this many digits, e.g. <span class="font-mono">012600001</span>. Set each department's
+          this many digits, e.g. <span class="nd-num">012600001</span>. Set each department's
           2-digit code in <strong>Departments</strong>.
         </p>
         <div class="mt-4 flex flex-wrap items-end gap-4">
           <label class="block max-w-[160px]">
-            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Number width</span>
-            <input class="pf-input mt-1" type="number" min="1" max="9"
+            <span class="nd-field__lbl">Number width</span>
+            <input class="nd-input nd-num mt-1" type="number" min="1" max="9"
                    [ngModel]="sampleNumberWidth()"
                    (ngModelChange)="sampleNumberWidth.set(+$event)"
                    (blur)="saveSampleNumberWidth()" />
           </label>
           <p class="text-[13px] pb-2" style="color: var(--text-secondary);">
-            Preview: <strong class="font-mono" style="color: var(--text-primary);">{{ sampleBarcodePreview() }}</strong>
+            Preview: <strong class="nd-num" style="color: var(--text-primary);">{{ sampleBarcodePreview() }}</strong>
           </p>
         </div>
-      </pf-tile>
+      </div>
+      </section>
       }
 
       @if (showSec('rules')) {
       <!-- Calculation constants (tenant-wide) — feed calculated results. -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Calculation constants</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg></span><h3 class="nd-card__label pf-ls__title">Calculation constants</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Lab-specific numbers used by calculated results during entry.
           <strong>ISI</strong> and <strong>MNPT</strong> come from your thromboplastin
@@ -216,86 +234,84 @@ interface AutoAssignConfig {
         </p>
         <div class="mt-4 flex flex-wrap items-end gap-4">
           <label class="block max-w-[130px]">
-            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">ISI</span>
-            <input class="pf-input mt-1" type="number" step="0.01" min="0" placeholder="1.0"
+            <span class="nd-field__lbl">ISI</span>
+            <input class="nd-input nd-num mt-1" type="number" step="0.01" min="0" placeholder="1.0"
                    [ngModel]="calcIsi()"
                    (ngModelChange)="calcIsi.set($event)"
                    (blur)="saveCalcConstants()" />
           </label>
           <label class="block max-w-[150px]">
-            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">MNPT (seconds)</span>
-            <input class="pf-input mt-1" type="number" step="0.1" min="0" placeholder="12.0"
+            <span class="nd-field__lbl">MNPT (seconds)</span>
+            <input class="nd-input nd-num mt-1" type="number" step="0.1" min="0" placeholder="12.0"
                    [ngModel]="calcMnpt()"
                    (ngModelChange)="calcMnpt.set($event)"
                    (blur)="saveCalcConstants()" />
           </label>
           <label class="block max-w-[150px]">
-            <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">Normal HCT (%)</span>
-            <input class="pf-input mt-1" type="number" step="1" min="1" max="99" placeholder="45"
+            <span class="nd-field__lbl">Normal HCT (%)</span>
+            <input class="nd-input nd-num mt-1" type="number" step="1" min="1" max="99" placeholder="45"
                    [ngModel]="calcNormalHct()"
                    (ngModelChange)="calcNormalHct.set($event)"
                    (blur)="saveCalcConstants()" />
           </label>
         </div>
-      </pf-tile>
+      </div>
+      </section>
       }
 
       @if (showSec('rules')) {
       <!-- No-scan override (tenant-wide) -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h3 class="pf-ls__title">Allow no-scan claim (supervisor override)</h3>
-            <p class="pf-ls__hint">
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/></svg></span><h3 class="nd-card__label pf-ls__title">Allow no-scan claim (supervisor override)</h3><span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="allowNoScan()" aria-label="Allow no-scan claim (supervisor override)"
+                  (click)="setAllowNoScan(!allowNoScan())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
+        </div>
+        <div class="pf-ls__cardbody">
+          <p class="pf-ls__hint">
               When ON, a supervisor can claim a test without scanning the vial — for broken or
               smudged barcodes. Every override is audit-logged. Leave OFF for strict
               scan-first workflow.
             </p>
-          </div>
-          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="allowNoScan()">
-            <input type="checkbox"
-                   [checked]="allowNoScan()"
-                   (change)="setAllowNoScan($any($event.target).checked)" />
-            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-          </label>
         </div>
-      </pf-tile>
+      </section>
       }
 
       @if (showSec('rules')) {
       <!-- Inventory master switch — only when the tenant is entitled to the
            inventory module, so an admin can't turn on a module they don't have. -->
       @if (entitlements.moduleEnabled('inventory')) {
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h3 class="pf-ls__title">Enable inventory</h3>
-            <p class="pf-ls__hint">
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><h3 class="nd-card__label pf-ls__title">Enable inventory</h3><span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="inventoryEnabled()" aria-label="Enable inventory"
+                  (click)="setInventoryEnabled(!inventoryEnabled())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
+        </div>
+        <div class="pf-ls__cardbody">
+          <p class="pf-ls__hint">
               Track consumable stock (tubes, kits, reagents). When ON, usage is auto-deducted at
               collection and a test <strong>can't be ordered if its kit isn't fully in stock</strong>.
               When OFF, inventory is ignored entirely. Manage stock under Admin → Inventory.
             </p>
-          </div>
-          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="inventoryEnabled()">
-            <input type="checkbox" [checked]="inventoryEnabled()" (change)="setInventoryEnabled($any($event.target).checked)" />
-            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-          </label>
         </div>
-      </pf-tile>
+      </section>
       }
       }
 
       @if (showSec('rules')) {
       <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow. -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Require full payment to progress</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><h3 class="nd-card__label pf-ls__title">Require full payment to progress</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Choose where an unpaid balance blocks the workflow. Sample <em>collection</em> is never blocked —
           you can bill pay-later / part-advance and still draw the tube; the difference is settled at the gate.
         </p>
-        <div class="pf-ls__gate">
+        <div class="pf-ls__gate" role="radiogroup">
           @for (opt of gateOptions; track opt.value) {
-            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="paymentGateStage() === opt.value"
+            <button type="button" class="pf-ls__gate-opt" role="radio" [attr.aria-checked]="paymentGateStage() === opt.value"
                     (click)="setPaymentGateStage(opt.value)">
               <span class="pf-ls__gate-radio"></span>
               <span class="pf-ls__gate-text">
@@ -305,23 +321,25 @@ interface AutoAssignConfig {
             </button>
           }
         </div>
-      </pf-tile>
+      </div>
+      </section>
       }
 
       @if (showSec('collection')) {
       <!-- Specimen label CODE — an org-wide policy. Label SIZE + printer + darkness
            are per-station (a user's Print settings), never stored in the cloud. -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-ls__title">Specimen label code</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></span><h3 class="nd-card__label pf-ls__title">Specimen label code</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           The <strong>one</strong> machine-readable code printed on every tube label across the
           organisation. A tube label can't fit more than one. Label size, printer &amp; darkness
           are set per station under <strong>Print settings</strong> (profile menu).
         </p>
 
-        <div class="pf-ls__gate mt-3">
+        <div class="pf-ls__gate mt-3" role="radiogroup">
           @for (opt of labelCodeOptions; track opt.value) {
-            <button type="button" class="pf-ls__gate-opt" [class.pf-ls__gate-opt--on]="labelCodeMode() === opt.value"
+            <button type="button" class="pf-ls__gate-opt" role="radio" [attr.aria-checked]="labelCodeMode() === opt.value"
                     (click)="setLabelCodeMode(opt.value)">
               <span class="pf-ls__gate-radio"></span>
               <span class="pf-ls__gate-text">
@@ -332,51 +350,51 @@ interface AutoAssignConfig {
           }
         </div>
 
-      </pf-tile>
+      </div>
+      </section>
       }
 
       @if (showSec('rules')) {
       <!-- Require validation for all results -->
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h3 class="pf-ls__title">Require validation for all results</h3>
-            <p class="pf-ls__hint">
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><h3 class="nd-card__label pf-ls__title">Require validation for all results</h3><span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="requireValidation()" aria-label="Require validation for all results"
+                  (click)="setRequireValidation(!requireValidation())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
+        </div>
+        <div class="pf-ls__cardbody">
+          <p class="pf-ls__hint">
               When ON, every result must be validated by a pathologist — even tests set to
               <strong>direct flow</strong> (which otherwise auto-validate on entry). Leave OFF for default behaviour.
             </p>
-          </div>
-          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="requireValidation()">
-            <input type="checkbox" [checked]="requireValidation()" (change)="setRequireValidation($any($event.target).checked)" />
-            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-          </label>
         </div>
-      </pf-tile>
+      </section>
       }
 
       @if (showSec('rules')) {
       <!-- Front-desk Payments-due tab visibility -->
-      <pf-tile tone="default" padding="lg" class="block">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h3 class="pf-ls__title">Show "Payments due" tab</h3>
-            <p class="pf-ls__hint">
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Show "Payments due" tab</h3><span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="showPaymentsDue()" aria-label="Show &quot;Payments due&quot; tab"
+                  (click)="setShowPaymentsDue(!showPaymentsDue())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
+        </div>
+        <div class="pf-ls__cardbody">
+          <p class="pf-ls__hint">
               When ON, the front-desk shows a <strong>Payments due</strong> tab listing every order with an
               outstanding balance. In Progress and Completed are always shown. Leave OFF to hide it.
             </p>
-          </div>
-          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="showPaymentsDue()">
-            <input type="checkbox" [checked]="showPaymentsDue()" (change)="setShowPaymentsDue($any($event.target).checked)" />
-            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-          </label>
         </div>
-      </pf-tile>
+      </section>
       }
 
       @if (showSec('queues')) {
       <!-- Auto-assign per department -->
-      <pf-tile tone="default" padding="lg" class="block">
-        <h3 class="pf-ls__title">Auto-assign by department</h3>
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h3 class="nd-card__label pf-ls__title">Auto-assign by department</h3></div>
+        <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Two independent legs. <strong>Technicians</strong> — when a sample is received, each test is
           routed to the person (or least-loaded member of a role) set for its department.
@@ -390,22 +408,20 @@ interface AutoAssignConfig {
             <p class="pf-ls__dept-name">Auto-assign technicians</p>
             <p class="pf-ls__hint">On receive, route each test to its department's tech pool. Off → the shared bench queue.</p>
           </div>
-          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="autoAssignEnabled()">
-            <input type="checkbox" [checked]="autoAssignEnabled()"
-                   (change)="setAutoAssignEnabled($any($event.target).checked)" />
-            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-          </label>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignEnabled()" aria-label="Auto-assign technicians"
+                  (click)="setAutoAssignEnabled(!autoAssignEnabled())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
         </div>
         <div class="flex items-start justify-between gap-4 pf-ls__autoassign-master">
           <div class="min-w-0">
             <p class="pf-ls__dept-name">Auto-assign validators</p>
             <p class="pf-ls__hint">On submit, route the result to its department's validator pool. Their Pending-validation screen lists it first; anyone can still validate it.</p>
           </div>
-          <label class="pf-ls__toggle" [class.pf-ls__toggle--on]="autoAssignValidatorsEnabled()">
-            <input type="checkbox" [checked]="autoAssignValidatorsEnabled()"
-                   (change)="setAutoAssignValidatorsEnabled($any($event.target).checked)" />
-            <span class="pf-ls__toggle-track"><span class="pf-ls__toggle-thumb"></span></span>
-          </label>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignValidatorsEnabled()" aria-label="Auto-assign validators"
+                  (click)="setAutoAssignValidatorsEnabled(!autoAssignValidatorsEnabled())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
         </div>
 
         @if (departments().length === 0) {
@@ -474,7 +490,8 @@ interface AutoAssignConfig {
             }
           </div>
         }
-      </pf-tile>
+      </div>
+      </section>
       }
       </div>
     </section>
@@ -491,10 +508,21 @@ interface AutoAssignConfig {
     }
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
+    /* ── ND audit: kit cards (BILLING header), slate switches, neutral radios ── */
+    .pf-ls__card { margin-bottom: 16px; }
+    .pf-ls__card .pf-ls__title.nd-card__label { font-size: 13px; }
+    .pf-ls__cardbody { padding: 14px 18px 18px; }
+    .pf-ls__cardbody > .pf-ls__hint:first-child { margin-top: 0; }
+    .pf-ls__switch { flex: none; }
+    .pf-ls__chipm { height: auto; min-height: 30px; white-space: normal; }
+    .pf-ls__wfbtn { height: 32px; min-height: 32px; }
+    @media (max-width: 640px) {
+      .pf-ls__savestate-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    }
     .pf-ls__link  { background: none; border: none; padding: 0; font-size: 12.5px; color: var(--color-violet-400, #a78bfa); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
     .pf-ls__link:hover { color: var(--color-violet-300, #c4b5fd); }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
-    .pf-ls__warn  { margin: 4px 0 0; font-size: 11.5px; color: var(--amber-text); font-style: italic; }
+    .pf-ls__warn  { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary); font-style: italic; }
     /* Pool sub-headings inside a department card (Technicians / Validators). */
     .pf-ls__pool { margin: 14px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
     .pf-ls__pool:first-of-type { margin-top: 10px; }
@@ -503,35 +531,23 @@ interface AutoAssignConfig {
 
     /* Payment-gate radio options */
     .pf-ls__gate { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
-    .pf-ls__gate-opt { display: flex; align-items: flex-start; gap: 12px; text-align: left; padding: 12px 14px; border-radius: 12px; background: var(--glass-bg); border: 1px solid var(--glass-border); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
-    .pf-ls__gate-opt:hover { border-color: rgba(124,58,237,0.4); }
-    .pf-ls__gate-opt--on { border-color: rgba(124,58,237,0.6); background: rgba(124,58,237,0.06); }
+    .pf-ls__gate-opt { display: flex; align-items: flex-start; gap: 12px; text-align: left; padding: 12px 14px; border-radius: var(--nd-radius); background: var(--nd-card-bg); border: 1px solid var(--nd-line); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+    .pf-ls__gate-opt:hover { border-color: var(--nd-sel-border); }
+    /* Neutral selected state; the radio's small violet dot is the one accent. */
+    .pf-ls__gate-opt[aria-checked='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-ls__gate-opt:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pf-ls__gate-radio { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--border-input, #cbd5e1); position: relative; transition: border-color .15s ease; }
-    .pf-ls__gate-opt--on .pf-ls__gate-radio { border-color: var(--color-violet-500, #7c3aed); }
-    .pf-ls__gate-opt--on .pf-ls__gate-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--color-violet-500, #7c3aed); }
+    .pf-ls__gate-opt[aria-checked='true'] .pf-ls__gate-radio { border-color: var(--color-violet-500, #7c3aed); }
+    .pf-ls__gate-opt[aria-checked='true'] .pf-ls__gate-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--color-violet-500, #7c3aed); }
     .pf-ls__gate-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .pf-ls__gate-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__gate-s { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
 
-    .pf-ls__toggle { cursor: pointer; display: inline-flex; align-items: center; }
-    .pf-ls__toggle input { position: absolute; opacity: 0; pointer-events: none; }
-    .pf-ls__toggle-track {
-      position: relative; width: 44px; height: 24px; border-radius: 9999px;
-      background: var(--border-muted); transition: background 0.2s ease;
-    }
-    .pf-ls__toggle-thumb {
-      position: absolute; top: 3px; left: 3px;
-      width: 18px; height: 18px; border-radius: 9999px;
-      background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-      transition: transform 0.2s ease;
-    }
-    .pf-ls__toggle--on .pf-ls__toggle-track { background: var(--gradient-primary); }
-    .pf-ls__toggle--on .pf-ls__toggle-thumb { transform: translateX(20px); }
 
     .pf-ls__autoassign-master {
       margin-top: 12px; padding: 12px 14px;
-      border: 1px solid var(--glass-border); border-radius: 12px;
-      background: var(--glass-bg, rgba(255,255,255,0.03));
+      border: 1px solid var(--nd-line); border-radius: var(--nd-radius);
+      background: var(--nd-card-bg);
     }
     .pf-ls__dept-grid {
       display: grid;
@@ -558,9 +574,9 @@ interface AutoAssignConfig {
     .pf-ls__chip-x:disabled { opacity: 0.4; cursor: not-allowed; }
     .pf-ls__dept {
       padding: 14px;
-      border-radius: 14px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
+      border-radius: var(--nd-radius);
+      background: var(--nd-card-bg);
+      border: 1px solid var(--nd-line);
       display: flex; flex-direction: column; gap: 8px;
     }
     .pf-ls__dept-head {
@@ -582,28 +598,21 @@ interface AutoAssignConfig {
       transition: border-color 0.15s ease, background 0.15s ease;
     }
     .pf-ls__radio:hover { border-color: rgba(168, 85, 247, 0.35); }
-    .pf-ls__radio--on {
-      border-color: rgba(45, 212, 191, 0.55);
-      background: rgba(45, 212, 191, 0.08);
-    }
+    .pf-ls__radio--on { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
     .pf-ls__radio input { position: absolute; opacity: 0; pointer-events: none; }
     .pf-ls__radio-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__radio-sub { font-size: 11.5px; color: var(--text-tertiary); }
 
     .pf-ls__dept-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
-    .pf-ls__dept-code { margin: 2px 0 0; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-muted); }
-    .pf-ls__label {
-      margin: 8px 0 4px;
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em;
-      text-transform: uppercase; color: var(--text-muted);
-    }
+    .pf-ls__dept-code { margin: 2px 0 0; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+    .pf-ls__label { margin: 8px 0 4px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
 
     /* ── Cross-platform overrides — additive only, never touch base rules ── */
 
     /* Coarse-pointer (touch) sizing: make the toggle a >=44px tap target
        without changing its visual track size. Scoped to this page's toggle. */
     @media (pointer: coarse) {
-      :host .pf-ls__toggle { min-width: 44px; min-height: 44px; justify-content: flex-end; }
+      :host .pf-ls__switch { min-width: 44px; min-height: 44px; justify-content: flex-end; }
 
       /* This page's own action button (Edit in Workflow): the toolbar
          primitives already meet 44px, but this inline button is sized with
