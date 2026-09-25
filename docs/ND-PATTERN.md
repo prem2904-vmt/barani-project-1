@@ -1,0 +1,214 @@
+# New-design pattern (nd-kit)
+
+Every new-design screen in the LMS follows this pattern and uses the **nd-kit**.
+The canonical example is **Order & Payments**
+(`apps/lms/src/app/features/frontdesk/order-create/`). The second screen built
+on it is **Collect sample** (`apps/lms/src/app/features/lab/sample-collection/`,
+the collect drawer).
+
+The kit lives in `apps/lms/src/app/shared/styles/`:
+
+| File | What it is |
+| --- | --- |
+| `_nd-kit.scss` | **Global** classes and tokens (light + dark). Imported once by `apps/lms/src/styles.scss`. |
+| `_nd-mixins.scss` | Mixins only, no CSS output. Component styles may `@use '…/shared/styles/nd-mixins' as nd;` where a kit class can't be applied. |
+
+If a screen needs something the kit doesn't have, add it to the kit first,
+then use it. Don't write a one-off look inside a component.
+
+---
+
+## 1. Layout: band, then cards
+
+```
+┌ band (pf-hero-band) ─────────────────────────────────────────────┐
+│ ‹  [logo] Micro World                           [band actions]  │
+│      ┌ pill = CONTEXT BAR ─────────────────────────────────────┐ │
+└──────│ search  OR  subject chips + this step's filters + count │─┘
+       └─────────────────────────────────────────────────────────┘
+┌ main work card (.nd-card) ───────────┐ ┌ side action card ────┐
+│ ICON  LABEL      note / controls     │ │ ICON  LABEL  toggles │
+│ ──────────────────────────────────── │ │ body (scrolls)       │
+│ body (scrolls)                       │ │                      │
+│                                      │ │ [secondary][PRIMARY] │ ← sticky footer
+└──────────────────────────────────────┘ └──────────────────────┘
+```
+
+- Page: `.nd-page`. There is no page-level scroll; only card bodies scroll.
+- Body: `.nd-body.nd-body--split` holds the main card plus a 400px side card
+  at ≥1024px. Below that it is one column.
+- Cards: `.nd-card` > `.nd-card__head` (`.nd-card__icon`, `.nd-card__label`
+  in uppercase, optional `.nd-card__note`, `.nd-card__spacer`, header
+  controls) > `.nd-card__body` (scrolls) > `.nd-card__foot` (sticky, a 2-column
+  button grid; `.nd-span` makes a button full width).
+- Order & Payments: the catalogue is the main card, BILLING is the side card.
+  Collect: VIALS is the main card, COLLECTION is the side card.
+
+### Continuity: the band is the same on every step
+
+The band always shows the **back chevron**, the **tenant logo and name** and
+the **band actions**. It **never** becomes a page or patient title.
+
+The band's pill is the **CONTEXT BAR** for the step:
+
+- **Search screens:** the pill *is* the search (Order & Payments: scope tiles
+  plus input).
+- **Work screens** (Collect; later results, validate, …): the pill holds the
+  current **subject** as read-only chips (patient, order ID, sample IDs), then
+  that screen's **filters** (a `.nd-seg`), then a counter
+  (`.nd-band-chip`).
+- On phones the pill is one row. Keep the subject chips; move the filters into
+  the main card's header; the counter goes to the bottom bar.
+
+✅ Do: `‹ Micro World` + pill `[Ms. Paravai Munusamy 44/F · AA0007] [Order LAB-2609-000085] … [All·Pending·Drawn·External] [0/1 drawn]`
+❌ Don't: replace the band with a big "Collect sample" / patient-name header.
+
+In-page steps that close rather than navigate pass `[backAction]` to
+`pf-hero-band` (Collect: `closeFn`).
+
+---
+
+## 2. Colour: primary only for the main call to action
+
+- **Primary** (`.nd-btn.nd-btn--primary`, the violet gradient): **one** per
+  view, for the main call to action only. Examples: Continue to payment,
+  Confirm ₹X received, Review & Pay, Collect all to finish (only when enabled),
+  Dispatch.
+- **Secondary** (`.nd-btn--secondary`, outline, like "Save as draft"): Can't
+  collect, Label by hand, Save as draft.
+- **Tertiary** (`.nd-btn--tertiary`, text): Clear, Discard draft, Edit.
+- **Icon** (`.nd-btn--icon`, neutral): close, "more".
+- Everything else is neutral: tiles, chips, segmented controls, counters,
+  badges, thumbnails.
+
+✅ Do: a disabled "Collect all to finish" is secondary; it turns primary when enabled.
+❌ Don't: a gradient cart icon, a gradient ₹/% toggle, a violet "selected" payment tile.
+
+Functional colours are **data** and stay as they are: tube cap colours,
+status colours (success / warning / error), the unpriced dot.
+
+## 3. Selected states are neutral
+
+- Segmented controls: `.nd-seg` > `.nd-seg__item[aria-checked|aria-pressed="true"]`
+  shows as a raised neutral segment with normal text.
+- Chips: `.nd-chip[aria-pressed="true"]`. Use `.nd-chip--static` for
+  read-only chips.
+- Tiles / method tiles: `.nd-tile-sel[aria-checked="true"]` gets a stronger
+  border and a light tint, with no violet text.
+- In cart / drawn: `.nd-row--in` (a subtle tint plus a neutral check) and
+  `.nd-row--done` (a light success tint).
+- Drive state with ARIA attributes, not `…--on` classes. A global new-design
+  rule turns any `button[class*="--on"]` violet.
+
+## 4. Toggles are slate
+
+`.nd-toggle[role=switch][aria-checked]` > `.nd-toggle__track` > `.nd-toggle__knob`.
+
+- ON is a slate track (`--nd-toggle-on`: #AEB8C2 in light, a darker slate in
+  dark), with a white knob and a small shadow.
+- OFF is a lighter neutral.
+- `.nd-toggle--urgent` makes ON a muted red, never violet.
+- Examples: Urgent and Include Trendogram in the BILLING header.
+
+## 5. No truncation when there is room
+
+- Titles, names and meta wrap (`.nd-head__title`, `.nd-head__meta` and
+  `.nd-row__name` all use the `no-truncate` mixin).
+- An ellipsis is allowed only when the text truly overflows a one-row
+  container: a phone pill chip, or a flex item with `min-width: 0`.
+- Never cut a name in code, e.g. `formatPatientInfo` shortens names to 15
+  characters. Use `patientDisplayName` for display.
+
+✅ `Ms. Paravai Munusamy` ❌ `Ms. Paravai Mun..`
+
+## 6. Lists: one row per item
+
+- The row: `.nd-row` > `.nd-row__check` · `.nd-row__code` (mono, violet) ·
+  `.nd-row__name` (wraps, up to 2 lines) · `.nd-row__meta` (muted) ·
+  `.nd-row__value` (right aligned, e.g. the price and the unpriced dot).
+  Rows are at least 52px tall.
+- Search results are **one per row**, so the ranked order reads top to
+  bottom and ↑/↓ moves one row. Never lay search results out in a multi-column
+  grid.
+- Browse grids (the catalogue, vial tiles) may use 2–4 columns of compact
+  tiles, about 72–88px tall, with a small glyph rather than an illustration.
+- Mono type is only for IDs and codes. Everything else is Noto Sans.
+
+## 7. Search: one mode per device type
+
+- **Web / desktop** (`(hover: hover) and (pointer: fine)`): results only in
+  a dropdown under the pill.
+  - The page behind never changes.
+  - A scrim dims it.
+  - The dropdown is the pill's width, with one row per result.
+  - A single sticky filter row: type segment on the left, department chips on the right.
+- **Touch** (iPad and phones): no dropdown for the main search. The main
+  card becomes the results ("N results for 'x'"); clearing restores it.
+  Pick-one lookups (patient, doctor, hospital) keep a dropdown.
+- Detect the mode reactively from `matchMedia`, using a signal plus a
+  change listener.
+- Matching: case-insensitive substring on code, name, short name and profile
+  label, ranked. No fuzzy matching. A 1-character query matches prefixes only
+  (`filterTestListStrict`).
+
+## 8. Touch
+
+- Tap targets are at least 44px. Inputs are at least 16px on phones, so iOS
+  doesn't zoom.
+- **Phone bottom bar:** `.nd-bottombar` (+ `.nd-bottombar__info`) carries the
+  side card's summary and its primary action (the cart bar; Collect's
+  "0/1 drawn · Collect all to finish").
+- **Phone sheet:** `.nd-sheet` (about 92dvh minus the top safe area) with a
+  `.nd-sheet__handle`, an inner scrolling body, a sticky footer with the
+  bottom safe area, and `.nd-sheet-backdrop`. Side-card actions open in it.
+- **Immersive:** while a full-screen flow or sheet owns the screen, set an
+  html class that hides the app bar and bottom nav. Use `html.nd-immersive`
+  (the kit), or the existing `pf-sheet-immersive` / `pf-collect-immersive`.
+  Always remove it on close **and** on destroy. Call `KeyboardService.reset()`
+  when a view that owns an input tears down.
+- Follow the repo's mobile conventions: phone rules are additive, inside
+  `@media (max-width: 640px)`, and never change desktop.
+
+## 9. Motion
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--nd-spring` | `cubic-bezier(0.32, 0.72, 0, 1)` | search activation, results, scrim |
+| `--nd-spring-bounce` | `cubic-bezier(0.34, 1.36, 0.64, 1)` | field grow, sheet rise, pop |
+| `--nd-dur-fast` | 200ms | closes and hovers (closes run quicker) |
+| `--nd-dur` | 320ms | open / activation |
+| `--nd-dur-sheet` | 360ms | billing / phone sheet rise |
+
+- Classes: `.nd-anim-in` (fade and scale from 0.97), `.nd-anim-pop`
+  (a confirm tap, e.g. a drawn vial), `.nd-anim-rise` (a sheet).
+- Stagger list rows by about 18ms.
+- Everything is off under `prefers-reduced-motion`.
+
+## 10. Always
+
+- **No emoji.** Icons are stroked inline SVGs with `aria-hidden="true"`;
+  icon-only buttons get an `aria-label`.
+- **No native controls.** No `<select>`, `datalist` or `window.confirm`: use
+  `pf-select` and `DialogService`.
+- **Theme tokens only.** Light and dark must both be right; never force dark.
+- **Tests:** add specs for the pattern hooks. Examples: only one primary; kit
+  classes present; no truncation; mode switching.
+
+## API summary
+
+```
+Layout   .nd-page · .nd-head(__back|__who|__title|__meta|__actions) · .nd-band-chip
+         .nd-body · .nd-body--split
+Card     .nd-card · .nd-card__head · __icon · __label · __note · __spacer · __body · __foot · .nd-span
+Buttons  .nd-btn + --primary | --secondary | --tertiary | --icon
+Select   .nd-seg / .nd-seg__item[aria-checked] · .nd-chip[aria-pressed] · .nd-chip--static · .nd-tile-sel
+Toggle   .nd-toggle[role=switch][aria-checked] › .nd-toggle__track › .nd-toggle__knob · .nd-toggle--urgent
+Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done · .nd-mono
+Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
+         .nd-anim-in · .nd-anim-pop · .nd-anim-rise
+Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · html.nd-immersive
+Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line
+         --nd-shadow-sm · --nd-chip-bg · --nd-sel-bg · --nd-sel-border · --nd-in-tint · --nd-done-tint
+         --nd-toggle-on · --nd-toggle-off · --nd-toggle-urgent
+Mixins   nd.card · nd.btn-primary · nd.btn-secondary · nd.neutral-selected · nd.no-truncate · nd.reduced-motion
+```
