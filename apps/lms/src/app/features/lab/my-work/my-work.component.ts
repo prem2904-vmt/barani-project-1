@@ -36,6 +36,8 @@ import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-stri
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { plural } from '../../../shared/utils/plural';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 /** Sticky "keep Lab Intake open" choice (new design only). */
@@ -550,11 +552,11 @@ const COUNTERS: CounterSpec[] = [
             </div>
             <p class="pf-mw-pane__meta">
               @if (tab() === 'culture') {
-                {{ cultureCount() }} cases
+                {{ plural(cultureCount(), 'case') }}
               } @else {
               <!-- Sample-focused branches count TUBES — the unit of work on this
                    screen in that mode — not the tests inside them. -->
-              {{ labCfg.sampleFocused() ? sampleCountIn(rows()) + ' samples' : rows().length + ' items' }}
+              {{ paneCountLabel() }}
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
               }
             </p>
@@ -621,11 +623,15 @@ const COUNTERS: CounterSpec[] = [
                 <div class="pf-tq__side">
                   <span class="pf-tq__stat">
                     {{ tube.completedAt | date:'d MMM, h:mm a' }}
-                    <span class="pf-tq__stat-u">{{ testCount(tube.tests) }} {{ testCount(tube.tests) === 1 ? 'test' : 'tests' }}</span>
+                    @if (!theme.isNewDesign()) {
+                      <span class="pf-tq__stat-u">{{ testCount(tube.tests) }} {{ testCount(tube.tests) === 1 ? 'test' : 'tests' }}</span>
+                    }
                   </span>
                   <div class="pf-tq__acts">
                   @if (tube.status === 'validated') {
-                    <button type="button" class="pf-tq__act pf-tq__act--print" title="Print report"
+                    <button type="button" class="pf-tq__act--print" title="Print report"
+                            [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
+                            [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
                             [disabled]="printingTubeId() === tube.sampleId"
                             [attr.aria-label]="'Print report for ' + (tube.barcode || tube.sampleId)"
                             (click)="printCompletedTube(tube)">
@@ -635,11 +641,13 @@ const COUNTERS: CounterSpec[] = [
                         <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
                         <rect x="6" y="14" width="12" height="8" rx="1"/>
                       </svg>
-                      <span class="pf-tq__act-t">{{ printingTubeId() === tube.sampleId ? 'Opening…' : 'Print' }}</span>
+                      <span class="pf-tq__act-t nd-rowact__t">{{ printingTubeId() === tube.sampleId ? 'Opening…' : 'Print' }}</span>
                     </button>
                   }
                   @if (canEditResult()) {
-                    <button type="button" class="pf-tq__act" title="Edit results"
+                    <button type="button" title="Edit results"
+                            [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
+                            [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
                             [disabled]="reopeningTubeId() === tube.sampleId"
                             [attr.aria-label]="'Edit ' + (tube.barcode || tube.sampleId)"
                             (click)="editCompletedTube(tube)">
@@ -648,7 +656,7 @@ const COUNTERS: CounterSpec[] = [
                         <path d="M12 20h9"/>
                         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
                       </svg>
-                      <span class="pf-tq__act-t">{{ reopeningTubeId() === tube.sampleId ? 'Opening…' : 'Edit' }}</span>
+                      <span class="pf-tq__act-t nd-rowact__t">{{ reopeningTubeId() === tube.sampleId ? 'Opening…' : 'Edit' }}</span>
                     </button>
                   }
                   </div>
@@ -706,7 +714,7 @@ const COUNTERS: CounterSpec[] = [
                              Expand the card (or open the tube) for test names + barcodes. -->
                         <div class="flex items-center gap-2 flex-wrap mt-1">
                           <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"/>
-                          <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span>
+                          @if (!theme.isNewDesign()) { <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span> }
                         </div>
                       </div>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -736,7 +744,7 @@ const COUNTERS: CounterSpec[] = [
                               style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);">
                             <div class="flex items-center gap-2 mb-1.5">
                               <span class="text-[12.5px] font-semibold flex-1 truncate" style="color: var(--text-primary);">
-                                {{ tube.deptName || 'Tube' }} · {{ testCount(tube.tests) }} test{{ testCount(tube.tests) === 1 ? '' : 's' }}
+                                {{ tube.deptName || 'Tube' }}@if (!theme.isNewDesign()) { · {{ testCount(tube.tests) }} test{{ testCount(tube.tests) === 1 ? '' : 's' }} }
                               </span>
                               @if (tube.hasDraft && !tube.allDone) {
                                 <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded"
@@ -896,20 +904,22 @@ const COUNTERS: CounterSpec[] = [
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
                           <span class="pf-tq__stat-u">done</span>
                         </span>
-                      } @else {
+                      } @else if (!theme.isNewDesign()) {
                         <span class="pf-tq__stat">
                           {{ testCount(tube.tests) }}
                           <span class="pf-tq__stat-u">{{ testCount(tube.tests) === 1 ? 'test' : 'tests' }}</span>
                         </span>
                       }
                       @if (tab() === 'service_queue' ? canReassign() : !tube.allDone) {
-                        <button type="button" class="pf-tq__act" title="Delegate"
+                        <button type="button" title="Delegate"
+                                [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
+                                [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
                                 [attr.aria-label]="'Delegate ' + (tube.barcode || tube.sampleId)"
                                 (click)="openDelegate(tube.tests); $event.stopPropagation()">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M18 8h4m-2-2v4"/>
                           </svg>
-                          <span class="pf-tq__act-t">Delegate</span>
+                          <span class="pf-tq__act-t nd-rowact__t">Delegate</span>
                         </button>
                       }
                     </div>
@@ -2542,21 +2552,6 @@ const COUNTERS: CounterSpec[] = [
       font-size: 13px; font-weight: 600; color: var(--text-primary); align-items: baseline;
     }
     :host-context(.design-new) .pf-tq__stat-u { font-size: 11px; color: var(--text-muted); }
-    /* Delegate / Print / Edit = nd secondary (outline, like "Save as draft"). */
-    :host-context(.design-new) .pf-tq__act {
-      min-height: 32px; padding: 0 12px;
-      border-radius: var(--nd-radius-sm, 10px);
-      background: transparent; border: 1px solid var(--color-violet-600, #7c3aed);
-      color: var(--violet-text, #6d28d9); font-size: 12px; font-weight: 600;
-    }
-    :host-context(.design-new) .pf-tq__act:hover {
-      background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent);
-      color: var(--violet-text, #6d28d9); border-color: var(--color-violet-600, #7c3aed);
-    }
-    :host-context(.design-new) .pf-tq__act:active { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
-    @media (pointer: coarse) {
-      :host-context(.design-new) .pf-tq__act { min-height: 44px; }
-    }
 
     /* ════ Round 3 (owner): exactly the BILLING header + calm rows ════ */
     /* Pane header = BILLING header: violet icon chip + the title only. */
@@ -2574,24 +2569,6 @@ const COUNTERS: CounterSpec[] = [
     }
     :host-context(.design-new) .pf-mw-culture__count {
       background: none; padding: 0; border-radius: 0; font-weight: 400; color: var(--text-tertiary);
-    }
-    /* Row actions (Delegate / Print / Edit): quiet, like the catalogue row's
-       star — a neutral 32px icon button (label kept for AT + tooltip);
-       touch 44px. Never a loud repeated outline on every row. */
-    :host-context(.design-new) .pf-tq__act {
-      width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0;
-      border-radius: var(--nd-radius-sm, 10px);
-      border: 1px solid var(--nd-line); background: var(--nd-card-bg);
-      color: var(--text-secondary); font-size: 0; gap: 0;
-    }
-    :host-context(.design-new) .pf-tq__act .pf-tq__act-t {
-      position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
-    }
-    :host-context(.design-new) .pf-tq__act:hover {
-      background: var(--nd-card-bg); border-color: var(--nd-sel-border); color: var(--text-primary);
-    }
-    @media (pointer: coarse) {
-      :host-context(.design-new) .pf-tq__act { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
     }
     /* Completed: palette only — neutral status chips (validated = violet
        check-dot), no green / red, no colour stripe. */
@@ -2660,6 +2637,25 @@ const COUNTERS: CounterSpec[] = [
     }
     :host-context(.design-new) .pf-mtab--on .pf-mtab__count { color: var(--text-primary); }
 
+    /* ════ Round 5 (owner) ════
+       Pane header = BILLING header: ONLY the icon chip is tinted. The
+       classic tab-strip track (.pf-mw-tabs pill) and the header wash go. */
+    :host-context(.design-new) .pf-mw-tabs {
+      background: none !important; border: 0 !important; padding: 0 !important;
+      border-radius: 0 !important; gap: 10px; box-shadow: none !important;
+    }
+    :host-context(.design-new) .pf-mw-pane__hdr { background: var(--nd-card-bg) !important; }
+    :host-context(.design-new) .pf-mw-pane .pf-mw-pane__title { background: none !important; padding: 0 !important; }
+    /* Row actions: .nd-rowact (kit) — flex row so text buttons sit side by side. */
+    :host-context(.design-new) .pf-tq__acts { gap: 8px; }
+    /* Queue "done" stat: palette only — violet check, never green. */
+    :host-context(.design-new) .pf-tq__stat--done,
+    :host-context(.design-new) .pf-tq__stat--done .pf-tq__stat-u { color: var(--violet-text, #6d28d9); }
+    /* Group dots: NORMAL is neutral; red / amber stay for urgent / high. */
+    :host-context(.design-new) .pf-dot[data-level='normal'] { background: var(--nd-toggle-on, #aeb8c2); box-shadow: none; }
+    :host-context(.design-new) .pf-dot[data-level='urgent'],
+    :host-context(.design-new) .pf-dot[data-level='high'] { box-shadow: none; }
+
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -2692,6 +2688,15 @@ export class MyWorkComponent implements OnInit {
   readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
+  /** Row actions: text buttons on web (fine pointer + hover), icon buttons
+   *  on touch — the Order & Payments device-mode query (nd-kit .nd-rowact). */
+  readonly webPointer = webPointerSignal();
+  /** "1 sample" / "2 samples". */
+  protected readonly plural = plural;
+  /** Pane-header count text (sample-focused branches count tubes). */
+  readonly paneCountLabel = computed(() => this.labCfg.sampleFocused()
+    ? plural(this.sampleCountIn(this.rows()), 'sample')
+    : plural(this.rows().length, 'item'));
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);

@@ -75,12 +75,21 @@ actions.
 ### Card headers and row actions
 
 - Every card / pane header is the BILLING header: a violet icon chip
-  (`.nd-card__icon`) + the UPPERCASE title. Nothing else unless it is a real
+  (`.nd-card__icon`) + the UPPERCASE title. ONLY the icon chip is tinted — the
+  label and the header row have no fill / pill behind them. Nothing else unless it is a real
   control for that card (toggles in slate). Counts are plain muted text on
   the right — never a pill.
-- Per-row actions (Delegate, Print, Edit, favourite) are QUIET: a neutral
-  32px icon button with an `aria-label` + tooltip (44px on touch). Never a
-  loud outline / gradient repeated on every row — that is the page CTA's job.
+- **Row actions: text on web, icon on touch.** Per-row actions (Delegate,
+  Print, Edit…) use the kit's `.nd-rowact`. On web (`(hover: hover) and
+  (pointer: fine)`, via `webPointerSignal()` in `shared/utils/pointer-mode.ts`,
+  the same query as Order & Payments) they are compact 32px secondary TEXT
+  buttons ("Delegate", "Print", "Edit"). On touch (iPad / phone) add
+  `.nd-rowact--icon`: a neutral 44px icon button, label kept for AT via
+  `aria-label` + the visually-hidden `.nd-rowact__t`. Never a gradient.
+- Header / group counts are pluralised properly (`plural()` in
+  `shared/utils/plural.ts`): "1 sample", "2 samples". Group dots: NORMAL is
+  neutral; red / amber only for urgent / high.
+- Tiles don't repeat a test count ("1 test") — it is noise on a sample row.
 - Status on rows (Validated, Submitted, Draft) = neutral chips; a violet
   dot/check marks "done". Red only for real warnings (Re-entry).
 
