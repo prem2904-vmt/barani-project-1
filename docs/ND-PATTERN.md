@@ -64,7 +64,10 @@ The band's pill is the **CONTEXT BAR** for the step:
 ### Side card = actions + info the main card doesn't show
 
 Never repeat the main card's items in the side card (Collect: no per-tube
-list). The side card carries one status line (a neutral chip with a violet
+list). Fill the side card with what the main card hides — Collect: the
+tests each tube is for (+ draw volume) and an Ordered → Drawn → Dispatched
+timeline. Type stays calm: section titles 11px uppercase muted, body 12.5–13px
+at weight 400–500; counters 500, never 700+. The side card carries one status line (a neutral chip with a violet
 mark), information the main card lacks (only fields the data really has —
 e.g. priority, fasting, referral), a short explanation line, and the footer
 actions.

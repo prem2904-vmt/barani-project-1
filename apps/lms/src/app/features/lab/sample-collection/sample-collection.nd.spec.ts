@@ -350,3 +350,34 @@ describe('Collect sample — symmetric tiles, lean COLLECTION panel', () => {
     expect(text).not.toContain('Hospital');
   });
 });
+
+describe('Collect sample — COLLECTION panel fills with what the tiles do not show', () => {
+  afterEach(() => document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove()));
+
+  it('lists each tube\'s tests with the draw volume', async () => {
+    const a = S('a', 'pending', { tests: [{ test: { name: 'Complete Blood Count', sampleVolumeMl: 2 } }, { test: { name: 'ESR' } }] });
+    const { drawer } = await renderDrawer([a]);
+    const sec = drawer.querySelector('.pf-sc-side [aria-label="Tests by tube"]') as HTMLElement;
+    expect(sec).not.toBeNull();
+    const rows = [...sec.querySelectorAll('.pf-sc-tests__list li')].map(li =>
+      [...li.querySelectorAll('span')].map(sp => sp.textContent!.trim()).join(' | '));
+    expect(rows).toEqual(['Complete Blood Count | 2 mL', 'ESR']);
+  });
+
+  it('timeline: Ordered → Drawn (k of n until done) → Dispatched', async () => {
+    const { drawer } = await renderDrawer([S('a', 'collected', { collectedAt: '2026-09-25T06:12:00Z' }), S('b')]);
+    const steps = [...drawer.querySelectorAll('.pf-sc-timeline__step')];
+    expect(steps.map(s => s.querySelector('.pf-sc-timeline__label')!.textContent)).toEqual(['Ordered', 'Drawn', 'Dispatched']);
+    expect(steps[0].classList).toContain('pf-sc-timeline__step--done');
+    expect(steps[1].classList).not.toContain('pf-sc-timeline__step--done');
+    expect(steps[1].querySelector('.pf-sc-timeline__at')!.textContent!.trim()).toBe('1 of 2');
+    expect(steps[2].querySelector('.pf-sc-timeline__at')!.textContent!.trim()).toBe('—');
+  });
+
+  it('Drawn completes with the last draw time once every vial is drawn', async () => {
+    const { drawer } = await renderDrawer([S('a', 'collected', { collectedAt: '2026-09-25T06:12:00Z' })]);
+    const drawn = drawer.querySelectorAll('.pf-sc-timeline__step')[1];
+    expect(drawn.classList).toContain('pf-sc-timeline__step--done');
+    expect(drawn.querySelector('.pf-sc-timeline__at')!.textContent!.trim()).not.toBe('—');
+  });
+});
