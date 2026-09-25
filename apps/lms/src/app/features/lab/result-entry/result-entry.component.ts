@@ -10,9 +10,7 @@ import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/
 import { OrderTest } from '../../../shared/models/order.model';
 import { patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
-import { CultureResult } from '../../../shared/models/culture.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { CultureEntryComponent } from '../culture-entry/culture-entry.component';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
@@ -87,7 +85,6 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     NumPadComponent,
     TileComponent,
     SelectComponent,
-    CultureEntryComponent,
     EditResultDialogComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -211,7 +208,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                 <span class="pf-results-head__eyebrow">Culture &amp; Sensitivity</span>
               </header>
               <div class="pf-col-scrolls__body px-1 pt-2">
-                <pf-culture-entry [value]="cultureValue()" (valueChange)="setCulture($event)"></pf-culture-entry>
+                <!-- Culture is worked on the Culture case page (one screen). -->
+                <button type="button" class="nd-row pf-re-culturelink press" (click)="openCultureBench()"
+                        aria-label="Open this culture on the culture bench">
+                  <span class="nd-row__name">Culture: open on the bench</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
               </div>
             </pf-tile>
           } @else if (parameters().length > 0) {
@@ -2924,15 +2926,11 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   // ── Microbiology Culture & Sensitivity ───────────────────────────────
   readonly microFormat = computed<string | null>(() => this._paramsBlob()?.microFormat ?? null);
   readonly isCulture = computed(() => this.microFormat() === 'culture_sensitivity');
-  /** The current result as a culture structure (the whole `values` payload). */
-  readonly cultureValue = computed<CultureResult>(() => (this._values() as CultureResult) ?? {});
-  setCulture(v: CultureResult) { this._values.set(v as Record<string, unknown>); }
-  /** Ready to submit a culture: no growth, or at least one named organism. */
-  readonly cultureReady = computed(() => {
-    const m = this._values() as CultureResult;
-    if (m?.noGrowth) return true;
-    return (m?.organisms ?? []).some(o => (o.name ?? '').trim().length > 0);
-  });
+  /** Culture tests are entered on the Culture case page, never here. */
+  openCultureBench() {
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id) void this.router.navigate(['/lab/culture', id]);
+  }
   // Form view of the SAME parameters (rich type, showWhen, validation) —
   // derived, never a second stored list.
   private readonly _fields = computed<FormField[]>(() =>
@@ -3045,7 +3043,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
   readonly canSubmit = computed(() =>
     this.isCulture()
-      ? this.cultureReady()
+      ? false                       // culture submits on the Culture case page
       : (this.filledCount() === this.requiredCount() &&
          this.requiredCount() > 0 &&
          !this.hasValidationErrors())

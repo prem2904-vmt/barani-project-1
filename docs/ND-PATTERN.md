@@ -550,6 +550,27 @@ plus (owner reviews, 2026-09-25):
 - **AST screenshots** in the real-layout check rewrite the case response in
   the browser (AST open, an identified organism) and answer the pick
   locally — nothing is claimed or written on the server.
+- **One culture screen.** Entry AND pathologist sign-out live on the
+  Culture case page; nothing else renders the culture form:
+  - Route guards (`core/navigation/culture-redirect.guard.ts`, marker =
+    `parameters.microFormat === 'culture_sensitivity'`) send a culture-only
+    tube on `/lab/sample/:id` (search, scan, notifications, Completed,
+    report queue, bookmarks — and `?validate=1` for validators), a culture
+    test on `/lab/result/:id`, and `/pathologist/validate/:id` to
+    `/lab/culture/:orderTestId`. The pending-validation list routes culture
+    tests there directly. The route admits `culture_workbench` OR
+    `validate_result`.
+  - **Sign-out (review mode):** a validator on an `awaiting_signout` case
+    sees every stage read-only (the AST as the read-only table), no bench
+    tools, and the band actions **Reject** (secondary; the reason is
+    required, via `DialogService.prompt`) + **Validate & sign out** (THE
+    primary) — the same `/api/validation/:id/validate|reject` calls the
+    pathologist screens use.
+  - **Mixed tubes** (culture + other tests) stay on sample result entry:
+    the culture test is a small "Culture: open on the bench →" row linking
+    to `/lab/culture/:orderTestId`, and it never rides the tube's draft /
+    submit / validate batches. `result-entry` and `validate-result` show
+    the same link instead of the old form.
 
 ## 14. Editors (single-record pages)
 

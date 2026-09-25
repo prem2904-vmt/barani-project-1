@@ -53,8 +53,6 @@ import { OrderTestComment } from "../../../shared/models/comment.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { CommentThreadComponent } from "../../../shared/components/comment-thread/comment-thread.component";
 import { SelectComponent } from "../../../shared/primitives/select.component";
-import { CultureEntryComponent } from "../culture-entry/culture-entry.component";
-import { CultureResult } from "../../../shared/models/culture.model";
 import { formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
 import { sampleVtName } from "../../../core/navigation/zoom-transition";
@@ -104,7 +102,6 @@ function calcKey(testId: string, paramName: string): string {
     FormsModule,
     CommentThreadComponent,
     SelectComponent,
-    CultureEntryComponent,
     HeroBandComponent,
   ],
   templateUrl: "./sample-result-entry.component.html",
@@ -823,7 +820,8 @@ export class SampleResultEntryComponent {
       (t) =>
         t.status !== "entered" &&
         t.status !== "validated" &&
-        t.status !== "rejected",
+        t.status !== "rejected" &&
+        !this.isCultureTest(t),
     ),
   );
 
@@ -1042,9 +1040,9 @@ export class SampleResultEntryComponent {
   }
 
   // ── Microbiology Culture & Sensitivity ───────────────────────────────
-  // Tests flagged microFormat=culture_sensitivity render the structured
-  // culture screen (pf-culture-entry) instead of the flat parameter grid.
-  // The whole CultureResult is stored as that test's values payload.
+  // Tests flagged microFormat=culture_sensitivity are NOT entered here: the
+  // card links to the Culture case page, and they never ride this tube's
+  // draft / submit / validate batches (a mixed tube keeps its other tests).
   private readonly _cultureTestIds = computed<Set<string>>(() => {
     const set = new Set<string>();
     for (const t of this._sample()?.tests ?? []) {
@@ -1065,16 +1063,9 @@ export class SampleResultEntryComponent {
   isCultureTest(t: OrderTest): boolean {
     return this._cultureTestIds().has(t.id);
   }
-  cultureValueFor(t: OrderTest): CultureResult {
-    return (this._values()[t.id] ?? {}) as CultureResult;
-  }
-  setCulture(testId: string, v: CultureResult) {
-    this._values.update((all) => ({
-      ...all,
-      [testId]: v as unknown as Record<string, unknown>,
-    }));
-    this.scheduleDraftSave();
-    this.scheduleServerAutosave();
+  /** Culture tests live on the Culture case page (entry AND sign-out). */
+  openCultureBench(t: OrderTest) {
+    void this.router.navigate(["/lab/culture", t.id]);
   }
 
   // ── Background server autosave ────────────────────────────────────
@@ -1098,7 +1089,7 @@ export class SampleResultEntryComponent {
       return;
     const all = this._values();
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered",
+      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
     );
     const payload = {
       results: writable
@@ -1459,7 +1450,7 @@ export class SampleResultEntryComponent {
   readonly viewOnly = signal(false);
 
   enteredTests() {
-    return (this._sample()?.tests ?? []).filter(t => t.status === 'entered');
+    return (this._sample()?.tests ?? []).filter(t => t.status === 'entered' && !this.isCultureTest(t));
   }
   /** When the tube was submitted (latest resultedAt across its tests). */
   submittedAtLabel(): string {
@@ -1654,7 +1645,7 @@ export class SampleResultEntryComponent {
     // The form pre-fills values for these from currentResult so they
     // can be SEEN, but submitting them would 409 the whole batch.
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered",
+      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
     );
     // A numeric parameter holding a non-parseable value must never be
     // submitted as the result — surface which ones and stop.
@@ -1741,7 +1732,7 @@ export class SampleResultEntryComponent {
     if (!s || this._submitting() || this._savingDraft()) return;
     const all = this._values();
     const writable = (s.tests ?? []).filter(
-      (t) => t.status !== "validated" && t.status !== "entered",
+      (t) => t.status !== "validated" && t.status !== "entered" && !this.isCultureTest(t),
     );
     const payload = {
       results: writable

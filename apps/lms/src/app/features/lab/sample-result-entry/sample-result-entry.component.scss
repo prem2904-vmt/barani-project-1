@@ -123,7 +123,9 @@
 .pf-sre-card .nd-card__body > .pf-sre__test-comments,
 .pf-sre-card .nd-card__body > .pf-sre__attach-strip,
 .pf-sre-card .nd-card__body > .pf-sre__test-empty,
-.pf-sre-card .nd-card__body > pf-culture-entry { margin: 12px 14px; }
+.pf-sre-card .nd-card__body > .pf-sre-culturelink { margin: 12px 14px; width: calc(100% - 28px); cursor: pointer; }
+.pf-sre-culturelink:hover { border-color: var(--nd-sel-border); }
+.pf-sre-culturelink__chev { flex: none; margin-left: auto; color: var(--text-tertiary); }
 
 /* Order-level extras above the cards (only when they apply). */
 .pf-sre-strip { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
