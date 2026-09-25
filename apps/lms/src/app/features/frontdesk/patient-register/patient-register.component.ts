@@ -1,5 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -17,12 +16,14 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
 import { AbhaPrefillComponent, AbhaPrefillData } from '../../../shared/components/abha-wizard/abha-prefill.component';
-import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValues, WorkflowStep } from '../../../shared/models/workflow.model';
+import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValues } from '../../../shared/models/workflow.model';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
 
 @Component({
   selector: 'pf-patient-register',
@@ -34,32 +35,40 @@ import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
     LoadingLogoComponent,
     AbhaWizardComponent,
     AbhaPrefillComponent,
-    HeroBandComponent,
-    NgTemplateOutlet
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Section glyphs: the pill tabs never carry icons; the section card's
-         violet icon chip does. -->
-    <ng-template #secIco let-kind>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        @switch (kind) {
-          @case ('identity') { <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/> }
-          @case ('contact') { <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/> }
-          @case ('more') { <path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/> }
-          @default { <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/> }
-        }
-      </svg>
+    <!-- ABHA helpers ride in the Identity card's header: quiet, neutral. -->
+    <ng-template #abhaTpl>
+      @if (!patientId()) {
+        <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha" (click)="openAbhaPrefill('fetch')"
+                title="Has an ABHA? Scan the card or enter the number to fill the form">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16"/></svg>
+          Fill from ABHA
+        </button>
+        <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha-new" (click)="openAbhaPrefill('create')"
+                title="No ABHA? Create one with Aadhaar OTP — it fills the form">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 9v6M9 12h6"/></svg>
+          Create ABHA
+        </button>
+      } @else {
+        <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha" (click)="abhaWizardOpen.set(true)"
+                title="Create a new ABHA or verify an existing one via ABDM OTP">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+          Verify / create ABHA
+        </button>
+      }
     </ng-template>
 
     @if (theme.isNewDesign()) {
-    <!-- NEW DESIGN (ND-PATTERN §14 "Editors" + "Patient registration"):
-         band = back · tenant · actions (ONE primary: Register patient / Save
-         changes); the pill = the patient's name + the form's section tabs,
-         nothing else; ONE section card at a time, only its body scrolls. -->
+    <!-- NEW DESIGN (ND-PATTERN §15): ONE form, no tabs, keyboard-first.
+         Band = back · tenant · actions (ONE primary); the pill = the
+         patient's name only; every section is a card on the same screen
+         (3 / 2 / 1 columns). Ctrl/⌘+Enter saves from anywhere. -->
     <section class="pf-band-page pf-reg">
-      <pf-hero-band class="pf-reg-band" [back]="true" [backTo]="parentRoute()" [customSearch]="true" [contextBar]="true">
+      <pf-hero-band class="pf-reg-band" [back]="true" [backTo]="parentRoute()" [backAction]="backFn"
+                    [customSearch]="true" [contextBar]="true">
         <ng-container band-actions>
           @if (patientId()) {
             <span class="nd-savestate pf-reg-savestate" role="status" aria-live="polite"
@@ -91,7 +100,8 @@ import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
           }
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-reg-primary press" [disabled]="saving() || !config()"
                   (click)="submit(null)"
-                  [attr.aria-label]="saving() ? 'Saving' : primaryLabel()" [title]="primaryLabel()">
+                  [attr.aria-label]="saving() ? 'Saving' : primaryLabel()" [title]="primaryLabel() + ' (Ctrl/⌘+Enter)'"
+                  aria-keyshortcuts="Control+Enter Meta+Enter">
             @if (patientId()) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
             } @else {
@@ -101,8 +111,7 @@ import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
           </button>
         </ng-container>
 
-        <!-- The pill = [patient name ✎] | [section tabs]. No fact chips:
-             the sections already show MRN, phone, age… -->
+        <!-- The pill = the patient's name, nothing else. -->
         <div band-search class="nd-ctx pf-reg-ctx">
           <span class="nd-ctx__primary pf-reg-ctx__name">
             <span class="pf-reg-ctx__nametext">{{ subjectName() }}</span>
@@ -110,100 +119,30 @@ import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
             </button>
           </span>
-          @if (sections().length > 1) {
-            <span class="pf-reg-ctx__div" aria-hidden="true"></span>
-            <div class="pf-reg-tabs" role="tablist" aria-label="Sections" #tabsEl (keydown)="onTabsKey($event)">
-              <span class="pf-reg-tabs__ind" aria-hidden="true"
-                    [style.transform]="'translateX(' + tabInd().x + 'px)'" [style.width.px]="tabInd().w"
-                    [style.opacity]="tabInd().w ? 1 : 0"></span>
-              @for (s of sections(); track s.id) {
-                <button type="button" class="pf-reg-tab" role="tab" [id]="'pf-reg-tab-' + s.id"
-                        [attr.aria-selected]="activeId() === s.id" [attr.aria-controls]="'pf-reg-sec'"
-                        [attr.tabindex]="activeId() === s.id ? 0 : -1"
-                        [attr.data-step]="s.id" (click)="openSection(s.id)">
-                  <span>{{ s.label }}</span>
-                  <span class="pf-reg-tab__dot" [class.pf-reg-tab__dot--ok]="s.ok"
-                        [attr.aria-label]="s.ok ? 'complete' : 'something to finish'"
-                        [title]="s.ok ? 'Complete' : 'Something to finish here'"></span>
-                </button>
-              }
-            </div>
-          }
         </div>
       </pf-hero-band>
 
-      <div class="pf-band-body pf-band-body--fill pf-reg-body">
+      <div class="pf-band-body pf-reg-body">
         @if (displayConfig(); as cfg) {
-          @let sec = activeSection();
-          <section class="nd-card pf-reg-card" id="pf-reg-sec" role="tabpanel"
-                   [attr.aria-labelledby]="sec ? 'pf-reg-tab-' + sec.id : null">
-            <div class="nd-card__head pf-reg-card__head">
-              <span class="nd-card__icon">
-                <ng-container *ngTemplateOutlet="secIco; context: { $implicit: sec?.kind ?? 'other' }"></ng-container>
-              </span>
-              <h2 class="nd-card__label pf-reg-card__label">{{ sec?.title ?? 'Patient' }}</h2>
-              <span class="nd-card__note pf-reg-card__note">
-                @if (sec && sec.required > 0) {
-                  <span class="nd-dot-unpriced" aria-hidden="true"></span>
-                  {{ sec.required }} required
-                } @else {
-                  Optional
-                }
-              </span>
-              <!-- ABHA (ABDM) — scan / fetch to fill a NEW registration, or
-                   verify / create on an existing patient. Text on web,
-                   icons on touch. -->
-              @if (!patientId()) {
-                <button type="button" class="nd-rowact pf-reg-abha" [class.nd-rowact--icon]="!web()"
-                        (click)="openAbhaPrefill('fetch')" aria-label="Fill from ABHA"
-                        title="Has an ABHA? Scan the card or enter the number to fill the form">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16"/></svg>
-                  <span class="nd-rowact__t">Fill from ABHA</span>
-                </button>
-                <button type="button" class="nd-rowact pf-reg-abha-new" [class.nd-rowact--icon]="!web()"
-                        (click)="openAbhaPrefill('create')" aria-label="Create ABHA"
-                        title="No ABHA? Create one with Aadhaar OTP — it fills the form">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 9v6M9 12h6"/></svg>
-                  <span class="nd-rowact__t">Create ABHA</span>
-                </button>
-              } @else {
-                <button type="button" class="nd-rowact pf-reg-abha" [class.nd-rowact--icon]="!web()"
-                        (click)="abhaWizardOpen.set(true)" aria-label="Verify or create ABHA"
-                        title="Create a new ABHA or verify an existing one via ABDM OTP">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-                  <span class="nd-rowact__t">Verify / create ABHA</span>
-                </button>
-              }
-            </div>
-            <div class="nd-card__body pf-reg-card__body" #cardBody>
-              <pf-workflow-renderer
-                [config]="cfg"
-                [singlePage]="true"
-                [nd]="true"
-                [hideActions]="true"
-                [activeStepId]="activeId()"
-                [context]="context()"
-                [initialValues]="initialValues()"
-                [submitting]="saving()"
-                [finishLabel]="primaryLabel()"
-                [extraActions]="patientId() ? [] : registerActions"
-                (invalid)="onInvalid($event)"
-                (valuesChange)="onValuesChange($event)"
-                (extraActionClicked)="onExtraAction($event)"
-                (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
-              @if (nextSection(); as nx) {
-                <div class="pf-reg-next">
-                  <button type="button" class="nd-btn nd-btn--secondary pf-reg-next__btn" (click)="openSection(nx.id)">
-                    Next: {{ nx.label }}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-                  </button>
-                </div>
-              }
-            </div>
-          </section>
+          <pf-workflow-renderer class="pf-reg-form"
+            [config]="cfg"
+            [singlePage]="true"
+            [nd]="true"
+            [hideActions]="true"
+            [stepHeaderTpl]="abhaTpl"
+            [stepHeaderFor]="identityStepId()"
+            [context]="context()"
+            [initialValues]="initialValues()"
+            [submitting]="saving()"
+            [finishLabel]="primaryLabel()"
+            [extraActions]="patientId() ? [] : registerActions"
+            (enterSubmit)="submit(null)"
+            (valuesChange)="onValuesChange($event)"
+            (extraActionClicked)="onExtraAction($event)"
+            (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
         } @else {
-          <section class="nd-card pf-reg-card pf-reg-card--loading" aria-busy="true">
-            <div class="nd-card__body pf-reg-card__body">
+          <section class="nd-card pf-reg-loading" aria-busy="true">
+            <div class="nd-card__body">
               <div class="flex justify-center py-10">
                 <pf-loading-logo size="xl" color="purple" [showDna]="true"
                                  [showText]="true" text="Loading the form…"></pf-loading-logo>
@@ -333,53 +272,23 @@ export class PatientRegisterComponent implements OnInit {
   private readonly orderEntry = inject(OrderEntryService);
   private readonly route = inject(ActivatedRoute);
   protected readonly theme = inject(ThemeService);
-  /** Card-header ABHA actions: text on web, icons on touch (ND §1). */
+  /** Web pointer (autofocus only on web — never pop the phone keyboard). */
   protected readonly web = webPointerSignal();
 
-  // ── New design: the pill (name + section tabs) and ONE section card ──
+  // ── New design (§15): ONE form, the name-only pill, keyboard-first ──
   private readonly renderer = viewChild(WorkflowRendererComponent);
-  private readonly tabsEl = viewChild<ElementRef<HTMLElement>>('tabsEl');
-  private readonly cardBody = viewChild<ElementRef<HTMLElement>>('cardBody');
-  /** The open section (a display step id); null = the first one. */
-  private readonly _section = signal<string | null>(null);
+  private readonly tenantState = inject(TenantStateService);
   /** The patient's name as loaded (edit mode) — the pill's fallback. */
   protected readonly loadedName = signal('');
   /** The edit form as loaded, to tell "Unsaved changes" from "saved". */
   private readonly loadedValues = signal<WorkflowFormValues | null>(null);
+  /** Opened from Order & Payments ("Register a new patient" / "Edit …
+   *  details"): after saving (or cancelling) go BACK to that order. */
+  protected readonly returnTo = signal<string | null>(null);
 
-  /** The form's real groupings, from the (display-restructured) workflow:
-   *  Identity · Contact & IDs · Additional details · any tenant steps. */
-  protected readonly sections = computed(() => {
-    const r = this.renderer();
-    const steps: WorkflowStep[] = r ? r.visibleSteps() : (this.displayConfig()?.steps ?? []);
-    return steps.map(s => ({
-      id: s.id,
-      title: s.title,
-      label: PatientRegisterComponent.tabLabel(s.title),
-      kind: s.id.endsWith('__identity') ? 'identity'
-        : s.id.endsWith('__contact') ? 'contact'
-        : s.name === 'additional_info' ? 'more' : 'other',
-      required: r ? r.visibleFields(s).filter(f => f.isRequired).length : s.fields.filter(f => f.isRequired).length,
-      ok: r ? r.isStepValid(s) : false,
-    }));
-  });
-  protected readonly activeId = computed(() => {
-    const list = this.sections();
-    const want = this._section();
-    return (want && list.some(s => s.id === want)) ? want : (list[0]?.id ?? null);
-  });
-  protected readonly activeSection = computed(() => this.sections().find(s => s.id === this.activeId()) ?? null);
-  protected readonly nextSection = computed(() => {
-    const list = this.sections();
-    const i = list.findIndex(s => s.id === this.activeId());
-    return i >= 0 && i < list.length - 1 ? list[i + 1] : null;
-  });
-
-  /** "Patient identity" → "Identity" (tabs stay short; the card says it in full). */
-  private static tabLabel(title: string): string {
-    const t = (title ?? '').replace(/^patient\s+/i, '').trim();
-    return t ? t[0].toUpperCase() + t.slice(1) : 'Details';
-  }
+  /** The card that carries the ABHA helpers: the one holding the name. */
+  protected readonly identityStepId = computed(() =>
+    this.displayConfig()?.steps.find(s => s.fields.some(f => f.name === 'first_name'))?.id ?? null);
 
   /** The pill's subject: the FULL name as typed (never truncated), else
    *  "New patient" / the loaded name. Baby: "Baby of <mother>". */
@@ -412,63 +321,46 @@ export class PatientRegisterComponent implements OnInit {
       .map(k => [k, v[k]]));
   }
 
-  /** Band actions → the renderer (it validates EVERY section first). */
+  /** The tenant's dialling code (from its phone number) → the phone
+   *  field's default country; +91 when the tenant has none. */
+  private readonly defaultPhoneCode = computed(() => {
+    const ph = (this.tenantState.tenant()?.phone ?? '').replace(/\s+/g, '');
+    const hit = ph.startsWith('+') ? COUNTRY_PHONE_RULES.find(r => ph.startsWith(r.code)) : null;
+    return hit?.code ?? null;
+  });
+
+  /** Band actions (and Enter on the last field / Ctrl-⌘+Enter) → the
+   *  renderer, which validates EVERY field first. */
   submit(action: 'create_order' | 'create_appointment' | null): void {
     const r = this.renderer();
     if (!r || this._saving()) return;
     if (action) r.triggerExtraAction(action); else r.finish();
   }
-  /** Validation failed somewhere: open that section so the message shows. */
-  onInvalid(e: { stepId: string }): void {
-    this.openSection(e.stepId);
+  /** Ctrl / ⌘ + Enter saves from anywhere on the form. */
+  @HostListener('document:keydown', ['$event'])
+  onDocKey(e: KeyboardEvent): void {
+    if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || !this.theme.isNewDesign()) return;
+    e.preventDefault();
+    this.submit(null);
   }
-  openSection(id: string): void {
-    this._section.set(id);
-    const body = this.cardBody()?.nativeElement;
-    if (body) body.scrollTop = 0;
-  }
-  /** The pill pencil: open the section holding the name and focus it. */
-  editName(): void {
-    const step = this.displayConfig()?.steps.find(s => s.fields.some(f => f.name === 'first_name'));
-    if (step) this.openSection(step.id);
+  /** The pill pencil: focus First name. */
+  editName(): void { this.focusField('first_name'); }
+  private focusField(name: string): void {
     setTimeout(() => {
-      const el = document.querySelector<HTMLInputElement>('.pf-reg [data-field="first_name"] input');
+      const el = document.querySelector<HTMLInputElement>(`.pf-reg [data-field="${name}"] input`);
       el?.focus();
     });
   }
-  /** Arrow keys walk the tabs (roving tabindex). */
-  onTabsKey(e: KeyboardEvent): void {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    const list = this.sections();
-    const i = list.findIndex(s => s.id === this.activeId());
-    if (i < 0) return;
-    const j = e.key === 'ArrowRight' ? Math.min(list.length - 1, i + 1) : Math.max(0, i - 1);
-    if (j === i) return;
-    e.preventDefault();
-    this.openSection(list[j].id);
-    setTimeout(() => this.tabsEl()?.nativeElement.querySelector<HTMLElement>(`[data-step="${list[j].id}"]`)?.focus());
-  }
-
-  /** The selected tab's sliding surface (ND §14), kept in view when the tabs scroll. */
-  readonly tabInd = signal<{ x: number; w: number }>({ x: 0, w: 0 });
-  private readonly _tabIndFx = effect(() => {
-    this.activeId(); this.sections(); this.tabsEl();
-    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this.measureTab());
-    else this.measureTab();
+  /** Keyboard-first: First name has focus as soon as the form renders
+   *  (web only — on touch it would throw the keyboard over the form). */
+  private _autofocused = false;
+  private readonly _autofocusFx = effect(() => {
+    if (!this.renderer() || !this.displayConfig() || this._autofocused || !this.web()) return;
+    this._autofocused = true;
+    this.focusField('first_name');
   });
-  @HostListener('window:resize')
-  onResizeTabs(): void {
-    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this.measureTab());
-  }
-  measureTab(): void {
-    const box = this.tabsEl()?.nativeElement;
-    const on = box?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-    if (!box || !on) { this.tabInd.set({ x: 0, w: 0 }); return; }
-    this.tabInd.set({ x: on.offsetLeft, w: on.offsetWidth });
-    const l = on.offsetLeft, r = l + on.offsetWidth;
-    if (l < box.scrollLeft) box.scrollLeft = Math.max(0, l - 8);
-    else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8;
-  }
+  /** Hero-band back chevron = Cancel (returns to the order when opened from it). */
+  protected readonly backFn = () => this.back();
 
   private readonly _record = signal<WorkflowConfigRecord | null>(null);
   private readonly _config = signal<WorkflowConfig | null>(null);
@@ -682,7 +574,9 @@ export class PatientRegisterComponent implements OnInit {
       branchId: user?.branchId,
       patientAge: age,
       patientSex: sexKey ? String(v[sexKey]) : undefined,
-      'user.permissions': user?.permissions ?? []
+      'user.permissions': user?.permissions ?? [],
+      // New design: the phone field's default country (the tenant's own).
+      defaultPhoneCode: this.defaultPhoneCode()
     };
   });
 
@@ -691,6 +585,7 @@ export class PatientRegisterComponent implements OnInit {
     if (pid) {
       this.patientId.set(pid);
     }
+    this.returnTo.set(this.route.snapshot.queryParamMap.get('returnTo'));
 
     this.api.get<WorkflowConfigRecord>('/api/workflows/patient_registration').subscribe({
       next: r => {
@@ -727,6 +622,11 @@ export class PatientRegisterComponent implements OnInit {
 
   back() {
     const pid = this.patientId();
+    if (this.returnTo() === 'order') {
+      // Back to the half-built order: its stashed cart comes back with it.
+      void this.router.navigate(['/frontdesk/order'], { queryParams: { ...(pid ? { patientId: pid } : {}), resume: 'registration' } });
+      return;
+    }
     if (pid) {
       this.navBack.backTo(`/frontdesk/patients/${pid}`);
     } else {
@@ -816,6 +716,7 @@ export class PatientRegisterComponent implements OnInit {
         next: patient => {
           this._saving.set(false);
           this.toasts.success(`Updated ${patient.displayName}`);
+          if (this.returnTo() === 'order') { void this.returnToOrder(patient.id); return; }
           this.router.navigate(['/frontdesk/patients', patient.id]);
         },
         error: e => {
@@ -832,7 +733,12 @@ export class PatientRegisterComponent implements OnInit {
           // patient were created by re-clicking a form that looked dead
           // (OPS-49). A guard-blocked or crashed navigation now says so,
           // and the button stays disabled until the navigation settles.
-          const nav = target === 'order'
+          // Opened from a half-built Order & Payments: go BACK to it with the
+          // new patient attached (its stashed cart is restored there).
+          const backToOrder = this.returnTo() === 'order' && target !== 'appointment';
+          const nav = backToOrder
+            ? this.returnToOrder(patient.id)
+            : target === 'order'
             ? this.orderEntry.startNewOrder(patient.id)
             : target === 'appointment'
               ? this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } })
@@ -858,6 +764,12 @@ export class PatientRegisterComponent implements OnInit {
         }
       });
     }
+  }
+
+  /** Back to Order & Payments with this patient attached; `resume` tells it
+   *  to restore the cart it stashed before opening registration. */
+  private returnToOrder(patientId: string): Promise<boolean> {
+    return this.router.navigate(['/frontdesk/order'], { queryParams: { patientId, resume: 'registration' } });
   }
 
   /** OPS-49: same name + phone already registered — confirm before creating

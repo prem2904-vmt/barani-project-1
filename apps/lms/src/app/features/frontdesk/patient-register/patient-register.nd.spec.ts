@@ -15,13 +15,14 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 
 /**
- * Patient registration — NEW DESIGN (ND-PATTERN §14 + "Patient
- * registration"). Band = back · tenant · actions with ONE primary; the pill
- * = the patient's name + the form's section tabs only; one section card at a
- * time; kit fields (neutral segmented Title / Sex, amber required dot);
- * violet + neutrals only, Noto (no monospace). Behaviour is unchanged:
- * validation across every section, duplicate confirm, return-to-order.
+ * Patient registration — NEW DESIGN (ND-PATTERN §15: ONE single form, no
+ * tabs, keyboard-first). Band = back · tenant · actions with ONE primary;
+ * the pill = the patient's name only; every section is a card on the same
+ * screen (3 / 2 / 1 columns); Enter walks the fields and submits on the
+ * last; Title / Sex are keyboard-operable segments; errors are field-level;
+ * opened from Order & Payments it returns there with the patient attached.
  */
+import { WorkflowRendererComponent } from '../../../shared/components/workflow-renderer/workflow-renderer.component';
 
 /** The seeded Micro World form (WorkflowSeeder.PatientRegistration). */
 const CONFIG = {
@@ -58,10 +59,8 @@ const CONFIG = {
 const PATIENT = { id: 'p-1', displayName: 'Mr. Arun Kumar', mrn: 'AA0042', firstName: 'Arun', fathersName: 'Kumar', title: 'Mr.',
   sex: 'Male', phone: '+919876543210', dateOfBirth: '1990-05-15T00:00:00Z' };
 
-function render(opts: { nd?: boolean; patientId?: string; post?: any } = {}) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+function render(opts: { nd?: boolean; patientId?: string; post?: any; returnTo?: string; web?: boolean; tenantPhone?: string } = {}) {
+  (window as any).matchMedia = () => ({ matches: opts.web ?? false, addEventListener() {}, removeEventListener() {} });
   const api = {
     get: vi.fn((url: string) => {
       if (url === '/api/workflows/patient_registration') return of({ configJson: JSON.stringify(CONFIG), version: 3 });
@@ -75,6 +74,9 @@ function render(opts: { nd?: boolean; patientId?: string; post?: any } = {}) {
   const orderEntry = { startNewOrder: vi.fn(async () => true) };
   const dialog = { confirm: vi.fn(async () => true) };
   const toasts = { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() };
+  const q: Array<[string, string]> = [];
+  if (opts.patientId) q.push(['patientId', opts.patientId]);
+  if (opts.returnTo) q.push(['returnTo', opts.returnTo]);
   TestBed.configureTestingModule({
     imports: [PatientRegisterComponent],
     providers: [
@@ -86,9 +88,9 @@ function render(opts: { nd?: boolean; patientId?: string; post?: any } = {}) {
       { provide: Router, useValue: router },
       { provide: NavBackService, useValue: { backTo: vi.fn(), back: vi.fn(), showBack: () => true } },
       { provide: OrderEntryService, useValue: orderEntry },
-      { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: new Map(opts.patientId ? [['patientId', opts.patientId]] : []) } } },
+      { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: new Map(q) } } },
       { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => opts.nd ?? true } },
-      { provide: TenantStateService, useValue: { tenant: () => null } },
+      { provide: TenantStateService, useValue: { tenant: () => (opts.tenantPhone ? { phone: opts.tenantPhone } : null) } },
     ],
   });
   const f = TestBed.createComponent(PatientRegisterComponent);
@@ -103,175 +105,194 @@ function render(opts: { nd?: boolean; patientId?: string; post?: any } = {}) {
     input.dispatchEvent(new Event('input'));
     f.detectChanges();
   };
-  const tab = (label: string) => {
-    const t = Array.from(el.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(b => txt(b) === label)!;
-    t.click();
+  const seg = (field: string, label: string) => {
+    (Array.from(el.querySelectorAll<HTMLButtonElement>(`[data-field="${field}"] .nd-seg__item`)).find(b => b.textContent!.trim() === label))!.click();
     f.detectChanges();
   };
-  return { f, el, c: f.componentInstance as any, api, router, orderEntry, dialog, toasts, txt, flush, type, tab };
+  const fillAll = () => {
+    type('first_name', 'Ravi');
+    type('fathers_name', 'Shankar');
+    seg('sex', 'Male');
+    type('phone', '9876543210');
+  };
+  const enter = (target: Element, extra: KeyboardEventInit = {}) => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...extra }));
+    f.detectChanges();
+  };
+  return { f, el, c: f.componentInstance as any, api, router, orderEntry, dialog, toasts, txt, flush, type, seg, fillAll, enter };
 }
 
-describe('Patient registration — new design: band + pill', () => {
-  it('band: back + ONE primary (Register patient) in the band actions; secondaries are ghosts; no page title', () => {
+describe('Patient registration — new design: ONE form', () => {
+
+  it('band: back + ONE primary (Register patient); secondaries are ghosts; no page title', () => {
     const { el, txt } = render();
-    const band = el.querySelector('pf-hero-band')!;
-    expect(band).not.toBeNull();
     const primaries = el.querySelectorAll('pf-hero-band .pf-hb__actions .pf-hb-btn--primary');
     expect(primaries.length).toBe(1);
     expect(txt(primaries[0])).toBe('Register patient');
-    // …and nowhere else on the page (no form footer primary).
     expect(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, .pf-btn-primary').length).toBe(1);
     const ghosts = Array.from(el.querySelectorAll('pf-hero-band .pf-hb-btn--ghost')).map(b => txt(b));
     expect(ghosts).toEqual(['Cancel', 'Save & book test', 'Save & book appointment']);
     expect(el.querySelector('pf-screen-header, h1')).toBeNull();
-  });
-
-  it('the primary carries an SVG + aria-label, so on phones it is an icon at the top of the band', () => {
-    const { el } = render();
     const p = el.querySelector('.pf-reg-primary')!;
     expect(p.querySelector('svg')).not.toBeNull();
     expect(p.getAttribute('aria-label')).toBe('Register patient');
   });
 
-  it('pill = ONLY the subject name ("New patient") + the form sections as tabs — no fact chips', () => {
+  it('pill = ONLY the name chip — no tabs, no dots, no fact chips', () => {
     const { el, txt } = render();
     const ctx = el.querySelector('pf-hero-band .nd-ctx')!;
     expect(txt(ctx.querySelector('.pf-reg-ctx__nametext'))).toBe('New patient');
-    expect(ctx.querySelector('.nd-ctx__primary .nd-ctx__edit[aria-label="Edit name"]')).not.toBeNull();
-    expect(ctx.querySelectorAll('.nd-ctx__chip').length).toBe(0);
-    const tabs = Array.from(ctx.querySelectorAll('[role="tablist"] [role="tab"]')).map(t => txt(t));
-    expect(tabs).toEqual(['Identity', 'Contact & IDs', 'Additional details']);
-    expect(ctx.querySelector('.pf-reg-tabs__ind')).not.toBeNull();
-    // The pill has nothing but the name and the tabs.
-    const kids = Array.from(ctx.children).map(k => k.className.split(' ')[0]);
-    expect(kids).toEqual(['nd-ctx__primary', 'pf-reg-ctx__div', 'pf-reg-tabs']);
-    expect(el.querySelectorAll('[role="tablist"]').length).toBe(1);
+    expect(Array.from(ctx.children).map(k => k.className.split(' ')[0])).toEqual(['nd-ctx__primary']);
+    expect(el.querySelector('[role="tablist"], [role="tab"], .nd-ctx__chip, .pf-reg-next')).toBeNull();
   });
 
-  it('the pill name follows what is typed — the FULL name, never cut', () => {
+  it('every section renders at once, as its own card with "N required"', () => {
+    const { el, txt } = render();
+    const cards = Array.from(el.querySelectorAll('.pf-wr-cards > .pf-wr-card.nd-card'));
+    expect(cards.map(c => txt(c.querySelector('.nd-card__label')))).toEqual(['Patient identity', 'Contact & IDs', 'Additional details']);
+    expect(cards.map(c => txt(c.querySelector('.pf-wr-card__note')))).toEqual(['3 required', '1 required', 'Optional']);
+    for (const f of ['title', 'first_name', 'sex', 'date_of_birth', 'phone', 'abha_id', 'email', 'occupation']) {
+      expect(el.querySelector(`[data-field="${f}"]`), f).not.toBeNull();
+    }
+  });
+
+  it('columns: 3 side by side from 1200px, 2 on tablets, 1 on phones; desktop fills without page scroll', () => {
+    const css = ((WorkflowRendererComponent as any).ɵcmp.styles as string[]).join('\n').replace(/\s+/g, ' ');
+    expect(css).toMatch(/\.pf-wr-cards\[[^\]]*\] ?\{ ?display: ?grid; ?grid-template-columns: ?minmax\(0, ?1fr\)/);
+    expect(css).toMatch(/@media \(min-width: ?768px\) ?\{ ?\.pf-wr-cards\[[^\]]*\] ?\{ ?grid-template-columns: ?repeat\(2, ?minmax\(0, ?1fr\)\)/);
+    expect(css).toMatch(/@media \(min-width: ?1200px\) ?\{ ?\.pf-wr-cards\[[^\]]*\] ?\{ ?grid-template-columns: ?repeat\(3, ?minmax\(0, ?1fr\)\)[^}]*height: ?100%/);
+    expect(PATIENT_REGISTER_ND_STYLES).toMatch(/@media \(min-width: 1200px\)[^@]*\.pf-reg-body \{[^}]*overflow: hidden/);
+  });
+
+  it('kit fields: nd-input, the amber required dot, tabular numbers, quiet grey ABHA buttons in the Identity card', () => {
+    const { el } = render();
+    const first = el.querySelector('[data-field="first_name"]')!;
+    expect(first.querySelector('input.nd-input')).not.toBeNull();
+    expect(first.querySelector('.nd-field__lbl .nd-dot-unpriced[aria-label="required"]')).not.toBeNull();
+    expect(el.querySelector('[data-field="phone"] input[type="tel"].nd-num')).not.toBeNull();
+    expect(el.querySelector('[data-field="abha_id"] input.nd-input.nd-num')).not.toBeNull();
+    expect(el.querySelector('.pf-input')).toBeNull();
+    const abha = Array.from(el.querySelectorAll('.pf-wr-card')[0].querySelectorAll('.nd-card__head button')).map(b => b.textContent!.trim());
+    expect(abha).toEqual(['Fill from ABHA', 'Create ABHA']);
+    expect(el.querySelectorAll('.nd-card__head .nd-btn--quiet').length).toBe(2);
+    expect(el.querySelector('.nd-card__head .nd-rowact, .nd-card__head .nd-btn--secondary')).toBeNull();
+  });
+
+  it('the pill name follows what is typed — the FULL name', () => {
     const { el, txt, type } = render();
     type('first_name', 'Venkatasubramanian');
     type('fathers_name', 'Ramakrishnan Iyer');
     expect(txt(el.querySelector('.pf-reg-ctx__nametext'))).toBe('Venkatasubramanian Ramakrishnan Iyer');
   });
 
-  it('edit mode: the pill shows the patient, primary = Save changes, a neutral save state', async () => {
-    const { el, txt, flush, type } = render({ patientId: 'p-1' });
-    await flush();
-    expect(txt(el.querySelector('.pf-reg-ctx__nametext'))).toBe('Mr. Arun Kumar');
-    const primaries = el.querySelectorAll('pf-hero-band .pf-hb-btn--primary');
-    expect(primaries.length).toBe(1);
-    expect(txt(primaries[0])).toBe('Save changes');
-    expect(el.querySelector('.pf-reg-order')).toBeNull();
-    expect(txt(el.querySelector('.nd-savestate'))).toBe('All changes saved');
-    type('first_name', 'Arun K');
-    expect(txt(el.querySelector('.nd-savestate'))).toBe('Unsaved changes');
-    expect(el.querySelector('.nd-savestate__dot')).not.toBeNull();
+  it('palette + font hygiene: no monospace / green / teal, no native select / datalist, no emoji', () => {
+    const { el } = render();
+    expect(el.querySelector('select, datalist, code, .font-mono, .mono')).toBeNull();
+    expect(el.querySelector('[class*="green"], [class*="emerald"], [class*="teal"]')).toBeNull();
+    expect(/\p{Extended_Pictographic}/u.test(el.textContent ?? '')).toBe(false);
+    expect(/monospace/i.test(el.innerHTML)).toBe(false);
   });
 });
 
-describe('Patient registration — new design: sections + fields', () => {
-  it('ONE section card at a time (violet icon chip + UPPERCASE label); a tab switches it', () => {
-    const { el, txt, tab } = render();
-    const card = () => el.querySelector('#pf-reg-sec')!;
-    expect(card().classList.contains('nd-card')).toBe(true);
-    expect(card().querySelector('.nd-card__head .nd-card__icon svg')).not.toBeNull();
-    expect(txt(card().querySelector('.nd-card__label'))).toBe('Patient identity');
-    expect(el.querySelector('[data-field="first_name"]')).not.toBeNull();
-    expect(el.querySelector('[data-field="phone"]')).toBeNull();
-    tab('Contact & IDs');
-    expect(txt(card().querySelector('.nd-card__label'))).toBe('Contact & IDs');
-    expect(el.querySelector('[data-field="phone"]')).not.toBeNull();
-    expect(el.querySelector('[data-field="first_name"]')).toBeNull();
-    expect(el.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain('Contact');
+describe('Patient registration — keyboard-first', () => {
+
+  it('First name has focus as soon as the form renders (web)', async () => {
+    const { el, flush } = render({ web: true });
+    await flush();
+    expect(document.activeElement).toBe(el.querySelector('[data-field="first_name"] input'));
   });
 
-  it('kit fields: nd-input, the amber required dot, tabular numbers for phone / IDs', () => {
-    const { el, tab } = render();
-    const first = el.querySelector('[data-field="first_name"]')!;
-    expect(first.querySelector('input.nd-input')).not.toBeNull();
-    expect(first.querySelector('.nd-field__lbl .nd-dot-unpriced[aria-label="required"]')).not.toBeNull();
-    expect(el.querySelector('[data-field="date_of_birth"] input[type="date"].nd-input')).not.toBeNull();
-    tab('Contact & IDs');
-    expect(el.querySelector('[data-field="phone"] input[type="tel"].nd-num')).not.toBeNull();
-    expect(el.querySelector('[data-field="abha_id"] input.nd-input.nd-num')).not.toBeNull();
-    expect(el.querySelector('.pf-input')).toBeNull();
+  it('Enter moves to the next field in reading order, across the cards', () => {
+    const { el, enter } = render();
+    const first = el.querySelector<HTMLInputElement>('[data-field="first_name"] input')!;
+    first.focus();
+    enter(first);
+    expect(document.activeElement).toBe(el.querySelector('[data-field="fathers_name"] input'));
+    // …Sex's segment is a stop (its checked / first option)…
+    enter(document.activeElement!);
+    expect((document.activeElement as HTMLElement).closest('[data-field]')!.getAttribute('data-field')).toBe('sex');
+    // …the DOB → the next CARD's first field (the phone number).
+    const dob = el.querySelector<HTMLInputElement>('[data-field="date_of_birth"] input[type="date"]')!;
+    dob.focus();
+    enter(dob);
+    expect(document.activeElement).toBe(el.querySelector('[data-field="phone"] input[type="tel"]'));
   });
 
-  it('Title and Sex are neutral segmented controls (aria-pressed, never an --on class); Mr. fills Sex', () => {
-    const { el, f } = render();
-    const title = el.querySelector('[data-field="title"] .nd-seg')!;
-    expect(title).not.toBeNull();
-    const mr = Array.from(title.querySelectorAll<HTMLButtonElement>('.nd-seg__item')).find(b => b.textContent!.trim() === 'Mr.')!;
-    mr.click();
-    f.detectChanges();
-    expect(mr.getAttribute('aria-pressed')).toBe('true');
-    const sex = el.querySelector('[data-field="sex"] .nd-seg')!;
-    const male = Array.from(sex.querySelectorAll('.nd-seg__item')).find(b => b.textContent!.trim() === 'Male')!;
-    expect(male.getAttribute('aria-pressed')).toBe('true');
+  it('Enter on the LAST field submits (Register)', async () => {
+    const { el, api, fillAll, enter, flush } = render();
+    fillAll();
+    const last = el.querySelector<HTMLInputElement>('[data-field="occupation"] input')!;
+    last.focus();
+    enter(last);
+    await flush();
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('Ctrl / ⌘ + Enter saves from anywhere', async () => {
+    const { api, fillAll, flush } = render();
+    fillAll();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+    await flush();
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('Title → Sex default (Mr. → Male, Ms. → Female), and a manual Sex wins', () => {
+    const { el, seg } = render();
+    const checked = (f: string) => el.querySelector(`[data-field="${f}"] [role="radio"][aria-checked="true"]`)?.textContent?.trim();
+    seg('title', 'Mr.');
+    expect(checked('sex')).toBe('Male');
+    seg('title', 'Ms.');
+    expect(checked('sex')).toBe('Female');
+    seg('sex', 'Other');
+    seg('title', 'Mr.');
+    expect(checked('sex')).toBe('Other');
     expect(el.querySelector('button[class*="--on"]')).toBeNull();
   });
 
-  it('tab dots: a ring until the section is complete, then violet', () => {
-    const { el, f, type } = render();
-    const dot = () => el.querySelector('[role="tab"][data-step="st1__identity"] .pf-reg-tab__dot')!;
-    expect(dot().classList.contains('pf-reg-tab__dot--ok')).toBe(false);
-    type('first_name', 'Ravi');
-    type('fathers_name', 'Shankar');
-    (Array.from(el.querySelectorAll<HTMLButtonElement>('[data-field="sex"] .nd-seg__item')).find(b => b.textContent!.trim() === 'Male'))!.click();
-    f.detectChanges();
-    expect(dot().classList.contains('pf-reg-tab__dot--ok')).toBe(true);
-  });
-
-  it('palette + font hygiene: no monospace / green / teal, no native select / datalist, no emoji', () => {
-    const { el, tab } = render();
-    for (const t of ['Identity', 'Contact & IDs', 'Additional details']) {
-      tab(t);
-      expect(el.querySelector('select, datalist, code, .font-mono, .mono')).toBeNull();
-      expect(el.querySelector('[class*="green"], [class*="emerald"], [class*="teal"]')).toBeNull();
-      expect(/\p{Extended_Pictographic}/u.test(el.textContent ?? '')).toBe(false);
-      expect(/monospace/i.test(el.innerHTML)).toBe(false);
-    }
+  it('Sex is keyboard-operable: F / M / O quick keys and arrows (a radio group with one Tab stop)', () => {
+    const { el, f } = render();
+    const group = el.querySelector<HTMLElement>('[data-field="sex"] [role="radiogroup"]')!;
+    const key = (k: string) => { group.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); f.detectChanges(); };
+    const checked = () => group.querySelector('[aria-checked="true"]')?.textContent?.trim();
+    key('f');
+    expect(checked()).toBe('Female');
+    key('ArrowRight');
+    expect(checked()).toBe('Other');
+    key('m');
+    expect(checked()).toBe('Male');
+    expect(Array.from(group.querySelectorAll('[role="radio"]')).map(b => b.getAttribute('tabindex'))).toEqual(['0', '-1', '-1']);
   });
 });
 
-describe('Patient registration — new design: behaviour kept', () => {
-  it('Register with a missing required field opens THAT section with the message; nothing is posted', () => {
-    const { el, f, api, txt, tab } = render();
-    tab('Additional details');
+describe('Patient registration — errors + behaviour kept', () => {
+
+  it('Register with gaps: EACH invalid field is outlined with its message; focus goes to the first', async () => {
+    const { el, api, txt, flush } = render();
     (el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
-    f.detectChanges();
+    await flush();
     expect(api.post).not.toHaveBeenCalled();
-    expect(txt(el.querySelector('[role="tab"][aria-selected="true"]'))).toBe('Identity');
-    expect(txt(el.querySelector('.pf-wr-err'))).toBe('First name: Required');
-    expect(el.querySelector('.pf-wr-err')!.getAttribute('role')).toBe('alert');
+    const first = el.querySelector('[data-field="first_name"]')!;
+    expect(first.querySelector('input.nd-input--error[aria-invalid="true"]')).not.toBeNull();
+    expect(txt(first.querySelector('.pf-di-err'))).toBe('Required');
+    expect(el.querySelector('[data-field="sex"] .pf-di-seg--error')).not.toBeNull();
+    expect(el.querySelector('[data-field="phone"] .pf-di-phone--err')).not.toBeNull();
+    expect(el.querySelector('[data-field="email"] .pf-di-err')).toBeNull();
+    expect(document.activeElement).toBe(first.querySelector('input'));
+    expect(el.querySelector('.pf-wr-err, [role="tablist"]')).toBeNull();
   });
 
-  it('validation walks every section: a missing phone opens Contact & IDs', () => {
-    const { el, f, api, txt, type } = render();
+  it('fixing a field clears ITS error only', async () => {
+    const { el, type, flush } = render();
+    (el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
+    await flush();
     type('first_name', 'Ravi');
-    type('fathers_name', 'Shankar');
-    (Array.from(el.querySelectorAll<HTMLButtonElement>('[data-field="sex"] .nd-seg__item')).find(b => b.textContent!.trim() === 'Male'))!.click();
-    f.detectChanges();
-    (el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
-    f.detectChanges();
-    expect(api.post).not.toHaveBeenCalled();
-    expect(txt(el.querySelector('[role="tab"][aria-selected="true"]'))).toBe('Contact & IDs');
-    expect(txt(el.querySelector('.pf-wr-err'))).toBe('Phone: Required');
+    expect(el.querySelector('[data-field="first_name"] .pf-di-err')).toBeNull();
+    expect(el.querySelector('[data-field="fathers_name"] .pf-di-err')).not.toBeNull();
   });
-
-  async function fillAll(r: ReturnType<typeof render>) {
-    r.type('first_name', 'Ravi');
-    r.type('fathers_name', 'Shankar');
-    (Array.from(r.el.querySelectorAll<HTMLButtonElement>('[data-field="sex"] .nd-seg__item')).find(b => b.textContent!.trim() === 'Male'))!.click();
-    r.f.detectChanges();
-    r.tab('Contact & IDs');
-    r.type('phone', '9876543210');
-  }
 
   it('Register posts the patient and opens the profile (MRN is server-generated)', async () => {
     const r = render();
-    await fillAll(r);
+    r.fillAll();
     (r.el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
     await r.flush();
     expect(r.api.post).toHaveBeenCalledTimes(1);
@@ -282,20 +303,35 @@ describe('Patient registration — new design: behaviour kept', () => {
     expect(r.router.navigate).toHaveBeenCalledWith(['/frontdesk/patients', 'p-new']);
   });
 
-  it('Save & book test returns to Order & Payments with the new patient attached', async () => {
+  it('Save & book test (not from an order) opens a new order for the patient', async () => {
     const r = render();
-    await fillAll(r);
+    r.fillAll();
     (r.el.querySelector('.pf-reg-order') as HTMLButtonElement).click();
     await r.flush();
     expect(r.orderEntry.startNewOrder).toHaveBeenCalledWith('p-new');
   });
 
-  it('duplicate patient: confirm via DialogService, then retry with force', async () => {
+  it('opened from Order & Payments: Register goes BACK to that order with the patient (cart resumes)', async () => {
+    const r = render({ returnTo: 'order' });
+    r.fillAll();
+    (r.el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
+    await r.flush();
+    expect(r.router.navigate).toHaveBeenCalledWith(['/frontdesk/order'], { queryParams: { patientId: 'p-new', resume: 'registration' } });
+    expect(r.orderEntry.startNewOrder).not.toHaveBeenCalled();
+  });
+
+  it('opened from Order & Payments: Cancel goes back to the order too', () => {
+    const r = render({ returnTo: 'order' });
+    (r.el.querySelector('.pf-reg-cancel') as HTMLButtonElement).click();
+    expect(r.router.navigate).toHaveBeenCalledWith(['/frontdesk/order'], { queryParams: { resume: 'registration' } });
+  });
+
+  it('duplicate patient: confirm via DialogService, then retry with force (no other dialogs)', async () => {
     let n = 0;
     const r = render({ post: () => (++n === 1
       ? throwError(() => ({ error: { error: 'duplicate_patient', message: 'Ravi Shankar (9876543210) is already registered.' } }))
       : of({ id: 'p-new', displayName: 'Mr. Ravi Shankar' })) });
-    await fillAll(r);
+    r.fillAll();
     (r.el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
     await r.flush();
     await r.flush();
@@ -304,7 +340,12 @@ describe('Patient registration — new design: behaviour kept', () => {
     expect((r.api.post.mock.calls[1] as unknown[])[1]).toMatchObject({ force: true });
   });
 
-  it('ABHA: Fill from ABHA opens the prefill; fetched details fill the form', async () => {
+  it('the phone country code defaults to the tenant\'s', () => {
+    const { el } = render({ tenantPhone: '+44 20 7946 0000' });
+    expect(el.querySelector('[data-field="phone"] .pf-dd__value')!.textContent!.trim()).toBe('+44');
+  });
+
+  it('ABHA: Fill from ABHA opens the prefill; fetched details fill the form and the pill', async () => {
     const { el, f, c, flush, txt } = render();
     (el.querySelector('.pf-reg-abha') as HTMLButtonElement).click();
     f.detectChanges();
@@ -317,17 +358,22 @@ describe('Patient registration — new design: behaviour kept', () => {
     expect(el.querySelector<HTMLInputElement>('[data-field="first_name"] input')!.value).toBe('Meena');
     expect(txt(el.querySelector('.pf-reg-ctx__nametext'))).toBe('Meena Devi');
   });
-});
 
-describe('Patient registration — phones + classic', () => {
-  it('phone rules: Cancel goes, the tabs stack under the name and scroll, 40px+ tab targets', () => {
+  it('edit mode: the pill shows the patient, primary = Save changes, a neutral save state', async () => {
+    const { el, txt, flush, type } = render({ patientId: 'p-1' });
+    await flush();
+    expect(txt(el.querySelector('.pf-reg-ctx__nametext'))).toBe('Mr. Arun Kumar');
+    expect(txt(el.querySelector('pf-hero-band .pf-hb-btn--primary'))).toBe('Save changes');
+    expect(el.querySelector('.pf-reg-order')).toBeNull();
+    expect(txt(el.querySelector('.nd-savestate'))).toBe('All changes saved');
+    type('first_name', 'Arun K');
+    expect(txt(el.querySelector('.nd-savestate'))).toBe('Unsaved changes');
+  });
+
+  it('phone rules: Cancel goes on phones; no tab styles remain', () => {
     const phone = PATIENT_REGISTER_ND_STYLES.slice(PATIENT_REGISTER_ND_STYLES.indexOf('@media (max-width: 640px)'));
     expect(phone).toMatch(/\.pf-reg-cancel\s*\{\s*display:\s*none/);
-    expect(phone).toMatch(/\.pf-reg-ctx__name\s*\{[^}]*flex:\s*1 1 100%/);
-    expect(phone).toMatch(/\.pf-reg-tab\s*\{\s*height:\s*40px/);
-    expect(PATIENT_REGISTER_ND_STYLES).toMatch(/\.pf-reg-tabs\s*\{[^}]*overflow-x:\s*auto/);
-    // No palette leaks in the styles either.
-    expect(/monospace|#10b981|emerald|teal|green/i.test(PATIENT_REGISTER_ND_STYLES)).toBe(false);
+    expect(/pf-reg-tab|monospace|emerald|teal|green/i.test(PATIENT_REGISTER_ND_STYLES)).toBe(false);
   });
 
   it('classic design keeps the old page (screen header, no band)', () => {
