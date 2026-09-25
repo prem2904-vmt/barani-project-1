@@ -138,7 +138,7 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
     .pf-tog__thumb {
       width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s;
     }
-    .pf-tog--on .pf-tog__track { background: #10b981; }
+    .pf-tog--on .pf-tog__track { background: var(--nd-toggle-on, #aeb8c2); }   /* slate toggle (nd-kit) */
     .pf-tog--on .pf-tog__thumb { transform: translateX(18px); }
     .pf-tog--sm .pf-tog__track { width: 36px; height: 21px; }
     .pf-tog--sm .pf-tog__thumb { width: 17px; height: 17px; }

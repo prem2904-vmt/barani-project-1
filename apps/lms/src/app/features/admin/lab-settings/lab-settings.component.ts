@@ -484,9 +484,10 @@ interface AutoAssignConfig {
       display: inline-flex; align-items: center; gap: 6px;
       margin: 2px 0 18px; padding: 5px 12px; border-radius: 999px;
       font-size: 12px; font-weight: 600;
-      color: var(--emerald-text, #10b981);
-      background: rgba(16, 185, 129, 0.10);
-      border: 1px solid rgba(16, 185, 129, 0.28);
+      /* Palette only (nd-kit): a neutral chip, no green. */
+      color: var(--text-secondary);
+      background: var(--nd-chip-bg, rgba(127, 127, 127, 0.1));
+      border: 1px solid var(--nd-line, rgba(127, 127, 127, 0.25));
     }
     .pf-ls__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-ls__hint  { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }

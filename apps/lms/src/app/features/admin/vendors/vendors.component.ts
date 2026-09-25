@@ -407,7 +407,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
     }
     .pf-vendor__bar > span {
       display: block; height: 100%;
-      background: linear-gradient(90deg, #10b981, #ec4899);
+      background: var(--color-violet-500, #8b5cf6);   /* palette only */
       transition: width 0.25s ease;
     }
 

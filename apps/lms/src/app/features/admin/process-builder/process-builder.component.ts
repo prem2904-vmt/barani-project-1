@@ -333,7 +333,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     .pb-toggle:disabled { opacity: 0.6; cursor: not-allowed; }
     .pb-toggle { width: 30px; height: 17px; border-radius: 9px; border: none; background: rgba(255,255,255,0.15); position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.15s; }
     .pb-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
-    .pb-toggle.on { background: #10b981; }
+    .pb-toggle.on { background: var(--nd-toggle-on, #aeb8c2); }   /* slate toggle (nd-kit) */
     .pb-toggle.on::after { transform: translateX(13px); }
     .pb-empty { font-size: 11.5px; color: var(--text-tertiary); text-align: center; padding: 14px 4px; border: 1px dashed var(--glass-border); border-radius: 10px; }
     .pb-add-lane { width: 56px; flex-shrink: 0; align-self: stretch; border: 1.5px dashed var(--glass-border); border-radius: 16px; background: transparent; color: var(--text-tertiary); font-size: 12px; font-weight: 700; cursor: pointer; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 0.05em; transition: border-color .15s, color .15s, background .15s; }

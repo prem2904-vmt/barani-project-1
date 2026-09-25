@@ -308,7 +308,7 @@ export class UsersAccessComponent implements OnInit {
     input.style.cssText = 'opacity:0;width:0;height:0;margin:0;';
 
     const slider = document.createElement('span');
-    slider.style.cssText = `position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:${u.isActive ? '#10b981' : '#9ca3af'};transition:.2s;border-radius:20px;`;
+    slider.style.cssText = `position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:${u.isActive ? 'var(--nd-toggle-on, #aeb8c2)' : 'var(--nd-toggle-off, #e3e7eb)'};transition:.2s;border-radius:20px;`;
 
     const dot = document.createElement('span');
     dot.style.cssText = `position:absolute;content:"";height:14px;width:14px;left:${u.isActive ? '18px' : '3px'};bottom:3px;background-color:white;transition:.2s;border-radius:50%;`;
