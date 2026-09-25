@@ -164,49 +164,79 @@
 
     <!-- ─── Collect drawer ────────────────────────────────────────────── -->
     @if (activeGroup(); as g) {
-      <div #drawerEl class="pf-drawer pf-drawer--nd" role="dialog" aria-modal="true" (click)="close()">
-        <div class="pf-drawer__panel" (click)="$event.stopPropagation()">
-          <header class="pf-drawer__head">
-            <button type="button" class="pf-drawer__close" (click)="close()" aria-label="Close">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 6 6 18M6 6l12 12"/>
-              </svg>
-            </button>
-            <div class="pf-drawer__who min-w-0">
-              <p class="pf-drawer__name">{{ patientTitle(g.patientName) }}</p>
-              <p class="pf-drawer__meta pf-drawer__meta--order flex items-center gap-1.5 flex-wrap">
-                @if (patientSub(g.patientName); as sub) {
-                  <span class="pf-drawer__sub font-mono font-medium">{{ sub }}</span>
-                  <span class="opacity-40" aria-hidden="true">•</span>
+      <div #drawerEl class="pf-drawer pf-drawer--nd" role="dialog" aria-modal="true" [attr.aria-label]="'Collect samples for ' + patientFullName(g)" (click)="close()">
+        <div class="pf-drawer__panel nd-page" (click)="$event.stopPropagation()">
+          <!-- Band: IDENTICAL to every step (back + tenant). The pill is the
+               CONTEXT BAR: subject chips (patient, order, samples) + this
+               step's filters + the counter. (docs/ND-PATTERN.md) -->
+          <pf-hero-band class="pf-sc-band" [customSearch]="true" [back]="true" [backAction]="closeFn">
+            <div band-search class="pf-sc-ctx">
+              @if (canOpenPatient(g)) {
+                <button type="button" class="nd-chip pf-sc-chip pf-sc-chip--patient" (click)="openPatient(g)"
+                        [attr.aria-label]="'Open patient ' + patientFullName(g)">
+                  <span class="pf-sc-chip__name">{{ patientFullName(g) }}</span>
+                  @if (patientSub(g.patientName); as sub) { <span class="pf-sc-chip__meta">{{ sub }}</span> }
+                </button>
+              } @else {
+                <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--patient">
+                  <span class="pf-sc-chip__name">{{ patientFullName(g) }}</span>
+                  @if (patientSub(g.patientName); as sub) { <span class="pf-sc-chip__meta">{{ sub }}</span> }
+                </span>
+              }
+              <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--order" title="Order ID">
+                <span class="pf-sc-chip__meta">Order</span><span class="nd-mono">{{ g.orderNo }}</span>
+              </span>
+              @if (g.samples.length === 1) {
+                <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--samples" title="Sample ID">
+                  <span class="pf-sc-chip__meta">Sample</span><span class="nd-mono">{{ g.samples[0].barcode ?? '—' }}</span>
+                </span>
+              } @else {
+                <span class="pf-sc-samples">
+                  <button type="button" class="nd-chip pf-sc-chip pf-sc-chip--samples" [attr.aria-expanded]="samplesOpen()"
+                          (click)="samplesOpen.set(!samplesOpen())">{{ g.samples.length }} samples</button>
+                  <span class="pf-sc-samples__pop" [class.pf-sc-samples__pop--open]="samplesOpen()" role="list">
+                    @for (x of g.samples; track x.id) { <span class="nd-mono" role="listitem">{{ x.barcode ?? '—' }}</span> }
+                  </span>
+                </span>
+              }
+              <span class="pf-sc-ctx__grow"></span>
+              <div class="nd-seg pf-sc-ctx__filters" role="radiogroup" aria-label="Show vials">
+                @for (f of vialFilterOpts(g); track f.id) {
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="vialFilter() === f.id"
+                          (click)="vialFilter.set(f.id)">{{ f.label }} <span class="pf-sc-n">{{ f.count }}</span></button>
                 }
-                <span>Order ID: {{ g.orderNo }}</span>
-              </p>
+              </div>
+              <span class="nd-band-chip pf-sc-ctx__count" aria-live="polite">
+                <strong>@for (n of [g.collected]; track n) {<span class="pf-tick">{{ n }}</span>}/{{ g.totalVials }}</strong> drawn
+              </span>
             </div>
-            <div class="pf-drawer__progress shrink-0">
-              <!-- Re-created per value so the tick animation replays. -->
-              <span class="pf-drawer__progress-num">@for (n of [g.collected]; track n) {<span class="pf-tick">{{ n }}</span>}/{{ g.totalVials }}</span>
-              <span class="pf-drawer__progress-lbl">vials drawn</span>
-            </div>
-          </header>
+          </pf-hero-band>
 
-          <div class="pf-drawer__progressbar">
+          <div class="pf-drawer__progressbar" aria-hidden="true">
             <span [style.width.%]="(g.collected / g.totalVials) * 100"></span>
           </div>
 
-          <p class="pf-drawer__hint">Tap each vial as you draw it — or mark a brought-in specimen as External to skip its draw. When every vial is done, the order completes automatically.</p>
-
-          <!-- Phones: a 2-column grid of vial cards (reads + counts better than
-               a sideways snap-scroll). -->
-          <div class="pf-drawer__tubes pf-drawer__tubes--grid">
-            @for (s of orderedSamples(g); track s.id) {
-              <!-- Wrapper exists so the External flag can sit OUTSIDE the
-                   card's tap region (the card clips its children with
-                   overflow:hidden and owns tap-to-collect + hold-to-peek). -->
-              <div class="pf-tube-wrap">
-              <!-- External flag, perched on the card's top-left corner but
-                   outside its hit area: one tap collects THIS tube as
-                   brought-in with no draw; filled violet = marked (tap to
-                   undo while the tube hasn't left the counter). -->
+          <div class="nd-body nd-body--split pf-sc-body">
+            <!-- Main card: VIALS (like the catalogue card). -->
+            <section class="nd-card pf-sc-vials" aria-label="Vials">
+              <header class="nd-card__head">
+                <span class="nd-card__icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v14a2 2 0 0 0 4 0V3"/></svg>
+                </span>
+                <span class="nd-card__label">Vials</span>
+                <span class="nd-card__note">Tap a vial when drawn. Mark a brought-in specimen External to skip its draw.</span>
+                <!-- Phones: the status filter moves here from the band pill. -->
+                <div class="nd-seg pf-sc-vials__filters" role="radiogroup" aria-label="Show vials">
+                  @for (f of vialFilterOpts(g); track f.id) {
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="vialFilter() === f.id"
+                            (click)="vialFilter.set(f.id)">{{ f.label }} <span class="pf-sc-n">{{ f.count }}</span></button>
+                  }
+                </div>
+              </header>
+              <div class="nd-card__body">
+                <div class="pf-sc-grid">
+                  @for (s of visibleSamples(g); track s.id) {
+                    <div class="pf-tube-wrap">
               @if (dispatchSelect() === null && (s.source === 'external' || canMarkExternal(s))) {
                 <button type="button" class="pf-tube__extflag"
                         [class.pf-tube__extflag--on]="s.source === 'external'"
@@ -227,7 +257,7 @@
               <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
                    list (a floating popover). A div, not <button>, so the hold /
                    pointer handling is clean. -->
-              <div class="pf-tube" role="button" tabindex="0"
+              <div class="pf-tube pf-sc-tile" role="button" tabindex="0"
                    [class.pf-tube--done]="s.status !== 'pending'"
                    [class.pf-tube--holding]="holdingId() === s.id"
                    [class.pf-tube--locked]="tubeState(s).kind === 'locked'"
@@ -257,6 +287,8 @@
                     </svg>
                   </span>
                 }
+                <!-- The ORIGINAL tube illustration + blood-fill animation, kept
+                     exactly (owner). Scaled down in the compact tile. -->
                 @if (container(s).kind !== 'vacutainer') {
                   <!-- Specimen cup/jar: shorter cylinder, wide rim, screw-cap
                        lid. Urine cups fill amber; sterile jars (body fluid,
@@ -517,24 +549,78 @@
                   }
                 </div>
               </div>
-              </div><!-- /pf-tube-wrap -->
-            }
-          </div>
+                    </div><!-- /pf-tube-wrap -->
+                  }
+                  @if (visibleSamples(g).length === 0) {
+                    <p class="pf-sc-empty">No vials in this view.</p>
+                  }
+                </div>
+              </div>
+            </section>
 
-          <footer class="pf-drawer__foot">
+            <!-- Side card: COLLECTION (like the BILLING card). On phones it is
+                 the sheet opened from the bottom bar. -->
+            @if (actionsOpen()) { <div class="nd-sheet-backdrop pf-sc-backdrop" (click)="actionsOpen.set(false)"></div> }
+            <aside class="nd-card pf-sc-side" [class.pf-sc-side--open]="actionsOpen()" aria-label="Collection">
+              <span class="nd-sheet__handle" aria-hidden="true"></span>
+              <header class="nd-card__head">
+                <span class="nd-card__icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                </span>
+                <span class="nd-card__label">Collection</span>
+                <span class="nd-card__spacer"></span>
+                <button type="button" class="nd-btn nd-btn--icon pf-sc-side__close" (click)="actionsOpen.set(false)" aria-label="Close collection">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </header>
+              <div class="nd-card__body">
+                @if (isDispatched(g)) {
+                  <span class="pf-drawer__done-stamp">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M5 18H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h11v12M14 9h4l3 3v5a1 1 0 0 1-1 1h-2"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="17.5" cy="18.5" r="1.5"/>
+                    </svg>
+                    Dispatched to lab
+                  </span>
+                } @else if (g.collected === g.totalVials) {
+                  <span class="pf-drawer__done-stamp">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+                    All vials collected
+                  </span>
+                } @else {
+                  <p class="pf-sc-remaining"><strong>{{ g.totalVials - g.collected }}</strong> of {{ g.totalVials }} remaining</p>
+                }
+                <ul class="pf-sc-summary" aria-label="Tubes">
+                  @for (s of orderedSamples(g); track s.id) {
+                    <li class="nd-row pf-sc-sumrow" [class.nd-row--done]="s.status !== 'pending'">
+                      <span class="pf-sc-dot" [style.background]="container(s).kind !== 'vacutainer' ? container(s).color : tube(s).color" aria-hidden="true"></span>
+                      <span class="nd-row__name">{{ tube(s).label }}</span>
+                      <span class="nd-row__value pf-sc-sumrow__state">
+                        @if (s.status === 'pending') { Pending }
+                        @else if (s.source === 'external') { Brought in }
+                        @else if (s.status === 'collected') { Drawn {{ s.collectedAt | date:'shortTime' }} }
+                        @else { Dispatched }
+                      </span>
+                    </li>
+                  }
+                </ul>
+                <p class="pf-sc-labelinfo">
+                  {{ scan.manualEntry() ? 'Manual mode: write each sample ID on its container (Label by hand).' : 'Print a barcode + QR label for each tube (Print labels).' }}
+                </p>
+              </div>
+              <footer class="nd-card__foot pf-sc-foot">
             @if (dispatchSelect(); as sel) {
               <!-- Partial-dispatch selection mode: pick collected tubes, then
                    send just those to the lab. Everything else in the footer is
                    parked until Cancel / confirm. -->
-              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text" (click)="cancelPartialDispatch()"
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text nd-btn nd-btn--secondary" (click)="cancelPartialDispatch()"
                       aria-label="Cancel" data-label="Cancel">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12"/>
                 </svg>
                 <span class="pf-btn__text">Cancel</span>
               </button>
-              <span class="pf-drawer__remaining">Tap collected tubes to select</span>
-              <button type="button" class="pf-btn pf-btn-primary pf-btn--keep-text" (click)="confirmPartialDispatch(g)"
+              <span class="pf-drawer__remaining nd-span">Tap collected tubes to select</span>
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--keep-text nd-btn nd-btn--primary nd-span" (click)="confirmPartialDispatch(g)"
                       [disabled]="sel.size === 0 || dispatching()"
                       [attr.aria-label]="'Dispatch ' + sel.size" [attr.data-label]="'Dispatch ' + sel.size">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -544,11 +630,11 @@
               </button>
             } @else {
             @if (isDispatched(g)) {
-              <button type="button" class="pf-btn pf-btn-ghost" (click)="undispatchOrder(g)" [disabled]="dispatching()">
+              <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="undispatchOrder(g)" [disabled]="dispatching()">
                 {{ dispatching() ? 'Undoing…' : 'Undo dispatch' }}
               </button>
             } @else {
-              <button type="button" class="pf-btn pf-btn-ghost" (click)="rejectOrder(g)"
+              <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="rejectOrder(g)"
                       aria-label="Can't collect" data-label="Can't collect">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9"/><path d="M5.6 5.6 18.4 18.4"/>
@@ -559,7 +645,7 @@
             @if (scan.manualEntry()) {
               <!-- Manual mode: nothing to print — show what to hand-write on
                    each container instead. -->
-              <button type="button" class="pf-btn pf-btn-ghost" (click)="writeUpOpen.set(true)"
+              <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="writeUpOpen.set(true)"
                       aria-label="Label by hand" data-label="Label by hand">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>
@@ -569,30 +655,13 @@
             } @else {
               <!-- Print the order's tube labels (barcode + QR) — available any time
                    in the drawer so tubes can be labelled before or after the draw. -->
-              <button type="button" class="pf-btn pf-btn-ghost" (click)="printLabels(g)"
+              <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="printLabels(g)"
                       aria-label="Print labels" data-label="Print labels">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M6 9V2h12v7"/><rect x="6" y="13" width="12" height="9"/><path d="M6 18H3a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-3"/>
                 </svg>
                 <span class="pf-btn__text">Print labels</span>
               </button>
-            }
-            @if (isDispatched(g)) {
-              <span class="pf-drawer__done-stamp">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 18H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h11v12M14 9h4l3 3v5a1 1 0 0 1-1 1h-2"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="17.5" cy="18.5" r="1.5"/>
-                </svg>
-                Dispatched to lab
-              </span>
-            } @else if (g.collected === g.totalVials) {
-              <span class="pf-drawer__done-stamp">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="m5 12 4 4L19 6"/>
-                </svg>
-                All vials collected
-              </span>
-            } @else {
-              <span class="pf-drawer__remaining">{{ g.totalVials - g.collected }} remaining</span>
             }
             <!-- Dispatch right here once everything's drawn (FD/collector handoff
                  to the lab) — only if the user can dispatch and it's not already.
@@ -601,7 +670,7 @@
                  "Payment pending" note for collectors without billing access. -->
             @if (g.collected === g.totalVials && !isDispatched(g) && g.paymentHold && dispatchStep()) {
               @if (canBill()) {
-                <button type="button" class="pf-btn pf-btn-primary" (click)="goToBilling(g)"
+                <button type="button" class="pf-btn pf-btn-primary nd-btn nd-btn--primary nd-span" (click)="goToBilling(g)"
                         aria-label="Bill" data-label="Bill">
                   <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M3 5h18v14H3z"/><path d="M3 10h18M7 15h3"/>
@@ -609,10 +678,10 @@
                   <span class="pf-btn__text">Bill</span>
                 </button>
               } @else {
-                <span class="pf-drawer__remaining">Payment pending — dispatch locked</span>
+                <span class="pf-drawer__remaining nd-span">Payment pending — dispatch locked</span>
               }
             } @else if (g.collected === g.totalVials && canDispatch() && !isDispatched(g)) {
-              <button type="button" class="pf-btn pf-btn-primary" (click)="dispatchOrder(g)" [disabled]="dispatching()"
+              <button type="button" class="pf-btn pf-btn-primary nd-btn nd-btn--primary nd-span" (click)="dispatchOrder(g)" [disabled]="dispatching()"
                       aria-label="Dispatch" data-label="Dispatch">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>
@@ -623,14 +692,14 @@
               <!-- Series, some tubes drawn, more still to come. One click hands
                    ALL drawn tubes to the lab (OPS-66 — no select-then-confirm).
                    "Choose" opens tube-by-tube selection for the rare subset. -->
-              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text" (click)="startPartialDispatch(g)"
+              <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text nd-btn nd-btn--secondary" (click)="startPartialDispatch(g)"
                       aria-label="Choose tubes" data-label="Choose">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                 </svg>
                 <span class="pf-btn__text">Choose</span>
               </button>
-              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial" (click)="dispatchCollected(g)"
+              <button type="button" class="pf-btn pf-btn-primary pf-btn--partial nd-btn nd-btn--primary nd-span" (click)="dispatchCollected(g)"
                       [disabled]="dispatching()"
                       [attr.aria-label]="'Dispatch ' + collectedCount(g)" [attr.data-label]="'Dispatch ' + collectedCount(g)">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -639,7 +708,8 @@
                 <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch ' + collectedCount(g) }}</span>
               </button>
             }
-            <button type="button" class="pf-btn pf-drawer__finish" [class.pf-btn-primary]="finishIsPrimary(g)" [class.pf-btn-ghost]="!finishIsPrimary(g)"
+            <button type="button" class="pf-btn pf-drawer__finish nd-btn nd-span" [class.pf-btn-primary]="finishIsPrimary(g)" [class.pf-btn-ghost]="!finishIsPrimary(g)"
+                    [class.nd-btn--primary]="finishIsPrimary(g)" [class.nd-btn--secondary]="!finishIsPrimary(g)"
                     (click)="close()" [disabled]="doneDisabled(g)"
                     [attr.aria-label]="doneLabel(g)"
                     [attr.data-label]="doneLabel(g)">
@@ -655,7 +725,23 @@
               <span class="pf-btn__text">{{ doneLabel(g) }}</span>
             </button>
             }
-          </footer>
+              </footer>
+            </aside>
+          </div>
+
+          <!-- Phones: the COLLECTION card as a sticky bottom bar. -->
+          <div class="nd-bottombar pf-sc-bar">
+            <span class="nd-bottombar__info">{{ g.collected }}/{{ g.totalVials }} drawn</span>
+            <button type="button" class="nd-btn nd-btn--icon" (click)="actionsOpen.set(true)" aria-label="More collection actions">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+            </button>
+            @if (dispatchCtaShown(g)) {
+              <button type="button" class="nd-btn nd-btn--primary pf-sc-bar__cta" (click)="actionsOpen.set(true)">Dispatch…</button>
+            } @else {
+              <button type="button" class="nd-btn pf-sc-bar__cta" [class.nd-btn--primary]="finishIsPrimary(g)" [class.nd-btn--secondary]="!finishIsPrimary(g)"
+                      (click)="close()" [disabled]="doneDisabled(g)">{{ doneLabel(g) }}</button>
+            }
+          </div>
 
           <!-- Tube labels for printing. Hidden on screen; the global
                pf-print-label rule reveals ONLY this block during

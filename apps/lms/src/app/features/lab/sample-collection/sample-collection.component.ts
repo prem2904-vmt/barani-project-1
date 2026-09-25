@@ -330,6 +330,9 @@ interface OrderGroup {
   /** Server-computed on the embedded order: the require-bill gate is on and
    *  the bill isn't settled — dispatch would be rejected, offer "Bill". */
   paymentHold: boolean;
+  /** FULL display name (never the 15-char cut of formatPatientInfo). */
+  patientFull?: string;
+  patientId?: string;
 }
 
 @Component({
@@ -639,6 +642,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
             s.order?.orderNumber ||
             "#" + s.orderId.replace(/-/g, "").slice(-8).toUpperCase(),
           patientName: formatPatientInfo(p),
+          patientFull: (p && patientDisplayName(p)) || undefined,
+          patientId: p?.id,
           patientMeta: "",
           createdAt: s.createdAt,
           samples: [],
@@ -775,6 +780,49 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   /** Drawer order: normal tubes first (existing order), then series tubes by
    *  (series, ascending offset). */
+  // ─── Context bar (band pill) + VIALS filter (nd pattern) ─────────────
+  /** Status filter for the VIALS card (All · Pending · Drawn · External). */
+  readonly vialFilter = signal<'all' | 'pending' | 'drawn' | 'external'>('all');
+  /** "N samples" chip expanded (lists the sample IDs). */
+  readonly samplesOpen = signal(false);
+  /** Phone: the COLLECTION card opens as a sheet from the bottom bar. */
+  readonly actionsOpen = signal(false);
+  /** Back chevron in the band closes this step (hero-band backAction). */
+  readonly closeFn = () => this.close();
+
+  vialFilterOpts(g: OrderGroup): Array<{ id: 'all' | 'pending' | 'drawn' | 'external'; label: string; count: number }> {
+    const ss = g.samples;
+    return [
+      { id: 'all', label: 'All', count: ss.length },
+      { id: 'pending', label: 'Pending', count: ss.filter(s => s.status === 'pending').length },
+      { id: 'drawn', label: 'Drawn', count: ss.filter(s => s.status !== 'pending').length },
+      { id: 'external', label: 'External', count: ss.filter(s => s.source === 'external').length },
+    ];
+  }
+  /** The vial tiles shown under the current filter. */
+  visibleSamples(g: OrderGroup): OrderSample[] {
+    const f = this.vialFilter();
+    const list = this.orderedSamples(g);
+    if (f === 'pending') return list.filter(s => s.status === 'pending');
+    if (f === 'drawn') return list.filter(s => s.status !== 'pending');
+    if (f === 'external') return list.filter(s => s.source === 'external');
+    return list;
+  }
+  /** Full patient name for the context chip (falls back to the list name). */
+  patientFullName(g: OrderGroup): string {
+    return g.patientFull || this.patientTitle(g.patientName);
+  }
+  /** The patient chip opens the profile when the user may view patients. */
+  canOpenPatient(g: OrderGroup): boolean {
+    return !!g.patientId && (this.auth.hasPermission('view_patient') || this.auth.hasPermission('register_patient'));
+  }
+  openPatient(g: OrderGroup): void {
+    if (!this.canOpenPatient(g)) return;
+    const id = g.patientId!;
+    this._openOrderId.set(null);
+    this.router.navigate(['/frontdesk/patients', id]);
+  }
+
   orderedSamples(g: OrderGroup): OrderSample[] {
     return sortForCollection(g.samples);
   }
@@ -1257,6 +1305,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
   close() {
     this.resetSeriesOverrides();
+    this.vialFilter.set('all');
+    this.samplesOpen.set(false);
+    this.actionsOpen.set(false);
     this._openOrderId.set(null);
     // Deep-linked from another screen (FD "Collect Sample") — return there
     // rather than leaving the user on an unrelated queue.

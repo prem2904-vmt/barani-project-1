@@ -1691,3 +1691,124 @@
       .pf-drawer--nd .pf-tube--done,
       .pf-drawer--nd .pf-tube--done .pf-tube__stamp { animation: none; }
     }
+
+    /* ════ Collect on the nd pattern (docs/ND-PATTERN.md) ════════════════
+       Band (identical to every step) with the pill as the CONTEXT BAR →
+       VIALS main card with compact tiles → COLLECTION side card with the
+       billing-card footer. Phones: pill = patient + order; filters in the
+       VIALS header; COLLECTION = sticky bottom bar + sheet. */
+    .pf-drawer--nd .pf-drawer__panel { background: var(--bg-primary); }
+    .pf-drawer--nd .pf-sc-band { flex: none; }
+
+    /* Context bar (band pill) */
+    .pf-sc-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: nowrap; }
+    .pf-sc-chip { height: 34px; flex: 0 1 auto; min-width: 0; gap: 6px; }
+    .pf-sc-chip--patient { max-width: 100%; }
+    /* Full name; an ellipsis appears ONLY when it truly overflows. */
+    .pf-sc-chip__name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .pf-sc-chip__meta { flex: none; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+    .pf-sc-chip--order, .pf-sc-chip--samples { flex: none; }
+    .pf-sc-chip .nd-mono { font-size: 12px; color: var(--text-primary); }
+    .pf-sc-samples { position: relative; flex: none; }
+    .pf-sc-samples__pop {
+      display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 5;
+      flex-direction: column; gap: 4px; padding: 8px 10px; min-width: 180px;
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm);
+      box-shadow: var(--nd-shadow-sm); font-size: 12px;
+    }
+    .pf-sc-samples__pop--open,
+    .pf-sc-samples:hover .pf-sc-samples__pop,
+    .pf-sc-samples:focus-within .pf-sc-samples__pop { display: flex; }
+    .pf-sc-ctx__grow { flex: 1 1 auto; }
+    .pf-sc-ctx__filters, .pf-sc-ctx__count { flex: none; }
+    .pf-sc-n { font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .pf-drawer--nd .pf-drawer__progressbar { width: 100%; margin: 0; border-radius: 0; }
+
+    /* Body: VIALS + COLLECTION */
+    .pf-sc-body { padding-top: 4px; }
+    .pf-sc-vials__filters { display: none; }
+    .pf-sc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 10px;
+      align-content: start;
+    }
+    .pf-sc-empty { margin: 0; padding: 12px 4px; font-size: 13px; color: var(--text-tertiary); }
+    .pf-drawer--nd .pf-sc-grid .pf-tube-wrap { width: 100%; }
+
+    /* Compact vial tile (list-row / tile pattern), ~76px tall. */
+    .pf-drawer--nd .pf-tube.pf-sc-tile {
+      width: 100%; box-sizing: border-box;
+      display: flex; flex-direction: row; align-items: center; gap: 12px;
+      min-height: 112px; padding: 8px 12px 8px 10px;
+      text-align: left;
+      border-radius: var(--nd-radius, 12px);
+    }
+    .pf-drawer--nd .pf-tube-wrap:has(.pf-tube__extflag) .pf-sc-tile { padding-right: 104px; }
+    .pf-drawer--nd .pf-sc-tile::before { display: none; }
+    .pf-drawer--nd .pf-sc-tile .pf-tube__body { align-items: flex-start; gap: 2px; flex: 1 1 auto; }
+    .pf-drawer--nd .pf-sc-tile .pf-tube__label { margin: 0; font-size: 13.5px; font-weight: 600; text-align: left; white-space: normal; }
+    .pf-drawer--nd .pf-sc-tile .pf-tube__dept { margin: 0; font-size: 11.5px; }
+    .pf-drawer--nd .pf-sc-tile .pf-tube__code { margin: 0; font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-drawer--nd .pf-sc-tile .pf-tube__stamp { margin-top: 4px; padding: 2px 8px; font-size: 11px; }
+    /* External: a neutral chip toggle in the tile's top-right corner. */
+    .pf-drawer--nd .pf-sc-grid .pf-tube__extflag { top: 10px; right: 10px; left: auto; height: 28px; padding: 0 10px 0 8px; }
+
+    /* COLLECTION side card */
+    .pf-sc-side__close { display: none; }
+    .pf-sc-remaining { margin: 0; font-size: 13px; color: var(--text-secondary); }
+    .pf-sc-remaining strong { font-size: 20px; color: var(--text-primary); font-variant-numeric: tabular-nums; margin-right: 4px; }
+    .pf-sc-summary { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pf-sc-sumrow { min-height: 40px; padding: 6px 10px; }
+    .pf-sc-dot { flex: none; width: 10px; height: 10px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); }
+    .pf-sc-sumrow__state { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+    .pf-sc-labelinfo { margin: 0; font-size: 12px; color: var(--text-tertiary); text-wrap: pretty; }
+    .pf-sc-foot .pf-drawer__remaining { font-family: inherit; font-size: 12px; color: var(--text-tertiary); align-self: center; }
+    .pf-sc-foot .pf-btn__icon { display: none; }
+
+    @media (max-width: 640px) {
+      /* Pill = patient + order only (one row). */
+      .pf-sc-ctx__filters, .pf-sc-ctx__count, .pf-sc-samples, .pf-sc-chip--samples, .pf-sc-ctx__grow { display: none; }
+      .pf-sc-chip { height: 32px; }
+      .pf-sc-chip__meta { display: none; }
+      .pf-sc-chip--order .pf-sc-chip__meta { display: none; }
+      .pf-sc-vials__filters { display: inline-flex; flex: 1 0 100%; overflow-x: auto; scrollbar-width: none; }
+      .pf-drawer--nd .nd-card__note { display: none; }
+      .pf-sc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .pf-drawer--nd .pf-tube.pf-sc-tile { min-height: 100px; gap: 8px; padding: 6px 8px; }
+      .pf-drawer--nd .pf-sc-tile .pf-vial { height: 86px; }
+      .pf-drawer--nd .pf-sc-tile .pf-vial--cup { height: 70px; }
+      .pf-drawer--nd .pf-tube-wrap:has(.pf-tube__extflag) .pf-sc-tile { padding-right: 44px; }
+      .pf-sc-body { padding: 8px 12px calc(84px + env(safe-area-inset-bottom, 0px)); }
+      /* COLLECTION becomes the sheet opened from the bottom bar. */
+      .pf-sc-side { display: none; }
+      .pf-sc-side.pf-sc-side--open {
+        display: flex;
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 1002;
+        height: calc(92dvh - env(safe-area-inset-top, 0px));
+        border-radius: 20px 20px 0 0;
+        animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce, ease) both;
+      }
+      .pf-sc-side__close { display: inline-flex; }
+      .pf-sc-backdrop { z-index: 1001; }
+      .pf-sc-bar { z-index: 1000; }
+      .pf-sc-bar__cta { flex: 1 1 auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pf-sc-side.pf-sc-side--open { animation: none; }
+    }
+
+    /* The ORIGINAL tube illustration is the tile's hero, scaled down; its
+       blood-fill transition (y, 0.6s) and the tick pop are untouched. */
+    .pf-drawer--nd .pf-sc-tile .pf-vial {
+      height: 96px; width: auto; flex: none;
+      filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.22));
+    }
+    .pf-drawer--nd .pf-sc-tile .pf-vial--cup { height: 78px; width: auto; }
+    /* Drawn state (tint + check + pop) FOLLOWS the fill: it starts once the
+       0.6s blood-fill transition has finished, instead of replacing it. */
+    .pf-drawer--nd .pf-sc-tile.pf-tube--done {
+      transition: background 0.25s ease 0.6s, border-color 0.25s ease 0.6s, box-shadow 0.25s ease 0.6s;
+      animation-delay: 0.6s;
+    }
+    .pf-drawer--nd .pf-sc-tile.pf-tube--done .pf-tube__stamp { animation-delay: 0.6s; }
