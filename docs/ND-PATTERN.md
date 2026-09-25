@@ -84,8 +84,21 @@ In-page steps that close rather than navigate pass `[backAction]` to
 ✅ Do: a disabled "Collect all to finish" is secondary; it turns primary when enabled.
 ❌ Don't: a gradient cart icon, a gradient ₹/% toggle, a violet "selected" payment tile.
 
-Functional colours are **data** and stay as they are: tube cap colours,
-status colours (success / warning / error), the unpriced dot.
+### Palette: primary + neutrals only
+
+The palette is **primary (violet)**, **secondary and tertiary (neutrals and
+slate)**. No green, teal, sky or other off-palette colour as decoration:
+"done / drawn / paid / included" is the neutral selected state (a light
+violet tint `--nd-done-tint` + a violet check), never a green tint, badge or
+pill. Functional exceptions — these are data or warnings, not decoration:
+
+- tube cap colours and the red blood-fill animation (Collect);
+- the muted-red **Urgent** toggle (`.nd-toggle--urgent`);
+- error red for validation / short payments;
+- the amber **unpriced / required** dot.
+
+✅ Do: "All vials collected" = neutral chip with a violet check icon.
+❌ Don't: mint tile tint, green check badge, green time chip.
 
 ## 3. Selected states are neutral
 
@@ -132,7 +145,9 @@ status colours (success / warning / error), the unpriced dot.
   grid.
 - Browse grids (the catalogue, vial tiles) may use 2–4 columns of compact
   tiles, about 72–88px tall, with a small glyph rather than an illustration.
-- Mono type is only for IDs and codes. Everything else is Noto Sans.
+- **One font family: Noto Sans.** IDs, codes, times and counts use tabular
+  numbers (`.nd-num` = Noto Sans + `font-variant-numeric: tabular-nums`),
+  never a system monospace (`monospace` / `ui-monospace` renders as Courier).
 
 ## 7. Search: one mode per device type
 
@@ -207,7 +222,8 @@ Card     .nd-card · .nd-card__head · __icon · __label · __note · __spacer �
 Buttons  .nd-btn + --primary | --secondary | --tertiary | --icon
 Select   .nd-seg / .nd-seg__item[aria-checked] · .nd-chip[aria-pressed] · .nd-chip--static · .nd-tile-sel
 Toggle   .nd-toggle[role=switch][aria-checked] › .nd-toggle__track › .nd-toggle__knob · .nd-toggle--urgent
-Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done · .nd-mono
+Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done
+Numbers  .nd-num (Noto Sans + tabular-nums; .nd-mono is an alias)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
 Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .nd-fullscreen · --nd-nav-h

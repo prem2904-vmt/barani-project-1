@@ -31,4 +31,7 @@
   toggles; neutral selected states; no truncation when there is room; one row per search
   result; web vs touch search modes; the bottom navbar is ALWAYS visible (layouts fit above
   it, never hide it); phone bottom bar / 92dvh sheet above the nav;
-  spring motion with reduced-motion off; SVG stroked icons (no emoji); no native controls.
+  spring motion with reduced-motion off; SVG stroked icons (no emoji); no native controls;
+  ONE font (Noto Sans, tabular numbers for IDs — never monospace); palette = violet +
+  neutrals/slate only (no green/teal decoration; exceptions: tube caps, blood fill, red
+  Urgent / validation, amber unpriced/required dot).
