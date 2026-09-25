@@ -24,28 +24,30 @@ import {
  * the copy takes the master's current version (it then reads the master again);
  * Dismiss = keep yours until the master changes again. Hidden when nothing waits.
  */
+import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
 @Component({
   selector: 'pf-catalog-proposals-panel',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (proposals().length > 0) {
-      <section class="pf-cp" aria-label="Test Master updates">
-        <div class="pf-cp__bar">
-          <svg class="pf-cp__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      <section class="nd-card pf-cp" aria-label="Test Master updates">
+        <div class="nd-card__head pf-cp__bar">
+          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>
-          </svg>
-          <span class="pf-cp__title">
-            {{ proposals().length }} Test Master update{{ proposals().length === 1 ? '' : 's' }}
+          </svg></span>
+          <span class="nd-card__label">Master updates</span>
+          <span class="nd-card__note pf-cp__title">
+            <span class="nd-num">{{ proposals().length }}</span> update{{ proposals().length === 1 ? '' : 's' }}
             for tests you changed
           </span>
-          <span class="pf-cp__spacer"></span>
-          <button type="button" class="pf-cp__btn" (click)="open.set(!open())" [attr.aria-expanded]="open()">
+          <!-- Secondary / tertiary only: the band's Create / Save owns the ONE primary. -->
+          <button type="button" class="nd-btn nd-btn--tertiary pf-cp__btn press" (click)="open.set(!open())" [attr.aria-expanded]="open()">
             {{ open() ? 'Hide' : 'Review' }}
           </button>
-          <button type="button" class="pf-cp__btn" [disabled]="busy()" (click)="dismissAll()">Dismiss all</button>
-          <button type="button" class="pf-cp__btn pf-cp__btn--primary" [disabled]="busy()" (click)="acceptAll()">Accept all</button>
+          <button type="button" class="nd-btn nd-btn--tertiary pf-cp__btn press" [disabled]="busy()" (click)="dismissAll()">Dismiss all</button>
+          <button type="button" class="nd-btn nd-btn--secondary pf-cp__btn press" [disabled]="busy()" (click)="acceptAll()">Accept all</button>
         </div>
         @if (open()) {
           <ul class="pf-cp__list">
@@ -54,15 +56,21 @@ import {
                 <div class="pf-cp__head">
                   <div class="pf-cp__what">
                     <span class="pf-cp__name">{{ p.name }}</span>
-                    @if (p.code) { <span class="pf-cp__code">{{ p.code }}</span> }
+                    @if (p.code) { <span class="pf-cp__code nd-num">{{ p.code }}</span> }
                   </div>
                   <span class="pf-cp__tag">{{ p.kind }}</span>
                   <span class="pf-cp__tag pf-cp__tag--branch">{{ p.branch }}</span>
                   <span class="pf-cp__spacer"></span>
-                  <button type="button" class="pf-cp__btn" [disabled]="busy()" (click)="dismiss(p.id)"
-                          title="Keep your version. A later master change will ask again.">Dismiss</button>
-                  <button type="button" class="pf-cp__btn pf-cp__btn--primary" [disabled]="busy()" (click)="accept(p.id)"
-                          title="Take the master's current version of this test. Prices stay as they are.">Accept</button>
+                  <button type="button" class="nd-rowact pf-cp__act" [class.nd-rowact--icon]="!web()" [disabled]="busy()" (click)="dismiss(p.id)"
+                          [attr.aria-label]="'Dismiss the update for ' + p.name"
+                          title="Keep your version. A later master change will ask again.">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    <span class="nd-rowact__t">Dismiss</span></button>
+                  <button type="button" class="nd-rowact pf-cp__act" [class.nd-rowact--icon]="!web()" [disabled]="busy()" (click)="accept(p.id)"
+                          [attr.aria-label]="'Accept the master version of ' + p.name"
+                          title="Take the master's current version of this test. Prices stay as they are.">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    <span class="nd-rowact__t">Accept</span></button>
                 </div>
                 @if (p.dates) { <p class="pf-cp__dates">{{ p.dates }}</p> }
                 @if (p.diff.length > 0) {
@@ -90,36 +98,29 @@ import {
   `,
   styles: [`
     :host { display: block; }
-    .pf-cp { margin-bottom: 12px; border-radius: 12px; background: var(--bg-card, transparent);
-      box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.24); overflow: hidden; }
-    .pf-cp__bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
-    .pf-cp__icon { color: var(--violet-text); flex: 0 0 auto; }
-    .pf-cp__title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-    .pf-cp__spacer { flex: 1 1 auto; }
-    .pf-cp__btn { height: 30px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; font-weight: 500;
-      border: 1px solid rgba(148, 163, 184, 0.3); background: transparent; color: var(--text-secondary); cursor: pointer; }
-    .pf-cp__btn:disabled { opacity: 0.5; cursor: default; }
-    .pf-cp__btn--primary { border-color: transparent; background: rgba(139, 92, 246, 0.14); color: var(--violet-text); }
-    .pf-cp__list { list-style: none; margin: 0; padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
-    .pf-cp__row { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px;
-      background: rgba(148, 163, 184, 0.06); }
+    .pf-cp { margin-bottom: 12px; }
+    .pf-cp__bar { flex-wrap: wrap; }
+    .pf-cp__title { font-size: 12.5px; color: var(--text-secondary); }
+    .pf-cp__btn { height: 36px; min-height: 36px; }
+    .pf-cp__list { list-style: none; margin: 0; padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px;
+      max-height: 40dvh; overflow-y: auto; }
+    .pf-cp__row { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--nd-radius-sm);
+      border: 1px solid var(--nd-line); background: var(--nd-card-bg); }
     .pf-cp__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-cp__spacer { flex: 1 1 auto; }
     .pf-cp__dates { margin: 0; font-size: 12px; color: var(--text-secondary); }
     .pf-cp__diffwrap { overflow-x: auto; }
     .pf-cp__diff { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-    .pf-cp__diff th, .pf-cp__diff td { text-align: left; padding: 5px 8px; vertical-align: top;
-      border-top: 1px solid rgba(148, 163, 184, 0.16); }
-    .pf-cp__diff thead th { border-top: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
-      text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-cp__diff th, .pf-cp__diff td { text-align: left; padding: 6px 8px; vertical-align: top; border-top: 1px solid var(--nd-line); }
+    .pf-cp__diff thead th { border-top: 0; font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
     .pf-cp__diff tbody th { font-weight: 500; color: var(--text-secondary); white-space: nowrap; width: 1%; }
     .pf-cp__yours { color: var(--text-primary); }
-    .pf-cp__master { color: var(--violet-text); font-weight: 500; }
-    .pf-cp__what { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-    .pf-cp__name { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pf-cp__code { font-size: 11.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-    .pf-cp__tag { font-size: 11px; padding: 2px 7px; border-radius: 999px; color: var(--text-secondary);
-      background: rgba(148, 163, 184, 0.12); white-space: nowrap; }
-    .pf-cp__tag--branch { color: var(--sky-text); background: rgba(14, 165, 233, 0.10); }
+    .pf-cp__master { color: var(--text-primary); font-weight: 600; }
+    .pf-cp__what { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+    .pf-cp__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-cp__code { font-size: 12px; color: var(--text-tertiary); }
+    .pf-cp__tag { font-size: 12px; padding: 2px 8px; border-radius: var(--nd-radius-chip, 8px); color: var(--text-secondary);
+      background: var(--nd-chip-bg); border: 1px solid var(--nd-line); white-space: nowrap; }
     @media (max-width: 640px) { .pf-cp__head .pf-cp__spacer { display: none; } }
   `],
 })
@@ -136,6 +137,8 @@ export class CatalogProposalsPanelComponent {
   /** Something was accepted/dismissed: the host reloads tests + proposals. */
   readonly changed = output<void>();
 
+  /** Row actions: text on web, icon on touch. */
+  readonly web = webPointerSignal();
   readonly open = signal(false);
   readonly busy = signal(false);
 

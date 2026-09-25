@@ -122,7 +122,7 @@ describe('Admin band — Test Master', () => {
     expect(p.cmp.rowData().map((r: any) => r.id)).toEqual(['t2']);
   });
 
-  it('view switch in the pill: type views and the side views; body scrolls in side views', () => {
+  it('view switch in the pill: type views and the side views; option groups fill (grid + side card scroll)', () => {
     const p = renderTm();
     const seg = () => Array.from(p.tools()!.querySelectorAll<HTMLButtonElement>('pf-segmented button'));
     expect(seg().map((b) => b.textContent?.trim()))
@@ -134,8 +134,36 @@ describe('Admin band — Test Master', () => {
     seg()[3].click();
     p.f.detectChanges();
     expect(p.cmp.ogView()).toBe(true);
-    expect(p.body()?.classList.contains('pf-band-body--fill')).toBe(false);
+    expect(p.body()?.classList.contains('pf-band-body--fill')).toBe(true);
     expect(p.actions().map((b) => b.textContent?.trim())).toContain('New option group');
+  });
+
+  it('ONE primary: Create steps down while grid edits wait ("Save changes" is it)', () => {
+    const p = renderTm();
+    const prim = () => Array.from(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary')).map(b => b.textContent?.trim());
+    expect(prim()).toEqual(['Create']);
+    p.cmp._dirty.set(new Map([['t1', { unit: 'x' }]]));
+    p.f.detectChanges();
+    expect(prim()).toEqual(['Save changes (1)']);
+  });
+
+  it('ONE primary: an open option-group editor owns it; the band "New option group" steps down', () => {
+    const p = renderTm();
+    p.cmp.setView('og');
+    p.f.detectChanges();
+    const prim = () => Array.from(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary')).map(b => b.textContent?.trim());
+    expect(prim()).toEqual(['New option group']);
+    p.cmp.panelEditing.set(true);
+    p.f.detectChanges();
+    expect(prim()).toEqual([]);
+  });
+
+  it('ND hygiene: slate department switches, neutral selected rail, no green / mono', () => {
+    const p = renderTm();
+    const sw = p.el.querySelector('.pf-tm-side .nd-toggle[role="switch"]');
+    expect(sw).not.toBeNull();
+    expect(p.el.querySelector('.pf-tm-dept[aria-pressed="true"]')).not.toBeNull();
+    expect(p.el.querySelector('.pf-tm-dept--active, .pf-tm-dept-switch--on, .pf-tm-inactive-chip--on, .font-mono, select')).toBeNull();
   });
 
   it('"Inactive (n)" chip in the pill toggles showInactive', () => {

@@ -10,7 +10,7 @@
         <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions" [value]="view()"
                       (valueChange)="setView($event)"></pf-segmented>
         @if (gridView() && (inactiveCount() > 0 || showInactive())) {
-          <button type="button" class="pf-tm-inactive-chip press" [class.pf-tm-inactive-chip--on]="showInactive()"
+          <button type="button" class="nd-chip pf-tm-inactive-chip press"
                   [attr.aria-pressed]="showInactive()" (click)="showInactive.set(!showInactive())"
                   title="Show inactive tests">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -53,7 +53,10 @@
           </button>
         }
         @if (ogView()) {
-          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="newOptionGroup()"
+          <!-- ONE primary: while grid edits wait "Save changes" is it; while a
+               panel editor is open, that editor's save is it. -->
+          <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!bandPrimaryElsewhere()"
+                  [class.pf-hb-btn--ghost]="bandPrimaryElsewhere()" (click)="newOptionGroup()"
                   title="New option group" aria-label="New option group">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -62,7 +65,8 @@
             New option group
           </button>
         } @else {
-          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openCreate()"
+          <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!bandPrimaryElsewhere()"
+                  [class.pf-hb-btn--ghost]="bandPrimaryElsewhere()" (click)="openCreate()"
                   title="Create" aria-label="Create">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -136,18 +140,21 @@
 
   <!-- Everything under the band: the grid view FILLS the body (the grid
        scrolls itself); the side views scroll the body. -->
-  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView()">
+  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView()">
   @if (ogView()) {
     <!-- Shared option-group vocabularies, derived live from this tenant's
          tests — edit once, changes every linked parameter. -->
-    <pf-option-groups-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"></pf-option-groups-panel>
+    <pf-option-groups-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
+                            (editingChange)="panelEditing.set($event)"></pf-option-groups-panel>
   } @else if (microView()) {
     <!-- Culture reference masters: specimens, antibiotics, CLSI breakpoints. -->
-    <pf-micro-masters-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"></pf-micro-masters-panel>
+    <pf-micro-masters-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
+                            (editingChange)="panelEditing.set($event)"></pf-micro-masters-panel>
   } @else if (pricingView()) {
     <!-- The per-tenant pricing table: the ONE place prices live (₹1 default,
          per-branch when the tenant runs branch isolation). -->
-    <pf-pricing [embedded]="true" [bandQuery]="theme.isNewDesign() ? panelQuery() : null"></pf-pricing>
+    <pf-pricing [embedded]="true" [bandQuery]="theme.isNewDesign() ? panelQuery() : null"
+                (editingChange)="panelEditing.set($event)"></pf-pricing>
   } @else {
   <!-- Test Master updates for tests this lab changed (one per copy, branch
        copies named) — Accept all / Dismiss all. Hidden when none wait. -->
@@ -155,7 +162,7 @@
                               (changed)="onProposalsChanged()"></pf-catalog-proposals-panel>
   <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()">
     <!-- ── LEFT: departments ─────────────────────────────── -->
-    <aside class="pf-tm-side">
+    <aside class="pf-tm-side" aria-label="Departments">
       <div class="pf-tm-side-head">
         <span>Departments</span>
         <button type="button" class="pf-tm-side-toggle" (click)="toggleSide()"
@@ -167,7 +174,7 @@
       </div>
       <ul class="pf-tm-dept-list">
         <li>
-          <button type="button" class="pf-tm-dept" [class.pf-tm-dept--active]="!selectedDept()"
+          <button type="button" class="pf-tm-dept" [attr.aria-pressed]="!selectedDept()"
                   (click)="selectDept(null)">
             <span class="pf-tm-dept-name">All</span>
             <span class="pf-tm-dept-count">{{ typeTests().length }}</span>
@@ -175,20 +182,21 @@
         </li>
         @for (d of departments(); track d.key) {
           <li class="pf-tm-dept-row" [class.pf-tm-dept-row--off]="!!d.id && !d.isActive">
-            <button type="button" class="pf-tm-dept" [class.pf-tm-dept--active]="selectedDept() === d.key"
+            <button type="button" class="pf-tm-dept" [attr.aria-pressed]="selectedDept() === d.key"
                     (click)="selectDept(d.key)">
               <span class="pf-tm-dept-name">
                 {{ d.name }}
-                @if (d.code) { <span class="pf-tm-dept-code">{{ d.code }}</span> }
+                @if (d.code) { <span class="pf-tm-dept-code nd-num">{{ d.code }}</span> }
               </span>
               <span class="pf-tm-dept-count">{{ d.count }}</span>
             </button>
             @if (d.id) {
-              <button type="button" class="pf-tm-dept-switch" [class.pf-tm-dept-switch--on]="d.isActive"
-                      (click)="toggleDept(d)" [attr.aria-pressed]="d.isActive"
+              <!-- Kit slate switch (never violet). -->
+              <button type="button" class="nd-toggle pf-tm-dept-switch" role="switch" [attr.aria-checked]="d.isActive"
+                      (click)="toggleDept(d)"
                       [title]="d.isActive ? 'Disable department' : 'Enable department'"
-                      [attr.aria-label]="(d.isActive ? 'Disable ' : 'Enable ') + d.name">
-                <span class="pf-tm-dept-switch-knob"></span>
+                      [attr.aria-label]="'Department ' + d.name + ' enabled'">
+                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
               </button>
             }
           </li>

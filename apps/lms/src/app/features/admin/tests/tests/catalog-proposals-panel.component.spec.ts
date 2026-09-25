@@ -44,7 +44,8 @@ describe('CatalogProposalsPanel', () => {
 
   it('summarises and lists every proposal per copy, naming the branch', () => {
     const { f, c, el } = render();
-    expect(el.textContent).toContain('2 Test Master updates');
+    expect(el.textContent).toContain('Master updates');
+    expect(el.textContent).toContain('2 updates for tests you changed');
     c.open.set(true);
     f.detectChanges();
     const rows = [...el.querySelectorAll('.pf-cp__row')].map(r => r.textContent ?? '');

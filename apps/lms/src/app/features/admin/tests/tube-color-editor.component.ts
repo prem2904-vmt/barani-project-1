@@ -30,31 +30,28 @@ export interface TubeChoice { key: string; label: string; hex: string; }
     </div>
   `,
   styles: [`
+    /* Theme tokens (both themes), kit radius / line / shadow; the selected
+       option is the neutral selected state. Tube caps are the functional colour. */
     .pf-tce {
-      max-height: 260px; overflow-y: auto; min-width: 190px;
-      padding: 4px; border-radius: 10px;
-      background: var(--bg-elevated, #0f172a);
-      border: 1px solid var(--glass-border, rgba(148,163,184,0.28));
-      box-shadow: 0 14px 36px rgba(0,0,0,0.45);
+      max-height: 260px; overflow-y: auto; min-width: 200px;
+      padding: 4px; border-radius: var(--nd-radius-sm, 10px);
+      background: var(--nd-card-bg, #fff);
+      border: 1px solid var(--nd-line);
+      box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
     }
     .pf-tce__opt {
-      display: flex; align-items: center; gap: 9px; width: 100%;
-      padding: 7px 9px; border: 0; border-radius: 7px;
-      background: transparent; cursor: pointer; text-align: left;
+      display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px;
+      padding: 7px 9px; border: 0; border-radius: 8px;
+      background: transparent; cursor: pointer; text-align: left; font: inherit;
     }
-    .pf-tce__opt:hover { background: rgba(255,255,255,0.07); }
-    .pf-tce__opt--on { background: rgba(139, 92, 246, 0.18); }
+    .pf-tce__opt:hover { background: var(--nd-chip-bg); }
+    .pf-tce__opt--on { background: var(--nd-sel-bg); box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
     .pf-tce__dot {
       width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto;
-      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.2) inset;
     }
-    .pf-tce__lbl { font-size: 13px; color: var(--text-primary, #e2e8f0); }
-    :host-context([data-theme="light"]) .pf-tce {
-      background: #fff; border-color: rgba(15,23,42,0.12);
-      box-shadow: 0 14px 36px rgba(15,23,42,0.16);
-    }
-    :host-context([data-theme="light"]) .pf-tce__opt:hover { background: rgba(15,23,42,0.05); }
-    :host-context([data-theme="light"]) .pf-tce__lbl { color: #0f172a; }
+    .pf-tce__lbl { font-size: 13px; color: var(--text-primary); }
+    @media (pointer: coarse) { .pf-tce__opt { min-height: 44px; } }
   `]
 })
 export class TubeColorEditorComponent implements ICellEditorAngularComp {

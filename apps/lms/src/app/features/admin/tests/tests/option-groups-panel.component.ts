@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -47,13 +47,14 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
     <div class="pf-og">
       <div class="pf-og__bar">
         @if (bandQuery() === null) {
-          <input type="text" class="pf-og__search" placeholder="Search values, tests, parameters…"
+          <input type="search" class="nd-input pf-og__search" placeholder="Search values, tests, parameters…" aria-label="Search option groups"
                  [ngModel]="query()" (ngModelChange)="query.set($event)" />
         }
-        <span class="pf-og__count">{{ rows().length }} option group{{ rows().length === 1 ? '' : 's' }}</span>
+        <span class="pf-og__count"><span class="nd-num">{{ rows().length }}</span> option group{{ rows().length === 1 ? '' : 's' }}</span>
         <span class="pf-og__spacer"></span>
         @if (bandQuery() === null) {
-          <button type="button" class="pf-og__new press" (click)="startCreate()">+ New option group</button>
+          <button type="button" class="nd-btn pf-og__new press" [class.nd-btn--primary]="!sheetOpen()"
+                  [class.nd-btn--secondary]="sheetOpen()" (click)="startCreate()">+ New option group</button>
         }
       </div>
 
@@ -61,7 +62,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
         <!-- ── LEFT: the groups grid ── -->
         <div class="pf-og__grid">
           <ag-grid-angular
-            style="width: 100%; height: 62vh;"
+            style="width: 100%; height: 100%; min-height: 320px;"
             [theme]="gridTheme()"
             [rowData]="rows()"
             [columnDefs]="columnDefs"
@@ -72,114 +73,133 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
           </ag-grid-angular>
         </div>
 
-        <!-- ── RIGHT: detail / create ── -->
-        <aside class="pf-og__side">
+        <!-- ── RIGHT: detail / editor side card (phones: a sheet above the
+             navbar while creating / editing). ── -->
+        @if (sheetOpen()) { <div class="nd-sheet-backdrop" (click)="closeEditor()" aria-hidden="true"></div> }
+        <aside class="nd-card pf-og__side" [class.nd-sheet]="sheetOpen()"
+               [attr.aria-label]="mode() === 'create' ? 'New option group' : 'Option group'">
+          <span class="nd-sheet__handle" aria-hidden="true"></span>
           @if (mode() === 'create') {
-            <div class="pf-og__shead">
-              <span class="pf-og__sname">New option group</span>
-              <button type="button" class="pf-og__ghost" (click)="mode.set('idle')">Cancel</button>
+            <div class="nd-card__head">
+              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+              <span class="nd-card__label">New option group</span>
+              <span class="nd-card__spacer"></span>
+              <button type="button" class="nd-btn nd-btn--tertiary pf-og__hbtn press" (click)="mode.set('idle')">Cancel</button>
             </div>
+            <div class="nd-card__body">
+              <div class="pf-og__slabel">Values</div>
+              @for (r of draft(); track $index) {
+                <div class="pf-og__row">
+                  <input type="text" class="nd-input nd-input--sm pf-og__rowval" [ngModel]="r.value" aria-label="Value"
+                         (ngModelChange)="patchRow($index, { value: $event })" placeholder="Value" />
+                  <button type="button" class="nd-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.normal"
+                        (click)="patchRow($index, { normal: !r.normal })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Normal</button>
+                  <button type="button" class="pf-og__rowdel press" (click)="removeRow($index)" aria-label="Remove value" title="Remove value"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                </div>
+              }
+              <button type="button" class="nd-btn nd-btn--tertiary pf-og__addrow press" (click)="addRow()">+ Add value</button>
 
-            <div class="pf-og__slabel">Values</div>
-            @for (r of draft(); track $index) {
-              <div class="pf-og__row">
-                <input type="text" class="pf-og__rowval" [ngModel]="r.value"
-                       (ngModelChange)="patchRow($index, { value: $event })" placeholder="Value" />
-                <label class="pf-og__flag"><input type="checkbox" [checked]="r.normal"
-                       (change)="patchRow($index, { normal: !r.normal })" /> Normal</label>
-                <button type="button" class="pf-og__rowdel" (click)="removeRow($index)" aria-label="Remove value">×</button>
-              </div>
-            }
-            <button type="button" class="pf-og__addrow" (click)="addRow()">+ Add value</button>
-
-            <div class="pf-og__slabel">Map into tests</div>
-            <input type="text" class="pf-og__search pf-og__search--full" placeholder="Search a test…"
-                   [ngModel]="pickQuery()" (ngModelChange)="pickQuery.set($event)" />
-            @if (pickQuery().trim()) {
-              <div class="pf-og__picklist">
-                @for (p of pickable(); track p.testId + p.paramName) {
-                  <label class="pf-og__pick" [class.pf-og__pick--warn]="p.mappedTo">
-                    <input type="checkbox" [checked]="isTargeted(p)" (change)="toggleTarget(p)" />
-                    <span class="pf-og__picktest">{{ p.testCode || '—' }} {{ p.testName }}</span>
-                    <span class="pf-og__pickparam">{{ p.paramTitle }}</span>
-                    @if (p.mappedTo) { <span class="pf-og__pickwarn">already mapped: {{ p.mappedTo }}</span> }
-                  </label>
-                } @empty {
-                  <div class="pf-og__note">No matching parameters.</div>
-                }
-              </div>
-            }
-            @if (targets().length) {
-              <div class="pf-og__slabel">Selected ({{ targets().length }})</div>
-              <div class="pf-og__chips">
-                @for (t of targets(); track t.testId + t.paramName) {
-                  <span class="pf-og__chip" [class.pf-og__chip--warnmap]="t.mappedTo"
-                        [title]="t.mappedTo ? 'Already mapped to: ' + t.mappedTo : ''">
-                    {{ t.testCode || t.testName }} · {{ t.paramTitle }}
-                    <button type="button" class="pf-og__chipx" (click)="toggleTarget(t)" aria-label="Remove">×</button>
-                  </span>
-                }
-              </div>
-            }
+              <div class="pf-og__slabel">Map into tests</div>
+              <input type="search" class="nd-input pf-og__search--full" placeholder="Search a test…" aria-label="Search a test"
+                     [ngModel]="pickQuery()" (ngModelChange)="pickQuery.set($event)" />
+              @if (pickQuery().trim()) {
+                <div class="pf-og__picklist">
+                  @for (p of pickable(); track p.testId + p.paramName) {
+                    <label class="nd-row pf-og__pick" [class.nd-row--in]="isTargeted(p)">
+                      <input type="checkbox" class="pf-og__srcheck" [checked]="isTargeted(p)" (change)="toggleTarget(p)" />
+                      <span class="nd-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                      <span class="nd-row__name pf-og__picktest"><span class="nd-num pf-og__pcode">{{ p.testCode || '—' }}</span> {{ p.testName }}
+                        <span class="pf-og__pickparam">{{ p.paramTitle }}</span></span>
+                      @if (p.mappedTo) { <span class="pf-og__pickwarn">already mapped: {{ p.mappedTo }}</span> }
+                    </label>
+                  } @empty {
+                    <div class="pf-og__note">No matching parameters.</div>
+                  }
+                </div>
+              }
+              @if (targets().length) {
+                <div class="pf-og__slabel">Selected (<span class="nd-num">{{ targets().length }}</span>)</div>
+                <div class="pf-og__chips">
+                  @for (t of targets(); track t.testId + t.paramName) {
+                    <span class="pf-og__chip" [class.pf-og__chip--warnmap]="t.mappedTo"
+                          [title]="t.mappedTo ? 'Already mapped to: ' + t.mappedTo : ''">
+                      {{ t.testCode || t.testName }} · {{ t.paramTitle }}
+                      <button type="button" class="pf-og__chipx" (click)="toggleTarget(t)" aria-label="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                    </span>
+                  }
+                </div>
+              }
+            </div>
             <div class="pf-og__editact">
               @if (warnCount() > 0) {
-                <span class="pf-og__warn pf-og__warn--amber">⚠ {{ warnCount() }} parameter{{ warnCount() === 1 ? ' is' : 's are' }} already mapped — saving replaces the existing table.</span>
+                <span class="pf-og__warn pf-og__warn--amber">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                  {{ warnCount() }} parameter{{ warnCount() === 1 ? ' is' : 's are' }} already mapped — saving replaces the existing table.</span>
               } @else { <span class="pf-og__warn"></span> }
-              <button type="button" class="pf-og__save" [disabled]="saving() || !draftValid() || !targets().length"
+              <button type="button" class="nd-btn nd-btn--primary pf-og__save press" [disabled]="saving() || !draftValid() || !targets().length"
                       (click)="create()">{{ saving() ? 'Saving…' : 'Create & map' }}</button>
             </div>
           }
 
           @else if (selected(); as g) {
-            <div class="pf-og__shead">
-              <span class="pf-og__sname">{{ g.name }}</span>
+            <div class="nd-card__head">
+              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+              <span class="nd-card__label pf-og__sname">{{ g.name }}</span>
+              <span class="nd-card__spacer"></span>
               @if (editing()) {
-                <button type="button" class="pf-og__ghost" (click)="editing.set(false)">Cancel</button>
+                <button type="button" class="nd-btn nd-btn--tertiary pf-og__hbtn press" (click)="editing.set(false)">Cancel</button>
               } @else {
-                <button type="button" class="pf-og__edit" (click)="startEdit(g)">Edit values</button>
+                <button type="button" class="nd-btn nd-btn--secondary pf-og__hbtn pf-og__edit press" (click)="startEdit(g)">Edit values</button>
               }
             </div>
-            <div class="pf-og__chips">
-              @for (v of g.values; track v.value) {
-                <span class="pf-og__chip" [class.pf-og__chip--normal]="v.normal" [class.pf-og__chip--off]="!v.active">{{ v.value }}</span>
-              }
-            </div>
+            <div class="nd-card__body">
+              <div class="pf-og__chips">
+                @for (v of g.values; track v.value) {
+                  <span class="pf-og__chip" [class.pf-og__chip--normal]="v.normal" [class.pf-og__chip--off]="!v.active"
+                        [title]="v.normal ? 'Normal (expected) value' : ''">
+                    @if (v.normal) { <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> }
+                    {{ v.value }}</span>
+                }
+              </div>
 
-            @if (editing()) {
-              <div class="pf-og__slabel">Values</div>
-              @for (r of draft(); track $index) {
-                <div class="pf-og__row">
-                  <input type="text" class="pf-og__rowval" [ngModel]="r.value"
+              @if (editing()) {
+                <div class="pf-og__slabel">Values</div>
+                @for (r of draft(); track $index) {
+                  <div class="pf-og__row">
+                  <input type="text" class="nd-input nd-input--sm pf-og__rowval" [ngModel]="r.value" aria-label="Value"
                          (ngModelChange)="patchRow($index, { value: $event })" placeholder="Value" />
-                  <label class="pf-og__flag"><input type="checkbox" [checked]="r.normal"
-                         (change)="patchRow($index, { normal: !r.normal })" /> Normal</label>
-                  <label class="pf-og__flag"><input type="checkbox" [checked]="r.active"
-                         (change)="patchRow($index, { active: !r.active })" /> Active</label>
-                  <button type="button" class="pf-og__rowdel" (click)="removeRow($index)" aria-label="Remove value">×</button>
+                  <button type="button" class="nd-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.normal"
+                        (click)="patchRow($index, { normal: !r.normal })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Normal</button>
+                  <button type="button" class="nd-toggle pf-og__flag" role="switch" [attr.aria-checked]="r.active"
+                        (click)="patchRow($index, { active: !r.active })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Active</button>
+                  <button type="button" class="pf-og__rowdel press" (click)="removeRow($index)" aria-label="Remove value" title="Remove value"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                 </div>
+                }
+                <button type="button" class="nd-btn nd-btn--tertiary pf-og__addrow press" (click)="addRow()">+ Add value</button>
               }
-              <button type="button" class="pf-og__addrow" (click)="addRow()">+ Add value</button>
+
+              <div class="pf-og__slabel">Linked tests (<span class="nd-num">{{ testsOf(g).length }}</span>)</div>
+              <div class="pf-og__tests">
+                @for (t of testsOf(g); track t.testId) {
+                  <button type="button" class="nd-row pf-og__test press" (click)="openTest(t.testId)"
+                          [title]="'Open ' + (t.testCode || t.testName) + ' in the test editor'">
+                    <span class="nd-num pf-og__tcode">{{ t.testCode || '—' }}</span>
+                    <span class="nd-row__name pf-og__tname">{{ t.testName }}</span>
+                    @if (paramsHint(t); as hint) {
+                      <span class="nd-row__meta pf-og__tparams">{{ hint }}</span>
+                    }
+                  </button>
+                }
+              </div>
+            </div>
+            @if (editing()) {
               <div class="pf-og__editact">
-                <span class="pf-og__warn">Updates {{ g.links.length }} parameter{{ g.links.length === 1 ? '' : 's' }} across {{ testsOf(g).length }} test{{ testsOf(g).length === 1 ? '' : 's' }}.</span>
-                <button type="button" class="pf-og__save" [disabled]="saving() || !draftValid()" (click)="save(g)">
+                <span class="pf-og__warn">Updates <span class="nd-num">{{ g.links.length }}</span> parameter{{ g.links.length === 1 ? '' : 's' }} across <span class="nd-num">{{ testsOf(g).length }}</span> test{{ testsOf(g).length === 1 ? '' : 's' }}.</span>
+                <button type="button" class="nd-btn nd-btn--primary pf-og__save press" [disabled]="saving() || !draftValid()" (click)="save(g)">
                   {{ saving() ? 'Saving…' : 'Save everywhere' }}
                 </button>
               </div>
             }
-
-            <div class="pf-og__slabel">Linked tests ({{ testsOf(g).length }})</div>
-            <div class="pf-og__tests">
-              @for (t of testsOf(g); track t.testId) {
-                <button type="button" class="pf-og__test press" (click)="openTest(t.testId)"
-                        [title]="'Open ' + (t.testCode || t.testName) + ' in the test editor'">
-                  <span class="pf-og__tcode">{{ t.testCode || '—' }}</span>
-                  <span class="pf-og__tname">{{ t.testName }}</span>
-                  @if (paramsHint(t); as hint) {
-                    <span class="pf-og__tparams">{{ hint }}</span>
-                  }
-                </button>
-              }
-            </div>
           }
 
           @else {
@@ -190,76 +210,67 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
     </div>
   `,
   styles: [`
-    .pf-og { display: flex; flex-direction: column; gap: 12px; }
-    .pf-og__bar { display: flex; align-items: center; gap: 12px; }
+    :host { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+    .pf-og { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; }
+    .pf-og__bar { display: flex; align-items: center; gap: 12px; flex: none; }
     .pf-og__spacer { flex: 1; }
-    .pf-og__search { flex: 0 1 320px; padding: 9px 12px; border-radius: 10px; font-size: 13px;
-      color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; }
-    .pf-og__search--full { flex: none; width: 100%; box-sizing: border-box; margin-bottom: 6px; }
-    .pf-og__search:focus { border-color: var(--input-border-focus); }
-    .pf-og__count { font-size: 12px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap; }
-    .pf-og__new { padding: 8px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer;
-      background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
+    .pf-og__search { flex: 0 1 320px; }
+    .pf-og__search--full { margin-bottom: 6px; }
+    .pf-og__count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
     .pf-og__note { padding: 28px 12px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
 
-    /* Two panels — grid left, detail/create right (mirrors the tests view). */
-    .pf-og__cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(330px, 0.75fr); gap: 14px; align-items: start; }
-    @media (max-width: 980px) { .pf-og__cols { grid-template-columns: 1fr; } }
-    .pf-og__grid { border-radius: 12px; overflow: hidden; }
-    .pf-og__side { border: 1px solid var(--glass-border); border-radius: 14px; background: var(--glass-bg);
-      padding: 14px 16px; max-height: 62vh; overflow-y: auto; }
+    /* Two panels — grid left, detail / editor side card right. The grid and
+       the side card body scroll themselves; the page never does. */
+    .pf-og__cols { flex: 1 1 auto; min-height: 0; display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
+    .pf-og__grid { min-height: 0; border-radius: var(--nd-radius, 12px); overflow: hidden; }
+    .pf-og__side { min-height: 0; max-height: 100%; }
+    .pf-og__side:not(.nd-sheet) .nd-sheet__handle { display: none; }
+    .pf-og__side .nd-card__body { gap: 8px; }
+    .pf-og__sname { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text-primary); }
+    @media (min-width: 641px) { .pf-og__cols > .nd-sheet-backdrop { display: none; } }
+    .pf-og__hbtn { height: 36px; min-height: 36px; }
+    @media (max-width: 980px) {
+      .pf-og__cols { grid-template-columns: 1fr; grid-template-rows: none; }
+      .pf-og__grid { height: 55dvh; }
+    }
 
-    .pf-og__shead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-    .pf-og__sname { font-size: 14px; font-weight: 700; color: var(--text-primary); }
-    .pf-og__slabel { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
-      color: var(--text-tertiary); margin: 14px 0 6px; }
-    .pf-og__chips { display: flex; flex-wrap: wrap; gap: 4px; }
-    .pf-og__chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
-      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-og__chip--normal { color: #34d399; border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.08); }
+    .pf-og__slabel { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 10px 0 2px; }
+    .pf-og__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-og__chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; padding: 4px 10px;
+      border-radius: var(--nd-radius-chip, 8px); color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
+    /* Normal = the neutral selected state + a violet check (never green). */
+    .pf-og__chip--normal { color: var(--text-primary); border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-og__chip--normal svg { color: var(--violet-text, #7c3aed); }
     .pf-og__chip--off { opacity: .45; text-decoration: line-through; }
-    .pf-og__chip--warnmap { color: #fbbf24; border-color: rgba(245,158,11,.5); background: rgba(245,158,11,.08); }
-    .pf-og__chipx { border: none; background: transparent; color: inherit; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
-    .pf-og__edit { padding: 6px 14px; border-radius: 9px; font-size: 12.5px; font-weight: 600; cursor: pointer;
-      color: var(--violet-text, #a78bfa); background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.35); }
-    .pf-og__ghost { padding: 6px 14px; border-radius: 9px; font-size: 12.5px; font-weight: 600; cursor: pointer;
-      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-og__chip--warnmap { border-style: dashed; }
+    .pf-og__chipx { display: inline-flex; border: none; background: transparent; color: inherit; cursor: pointer; padding: 0; }
 
-    .pf-og__row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
-    .pf-og__rowval { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; font-size: 13px;
-      color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); outline: none; }
-    .pf-og__flag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
-    .pf-og__rowdel { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
-      color: var(--text-tertiary); background: transparent; font-size: 14px; line-height: 1; }
-    .pf-og__rowdel:hover { color: #ef4444; background: rgba(239,68,68,.12); }
-    .pf-og__addrow { margin-top: 6px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
-      color: var(--text-secondary); background: transparent; border: 1px dashed var(--glass-border); }
-    .pf-og__editact { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 10px;
-      border-top: 1px solid var(--glass-border); }
-    .pf-og__warn { flex: 1; font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-og__warn--amber { color: #fbbf24; font-weight: 600; }
-    .pf-og__save { padding: 7px 16px; border-radius: 9px; font-size: 12.5px; font-weight: 700; color: #fff; cursor: pointer;
-      background: var(--gradient-primary, linear-gradient(90deg,#a855f7,#ec4899)); border: 1px solid transparent; }
-    .pf-og__save:disabled { opacity: .5; cursor: default; }
+    .pf-og__row { display: flex; align-items: center; gap: 10px; padding: 2px 0; flex-wrap: wrap; }
+    .pf-og__rowval { flex: 1 1 160px; min-width: 0; }
+    .pf-og__flag { font-size: 12.5px; }
+    .pf-og__rowdel { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px;
+      border-radius: 8px; border: 1px solid transparent; cursor: pointer; color: var(--text-tertiary); background: transparent; }
+    .pf-og__rowdel:hover { color: var(--red-text, #b91c1c); border-color: var(--nd-line); }
+    .pf-og__addrow { align-self: flex-start; height: 34px; min-height: 34px; }
+    .pf-og__editact { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px 14px;
+      border-top: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+    .pf-og__warn { flex: 1; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); }
+    .pf-og__warn--amber { color: var(--text-secondary); font-weight: 500; }
 
-    .pf-og__picklist { max-height: 220px; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 10px; }
-    .pf-og__pick { display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; cursor: pointer;
-      border-bottom: 1px solid var(--glass-border); font-size: 12px; }
-    .pf-og__pick:last-child { border-bottom: none; }
-    .pf-og__pick:hover { background: rgba(124,58,237,.06); }
-    .pf-og__picktest { font-weight: 600; color: var(--text-primary); white-space: nowrap; }
-    .pf-og__pickparam { color: var(--text-secondary); }
-    .pf-og__pickwarn { margin-left: auto; font-size: 10.5px; font-weight: 600; color: #fbbf24; white-space: nowrap; }
-    .pf-og__pick--warn { background: rgba(245,158,11,.05); }
+    .pf-og__picklist { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+    .pf-og__pick { position: relative; cursor: pointer; min-height: 44px; font-size: 12.5px; }
+    .pf-og__srcheck { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+    .pf-og__pick:has(.pf-og__srcheck:focus-visible) { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .pf-og__pcode { color: var(--text-tertiary); margin-right: 4px; }
+    .pf-og__pickparam { display: block; font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+    .pf-og__pickwarn { flex: none; font-size: 11.5px; color: var(--text-secondary); }
 
     .pf-og__tests { display: flex; flex-direction: column; gap: 6px; }
-    .pf-og__test { display: flex; align-items: baseline; gap: 7px; width: 100%; cursor: pointer;
-      padding: 7px 11px; border-radius: 10px; text-align: left;
-      background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-og__test:hover { border-color: rgba(139,92,246,.5); }
-    .pf-og__tcode { flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .pf-og__tname { font-size: 12px; color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pf-og__tparams { margin-left: auto; font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-og__test { width: 100%; cursor: pointer; min-height: 44px; }
+    .pf-og__test:hover { border-color: var(--nd-sel-border); }
+    .pf-og__tcode { flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+    @media (max-width: 640px) { .pf-og__side.nd-sheet { z-index: 80; } }
   `],
 })
 export class OptionGroupsPanelComponent implements OnInit {
@@ -288,6 +299,13 @@ export class OptionGroupsPanelComponent implements OnInit {
   readonly pickQuery = signal('');
   readonly targets = signal<PickParam[]>([]);
   private readonly allParams = signal<PickParam[]>([]);
+  /** Creating / editing: the side card is an editor (a sheet on phones). */
+  readonly sheetOpen = computed(() => this.mode() === 'create' || this.editing());
+  /** Tells the host (Test Master's band) an editor is open, so the band's
+   *  "New option group" steps down and this card's save is the ONE primary. */
+  readonly editingChange = output<boolean>();
+  constructor() { effect(() => this.editingChange.emit(this.sheetOpen())); }
+  closeEditor() { this.mode.set('idle'); this.editing.set(false); }
 
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, suppressMovable: true };
   readonly columnDefs: ColDef<OgGridRow>[] = [

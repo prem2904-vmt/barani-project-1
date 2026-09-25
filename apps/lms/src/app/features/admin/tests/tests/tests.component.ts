@@ -46,6 +46,7 @@ import { CatalogProposal } from '../../../../shared/models/test.model';
 import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.component';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
+import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
 // (ViewChild refs let the header Create button drive the active panel)
 
 // AG Grid v33+ requires explicit module registration (once per app).
@@ -242,6 +243,8 @@ export class TestsComponent implements OnInit {
     new Set([...this._dirty().keys(), ...this._priceDirty().keys()]).size);
 
   readonly isPhone = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
+  /** Row actions: TEXT on web, ICON on touch (ND-PATTERN .nd-rowact). */
+  readonly web = webPointerSignal();
   readonly isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
   readonly sideCollapsed = signal(true);
   toggleSide() { this.sideCollapsed.update(v => !v); }
@@ -595,14 +598,15 @@ export class TestsComponent implements OnInit {
 
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.setAttribute('aria-pressed', String(isActive));
+    btn.setAttribute('role', 'switch');
+    btn.setAttribute('aria-checked', String(isActive));
     btn.title = isActive ? 'Deactivate' : 'Activate';
     btn.setAttribute('aria-label', (isActive ? 'Deactivate ' : 'Activate ') + (data.name || 'test'));
     btn.style.cssText = 'position:relative;flex-shrink:0;width:36px;height:20px;border-radius:999px;padding:0;cursor:pointer;'
       + 'transition:background 0.15s, border-color 0.15s;outline:none;'
       + (isActive
-          ? 'background:#10b981;border:1px solid #059669;'
-          : 'background:rgba(148,163,184,0.22);border:1px solid rgba(148,163,184,0.35);');
+          ? 'background:var(--nd-toggle-on, #aeb8c2);border:1px solid var(--nd-toggle-on, #aeb8c2);'
+          : 'background:var(--nd-toggle-off, #e3e7eb);border:1px solid var(--nd-toggle-off, #e3e7eb);');
 
     const knob = document.createElement('span');
     knob.style.cssText = 'position:absolute;top:1px;left:1px;width:16px;height:16px;border-radius:50%;'
@@ -697,36 +701,32 @@ export class TestsComponent implements OnInit {
   private actionsRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
     const data = params.data;
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.title = 'Edit test';
-    btn.setAttribute('aria-label', 'Edit test');
-    btn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;'
-      + 'border-radius:8px;border:1px solid rgba(148,163,184,0.28);background:transparent;'
-      + 'color:var(--text-secondary,#94a3b8);cursor:pointer;';
-    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-      + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-      + '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (data?.id) this.editTest(data.id);
-    });
-    wrap.appendChild(btn);
+    wrap.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:6px;height:100%;';
+    const web = this.web();
+    // Kit row action: compact TEXT button on web, a 44px neutral ICON on touch
+    // (label kept for AT via aria-label + the visually-hidden .nd-rowact__t).
+    const act = (label: string, aria: string, path: string, run: () => void) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'nd-rowact' + (web ? '' : ' nd-rowact--icon');
+      b.title = aria;
+      b.setAttribute('aria-label', aria);
+      b.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
+      const t = document.createElement('span');
+      t.className = 'nd-rowact__t';
+      t.textContent = label;
+      b.appendChild(t);
+      b.addEventListener('click', e => { e.stopPropagation(); run(); });
+      return b;
+    };
+    wrap.appendChild(act('Edit', 'Edit ' + (data?.name || 'test'),
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+      () => { if (data?.id) this.editTest(data.id); }));
     if (data && canRevertToMaster(data)) {
-      const rv = document.createElement('button');
-      rv.type = 'button';
-      rv.title = 'Revert to master';
-      rv.setAttribute('aria-label', 'Revert ' + (data.name || 'test') + ' to master');
-      rv.style.cssText = btn.style.cssText + 'margin-left:6px;';
-      rv.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-        + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-        + '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>';
-      rv.addEventListener('click', (e) => {
-        e.stopPropagation();
-        (params.context as { revert?: (row: TestRow) => void })?.revert?.(data);
-      });
-      wrap.appendChild(rv);
+      wrap.appendChild(act('Revert', 'Revert ' + (data.name || 'test') + ' to master',
+        '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>',
+        () => (params.context as { revert?: (row: TestRow) => void })?.revert?.(data)));
     }
     return wrap;
   };
@@ -735,7 +735,8 @@ export class TestsComponent implements OnInit {
     return {
       headerName: '', colId: 'actions', cellRenderer: this.actionsRenderer,
       editable: false, sortable: false, filter: false, resizable: false,
-      minWidth: 60, maxWidth: 100, pinned: 'right',
+      // Web: "Edit" / "Revert" text buttons; touch: two 44px icons.
+      minWidth: this.web() ? 170 : 110, maxWidth: this.web() ? 190 : 120, pinned: 'right',
     };
   }
 
@@ -794,9 +795,9 @@ export class TestsComponent implements OnInit {
     this.gridApi = e.api;
   }
 
-  openOgView() { this.panelQuery.set(''); this.microView.set(false); this.pricingView.set(false); this.ogView.set(true); }
-  openMicroView() { this.panelQuery.set(''); this.ogView.set(false); this.pricingView.set(false); this.microView.set(true); }
-  openPricingView() { this.panelQuery.set(''); this.ogView.set(false); this.microView.set(false); this.pricingView.set(true); }
+  openOgView() { this.panelEditing.set(false); this.panelQuery.set(''); this.microView.set(false); this.pricingView.set(false); this.ogView.set(true); }
+  openMicroView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.pricingView.set(false); this.microView.set(true); }
+  openPricingView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.microView.set(false); this.pricingView.set(true); }
 
   // ── Band pill (owner, "band pill everywhere") ──────────────────────────
   /** The ONE view switch in the pill: the three catalogue types plus the
@@ -814,6 +815,7 @@ export class TestsComponent implements OnInit {
   /** True while the tests/profiles/packages grid (not a side view) shows. */
   readonly gridView = computed(() => !this.ogView() && !this.microView() && !this.pricingView());
   setView(v: TmView) {
+    this.panelEditing.set(false);
     if (v === 'og') this.openOgView();
     else if (v === 'micro') this.openMicroView();
     else if (v === 'pricing') this.openPricingView();
@@ -839,6 +841,14 @@ export class TestsComponent implements OnInit {
   }
   /** Band action for the option-groups view (its own "+ New" moved up here). */
   newOptionGroup() { this.ogPanel?.startCreate(); }
+  /** A side-view panel (option groups / microbiology / pricing) has an editor
+   *  open or unsaved edits —
+   *  its own save is then the view's ONE primary. */
+  readonly panelEditing = signal(false);
+  /** The band's Create / New steps down to secondary when another primary
+   *  owns the view (pending grid edits, or an open panel editor). */
+  readonly bandPrimaryElsewhere = computed(() =>
+    this.dirtyCount() > 0 || ((this.ogView() || this.microView() || this.pricingView()) && this.panelEditing()));
 
   setType(t: TestType) {
     this.ogView.set(false);
