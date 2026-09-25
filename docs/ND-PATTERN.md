@@ -372,6 +372,50 @@ unit of work. It follows the band rules above with these specifics
   bottom bar, no tabs, 12px card label. `SHOTS_DIR=… ` saves 375 / 768 /
   1440 screenshots.
 
+## 13. Culture case
+
+`/lab/culture/:orderTestId` (`features/lab/culture-workbench/`) — one
+culture case (MICRO26001), worked stage by stage. Band rules as above, plus:
+
+- **Band actions (top-right):** the technician as a neutral chip (no status
+  dot; initials avatar on phones), the incubation status as a neutral chip
+  ("Ready in 5h 12m"; a violet check when complete), then ONE primary:
+  **Inoculate & incubate** until the timer runs; once every stage is done,
+  **Validate & submit / Submit for sign-out** is the primary and "+ Hours"
+  is secondary. Phones: the actions are 44px icon buttons (label kept for
+  AT + tooltip).
+- **Context bar (the pill):** the case ID as the primary chip, the patient's
+  FULL name, the test and "Day N" as calm neutral chips, "0/4 stages" at the
+  right. No spaced mono caps anywhere.
+- **One navigation row** above the card: "Specimen" (normal-case label) +
+  `pf-select`, the branch segment (Primary · subcultures) with a tertiary
+  "+ Subculture", then the **stage tabs** — a neutral `.nd-seg` whose
+  selected indicator slides on `--nd-spring` (off under reduced motion).
+  Done stages carry a small violet check; the stage I hold a violet dot.
+  The selected tab shows that stage's card (default: `?stage=`, else the
+  one I hold, else the first not done). Phones: the tabs scroll sideways.
+- **Stage card:** `.nd-card` — violet icon chip + the stage title (13px /
+  600 uppercase), a neutral state chip (Done · who, You · 5m, held by …),
+  the quiet note pencil, then Drop (tertiary) · Delegate (secondary) ·
+  Submit (the card's primary) while I hold it; Edit once done.
+- **Rows:** [kit report tick] name 14px / 500 · the options as a COMPACT
+  `.nd-seg` sized to its content (≈32px; 40px on touch), left-aligned,
+  wrapping inside its cell when there are many (Morphology's 7) — never
+  stretched across the row; neutral selected state. Free text is a kit
+  field at ~60% width (full width on phones). The pencil is a quiet
+  neutral icon button; one tap opens the inline note composer with focus.
+- **Phones:** rows stack — name + pencil, then the options / field full
+  width (fields ≥44px, textareas ≈88px).
+- **Palette:** no green (the old tech dot / done chips), no amber (the old
+  Inoculate button / held chips), no cyan (incubation). Clinical colours
+  that carry meaning stay where they already live — the AST S / I / R
+  interpretation in `culture-entry` (red = resistant, amber =
+  intermediate, green = sensitive).
+- **Real-layout check:** `apps/lms-e2e/src/culture-case-layout.rbac.spec.ts`
+  (seeded Lab Admin; opens the first case from My Work → Culture) asserts
+  one band primary, options narrower than the row at 1440, stacked rows +
+  44px band icons at 375. `SHOTS_DIR=…` saves 1440 / 375, dark + light.
+
 ## API summary
 
 ```
