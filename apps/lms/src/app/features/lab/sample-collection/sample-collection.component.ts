@@ -535,6 +535,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the full-screen overlay actually cover the nav.
     effect(() => {
       const hasDrawer = !!this.activeGroup();
+      // Full-screen flow: hide the app bar / bottom nav while it is open
+      // (html.pf-collect-immersive — the shell + global styles react).
+      // Always removed on close and on destroy.
+      if (typeof document !== "undefined")
+        document.documentElement.classList.toggle("pf-collect-immersive", hasDrawer);
       if (!hasDrawer) {
         this.detachTeleport();
         return;
@@ -576,6 +581,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this._clock = null;
     }
     this.detachTeleport();
+    if (typeof document !== "undefined")
+      document.documentElement.classList.remove("pf-collect-immersive");
   }
 
   private detachTeleport() {
@@ -802,6 +809,22 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       const k = this.tubeState(s).kind;
       return k === "normal" || k === "anchor" || k === "due";
     });
+  }
+
+  /** A dispatch / bill action is the footer's call to action right now
+   *  (mirrors the template's footer branches). */
+  dispatchCtaShown(g: OrderGroup): boolean {
+    if (this.isDispatched(g)) return false;
+    if (g.collected === g.totalVials && g.paymentHold && this.dispatchStep()) return this.canBill();
+    if (g.collected === g.totalVials && this.canDispatch()) return true;
+    return this.canPartialDispatch(g);
+  }
+
+  /** Colour discipline: ONLY the main call to action is primary. The
+   *  finish button is it when enabled and no dispatch / bill action is on
+   *  offer (and after dispatch, as before). */
+  finishIsPrimary(g: OrderGroup): boolean {
+    return this.isDispatched(g) || (!this.doneDisabled(g) && !this.dispatchCtaShown(g));
   }
 
   doneLabel(g: OrderGroup): string {

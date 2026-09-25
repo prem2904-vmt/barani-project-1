@@ -164,7 +164,7 @@
 
     <!-- ─── Collect drawer ────────────────────────────────────────────── -->
     @if (activeGroup(); as g) {
-      <div #drawerEl class="pf-drawer" role="dialog" aria-modal="true" (click)="close()">
+      <div #drawerEl class="pf-drawer pf-drawer--nd" role="dialog" aria-modal="true" (click)="close()">
         <div class="pf-drawer__panel" (click)="$event.stopPropagation()">
           <header class="pf-drawer__head">
             <button type="button" class="pf-drawer__close" (click)="close()" aria-label="Close">
@@ -183,7 +183,8 @@
               </p>
             </div>
             <div class="pf-drawer__progress shrink-0">
-              <span class="pf-drawer__progress-num">{{ g.collected }}/{{ g.totalVials }}</span>
+              <!-- Re-created per value so the tick animation replays. -->
+              <span class="pf-drawer__progress-num">@for (n of [g.collected]; track n) {<span class="pf-tick">{{ n }}</span>}/{{ g.totalVials }}</span>
               <span class="pf-drawer__progress-lbl">vials drawn</span>
             </div>
           </header>
@@ -194,7 +195,9 @@
 
           <p class="pf-drawer__hint">Tap each vial as you draw it — or mark a brought-in specimen as External to skip its draw. When every vial is done, the order completes automatically.</p>
 
-          <div class="pf-drawer__tubes">
+          <!-- Phones: a 2-column grid of vial cards (reads + counts better than
+               a sideways snap-scroll). -->
+          <div class="pf-drawer__tubes pf-drawer__tubes--grid">
             @for (s of orderedSamples(g); track s.id) {
               <!-- Wrapper exists so the External flag can sit OUTSIDE the
                    card's tap region (the card clips its children with
@@ -636,7 +639,7 @@
                 <span class="pf-btn__text">{{ dispatching() ? 'Dispatching…' : 'Dispatch ' + collectedCount(g) }}</span>
               </button>
             }
-            <button type="button" class="pf-btn" [class.pf-btn-primary]="isDispatched(g)" [class.pf-btn-ghost]="!isDispatched(g)"
+            <button type="button" class="pf-btn pf-drawer__finish" [class.pf-btn-primary]="finishIsPrimary(g)" [class.pf-btn-ghost]="!finishIsPrimary(g)"
                     (click)="close()" [disabled]="doneDisabled(g)"
                     [attr.aria-label]="doneLabel(g)"
                     [attr.data-label]="doneLabel(g)">
