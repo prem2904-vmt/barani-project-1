@@ -216,7 +216,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                   <p class="pf-stg__lockmsg">{{ s.holderName || 'Another tech' }} is working this stage.</p>
                 } @else {
                   @if (s.key === 'ast') {
-                    <button type="button" class="nd-btn nd-btn--secondary pf-cse__astbtn press" (click)="ensurePicked(s); astOpen.set(!astOpen())"
+                    <button type="button" class="nd-btn pf-cse__astbtn press" [class.nd-btn--tertiary]="astOpen()" [class.nd-btn--secondary]="!astOpen()" (click)="ensurePicked(s); astOpen.set(!astOpen())"
                             [attr.aria-expanded]="astOpen()">
                       {{ astOpen() ? 'Hide organism / sensitivity' : (astSummary() || 'Enter organism + sensitivity') }}
                     </button>

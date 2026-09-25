@@ -64,12 +64,12 @@ interface Breakpoint {
           @if ((m().organisms ?? []).length) {
             <!-- UNIVERSAL entry mode: every organism's table reads in it. -->
             <div class="ce-modebar">
-              <span class="ce-modebar__lbl">Reading method</span>
-              <span class="ce-abx__mode ce-org__modetgl">
-                <button type="button" [class.ce-abx__mode--on]="mode() === 'zone'"
-                        (click)="setMode('zone')">Zone mm</button>
-                <button type="button" [class.ce-abx__mode--on]="mode() === 'mic'"
-                        (click)="setMode('mic')">MIC µg/mL</button>
+              <span class="ce-modebar__lbl" id="ce-mode-lbl">Reading method</span>
+              <span class="nd-seg ce-modeseg" role="radiogroup" aria-labelledby="ce-mode-lbl">
+                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === 'zone'"
+                        (click)="setMode('zone')">Zone (mm)</button>
+                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === 'mic'"
+                        (click)="setMode('mic')">MIC (µg/mL)</button>
               </span>
             </div>
           }
@@ -210,14 +210,16 @@ interface Breakpoint {
 
                   <!-- Wide: separate S/I/R result buttons -->
                   <span class="ce-abx__sirbtns">
+                    <span class="nd-seg ce-sirseg" role="radiogroup" [attr.aria-label]="ab.name + ' result'">
                     @for (v of ['S','I','R']; track v) {
-                      <button type="button" class="ce-abx__sirbtn"
-                        [style.borderColor]="ab.interpretation === v ? toneColor(v) : 'var(--border-subtle)'"
-                        [style.color]="ab.interpretation === v ? '#fff' : 'var(--text-secondary)'"
-                        [style.background]="ab.interpretation === v ? toneColor(v) : 'transparent'"
+                      <button type="button" class="nd-seg__item ce-abx__sirbtn" role="radio"
+                        [attr.data-v]="v"
+                        [class.ce-sir-picked]="ab.interpretation === v"
+                        [attr.aria-checked]="ab.interpretation === v"
                         [attr.aria-label]="ab.name + ': ' + v"
                         (click)="setInterp(oi, abi, $any(v))">{{ v }}</button>
                     }
+                    </span>
                     @if (isAuto(oi, abi) && ab.interpretation) {
                       <span class="ce-abx__auto" title="Auto-interpreted from the zone (CLSI). Tap S/I/R to override.">auto</span>
                     }
@@ -269,7 +271,9 @@ interface Breakpoint {
                     }
                   </span>
 
-                  <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name">×</button>
+                  <button type="button" class="ce-abx__x" (click)="removeAb(oi, abi)" [attr.aria-label]="'Remove ' + ab.name" [title]="'Remove ' + ab.name">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
                 </div>
               }
               <!-- The table's last row IS the add action. -->
@@ -478,6 +482,63 @@ interface Breakpoint {
     @media (pointer: coarse) {
       :host .ce-abx__cell, :host .ce-abx__zone, :host .ce-abx__sirbtn { min-height: 44px; }
     }
+
+    /* ══ Kit restyle (both themes; colour-independent) ══ */
+    :host { font-family: inherit; }
+    .ce-modebar__lbl { font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-tertiary); }
+    .ce-modeseg .nd-seg__item { height: 32px; font-size: 13px; }
+    .ce-abx__head { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+    .ce-abx__auto { font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+    .ce-sirseg { gap: 2px; }
+    .ce-abx__sirbtn { width: 36px; height: 32px; border: 0; border-radius: 8px; padding: 0;
+      font: inherit; font-size: 13px; font-weight: 600; color: var(--text-secondary); background: transparent; }
+    /* Dark keeps its traffic-light verdict (owner: dark is fine). */
+    .ce-sir-picked[data-v='S'] { background: #10b981; color: #fff; }
+    .ce-sir-picked[data-v='I'] { background: #f59e0b; color: #fff; }
+    .ce-sir-picked[data-v='R'] { background: #ef4444; color: #fff; }
+    .ce-abx__zone { font-family: inherit; border-radius: var(--nd-radius-sm, 10px);
+      background: var(--nd-card-bg, var(--input-bg)); border: 1px solid var(--nd-line, var(--input-border)); color: var(--text-primary); }
+    .ce-abx__zone:focus { border-color: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+    .ce-abx__bpbox { font-family: inherit; border-radius: var(--nd-radius-chip, 8px); }
+    .ce-abx__unit { font-weight: 500; }
+    .ce-abx__x { width: 32px; height: 32px; border-radius: var(--nd-radius-sm, 10px); display: inline-flex;
+      align-items: center; justify-content: center; color: var(--text-tertiary); }
+    .ce-abx__x:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
+    @media (pointer: coarse) { .ce-abx__x { width: 44px; height: 44px; } }
+
+    /* ══ LIGHT mode: no traffic lights (owner: eye strain). Neutral headers,
+       neutral breakpoint chips, muted MIC line, neutral S/I/R selection —
+       a small red dot on a selected R is the only colour left. ══ */
+    :host-context(.light) .ce-abx__col--s,
+    :host-context(.light) .ce-abx__col--i,
+    :host-context(.light) .ce-abx__col--r { color: var(--text-tertiary); }
+    :host-context(.light) .ce-abx__bpwide .ce-abx__bpbox { color: var(--text-primary);
+      background: var(--nd-chip-bg); border-color: transparent; }
+    :host-context(.light) .ce-abx__mic,
+    :host-context(.light) .ce-abx__mic em { color: var(--text-tertiary); font-weight: 400; }
+    :host-context(.light) .ce-abx__row[data-interp] { background: var(--nd-card-bg, #fff); }
+    :host-context(.light) .ce-abx__row:hover { border-color: var(--nd-sel-border); }
+    :host-context(.light) .ce-sir-picked[data-v] {
+      background: var(--nd-card-bg, #fff); color: var(--text-primary); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18); }
+    :host-context(.light) .ce-sir-picked[data-v='R'] { position: relative; }
+    :host-context(.light) .ce-sir-picked[data-v='R']::after {
+      content: ''; position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 999px; background: #dc2626; }
+    :host-context(.light) .ce-abx__celllbl,
+    :host-context(.light) .ce-abx__cell--s .ce-abx__celllbl,
+    :host-context(.light) .ce-abx__cell--i .ce-abx__celllbl,
+    :host-context(.light) .ce-abx__cell--r .ce-abx__celllbl { color: var(--text-tertiary); }
+    :host-context(.light) .ce-abx__cell--on,
+    :host-context(.light) .ce-abx__cell--s.ce-abx__cell--on,
+    :host-context(.light) .ce-abx__cell--i.ce-abx__cell--on,
+    :host-context(.light) .ce-abx__cell--r.ce-abx__cell--on { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+    :host-context(.light) .ce-abx__cell--on .ce-abx__celllbl,
+    :host-context(.light) .ce-abx__cell--on .ce-abx__cellunit,
+    :host-context(.light) .ce-abx__cell--on .ce-abx__bpin { color: var(--text-primary); }
+    :host-context(.light) .ce-abx__cell--r.ce-abx__cell--on { position: relative; }
+    :host-context(.light) .ce-abx__cell--r.ce-abx__cell--on::after {
+      content: ''; position: absolute; top: 6px; right: 6px; width: 5px; height: 5px; border-radius: 999px; background: #dc2626; }
+    :host-context(.light) .ce-org__prog--done { color: var(--violet-text, #6d28d9); border-color: var(--nd-sel-border); }
 `]
 })
 export class CultureEntryComponent implements OnInit {
