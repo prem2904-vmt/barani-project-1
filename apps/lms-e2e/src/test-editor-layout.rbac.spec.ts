@@ -218,4 +218,51 @@ test.describe('Test editor — real layout', () => {
     await expect(aside).toBeHidden();
     await page.unrouteAll({ behavior: 'ignoreErrors' });
   });
+
+  test('Test Master views + profile / package editors: one primary, no mono / green (shots)', async ({ page }) => {
+    await relayCors(page);
+    await loginAs(page, 'admin');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // Collect every test row the app loads, to find a profile + a package.
+    const seen: any[] = [];
+    page.on('response', async r => {
+      if (!/\/api\/tests\//.test(r.url()) || r.request().method() !== 'GET') return;
+      const b = await r.json().catch(() => null);
+      const rows = Array.isArray(b) ? b : (Array.isArray(b?.data) ? b.data : []);
+      seen.push(...rows);
+    });
+    await page.goto('/admin/tests');
+    await page.waitForLoadState('networkidle').catch(() => {});
+    const PRIMARY = '.pf-hb-btn--primary, .nd-btn--primary, pf-touch-btn .v-primary';
+    for (const view of ['Profiles', 'Packages', 'Option groups', 'Microbiology', 'Pricing']) {
+      const seg = page.locator(`pf-hero-band pf-segmented button[aria-label="${view}"]`).first();
+      if (!(await seg.count())) continue;
+      await seg.click();
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await page.waitForTimeout(700);
+      await expect(page.getByText(/Loading prices/i)).toHaveCount(0, { timeout: 20_000 }).catch(() => {});
+      const n = await page.locator(PRIMARY).evaluateAll(els => els.filter(e => (e as HTMLElement).offsetParent !== null).length);
+      expect(n, `primaries on ${view}`).toBeLessThanOrEqual(1);
+      const h = await hygiene(page);
+      expect(h.mono, `monospace on ${view}`).toEqual([]);
+      await shoot(page, `test-master-${view.toLowerCase().replace(/\s+/g, '-')}-1440`);
+    }
+    for (const type of ['profile', 'package'] as const) {
+      const t = seen.find(r => r?.type === type && r?.id);
+      if (!t) continue;
+      await page.goto(`/admin/tests/${t.id}/edit?type=${type}`);
+      await expect(page.locator('pf-hero-band .pf-te2-ctx__nametext')).not.toHaveText(/^(New|Edit) /, { timeout: 20_000 });
+      await expect(page.locator('pf-hero-band .nd-ctx__chip')).toHaveCount(0);
+      await expect(page.locator(PRIMARY)).toHaveCount(1);
+      await shoot(page, `${type}-editor-1440-basics`);
+      await page.locator('[role="tab"][data-sec="results"]').click();
+      await page.waitForTimeout(600);
+      await expect(page.locator(PRIMARY)).toHaveCount(1);
+      const h = await hygiene(page);
+      expect(h.mono, `monospace on the ${type} members`).toEqual([]);
+      expect(h.green, `green on the ${type} members`).toEqual([]);
+      await shoot(page, `${type}-editor-1440-members`);
+    }
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
 });

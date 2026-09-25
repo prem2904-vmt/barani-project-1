@@ -1,5 +1,5 @@
 /* The pinned "Selected" group reads as a summary, not another dept. */
-.pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__name { color: var(--violet-text); }
+.pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__name { color: var(--text-primary); }
 .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__count {
   background: rgba(168, 85, 247, 0.28);
   border-color: rgba(168, 85, 247, 0.5);
@@ -140,9 +140,9 @@ select.pf-input--compact {
 /* Calculated profile members */
 .pf-calc-members {
   margin: 12px 0 16px; padding: 12px; border-radius: 12px;
-  background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.25);
+  background: var(--nd-card-bg); border: 1px solid var(--nd-line);
 }
-.pf-calc-members__hdr { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--violet-text); margin-bottom: 8px; }
+.pf-calc-members__hdr { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
 .pf-calc-members__row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 3px 0; }
 .pf-calc-members__name { font-weight: 600; color: var(--text-primary); min-width: 120px; }
 .pf-calc-members__f { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-secondary); background: var(--nd-chip-bg); padding: 2px 6px; border-radius: 4px; }
@@ -152,7 +152,7 @@ select.pf-input--compact {
 /* Department header inside bundle member picker */
 .pf-pkg-dept-hdr {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 4px 8px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-tertiary);
+  padding: 4px 2px 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary);
 }
 .pf-pkg-dept-hdr__count {
   padding: 1px 7px; border-radius: 999px; font-size: 10px;
@@ -324,13 +324,12 @@ select.pf-input--compact {
 }
 .pf-tp__hdr { display: flex; align-items: center; gap: 8px; padding: 2px 2px 8px; }
 .pf-tp__badge {
-  padding: 2px 10px;
-  font-size: 10.5px; font-weight: 800;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  border-radius: 9999px;
-  background: rgba(168, 85, 247, 0.16);
-  border: 1px solid rgba(168, 85, 247, 0.4);
-  color: var(--violet-text, #c4b5fd);
+  padding: 3px 9px;
+  font-size: 12px; font-weight: 600;
+  border-radius: var(--nd-radius-chip, 8px);
+  background: var(--nd-chip-bg);
+  border: 1px solid var(--nd-line);
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 .pf-tp__badge--first {
@@ -402,7 +401,7 @@ select.pf-input--compact {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
 }
-.pf-picker-search { width: 220px; flex-shrink: 0; }
+.pf-picker-search { width: 320px; max-width: 100%; flex-shrink: 0; }
 @media (max-width: 640px) { .pf-picker-search { width: 100%; } }
 .pf-picker-empty {
   padding: 24px 12px; text-align: center;
