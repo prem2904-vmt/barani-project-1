@@ -1501,3 +1501,193 @@
         padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)) !important;
       }
     }
+    /* ════ New-design language for the Collect-sample flow (owner) ════════
+       Same rules as Order & Payments: theme tokens (light + dark follow the
+       app theme, never forced dark), the band wash in the header, calm
+       neutral cards (10–12px radius, small soft shadow), Noto Sans with mono
+       only for IDs, and ONLY the main call to action in the primary
+       gradient. Tube cap colours are data and stay as they are.
+       Scoped to .pf-drawer--nd (the drawer is teleported to <body>, and the
+       emulated attributes still apply). */
+    .pf-drawer.pf-drawer--nd {
+      --pf-nd-card: var(--bg-card-solid, #ffffff);
+      --pf-nd-line: var(--border-muted, #e5e7eb);
+      --pf-nd-chip: #f3f4f6;
+      --pf-nd-sel-border: #9aa4ae;
+      --pf-nd-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 14px rgba(15, 23, 42, 0.06);
+      --pf-nd-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Noto Sans', system-ui, sans-serif;
+    }
+    :host-context(.dark) .pf-drawer.pf-drawer--nd,
+    :host-context([data-theme='dark']) .pf-drawer.pf-drawer--nd {
+      --pf-nd-chip: rgba(255, 255, 255, 0.08);
+      --pf-nd-sel-border: rgba(255, 255, 255, 0.4);
+      --pf-nd-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Header = the band: close top-left, patient + meta, progress card right. */
+    .pf-drawer--nd .pf-drawer__head {
+      background-color: var(--pf-band-bg, var(--bg-card-solid));
+      background-image: var(--pf-band-fade, none), var(--pf-band-sweep, none);
+      border-bottom: 1px solid var(--pf-band-edge, var(--pf-nd-line));
+      padding-top: 20px;
+      padding-bottom: 16px;
+    }
+    .pf-drawer--nd .pf-drawer__close {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: var(--pf-nd-card);
+      border: 1px solid var(--pf-nd-line);
+      color: var(--text-secondary);
+      box-shadow: var(--pf-nd-shadow);
+    }
+    .pf-drawer--nd .pf-drawer__close:hover { color: var(--text-primary); border-color: var(--pf-nd-sel-border); background: var(--pf-nd-card); }
+    .pf-drawer--nd .pf-drawer__name {
+      font-size: 22px; font-weight: 600; letter-spacing: -0.01em;
+      background: none; -webkit-text-fill-color: currentColor; color: var(--text-primary);
+    }
+    .pf-drawer--nd .pf-drawer__meta,
+    .pf-drawer--nd .pf-drawer__meta--order {
+      font-family: 'Noto Sans', system-ui, sans-serif;
+      font-size: 13px; font-weight: 500; letter-spacing: 0;
+      color: var(--text-secondary);
+    }
+    .pf-drawer--nd .pf-drawer__sub { font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace; color: var(--text-secondary); }
+    .pf-drawer--nd .pf-drawer__progress {
+      min-width: 104px; padding: 8px 14px; border-radius: 12px;
+      background: var(--pf-nd-card);
+      border: 1px solid var(--pf-nd-line);
+      box-shadow: var(--pf-nd-shadow);
+    }
+    .pf-drawer--nd .pf-drawer__progress-num { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+    .pf-drawer--nd .pf-drawer__progress-lbl { font-size: 10px; letter-spacing: 0.12em; color: var(--text-muted); }
+    .pf-tick { display: inline-block; animation: pf-nd-tick 240ms var(--pf-nd-spring, ease) both; }
+    @keyframes pf-nd-tick { from { transform: translateY(35%); opacity: 0; } to { transform: none; opacity: 1; } }
+
+    /* Thin progress bar with a subtle accent (no glow). */
+    .pf-drawer--nd .pf-drawer__progressbar { height: 3px; margin-top: 0; background: var(--pf-nd-line); border-radius: 0 0 3px 3px; }
+    .pf-drawer--nd .pf-drawer__progressbar > span {
+      background: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 70%, transparent);
+      box-shadow: none;
+    }
+    .pf-drawer--nd .pf-drawer__hint {
+      max-width: 680px; margin-left: auto; margin-right: auto;
+      font-size: 13px; line-height: 1.45; color: var(--text-tertiary);
+      text-wrap: pretty;
+    }
+
+    /* Vial cards: calm neutral surface, 12px radius, small soft shadow. */
+    .pf-drawer--nd .pf-tube {
+      background: var(--pf-nd-card);
+      border: 1px solid var(--pf-nd-line);
+      border-radius: 12px;
+      box-shadow: var(--pf-nd-shadow);
+    }
+    .pf-drawer--nd .pf-tube:hover:not([disabled]) { border-color: var(--pf-nd-sel-border); }
+    .pf-drawer--nd .pf-tube:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: 2px; }
+    /* Drawn: a light tint + the check; a quick, subtle confirmation pop. */
+    .pf-drawer--nd .pf-tube--done {
+      background: color-mix(in srgb, var(--color-success, #10b981) 7%, var(--pf-nd-card));
+      border-color: color-mix(in srgb, var(--color-success, #10b981) 45%, transparent);
+      box-shadow: var(--pf-nd-shadow);
+      animation: pf-nd-drawn 230ms var(--pf-nd-spring) both;
+    }
+    @keyframes pf-nd-drawn { 0% { transform: scale(0.97); } 60% { transform: scale(1.015); } 100% { transform: none; } }
+    .pf-drawer--nd .pf-tube--done .pf-tube__stamp { animation: pf-nd-check 220ms ease-out both; }
+    @keyframes pf-nd-check { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+    .pf-drawer--nd .pf-tube--selected {
+      background: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 7%, var(--pf-nd-card));
+      border-color: var(--pf-nd-sel-border);
+    }
+    .pf-drawer--nd .pf-tube__code { font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace; }
+
+    /* Chips: neutral / tertiary. "Tap when drawn" + series states. */
+    .pf-drawer--nd .pf-tube__stamp {
+      border-radius: 8px; font-weight: 600;
+      color: var(--success-text, #047857);
+      background: color-mix(in srgb, var(--color-success, #10b981) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-success, #10b981) 30%, transparent);
+    }
+    .pf-drawer--nd .pf-tube__stamp--pending {
+      color: var(--text-secondary);
+      background: var(--pf-nd-chip);
+      border-color: var(--pf-nd-line);
+    }
+    /* EXTERNAL tag: a neutral rounded rectangle; marked = neutral selected. */
+    .pf-drawer--nd .pf-tube__extflag {
+      border-radius: 8px;
+      border: 1px solid var(--pf-nd-line);
+      background: var(--pf-nd-card);
+      color: var(--text-tertiary);
+      box-shadow: var(--pf-nd-shadow);
+    }
+    .pf-drawer--nd .pf-tube__extflag:not(:disabled):hover { color: var(--text-primary); border-color: var(--pf-nd-sel-border); }
+    .pf-drawer--nd .pf-tube__extflag--on {
+      color: var(--text-primary);
+      background: var(--pf-nd-chip);
+      border: 1px solid var(--pf-nd-sel-border);
+      box-shadow: none;
+    }
+    .pf-drawer--nd .pf-tube__extlabel { color: var(--text-tertiary); }
+
+    /* Footer: sticky, calm surface, safe area (the app bar is hidden while
+       this full-screen flow is open, so no nav clearance). */
+    .pf-drawer--nd .pf-drawer__foot {
+      position: sticky; bottom: 0; z-index: 2;
+      background: var(--pf-nd-card);
+      border-top: 1px solid var(--pf-nd-line);
+      padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    }
+    .pf-drawer--nd .pf-drawer__remaining {
+      font-family: 'Noto Sans', system-ui, sans-serif; font-size: 12px; font-weight: 500;
+      color: var(--text-tertiary);
+      padding: 4px 10px; border-radius: 8px; background: var(--pf-nd-chip);
+    }
+    .pf-drawer--nd .pf-drawer__done-stamp { border-radius: 10px; }
+    /* Secondary = neutral; primary gradient ONLY on the main CTA. */
+    .pf-drawer--nd .pf-drawer__foot .pf-btn { border-radius: 10px; min-height: 44px; }
+    .pf-drawer--nd .pf-drawer__foot .pf-btn-ghost {
+      background: var(--pf-nd-card);
+      border: 1px solid var(--pf-nd-line);
+      color: var(--text-primary);
+      box-shadow: var(--pf-nd-shadow);
+    }
+    .pf-drawer--nd .pf-drawer__foot .pf-btn-ghost:hover:not(:disabled) { border-color: var(--pf-nd-sel-border); background: var(--pf-nd-card); }
+    .pf-drawer--nd .pf-drawer__foot .pf-btn-ghost:disabled { opacity: 0.55; }
+    .pf-drawer--nd .pf-drawer__foot .pf-btn-primary {
+      background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+      color: #fff; border: 0;
+    }
+
+    /* Phones: 2-column vial grid; the primary action full width at the
+       bottom (with its label); secondaries stay compact icon buttons. */
+    @media (max-width: 640px) {
+      .pf-drawer--nd .pf-drawer__name { font-size: 18px; }
+      .pf-drawer--nd .pf-drawer__tubes--grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 16px 12px 20px;
+        align-content: start;
+      }
+      .pf-drawer--nd .pf-drawer__tubes--grid .pf-tube-wrap,
+      .pf-drawer--nd .pf-drawer__tubes--grid .pf-tube { width: 100%; }
+      .pf-drawer--nd .pf-drawer__foot { flex-wrap: wrap; row-gap: 10px; }
+      .pf-drawer--nd .pf-drawer__foot .pf-btn.pf-btn-primary {
+        order: 99;
+        flex: 1 0 100%;
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        gap: 8px;
+      }
+      .pf-drawer--nd .pf-drawer__foot .pf-btn.pf-btn-primary .pf-btn__text { display: inline; }
+      .pf-drawer--nd .pf-drawer__hint { padding: 0 16px; font-size: 12.5px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .pf-tick,
+      .pf-drawer--nd .pf-tube--done,
+      .pf-drawer--nd .pf-tube--done .pf-tube__stamp { animation: none; }
+    }
