@@ -2456,6 +2456,93 @@ const COUNTERS: CounterSpec[] = [
     }
     :host-context(.design-new) .pf-counter__value,
     :host-context(.design-new) .pf-kpi-stat__value { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+    /* ════ Round 2 (owner): tiles + buttons in OUR theme (Order & Payments) ════
+       Panes = nd cards; pane header = the BILLING-style header; the queue
+       tile = the catalogue row (small violet code, primary name, muted meta,
+       right-aligned value); buttons = nd secondary outline / neutral icon. */
+    :host-context(.design-new) .pf-mw-pane,
+    :host-context(.design-new) .pf-mw-rail {
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
+      border-radius: var(--nd-radius-card, 16px); box-shadow: var(--nd-shadow-sm);
+    }
+    :host-context(.design-new) .pf-mw-pane__hdr {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg));
+      border-bottom: 1px solid var(--nd-line);
+      padding: 12px 14px;
+    }
+    :host-context(.design-new) .pf-mw-pane__title {
+      font-size: 12px; font-weight: 500; letter-spacing: 0.1em; color: var(--text-secondary);
+    }
+    /* Pin / hide = neutral icon buttons; pinned = neutral selected. */
+    :host-context(.design-new) .pf-mw-pin {
+      width: 32px; height: 32px; border-radius: var(--nd-radius-sm, 10px);
+      border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-secondary);
+    }
+    :host-context(.design-new) .pf-mw-pin:hover { border-color: var(--nd-sel-border); background: var(--nd-card-bg); color: var(--text-primary); }
+    :host-context(.design-new) .pf-mw-pin--on {
+      color: var(--text-primary); background: var(--nd-sel-bg); border-color: var(--nd-sel-border); box-shadow: none;
+    }
+    /* Pane tabs (Queue / My Work / Completed): underline like the catalogue tabs. */
+    :host-context(.design-new) .pf-mw-tab {
+      background: transparent !important; border: 0 !important; border-radius: 0 !important;
+      box-shadow: none !important; color: var(--text-tertiary) !important; font-weight: 500;
+      padding: 8px 2px 10px;
+    }
+    :host-context(.design-new) .pf-mw-tab--on {
+      color: var(--text-primary) !important; font-weight: 600;
+      box-shadow: inset 0 -2px 0 var(--color-violet-600, #7c3aed) !important;
+    }
+    :host-context(.design-new) .pf-mw-tab__count { background: transparent !important; color: var(--violet-text, #7c3aed) !important; font-size: 11px; }
+    /* Intake scan bar: stock input look + nd buttons. */
+    :host-context(.design-new) .pf-mw-scan {
+      border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+    }
+    :host-context(.design-new) .pf-mw-scan__btn {
+      border-radius: var(--nd-radius-sm, 10px) !important;
+      background: transparent !important; border: 1px solid var(--color-violet-600, #7c3aed) !important;
+      color: var(--violet-text, #6d28d9) !important; font-weight: 600; box-shadow: none !important;
+    }
+
+    /* Queue tile = the catalogue row. */
+    :host-context(.design-new) .pf-tq { border-radius: var(--nd-radius-sm, 10px); }
+    :host-context(.design-new) .pf-tq__main { padding: 10px 12px 10px 14px; }
+    :host-context(.design-new) .pf-tq__line { gap: 8px; }
+    :host-context(.design-new) .pf-tq__id {
+      font-size: 11.5px !important; font-weight: 500; color: var(--violet-text, #7c3aed);
+    }
+    :host-context(.design-new) .pf-tq__sub { margin-top: 3px; font-size: 12px; color: var(--text-tertiary); }
+    :host-context(.design-new) .pf-tq__who { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
+    :host-context(.design-new) .pf-tq__tag {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
+      padding: 1px 6px; border-radius: 6px; background: var(--nd-chip-bg); color: var(--text-secondary);
+    }
+    :host-context(.design-new) .pf-tq__tag--warn { background: var(--error-bg, rgba(239, 68, 68, 0.12)); color: var(--error-text, #b91c1c); }
+    :host-context(.design-new) .pf-tq__tag--draft { background: var(--nd-chip-bg); color: var(--text-secondary); }
+    /* Trailing zone: no dark slab — a hairline and a right-aligned value. */
+    :host-context(.design-new) .pf-tq__side {
+      background: transparent; border-left: 1px solid var(--nd-line);
+      flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px 8px 12px;
+    }
+    :host-context(.design-new) .pf-tq__stat {
+      font-size: 13px; font-weight: 600; color: var(--text-primary); align-items: baseline;
+    }
+    :host-context(.design-new) .pf-tq__stat-u { font-size: 11px; color: var(--text-muted); }
+    /* Delegate / Print / Edit = nd secondary (outline, like "Save as draft"). */
+    :host-context(.design-new) .pf-tq__act {
+      min-height: 32px; padding: 0 12px;
+      border-radius: var(--nd-radius-sm, 10px);
+      background: transparent; border: 1px solid var(--color-violet-600, #7c3aed);
+      color: var(--violet-text, #6d28d9); font-size: 12px; font-weight: 600;
+    }
+    :host-context(.design-new) .pf-tq__act:hover {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent);
+      color: var(--violet-text, #6d28d9); border-color: var(--color-violet-600, #7c3aed);
+    }
+    :host-context(.design-new) .pf-tq__act:active { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+    @media (pointer: coarse) {
+      :host-context(.design-new) .pf-tq__act { min-height: 44px; }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {
