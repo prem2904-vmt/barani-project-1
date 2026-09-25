@@ -644,6 +644,59 @@ canonical example is the **test editor**
   Save is an icon and Preview opens a sheet above the navbar. Run it against
   a build: `BASE_URL=http://localhost:4310 CORS_RELAY=1 SHOTS_DIR=…`.
 
+## 15. Patient registration
+
+`/frontdesk/patients/new` (+ `?patientId=` = edit details; Order & Payments'
+"Register a new patient" / "Edit … details" land here) —
+`features/frontdesk/patient-register/`. An §14 editor over the tenant's
+`patient_registration` workflow (owner, 2026-09-25):
+
+- **Band:** back · tenant · actions. New: ghost **Cancel**,
+  ghost **Save & book test** (registers, then opens Order & Payments with the
+  patient attached — `OrderEntryService.startNewOrder(id)`), ghost **Save &
+  book appointment**, then the ONE primary **Register patient**. Edit: the
+  neutral save state (`.nd-savestate`), Cancel, primary **Save changes**.
+  Phones: Cancel goes (the back chevron is the same move), the rest are 44px
+  icons at the top of the band.
+- **Pill = the subject name + the section tabs, nothing else:** "New patient"
+  until a name is typed, then the FULL live name ("Mr. Ravi Shankar"; Baby →
+  "Baby of <mother>"); edit = the patient's name. Quiet pencil → Identity,
+  focus First name. Tabs = the form's REAL groupings, from the workflow
+  (display-only split, storage keys untouched): **Identity · Contact & IDs ·
+  Additional details** (+ any tenant step). Sliding neutral indicator, violet
+  dot (filled = complete, ring = something to finish), ←/→ walk the tabs;
+  phones stack the name over a sideways-scrolling tabs row.
+- **One section card** (violet icon chip + the step title; the note says
+  "N required" with the amber dot, or "Optional"); only its body scrolls.
+  The card header carries ABHA: **Fill from ABHA** (scan / number → fills
+  the form) + **Create ABHA** on a new patient, **Verify / create ABHA** in
+  edit — `.nd-rowact` (text on web, icons on touch). A secondary "Next: …"
+  closes each section.
+- **Fields** (`pf-workflow-renderer [nd] [activeStepId] [hideActions]` →
+  `pf-dynamic-input [nd]`; both default OFF so result entry / the workflow
+  preview keep the classic look): kit `.nd-field` + `.nd-input` (40px; 44px
+  and 16px text on phones), the amber required dot (never a red `*`), Title
+  and 2–4-option selects (Sex) as neutral `.nd-seg` with `aria-pressed`
+  (pills keep their width on web; 5+ go three-up on phones), DOB ⇄ age kept
+  (kit date input + age + Yrs / Mo segment), phone = one kit shell with the
+  country code as `pf-select` (code + country hint, no flag emoji), ABHA /
+  Aadhaar / phone / age in tabular numbers, on/off = slate `.nd-toggle`.
+- **Validation** still covers EVERY section on any submit; the renderer's
+  `(invalid)` names the step and the page opens it, with the message at the
+  top of the card (`role="alert"`). Duplicate patient → `DialogService`
+  confirm → retry with `force`. ABHA prefill also updates the pill.
+- **ABHA modals** (`abha-prefill`, `abha-wizard`) in the new design: nd-card
+  modal, kit inputs, OTP in Noto tabular numbers (no monospace), neutral info
+  text (no green); phones: a sheet above the navbar.
+- **Real-layout check:** `apps/lms-e2e/src/patient-register-layout.rbac.spec.ts`
+  (seeded Lab Admin; every `/api/patients` write is answered in the browser
+  and asserted never sent; edit mode loads a made-up patient answered in the
+  browser) asserts one primary, the name + tabs pill on one line, no page
+  scroll, 40px fields, no mono / green, validation opening Identity, the
+  live pill name; at 375 the icon primary above the pill, scrolling ≥40px
+  tabs, full-width ≥44px / 16px fields, a 12px card label and the card above
+  the navbar. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
+
 ## API summary
 
 ```

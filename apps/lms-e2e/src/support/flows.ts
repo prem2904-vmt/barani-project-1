@@ -8,13 +8,55 @@ import { expect } from '@playwright/test';
  * re-implementing the dynamic-workflow-form dance.
  */
 
-/** Field rows are `<div class="flex flex-col gap-1.5"><label class="pf-label">…` —
- *  label and control are siblings with no `for`/`id` link, so getByLabel()
- *  doesn't apply. Scope by the row that contains the given label text. */
+/** Field rows are `<div class="flex flex-col gap-1.5">` holding the label
+ *  (classic `label.pf-label`, new design `label.nd-field__lbl`) and the
+ *  control. Scope by the row that contains the given label text. */
 export function fieldRow(page: Page, label: string) {
   return page.locator('div.flex.flex-col.gap-1\\.5').filter({
-    has: page.locator('label.pf-label', { hasText: label }),
+    has: page.locator('label.pf-label, label.nd-field__lbl', { hasText: label }),
   });
+}
+
+/** New-design registration shows ONE section at a time (tabs in the band
+ *  pill). Open whichever section holds the field; classic is one page. */
+export async function revealRegistrationField(page: Page, label: string): Promise<void> {
+  if (await fieldRow(page, label).count()) return;
+  const tabs = page.locator('pf-hero-band [role="tablist"] [role="tab"]');
+  const n = await tabs.count();
+  for (let i = 0; i < n; i++) {
+    await tabs.nth(i).click();
+    if (await fieldRow(page, label).count()) return;
+  }
+}
+
+/** Pick a Sex value: a pf-select in classic, a neutral segment in new design. */
+export async function pickSex(page: Page, value: string): Promise<void> {
+  await revealRegistrationField(page, 'Sex');
+  const row = fieldRow(page, 'Sex');
+  const trigger = row.locator('button.pf-dd__trigger');
+  if (await trigger.count()) {
+    // Custom pf-select (no native <select>): open it, then pick the option
+    // from its portalled listbox panel.
+    await trigger.click();
+    await page.getByRole('option', { name: value, exact: true }).click();
+  } else {
+    await row.locator('.nd-seg__item', { hasText: new RegExp(`^${value}$`) }).click();
+  }
+}
+
+/** Fill the registration form's required fields, whatever the design. */
+export async function fillRegistration(page: Page, p: { firstName: string; lastName: string; phone: string; dob?: string }): Promise<void> {
+  await revealRegistrationField(page, 'First name');
+  await fieldRow(page, 'First name').locator('input').first().fill(p.firstName);
+  await revealRegistrationField(page, 'Last name');
+  await fieldRow(page, 'Last name').locator('input').first().fill(p.lastName);
+  if (p.dob) {
+    await revealRegistrationField(page, 'Date of birth');
+    await fieldRow(page, 'Date of birth').locator('input[type="date"]').fill(p.dob);
+  }
+  await pickSex(page, 'Male');
+  await revealRegistrationField(page, 'Phone');
+  await fieldRow(page, 'Phone').locator('input[type="tel"]').fill(p.phone);
 }
 
 export interface RegisteredPatient {
@@ -42,18 +84,9 @@ export async function registerPatient(page: Page): Promise<RegisteredPatient> {
 
   // The form is populated from a backend-fetched workflow config — wait for
   // it to actually render before interacting.
-  await expect(fieldRow(page, 'First name').locator('input')).toBeVisible({ timeout: 30_000 });
+  await expect(fieldRow(page, 'First name').locator('input').first()).toBeVisible({ timeout: 30_000 });
 
-  await fieldRow(page, 'First name').locator('input').fill(firstName);
-  await fieldRow(page, 'Last name').locator('input').fill(lastName);
-  await fieldRow(page, 'Date of birth').locator('input[type="date"]').fill('1990-05-15');
-
-  // Sex is a custom pf-select (no native <select>): open it, then pick the
-  // option from its portalled listbox panel.
-  await fieldRow(page, 'Sex').locator('button.pf-dd__trigger').click();
-  await page.getByRole('option', { name: 'Male', exact: true }).click();
-
-  await fieldRow(page, 'Phone').locator('input[type="tel"]').fill(phone);
+  await fillRegistration(page, { firstName, lastName, phone, dob: '1990-05-15' });
 
   await page.getByRole('button', { name: /^register patient$/i }).click();
 

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { fieldRow, fillRegistration } from './support/flows';
 
 /**
  * Stage 1 of the clinical flow — patient registration. Runs against the real
@@ -15,14 +16,6 @@ import { test, expect } from '@playwright/test';
  * registered).
  */
 
-/** Field rows are `<div class="flex flex-col gap-1.5"><label class="pf-label">…` —
- *  label and control are siblings with no `for`/`id` link, so getByLabel()
- *  doesn't apply. Scope by the row that contains the given label text. */
-function fieldRow(page: import('@playwright/test').Page, label: string) {
-  return page.locator('div.flex.flex-col.gap-1\\.5').filter({
-    has: page.locator('label.pf-label', { hasText: label }),
-  });
-}
 
 test.describe('Patient registration', () => {
   test('registers a new patient and lands on their profile', async ({ page }) => {
@@ -36,18 +29,11 @@ test.describe('Patient registration', () => {
 
     // The form is populated from a backend-fetched workflow config — wait for
     // it to actually render before interacting.
-    await expect(fieldRow(page, 'First name').locator('input')).toBeVisible({ timeout: 15_000 });
+    await expect(fieldRow(page, 'First name').locator('input').first()).toBeVisible({ timeout: 15_000 });
 
-    await fieldRow(page, 'First name').locator('input').fill(firstName);
-    await fieldRow(page, 'Last name').locator('input').fill(lastName);
-    await fieldRow(page, 'Date of birth').locator('input[type="date"]').fill('1990-05-15');
-
-    // Sex is a custom pf-select (no native <select>): open it, then pick the
-    // option from its portalled listbox panel.
-    await fieldRow(page, 'Sex').locator('button.pf-dd__trigger').click();
-    await page.getByRole('option', { name: 'Male', exact: true }).click();
-
-    await fieldRow(page, 'Phone').locator('input[type="tel"]').fill(phone);
+    // Design-agnostic: classic is one page; the new design opens each
+    // field's section tab first (Sex is a segment there, a pf-select classic).
+    await fillRegistration(page, { firstName, lastName, phone, dob: '1990-05-15' });
 
     await page.getByRole('button', { name: /^register patient$/i }).click();
 
