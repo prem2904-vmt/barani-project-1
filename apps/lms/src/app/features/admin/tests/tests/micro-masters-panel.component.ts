@@ -7,7 +7,7 @@ import { ApiService } from '../../../../core/services/api.service';
 import { PfSelectOption, SelectComponent } from '../../../../shared/primitives/select.component';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
-import { gridThemeDark, gridThemeLight } from './tests.component';
+import { gridThemeDark, gridThemeLight } from './grid-theme';
 
 interface MicroOrganism {
   code: string; name: string; shortName: string | null; group: string | null;

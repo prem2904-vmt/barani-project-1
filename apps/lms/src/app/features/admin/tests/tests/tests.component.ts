@@ -15,9 +15,6 @@ import {
   CellValueChangedEvent,
   RowClassParams,
   RowStyle,
-  colorSchemeDark,
-  colorSchemeLight,
-  themeQuartz,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../../core/services/api.service';
@@ -73,24 +70,9 @@ interface DeptRecord {
   isActive?: boolean;
 }
 
-/** AG Grid theme rules matching our dark/light tokens. */
-export const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
-  fontFamily: 'Inter, system-ui, sans-serif',
-  fontSize: 13,
-  rowHeight: 44,
-  headerHeight: 40,
-  borderRadius: 12,
-  accentColor: '#7c3aed',
-});
-
-export const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
-  fontFamily: 'Inter, system-ui, sans-serif',
-  fontSize: 13,
-  rowHeight: 44,
-  headerHeight: 40,
-  borderRadius: 12,
-  accentColor: '#a855f7',
-});
+/** AG Grid themes live in ./grid-theme (re-exported for existing importers). */
+export { gridThemeDark, gridThemeLight } from './grid-theme';
+import { gridThemeDark, gridThemeLight } from './grid-theme';
 
 /** Extended row model supporting manual tree hierarchy for profiles/packages. */
 export type TestRow = Test & {

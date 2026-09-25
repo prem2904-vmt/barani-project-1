@@ -8,7 +8,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { Test } from '../../../../shared/models/test.model';
-import { gridThemeDark, gridThemeLight } from './tests.component';
+import { gridThemeDark, gridThemeLight } from './grid-theme';
 
 interface OgRow { code: string | null; value: string; normal: boolean; active: boolean; }
 interface OgLink { testId: string; testCode: string | null; testName: string; paramName: string; paramTitle: string; }
