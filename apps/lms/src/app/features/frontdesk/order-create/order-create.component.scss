@@ -2823,15 +2823,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pf-us__ttype {
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--warning-text, #b45309);
-  background: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, transparent);
-}
 .pf-us__ttat { flex-shrink: 0; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .pf-us__tprice { flex-shrink: 0; min-width: 60px; text-align: right; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 @media (max-width: 640px) {
@@ -2859,4 +2850,145 @@
   .pf-us__tile--req:not(.pf-us__tile--on),
   .pf-us__tile--nudge { animation: none; }
   :host ::ng-deep .pf-oc-band .pf-hb__search { transition: none; }
+}
+
+/* ════ Round 3 (owner): readable catalogue rows ════
+   code · name (up to 2 lines) · price · subtle star. No TAT, no member
+   count, no type badge, neutral border (the tab / title says the type).
+   In-cart = violet tint + check. Only the search dropdown, where tests,
+   profiles and packages are MIXED, marks the type with an outline
+   (profile blue / package amber). */
+:host {
+  --pf-type-profile: #2563eb;
+  --pf-type-package: #d97706;
+}
+:host-context(.dark),
+:host-context([data-theme='dark']) {
+  --pf-type-profile: #60a5fa;
+  --pf-type-package: #fbbf24;
+}
+
+.pf-oc-cat__list { container-type: inline-size; }
+.pf-oc-cat .pf-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+@container (min-width: 520px) {
+  .pf-oc-cat .pf-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 1100px) {
+  .pf-oc-cat .pf-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.pf-crow {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-height: 52px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: var(--bg-card-solid);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pf-crow:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+/* In cart: filled violet tint + check. */
+.pf-crow--in {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, var(--bg-card-solid));
+  border-color: color-mix(in srgb, var(--color-violet-500, #8b5cf6) 55%, transparent);
+}
+
+.pf-crow__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-crow__main:focus-visible { outline: 2px solid var(--color-violet-500, #8b5cf6); outline-offset: -2px; }
+.pf-crow__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-muted);
+  color: #fff;
+}
+.pf-crow--in .pf-crow__check { border-color: transparent; background: var(--color-violet-600, #7c3aed); }
+.pf-crow__code {
+  flex-shrink: 0;
+  font-family: 'Noto Sans Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--violet-text, #7c3aed);
+}
+.pf-crow__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.pf-crow__star {
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.pf-crow:hover .pf-crow__star,
+.pf-crow__star:focus-visible { opacity: 1; }
+.pf-crow__star--fav { color: var(--color-warning, #f59e0b); opacity: 1; }
+
+/* Price: plain, small, right-aligned; unpriced = muted + tiny dot. */
+.pf-price {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.pf-price--unpriced { color: var(--text-muted); font-weight: 500; }
+.pf-price__dot { width: 5px; height: 5px; border-radius: 999px; background: var(--color-warning, #f59e0b); }
+
+/* Dropdown rows (mixed types): the type is the row outline. */
+.pf-us__trow[data-type='profile'] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-type-profile) 70%, transparent); }
+.pf-us__trow[data-type='package'] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-type-package) 75%, transparent); }
+.pf-us__trow + .pf-us__trow { margin-top: 2px; }
+
+@media (pointer: coarse) {
+  .pf-crow__star { width: 40px; height: 40px; min-width: 40px; min-height: 40px; margin-right: 2px; }
 }

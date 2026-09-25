@@ -16,7 +16,6 @@ import { Patient, formatPatientInfo, patientDisplayName } from '../../../shared/
 import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { PriceFlagComponent } from '../../../shared/primitives/price-flag.component';
 import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, taxSlabOf } from '../../../shared/utils/test-pricing';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -46,7 +45,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, PriceFlagComponent, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -1205,6 +1204,24 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return `${name} (${short})`;
     }
     return name;
+  }
+
+  /** Type word for a catalogue row ('' for an individual test). The type is
+   *  shown by the row's outline colour; this is its text for hover / AT. */
+  typeWord(t: Test): string {
+    return t.type === 'profile' ? 'Profile' : t.type === 'package' ? 'Package' : '';
+  }
+  /** Hover title: "Profile · Lipid Profile" / plain name for a test. */
+  rowTitle(t: Test): string {
+    const w = this.typeWord(t);
+    return w ? `${w} · ${this.testDisplayName(t)}` : this.testDisplayName(t);
+  }
+  private readonly inrFmt = new CurrencyInrPipe();
+  /** Screen-reader label: type, name, price (+ not priced), cart state. */
+  rowLabel(t: Test): string {
+    const w = this.typeWord(t);
+    const price = this.inrFmt.transform(this.priceOf(t)) + (this.notPriced(t) ? ', not priced yet' : '');
+    return `${w ? w + ': ' : ''}${this.testDisplayName(t)}, ${price}${this.isSelected(t.id) ? ', in cart' : ''}`;
   }
 
   getPackageTestCount(pkg: Test): number {

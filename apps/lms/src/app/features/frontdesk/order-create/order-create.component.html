@@ -145,7 +145,8 @@
         </div>
         @if (scope() === 'tests') {
         @for (t of searchResults(); track t.id; let i = $index) {
-        <button type="button" class="pf-us__trow" role="option" [attr.data-search-row]="t.id"
+        <button type="button" class="pf-us__trow" role="option" [attr.data-search-row]="t.id" [attr.data-type]="t.type"
+          [title]="rowTitle(t)"
           [class.pf-us__row--hl]="i === activeResult()" [class.pf-us__trow--in]="isSelected(t.id)"
           [attr.aria-selected]="isSelected(t.id)" (mouseenter)="activeResult.set(i)" (click)="addSearchResult(t)">
           <span class="pf-us__tcheck" aria-hidden="true">
@@ -159,10 +160,9 @@
           </span>
           <span class="pf-us__tcode">{{ shortCode(t) }}</span>
           <span class="pf-us__tname" [title]="testDisplayName(t)">{{ testDisplayName(t) }}
-            @if (t.type !== 'individual') { <span class="pf-us__ttype">{{ t.type === 'package' ? 'Package' : 'Profile' }}</span> }
           </span>
           @if (t.tatHours) { <span class="pf-us__ttat">TAT {{ t.tatHours }}h</span> }
-          <span class="pf-us__tprice">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
+          <span class="pf-us__tprice"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
           <span class="sr-only">{{ isSelected(t.id) ? 'In cart, tap to remove' : 'Tap to add' }}</span>
         </button>
         }
@@ -308,7 +308,7 @@
               <p class="font-semibold text-sm truncate" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
               <p class="text-xs text-muted mt-0.5">{{ t.department?.name ?? 'General' }}</p>
             </div>
-            <span class="pf-readonly-test-card__price">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
+            <span class="pf-readonly-test-card__price"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
           </div>
           }
           }
@@ -402,41 +402,14 @@
       }
 
       <div class="pf-oc-cat__list">
+        <!-- Rows: code · name (2 lines) · price · star. Neutral border; the
+             type lives in the title / aria-label; in-cart = tint + check. -->
         @if (categoryTab() === 'recent') {
         @if (recentTests().length === 0) {
         <p class="pf-empty-line">No recent tests yet. They appear here once you create your first order.</p>
         } @else {
         <div class="pf-rail" role="list">
-          @for (t of recentTests(); track t.id) {
-          <button type="button" class="pf-rail-card press" [class.pf-rail-card--on]="isSelected(t.id)"
-            (click)="toggleTest(t)" role="listitem">
-            <div class="pf-rail-card__title-row">
-              <span class="inline-flex items-center gap-1.5">
-                @if (isSelected(t.id)) {
-                <svg class="pf-rail-card__check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                }
-                <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
-              </span>
-              <button type="button" class="pf-rail-card__star" [class.pf-rail-card__star--on]="isFavourite(t.id)"
-                (click)="toggleFavourite(t.id, $event)"
-                [attr.aria-label]="isFavourite(t.id) ? 'Unpin' : 'Pin to favourites'">
-                <svg width="14" height="14" viewBox="0 0 24 24"
-                  [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <polygon
-                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              </button>
-            </div>
-            <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
-            <div class="pf-rail-card__price-row">
-              <span class="pf-rail-card__price">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
-              @if (t.tatHours) {
-              <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
-              }
-            </div>
-          </button>
-          }
+          @for (t of recentTests(); track t.id) { <ng-container *ngTemplateOutlet="catRow; context: { $implicit: t }"></ng-container> }
         </div>
         }
         }
@@ -446,34 +419,7 @@
         <p class="pf-empty-line">No favourites yet. Click the star on any test to pin it here.</p>
         } @else {
         <div class="pf-rail" role="list">
-          @for (t of favouriteTests(); track t.id) {
-          <button type="button" class="pf-rail-card press" [class.pf-rail-card--on]="isSelected(t.id)"
-            (click)="toggleTest(t)" role="listitem">
-            <div class="pf-rail-card__title-row">
-              <span class="inline-flex items-center gap-1.5">
-                @if (isSelected(t.id)) {
-                <svg class="pf-rail-card__check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                }
-                <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
-              </span>
-              <button type="button" class="pf-rail-card__star pf-rail-card__star--on"
-                (click)="toggleFavourite(t.id, $event)" aria-label="Unpin">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon
-                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              </button>
-            </div>
-            <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
-            <div class="pf-rail-card__price-row">
-              <span class="pf-rail-card__price">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
-              @if (t.tatHours) {
-              <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
-              }
-            </div>
-          </button>
-          }
+          @for (t of favouriteTests(); track t.id) { <ng-container *ngTemplateOutlet="catRow; context: { $implicit: t }"></ng-container> }
         </div>
         }
         }
@@ -483,31 +429,7 @@
         <p class="pf-empty-line">No packages configured.</p>
         } @else {
         <div class="pf-rail" role="list">
-          @for (pkg of packages(); track pkg.id) {
-          <button type="button" class="pf-rail-card pf-rail-card--pkg press"
-            [class.pf-rail-card--on]="isSelected(pkg.id)" (click)="togglePackage(pkg)" role="listitem">
-            <div class="pf-rail-card__title-row">
-              <span class="pf-rail-card__badge-pkg">
-                @if (isSelected(pkg.id)) {
-                <svg class="pf-rail-card__check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                }
-                PACKAGE
-              </span>
-              @if (getPackageTestCount(pkg); as count) {
-              <span class="pf-rail-card__pkg-count">{{ count }} tests</span>
-              }
-            </div>
-            <p class="pf-rail-card__name" [title]="testDisplayName(pkg)">{{ testDisplayName(pkg) }}</p>
-            <div class="pf-rail-card__price-row">
-              <span class="pf-rail-card__price">@if (notPriced(pkg)) {<pf-price-flag />} @else { {{ priceOf(pkg) | inr }} }</span>
-              @if (pkg.tatHours) {
-              <span class="pf-rail-card__tat">TAT {{ pkg.tatHours }}h</span>
-              } @else {
-              <span class="pf-rail-card__tat">Bundle</span>
-              }
-            </div>
-          </button>
-          }
+          @for (t of packages(); track t.id) { <ng-container *ngTemplateOutlet="catRow; context: { $implicit: t }"></ng-container> }
         </div>
         }
         }
@@ -524,31 +446,7 @@
               <span class="pf-dept-hdr__count">{{ group.tests.length }}</span>
             </div>
             <div class="pf-rail" role="list">
-              @for (p of group.tests; track p.id) {
-              <button type="button" class="pf-rail-card pf-rail-card--pkg press"
-                [class.pf-rail-card--on]="isSelected(p.id)" (click)="toggleTest(p)" role="listitem">
-                <div class="pf-rail-card__title-row">
-                  <span class="pf-rail-card__badge-pkg">
-                    @if (isSelected(p.id)) {
-                    <svg class="pf-rail-card__check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                    }
-                    PROFILE
-                  </span>
-                  @if (getPackageTestCount(p); as count) {
-                  <span class="pf-rail-card__pkg-count">{{ count }} tests</span>
-                  }
-                </div>
-                <p class="pf-rail-card__name" [title]="testDisplayName(p)">{{ testDisplayName(p) }}</p>
-                <div class="pf-rail-card__price-row">
-                  <span class="pf-rail-card__price">@if (notPriced(p)) {<pf-price-flag />} @else { {{ priceOf(p) | inr }} }</span>
-                  @if (p.tatHours) {
-                  <span class="pf-rail-card__tat">TAT {{ p.tatHours }}h</span>
-                  } @else {
-                  <span class="pf-rail-card__tat">Bundle</span>
-                  }
-                </div>
-              </button>
-              }
+              @for (t of group.tests; track t.id) { <ng-container *ngTemplateOutlet="catRow; context: { $implicit: t }"></ng-container> }
             </div>
           </div>
           }
@@ -570,36 +468,7 @@
               <span class="pf-dept-hdr__count">{{ group.tests.length }}</span>
             </div>
             <div class="pf-rail" role="list">
-              @for (t of group.tests; track t.id) {
-              <button type="button" class="pf-rail-card press" [class.pf-rail-card--on]="isSelected(t.id)"
-                (click)="toggleTest(t)" role="listitem">
-                <div class="pf-rail-card__title-row">
-                  <span class="inline-flex items-center gap-1.5">
-                    @if (isSelected(t.id)) {
-                    <svg class="pf-rail-card__check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                    }
-                    <span class="pf-rail-card__code">{{ shortCode(t) }}</span>
-                  </span>
-                  <button type="button" class="pf-rail-card__star" [class.pf-rail-card__star--on]="isFavourite(t.id)"
-                    (click)="toggleFavourite(t.id, $event)"
-                    [attr.aria-label]="isFavourite(t.id) ? 'Unpin' : 'Pin to favourites'">
-                    <svg width="14" height="14" viewBox="0 0 24 24"
-                      [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"
-                      stroke-linecap="round" stroke-linejoin="round">
-                      <polygon
-                        points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                    </svg>
-                  </button>
-                </div>
-                <p class="pf-rail-card__name" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
-                <div class="pf-rail-card__price-row">
-                  <span class="pf-rail-card__price">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
-                  @if (t.tatHours) {
-                  <span class="pf-rail-card__tat">TAT {{ t.tatHours }}h</span>
-                  }
-                </div>
-              </button>
-              }
+              @for (t of group.tests; track t.id) { <ng-container *ngTemplateOutlet="catRow; context: { $implicit: t }"></ng-container> }
             </div>
           </div>
           }
@@ -789,7 +658,7 @@
           <span class="pf-cart-amount pf-cart-amount--included"
             [title]="'Covered by ' + coveringPackageName(t.id) + ', not billed separately'">Included</span>
           } @else {
-          <span class="pf-cart-amount">@if (notPriced(t)) {<pf-price-flag />} @else { {{ priceOf(t) | inr }} }</span>
+          <span class="pf-cart-amount"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
           }
           @if (!paidOrderId() && !isReadOnly()) {
           @if (isCollected(t.id)) {
@@ -834,7 +703,7 @@
                 Includes {{ s.memberCount }} test{{ s.memberCount === 1 ? '' : 's' }}
                 <span class="pf-pkg-suggest__sep">·</span>
                 <span class="pf-pkg-suggest__strike">{{ s.individualSum | inr }}</span>
-                <span class="pf-pkg-suggest__price">@if (notPriced(s.package)) {<pf-price-flag />} @else { {{ priceOf(s.package) | inr }} }</span>
+                <span class="pf-pkg-suggest__price"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: s.package }"></ng-container></span>
               </p>
             </div>
             @if (s.savings > 0) {
@@ -1054,6 +923,41 @@
       }
       }
     </footer>
+  </ng-template>
+
+  <!-- One catalogue row (every tab). The row is a div; the toggle and the
+       star are sibling buttons (no button-in-button). -->
+  <ng-template #catRow let-t>
+    <div class="pf-crow" role="listitem" [class.pf-crow--in]="isSelected(t.id)">
+      <button type="button" class="pf-crow__main press" [attr.aria-pressed]="isSelected(t.id)"
+        [attr.aria-label]="rowLabel(t)" [title]="rowTitle(t)"
+        (click)="t.type === 'package' ? togglePackage(t) : toggleTest(t)">
+        <span class="pf-crow__check" aria-hidden="true">
+          @if (isSelected(t.id)) {
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+          }
+        </span>
+        <span class="pf-crow__code">{{ shortCode(t) }}</span>
+        <span class="pf-crow__name">{{ testDisplayName(t) }}</span>
+        <ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container>
+      </button>
+      <button type="button" class="pf-crow__star" [class.pf-crow__star--fav]="isFavourite(t.id)"
+        (click)="toggleFavourite(t.id, $event)" [attr.aria-pressed]="isFavourite(t.id)"
+        [attr.aria-label]="(isFavourite(t.id) ? 'Unpin ' : 'Pin to favourites: ') + testDisplayName(t)">
+        <svg width="13" height="13" viewBox="0 0 24 24" [attr.fill]="isFavourite(t.id) ? 'currentColor' : 'none'"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      </button>
+    </div>
+  </ng-template>
+
+  <!-- Price: plain small text; unpriced = muted + a tiny dot ("Not priced yet"). -->
+  <ng-template #priceTpl let-t>
+    <span class="pf-price" [class.pf-price--unpriced]="notPriced(t)" [attr.title]="notPriced(t) ? 'Not priced yet' : null">
+      {{ priceOf(t) | inr }}@if (notPriced(t)) {<span class="pf-price__dot" aria-hidden="true"></span><span class="sr-only"> (not priced yet)</span>}
+    </span>
   </ng-template>
 
   <!-- Scope icons: Tests (flask) · Patient · Doctor (stethoscope) · Hospital. -->
