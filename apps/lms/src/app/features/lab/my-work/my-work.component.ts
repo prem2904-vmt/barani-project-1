@@ -154,8 +154,10 @@ const COUNTERS: CounterSpec[] = [
       </pf-hero-band>
       }
 
-      <!-- KPI strip: not on phone (status lives in the header Stats popover). -->
-      @if (!isPhone()) {
+      <!-- KPI strip: not on phone (status lives in the header Stats popover),
+           and not in the new design — the live queue counters and tabs
+           already carry these numbers (owner: the static strip isn't needed). -->
+      @if (!isPhone() && !theme.isNewDesign()) {
         <pf-kpi-strip screen="lab_my_work"></pf-kpi-strip>
       }
 
@@ -2412,6 +2414,46 @@ const COUNTERS: CounterSpec[] = [
       .pf-claim { padding: 14px 12px calc(var(--tab-nav-total-height) + 12px); }
       .pf-claim__sheet { max-width: none; max-height: 80dvh; }
     }
+
+    /* ════ New-design remap (owner): nd-kit tiles, palette only ════
+       Queue / My Work / Done tiles become calm nd cards: neutral surface,
+       hairline border, 12px radius, small soft shadow; Noto Sans with
+       tabular numbers for sample IDs. The left cap stripe keeps ONLY the
+       functional priority colours (urgent red, high amber); done is a
+       violet mark, not green. Counter chips lose their colour dots. */
+    :host-context(.design-new) .pf-tq {
+      background: var(--nd-card-bg, var(--bg-card-solid));
+      border: 1px solid var(--nd-line, var(--border-muted));
+      border-radius: var(--nd-radius, 12px);
+      box-shadow: var(--nd-shadow-sm);
+    }
+    :host-context(.design-new) .pf-tq:hover { border-color: var(--nd-sel-border); box-shadow: var(--nd-shadow-sm); }
+    :host-context(.design-new) .pf-tq__main:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, transparent); }
+    :host-context(.design-new) .pf-tq--done { --tq-accent: var(--color-violet-500, #8b5cf6); }
+    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--high):not(.pf-tq--done) .pf-tq__cap { background: transparent; }
+    :host-context(.design-new) .pf-tq--done .pf-tq__tag,
+    :host-context(.design-new) .pf-tq__stat--done { color: var(--violet-text, #6d28d9) !important; }
+    :host-context(.design-new) .pf-tq__id,
+    :host-context(.design-new) .pf-mw-completed-cap {
+      font-family: inherit; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: 0.01em;
+    }
+    :host-context(.design-new) .pf-tq__id { font-size: 13.5px; }
+    :host-context(.design-new) .pf-tq__who { font-weight: 500; }
+    :host-context(.design-new) .pf-tq__act {
+      border-radius: var(--nd-radius-sm, 10px);
+      color: var(--text-secondary);
+    }
+    /* Counter chips: neutral, no colour dots; selected = neutral raised. */
+    :host-context(.design-new) .pf-counter__dot,
+    :host-context(.design-new) .pf-kpi-stat__dot { display: none !important; }
+    :host-context(.design-new) .pf-counter--on,
+    :host-context(.design-new) .pf-kpi-stat.is-on {
+      background: var(--nd-sel-bg) !important;
+      color: var(--text-primary) !important;
+      box-shadow: none !important;
+    }
+    :host-context(.design-new) .pf-counter__value,
+    :host-context(.design-new) .pf-kpi-stat__value { font-variant-numeric: tabular-nums; font-weight: 600; }
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -2468,13 +2510,16 @@ export class MyWorkComponent implements OnInit {
   /** The workbench tabs as the search bar's filter strip (new design). The
    *  dots double as the legend for the queue's own colour coding. */
   readonly tabOptions = computed<SegmentedOption<Tab>[]>(() => {
+    // New design: palette only — no colour dots, the counts carry it.
+    const nd = this.theme.isNewDesign();
+    const dot = (c: string) => (nd ? undefined : c);
     const opts: SegmentedOption<Tab>[] = [
-      { value: 'service_queue', label: 'Queue', dot: '#a78bfa', count: this.countFor('service_queue') },
-      { value: 'my_work', label: 'My Work', dot: '#f59e0b', count: this.countFor('my_work') },
-      { value: 'completed', label: 'Completed', dot: '#10b981', count: this.countFor('completed') },
+      { value: 'service_queue', label: 'Queue', dot: dot('#a78bfa'), count: this.countFor('service_queue') },
+      { value: 'my_work', label: 'My Work', dot: dot('#f59e0b'), count: this.countFor('my_work') },
+      { value: 'completed', label: 'Completed', dot: dot('#10b981'), count: this.countFor('completed') },
     ];
     if (this.cultureAsTab()) {
-      opts.push({ value: 'culture', label: 'Culture', dot: '#38bdf8', count: this.cultureCount() });
+      opts.push({ value: 'culture', label: 'Culture', dot: dot('#38bdf8'), count: this.cultureCount() });
     }
     return opts;
   });
