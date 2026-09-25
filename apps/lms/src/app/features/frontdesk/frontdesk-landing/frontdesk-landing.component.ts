@@ -103,6 +103,11 @@ import { InlinePaymentPanelComponent, InlinePaymentResult } from '../order-creat
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { savedValueRows } from '../../../shared/utils/result-flag';
+import { OutsourcingService } from '../../../core/services/outsourcing.service';
+import { OutsourcedListComponent, outsourcedPartnerOptions, outsourcedStatusOptions } from '../outsourced/outsourced-list.component';
+import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
+import { SelectComponent } from '../../../shared/primitives/select.component';
+import { OutsourcedStatusFilter } from '../outsourced/outsourced-view';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -141,7 +146,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -318,19 +323,29 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
-  private readonly _rightTab = signal<'ip' | 'done' | 'billing'>(this.loadRightTab());
+  private readonly _rightTab = signal<'ip' | 'done' | 'billing' | 'out'>(this.loadRightTab());
   readonly rightTab = this._rightTab.asReadonly();
-  setRightTab(t: 'ip' | 'done' | 'billing') {
+
+  // ── Outsourced tab ─────────────────────────────────────────
+  // Outsourced tests never enter the lab's queues; the front desk tracks
+  // them here and uploads the partner lab's report to complete them.
+  readonly outsourcing = inject(OutsourcingService);
+  readonly outStatusOptions = computed(() => outsourcedStatusOptions(this.outsourcing.counts()));
+  readonly outPartnerOptions = computed(() => outsourcedPartnerOptions(this.outsourcing.partners()));
+  setOutStatus(v: string) { this.outsourcing.status.set(v as OutsourcedStatusFilter); }
+  setOutPartner(v: string) { this.outsourcing.partnerId.set(v || null); }
+
+  setRightTab(t: 'ip' | 'done' | 'billing' | 'out') {
     this._rightTab.set(t);
     // Drafts (localStorage) surface at the top of the In Progress list — re-scan
     // when that tab is opened to catch any saved from a prior order-create visit.
     if (t === 'ip') this.refreshDrafts();
     try { localStorage.setItem(FrontdeskLandingComponent.RIGHT_TAB_KEY, t); } catch { /* ignore */ }
   }
-  private loadRightTab(): 'ip' | 'done' | 'billing' {
+  private loadRightTab(): 'ip' | 'done' | 'billing' | 'out' {
     try {
       const raw = localStorage.getItem(FrontdeskLandingComponent.RIGHT_TAB_KEY);
-      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : 'ip';
+      return raw === 'done' ? 'done' : raw === 'billing' ? 'billing' : raw === 'out' ? 'out' : 'ip';
     } catch { return 'ip'; }
   }
 
@@ -414,7 +429,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // thin projection over expandedPane + active tabs — desktop/iPad layout
   // is untouched.
   readonly mobileListOpen = signal(false);
-  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing'>(() =>
+  readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out'>(() =>
     this.expandedPane() === 'appt' ? this.leftTab() : this.rightTab());
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
@@ -422,10 +437,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       case 'ip': return 'In progress';
       case 'home': return 'Home collection';
       case 'billing': return 'Payments due';
+      case 'out': return 'Outsourced';
       default: return 'Completed';
     }
   });
-  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing') {
+  setMobileList(v: 'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out') {
     if (v === 'appt' || v === 'home') {
       this._expandedPane.set('appt');
       this.setLeftTab(v);

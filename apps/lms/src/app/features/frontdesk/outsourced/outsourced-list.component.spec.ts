@@ -1,0 +1,118 @@
+import { TestBed } from '@angular/core/testing';
+import { computed, signal } from '@angular/core';
+import { vi } from 'vitest';
+import { OutsourcedListComponent } from './outsourced-list.component';
+import { OutsourcingService } from '../../../core/services/outsourcing.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { OutsourcedTube, countByStatus, filterOutsourced, partnerOptions } from './outsourced-view';
+
+const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
+  sampleId: 's1', barcode: 'OUT-0001', sampleStatus: 'dispatched', orderId: 'o1', orderNumber: 'LAB-2609-000001',
+  patientId: 'p1', patientName: 'Ms. Paravai Munusamy', partnerLabId: 'a', partnerLabName: 'Apollo Diagnostics',
+  createdAt: '2026-09-25T00:00:00Z', dispatchedAt: '2026-09-25T02:00:00Z', status: 'outsourced', hasReport: false,
+  tests: [{ orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'outsourced', completed: false }],
+  ...o,
+});
+
+function setup(rows: OutsourcedTube[], confirm = true) {
+  const rowsSig = signal(rows);
+  const status = signal<'all' | 'outsourced' | 'completed'>('all');
+  const partnerId = signal<string | null>(null);
+  const query = signal('');
+  const svc = {
+    rows: rowsSig, loading: signal(false), status, partnerId, query,
+    visible: computed(() => filterOutsourced(rowsSig(), { status: status(), partnerId: partnerId(), query: query() })),
+    partners: computed(() => partnerOptions(rowsSig())),
+    counts: computed(() => countByStatus(rowsSig())),
+    apiBase: 'https://api.test',
+    load: vi.fn(async () => {}),
+    upload: vi.fn(async () => '/uploads/t/p.pdf'),
+    complete: vi.fn(async () => {}),
+    reopen: vi.fn(async () => {}),
+  };
+  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
+  const dialog = { confirm: vi.fn(async () => confirm) };
+  TestBed.configureTestingModule({
+    imports: [OutsourcedListComponent],
+    providers: [
+      { provide: OutsourcingService, useValue: svc },
+      { provide: ToastService, useValue: toasts },
+      { provide: DialogService, useValue: dialog },
+    ],
+  });
+  const f = TestBed.createComponent(OutsourcedListComponent);
+  f.detectChanges();
+  return { f, c: f.componentInstance, el: f.nativeElement as HTMLElement, svc, toasts, dialog };
+}
+
+describe('Frontdesk Outsourced tab', () => {
+  it('lists each outsourced tube: sample, full patient name, order, tests, partner, dispatched date, status chip', () => {
+    const { el, svc } = setup([row()]);
+    expect(svc.load).toHaveBeenCalled();
+    const r = el.querySelector('.pf-out__row') as HTMLElement;
+    expect(r.querySelector('.pf-out__sample')?.textContent).toContain('OUT-0001');
+    expect(r.querySelector('.pf-out__who')?.textContent).toContain('Ms. Paravai Munusamy');
+    expect(r.querySelector('.pf-out__who')?.textContent).toContain('LAB-2609-000001');
+    expect(r.querySelector('.pf-out__tests')?.textContent).toContain('Vitamin D');
+    expect(r.querySelector('.pf-out__partner')?.textContent).toContain('Apollo Diagnostics');
+    expect(r.querySelector('.pf-out__date')?.textContent).toContain('Dispatched');
+    const chip = r.querySelector('.pf-out__status') as HTMLElement;
+    expect(chip.classList).toContain('nd-chip');
+    expect(chip.textContent?.trim()).toBe('Outsourced');
+    expect(chip.querySelector('.pf-out__check')).toBeNull();
+    expect([...r.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim())).toContain('Upload report');
+  });
+
+  it('Completed = neutral chip with a violet check (no green)', () => {
+    const { el } = setup([row({ status: 'completed', hasReport: true, tests: [
+      { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
+        report: { orderTestId: 't1', testName: 'Vitamin D', url: '/uploads/t/p.pdf' } }] })]);
+    const chip = el.querySelector('.pf-out__status') as HTMLElement;
+    expect(chip.textContent?.trim()).toBe('Completed');
+    expect(chip.querySelector('.pf-out__check')).not.toBeNull();
+    expect(chip.getAttribute('style') ?? '').not.toMatch(/green|#10b981|#22c55e/i);
+    const labels = [...el.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim());
+    expect(labels).toEqual(expect.arrayContaining(['View', 'Undo', 'Replace report']));
+  });
+
+  it('upload → complete: uploads the file then marks the open lines Completed', async () => {
+    const { c, svc, toasts } = setup([row()]);
+    const file = new File(['%PDF'], 'vitd.pdf', { type: 'application/pdf' });
+    await c.uploadAndComplete(row(), file);
+    expect(svc.upload).toHaveBeenCalledWith(file);
+    expect(svc.complete).toHaveBeenCalledWith(['t1'], { url: '/uploads/t/p.pdf', name: 'vitd.pdf', type: 'application/pdf' });
+    expect(toasts.success).toHaveBeenCalled();
+  });
+
+  it('rejects a non-PDF / non-image file before uploading', async () => {
+    const { c, svc, toasts } = setup([row()]);
+    await c.uploadAndComplete(row(), new File(['x'], 'x.txt', { type: 'text/plain' }));
+    expect(svc.upload).not.toHaveBeenCalled();
+    expect(toasts.error).toHaveBeenCalled();
+  });
+
+  it('undo Completed asks for confirmation first (DialogService), and respects cancel', async () => {
+    const done = row({ status: 'completed', hasReport: true });
+    const a = setup([done], false);
+    await a.c.undo(done);
+    expect(a.dialog.confirm).toHaveBeenCalled();
+    expect(a.svc.reopen).not.toHaveBeenCalled();
+    TestBed.resetTestingModule();
+    const b = setup([done], true);
+    await b.c.undo(done);
+    expect(b.svc.reopen).toHaveBeenCalledWith(['t1']);
+  });
+
+  it('classic design shows status + partner filters; the search narrows the list', () => {
+    const { f, el, svc } = setup([row(), row({ sampleId: 's2', patientName: 'Mr. Arun Kumar', barcode: 'OUT-0002' })]);
+    f.componentRef.setInput('showFilters', true);
+    f.detectChanges();
+    expect(el.querySelector('pf-segmented')).not.toBeNull();
+    expect(el.querySelector('pf-select')).not.toBeNull();
+    expect(el.querySelector('select, datalist')).toBeNull();
+    svc.query.set('arun');
+    f.detectChanges();
+    expect(el.querySelectorAll('.pf-out__row').length).toBe(1);
+  });
+});

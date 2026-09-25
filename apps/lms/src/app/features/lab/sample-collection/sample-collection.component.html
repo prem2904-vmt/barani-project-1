@@ -92,25 +92,6 @@
         </pf-barcode-scanner-modal>
       }
 
-      <!-- Outsourcing changed AFTER these tubes were drawn: the backend never
-           moves drawn blood, so each line needs its own tube (new label). -->
-      @if (splits().length > 0) {
-        <h3 class="pf-sc__section">Separate tube needed · {{ splits().length }}</h3>
-        <ul class="pf-sc__splits" aria-label="Separate tubes needed">
-          @for (x of splits(); track x.orderTestId) {
-            <li class="nd-row pf-sc__split">
-              <span class="nd-row__name">{{ splitPrompt(x) }}
-                <span class="pf-sc__split-meta">{{ x.patientName ?? 'Patient' }} · <span class="nd-num">{{ x.orderNumber ?? '' }}</span> · drawn in <span class="nd-num">{{ x.barcode ?? '—' }}</span></span>
-              </span>
-              <button type="button" class="nd-btn nd-btn--secondary pf-sc__split-btn"
-                      [disabled]="splitBusy() !== null" (click)="splitTube(x)">
-                {{ splitBusy() === x.orderTestId ? 'Creating…' : 'Create tube' }}
-              </button>
-            </li>
-          }
-        </ul>
-      }
-
       <h3 class="pf-sc__section">
         Pending collection · {{ filteredGroups().length }} patient<span [class.hidden]="filteredGroups().length === 1">s</span>
       </h3>
@@ -149,7 +130,7 @@
                               [style.background]="tube(s).color"
                               [class.pf-sc__chip--done]="s.status !== 'pending'"
                               [class.pf-sc__chip--out]="!!s.outsourcedVendorId"
-                              [title]="outsourcedTag(s) ? (tube(s).label + ' · ' + outsourcedTag(s)) : tube(s).label"></span>
+                              [title]="s.outsourcedVendorId ? (tube(s).label + ' · Outsourced') : tube(s).label"></span>
                       }
                     </div>
                   </div>
@@ -259,23 +240,6 @@
                 <span class="nd-card__note">Tap a vial when drawn. Mark a brought-in specimen External to skip its draw.</span>
               </header>
               <div class="nd-card__body">
-                @if (splitsFor(g.orderId); as sp) {
-                  @if (sp.length > 0) {
-                    <ul class="pf-sc__splits" aria-label="Separate tubes needed">
-                      @for (x of sp; track x.orderTestId) {
-                        <li class="nd-row pf-sc__split">
-                          <span class="nd-row__name">{{ splitPrompt(x) }}
-                            <span class="pf-sc__split-meta">Drawn in <span class="nd-num">{{ x.barcode ?? '—' }}</span> — a new tube gets its own label</span>
-                          </span>
-                          <button type="button" class="nd-btn nd-btn--secondary pf-sc__split-btn"
-                                  [disabled]="splitBusy() !== null" (click)="splitTube(x)">
-                            {{ splitBusy() === x.orderTestId ? 'Creating…' : 'Create tube' }}
-                          </button>
-                        </li>
-                      }
-                    </ul>
-                  }
-                }
                 <div class="pf-sc-grid" [attr.data-size]="tileSize(g)" [class]="'pf-sc-grid pf-sc-grid--' + tileSize(g)">
                   @for (s of visibleSamples(g); track s.id) {
                     <div class="pf-tube-wrap">
@@ -544,14 +508,6 @@
                        textual hint and no draw-volume pill — the card carries
                        only the container name and the sample id. -->
                   <p class="pf-tube__code">Sample ID&nbsp;<span class="nd-num">{{ s.barcode ?? '—' }}</span></p>
-                  <!-- Outsourced tube: its own glass, labelled for the partner
-                       lab (neutral chip — no new colours). -->
-                  @if (outsourcedTag(s); as tag) {
-                    <span class="nd-chip nd-chip--static pf-tube__out">{{ tag }}</span>
-                  }
-                  @if (splitFrom(s); as from) {
-                    <p class="pf-tube__split">Split from <span class="nd-num">{{ from }}</span></p>
-                  }
 
                   @if (s.status !== 'pending') {
                     <span class="pf-tube__stamp nd-num">

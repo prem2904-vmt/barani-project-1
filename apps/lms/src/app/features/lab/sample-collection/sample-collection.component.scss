@@ -2019,15 +2019,3 @@
     .pf-sc-skel__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 300px)); justify-content: center; gap: 16px; }
     @keyframes pf-sc-shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
     @media (prefers-reduced-motion: reduce) { .pf-sc-skel__bar, .pf-sc-skel__tile { animation: none; } }
-
-
-/* ── Outsourced tubes ──────────────────────────────────────────────────
-   "Outsourced · <partner>" rides the neutral nd-chip (no new colours); a
-   tube split out of a drawn one notes its source barcode. The "separate
-   tube needed" rows reuse nd-row + nd-btn. */
-.pf-tube__out { height: 22px; margin-top: 4px; padding: 0 8px; font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.pf-tube__split { margin: 2px 0 0; font-size: 11px; color: var(--text-muted); }
-.pf-sc__splits { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.pf-sc__split { justify-content: space-between; }
-.pf-sc__split-meta { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 400; color: var(--text-muted); }
-.pf-sc__split-btn { flex: none; }
