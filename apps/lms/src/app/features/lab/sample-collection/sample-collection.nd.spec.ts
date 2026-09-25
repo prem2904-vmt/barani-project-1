@@ -231,7 +231,7 @@ describe('nd-kit — the Collect screen is built from the kit classes', () => {
     const { drawer } = await renderDrawer([S('a'), S('b', 'collected')]);
     for (const cls of ['nd-page', 'nd-body', 'nd-body--split', 'nd-card', 'nd-card__head', 'nd-card__icon',
       'nd-card__label', 'nd-card__body', 'nd-card__foot', 'nd-btn', 'nd-btn--secondary', 'nd-btn--icon',
-      'nd-seg', 'nd-seg__item', 'nd-chip', 'nd-band-chip', 'nd-row', 'nd-row--done', 'nd-mono', 'nd-bottombar']) {
+      'nd-seg', 'nd-seg__item', 'nd-chip', 'nd-band-chip', 'nd-row', 'nd-row--done', 'nd-num', 'nd-bottombar']) {
       expect(drawer.querySelector('.' + cls), cls).not.toBeNull();
     }
   });
@@ -277,5 +277,26 @@ describe('Collect sample — layout above the nav, External row, adaptive tiles'
   it('sample ID reads on one line: "Sample ID 26117"', async () => {
     const { drawer } = await renderDrawer([S('a')]);
     expect(drawer.querySelector('.pf-sc-tile .pf-tube__code')?.textContent?.replace(/\u00a0/g, ' ').trim()).toBe('Sample ID B-a');
+  });
+});
+
+describe('Collect sample — palette + one font family', () => {
+  afterEach(() => document.body.querySelectorAll('.pf-drawer').forEach(n => n.remove()));
+
+  it('the drawn state carries no green: no green/emerald/success classes, no green fills', async () => {
+    const { drawer } = await renderDrawer([S('a', 'collected'), S('b')]);
+    const html = drawer.innerHTML.toLowerCase();
+    expect(html).not.toMatch(/emerald|green|text-success|bg-success/);
+    for (const g of ['#10b981', '#34d399', '#059669', '#047857']) expect(html).not.toContain(g);
+    // the check badge on the drawn tube is violet
+    expect(drawer.querySelector('.pf-sc-tile.pf-tube--done circle[fill="#7c3aed"]')).not.toBeNull();
+  });
+
+  it('IDs and times use the tabular-number class, never a monospace class', async () => {
+    const { drawer } = await renderDrawer([S('a', 'collected')]);
+    expect(drawer.querySelector('.font-mono, .nd-mono, [font-family*="monospace"]')).toBeNull();
+    expect(drawer.querySelector('.pf-sc-chip--order .nd-num')?.textContent).toBe('LAB-2609-000085');
+    expect(drawer.querySelector('.pf-sc-tile .pf-tube__code .nd-num')?.textContent).toBe('B-a');
+    expect(drawer.querySelector('.pf-sc-sumrow__state .nd-num')).not.toBeNull();
   });
 });
