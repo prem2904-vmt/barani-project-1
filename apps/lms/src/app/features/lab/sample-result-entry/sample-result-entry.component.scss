@@ -1,1751 +1,356 @@
-/* ── Grid / Form view toggle in page header ───────────────── */
-.pf-sre__view {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  margin-left: auto;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-}
-.pf-sre__view-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 0;
-  background: transparent;
-  border-radius: 9999px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s;
-}
-.pf-sre__view-btn:hover {
-  color: var(--text-primary);
-}
-.pf-sre__view-btn--on {
-  background: rgba(168, 85, 247, 0.16);
-  color: var(--violet-text);
-}
+// ═════════════════════════════════════════════════════════════════════════
+// Result entry (/lab/sample/:id) on the nd pattern — docs/ND-PATTERN.md
+// → "Result entry". Band + CONTEXT BAR → RESULTS cards (main column) +
+// SAMPLE side card. Global kit classes (.nd-*) do the heavy lifting; this
+// file only holds what is specific to the entry table and the context bar.
+// Palette only: violet + neutrals/slate. Functional colours kept: H / L /
+// critical flags, error red, the amber autosave dot, tube cap colours.
+// ═════════════════════════════════════════════════════════════════════════
+@use '../../../shared/styles/nd-mixins' as nd;
 
-/* ── Grid view (mirrors report PDF) ───────────────────────── */
-.pf-sre__grid-wrap {
-  margin-top: 8px;
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--glass-bg);
+/* WORK page: the host fills the shell; only the columns scroll. */
+:host { display: block; height: 100%; min-height: 0; overflow: hidden; }
+.pf-sre { height: 100%; }
+.pf-sre-band { flex: none; }
+.pf-sre-vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── CONTEXT BAR (the band's pill) ─────────────────────────────────── */
+.pf-sre-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: nowrap; }
+.pf-sre-ctx__grow { flex: 1 1 auto; }
+.pf-sre-chip { height: 34px; gap: 6px; flex: none; }
+/* The patient chip may shrink; an ellipsis only when it TRULY overflows. */
+.pf-sre-chip--patient { flex: 0 1 auto; min-width: 0; }
+.pf-sre-chip__name { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pf-sre-chip__meta { flex: none; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+/* Sample ID = the primary line in lab contexts. */
+.pf-sre-chip__id { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.pf-sre-chip--tech svg, .pf-sre-chip--ro svg { flex: none; color: var(--text-tertiary); }
+.pf-sre-chip--tech { flex: 0 1 auto; min-width: 0; }
+
+/* Tube tabs: a neutral segmented control; the open-work dot is violet. */
+.pf-sre-tabs { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.pf-sre-tabs::-webkit-scrollbar { display: none; }
+.pf-sre-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 240px; }
+.pf-sre-tab__id { font-weight: 600; color: var(--text-primary); }
+.pf-sre-tab__tests { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-sre-tab__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); }
+.pf-sre-tab[aria-selected='false'] { cursor: pointer; }
+.pf-sre-tubesel { display: none; }
+.pf-sre-mode { flex: none; }
+
+/* ── Body: RESULTS column + SAMPLE card ─────────────────────────────── */
+.pf-sre-body { padding-top: 4px; }
+.pf-sre-main {
+  min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 14px;
+  padding-bottom: 8px;
 }
-.pf-sre__grid {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: fixed;
-  font-size: 13px;
+/* Below the split (iPad portrait): one column — RESULTS, then SAMPLE —
+   and the body scrolls as a whole so neither is squeezed. */
+@media (max-width: 1023px) {
+  .pf-sre-body { overflow-y: auto; }
+  .pf-sre-main { flex: none; overflow: visible; }
+  .pf-sre-side { flex: none; overflow: visible; }
 }
+/* One card per test, stacked: cards size to content inside the column. */
+.pf-sre-card { flex: none; view-transition-class: pf-zoom; }
+.pf-sre-card .nd-card__body.pf-sre-card__body { overflow: visible; flex: none; padding: 0; gap: 0; }
+.pf-sre-card__label { margin: 0; @include nd.no-truncate; }
+.pf-sre-card__count { font-size: 12px; color: var(--text-muted); }
+.pf-sre-card--skel .nd-card__body { gap: 12px; padding: 16px 14px; }
+.pf-sre-card .nd-card__body > .pf-sre__test-reject-reason,
+.pf-sre-card .nd-card__body > .pf-sre__test-comments,
+.pf-sre-card .nd-card__body > .pf-sre__attach-strip,
+.pf-sre-card .nd-card__body > .pf-sre__test-empty,
+.pf-sre-card .nd-card__body > pf-culture-entry,
+.pf-sre-card .nd-card__body > .pf-sre__params { margin: 12px 14px; }
+
+.pf-sre-skel__bar { display: block; height: 12px; border-radius: 6px; background: var(--nd-chip-bg); animation: pf-sre-shimmer 1.2s ease-in-out infinite; }
+@keyframes pf-sre-shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* ── The entry table: our row style (1px lines, calm type) ─────────── */
+.pf-sre__grid-wrap { width: 100%; overflow-x: auto; }
+.pf-sre__grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
 .pf-sre__grid thead th {
-  text-align: left;
-  padding: 9px 10px;
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--violet-text);
-  background: linear-gradient(
-    180deg,
-    rgba(168, 85, 247, 0.18),
-    rgba(168, 85, 247, 0.06)
-  );
-  border-bottom: 1px solid rgba(168, 85, 247, 0.4);
+  text-align: left; padding: 9px 12px;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted); background: transparent;
+  border-bottom: 1px solid var(--nd-line);
 }
-.pf-sre__gc-param {
-  width: 25%;
-}
-.pf-sre__gc-result {
-  width: 20%;
-}
-.pf-sre__gc-flag {
-  width: 10%;
-  text-align: center;
-}
-.pf-sre__gc-unit {
-  width: 10%;
-}
-.pf-sre__gc-range {
-  width: 20%;
-}
-.pf-sre__gc-method {
-  width: 15%;
-}
-.pf-sre__grow td {
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--glass-border);
-  vertical-align: middle;
-}
-.pf-sre__grow:nth-child(odd) td {
-  background: rgba(255, 255, 255, 0.012);
-}
-.pf-sre__grow:hover td {
-  background: rgba(168, 85, 247, 0.06);
-}
-.pf-sre__grow--flagged td {
-  background: rgba(244, 63, 94, 0.08) !important;
-}
-.pf-sre__gc-param {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-.pf-sre__gidx {
-  display: inline-block;
-  min-width: 18px;
-  font-size: 9.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-  margin-right: 4px;
-}
-.pf-sre__ginput {
-  width: 100%;
-  padding: 6px 8px;
-  font-size: 13.5px;
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--glass-border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  transition:
-    border-color 0.12s,
-    background 0.12s;
-}
-.pf-sre__ginput:focus {
-  outline: 0;
-  border-color: rgba(168, 85, 247, 0.6);
-  background: rgba(168, 85, 247, 0.1);
-}
-
-/* Light mode grid inputs */
-:host-context(.light) .pf-sre__ginput {
-  background: var(--bg-input);
-  border: 1.5px solid #cbd5e1;
-  color: #1e293b;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-:host-context(.light) .pf-sre__ginput:focus {
-  border-color: #8b5cf6;
-  background: rgba(139, 92, 246, 0.05);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
-}
-.pf-sre__gselect {
-  width: 100%;
-}
-.pf-sre__gselect pf-select .pf-dd__trigger {
-  padding: 5px 8px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 6px;
-  min-height: 32px;
-}
-.pf-sre__ginput--num,
-.pf-sre__input--num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.pf-sre__ginput--ta {
-  resize: vertical;
-  min-height: 32px;
-  font-weight: 500;
-  text-align: left;
-}
-.pf-sre__gc-unit,
-.pf-sre__gc-range,
-.pf-sre__gc-method {
-  color: var(--text-tertiary);
-  font-size: 12px;
-}
-/* Inline unit suffix beside the result input — phone only. Hidden by
- default so desktop/iPad keep their dedicated UNIT column unchanged;
- the phone breakpoint switches it on. */
-.pf-sre__gunit-inline {
-  display: none;
-}
-.pf-sre__grow-comments td {
-  padding: 8px 10px;
-  background: rgba(168, 85, 247, 0.04);
-}
-.pf-sre__grow-attach td {
-  padding: 6px 10px 10px;
-}
-
-/* WORK page (non-scroll app layout). The host fills the shell's main
- area; the PAGE itself never scrolls. Scrolling happens INSIDE the
- single .pf-sre panel below — header & footer stick to its edges so
- only the test cards move. Holds at phone / iPad / desktop. */
-:host {
-  display: block;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-/* Full-width like FD/collect — Tailwind utility classes on the
- outer section provide the responsive padding; no max-width or
- margin auto here so the screen actually fills the lab terminal.
- This is the lone scroll panel: height:100% + overflow-y:auto so
- the inner content scrolls, not the window. */
-.pf-sre {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Header action icon styling — declared BEFORE the phone media query
- below so the media query's display:inline-flex wins on source order
- (media queries add no specificity; equal-specificity rules resolve by
- source order). Default = hidden so desktop keeps its Grid/Form toggle
- + bottom submit bar; the phone block re-shows it. */
-.pf-sre__hdr-action {
-  display: none;
-  flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 11px;
-  border: 1px solid transparent;
-  background: var(
-    --gradient-primary,
-    linear-gradient(135deg, #a855f7, #d946ef)
-  );
-  color: #fff;
-  box-shadow: 0 6px 16px rgba(168, 85, 247, 0.4);
-  cursor: pointer;
-}
-.pf-sre__hdr-action:disabled {
-  opacity: 0.4;
-  box-shadow: none;
-  cursor: not-allowed;
-}
-.pf-sre__hdr-action:not(.pf-sre__hdr-action--go) {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
-  color: var(--text-secondary);
-  box-shadow: none;
-}
-
-/* Mobile breakpoint — phones (<640px). Tighter every-thing so
- the form fits a 5" screen without horizontal scroll, and the
- submit button stays on screen so the tech doesn't lose it
- below the fold. */
-@media (max-width: 640px) {
-  /* Compact header. The global html.cap-native already pads the safe-area
-   top, so the sticky header must NOT add env() again (that double-counted
-   into a big dead gap above the title). Tight padding; back arrow inline. */
-  .pf-sre {
-    padding-top: 4px !important;
-  }
-  /* !important: the base .pf-sre__hdr--sticky{padding-top:env(safe-area-inset-top)}
-   appears LATER in source and was overriding this, re-adding the notch
-   inset that html.cap-native already applies → a big double-inset gap
-   above the title. The global pad already clears the status bar. */
-  .pf-sre__hdr--sticky {
-    padding-top: 4px !important;
-  }
-  .pf-sre__hdr {
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    padding-bottom: 8px;
-    margin-bottom: 8px;
-  }
-  .pf-sre__back {
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    justify-content: center;
-    flex: 0 0 auto;
-  }
-  .pf-sre__back-txt {
-    display: none;
-  }
-  /* Title row: name FIRST (order 1), code under it (order 2); drop the
-   "N tests on this tube" line — name + code is enough on a phone. */
-  .pf-sre__hdr-title {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    flex: 1;
-    min-width: 0;
-  }
-  /* Phone keeps the stacked layout: the identity row re-stacks so the
-   order-based title/eyebrow/pid arrangement below still applies. */
-  .pf-sre__idrow {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
-  }
-  /* Tube tabs: smaller, and the divider overlap matches the phone header's
-   tighter 8px bottom padding. */
-  .pf-sre__tabs {
-    margin-top: 6px;
-    margin-bottom: -9px;
-  }
-  .pf-sre__tab {
-    padding: 5px 11px 6px;
-  }
-  .pf-sre__tab-tests {
-    max-width: 110px;
-  }
-  .pf-sre__title {
-    order: 1;
-    font-size: 16px;
-    margin: 0;
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
-  .pf-sre__eyebrow {
-    order: 2;
-    font-size: 9.5px;
-    letter-spacing: 0.1em;
-  }
-  .pf-sre__pid {
-    order: 3;
-    font-size: 11px;
-  }
-  /* Keep the phone header compact — chip glimpse + tech pill are desktop-only. */
-  .pf-sre__chips {
-    display: none;
-  }
-  .pf-sre__tech {
-    display: none;
-  }
-  .pf-sre__sub {
-    display: none;
-  }
-  /* Submit (or undo) lives top-right as an icon; the bottom bar is gone.
-   margin-left:auto pins it to the far right even if the title is short,
-   and flex:0 0 auto (from base) stops it being squeezed off-screen. */
-  .pf-sre__hdr-action {
-    display: inline-flex;
-    margin-left: auto;
-  }
-  .pf-sre__footer {
-    display: none !important;
-  }
-  .pf-sre__test {
-    padding: 12px 14px;
-    margin-bottom: 10px;
-  }
-  .pf-sre__test-name {
-    font-size: 14px;
-  }
-}
-.pf-sre__hdr {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding-bottom: 12px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--glass-border);
-}
-/* Pin the header to the top of the scroll panel so test cards scroll
- beneath it. Backdrop blur keeps the title legible over scrolling
- cards; safe-area padding clears the notch on native iOS. */
-.pf-sre__hdr--sticky {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  padding-top: env(safe-area-inset-top, 0px);
-  background: var(--bg-primary, rgba(12, 14, 20, 0.82));
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-/* Desktop: NON-SCROLL app screen (WORK page) — the same pattern
- result-entry uses. The page fills shell-main exactly (shell-main is
- flex:1; min-height:0; overflow-y:auto, so a height:100% child fits),
- the header and Submit bar are FIXED flex children, and scrolling
- happens only inside .pf-sre__scroll. No sticky maths against the
- chrome, so nothing can overlap the top bar and there is no dead gap —
- the two bugs the previous top-offset attempts traded between.
- Phones keep the existing flow: the wrapper div is inert there and the
- tuned sticky/safe-area behaviour stands. */
-@media (min-width: 641px) {
-  :host {
-    display: block;
-    height: 100%;
-    overflow: hidden;
-  }
-  .pf-sre {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding-bottom: 0;
-  }
-  .pf-sre__hdr--sticky {
-    position: static; /* fixed by flex layout, not by pinning */
-    flex: 0 0 auto;
-    padding-top: 0;
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-  .pf-sre__scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-  .pf-sre__footer {
-    position: static;
-    flex: 0 0 auto;
-  }
-}
-.pf-sre__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.pf-sre__back:hover {
-  color: var(--text-primary);
-}
-/* App-wide standard back chevron, shown at ALL widths and placed BEFORE the
- title. align-self:center keeps it vertically centred with the title block
- regardless of the header row's align-items (flex-start on desktop, center
- on phone). */
-.pf-hdr-back {
-  align-self: center;
-  width: 38px;
-  height: 38px;
-  margin-left: -8px;
-  border-radius: 11px;
-  color: var(--text-primary);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    background 0.15s ease,
-    transform 0.08s ease;
-}
-.pf-hdr-back:active {
-  transform: scale(0.9);
-  background: var(--glass-bg, rgba(255, 255, 255, 0.06));
-}
-@media (hover: hover) {
-  .pf-hdr-back:hover {
-    background: var(--glass-bg, rgba(255, 255, 255, 0.06));
-  }
-}
-/* Single back affordance per viewport: the legacy pill back is hidden at ALL
- widths so only the standard .pf-hdr-back chevron shows everywhere. */
-.pf-sre__back {
-  display: none;
-}
-.pf-sre__hdr-title {
-  flex: 1;
-  min-width: 0;
-}
-/* One dense identity line: barcode · dept/count · patient share a baseline
-   row (wraps gracefully when narrow) instead of stacking three tall rows. */
-.pf-sre__idrow {
-  display: flex;
-  align-items: baseline;
-  gap: 2px 12px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.pf-sre__eyebrow {
-  margin: 0;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-}
-/* Sample ID is the primary identity — monospace like an accession no. */
-.pf-sre__title {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  letter-spacing: 0.01em;
-  line-height: 1.25;
-}
-.pf-sre__sub {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-/* Demoted patient line — small + secondary, always visible; shrinks with
-   ellipsis inside the identity row rather than pushing it taller. */
-.pf-sre__pid {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-
-/* Test-kind glimpse chips (tube-as-probe). */
-.pf-sre__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-.pf-sre__chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.5;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--accent, #a855f7) 14%, transparent);
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-}
-
-/* Signed-in technician (right of header). */
-.pf-sre__tech {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  align-self: center;
-  padding: 5px 11px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-}
-.pf-sre__tech svg {
-  flex: 0 0 auto;
-  opacity: 0.75;
-}
-.pf-sre__tech-name {
-  max-width: 160px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-@media (max-width: 640px) {
-  .pf-sre__tech-name {
-    display: none;
-  }
-}
-/* Medical registration ID beside the name — dash until the user sets one. */
-.pf-sre__tech-reg {
-  font-size: 11px;
-  color: var(--text-tertiary, #94a3b8);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-@media (max-width: 640px) {
-  .pf-sre__tech-reg {
-    display: none;
-  }
-}
-
-/* ── Profile / package block: one titled card, member tests inside ── */
-.pf-sre__profile {
-  margin-bottom: 20px;
-  padding: 14px 14px 6px;
-  border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.22));
-  border-radius: 18px;
-  background: var(--glass-bg, rgba(255, 255, 255, 0.03));
-}
-.pf-sre__profile-hdr {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 2px 4px 12px;
-}
-.pf-sre__profile-name {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-}
-.pf-sre__profile-count {
-  font-size: 11px;
-  color: var(--text-tertiary, #94a3b8);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-/* Member cards inside a profile sit flatter — the profile card carries the
- chrome; members read as a sequence of rows under the one title. */
-.pf-sre__test--member {
-  margin-bottom: 10px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-}
-.pf-sre__test--member .pf-sre__test-name {
-  font-size: 13px;
-}
-
-/* ── FLAT block: one header strip + a plain sequence of rows ── */
-.pf-sre__flat-hdr {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 2px 4px 12px;
-}
-/* Sub-label row for a multi-parameter member inside a profile. */
+.pf-sre__gc-param { width: 28%; }
+.pf-sre__gc-result { width: 20%; }
+.pf-sre__gc-range { width: 22%; }
+.pf-sre__gc-unit { width: 10%; }
+.pf-sre__gc-method { width: 20%; }
+.pf-sre__gc-note { width: 116px; text-align: right; white-space: nowrap; }
+.pf-sre__grow td { padding: 8px 12px; border-bottom: 1px solid var(--nd-line); vertical-align: middle; }
+.pf-sre__grid tbody tr:last-child td { border-bottom: 0; }
+@media (hover: hover) { .pf-sre__grow:hover td { background: color-mix(in srgb, var(--text-primary) 2.5%, transparent); } }
+.pf-sre__grow:focus-within td { background: var(--nd-in-tint); }
+.pf-sre__grow--flagged td { background: color-mix(in srgb, #ef4444 6%, transparent) !important; }
+.pf-sre__gc-param { color: var(--text-primary); }
+.pf-sre__gname { font-weight: 500; color: var(--text-primary); @include nd.no-truncate; }
+.pf-sre__gc-unit, .pf-sre__gc-range, .pf-sre__gc-method { color: var(--text-tertiary); font-size: 12.5px; @include nd.no-truncate; }
+.pf-sre__gc-range, .pf-sre__gc-unit { font-variant-numeric: tabular-nums; }
+.pf-sre__method { display: inline-flex; align-items: center; gap: 8px; }
+.pf-sre__gunit-inline { display: none; }
+.pf-sre__grow-comments td { padding: 8px 12px; background: var(--nd-in-tint); border-bottom: 1px solid var(--nd-line); }
+.pf-sre__grow-attach td { padding: 6px 12px 10px; border-bottom: 1px solid var(--nd-line); }
 .pf-sre__gsub td {
-  padding: 8px 10px 4px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-secondary, #cbd5e1);
-  border-bottom: none;
+  padding: 10px 12px 4px; font-size: 12.5px; font-weight: 500; color: var(--text-secondary);
+  border-bottom: 0;
 }
-/* Inline rejection note row. */
 .pf-sre__grow-reject td {
-  padding: 6px 10px;
-  font-size: 12px;
-  color: #fca5a5;
-  background: rgba(248, 113, 113, 0.06);
+  padding: 8px 12px; font-size: 12.5px; color: var(--text-secondary);
+  background: color-mix(in srgb, #ef4444 6%, transparent); border-bottom: 1px solid var(--nd-line);
 }
-/* Status dot + per-test note/attach buttons (last slim column). The
-   table is table-layout:fixed, so this must be a real width big enough
-   for the worst row (dot + param pencil + test pencil + paperclip with
-   count) — a percentage or shrink-to-fit clips the trailing button. */
-.pf-sre__gc-note {
-  width: 128px;
-  text-align: right;
-  white-space: nowrap;
-}
-.pf-sre__gc-note .pf-sre__gnote,
-.pf-sre__gc-note .pf-sre__attach-btn {
-  vertical-align: middle;
-}
-.pf-sre__gc-note .pf-sre__gnote + .pf-sre__gnote,
-.pf-sre__gc-note .pf-sre__attach-btn {
-  margin-left: 6px;
-}
-/* Match the pencil's footprint inside the table row. */
-.pf-sre__gc-note .pf-sre__attach-btn {
-  height: 26px;
-  padding: 0 7px;
-  border-radius: 8px;
-}
-.pf-sre__gdot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-.pf-sre__gdot--done {
-  background: #34d399;
-}
-.pf-sre__gdot--rejected {
-  background: #f87171;
-}
-.pf-sre__gnote {
-  border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.25));
-  background: transparent;
-  color: var(--text-tertiary, #94a3b8);
-  border-radius: 8px;
-  width: 26px;
-  height: 26px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.pf-sre__gnote:hover {
-  color: var(--text-primary, #e2e8f0);
-  background: rgba(148, 163, 184, 0.12);
-}
-.pf-sre__gnote--has {
-  color: var(--violet-400, #a78bfa);
-  border-color: rgba(167, 139, 250, 0.5);
-}
+.pf-sre__grow-reject strong { color: var(--red-text, #b91c1c); font-weight: 600; }
 
-/* Background autosave pill. */
-.pf-sre__autosave {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  align-self: center;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-tertiary);
+/* Inputs: kit surface + kit focus (violet ring), tabular numbers. */
+.pf-sre__ginput, .pf-sre__input {
+  width: 100%; min-height: 36px; padding: 6px 10px;
+  border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line);
+  background: var(--nd-card-bg); color: var(--text-primary);
+  font: inherit; font-size: 13.5px; font-weight: 500;
+  text-align: right; font-variant-numeric: tabular-nums;
+  transition: border-color var(--nd-dur-fast) ease, box-shadow var(--nd-dur-fast) ease;
 }
-.pf-sre__autosave-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--amber-text, #f59e0b);
-  animation: pf-sre-pulse 1s ease-in-out infinite;
+.pf-sre__ginput:hover, .pf-sre__input:hover { border-color: var(--nd-sel-border); }
+.pf-sre__ginput:focus, .pf-sre__input:focus {
+  outline: 0; border-color: var(--color-violet-600, #7c3aed);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
 }
-.pf-sre__autosave-dot--ok {
-  background: #10b981;
-  animation: none;
-}
-@keyframes pf-sre-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
+.pf-sre__ginput--ta, .pf-sre__input--ta { resize: vertical; text-align: left; font-weight: 400; }
+.pf-sre__input--ta { min-height: 56px; }
+.pf-sre__gselect { width: 100%; }
+.pf-sre__cb { width: 18px; height: 18px; accent-color: var(--color-violet-600, #7c3aed); }
 
-.pf-sre__msg {
-  color: var(--text-secondary);
-  font-size: 13px;
-  padding: 24px 0;
-  text-align: center;
-}
-.pf-sre__msg--err {
-  color: var(--red-text);
-}
+/* Live flags — FUNCTIONAL colours (data, not decoration). */
+.pf-sre__input--flagged { border-color: rgba(239, 68, 68, 0.6) !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1); }
+.pf-sre__input--outr { border-color: rgba(245, 158, 11, 0.7) !important; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.12); }
+.pf-sre__input--crit { border-color: rgba(239, 68, 68, 0.8) !important; background: rgba(239, 68, 68, 0.08) !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14) !important; }
+.pf-sre__input--invalid { border-style: dashed !important; border-color: rgba(239, 68, 68, 0.55) !important; }
+.pf-sre__select-wrap { border: 1px solid transparent; border-radius: 12px; }
+.pf-sre__select-wrap.pf-sre__input--flagged, .pf-sre__gselect.pf-sre__input--flagged { border-radius: 12px; }
 
-.pf-sre__test {
-  padding: 16px 18px;
-  margin-bottom: 14px;
-  border-radius: 14px;
-  background: var(--bg-card-solid, rgba(20, 22, 30, 0.6));
-  border: 1px solid var(--glass-border);
+.pf-sre__flag-chip, .pf-sre__calc-chip {
+  display: inline-flex; align-items: center; margin-left: 6px; padding: 0 7px; height: 18px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em;
+  border-radius: 999px; white-space: nowrap; vertical-align: middle;
 }
-.pf-sre__test--done {
-  border-color: rgba(16, 185, 129, 0.4);
-  background: linear-gradient(
-    135deg,
-    rgba(16, 185, 129, 0.06),
-    transparent 60%
-  );
-}
-.pf-sre__test--rejected {
-  border-color: rgba(239, 68, 68, 0.34);
-  background: linear-gradient(
-    135deg,
-    rgba(239, 68, 68, 0.06),
-    transparent 60%
-  );
-}
-.pf-sre__test-pill--rejected {
-  background: rgba(239, 68, 68, 0.18);
-  color: var(--red-text);
-  border-color: rgba(239, 68, 68, 0.34);
-}
-.pf-sre__test-reject-reason {
-  margin: -4px 0 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgba(239, 68, 68, 0.1);
-  border-left: 3px solid #ef4444;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-.pf-sre__test-reject-reason strong {
-  color: var(--red-text);
-  margin-right: 4px;
-}
-
-/* Top-of-screen banner — appears once per re-entered sample. */
-.pf-sre__reject-banner {
-  padding: 14px 16px;
-  margin-bottom: 18px;
-  border-radius: 12px;
-  background: linear-gradient(
-    135deg,
-    rgba(239, 68, 68, 0.14),
-    rgba(239, 68, 68, 0.04)
-  );
-  border: 1px solid rgba(239, 68, 68, 0.34);
-}
-.pf-sre__reject-banner-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.pf-sre__reject-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 9999px;
-  background: rgba(239, 68, 68, 0.22);
-  color: var(--red-text);
-  font-size: 13px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.pf-sre__reject-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--red-text);
-}
-.pf-sre__reject-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pf-sre__reject-item {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  font-size: 13px;
-  line-height: 1.4;
-}
-.pf-sre__reject-test {
-  font-weight: 600;
-  color: var(--text-primary);
-  flex-shrink: 0;
-}
-.pf-sre__reject-test::after {
-  content: ":";
-}
-.pf-sre__reject-reason {
-  color: var(--text-secondary);
-  flex: 1;
-  min-width: 0;
-}
-.pf-sre__test-hdr {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.pf-sre__test-name {
-  margin: 0;
-  flex: 1;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.pf-sre__test-pill {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 10px;
-  border-radius: 9999px;
-  background: rgba(16, 185, 129, 0.18);
-  color: var(--green-text);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-.pf-sre__test-empty {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin: 0;
-}
-
-/* Compact "+ Note" pill in the test header's right corner — replaces
- the previous full-width "Add Overall Observation" button which was
- consuming a vertical slot per test. Toggles a thread block beneath
- the header; once notes exist, the pill switches to "Notes (N)". */
-.pf-sre__note-btn {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  background: rgba(168, 85, 247, 0.1);
-  color: var(--violet-text);
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
-}
-.pf-sre__note-btn:hover {
-  background: rgba(168, 85, 247, 0.18);
-  border-color: rgba(168, 85, 247, 0.45);
-}
-.pf-sre__note-btn--has {
-  background: rgba(96, 165, 250, 0.12);
-  color: var(--blue-text);
-  border-color: rgba(96, 165, 250, 0.35);
-}
-.pf-sre__note-btn--has:hover {
-  background: rgba(96, 165, 250, 0.2);
-  border-color: rgba(96, 165, 250, 0.5);
-}
-
-.pf-sre__params {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-@media (min-width: 720px) {
-  .pf-sre__params {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-.pf-sre__param {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pf-sre__param-label {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.pf-sre__unit {
-  color: var(--text-tertiary);
-  font-weight: 400;
-}
-.pf-sre__input {
-  width: 100%;
-  min-height: 38px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--bg-input);
-  border: 1.5px solid var(--input-border, var(--glass-border));
-  color: var(--text-primary);
-  font-size: 13.5px;
-  font-family: inherit;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.pf-sre__input:focus {
-  outline: none;
-  border-color: #a855f7;
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
-}
-.pf-sre__input--ta {
-  resize: vertical;
-  min-height: 56px;
-  font-family: inherit;
-  text-align: left;
-}
-
-/* Light mode: Make input borders more visible */
-:host-context(.light) .pf-sre__input {
-  border: 1.5px solid #cbd5e1;
-  background: var(--bg-input);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
-  color: #1e293b;
-}
-:host-context(.light) .pf-sre__input:focus {
-  border-color: #8b5cf6;
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
-}
-.pf-sre__cb {
-  width: 18px;
-  height: 18px;
-}
-.pf-sre__hint {
-  font-size: 10.5px;
-  color: var(--text-tertiary);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-}
-
-/* New wrapper around the per-parameter <label> + comment thread.
- Wrapper is the grid cell; label is one block, thread is the
- sibling block — that's how the thread's buttons stay clickable
- (a label was eating their clicks). */
-.pf-sre__param-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-/* Soft red wash on the whole wrapper when a thread is open here. */
-.pf-sre__param-wrap--flagged {
-  padding: 4px;
-  margin: -4px;
-  border-radius: 10px;
-  background: rgba(239, 68, 68, 0.04);
-}
-
-/* Per-parameter conversation: small bump of breathing room from
- the input so the thread doesn't collide visually with the field. */
-.pf-sre__param-comments {
-  margin-top: 8px;
-}
-/* Parameter has an open thread → flag the input visually so the
- tech focuses there before submitting. */
-.pf-sre__input--flagged {
-  border-color: rgba(239, 68, 68, 0.6) !important;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
-}
-
-/* ── Live out-of-range / critical feedback ─────────────────────────
- Client-side preview while the tech types; the backend conditions
- engine still decides the persisted/reported flag. Applies to both
- the grid (.pf-sre__ginput) and form (.pf-sre__input) numeric inputs. */
-/* Plain high/low → soft amber tint (chip carries the wording). */
-.pf-sre__input--outr {
-  border-color: rgba(245, 158, 11, 0.6) !important;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
-}
-/* Critical → the INPUT itself goes red. Wins over the amber tint and
- over the open-comment red (declared later + stronger wash). */
-.pf-sre__input--crit {
-  border-color: rgba(239, 68, 68, 0.8) !important;
-  background: rgba(239, 68, 68, 0.09) !important;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14) !important;
-}
-/* Non-parseable numeric (slipped past the guards) → subtle dashed red. */
-.pf-sre__input--invalid {
-  border-style: dashed !important;
-  border-color: rgba(239, 68, 68, 0.55) !important;
-}
-/* The live flag chip beside a numeric input. Same tone palette as the
- result-entry grid flags so both screens read identically. */
-.pf-sre__flag-chip {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 5px;
-  padding: 0px 6px;
-  height: 16px;
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border-radius: 9999px;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-.pf-sre__flag-chip[data-tone="low"] {
-  background: rgba(59, 130, 246, 0.16);
-  color: var(--blue-text);
-  border: 1px solid rgba(59, 130, 246, 0.4);
-}
-.pf-sre__flag-chip[data-tone="high"] {
-  background: rgba(245, 158, 11, 0.16);
-  color: var(--amber-text);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-}
-.pf-sre__flag-chip[data-tone="critical"] {
-  background: rgba(239, 68, 68, 0.18);
-  color: var(--red-text);
-  border: 1px solid rgba(239, 68, 68, 0.45);
-}
-.pf-sre__flag-chip[data-tone="normal"] {
-  background: rgba(16, 185, 129, 0.16);
-  color: var(--green-text);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-}
-/* Calculated-field chip: how the value got there. Auto = formula is live,
- Manual = tech override (clearing the field resumes auto), Not calculable =
- validity gate failed (Friedewald over TG 400) — never a partial number. */
-.pf-sre__calc-chip {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 5px;
-  padding: 0px 6px;
-  height: 16px;
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border-radius: 9999px;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-.pf-sre__calc-chip[data-kind="auto"] {
-  background: rgba(139, 92, 246, 0.14);
-  color: var(--violet-text, #a78bfa);
-  border: 1px solid rgba(139, 92, 246, 0.38);
-}
-.pf-sre__calc-chip[data-kind="manual"] {
-  background: rgba(148, 163, 184, 0.14);
-  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
-  border: 1px solid rgba(148, 163, 184, 0.35);
-}
-.pf-sre__calc-chip[data-kind="na"] {
-  background: transparent;
-  color: var(--text-muted, rgba(255, 255, 255, 0.45));
-  border: 1px dashed rgba(148, 163, 184, 0.4);
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-/* Form view: the chip sits inside the label's column flow — hug the
- input it belongs to instead of stretching full width. */
-.pf-sre__flag-chip--form {
-  align-self: flex-end;
-  margin-top: 4px;
-}
-.pf-sre__select-wrap {
-  border: 1px solid transparent;
-  border-radius: 12px;
-  transition:
-    border-color 0.18s,
-    box-shadow 0.18s;
-}
-.pf-sre__select-wrap.pf-sre__input--flagged {
-  border-color: rgba(239, 68, 68, 0.6);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
-}
+.pf-sre__flag-chip[data-tone='low'] { background: rgba(59, 130, 246, 0.14); color: var(--blue-text, #1d4ed8); border: 1px solid rgba(59, 130, 246, 0.35); }
+.pf-sre__flag-chip[data-tone='high'] { background: rgba(245, 158, 11, 0.14); color: var(--amber-text, #b45309); border: 1px solid rgba(245, 158, 11, 0.4); }
+.pf-sre__flag-chip[data-tone='critical'] { background: rgba(239, 68, 68, 0.14); color: var(--red-text, #b91c1c); border: 1px solid rgba(239, 68, 68, 0.4); }
+.pf-sre__flag-chip[data-tone='normal'] { background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line); }
+/* How a calculated value got there — a neutral badge. */
+.pf-sre__calc-chip { background: var(--nd-chip-bg); color: var(--text-secondary); border: 1px solid var(--nd-line); }
+.pf-sre__calc-chip[data-kind='na'] { background: transparent; color: var(--text-muted); border-style: dashed; }
+.pf-sre__flag-chip--form { align-self: flex-end; margin-top: 4px; }
 .pf-sre__param-flag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: rgba(239, 68, 68, 0.22);
-  color: var(--red-text);
-  font-size: 10px;
-  font-weight: 700;
-  margin-left: 6px;
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+  width: 16px; height: 16px; margin-left: 6px; border-radius: 999px;
+  background: rgba(239, 68, 68, 0.16); color: var(--red-text, #b91c1c);
 }
 
-/* Overall thread block for a test — separates conversation from
- the parameter inputs below it. */
-.pf-sre__test-comments {
-  margin-bottom: 14px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--glass-border);
+/* Row / test note: a quiet neutral icon button. */
+.pf-sre__gnote {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+  width: 30px; height: 30px; padding: 0; border-radius: 8px;
+  border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer;
+  transition: color var(--nd-dur-fast) ease, border-color var(--nd-dur-fast) ease;
 }
+.pf-sre__gnote:hover { color: var(--text-primary); border-color: var(--nd-line); background: var(--nd-card-bg); }
+.pf-sre__gnote:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pf-sre__gnote--has { color: var(--violet-text, #6d28d9); }
+.pf-sre__gc-note .pf-sre__gnote + .pf-sre__gnote, .pf-sre__gc-note .pf-sre__attach-btn { margin-left: 4px; }
+.pf-sre__gdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.pf-sre__gdot--done { background: var(--color-violet-600, #7c3aed); }
+.pf-sre__gdot--rejected { background: #ef4444; }
+.pf-sre__who, .pf-sre__gwho { font-size: 11.5px; font-weight: 400; color: var(--text-tertiary); }
+.pf-sre__gwho { display: block; margin-top: 2px; }
+.pf-sre__gsub .pf-sre__gwho { display: inline; margin-left: 8px; }
 
-.pf-sre__footer {
-  position: sticky;
-  bottom: 0;
-  padding: 16px 0 0;
-  /* Backdrop so scrolling test cards don't bleed under the submit
-   bar now that the panel (not the window) is the scroll context. */
-  background: linear-gradient(
-    180deg,
-    transparent,
-    var(--bg-primary, rgba(12, 14, 20, 0.92)) 40%
-  );
-  margin-top: 4px;
-  display: flex;
-  align-items: stretch;
-  gap: 10px;
+/* Card header bits: status chips (neutral; Re-entry is the one real warning). */
+.pf-sre__test-pill { height: 26px; font-size: 11.5px; color: var(--text-secondary); }
+.pf-sre__test-pill svg { color: var(--violet-text, #6d28d9); }
+.pf-sre__test-pill--rejected { color: var(--red-text, #b91c1c); border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.08); }
+/* "+ Note": the kit's secondary button, small. */
+.nd-btn.pf-sre__note-btn { height: 32px; min-height: 32px; padding: 0 12px; font-size: 12.5px; }
+.pf-sre__test-empty { font-size: 13px; color: var(--text-tertiary); }
+.pf-sre__test-reject-reason {
+  padding: 8px 12px; border-radius: 8px; font-size: 12.5px; color: var(--text-secondary);
+  background: rgba(239, 68, 68, 0.07); border-left: 3px solid #ef4444;
 }
-.pf-sre__reopen {
-  flex: 0 0 auto;
-  padding: 0 18px;
-  border-radius: 14px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  background: var(--glass-bg);
-  color: var(--text-secondary);
-  border: 1px solid var(--glass-border);
-}
-.pf-sre__reopen:hover:not(:disabled) {
-  color: var(--text-primary);
-  border-color: rgba(168, 85, 247, 0.4);
-}
-.pf-sre__reopen:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.pf-sre__draft {
-  flex: 0 0 auto;
-  padding: 0 18px;
-  border-radius: 14px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  background: var(--glass-bg);
-  color: var(--text-secondary);
-  border: 1px solid var(--glass-border);
-}
-.pf-sre__draft:hover:not(:disabled) {
-  color: var(--text-primary);
-  border-color: rgba(168, 85, 247, 0.4);
-}
-.pf-sre__draft:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-/* Mobile: lift the sticky Submit bar above the floating bottom-nav
- pill so the violet avatar doesn't peek out from behind the button.
- The pill body sits ~72px tall + safe-area; we add 16px breathing
- on top of that. iPad/desktop fall through unchanged. */
-@media (max-width: 640px) {
-  /* Single mode on phone: hide the Grid/Form toggle entirely — grid is
-   the one view here. Form logic + DOM are left intact; only this
-   control is hidden, and only at <=640px. */
-  .pf-sre__view {
-    display: none;
-  }
+.pf-sre__test-reject-reason strong { color: var(--red-text, #b91c1c); margin-right: 4px; font-weight: 600; }
+.pf-sre__test-comments { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--nd-line); background: var(--nd-in-tint); }
 
-  /* The bottom action bar is gone on phone (submit moved to the header
-   icon — see .pf-sre__footer{display:none} above). The scroll area only
-   needs to clear the floating bottom-nav now. */
-  .pf-sre {
-    padding-bottom: calc(var(--tab-nav-total-height) + 8px);
-  }
+/* Top-of-column re-entry banner (a real warning → red). */
+.pf-sre__reject-banner {
+  flex: none; padding: 12px 16px; border-radius: var(--nd-radius);
+  background: rgba(239, 68, 68, 0.07); border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.pf-sre__reject-banner-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.pf-sre__reject-icon {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 24px; height: 24px; border-radius: 999px; background: rgba(239, 68, 68, 0.16); color: var(--red-text, #b91c1c);
+}
+.pf-sre__reject-title { font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--red-text, #b91c1c); }
+.pf-sre__reject-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pf-sre__reject-item { display: flex; gap: 10px; align-items: baseline; font-size: 13px; line-height: 1.4; }
+.pf-sre__reject-test { font-weight: 500; color: var(--text-primary); flex-shrink: 0; }
+.pf-sre__reject-test::after { content: ':'; }
+.pf-sre__reject-reason { color: var(--text-secondary); flex: 1; min-width: 0; }
 
-  /* Phone: a <table> can't look right at 390px. Convert it to a clean
-   full-width row list — each parameter is ONE row: name (left, wraps) +
-   result input + unit (right). That's all the tech needs on a phone.
-   The dedicated UNIT / REFERENCE-RANGE / METHOD columns are dropped
-   (!important so the block-display below can't resurrect them); the unit
-   is re-shown inline next to the input. >=641px keeps the 5-col table. */
-  .pf-sre__gc-unit,
-  .pf-sre__gc-range,
-  .pf-sre__gc-method,
-  .pf-sre__grid thead {
-    display: none !important;
-  }
-  .pf-sre__grid-wrap {
-    width: 100%;
-    border: 0;
-    border-radius: 0;
-    background: none;
-  }
-  .pf-sre__grid,
-  .pf-sre__grid tbody {
-    display: block;
-    width: 100%;
-  }
+/* Form view */
+.pf-sre__params { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 720px) { .pf-sre__params { grid-template-columns: 1fr 1fr; } }
+.pf-sre__param { display: flex; flex-direction: column; gap: 4px; }
+.pf-sre__param-label { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+.pf-sre__unit { color: var(--text-tertiary); font-weight: 400; }
+.pf-sre__hint { font-size: 11px; color: var(--text-tertiary); }
+.pf-sre__param-wrap { display: flex; flex-direction: column; }
+.pf-sre__param-wrap--flagged { padding: 4px; margin: -4px; border-radius: 10px; background: rgba(239, 68, 68, 0.04); }
+.pf-sre__param-comments { margin-top: 8px; }
 
-  .pf-sre__grow {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 9px 6px;
-    border-bottom: 1px solid var(--glass-border);
-    border-radius: 8px;
-    transition: background 0.12s ease;
-  }
-  /* Focus: highlight the row whose input is being edited so the tech always
-   knows which parameter the keyboard is targeting. */
-  .pf-sre__grow:focus-within {
-    background: rgba(168, 85, 247, 0.12);
-  }
-  /* Reset only the cells we still show (NO blanket td{display:block}, which
-   previously out-specified the display:none above and brought the
-   range/method columns back, overlapping everything). */
-  .pf-sre__grow td {
-    padding: 0;
-    border: 0;
-    background: none !important;
-  }
-  /* Param cell: number is a fixed-width prefix; the name wraps in its OWN
-   column so a 2nd line ("(PCV)") aligns under the name's first letter,
-   NOT under the number — a clean hanging indent. */
-  td.pf-sre__gc-param {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-  .pf-sre__gc-param .pf-sre__gidx {
-    flex: 0 0 auto;
-    margin: 0;
-  }
-  .pf-sre__gc-param .pf-sre__gname {
-    flex: 1 1 auto;
-    min-width: 0;
-    white-space: normal;
-    line-height: 1.3;
-  }
+.pf-sre__msg { color: var(--text-secondary); font-size: 13px; padding: 24px 0; text-align: center; }
+.pf-sre__msg--err { color: var(--red-text, #b91c1c); }
 
-  /* Result cell IS the field box (fixed width → every row symmetric). The
-   input is borderless and fills it; the unit sits INSIDE on the right. */
-  td.pf-sre__gc-result {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex: 0 0 auto;
-    width: 132px;
-    min-height: 42px;
-    padding: 0 10px;
-    border: 1px solid var(--input-border, rgba(255, 255, 255, 0.16));
-    border-radius: 10px;
-    background: var(--bg-input, rgba(255, 255, 255, 0.06));
-  }
-  td.pf-sre__gc-result:focus-within {
-    border-color: rgba(168, 85, 247, 0.75);
-    background: rgba(168, 85, 247, 0.12);
-  }
-  td.pf-sre__gc-result .pf-sre__ginput {
-    flex: 1 1 auto;
-    min-width: 0;
-    min-height: 0;
-    border: 0 !important;
-    background: transparent !important;
-    padding: 8px 0 !important;
-    text-align: left;
-  }
-  td.pf-sre__gc-result .pf-sre__ginput--num {
-    text-align: right;
-  }
-  td.pf-sre__gc-result .pf-sre__cb {
-    flex: 0 0 auto;
-    width: 24px;
-    height: 24px;
-  }
-  .pf-sre__gunit-inline {
-    display: inline-flex;
-    align-items: center;
-    flex: 0 0 auto;
-    font-size: 11.5px;
-    font-weight: 600;
-    color: var(--text-tertiary);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .pf-sre__grow-comments {
-    display: block;
-    width: 100%;
-  }
-  .pf-sre__grow-comments td {
-    display: block;
-    width: 100%;
-    padding: 8px 2px;
-  }
+/* ── SAMPLE side card ───────────────────────────────────────────────── */
+.pf-sre-side__close { display: none; }
+.pf-sre-side__body { gap: 12px; }
+.pf-sre-status { align-self: flex-start; height: 32px; gap: 8px; font-size: 12.5px; font-weight: 500; color: var(--text-primary); }
+.pf-sre-status svg { color: var(--violet-text, #6d28d9); }
+.pf-sre-status__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); }
+.pf-sre__autosave { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
+.pf-sre__autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber-text, #f59e0b); animation: pf-sre-pulse 1s ease-in-out infinite; }
+.pf-sre__autosave-dot--ok { background: var(--color-violet-500, #8b5cf6); animation: none; }
+@keyframes pf-sre-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.pf-sre-trend { font-size: 12px; }
+.pf-sre-trendsel { display: flex; flex-direction: column; gap: 6px; }
 
-  /* Lock the test name (e.g. "Complete Blood Count (CBC)") as a sticky
-   section header while its parameters scroll, until the next test's
-   header pushes it up. Sits just below the sticky page header. */
-  .pf-sre__test-hdr {
-    position: sticky;
-    top: 52px; /* just below the compact sticky page header */
-    z-index: 4;
-    background: var(
-      --bg-secondary,
-      #0e1018
-    ); /* opaque — hides rows scrolling under */
-    margin: 0 -14px;
-    padding: 12px 14px;
-  }
-}
-.pf-sre__submit {
-  flex: 1 1 auto;
-  min-height: 48px;
-  border-radius: 12px;
-  background: var(
-    --gradient-primary,
-    linear-gradient(135deg, #a855f7, #d946ef)
-  );
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
-  border: 2px solid transparent;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.35);
-  transition:
-    transform 0.1s,
-    box-shadow 0.2s,
-    border-color 0.2s,
-    background 0.2s;
-  /* Improve rendering on some browsers/devices to avoid
-   a tiny anti-aliasing seam at the rounded corners. */
-  -webkit-font-smoothing: antialiased;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  transform: translateZ(0);
-  will-change: transform, box-shadow;
-  /* Ensure background doesn't bleed into the transparent border */
-  background-clip: padding-box;
-}
-.pf-sre__submit:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 30px rgba(168, 85, 247, 0.45);
-}
-.pf-sre__submit:active {
-  transform: scale(0.98);
-}
-.pf-sre__submit:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
+.pf-sre-info { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.pf-sre-info__row { display: flex; gap: 12px; font-size: 13px; }
+.pf-sre-info__row dt { flex: none; width: 92px; color: var(--text-tertiary); }
+.pf-sre-info__row dd { margin: 0; color: var(--text-primary); @include nd.no-truncate; }
+.pf-sre-info__urgent { color: var(--red-text, #b91c1c) !important; font-weight: 500; }
+/* Tube cap colour — functional (it is the physical container). */
+.pf-sre-cap { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 999px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); }
 
-/* Light mode button styling for better contrast */
-:host-context(.light) .pf-sre__submit {
-  background: linear-gradient(135deg, #8b5cf6, #d946ef);
-  border: 2px solid #cbd5e1;
-  box-shadow:
-    0 4px 12px rgba(139, 92, 246, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-:host-context(.light) .pf-sre__submit:hover:not(:disabled) {
-  border-color: #b8a3f2;
-  box-shadow:
-    0 6px 16px rgba(139, 92, 246, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-:host-context(.light) .pf-sre__submit:active {
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-}
+.pf-sre-sec { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--nd-line); }
+.pf-sre-sec__title { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+.pf-sre-prev { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pf-sre-prev__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; font-size: 12.5px; }
+.pf-sre-prev__name { color: var(--text-secondary); @include nd.no-truncate; }
+.pf-sre-prev__val { color: var(--text-primary); font-weight: 500; text-align: right; }
+.pf-sre-prev__at { grid-column: 1 / -1; font-size: 11.5px; color: var(--text-muted); }
+.pf-sre__flags { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pf-sre__flag { padding: 8px 12px; border-radius: 8px; background: var(--nd-chip-bg); border-left: 3px solid var(--nd-sel-border); font-size: 12.5px; }
+.pf-sre__flag strong { font-weight: 500; }
+.pf-sre__flag--crit { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.07); }
+.pf-sre-side__hint { margin: 0; padding-top: 12px; border-top: 1px solid var(--nd-line); font-size: 12px; color: var(--text-tertiary); text-wrap: pretty; }
 
-.pf-sre__flags {
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.pf-sre__flag {
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--glass-bg);
-  border-left: 3px solid var(--text-secondary);
-  font-size: 12.5px;
-}
-.pf-sre__flag--crit {
-  border-left-color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
-}
+/* Footer: normal-size buttons at the right, never full width. */
+.nd-card__foot.pf-sre-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.pf-sre-foot .nd-btn { flex: none; min-width: 112px; }
 
-/* ── Cross-platform overrides (additive, scoped) ──────────────────
- All rules below ONLY apply below desktop, to touch pointers, or
- under platform html classes. Desktop-web (>=1280px, fine pointer)
- falls through every guard unchanged. */
-
-/* Phone: stop iOS Safari/Capacitor WKWebView from auto-zooming when a
- field gains focus. Any text-entry control under ~16px triggers it,
- so bump every input/select/textarea to 16px on the small breakpoint.
- Desktop keeps its tighter 13.5px since this is width-gated. */
-@media (max-width: 640px) {
-  .pf-sre__input,
-  .pf-sre__input--ta,
-  .pf-sre__ginput,
-  .pf-sre__ginput--num,
-  .pf-sre__ginput--ta {
-    font-size: 16px;
-  }
-  :host ::ng-deep .pf-sre__test select,
-  :host ::ng-deep .pf-sre__test input,
-  :host ::ng-deep .pf-sre__test textarea {
-    font-size: 16px;
-  }
+/* ── Attachments ────────────────────────────────────────────────────── */
+.pf-sre__attach-btn {
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; vertical-align: middle;
+  border-radius: 8px; border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+  color: var(--text-tertiary); cursor: pointer; flex-shrink: 0;
 }
-
-/* Touch devices (coarse pointer, any width incl. iPad): grow the
- small header controls to a >=44px tap target. These are visual-
- only size bumps; the desktop fine-pointer path is untouched. */
-@media (pointer: coarse) {
-  .pf-sre__back {
-    min-height: 44px;
-  }
-  .pf-sre__view-btn {
-    min-height: 36px;
-    padding: 8px 14px;
-  }
-  .pf-sre__note-btn {
-    min-height: 36px;
-    padding: 8px 12px;
-  }
-  .pf-sre__submit {
-    min-height: 52px;
-  }
-  .pf-sre__cb {
-    width: 22px;
-    height: 22px;
-  }
-  /* The result-entry fields themselves are the densest, most-tapped
-   controls on this page yet were below the 44px touch floor (grid
-   inputs had no min-height; form inputs were 38px). Raise them on
-   coarse pointers only — desktop fine-pointer keeps its tighter
-   density. Also lifts grid row height since the input drives it. */
-  .pf-sre__input,
-  .pf-sre__ginput,
-  .pf-sre__ginput--num,
-  .pf-sre__select-wrap {
-    min-height: 44px;
-  }
+.pf-sre__attach-btn:hover { color: var(--text-primary); border-color: var(--nd-sel-border); }
+.pf-sre__attach-btn:disabled { opacity: 0.5; cursor: default; }
+.pf-sre__attach-count { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.pf-sre__attach-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.pf-sre__attach-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px 5px 5px;
+  border: 1px solid var(--nd-line); border-radius: 11px; background: var(--nd-card-bg);
 }
-
-/* Hover affordances only where a hover-capable pointer exists, so
- touch taps don't leave sticky hover states. Mirror (not replace)
- the base hovers — base rules stay intact for fine-pointer/legacy. */
-@media (hover: none) {
-  .pf-sre__back:hover {
-    color: var(--text-secondary);
-  }
-  .pf-sre__view-btn:hover {
-    color: var(--text-muted);
-  }
-  .pf-sre__submit:hover:not(:disabled) {
-    transform: none;
-    box-shadow: 0 8px 24px rgba(168, 85, 247, 0.35);
-  }
-  .pf-sre__grow:hover td {
-    background: inherit;
-  }
-  .pf-sre__note-btn:hover {
-    background: rgba(168, 85, 247, 0.1);
-    border-color: rgba(168, 85, 247, 0.3);
-  }
-  .pf-sre__note-btn--has:hover {
-    background: rgba(96, 165, 250, 0.12);
-    border-color: rgba(96, 165, 250, 0.35);
-  }
-}
-
-/* Capacitor native: the sticky Submit footer is this page's own
- bottom chrome. The width-gated rule above already lifts it over
- the floating bottom-nav + safe-area on phones; on native iPad
- (coarse pointer, >640px) the bottom-nav is hidden, so only honour
- the home-indicator inset there. */
-:host-context(html.cap-native) .pf-sre__footer {
-  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
-}
-@media (max-width: 640px) {
-  :host-context(html.cap-native) .pf-sre__footer {
-    bottom: var(--tab-nav-total-height);
-    padding-bottom: 12px;
-  }
-}
-
-.pf-sre__trend {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 10px 0 4px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(124, 58, 237, 0.06);
-  border: 1px solid rgba(168, 85, 247, 0.22);
-}
-.pf-sre__trend-toggle {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  cursor: pointer;
-}
-.pf-sre__trend-toggle input {
-  width: 16px;
-  height: 16px;
-  accent-color: #7c3aed;
-  flex-shrink: 0;
-}
-.pf-sre__trend-toggle svg {
-  color: #a855f7;
-  flex-shrink: 0;
-}
-.pf-sre__trend-toggle span {
-  display: flex;
-  flex-direction: column;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.pf-sre__trend-toggle em {
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-tertiary);
-}
-.pf-sre__trend-sel {
-  margin-left: auto;
-  background: var(--input-bg, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  color: var(--text-primary);
-  font-size: 12.5px;
-}
-
-/* ── Sibling tubes of the same order (OPS-51) ─────────────────────── */
-/* ── Tube tabs: browser-style tab strip on the header divider ──
-   Every tube of the order is a tab. The strip pulls itself down over the
-   header's bottom padding + 1px divider so the tabs SIT on the line; the
-   active tab masks the divider beneath it and so reads as attached to the
-   content below — exactly how a browser tab connects to its page. */
-.pf-sre__tabs {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  margin-top: 10px;
-  margin-bottom: -13px; /* header padding-bottom (12) + divider (1) */
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.pf-sre__tabs::-webkit-scrollbar { display: none; }
-.pf-sre__tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 260px;
-  padding: 6px 14px 7px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  border-bottom: none;
-  border-radius: 10px 10px 0 0;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.2;
-  white-space: nowrap;
-  cursor: pointer;
-}
-@media (hover: hover) {
-  button.pf-sre__tab:hover {
-    background: var(--glass-bg-hover, rgba(255, 255, 255, 0.05));
-    color: var(--text-primary);
-  }
-}
-.pf-sre__tab--active {
-  position: relative;
-  background: var(--glass-bg, rgba(255, 255, 255, 0.04));
-  color: var(--text-primary);
-  cursor: default;
-}
-/* Violet reading edge along the active tab's top — the "current" cue. */
-.pf-sre__tab--active::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  right: -1px;
-  height: 2px;
-  border-radius: 10px 10px 0 0;
-  background: var(--violet-500, #8b5cf6);
-}
-/* Mask the header divider directly under the active tab so it opens into
-   the content area like a real browser tab. */
-.pf-sre__tab--active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 1px;
-  background: var(--bg-primary, #0c0e14);
-}
-.pf-sre__tab-code {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 11.5px;
-}
-.pf-sre__tab-tests {
-  color: var(--text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  max-width: 170px;
-}
-.pf-sre__tab-dot {
-  width: 7px; height: 7px; border-radius: 999px;
-  background: var(--violet-500, #8b5cf6); flex-shrink: 0;
-}
-
-/* Validation mode: compact submitted meta beside Reject / Validate. Truncates
-   on narrow widths so the action buttons always keep their room; below phone
-   width it hides entirely — provenance lives on the test sections. */
-.pf-sre__val-meta {
-  margin-right: auto; font-size: 12px; color: var(--text-secondary); align-self: center;
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-@media (max-width: 520px) {
-  .pf-sre__val-meta { display: none; }
-}
-
-/* "Entered by" provenance — card header (form view) and flat grid rows. */
-.pf-sre__who {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.pf-sre__gwho {
-  display: block;
-  margin-top: 1px;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* On the profile sub-label row it sits inline after the test name. */
-.pf-sre__gsub .pf-sre__gwho {
-  display: inline;
-  margin-left: 8px;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-/* ── Result attachments (images/videos with show-on-report toggles) ── */
-.pf-sre__attach-btn { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
-  border-radius: 9px; border: 1px solid var(--glass-border); background: transparent;
-  color: var(--text-tertiary, #94a3b8); cursor: pointer; flex-shrink: 0; }
-.pf-sre__attach-btn:hover { color: var(--text-primary); background: var(--glass-bg-hover, rgba(255,255,255,.05)); }
-.pf-sre__attach-btn:disabled { opacity: .5; cursor: default; }
-.pf-sre__attach-count { font-size: 11px; font-weight: 700; color: var(--violet-text, #a78bfa); }
-.pf-sre__attach-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
-.pf-sre__attach-chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px 5px 5px;
-  border: 1px solid var(--glass-border); border-radius: 11px; background: var(--glass-bg);
-  transition: opacity .15s; }
-.pf-sre__attach-chip--off { opacity: .55; }
-.pf-sre__attach-thumb { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.05); }
+.pf-sre__attach-chip--off { opacity: 0.55; }
+.pf-sre__attach-thumb { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--nd-chip-bg); color: var(--text-secondary); }
 .pf-sre__attach-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.pf-sre__attach-thumb--video { color: var(--text-secondary, #cbd5e1); }
-.pf-sre__attach-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 11.5px; color: var(--text-secondary, #cbd5e1); }
-.pf-sre__attach-eye { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
-  border-radius: 8px; border: none; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
-.pf-sre__attach-eye--on { color: #34d399; }
-.pf-sre__attach-eye:hover { background: var(--glass-bg-hover, rgba(255,255,255,.06)); }
-.pf-sre__attach-record { font-size: 10px; color: var(--text-tertiary, #64748b); font-style: italic; }
-.pf-sre__attach-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
-  border-radius: 8px; border: none; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
-.pf-sre__attach-x:hover { color: #f87171; background: rgba(239,68,68,.08); }
-.pf-sre__attach-param { color: var(--violet-text, #a78bfa); font-weight: 700; }
-/* Per-report value picker (culture-checkbox pattern). */
-.pf-sre__printpick { margin-right: 8px; vertical-align: middle; accent-color: #a855f7; flex-shrink: 0; }
+.pf-sre__attach-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-secondary); }
+.pf-sre__attach-param { color: var(--text-primary); font-weight: 500; }
+.pf-sre__attach-eye, .pf-sre__attach-x {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 8px; border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer;
+}
+.pf-sre__attach-eye--on { color: var(--violet-text, #6d28d9); }
+.pf-sre__attach-x:hover { color: var(--red-text, #b91c1c); }
+.pf-sre__attach-record { font-size: 10.5px; color: var(--text-tertiary); font-style: italic; }
+.pf-sre__printpick { margin-right: 8px; vertical-align: middle; accent-color: var(--color-violet-600, #7c3aed); flex-shrink: 0; }
 
-/* Read-only VIEW (?view=1): opened from Completed / reports to inspect. */
-.pf-sre__viewchip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
-  border-radius: 9999px; border: 1px solid rgba(167, 139, 250, 0.45);
-  background: rgba(124, 58, 237, 0.12); color: var(--violet-text, #a78bfa);
-  font-size: 12px; font-weight: 700; flex-shrink: 0; }
-.pf-sre--view .pf-sre__footer,
-.pf-sre--view .pf-sre__hdr-action,
+/* ── Read-only VIEW (?view=1) ───────────────────────────────────────── */
 .pf-sre--view .pf-sre__attach-btn,
 .pf-sre--view .pf-sre__attach-eye,
 .pf-sre--view .pf-sre__attach-x,
 .pf-sre--view .pf-sre__printpick { display: none !important; }
-.pf-sre--view input:not([type="checkbox"]),
+.pf-sre--view input:not([type='checkbox']),
 .pf-sre--view textarea,
 .pf-sre--view select,
 .pf-sre--view pf-select,
-.pf-sre--view input[type="checkbox"] { pointer-events: none !important; }
+.pf-sre--view input[type='checkbox'] { pointer-events: none !important; }
+
+/* ── Touch: 44px targets (any width, incl. iPad) ────────────────────── */
+@media (pointer: coarse) {
+  .pf-sre__ginput, .pf-sre__input, .pf-sre__select-wrap { min-height: 44px; }
+  .pf-sre__gnote, .pf-sre__attach-btn { min-width: 44px; height: 44px; }
+  .nd-btn.pf-sre__note-btn { height: 44px; min-height: 44px; }
+  .pf-sre__cb { width: 22px; height: 22px; }
+  .pf-sre-chip { height: 38px; }
+}
+
+/* ── Phones (<=640px, additive) ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Pill = patient + sample in ONE row; tech chip + tabs leave the pill
+     (tabs become the compact picker in the tools row). */
+  .pf-sre-chip--tech, .pf-sre-chip--ro, .pf-sre-tabs, .pf-sre-ctx__grow { display: none; }
+  .pf-sre-chip--patient .pf-sre-chip__meta { display: none; }
+  .pf-sre-tubesel { display: block; flex: 1 1 auto; min-width: 0; }
+  .pf-sre-body { padding: 8px 12px 84px; }   /* clears the bottom bar */
+  /* SAMPLE becomes the sheet opened from the bottom bar. */
+  .pf-sre-side { display: none; }
+  .pf-sre-side.pf-sre-side--open {
+    display: flex; position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 1002;
+    height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+    border-radius: 20px 20px 0 0;
+    animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce, ease) both;
+  }
+  .pf-sre-side__close { display: inline-flex; }
+  .pf-sre-backdrop { z-index: 1001; }
+  .pf-sre-bar { z-index: 1000; }
+  .pf-sre-bar__cta { flex: 0 1 auto; }
+
+  /* No iOS focus zoom. */
+  .pf-sre__input, .pf-sre__ginput { font-size: 16px; }
+  :host ::ng-deep .pf-sre__test select,
+  :host ::ng-deep .pf-sre__test input,
+  :host ::ng-deep .pf-sre__test textarea { font-size: 16px; }
+
+  /* The table becomes one row per value: name (wraps) + result field
+     with the unit inside it. Range / unit / method columns drop. */
+  .pf-sre__gc-unit, .pf-sre__gc-range, .pf-sre__gc-method, .pf-sre__grid thead { display: none !important; }
+  .pf-sre__grid, .pf-sre__grid tbody { display: block; width: 100%; }
+  .pf-sre__grow {
+    display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box;
+    padding: 9px 12px; border-bottom: 1px solid var(--nd-line);
+  }
+  .pf-sre__grow td { padding: 0; border: 0; background: none !important; }
+  td.pf-sre__gc-param { display: block; flex: 1 1 auto; min-width: 0; }
+  td.pf-sre__gc-note { width: auto; flex: none; }
+  td.pf-sre__gc-result {
+    display: flex; align-items: center; gap: 4px; flex: 0 0 auto; width: 136px; min-height: 44px; padding: 0 10px;
+    border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm); background: var(--nd-card-bg);
+  }
+  td.pf-sre__gc-result:focus-within { border-color: var(--color-violet-600, #7c3aed); }
+  td.pf-sre__gc-result .pf-sre__ginput { flex: 1 1 auto; min-width: 0; min-height: 0; border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 8px 0 !important; }
+  .pf-sre__gunit-inline { display: inline-flex; flex: none; font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
+  .pf-sre__grow-comments, .pf-sre__grow-reject, .pf-sre__gsub, .pf-sre__grow-attach { display: block; width: 100%; }
+  .pf-sre__grow-comments td, .pf-sre__grow-reject td, .pf-sre__gsub td, .pf-sre__grow-attach td { display: block; width: 100%; box-sizing: border-box; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-sre-side.pf-sre-side--open, .pf-sre-skel__bar, .pf-sre__autosave-dot { animation: none; }
+  .pf-sre__ginput, .pf-sre__input, .pf-sre__gnote { transition: none; }
+}

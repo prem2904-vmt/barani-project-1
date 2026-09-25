@@ -49,11 +49,15 @@ import {
 import { OrderTestComment } from "../../../shared/models/comment.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { CommentThreadComponent } from "../../../shared/components/comment-thread/comment-thread.component";
-import { LoadingLogoComponent } from "../../../shared/components/loading-logo/loading-logo.component";
 import { SelectComponent } from "../../../shared/primitives/select.component";
 import { CultureEntryComponent } from "../culture-entry/culture-entry.component";
 import { CultureResult } from "../../../shared/models/culture.model";
-import { formatPatientInfo } from "../../../shared/models/patient.model";
+import { formatPatientInfo, formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
+import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
+import { tubeColor } from "../../../shared/utils/tube-colors";
+import { plural } from "../../../shared/utils/plural";
+import { webPointerSignal } from "../../../shared/utils/pointer-mode";
+import { sampleVtName } from "../../../core/navigation/zoom-transition";
 
 /** Live flag preview beside a numeric input — client mirror only; the
  *  backend conditions engine still decides the persisted/reported flag. */
@@ -99,8 +103,8 @@ function calcKey(testId: string, paramName: string): string {
     FormsModule,
     CommentThreadComponent,
     SelectComponent,
-    LoadingLogoComponent,
     CultureEntryComponent,
+    HeroBandComponent,
   ],
   templateUrl: "./sample-result-entry.component.html",
   styleUrl: "./sample-result-entry.component.scss",
@@ -118,6 +122,130 @@ export class SampleResultEntryComponent {
   private readonly dialog = inject(DialogService);
   private readonly tenantState = inject(TenantStateService);
   protected readonly formatPatient = formatPatientInfo;
+
+  // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
+  /** Web (fine pointer + hover) vs touch — row actions / tap targets. */
+  readonly web = webPointerSignal();
+  /** The route's sample id, known before the tube loads — the RESULTS
+   *  skeleton carries the zoom name so the queue tile can morph into it. */
+  readonly routeSampleId = signal<string | null>(null);
+  /** view-transition-name shared with the My Work tile (zoom-transition.ts). */
+  readonly vtName = computed(() => sampleVtName(this._sample()?.id ?? this.routeSampleId()));
+  /** Phone: the SAMPLE side card opens as the tall sheet. */
+  readonly sheetOpen = signal(false);
+
+  /** Full patient name — never cut in code (ND rule 5). */
+  readonly patientName = computed(() => patientDisplayName(this._sample()?.order?.patient) || "Patient");
+  /** "29/M · AA0012". */
+  readonly patientMeta = computed(() => formatPatientMeta(this._sample()?.order?.patient));
+
+  /** Sample tabs (this tube + its siblings) for the phone pf-select. */
+  readonly tubeOptions = computed(() => {
+    const s = this._sample();
+    if (!s?.siblings?.length) return [];
+    const self = { value: s.id, label: `${s.barcode || "This tube"} · ${this.headerChips().join(", ")}` };
+    return [self, ...s.siblings.map((sb) => ({
+      value: sb.id,
+      label: `${sb.barcode || "Tube"} · ${sb.tests.join(", ")}${sb.hasOpenWork ? " (open)" : ""}`,
+    }))];
+  });
+
+  /** RESULTS card label for a grid block: the profile name, the single
+   *  test's name, or "Results" for a run of single-value tests. */
+  blockLabel(blk: { title?: string | null; tests: OrderTest[] }): string {
+    if (blk.title) return blk.title;
+    if (blk.tests.length === 1) return blk.tests[0].test?.name ?? "Test";
+    return "Results";
+  }
+
+  /** Entry progress across the tube: every parameter field counts once; a
+   *  culture test counts once (any structured value = entered). */
+  readonly progress = computed(() => {
+    const all = this._values();
+    let done = 0, total = 0;
+    const filled = (v: unknown) => v !== undefined && v !== null && v !== false && String(v).trim() !== "";
+    for (const t of this._sample()?.tests ?? []) {
+      if (this.isCultureTest(t)) {
+        total++;
+        if (Object.keys(all[t.id] ?? {}).length > 0) done++;
+        continue;
+      }
+      for (const p of this.parametersFor(t)) {
+        total++;
+        if (filled(all[t.id]?.[p.name])) done++;
+      }
+    }
+    return { done, total };
+  });
+  readonly progressLabel = computed(() => {
+    const { done, total } = this.progress();
+    return `${done} of ${plural(total, "parameter")} entered`;
+  });
+
+  /** SAMPLE side card: ONLY what the RESULTS cards don't show, and only the
+   *  fields the tube really carries (GET /api/samples/:id/tests). */
+  readonly sampleInfo = computed(() => {
+    const s = this._sample();
+    if (!s) return null;
+    const tests = s.tests ?? [];
+    const uniq = (xs: Array<string | null | undefined>) =>
+      [...new Set(xs.map((x) => (x ?? "").trim()).filter(Boolean))];
+    const specimen = uniq(tests.map((t) => t.test?.sampleType)).join(", ") || null;
+    const tc = tubeColor(s.tubeColor ?? tests.find((t) => t.test?.tubeColor)?.test?.tubeColor);
+    // TAT runs from lab receipt — the same clock My Work's queue uses.
+    const tatHours = Math.max(0, ...tests.map((t) => t.test?.tatHours ?? 0)) || null;
+    const dueAt = tatHours && s.receivedAtLab
+      ? new Date(new Date(s.receivedAtLab).getTime() + tatHours * 3_600_000).toISOString() : null;
+    const o = s.order;
+    const pr = (o?.priority ?? "").trim().toLowerCase();
+    return {
+      specimen,
+      container: tc ? { label: tc.label, hex: tc.hex } : null,
+      external: s.source === "external",
+      collectedAt: s.collectedAt ?? null,
+      receivedAt: s.receivedAtLab ?? null,
+      tatHours,
+      dueAt,
+      overdue: !!dueAt && Date.parse(dueAt) < Date.now(),
+      priority: pr && pr !== "routine" && pr !== "normal" ? o!.priority : null,
+      orderNumber: o?.orderNumber?.trim() || null,
+      refDoctor: o?.refDoctorName?.trim() || null,
+      refHospital: o?.refHospitalName?.trim() || null,
+    };
+  });
+
+  /** Previous result for the same test (the patient's lab-trends series —
+   *  numeric values from EARLIER orders only). Empty when the endpoint gives
+   *  nothing (single prior result, no permission, non-numeric tests). */
+  readonly previousResults = computed(() => {
+    const s = this._sample();
+    const before = s?.order?.createdAt ? Date.parse(s.order.createdAt) : NaN;
+    if (!s || Number.isNaN(before)) return [];
+    const out: Array<{ key: string; test: string; param: string; value: number; unit: string | null; date: string }> = [];
+    const seen = new Set<string>();
+    for (const t of s.tests ?? []) {
+      if (seen.has(t.testId)) continue;
+      seen.add(t.testId);
+      const tr = this.trendEligible().find((x) => x.testId === t.testId);
+      if (!tr) continue;
+      const params = this.parametersFor(t);
+      for (const tp of tr.parameters) {
+        const prior = tp.points.filter((pt) => Date.parse(pt.date) < before);
+        const last = prior[prior.length - 1];
+        if (!last) continue;
+        const def = params.find((p) => p.name === tp.parameter);
+        out.push({
+          key: t.testId + "::" + tp.parameter,
+          test: tr.testName,
+          param: params.length > 1 ? def?.title || tp.parameter : "",
+          value: last.value,
+          unit: tp.unit ?? def?.unit ?? null,
+          date: last.date,
+        });
+      }
+    }
+    return out.slice(0, 8);
+  });
 
   /** Signed-in technician shown on the right of the header. Properly formats
    *  displayName or falls back to full name / 'Technician'. */
@@ -356,7 +484,9 @@ export class SampleResultEntryComponent {
       // whole tube without the tech ever reaching for the scrollbar.
       next.scrollIntoView({ block: "nearest" });
     } else if (inputs.length > 0) {
-      const submitBtn = container.querySelector<HTMLElement>(".pf-sre__submit");
+      // The visible Submit (side card on desktop, bottom bar on phones).
+      const submits = Array.from(container.querySelectorAll<HTMLElement>(".pf-sre-submit"));
+      const submitBtn = submits.find((b) => b.getClientRects().length > 0) ?? submits[0];
       if (submitBtn && !submitBtn.hasAttribute("disabled")) {
         submitBtn.focus();
       } else {
@@ -1249,6 +1379,7 @@ export class SampleResultEntryComponent {
 
   async ngOnInit() {
     const id = this.route.snapshot.paramMap.get("sampleId");
+    this.routeSampleId.set(id);
     this.validateMode.set(this.route.snapshot.queryParamMap.get('validate') === '1');
     this.viewOnly.set(this.route.snapshot.queryParamMap.get('view') === '1');
     if (!id) {
@@ -1262,7 +1393,9 @@ export class SampleResultEntryComponent {
    *  the route param is snapshot-read, so update the URL and reload state
    *  in place (OPS-51: FBS/PPBS live in different tubes of one order). */
   async openSibling(id: string) {
+    if (!id || id === this._sample()?.id) return;
     await this.router.navigate(["/lab/sample", id], { replaceUrl: false });
+    this.routeSampleId.set(id);
     this._loading.set(true);
     this._sample.set(null);
     await this.load(id);
