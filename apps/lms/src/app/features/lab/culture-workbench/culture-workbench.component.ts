@@ -52,7 +52,20 @@ interface StageField { name: string; title: string; type: string; options: strin
               <span class="pf-cse-tech__name">{{ techName() || 'Technician' }}</span>
             </span>
             <span class="pf-cse-techavatar" role="img" [title]="techName()" [attr.aria-label]="'Technician ' + techName()">{{ techInitials() }}</span>
-            @if (cc.caseState === 'awaiting_signout') {
+            @if (reviewMode()) {
+              <!-- Pathologist sign-out (owner): Reject (secondary, needs a
+                   reason) + Validate & sign out (THE primary). -->
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-cse-act pf-cse-reject press" [disabled]="busy()"
+                      (click)="rejectCase()" aria-label="Reject" title="Reject — send back to the bench">
+                <svg class="pf-cse-act__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+                <span class="pf-cse-act__t">Reject</span>
+              </button>
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-cse-act pf-cse-validate press" [disabled]="busy()"
+                      (click)="validateCase()" aria-label="Validate and sign out" title="Validate & sign out">
+                <svg class="pf-cse-act__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                <span class="pf-cse-act__t">Validate &amp; sign out</span>
+              </button>
+            } @else if (cc.caseState === 'awaiting_signout') {
               <span class="nd-chip nd-chip--static pf-cse-await">Awaiting sign-out</span>
             } @else {
               <!-- THE page primary: submit (or validate) the whole case —
@@ -115,6 +128,7 @@ interface StageField { name: string; title: string; type: string; options: strin
             }
             <!-- Incubation lives in the nav row (the band holds the page
                  primary): status chip · Inoculate / + Hours (secondary). -->
+            @if (cc.caseState !== 'awaiting_signout') {
             <span class="pf-cse-incubgrp">
               @if (cc.incubateUntil) {
                 <span class="nd-chip nd-chip--static pf-cse-incub" [class.pf-cse-incub--done]="incubDone()" aria-live="polite">
@@ -157,6 +171,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                 }
               </span>
             </span>
+            }
           </div>
 
           @for (s of cc.stages; track s.key) {
@@ -210,7 +225,14 @@ interface StageField { name: string; title: string; type: string; options: strin
                   </div>
                 }
 
-                @if (s.state === 'done') {
+                @if (s.state === 'done' && s.key === 'ast' && astHasData()) {
+                  <!-- Read-only AST (review + done): the same table, nothing editable. -->
+                  <div class="pf-cse__astwrap">
+                    <pf-culture-entry [value]="astValue()" [embedded]="true" [readonly]="true"
+                                      [reportHidden]="reportHidden()"
+                                      (reportHiddenChange)="setReportHidden($event)"></pf-culture-entry>
+                  </div>
+                } @else if (s.state === 'done') {
                   <p class="pf-stg__summary">{{ readable(s.valuesJson || '') || 'Completed' }}</p>
                 } @else if (lockedByOther(s)) {
                   <p class="pf-stg__lockmsg">{{ s.holderName || 'Another tech' }} is working this stage.</p>
@@ -1157,6 +1179,42 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
         this.toasts.error(e?.error?.message || 'Could not validate — it may need a second person.');
         this.load();
       },
+    });
+  }
+
+  // ── Pathologist sign-out (owner: moved here from validate-result) ──────
+  /** A validator looking at a case that waits for sign-out → review mode:
+   *  read-only stages + AST, band actions Reject / Validate & sign out. */
+  readonly reviewMode = computed(() => this.c()?.caseState === 'awaiting_signout' && this.canValidate());
+  readonly astHasData = computed(() => (this.astValue().organisms?.length ?? 0) > 0 || !!this.astValue().noGrowth);
+  /** Same API the pathologist queue / validate-result uses. */
+  validateCase() {
+    this.busy.set(true);
+    this.api.post(`/api/validation/${this.id}/validate`, { note: null }).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.toasts.success('Validated & signed out');
+        this.navBack.backTo('/pathologist');
+      },
+      error: (e: unknown) => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); this.load(); },
+    });
+  }
+  async rejectCase() {
+    const reason = await this.dialog.prompt({
+      title: 'Reject culture result?',
+      message: 'The bench is notified to re-work this case.',
+      placeholder: 'Reason for rejection…',
+      multiline: true, required: true, tone: 'danger', confirmLabel: 'Reject',
+    });
+    if (!reason) return;
+    this.busy.set(true);
+    this.api.post(`/api/validation/${this.id}/reject`, { reason, note: null }).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.toasts.success('Sent back to the bench');
+        this.navBack.backTo('/pathologist');
+      },
+      error: (e: unknown) => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }
 

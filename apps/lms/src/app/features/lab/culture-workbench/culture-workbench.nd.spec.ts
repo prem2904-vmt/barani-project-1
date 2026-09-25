@@ -40,9 +40,10 @@ function stubMatchMedia() {
   });
 }
 
-function render(caseOver: Record<string, unknown> = {}) {
+function render(caseOver: Record<string, unknown> = {}, opts: { perms?: string[]; prompt?: string | null } = {}) {
   stubMatchMedia();
   const c = { ...CASE, ...caseOver };
+  postSpy = vi.fn(() => of(c));
   const get = (url: string) => {
     if (url.includes('/stage-schema')) return of(SCHEMA);
     if (url.includes('/culture/')) return of(c);
@@ -51,10 +52,11 @@ function render(caseOver: Record<string, unknown> = {}) {
   TestBed.configureTestingModule({
     imports: [CultureWorkbenchComponent],
     providers: [
-      { provide: ApiService, useValue: { get, post: () => of(c), put: () => of({}), delete: () => of({}) } },
-      { provide: AuthService, useValue: { user: () => ({ id: 'me', displayName: 'Admin User', tenantName: 'Micro World' }), hasPermission: () => true } },
+      { provide: ApiService, useValue: { get, post: postSpy, put: () => of({}), delete: () => of({}) } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'me', displayName: 'Admin User', tenantName: 'Micro World' }),
+        hasPermission: (p: string) => (opts.perms ? opts.perms.includes(p) : true) } },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {}, warning() {} } },
-      { provide: DialogService, useValue: {} },
+      { provide: DialogService, useValue: { prompt: vi.fn(() => Promise.resolve(opts.prompt ?? null)) } },
       { provide: NavBackService, useValue: { showBack: () => true, back() {}, backTo() {} } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }) } },
       { provide: Router, useValue: { navigate: vi.fn() } },
@@ -66,6 +68,7 @@ function render(caseOver: Record<string, unknown> = {}) {
   return { f, el: f.nativeElement as HTMLElement, cmp: f.componentInstance as any };
 }
 
+let postSpy: ReturnType<typeof vi.fn>;
 const css = () => ((CultureWorkbenchComponent as any).ɵcmp.styles as string[]).join('\n');
 
 describe('Culture case — band + context bar', () => {
@@ -176,5 +179,41 @@ describe('Culture case — stage tabs + rows', () => {
     expect(phone).toMatch(/\.pf-cse-row[^{]*\{[^}]*grid-template-areas:\s*["']name note["']\s*["']ctl ctl["']/);
     expect(phone).toMatch(/\.pf-cse-field[^{]*\{[^}]*width:\s*100%/);
     expect(phone).toMatch(/\.pf-cse-act__i[^{]*\{[^}]*display:\s*block/);
+  });
+});
+
+describe('Culture case — pathologist sign-out (moved here from validate-result)', () => {
+  const awaiting = { caseState: 'awaiting_signout', stages: CASE.stages.map(s => ({ ...s, state: 'done' })) };
+
+  it('a validator on an awaiting case gets Reject (secondary) + Validate & sign out (THE primary)', () => {
+    const { el } = render(awaiting, { perms: ['validate_result'] });
+    const prim = el.querySelectorAll('.pf-hb__actions .pf-hb-btn--primary');
+    expect(prim.length).toBe(1);
+    expect(prim[0].textContent?.trim()).toBe('Validate & sign out');
+    expect(el.querySelector('.pf-hb__actions .pf-cse-reject')?.classList.contains('pf-hb-btn--ghost')).toBe(true);
+    expect(el.querySelector('.pf-cse-signout')).toBeNull();
+    expect(el.querySelector('.pf-cse-incubgrp')).toBeNull();   // no bench tools while reviewing
+  });
+
+  it('no sign-out actions for a non-validator, or when the case is not awaiting sign-out', () => {
+    expect(render(awaiting, { perms: ['culture_workbench'] }).el.querySelector('.pf-cse-validate')).toBeNull();
+    TestBed.resetTestingModule();
+    expect(render({}, { perms: ['validate_result'] }).el.querySelector('.pf-cse-validate')).toBeNull();
+  });
+
+  it('Validate calls the validation API for this order test', () => {
+    const { el } = render(awaiting, { perms: ['validate_result'] });
+    (el.querySelector('.pf-cse-validate') as HTMLButtonElement).click();
+    expect(postSpy).toHaveBeenCalledWith('/api/validation/ot-1/validate', { note: null });
+  });
+
+  it('Reject needs a reason: cancelled prompt → no call; a reason → reject API', async () => {
+    const a = render(awaiting, { perms: ['validate_result'], prompt: null });
+    await a.cmp.rejectCase();
+    expect(postSpy).not.toHaveBeenCalledWith(expect.stringContaining('/reject'), expect.anything());
+    TestBed.resetTestingModule();
+    const b = render(awaiting, { perms: ['validate_result'], prompt: 'Wrong organism' });
+    await b.cmp.rejectCase();
+    expect(postSpy).toHaveBeenCalledWith('/api/validation/ot-1/reject', { reason: 'Wrong organism', note: null });
   });
 });

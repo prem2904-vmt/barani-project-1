@@ -33,11 +33,13 @@ export function cultureOnlyTest(s: Pick<OrderSample, 'tests'> | null | undefined
   return culture.length && culture.length === tests.length ? culture[0] : null;
 }
 
-/** Pathologist review (?validate=1) stays on the sample screen; users
- *  without the culture bench permission keep the page they can open. */
-function mayRedirect(query: { get(k: string): string | null }): boolean {
-  if (query.get('validate')) return false;
-  return inject(AuthService).hasPermission('culture_workbench');
+/** Who may land on the Culture case page: the bench (culture_workbench), or
+ *  — for sign-out review (?validate=1, /pathologist/validate) — a validator.
+ *  Anyone else keeps the page they can open. */
+function mayRedirect(query: { get(k: string): string | null }, review = false): boolean {
+  const auth = inject(AuthService);
+  if (review || query.get('validate')) return auth.hasPermission('validate_result');
+  return auth.hasPermission('culture_workbench');
 }
 
 /** /lab/sample/:sampleId → /lab/culture/:orderTestId for a culture tube. */
@@ -56,6 +58,19 @@ export const cultureSampleRedirectGuard: CanActivateFn = async route => {
 export const cultureResultRedirectGuard: CanActivateFn = async route => {
   const id = route.paramMap.get('id');
   if (!id || !mayRedirect(route.queryParamMap)) return true;
+  const api = inject(ApiService);
+  const router = inject(Router);
+  try {
+    const t = await firstValueFrom(api.get<OrderTest>(`/api/results/${id}`));
+    return isCultureOrderTest(t) ? router.createUrlTree(['/lab/culture', t.id || id]) : true;
+  } catch { return true; }
+};
+
+/** /pathologist/validate/:id (old culture sign-out screen) → the Culture case
+ *  page, where sign-out now lives. Non-culture results stay. */
+export const cultureValidateRedirectGuard: CanActivateFn = async route => {
+  const id = route.paramMap.get('id');
+  if (!id || !mayRedirect(route.queryParamMap, true)) return true;
   const api = inject(ApiService);
   const router = inject(Router);
   try {

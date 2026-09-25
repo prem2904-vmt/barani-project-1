@@ -1,4 +1,5 @@
 import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { isCultureOrderTest } from '../../../core/navigation/culture-redirect.guard';
 import { ThemeService } from '../../../core/services/theme.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -471,9 +472,12 @@ export class PendingValidationComponent implements OnInit {
   }
 
   /** Validation review = the SAME screen the tech entered on (?validate=1).
-   *  Culture tubes keep the dedicated review (bench stage views + amend). */
+   *  A CULTURE test signs out on the Culture case page (owner). */
   private goToReview(t: OrderTest, siblings: OrderTest[]) {
-    const isCulture = siblings.some(x => (x.test?.parameters ?? '').includes('culture_sensitivity'));
+    if (isCultureOrderTest(t)) { this.router.navigate(['/lab/culture', t.id]); return; }
+    const culture = siblings.find(x => isCultureOrderTest(x));
+    if (culture && siblings.every(x => isCultureOrderTest(x))) { this.router.navigate(['/lab/culture', culture.id]); return; }
+    const isCulture = !!culture;
     const sampleId = t.subOrder?.id;
     if (!isCulture && sampleId) {
       this.router.navigate(['/lab/sample', sampleId], { queryParams: { validate: 1 } });

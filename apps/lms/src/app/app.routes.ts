@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { cultureResultRedirectGuard, cultureSampleRedirectGuard } from './core/navigation/culture-redirect.guard';
+import { cultureResultRedirectGuard, cultureSampleRedirectGuard, cultureValidateRedirectGuard } from './core/navigation/culture-redirect.guard';
 import { CanActivateFn, Route, Router } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { AuthService } from './core/auth/auth.service';
@@ -477,7 +477,8 @@ export const appRoutes: Route[] = [
         // Microbiology culture bench: the staged workspace for one culture case
         // (Gram → Growth → Identification → AST). Micro-tech only.
         path: 'lab/culture/:orderTestId',
-        canActivate: [permissionGuard('culture_workbench'), moduleGuard('lab')],
+        // Pathologists open it too: culture sign-out lives here (owner).
+        canActivate: [permissionGuard(['culture_workbench', 'validate_result']), moduleGuard('lab')],
         loadComponent: () => import('./features/lab/culture-workbench/culture-workbench.component').then(m => m.CultureWorkbenchComponent)
       },
 
@@ -501,7 +502,7 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'pathologist/validate/:id',
-        canActivate: [permissionGuard('validate_result')],
+        canActivate: [permissionGuard('validate_result'), cultureValidateRedirectGuard],
         loadComponent: () => import('./features/pathologist/validate-result/validate-result.component').then(m => m.ValidateResultComponent)
       },
 

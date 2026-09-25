@@ -4,7 +4,7 @@ import { of, throwError } from 'rxjs';
 import { ApiService } from '../services/api.service';
 import { AuthService } from '../auth/auth.service';
 import {
-  cultureOnlyTest, cultureResultRedirectGuard, cultureSampleRedirectGuard, isCultureOrderTest,
+  cultureOnlyTest, cultureResultRedirectGuard, cultureSampleRedirectGuard, cultureValidateRedirectGuard, isCultureOrderTest,
 } from './culture-redirect.guard';
 import { appRoutes as routes } from '../../app.routes';
 
@@ -50,9 +50,13 @@ describe('search / scan / deep link → /lab/sample/:id', () => {
     setup(() => of({ tests: [t('ot-2', N)] }));
     expect(await run(cultureSampleRedirectGuard, snap({ sampleId: 's-2' }))).toBe(true);
   });
-  it('pathologist review (?validate=1) stays on the sample screen', async () => {
+  it('pathologist review (?validate=1) of a culture tube goes to the Culture case page (sign-out lives there)', async () => {
+    setup(() => of({ tests: [t('ot-9', C)] }), ['validate_result']);
+    expect(url(await run(cultureSampleRedirectGuard, snap({ sampleId: 's-1' }, { validate: '1' })))).toBe('/lab/culture/ot-9');
+  });
+  it('?validate=1 without the validate permission stays put', async () => {
     const get = vi.fn(() => of({ tests: [t('ot-9', C)] }));
-    setup(get);
+    setup(get, ['culture_workbench']);
     expect(await run(cultureSampleRedirectGuard, snap({ sampleId: 's-1' }, { validate: '1' }))).toBe(true);
     expect(get).not.toHaveBeenCalled();
   });
@@ -77,11 +81,23 @@ describe('old per-test URL /lab/result/:id', () => {
   });
 });
 
+describe('old culture sign-out URL /pathologist/validate/:id', () => {
+  it('redirects a culture test to /lab/culture/:id', async () => {
+    setup(() => of(t('ot-7', C)), ['validate_result']);
+    expect(url(await run(cultureValidateRedirectGuard, snap({ id: 'ot-7' })))).toBe('/lab/culture/ot-7');
+  });
+  it('leaves a non-culture result on validate-result', async () => {
+    setup(() => of(t('ot-8', N)), ['validate_result']);
+    expect(await run(cultureValidateRedirectGuard, snap({ id: 'ot-8' }))).toBe(true);
+  });
+});
+
 describe('routes carry the guards', () => {
   const flat = (rs: any[]): any[] => rs.flatMap(r => [r, ...flat(r.children ?? [])]);
   it('/lab/sample/:sampleId and /lab/result/:id both run the culture redirect', () => {
     const all = flat(routes as any[]);
     expect(all.find(r => r.path === 'lab/sample/:sampleId')?.canActivate).toContain(cultureSampleRedirectGuard);
     expect(all.find(r => r.path === 'lab/result/:id')?.canActivate).toContain(cultureResultRedirectGuard);
+    expect(all.find(r => r.path === 'pathologist/validate/:id')?.canActivate).toContain(cultureValidateRedirectGuard);
   });
 });
