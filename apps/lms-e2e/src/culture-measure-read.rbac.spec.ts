@@ -75,6 +75,19 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
 
   test('real plate: disks, glare filtered, PIT zone > 6 mm, codes pending → manual → filled; 1440 + 375 shots', async ({ page }) => {
     test.skip(!PLATE || !existsSync(PLATE), 'Set PLATE_JPG to the real plate photo (ast-ocr/plate.jpg).');
+    // CORS_RELAY=1: the app runs on a non-allowlisted origin (e.g. a static
+    // build on :4310) — relay backend calls from the test runner, adding
+    // the CORS header. Registered first, so the mocks below still win.
+    if (process.env['CORS_RELAY']) {
+      await page.route(/prefrontal\.health\/api\//, async route => {
+        const origin = new URL(page.url() || 'http://localhost').origin;
+        const cors = { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true',
+          'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+        if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+        const res = await route.fetch();
+        await route.fulfill({ response: res, headers: { ...res.headers(), ...cors } });
+      });
+    }
     await loginAs(page, 'admin');
     await page.setViewportSize({ width: 1440, height: 900 });
 

@@ -258,6 +258,7 @@
    • default: the halo sits OUTSIDE the element (small items: a field).
    • `--inset`: ring + halo drawn INSIDE (a frame or panel that clips /
      scrolls — the photo stage, a side list).
+   • `--ring`: the ring alone — for MANY small items at once (list cells).
    • `.nd-ai-glow-mark`: SVG / tiny marks — a hue-cycling violet glow.
    Reduced motion: a static soft rainbow ring, no rotation. */
 @property --nd-ai-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
@@ -288,6 +289,8 @@
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude;
 }
+/* ring only, no halo — many small items glowing at once (list cells) */
+.nd-ai-glow--ring::after { display: none; }
 .nd-ai-glow-mark { transition: filter 240ms ease; }
 .nd-ai-glow-mark[data-ai-working='true'] { filter: drop-shadow(0 0 3px #a78bfa); animation: nd-ai-hue 3.5s linear infinite; }
 @keyframes nd-ai-spin { to { --nd-ai-angle: 360deg; } }

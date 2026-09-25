@@ -152,7 +152,8 @@ pill. Functional exceptions — these are data or warnings, not decoration:
   (violet → blue → cyan → green → yellow → orange → pink) + a soft blurred
   halo, rotating via `@property --nd-ai-angle` (~3.5 s a turn), ~0.6
   opacity (stronger in dark). `.nd-ai-glow--inset` draws ring + halo
-  INSIDE a frame / panel that clips or scrolls; `.nd-ai-glow-mark` gives SVG
+  INSIDE a frame / panel that clips or scrolls; `--ring` drops the halo for
+  many small items at once (list cells); `.nd-ai-glow-mark` gives SVG
   marks a hue-cycling glow. Removing the attribute fades it out (keep the
   class for the fade). Pseudo-elements only, `pointer-events: none` — the
   user keeps working underneath. Reduced motion: a static soft rainbow
@@ -563,7 +564,7 @@ Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row
 Numbers  .nd-num (Noto Sans + tabular-nums; .nd-mono is an alias)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
-AI       .nd-ai-glow[data-ai-working] · .nd-ai-glow--inset · .nd-ai-glow-mark · --nd-ai-angle (PF Sense only)
+AI       .nd-ai-glow[data-ai-working] · .nd-ai-glow--inset · .nd-ai-glow--ring · .nd-ai-glow-mark · --nd-ai-angle (PF Sense only)
 Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .nd-fullscreen · --nd-nav-h
 Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line
          --nd-shadow-sm · --nd-chip-bg · --nd-sel-bg · --nd-sel-border · --nd-in-tint · --nd-done-tint

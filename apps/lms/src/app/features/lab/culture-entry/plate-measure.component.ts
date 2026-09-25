@@ -296,7 +296,7 @@ const NOT_A_DISK = '__not_a_disk';
                       <span class="pm-drow__n nd-num" aria-hidden="true">{{ d.n }}</span>
                       <div class="pm-drow__code">
                         <div class="pm-drow__pick">
-                          <pf-select class="pm-codesel nd-ai-glow" [attr.data-ai-working]="isPending(d) ? 'true' : null" [class.pm-codesel--pending]="isPending(d)" [class.pm-codesel--set]="!!d.code || d.notDisk"
+                          <pf-select class="pm-codesel nd-ai-glow nd-ai-glow--ring" [attr.data-ai-working]="isPending(d) ? 'true' : null" [class.pm-codesel--pending]="isPending(d)" [class.pm-codesel--set]="!!d.code || d.notDisk"
                                      [options]="codeOptions().get(d.id) ?? []" [value]="codeValue(d)" [searchable]="true" size="sm"
                                      [placeholder]="isPending(d) ? (aiSlow() ? 'Still reading…' : 'Reading…') : 'Unknown — tap to pick'"
                                      [attr.aria-label]="'Disk ' + d.n + ' code'"
