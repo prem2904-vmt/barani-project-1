@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
@@ -19,7 +19,7 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
 @Component({
   selector: 'pf-admin-modules',
   standalone: true,
-  imports: [ScreenHeaderComponent, HeroBandComponent, SegmentedComponent],
+  imports: [ScreenHeaderComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10">
@@ -29,8 +29,13 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
         <pf-hero-band [back]="true" placeholder="Search modules & features — OPD, pharmacy, inventory…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-tools>
-            <pf-segmented size="sm" [options]="statusOptions()" [value]="status()"
-                          (valueChange)="status.set($event)"></pf-segmented>
+            <!-- Neutral kit segment (counts in Noto tabular, never mono). -->
+            <span class="nd-seg pf-mods-seg" role="radiogroup" aria-label="Show modules">
+              @for (o of statusOptions(); track o.value) {
+                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="status() === o.value"
+                        (click)="status.set(o.value)">{{ o.label }} <span class="nd-num pf-mods-seg__n">{{ o.count }}</span></button>
+              }
+            </span>
           </ng-container>
         </pf-hero-band>
       }
@@ -43,27 +48,25 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
       <div class="pf-band-body">
       <div class="pf-mods">
         @for (m of visibleCatalog(); track m.id) {
-          <div class="pf-mod" [class.pf-mod--on]="isModuleOn(m.id)">
+          <div class="pf-mod nd-card" [class.pf-mod--on]="isModuleOn(m.id)">
             <div class="pf-mod__head">
-              <span class="pf-mod__icon" [style.opacity]="isModuleOn(m.id) ? 1 : 0.5">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <span class="nd-card__icon pf-mod__icon" [style.opacity]="isModuleOn(m.id) ? 1 : 0.5">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path [attr.d]="m.iconPath"></path>
                 </svg>
               </span>
               <div class="pf-mod__meta">
                 <div class="pf-mod__titlerow">
                   <h3 class="pf-mod__title">{{ m.label }}</h3>
-                  @if (m.status === 'coming_soon') { <span class="pf-mod__badge">Coming soon</span> }
+                  @if (m.status === 'coming_soon') { <span class="nd-chip nd-chip--static pf-mod__badge">Coming soon</span> }
                 </div>
                 <p class="pf-mod__blurb">{{ m.blurb }}</p>
               </div>
-              <label class="pf-tog" [class.pf-tog--on]="isModuleOn(m.id)" [attr.aria-label]="'Enable ' + m.label">
-                <input type="checkbox" [checked]="isModuleOn(m.id)"
-                       [disabled]="busy()"
-                       (change)="toggleModule(m.id)" />
-                <span class="pf-tog__track"><span class="pf-tog__thumb"></span></span>
-              </label>
+              <button type="button" class="nd-toggle pf-tog" role="switch" [attr.aria-checked]="isModuleOn(m.id)"
+                      [attr.aria-label]="'Enable ' + m.label" [disabled]="busy()" (click)="toggleModule(m.id)">
+                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              </button>
             </div>
 
             @if (isModuleOn(m.id) && m.features.length) {
@@ -74,13 +77,10 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
                       <span class="pf-feat__label">{{ f.label }}</span>
                       @if (f.hint) { <span class="pf-feat__hint">{{ f.hint }}</span> }
                     </div>
-                    <label class="pf-tog pf-tog--sm" [class.pf-tog--on]="isFeatureOn(m.id, f.key)"
-                           [attr.aria-label]="'Enable ' + f.label">
-                      <input type="checkbox" [checked]="isFeatureOn(m.id, f.key)"
-                             [disabled]="busy()"
-                             (change)="toggleFeature(m.id, f.key)" />
-                      <span class="pf-tog__track"><span class="pf-tog__thumb"></span></span>
-                    </label>
+                    <button type="button" class="nd-toggle pf-tog" role="switch" [attr.aria-checked]="isFeatureOn(m.id, f.key)"
+                            [attr.aria-label]="'Enable ' + f.label" [disabled]="busy()" (click)="toggleFeature(m.id, f.key)">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
                   </div>
                 }
               </div>
@@ -95,63 +95,33 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
     </section>
   `,
   styles: [`
-    .pf-mods { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
-    .pf-mod {
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
-      border-radius: 16px; background: var(--bg-card, rgba(255,255,255,0.03));
-      overflow: hidden; transition: border-color .15s;
-    }
-    .pf-mod--on { border-color: rgba(16,185,129,.35); }
+    .pf-mods-seg { flex: none; }
+    .pf-mods-seg .nd-seg__item { height: 32px; }
+    .pf-mods-seg__n { color: var(--text-tertiary); font-weight: 500; margin-left: 2px; }
+    .pf-mods { display: flex; flex-direction: column; gap: 14px; max-width: 760px; margin-inline: auto; }
+    .pf-mod { transition: border-color var(--nd-dur-fast) ease; }
+    .pf-mod--on { border-color: var(--nd-sel-border); }
     .pf-mod__head { display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; }
-    .pf-mod__icon {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
-      color: #c4b5fd; background: rgba(168,85,247,.14); border: 1px solid rgba(168,85,247,.22);
-    }
+    .pf-mod__icon { width: 36px; height: 36px; border-radius: 10px; }
     .pf-mod__meta { flex: 1; min-width: 0; }
-    .pf-mod__titlerow { display: flex; align-items: center; gap: 8px; }
-    .pf-mod__title { margin: 0; font-size: 15px; font-weight: 650; color: var(--text-primary, #f8fafc); }
-    .pf-mod__badge {
-      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
-      color: #fbbf24; background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.28);
-      padding: 2px 7px; border-radius: 999px;
-    }
-    .pf-mod__blurb { margin: 3px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary, #cbd5e1); }
+    .pf-mod__titlerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-mod__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-mod__badge { height: 22px; font-size: 11px; }
+    .pf-mod__blurb { margin: 3px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-mod__feats {
-      border-top: 1px solid var(--glass-border, rgba(255,255,255,0.08));
-      padding: 6px 18px 10px 68px; display: flex; flex-direction: column;
+      border-top: 1px solid var(--nd-line);
+      padding: 6px 18px 10px 66px; display: flex; flex-direction: column;
     }
     .pf-feat { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; }
-    .pf-feat + .pf-feat { border-top: 1px solid rgba(255,255,255,0.05); }
+    .pf-feat + .pf-feat { border-top: 1px solid var(--nd-line); }
     .pf-feat__meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .pf-feat__label { font-size: 13px; font-weight: 500; color: var(--text-primary, #f1f5f9); }
-    .pf-feat__hint { font-size: 11.5px; color: var(--text-muted, #94a3b8); }
-
-    /* Toggle (self-contained; mirrors the lab-settings switch). */
-    .pf-tog { position: relative; display: inline-flex; flex-shrink: 0; cursor: pointer; }
-    .pf-tog input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
-    .pf-tog input:disabled { cursor: not-allowed; }
-    .pf-tog__track {
-      width: 42px; height: 24px; border-radius: 12px; background: rgba(255,255,255,0.14);
-      transition: background .15s; display: inline-flex; align-items: center; padding: 2px;
-    }
-    .pf-tog__thumb {
-      width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s;
-    }
-    .pf-tog--on .pf-tog__track { background: var(--nd-toggle-on, #aeb8c2); }   /* slate toggle (nd-kit) */
-    .pf-tog--on .pf-tog__thumb { transform: translateX(18px); }
-    .pf-tog--sm .pf-tog__track { width: 36px; height: 21px; }
-    .pf-tog--sm .pf-tog__thumb { width: 17px; height: 17px; }
-    .pf-tog--sm.pf-tog--on .pf-tog__thumb { transform: translateX(15px); }
-  
-    /* Touch: the pf-tog switches are ~24px tall and exempt from the global
-       44px button floor (they're labels) — give them a real touch box. */
-    @media (pointer: coarse) {
-      .pf-tog { min-height: 44px; align-items: center; }
-    }
-    @media (max-width: 640px) {
-      .pf-mod__feats { padding-left: 18px; }
-    }
+    .pf-feat__label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .pf-feat__hint { font-size: 12px; color: var(--text-tertiary); }
+    .pf-tog { flex: none; margin-top: 6px; }
+    .pf-feat .pf-tog { margin-top: 0; }
+    /* Touch: a real 44px box around the slate switch. */
+    @media (pointer: coarse) { .pf-tog { min-height: 44px; min-width: 44px; justify-content: center; } }
+    @media (max-width: 640px) { .pf-mod__feats { padding-left: 18px; } }
 `],
 })
 export class AdminModulesComponent implements OnInit {

@@ -41,10 +41,10 @@ interface PartnerTile {
       <div class="pf-band-body">
       <div class="pf-ph">
         @for (t of visibleTiles(); track t.href) {
-          <a [routerLink]="t.href" class="pf-ph__tile press">
-            <span class="pf-ph__ic">
+          <a [routerLink]="t.href" class="pf-ph__tile nd-card press">
+            <span class="nd-card__icon pf-ph__ic">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path [attr.d]="t.iconPath"></path>
               </svg>
             </span>
@@ -53,7 +53,7 @@ interface PartnerTile {
               <span class="pf-ph__s">{{ t.subtitle }}</span>
             </span>
             <svg class="pf-ph__chev" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="m9 18 6-6-6-6"></path>
             </svg>
           </a>
@@ -71,22 +71,17 @@ interface PartnerTile {
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
     .pf-ph__tile {
-      display: flex; flex-direction: column; gap: 4px;
-      padding: 18px; border-radius: 16px; text-decoration: none;
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
-      background: var(--bg-card, rgba(255,255,255,0.03));
-      transition: border-color .15s, transform .1s, background .15s;
+      gap: 4px; padding: 18px; text-decoration: none; overflow: visible;
+      transition: border-color var(--nd-dur-fast) ease, transform 100ms ease;
     }
-    .pf-ph__tile:hover { border-color: rgba(168,85,247,.4); background: rgba(255,255,255,0.05); }
+    .pf-ph__tile:hover { border-color: var(--nd-sel-border); }
     .pf-ph__tile:active { transform: scale(.99); }
-    .pf-ph__ic {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px; flex-shrink: 0;
-      color: #c4b5fd; background: rgba(168,85,247,.14); border: 1px solid rgba(168,85,247,.22);
-    }
+    .pf-ph__tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { .pf-ph__tile { transition: none; } .pf-ph__tile:active { transform: none; } }
+    .pf-ph__ic { width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px; }
     .pf-ph__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .pf-ph__t { font-size: 15px; font-weight: 650; color: var(--text-primary, #f8fafc); }
-    .pf-ph__s { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary, #cbd5e1); }
+    .pf-ph__t { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-ph__s { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-ph__chev { display: none; color: var(--text-muted, #94a3b8); flex-shrink: 0; }
 
     /* Phones: drop the 2-up tile grid to a single-column LIST — icon left,

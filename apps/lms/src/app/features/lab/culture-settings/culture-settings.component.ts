@@ -3,7 +3,6 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -24,12 +23,12 @@ const STAGE_LABELS: Record<string, string> = {
 /**
  * Microbiology / Culture settings — the culture bench's stage soft-lock timeout,
  * the supervisor-takeover switch, and per-stage turnaround targets that drive the
- * overdue alerts. Mirrors the Lab/OPD settings pattern (pf-tile cards).
+ * overdue alerts. Kit cards (nd-card) with the icon-chip header; slate switch; kit fields.
  */
 @Component({
   selector: 'pf-culture-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
@@ -68,36 +67,46 @@ const STAGE_LABELS: Record<string, string> = {
       <div class="pf-band-body">
       <div class="pf-band-narrow">
       @if (showSec('lock')) {
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-cs__title">Stage lock</h3>
-        <p class="pf-cs__hint">When a tech picks up a stage it's locked to them. If it sits idle this long,
-          it's auto-released back to the pool so an absent tech never strands a case. Set 0 to never auto-release.</p>
-        <div class="pf-cs__row">
-          <span class="pf-cs__lbl">Auto-release after</span>
-          <input type="number" min="0" max="1440" class="pf-cs__num" [(ngModel)]="lockTimeoutMinutes" />
-          <span class="pf-cs__lbl">minutes idle</span>
+      <section class="nd-card pf-cs__card">
+        <div class="nd-card__head">
+          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+          <h3 class="nd-card__label pf-cs__title">Stage lock</h3>
         </div>
-        <label class="pf-cs__check">
-          <input type="checkbox" [(ngModel)]="allowSupervisorTakeover" />
-          <span>Allow a supervisor to force-release a stage another tech holds</span>
-        </label>
-      </pf-tile>
-
+        <div class="pf-cs__body">
+          <p class="pf-cs__hint">When a tech picks up a stage it's locked to them. If it sits idle this long,
+            it's auto-released back to the pool so an absent tech never strands a case. Set 0 to never auto-release.</p>
+          <div class="pf-cs__row">
+            <label class="pf-cs__lbl" for="pf-cs-lock">Auto-release after</label>
+            <input id="pf-cs-lock" type="number" min="0" max="1440" inputmode="numeric" class="nd-input nd-num pf-cs__num" [(ngModel)]="lockTimeoutMinutes" />
+            <span class="pf-cs__lbl">minutes idle</span>
+          </div>
+          <button type="button" class="nd-toggle pf-cs__check" role="switch" [attr.aria-checked]="allowSupervisorTakeover"
+                  (click)="allowSupervisorTakeover = !allowSupervisorTakeover">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            <span>Allow a supervisor to force-release a stage another tech holds</span>
+          </button>
+        </div>
+      </section>
       }
 
       @if (showSec('tat')) {
-      <pf-tile tone="default" padding="lg" class="block mb-5">
-        <h3 class="pf-cs__title">Turnaround targets</h3>
-        <p class="pf-cs__hint">Each stage raises an "overdue" alert once it runs past its target.</p>
-        @for (t of stageTats(); track t.stageKey) {
-          <div class="pf-cs__row">
-            <span class="pf-cs__lbl pf-cs__lbl--wide">{{ label(t.stageKey) }}</span>
-            <input type="number" min="1" max="336" class="pf-cs__num"
-                   [ngModel]="t.tatHours" (ngModelChange)="setTat(t.stageKey, $event)" />
-            <span class="pf-cs__lbl">hours</span>
-          </div>
-        }
-      </pf-tile>
+      <section class="nd-card pf-cs__card">
+        <div class="nd-card__head">
+          <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+          <h3 class="nd-card__label pf-cs__title">Turnaround targets</h3>
+        </div>
+        <div class="pf-cs__body">
+          <p class="pf-cs__hint">Each stage raises an "overdue" alert once it runs past its target.</p>
+          @for (t of stageTats(); track t.stageKey) {
+            <div class="pf-cs__row">
+              <label class="pf-cs__lbl pf-cs__lbl--wide" [attr.for]="'pf-cs-tat-' + t.stageKey">{{ label(t.stageKey) }}</label>
+              <input [id]="'pf-cs-tat-' + t.stageKey" type="number" min="1" max="336" inputmode="numeric" class="nd-input nd-num pf-cs__num"
+                     [ngModel]="t.tatHours" (ngModelChange)="setTat(t.stageKey, $event)" />
+              <span class="pf-cs__lbl">hours</span>
+            </div>
+          }
+        </div>
+      </section>
       }
       </div>
       </div>
@@ -107,15 +116,15 @@ const STAGE_LABELS: Record<string, string> = {
     .pf-cs__save { padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; color: #fff;
       background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-cs__save:disabled { opacity: .5; cursor: default; }
-    .pf-cs__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
-    .pf-cs__hint { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
+    .pf-cs__card { margin-bottom: 16px; }
+    .pf-cs__title { margin: 0; }
+    .pf-cs__body { padding: 16px 18px 18px; }
+    .pf-cs__hint { margin: 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; text-wrap: pretty; }
     .pf-cs__row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
     .pf-cs__lbl { font-size: 13px; color: var(--text-secondary); }
     .pf-cs__lbl--wide { min-width: 190px; }
-    .pf-cs__num { width: 84px; padding: 7px 9px; border-radius: 8px; font-size: 14px; text-align: right;
-      color: var(--text-primary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-cs__check { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
-    .pf-cs__check input { margin-top: 2px; }
+    .pf-cs__num { width: 96px; text-align: right; }
+    .pf-cs__check { margin-top: 16px; font-size: 13px; white-space: normal; text-align: left; min-height: 32px; }
   `],
 })
 export class CultureSettingsComponent {

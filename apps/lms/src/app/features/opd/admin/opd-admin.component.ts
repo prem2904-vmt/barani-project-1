@@ -38,10 +38,10 @@ interface OpdTile {
       <div class="pf-band-body">
       <div class="pf-lsh">
         @for (t of visibleTiles(); track t.href) {
-          <a [routerLink]="t.href" class="pf-lsh__tile press">
-            <span class="pf-lsh__ic">
+          <a [routerLink]="t.href" class="pf-lsh__tile nd-card press">
+            <span class="nd-card__icon pf-lsh__ic">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path [attr.d]="t.iconPath"></path>
               </svg>
             </span>
@@ -50,7 +50,7 @@ interface OpdTile {
               <span class="pf-lsh__s">{{ t.subtitle }}</span>
             </span>
             <svg class="pf-lsh__chev" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="m9 18 6-6-6-6"></path>
             </svg>
           </a>
@@ -68,22 +68,17 @@ interface OpdTile {
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
     .pf-lsh__tile {
-      display: flex; flex-direction: column; gap: 4px;
-      padding: 18px; border-radius: 16px; text-decoration: none;
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
-      background: var(--bg-card, rgba(255,255,255,0.03));
-      transition: border-color .15s, transform .1s, background .15s;
+      gap: 4px; padding: 18px; text-decoration: none; overflow: visible;
+      transition: border-color var(--nd-dur-fast) ease, transform 100ms ease;
     }
-    .pf-lsh__tile:hover { border-color: rgba(168,85,247,.4); background: rgba(255,255,255,0.05); }
+    .pf-lsh__tile:hover { border-color: var(--nd-sel-border); }
     .pf-lsh__tile:active { transform: scale(.99); }
-    .pf-lsh__ic {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px; flex-shrink: 0;
-      color: var(--violet-text); background: rgba(168,85,247,.14); border: 1px solid rgba(168,85,247,.22);
-    }
+    .pf-lsh__tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { .pf-lsh__tile { transition: none; } .pf-lsh__tile:active { transform: none; } }
+    .pf-lsh__ic { width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px; }
     .pf-lsh__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .pf-lsh__t { font-size: 15px; font-weight: 650; color: var(--text-primary, #f8fafc); }
-    .pf-lsh__s { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary, #cbd5e1); }
+    .pf-lsh__t { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-lsh__s { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-lsh__chev { display: none; color: var(--text-muted, #94a3b8); flex-shrink: 0; }
 
     @media (max-width: 640px) {

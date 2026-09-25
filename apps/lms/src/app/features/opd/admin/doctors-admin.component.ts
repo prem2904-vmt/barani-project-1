@@ -20,11 +20,12 @@ import { bandFilter } from '../../../shared/utils/band-search';
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
-  fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, rowHeight: 44, headerHeight: 40,
+  fontFamily: "'Noto Sans', system-ui, sans-serif", fontSize: 13, rowHeight: 44, headerHeight: 40,
   borderRadius: 12, accentColor: '#7c3aed',
 });
+// Noto Sans only (ND-PATTERN §6) — the app font, never Inter.
 const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
-  fontFamily: 'Inter, system-ui, sans-serif', fontSize: 13, rowHeight: 44, headerHeight: 40,
+  fontFamily: "'Noto Sans', system-ui, sans-serif", fontSize: 13, rowHeight: 44, headerHeight: 40,
   borderRadius: 12, accentColor: '#a855f7',
 });
 
@@ -107,9 +108,9 @@ interface DoctorRow {
     .pf-da-grid { display: block; width: 100%; height: calc(100dvh - 240px); min-height: 420px; margin-top: 8px; }
     /* New design: the grid fills the band body (no page scroll). */
     :host-context(.design-new) .pf-da-grid { flex: 1 1 auto; height: auto; min-height: 320px; margin-top: 0; }
-    .pf-da__empty { margin-top: 16px; padding: 32px; text-align: center; border-radius: 14px;
-      border: 1px dashed var(--glass-border, rgba(255,255,255,0.14)); }
-    .pf-da__empty-t { font-weight: 700; color: var(--text-primary, #e2e8f0); }
+    .pf-da__empty { margin-top: 16px; padding: 32px; text-align: center; border-radius: var(--nd-radius-card);
+      border: 1px dashed var(--nd-line); }
+    .pf-da__empty-t { font-weight: 600; color: var(--text-primary); }
     .pf-da__muted { color: var(--text-tertiary, #64748b); font-size: 13px; margin-top: 4px; }
   `],
 })
@@ -139,7 +140,7 @@ export class DoctorsAdminComponent {
     { headerName: 'Specialisation', flex: 1.6, minWidth: 180,
       valueGetter: p => p.data?.specializations?.length ? p.data.specializations.join(', ') : '—' },
     { field: 'fee', headerName: 'Consultation fee (₹)', editable: true, width: 190, flex: 0,
-      cellClass: 'pf-da-fee', type: 'numericColumn',
+      cellClass: 'pf-da-fee nd-num', type: 'numericColumn',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) && n >= 0 ? n : (p.oldValue ?? 0); },
       valueFormatter: p => '₹' + (p.value ?? 0) },
   ];

@@ -85,29 +85,35 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
       }
 
       @if (mode() !== 'off') {
-        <pf-tile tone="default" padding="lg" class="block mb-5">
-          <div class="pf-os__row-head">
-            <h3 class="pf-os__title">Tiers</h3>
-            <button type="button" class="pf-os__add press" (click)="addTier()">+ Add tier</button>
+        <section class="nd-card pf-os__card">
+          <div class="nd-card__head pf-os__row-head">
+            <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L3 13V3h10l7.59 7.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.25"/></svg></span>
+            <h3 class="nd-card__label pf-os__title">Tiers</h3>
+            <span class="nd-card__spacer"></span>
+            <button type="button" class="nd-btn nd-btn--tertiary pf-os__add press" (click)="addTier()">+ Add tier</button>
           </div>
-          <p class="pf-os__hint">The tightest matching window applies. E.g. within 7 days → 100% off, within 30 days → 50% off.</p>
+          <div class="pf-os__body">
+            <p class="pf-os__hint">The tightest matching window applies. E.g. within 7 days → 100% off, within 30 days → 50% off.</p>
 
-          @if (tiers().length === 0) {
-            <p class="pf-os__muted">No tiers yet — add one.</p>
-          }
-          @for (t of tiers(); track $index) {
-            <div class="pf-os__tier">
-              <span class="pf-os__tier-txt">Within</span>
-              <input type="number" min="1" class="pf-os__num" [ngModel]="t.withinDays"
-                     (ngModelChange)="setTier($index, 'withinDays', $event)" />
-              <span class="pf-os__tier-txt">days →</span>
-              <input type="number" min="0" max="100" class="pf-os__num" [ngModel]="t.discountPercent"
-                     (ngModelChange)="setTier($index, 'discountPercent', $event)" />
-              <span class="pf-os__tier-txt">% {{ mode() === 'assisted' ? 'max' : 'off' }}</span>
-              <button type="button" class="pf-os__del press" (click)="removeTier($index)" aria-label="Remove">×</button>
-            </div>
-          }
-        </pf-tile>
+            @if (tiers().length === 0) {
+              <p class="pf-os__muted">No tiers yet — add one.</p>
+            }
+            @for (t of tiers(); track $index) {
+              <div class="nd-row pf-os__tier">
+                <span class="pf-os__tier-txt">Within</span>
+                <input type="number" min="1" inputmode="numeric" class="nd-input nd-num pf-os__num" [ngModel]="t.withinDays"
+                       (ngModelChange)="setTier($index, 'withinDays', $event)" aria-label="Within days" />
+                <span class="pf-os__tier-txt">days →</span>
+                <input type="number" min="0" max="100" inputmode="numeric" class="nd-input nd-num pf-os__num" [ngModel]="t.discountPercent"
+                       (ngModelChange)="setTier($index, 'discountPercent', $event)" aria-label="Discount percent" />
+                <span class="pf-os__tier-txt">% {{ mode() === 'assisted' ? 'max' : 'off' }}</span>
+                <button type="button" class="pf-os__del press" (click)="removeTier($index)" aria-label="Remove tier" title="Remove tier">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
+            }
+          </div>
+        </section>
       }
       </div>
       </div>
@@ -135,19 +141,21 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
     .pf-os__gate-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
     .pf-os__gate-s { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
 
-    .pf-os__modehint { margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.55;
-      color: var(--text-secondary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-os__modehint { margin: 0 0 16px; padding: 12px 14px; border-radius: var(--nd-radius); font-size: 13px; line-height: 1.55;
+      color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
     .pf-os__modehint strong { color: var(--text-primary); font-weight: 600; }
-    .pf-os__row-head { display: flex; align-items: center; justify-content: space-between; }
+    .pf-os__card { margin-bottom: 16px; }
+    .pf-os__card .pf-os__title { margin: 0; font-size: 13px; }
+    .pf-os__body { padding: 14px 18px 18px; }
+    .pf-os__card .pf-os__hint { margin: 0; }
     .pf-os__muted { margin-top: 10px; font-size: 13px; color: var(--text-tertiary); }
-    .pf-os__add { padding: 6px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600; cursor: pointer;
-      color: var(--color-violet-500, #7c3aed); background: transparent; border: 1px solid rgba(124,58,237,.35); }
-    .pf-os__tier { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .pf-os__add { height: 36px; min-height: 36px; }
+    .pf-os__tier { gap: 8px; margin-top: 10px; flex-wrap: wrap; }
     .pf-os__tier-txt { font-size: 13px; color: var(--text-secondary); }
-    .pf-os__num { width: 74px; padding: 7px 9px; border-radius: 8px; font-size: 14px; text-align: right;
-      color: var(--text-primary); background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-os__del { margin-left: auto; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 17px;
-      color: var(--text-secondary); background: transparent; border: 1px solid var(--glass-border); }
+    .pf-os__num { width: 84px; text-align: right; }
+    .pf-os__del { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+      border-radius: 8px; cursor: pointer; color: var(--text-tertiary); background: transparent; border: 1px solid transparent; }
+    .pf-os__del:hover { color: var(--red-text, #b91c1c); border-color: var(--nd-line); }
   `],
 })
 export class OpdSettingsComponent {
