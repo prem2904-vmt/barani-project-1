@@ -16,7 +16,9 @@ import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, Process
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
 
-const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#64748b', '#ef4444', '#14b8a6'];
+/** New work-areas get palette colours only (violet / slate) — the builder
+ *  itself draws every lane in the kit palette whatever colour was saved. */
+const PALETTE_COLORS = ['#7c3aed', '#64748b'];
 
 /**
  * Admin process-workflow builder. Drag operations (the action catalogue) into
@@ -101,9 +103,14 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
 
       <div class="pf-band-body">
       <div class="pb-name-row">
-        <input class="pb-name" [ngModel]="name()" (ngModelChange)="name.set($event); dirty.set(true)" placeholder="Workflow name" />
-        @if (isActive()) { <span class="pb-active">● Active — drives the live navigation</span> }
-        @if (dirty()) { <span class="pb-dirty">Unsaved changes</span> }
+        <input class="nd-input pb-name" [ngModel]="name()" (ngModelChange)="name.set($event); dirty.set(true)" placeholder="Workflow name" aria-label="Workflow name" />
+        @if (isActive()) {
+          <span class="nd-chip nd-chip--static pb-active">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            Active — drives the live navigation
+          </span>
+        }
+        @if (dirty()) { <span class="nd-savestate pb-dirty"><span class="nd-savestate__dot" aria-hidden="true"></span>Unsaved changes</span> }
       </div>
       <p class="pb-hint pf-classic-only">Configuring <strong class="pb-scope-tag">{{ branchName(scope()) }}</strong> · work-area names become the navigation · <svg class="pb-hint-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> actions are locked to their area</p>
 
@@ -119,8 +126,8 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
                 <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   @for (p of a.iconPath; track $index) { <path [attr.d]="p" /> }
                 </svg>
-                <span class="flex-1 truncate">{{ a.label }}</span>
-                <span class="pb-grip">⠿</span>
+                <span class="pb-label">{{ a.label }}</span>
+                <span class="pb-grip" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
               </div>
             }
             @if (palette().length === 0) { <div class="pb-empty">All actions placed.</div> }
@@ -131,11 +138,11 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
         <!-- Lanes -->
         <div class="pb-lanes">
           @for (lane of lanes(); track lane.cat.id; let li = $index) {
-            <div class="pb-lane" [class.pb-lane--collapsed]="!isExpanded(lane.cat.id)" [style.borderTopColor]="lane.cat.color" [style.--lane]="lane.cat.color">
+            <div class="pb-lane" [class.pb-lane--collapsed]="!isExpanded(lane.cat.id)">
               <div class="pb-lane-hd">
                 <!-- Single icon = the identity AND the picker: click it to choose. -->
                 <div class="pb-icon-wrap">
-                  <button type="button" class="pb-iconbtn" [style.color]="lane.cat.color"
+                  <button type="button" class="pb-iconbtn"
                           (click)="toggleIconMenu(li)" title="Change icon" [attr.aria-expanded]="iconMenuLane() === li">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="17" height="17">
                       @for (p of catIconPath(lane.cat.icon); track $index) { <path [attr.d]="p" /> }
@@ -145,7 +152,6 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
                     <div class="pb-iconmenu" role="menu">
                       @for (ic of workAreaIcons; track ic.key) {
                         <button type="button" class="pb-iconopt" [class.pb-iconopt--on]="lane.cat.icon === ic.key"
-                                [style.color]="lane.cat.icon === ic.key ? lane.cat.color : null"
                                 (click)="setIcon(li, ic.key)" [title]="ic.label" [attr.aria-label]="ic.label">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
                             @for (p of ic.path; track $index) { <path [attr.d]="p" /> }
@@ -156,11 +162,11 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
                   }
                 </div>
                 <input class="pb-lane-name" [ngModel]="lane.cat.name" (ngModelChange)="renameCategory(li, $event)" />
-                <span class="pb-lane-count" [style.background]="lane.cat.color">{{ lane.items.length }}</span>
+                <span class="pb-lane-count nd-num">{{ lane.items.length }}</span>
                 <div class="pb-lane-tools">
-                  <button type="button" class="pb-mini" [disabled]="li === 0" (click)="moveCategory(li, -1)" title="Move left">‹</button>
-                  <button type="button" class="pb-mini" [disabled]="li === lanes().length - 1" (click)="moveCategory(li, 1)" title="Move right">›</button>
-                  <button type="button" class="pb-mini pb-mini--del" (click)="deleteCategory(li)" title="Delete work-area">×</button>
+                  <button type="button" class="pb-mini" [disabled]="li === 0" (click)="moveCategory(li, -1)" title="Move left" aria-label="Move left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+                  <button type="button" class="pb-mini" [disabled]="li === lanes().length - 1" (click)="moveCategory(li, 1)" title="Move right" aria-label="Move right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+                  <button type="button" class="pb-mini pb-mini--del" (click)="deleteCategory(li)" title="Delete work-area" aria-label="Delete work-area"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
                 </div>
                 <button type="button" class="pb-lane-expand" (click)="toggleLane(lane.cat.id)"
                         [attr.aria-expanded]="isExpanded(lane.cat.id)" title="Expand / collapse">
@@ -179,7 +185,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
                     <span class="pb-role pb-role--on">{{ r }}</span>
                   }
                   @if (!(lane.cat.roles?.length)) { <span class="pb-role-all">Anyone with access</span> }
-                  <button type="button" class="pb-role-add" (click)="roleMenuLane.set(li)" title="Assign roles">＋ roles</button>
+                  <button type="button" class="pb-role-add" (click)="roleMenuLane.set(li)" title="Assign roles">+ roles</button>
                 }
               </div>
               <div cdkDropList [id]="'lane-' + lane.cat.id" [cdkDropListData]="lane.items" (cdkDropListDropped)="dropToLane($event, li)" class="pb-lane-list">
@@ -188,14 +194,16 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
                     <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                       @for (p of iconFor(item.type); track $index) { <path [attr.d]="p" /> }
                     </svg>
-                    <span class="flex-1 truncate">{{ labelFor(item) }}</span>
-                    <button type="button" class="pb-toggle" [class.on]="item.enabled" [disabled]="mandatory(item.type)" (click)="toggleAction(li, ii)" [title]="mandatory(item.type) ? 'Required — always on' : (item.enabled ? 'Enabled' : 'Hidden')"></button>
+                    <span class="pb-label">{{ labelFor(item) }}</span>
+                    <button type="button" class="nd-toggle pb-toggle" role="switch" [attr.aria-checked]="item.enabled" [disabled]="mandatory(item.type)" (click)="toggleAction(li, ii)"
+                            [attr.aria-label]="labelFor(item) + (item.enabled ? ' — shown' : ' — hidden')"
+                            [title]="mandatory(item.type) ? 'Required — always on' : (item.enabled ? 'Enabled' : 'Hidden')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
                     @if (locked(item.type)) {
                       <svg class="pb-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" [attr.title]="'Locked to this area'">
                         <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
                       </svg>
                     } @else {
-                      <span class="pb-grip">⠿</span>
+                      <span class="pb-grip" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
                     }
                   </div>
                 }
@@ -203,7 +211,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
               </div>
             </div>
           }
-          <button type="button" class="pb-add-lane" (click)="addCategory()">＋ Add work-area</button>
+          <button type="button" class="pb-add-lane" (click)="addCategory()">+ Add work-area</button>
         </div>
       </div>
 
@@ -212,7 +220,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
         <span class="pb-preview-lbl">Navigation preview</span>
         @for (lane of lanes(); track lane.cat.id) {
           @if (enabledCount(lane) > 0) {
-            <span class="pb-preview-item"><span class="pb-dot" [style.background]="lane.cat.color"></span>{{ lane.cat.name }} <em>{{ enabledCount(lane) }}</em></span>
+            <span class="pb-preview-item"><span class="pb-dot"></span>{{ lane.cat.name }} <em class="nd-num">{{ enabledCount(lane) }}</em></span>
           }
         }
       </div>
@@ -231,7 +239,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
 
     .pb-bar { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
     .pb-bar .min-w-0 { flex: 1; }
-    .pb-eyebrow { margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pb-eyebrow { margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
     .pb-title { margin: 5px 0 0; font-size: 26px; font-weight: 800; letter-spacing: -0.01em; color: var(--text-primary); line-height: 1.1; }
     .pb-title-accent { background: linear-gradient(100deg, #a78bfa, #7c3aed 60%, #6366f1); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
     .pb-sub { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); max-width: 52ch; }
@@ -245,10 +253,10 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     .pb-btn--primary { background: linear-gradient(180deg, #8b5cf6, #7c3aed); color: #fff; border-color: transparent; box-shadow: 0 6px 16px -6px rgba(124,58,237,0.7); }
     .pb-btn--primary:hover:not(:disabled) { color: #fff; box-shadow: 0 9px 22px -7px rgba(124,58,237,0.85); }
     .pb-name-row { display: flex; align-items: center; gap: 12px; margin: 18px 0 8px; flex-wrap: wrap; }
-    .pb-name { padding: 10px 14px; border-radius: 11px; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 15.5px; font-weight: 700; min-width: 240px; transition: border-color .15s, box-shadow .15s; }
-    .pb-name:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,0.18); }
-    .pb-active { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 700; color: #6ee7b7; padding: 4px 10px; border-radius: 999px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); }
-    .pb-dirty { font-size: 11.5px; font-weight: 700; color: #fbbf24; padding: 4px 10px; border-radius: 999px; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.28); }
+    .pb-name { width: auto; min-width: 260px; font-size: 15px; font-weight: 600; }
+    .pb-active { height: 28px; font-size: 12px; color: var(--text-secondary); }
+    .pb-active svg { color: var(--violet-text, #7c3aed); }
+    .pb-dirty { font-size: 12px; }
     .pb-hint { margin: 0 0 16px; font-size: 11.5px; color: var(--text-tertiary); }
     .pb-scope-tag { color: var(--violet-text); font-weight: 700; }
     .pb-select--scope { border-color: rgba(124,58,237,0.45); color: #c4b5fd; font-weight: 700; }
@@ -256,24 +264,24 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     .pb-board { display: flex; gap: 16px; align-items: stretch; }
     @media (max-width: 820px) { .pb-board { flex-direction: column; } }
 
-    .pb-palette { width: 206px; flex-shrink: 0; border: 1px solid var(--glass-border); border-radius: 16px; background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent); padding: 12px; align-self: flex-start; position: sticky; top: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+    .pb-palette { width: 206px; flex-shrink: 0; border: 1px solid var(--nd-line); border-radius: var(--nd-radius-card); background: var(--nd-card-bg); padding: 12px; align-self: flex-start; position: sticky; top: 8px; box-shadow: var(--nd-shadow-sm); }
     @media (max-width: 820px) { .pb-palette { width: 100%; position: static; } }
     .pb-palette-hd { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5; }
     .pb-palette-hd span { font-weight: 400; color: var(--text-tertiary); }
     .pb-palette-list { display: flex; flex-direction: column; gap: 7px; min-height: 60px; }
     @media (max-width: 820px) { .pb-palette-list { flex-direction: row; flex-wrap: wrap; } .pb-palette-list .pb-chip { flex: 0 1 auto; } }
     .pb-chip { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 10px; background: var(--bg-card-solid, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border); color: var(--text-secondary); font-size: 12.5px; font-weight: 600; cursor: grab; transition: transform .12s, border-color .15s, color .15s; }
-    .pb-chip:hover { color: var(--text-primary); border-color: #7c3aed; transform: translateY(-1px); }
+    .pb-chip:hover { color: var(--text-primary); border-color: var(--nd-sel-border); transform: translateY(-1px); }
     .pb-chip:active { cursor: grabbing; }
 
     .pb-lanes { flex: 1; min-width: 0; display: flex; gap: 14px; overflow-x: auto; padding-bottom: 10px; align-items: stretch; }
     @media (max-width: 820px) { .pb-lanes { flex-direction: column; overflow-x: visible; } }
-    .pb-lane { flex: 1 1 226px; min-width: 214px; max-width: 300px; border: 1px solid var(--glass-border); border-top: 3px solid; border-radius: 16px; background: var(--glass-bg); display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 18px 40px -28px rgba(0,0,0,0.7); transition: transform .15s, box-shadow .15s; overflow: hidden; }
-    .pb-lane:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.3), 0 26px 50px -28px rgba(0,0,0,0.8); }
+    .pb-lane { --lane: var(--color-primary, #7c3aed); flex: 1 1 226px; min-width: 214px; max-width: 300px; border: 1px solid var(--nd-line); border-radius: var(--nd-radius-card); background: var(--nd-card-bg); display: flex; flex-direction: column; box-shadow: var(--nd-shadow-sm); transition: transform var(--nd-dur-fast) var(--nd-spring), box-shadow var(--nd-dur-fast) ease; overflow: hidden; }
+    .pb-lane:hover { transform: translateY(-2px); }
     @media (max-width: 820px) { .pb-lane { max-width: none; width: 100%; } }
     .pb-lane-hd { display: flex; align-items: center; gap: 8px; padding: 11px 11px; border-bottom: 1px solid var(--glass-border);
-      background: linear-gradient(180deg, color-mix(in srgb, var(--lane, #7c3aed) 16%, transparent), transparent); }
-    .pb-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--lane, #7c3aed) 22%, transparent); }
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
+    .pb-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--color-violet-600, #7c3aed); }
     .pb-lane-name { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text-primary); font-size: 14px; font-weight: 700; padding: 2px 4px; border-radius: 6px; transition: background .15s; }
     .pb-lane-name:hover, .pb-lane-name:focus { background: rgba(255,255,255,0.05); outline: none; }
     .pb-lane-tools { display: flex; align-items: center; gap: 3px; }
@@ -284,7 +292,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     .pb-iconbtn {
       width: 23px; height: 23px; border-radius: 7px;
       display: inline-flex; align-items: center; justify-content: center;
-      border: 1px solid var(--glass-border); background: var(--glass-bg); cursor: pointer;
+      border: 0; background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); color: var(--violet-text, #7c3aed); cursor: pointer;
       transition: background .15s, border-color .15s;
     }
     .pb-iconbtn:hover { background: rgba(255,255,255,0.07); border-color: var(--text-tertiary); }
@@ -302,7 +310,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
       transition: background .12s, border-color .12s, color .12s;
     }
     .pb-iconopt:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
-    .pb-iconopt--on { border-color: currentColor; background: rgba(255,255,255,0.06); }
+    .pb-iconopt--on { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--violet-text, #7c3aed); }
     .pb-mini { width: 23px; height: 23px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text-tertiary); cursor: pointer; font-size: 13px; line-height: 1; transition: background .15s, color .15s; }
     .pb-mini:hover:not(:disabled) { background: rgba(255,255,255,0.07); color: var(--text-primary); }
     .pb-mini:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -311,39 +319,36 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
        <=640px block surfaces them and drives the collapse. */
     .pb-lane-expand { display: none; width: 34px; height: 34px; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--text-secondary); border-radius: 9px; cursor: pointer; flex-shrink: 0; }
     .pb-lane-chev { transition: transform .18s ease; }
-    .pb-lane-count { display: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; color: #fff; font-size: 11px; font-weight: 800; align-items: center; justify-content: center; flex-shrink: 0; }
+    .pb-lane-count { display: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--nd-chip-bg); color: var(--text-secondary); font-size: 11.5px; font-weight: 600; align-items: center; justify-content: center; flex-shrink: 0; }
     .pb-roles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 7px 9px; border-bottom: 1px solid var(--glass-border); }
     .pb-roles-lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-right: 2px; }
     .pb-role { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; border: 1px solid var(--glass-border); background: transparent; color: var(--text-tertiary); cursor: pointer; }
-    .pb-role--on { border-color: #7c3aed; background: rgba(124,58,237,0.18); color: #c4b5fd; }
+    .pb-role--on { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--text-primary); }
     .pb-role-all { font-size: 10px; color: var(--text-tertiary); font-style: italic; }
     .pb-role-add { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px dashed var(--glass-border); background: transparent; color: var(--text-secondary); cursor: pointer; }
     .pb-role-add:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
-    .pb-role-add--done { border-style: solid; border-color: #7c3aed; color: #c4b5fd; background: rgba(124,58,237,0.12); }
+    .pb-role-add--done { border-style: solid; border-color: var(--nd-sel-border); color: var(--text-primary); background: var(--nd-sel-bg); }
     .pb-lane-list { flex: 1; display: flex; flex-direction: column; gap: 7px; padding: 10px; min-height: 64px; }
     .pb-action { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 10px; background: var(--bg-card-solid, rgba(255,255,255,0.05)); border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 12.5px; font-weight: 600; cursor: grab; transition: transform .12s, border-color .15s, background .15s; }
-    .pb-action:hover { border-color: color-mix(in srgb, var(--lane, #7c3aed) 50%, var(--glass-border)); transform: translateX(2px); }
+    .pb-action:hover { border-color: var(--nd-sel-border); transform: translateX(2px); }
     .pb-action.cdk-drag-dragging { cursor: grabbing; }
     .pb-action--off { opacity: 0.45; }
-    .pb-ic { width: 16px; height: 16px; flex-shrink: 0; color: var(--lane, var(--text-tertiary)); }
-    .pb-grip { color: var(--text-tertiary); font-size: 12px; cursor: grab; }
+    .pb-ic { width: 16px; height: 16px; flex-shrink: 0; color: var(--violet-text, #7c3aed); }
+    .pb-label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+    .pb-grip { display: inline-flex; color: var(--text-tertiary); cursor: grab; flex: none; }
     .pb-action--locked { opacity: 0.92; cursor: default; }
     .pb-action--locked .pb-ic { color: var(--violet-text); }
     .pb-lock { width: 13px; height: 13px; color: var(--text-tertiary); flex-shrink: 0; }
-    .pb-toggle:disabled { opacity: 0.6; cursor: not-allowed; }
-    .pb-toggle { width: 30px; height: 17px; border-radius: 9px; border: none; background: rgba(255,255,255,0.15); position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.15s; }
-    .pb-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
-    .pb-toggle.on { background: var(--nd-toggle-on, #aeb8c2); }   /* slate toggle (nd-kit) */
-    .pb-toggle.on::after { transform: translateX(13px); }
+    .pb-toggle { flex: none; }   /* kit slate switch (.nd-toggle) */
     .pb-empty { font-size: 11.5px; color: var(--text-tertiary); text-align: center; padding: 14px 4px; border: 1px dashed var(--glass-border); border-radius: 10px; }
     .pb-add-lane { width: 56px; flex-shrink: 0; align-self: stretch; border: 1.5px dashed var(--glass-border); border-radius: 16px; background: transparent; color: var(--text-tertiary); font-size: 12px; font-weight: 700; cursor: pointer; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 0.05em; transition: border-color .15s, color .15s, background .15s; }
-    .pb-add-lane:hover { border-color: #7c3aed; color: #c4b5fd; background: rgba(124,58,237,0.07); }
+    .pb-add-lane:hover { border-color: var(--nd-sel-border); color: var(--text-primary); background: var(--nd-sel-bg); }
     @media (max-width: 820px) { .pb-add-lane { width: 100%; writing-mode: horizontal-tb; min-height: 50px; } }
 
     .pb-preview { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 20px; padding: 14px 16px; border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent); border: 1px solid var(--glass-border); }
     .pb-preview-lbl { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-right: 2px; }
     .pb-preview-item { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--text-secondary); padding: 5px 11px; border-radius: 999px; background: var(--bg-card-solid, rgba(255,255,255,0.04)); border: 1px solid var(--glass-border); }
-    .pb-preview-item em { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: rgba(124,58,237,0.18); color: #c4b5fd; font-weight: 700; }
+    .pb-preview-item em { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--nd-chip-bg); color: var(--text-secondary); font-weight: 600; }
 
     /* CDK drag visuals */
     .cdk-drag-preview { border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
@@ -360,7 +365,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
     /* Touch pointers: suppress hover-only transforms so taps don't leave
        elements stuck in a hovered/translated state on mobile + tablet. */
     @media (hover: none) {
-      .pb-lane:hover { transform: none; box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 18px 40px -28px rgba(0,0,0,0.7); }
+      .pb-lane:hover { transform: none; }
       .pb-chip:hover { transform: none; }
       .pb-action:hover { transform: none; }
       .pb-btn:hover:not(:disabled) { transform: none; }
@@ -376,9 +381,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
       .pb-lane-tools { gap: 4px; }
       .pb-mini { min-width: 44px; min-height: 44px; width: 44px; height: 44px; flex-shrink: 0; }
       .pb-color { width: 44px; height: 44px; }
-      .pb-toggle { min-width: 44px; min-height: 28px; width: 44px; height: 26px; border-radius: 13px; }
-      .pb-toggle::after { width: 20px; height: 20px; top: 3px; left: 3px; }
-      .pb-toggle.on::after { transform: translateX(18px); }
+      .pb-toggle { min-width: 44px; min-height: 44px; justify-content: center; }
       /* role pills become toggle buttons in edit mode — give them the full
          44px touch floor (they sit in a wrap-flow so height grows gracefully). */
       .pb-role, .pb-role-add, .pb-role-add--done { min-height: 44px; display: inline-flex; align-items: center; padding-top: 8px; padding-bottom: 8px; }
@@ -439,7 +442,7 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
        16px form fields to stop iOS auto-zoom, and clearance for the
        floating bottom-nav pill so the preview isn't hidden behind it. */
     @media (max-width: 640px) {
-      .pb { padding-bottom: calc(48px + var(--tab-nav-total-height, 0px)); }
+      .pb { padding-bottom: 0; }
       .pb-bar-actions { width: 100%; }
       .pb-bar-actions .pb-btn { flex: 1 1 auto; text-align: center; min-height: 44px; }
       .pb-select, .pb-select--scope { max-width: none; flex: 1 1 100%; min-height: 44px; font-size: 16px; }
@@ -454,6 +457,10 @@ const PALETTE_COLORS = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
        that can ride under the device top inset; nudge it clear of the
        status bar / notch (global body inset covers the page body). */
     :host-context(html.cap-native) .pb-palette { top: calc(8px + env(safe-area-inset-top)); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .pb-lane, .pb-chip, .pb-action, .pb-btn, .pb-lane-chev { transition: none !important; transform: none !important; }
+    }
 
     /* Phone-only back chevron (sits before the page title; hidden at md+). */
     .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
