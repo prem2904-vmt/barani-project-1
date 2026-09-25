@@ -50,7 +50,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
              knows the test (Test Master); the status pill stays useful. -->
         <div class="flex items-center justify-between flex-wrap gap-3 mb-4" [hidden]="slim()">
           <div class="flex items-center gap-3 pf-test-pick" [hidden]="!!fixedTestId()">
-            <label class="text-[11px] font-mono uppercase tracking-[0.16em]"
+            <label class="text-[11px] nd-num uppercase tracking-[0.16em]"
                    style="color: var(--text-muted);">Test</label>
             <pf-select
               style="width: 260px"
@@ -282,7 +282,9 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 
           <!-- Save footer -->
           <div class="flex items-center justify-end gap-3 mt-4">
-            <pf-touch-btn size="sm" variant="primary"
+            <!-- Embedded (slim) in the test editor, whose band owns the ONE
+                 primary (Save): this section's own save is secondary there. -->
+            <pf-touch-btn size="sm" [variant]="slim() ? 'secondary' : 'primary'"
                           [disabled]="saving()" (pressed)="save()">
               @if (saving()) { Saving… } @else { Save }
             </pf-touch-btn>
@@ -301,7 +303,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
       @if (!hidePreview()) {
       <aside class="xl:sticky xl:top-4 h-fit">
         <div class="flex items-center justify-between mb-2">
-          <p class="text-[11px] font-mono uppercase tracking-[0.16em]"
+          <p class="text-[11px] nd-num uppercase tracking-[0.16em]"
              style="color: var(--text-muted);">Live preview</p>
           <button type="button" class="pf-link-btn" [disabled]="!selectedTestId()"
                   (click)="refreshPreview()">Refresh</button>
@@ -327,7 +329,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-tl-desc-vary { flex-shrink: 0; background: none; border: none; padding: 2px 4px; font-size: 11.5px;
       font-weight: 600; color: var(--violet-text, #a78bfa); cursor: pointer; white-space: nowrap; }
     .pf-tl-desc-vary:hover { text-decoration: underline; }
-    .pf-tl-desc-flag { flex-shrink: 0; font-size: 11px; color: #d97706; white-space: nowrap; }
+    .pf-tl-desc-flag { flex-shrink: 0; font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
     .pf-tl-desc-cond { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
       margin: -2px 0 8px; padding: 8px 10px 8px 10px; border-left: 2px solid rgba(168,85,247,.35);
       background: rgba(124,58,237,.05); border-radius: 0 10px 10px 0; }
@@ -339,8 +341,8 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-tl-desc-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
       border: none; border-radius: 8px; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
     .pf-tl-desc-x:hover { color: #f87171; background: rgba(239,68,68,.08); }
-    .pf-tl-desc-warn { margin: -4px 0 8px; padding: 4px 10px 4px 12px; font-size: 11.5px; color: #fbbf24;
-      border-left: 2px solid rgba(251,191,36,.5); }
+    .pf-tl-desc-warn { margin: -4px 0 8px; padding: 4px 10px 4px 12px; font-size: 11.5px; color: var(--text-secondary);
+      border-left: 2px solid var(--nd-sel-border); }
     .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
       background: var(--glass-bg); padding: 1.75rem; }
     /* ── Simple-mode blocks ── */
@@ -359,7 +361,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-tl-adv-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--text-tertiary, #94a3b8); }
 
     .pf-input--compact { padding: 6px 10px; font-size: 12.5px; }
-    .pf-input--mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
+    .pf-input--mono { font-variant-numeric: tabular-nums; font-size: 11px; }
 
     .pf-status-pill {
       display: inline-flex; align-items: center; padding: 4px 10px;
@@ -367,8 +369,8 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
       text-transform: uppercase; border-radius: 9999px;
       border: 1px solid var(--glass-border);
     }
-    .pf-status-pill--ok { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.4); color: #34d399; }
-    .pf-status-pill--default { background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.32); color: #fbbf24; }
+    .pf-status-pill--ok { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); color: var(--violet-text, #6d28d9); }
+    .pf-status-pill--default { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); color: var(--text-secondary); }
 
     .pf-sec-list { display: flex; flex-direction: column; gap: 12px; list-style: none; padding: 0; margin: 0; }
     .pf-sec-card { border: 1px solid var(--glass-border); border-radius: 14px; background: var(--glass-bg); overflow: hidden; }
@@ -392,7 +394,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 
     .pf-cell-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
     .pf-cell-field { display: flex; flex-direction: column; gap: 2px; }
-    .pf-cell-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-cell-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
     .pf-icon-btn {
       width: 26px; height: 26px; flex: 0 0 auto;

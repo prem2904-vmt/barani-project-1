@@ -76,7 +76,8 @@ const OPERATORS = [
                       (pressed)="togglePreview()">
           {{ previewOpen() ? 'Hide preview' : 'Preview' }}
         </pf-touch-btn>
-        <pf-touch-btn size="sm" variant="primary"
+        <!-- Secondary: embedded in the test editor, whose band owns the ONE primary. -->
+        <pf-touch-btn size="sm" variant="secondary"
                       [disabled]="saving() || !testId()"
                       (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save layout' }}
@@ -252,7 +253,7 @@ const OPERATORS = [
                               </pf-select>
                               @if (condCount(r) > 0) {
                                 <span class="pf-le-sheet__cond-pill" [title]="condCount(r) + ' condition(s)'">
-                                  {{ condCount(r) }}↯
+                                  <span class="nd-num">{{ condCount(r) }}</span> if
                                 </span>
                               }
                             </td>
@@ -377,10 +378,10 @@ const OPERATORS = [
                                   <div class="pf-le-detail__actions">
                                     <button type="button" class="pf-link-btn"
                                             [disabled]="ri === 0"
-                                            (click)="moveRow(selectedSectionIndex(), ri, -1)">↑ Move up</button>
+                                            (click)="moveRow(selectedSectionIndex(), ri, -1)">Move up</button>
                                     <button type="button" class="pf-link-btn"
                                             [disabled]="ri === asGrid(s).rows.length - 1"
-                                            (click)="moveRow(selectedSectionIndex(), ri, 1)">↓ Move down</button>
+                                            (click)="moveRow(selectedSectionIndex(), ri, 1)">Move down</button>
                                     <button type="button" class="pf-link-btn pf-link-btn--danger"
                                             (click)="removeRow(selectedSectionIndex(), ri)">Delete row</button>
                                   </div>
@@ -793,9 +794,9 @@ const OPERATORS = [
       border: 1px solid var(--glass-border);
     }
     .pf-pill--ok {
-      background: rgba(16, 185, 129, 0.14);
-      border-color: rgba(16, 185, 129, 0.4);
-      color: var(--green-text);
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent);
+      color: var(--violet-text, #6d28d9);
     }
 
     /* ───── Empty / shell ───── */
@@ -865,8 +866,8 @@ const OPERATORS = [
       color: var(--violet-text);
     }
     .pf-le-stab__type[data-type='paragraph'] { background: rgba(59, 130, 246, 0.16); border-color: rgba(59, 130, 246, 0.4); color: #93c5fd; }
-    .pf-le-stab__type[data-type='chart']     { background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.4); color: var(--amber-text); }
-    .pf-le-stab__type[data-type='image']     { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; }
+    .pf-le-stab__type[data-type='chart']     { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); color: var(--text-secondary); }
+    .pf-le-stab__type[data-type='image']     { background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); color: var(--violet-text, #6d28d9); }
     .pf-le-stab__label {
       font-weight: 600;
       max-width: 180px;
@@ -910,8 +911,8 @@ const OPERATORS = [
     .pf-le-addmenu button:hover { color: var(--text-primary); background: var(--bg-hover); }
     .pf-le-addmenu button[data-type='grid']:hover      { color: var(--violet-text); background: rgba(168, 85, 247, 0.1); }
     .pf-le-addmenu button[data-type='paragraph']:hover { color: #93c5fd; background: rgba(59, 130, 246, 0.1); }
-    .pf-le-addmenu button[data-type='chart']:hover     { color: var(--amber-text); background: rgba(245, 158, 11, 0.1); }
-    .pf-le-addmenu button[data-type='image']:hover     { color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
+    .pf-le-addmenu button[data-type='chart']:hover     { color: var(--text-secondary); background: var(--nd-sel-bg); }
+    .pf-le-addmenu button[data-type='image']:hover     { color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); }
 
     /* ───── Section meta row ───── */
     .pf-le-smeta {
@@ -1003,7 +1004,7 @@ const OPERATORS = [
       background: rgba(168, 85, 247, 0.1) !important;
     }
     .pf-le-sheet__row--merged td {
-      background: rgba(245, 158, 11, 0.06) !important;
+      background: var(--nd-sel-bg) !important;
     }
 
     /* Parameter cell */
@@ -1017,9 +1018,9 @@ const OPERATORS = [
       font-size: 10px; font-weight: 700;
       letter-spacing: 0.04em;
       border-radius: 9999px;
-      background: rgba(245, 158, 11, 0.16);
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      color: var(--amber-text);
+      background: var(--nd-sel-bg);
+      border: 1px solid var(--nd-sel-border);
+      color: var(--text-secondary);
       flex-shrink: 0;
     }
 
@@ -1034,10 +1035,10 @@ const OPERATORS = [
       color: var(--text-tertiary, #94a3b8); white-space: nowrap;
     }
     .pf-le-sheet__c--locked {
-      background: rgba(245, 158, 11, 0.06) !important;
+      background: var(--nd-sel-bg) !important;
     }
     .pf-le-sheet__c--locked .pf-input--cell {
-      color: var(--amber-text);
+      color: var(--text-secondary);
       font-weight: 600;
     }
     .pf-le-sheet__c-inner {
@@ -1071,9 +1072,9 @@ const OPERATORS = [
       box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
     }
     .pf-le-sheet__c--locked .pf-input--cell:focus {
-      background: rgba(245, 158, 11, 0.12);
-      border-color: rgba(245, 158, 11, 0.55);
-      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+      background: var(--nd-sel-bg);
+      border-color: var(--nd-sel-border);
+      box-shadow: 0 0 0 2px var(--nd-sel-bg);
     }
 
     /* Right-aligned icon stack inside each cell. */
@@ -1122,23 +1123,23 @@ const OPERATORS = [
     .pf-le-sheet__row:hover .pf-le-sheet__lock:disabled { opacity: 0; }
     .pf-le-sheet__lock--on {
       opacity: 1 !important;
-      color: var(--amber-text) !important;
-      background: rgba(245, 158, 11, 0.18);
+      color: var(--text-secondary) !important;
+      background: var(--nd-sel-bg);
     }
     .pf-le-sheet__lock--on:hover {
-      background: rgba(245, 158, 11, 0.28);
+      background: var(--nd-sel-border);
     }
 
     /* Locked cell — clear amber theme so admins can't mistake it for a
        hovered/unlocked one. Cell background, input border, and text are
        all amber-tinted. */
     .pf-le-sheet__c--locked {
-      background: rgba(245, 158, 11, 0.08) !important;
+      background: var(--nd-sel-bg) !important;
     }
     .pf-le-sheet__c--locked .pf-input--cell {
-      color: var(--amber-text);
+      color: var(--text-secondary);
       font-weight: 600;
-      border-color: rgba(245, 158, 11, 0.25);
+      border-color: var(--nd-sel-border);
     }
 
     /* Suggestion popup — anchored to .pf-le-sheet__c-inner. */
@@ -1173,12 +1174,12 @@ const OPERATORS = [
     }
     .pf-le-sheet__menu-lbl { font-weight: 600; color: var(--text-primary); flex: 1; }
     .pf-le-sheet__menu-hint {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 10.5px;
       color: var(--text-muted);
     }
     .pf-le-sheet__menu-val {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 10.5px;
       color: var(--text-tertiary);
     }
@@ -1223,15 +1224,15 @@ const OPERATORS = [
       font-weight: 700 !important;
       letter-spacing: 0.04em;
       border-radius: 9999px;
-      border: 1px dashed rgba(245, 158, 11, 0.4) !important;
+      border: 1px dashed var(--nd-sel-border) !important;
       color: var(--text-muted) !important;
       opacity: 0.6;
       transition: opacity 0.12s, color 0.12s, border-color 0.12s;
     }
     .pf-le-sheet__row:hover .pf-merged-rule__add {
       opacity: 1;
-      color: var(--amber-text) !important;
-      border-color: rgba(245, 158, 11, 0.6) !important;
+      color: var(--text-secondary) !important;
+      border-color: var(--nd-sel-border) !important;
     }
 
     /* Actions cell */
@@ -1269,9 +1270,9 @@ const OPERATORS = [
       overflow: hidden;
     }
     .pf-le-detail-card--merged {
-      border-color: rgba(245, 158, 11, 0.5);
-      border-left-color: rgba(245, 158, 11, 0.7);
-      background: rgba(245, 158, 11, 0.03);
+      border-color: var(--nd-sel-border);
+      border-left-color: var(--nd-sel-border);
+      background: var(--nd-sel-bg);
     }
 
     .pf-le-sheet__detail-row td {
@@ -1281,8 +1282,8 @@ const OPERATORS = [
       border-left: 4px solid rgba(168, 85, 247, 0.7) !important;
     }
     .pf-le-sheet__detail-row--merged td {
-      background: rgba(245, 158, 11, 0.06) !important;
-      border-left-color: rgba(245, 158, 11, 0.7) !important;
+      background: var(--nd-sel-bg) !important;
+      border-left-color: var(--nd-sel-border) !important;
     }
 
     /* Banner sits at the top of the detail panel and names the row
@@ -1304,12 +1305,12 @@ const OPERATORS = [
     /* Merged rows get the amber accent end-to-end (left bar + banner). */
     .pf-le-sheet__row--merged.pf-le-sheet__row--open + .pf-le-sheet__detail-row td,
     .pf-le-detail-banner--merged + * .pf-le-sheet__detail-row td {
-      border-left-color: rgba(245, 158, 11, 0.7);
-      background: rgba(245, 158, 11, 0.06) !important;
+      border-left-color: var(--nd-sel-border);
+      background: var(--nd-sel-bg) !important;
     }
     .pf-le-detail-banner--merged {
-      background: rgba(245, 158, 11, 0.18);
-      border-bottom-color: rgba(245, 158, 11, 0.3);
+      background: var(--nd-sel-bg);
+      border-bottom-color: var(--nd-sel-border);
     }
 
     .pf-le-detail {
@@ -1388,7 +1389,7 @@ const OPERATORS = [
       background: rgba(168, 85, 247, 0.14);
       color: var(--violet-text);
     }
-    .pf-row__badge--merged { background: rgba(245, 158, 11, 0.14); color: var(--amber-text); }
+    .pf-row__badge--merged { background: var(--nd-sel-bg); color: var(--text-secondary); }
 
     /* ───── Conditions ───── */
     .pf-cond {
@@ -1431,16 +1432,16 @@ const OPERATORS = [
     }
     /* ELSE branches read amber so admins can scan IF vs ELSE quickly. */
     .pf-cond--else .pf-cond__mode {
-      background: rgba(245, 158, 11, 0.16);
-      border-color: rgba(245, 158, 11, 0.4);
-      color: var(--amber-text);
+      background: var(--nd-sel-bg);
+      border-color: var(--nd-sel-border);
+      color: var(--text-secondary);
     }
     .pf-cond--else .pf-cond__mode:hover {
-      background: rgba(245, 158, 11, 0.28);
-      border-color: rgba(245, 158, 11, 0.6);
+      background: var(--nd-sel-border);
+      border-color: var(--nd-sel-border);
     }
     .pf-cond--else {
-      border-left: 3px solid rgba(245, 158, 11, 0.5);
+      border-left: 3px solid var(--nd-sel-border);
     }
     /* Highlight an IF branch whose predicate has no parameter — that
        condition will never match, which usually means admin forgot to
@@ -1493,7 +1494,7 @@ const OPERATORS = [
     /* ───── Inputs ───── */
     .pf-input--inline-label { padding: 6px 10px; font-size: 13px; }
     .pf-input--compact { padding: 5px 8px; font-size: 12px; }
-    .pf-input--mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
+    .pf-input--mono { font-variant-numeric: tabular-nums; font-size: 11px; }
     .pf-input--ta { font-family: inherit; resize: vertical; min-height: 64px; }
 
     .pf-label-mini {
@@ -1642,7 +1643,7 @@ const OPERATORS = [
     .pf-pv-chart__axis {
       display: flex; justify-content: space-between;
       font-size: 10px; color: #64748b;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     /* Generic flex helper used by toolbar / sticky-spacer spans. */

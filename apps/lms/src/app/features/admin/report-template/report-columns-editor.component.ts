@@ -64,7 +64,8 @@ export interface ColumnsEditorState {
                       [disabled]="!totalOk() || applyingAll()" (pressed)="applyToAll()">
           {{ applyingAll() ? 'Applying…' : 'Apply to all' }}
         </pf-touch-btn>
-        <pf-touch-btn size="sm" variant="primary"
+        <!-- Secondary: the host page's band owns the ONE primary. -->
+        <pf-touch-btn size="sm" variant="secondary"
                       [disabled]="!totalOk() || saving()" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
@@ -225,7 +226,7 @@ export interface ColumnsEditorState {
         <div class="pf-ce-inspector" style="margin-top: 16px;">
           <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
             <h4 style="margin:0; font-size:13px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
-            <pf-touch-btn size="sm" variant="primary" [disabled]="sigSaving()" (pressed)="saveSignatories()">
+            <pf-touch-btn size="sm" variant="secondary" [disabled]="sigSaving()" (pressed)="saveSignatories()">
               {{ sigSaving() ? 'Saving…' : 'Save signatories' }}
             </pf-touch-btn>
           </div>
@@ -298,7 +299,7 @@ export interface ColumnsEditorState {
     .pf-ce-col__label { font-size: 12px; font-weight: 700; color: var(--text-primary, #e2e8f0);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pf-ce-col__meta { font-size: 10px; color: var(--text-tertiary, #94a3b8);
-      font-family: 'JetBrains Mono', ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pf-ce-col__lock { position: absolute; top: 4px; right: 6px; font-size: 10px; }
     .pf-ce-chain {
       align-self: center; flex: 0 0 auto; z-index: 1;
@@ -315,7 +316,7 @@ export interface ColumnsEditorState {
     .pf-ce-widthseg { flex-basis: 0; border-radius: 4px; background: rgba(148,163,184,0.35); cursor: pointer; }
     .pf-ce-widthseg--on { background: var(--violet-500, #8b5cf6); }
     .pf-ce-widthrow { display: flex; align-items: center; gap: 14px; margin: 0 3px 4px; }
-    .pf-ce-total { font-size: 12px; font-weight: 600; color: #34d399; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .pf-ce-total { font-size: 12px; font-weight: 600; color: var(--violet-text, #6d28d9); font-variant-numeric: tabular-nums; }
     .pf-ce-total--bad { color: #f87171; }
 
     /* ── Inspector ── */
@@ -329,12 +330,12 @@ export interface ColumnsEditorState {
       color: var(--text-secondary, #cbd5e1); font-size: 15px; font-weight: 700; }
     .pf-ce-step__num { width: 64px; text-align: center; }
     .pf-ce-dim { font-size: 12px; color: var(--text-tertiary, #94a3b8); }
-    .pf-ce-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
+    .pf-ce-mono { font-variant-numeric: tabular-nums; font-size: 11px; }
 
     .pf-status-pill { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
       padding: 4px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
-    .pf-status-pill--ok { color: #34d399; border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.08); }
-    .pf-status-pill--default { color: #fbbf24; border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.08); }
+    .pf-status-pill--ok { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
+    .pf-status-pill--default { color: var(--text-secondary); border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
     .pf-icon-btn { width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
       border: 1px solid var(--glass-border, rgba(148,163,184,0.3)); background: transparent; color: var(--text-tertiary, #94a3b8); cursor: pointer; }
     .pf-icon-btn--on { color: #fff; background: var(--violet-600, #7c3aed); border-color: transparent; }
@@ -354,7 +355,7 @@ export interface ColumnsEditorState {
       border: 1px solid var(--glass-border, rgba(148,163,184,0.18)); background: rgba(255,255,255,0.02); }
     .pf-sig-grip { cursor: grab; color: var(--text-tertiary, #94a3b8); }
     .pf-sig-pos { width: 18px; text-align: center; font-size: 11px; font-weight: 700; color: var(--violet-400, #a78bfa);
-      font-family: ui-monospace, monospace; }
+      font-variant-numeric: tabular-nums; }
     .pf-sig-mode { width: 190px; flex: 0 0 auto; }
     .pf-sig-who { flex: 1; min-width: 150px; }
     .pf-sig-desig { flex: 1; min-width: 150px; }

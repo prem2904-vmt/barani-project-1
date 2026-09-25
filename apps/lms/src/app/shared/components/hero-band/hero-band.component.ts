@@ -64,7 +64,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
       </div>
 
       <div class="pf-hb__searchrow">
-        <div class="pf-hb__search" [class.pf-hb__search--tabs]="tabsOnly()">
+        <div class="pf-hb__search" [class.pf-hb__search--tabs]="tabsOnly()" [class.pf-hb__search--ctx]="contextBar()">
           <!-- The field (icon + input + scan icons) is one unit. On
                tablet/desktop it is display:contents, i.e. INVISIBLE to
                layout — the pill renders exactly as before. On phones it
@@ -180,6 +180,10 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     .pf-hb__search--tabs .pf-hb__tools ::ng-deep pf-segmented.pf-hb-tabs .bar { display: flex; width: 100%; }
     .pf-hb__search--tabs .pf-hb__tools ::ng-deep pf-segmented.pf-hb-tabs .seg-item { flex: 1 1 0; white-space: nowrap; }
 
+    /* Context-bar pill (editors): the record's identity chips may need a
+       second row at tablet widths — the pill grows instead of clipping. */
+    .pf-hb__search.pf-hb__search--ctx { height: auto; min-height: 53px; padding-block: 4px; max-width: none; }
+
     /* ── Search pill overlapping the band's bottom edge (53px, r20) ── */
     .pf-hb__searchrow { padding: 0 20px; margin-top: -33px; }
     .pf-hb__search {
@@ -284,6 +288,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
         background: var(--bg-card-solid, #14141f);
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
       }
+      .pf-hb__search.pf-hb__search--ctx { padding: 0; min-height: 0; }
       /* 16px or iOS zooms the page on focus. */
       .pf-hb__input { font-size: 16px; }
       .pf-hb__search ::ng-deep [band-search] .field input { font-size: 16px; }
@@ -357,6 +362,9 @@ export class HeroBandComponent {
   /** Pill without a search field: the projected [band-tools] (section tabs)
    *  span the whole pill. */
   readonly tabsOnly = input<boolean>(false);
+  /** Pill = an editor's CONTEXT BAR (identity chips projected via
+   *  [band-search] with customSearch): the pill may grow to wrap them. */
+  readonly contextBar = input<boolean>(false);
 
   /** Optional handler for the back chevron — for an in-page step (e.g. the
    *  collect drawer) whose "back" closes the step rather than navigating.

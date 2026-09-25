@@ -1,4 +1,6 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -26,7 +28,7 @@ import {
 import { parseCalc, lintExpr, evaluateCalc, CALC_CONSTANT_DEFAULTS, CalcDef } from '../../../../shared/utils/calculation';
 import { NumberInputComponent } from '../../../../shared/primitives/number-input.component';
 import { CurrencyInrPipe } from '../../../../shared/pipes/currency-inr.pipe';
-import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
+import { SegmentedOption } from '../../../../shared/primitives/segmented.component';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, ModuleRegistry } from 'ag-grid-community';
 import { ThemeService } from '../../../../core/services/theme.service';
@@ -58,7 +60,7 @@ import { PriceFlagComponent } from '../../../../shared/primitives/price-flag.com
 import { DEFAULT_TEST_PRICE, NOT_PRICED_LABEL, effectivePrice, isPriceDefault } from '../../../../shared/utils/test-pricing';
 import { OriginBadgeComponent } from '../../../../shared/primitives/origin-badge.component';
 import {
-  TestOrigin, canRevertToMaster, isCloneMode, originLabel, originOf, revertToMasterPath,
+  ORIGIN_ICON_PATHS, TestOrigin, canRevertToMaster, isCloneMode, originHint, originLabel, originOf, revertToMasterPath,
 } from '../../../../shared/utils/test-origin';
 import {
   CODE_RANGE_EXHAUSTED_ERROR, CODE_READONLY_ERROR, CODE_READONLY_HINT, DEPARTMENT_REQUIRED_ERROR, codeDisplay,
@@ -156,7 +158,6 @@ function makeEmptyDraft(): DraftTest {
     ConditionEditorComponent,
     FieldTypePickerComponent,
     ValidationEditorComponent,
-    SegmentedComponent,
     SelectComponent,
     TouchButtonComponent,
     TestLayoutEditorComponent, ReportStructureComponent,
@@ -166,7 +167,9 @@ function makeEmptyDraft(): DraftTest {
     ReportColumnsEditorComponent,
     ReportPdfPreviewComponent,
     PriceFlagComponent,
-    OriginBadgeComponent
+    OriginBadgeComponent,
+    HeroBandComponent,
+    NgTemplateOutlet
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-editor.component.html',
@@ -194,6 +197,35 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly origin = signal<TestOrigin | null>(null);
   /** The lab's catalogue mode on the loaded row ('clone' | 'reference'). */
   readonly catalogMode = signal<string | null>(null);
+  // ── New design (ND-PATTERN "Editors") ─────────────────────────────
+  /** Band + context bar + tabs row. Only in the LMS new design, never in the
+   *  admin console's master mode (it hosts this editor in its own shell). */
+  readonly nd = computed(() => this.themeSvc.isNewDesign() && this.codeMode() === 'tenant');
+  /** Where the band's back chevron goes: Test Master on this record's view. */
+  readonly backUrl = computed(() =>
+    `/admin/tests?type=${this._draft().type || this.route.snapshot.queryParamMap.get('type') || 'individual'}`);
+  /** Below 1024px the live preview is a sheet behind the Preview button. */
+  readonly previewOpen = signal(false);
+  @HostListener('document:keydown.escape')
+  onEscape(): void { if (this.previewOpen()) this.previewOpen.set(false); }
+  /** Origin as a NEUTRAL context chip (label + glyph + hint). */
+  readonly originChip = computed(() => {
+    const o = this.origin();
+    if (!o || this.codeMode() !== 'tenant') return null;
+    const k = originOf({ origin: o });
+    if (!k) return null;
+    const t = { origin: o, catalogMode: this.catalogMode() };
+    return { label: originLabel(t), hint: originHint(t), icon: ORIGIN_ICON_PATHS[k] };
+  });
+  private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  /** The context bar's pencil: open Basics and put the caret in Name. */
+  editName(): void {
+    this.jumpToSection('identity');
+    setTimeout(() => {
+      const el = this.nameInput()?.nativeElement;
+      if (el) { el.focus(); el.select(); }
+    });
+  }
   readonly canRevert = computed(() => this.codeMode() === 'tenant'
     && canRevertToMaster({ origin: this.origin(), catalogMode: this.catalogMode() }));
   readonly reverting = signal(false);
@@ -1243,6 +1275,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.packageItems()
       .map(id => ({ id, name: byId.get(id)?.name ?? '(unknown test)' }));
   });
+
+  /** pf-select options for the calculated-test target (no native select). */
+  readonly calcTargetSelectOptions = computed<PfSelectOption[]>(() =>
+    this.calcTargetOptions().map(o => ({ value: o.id, label: o.name })));
 
   readonly calcCodeChips = computed(() => {
     const ce = this.calcEdit();

@@ -247,7 +247,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
     }
     .rsd__pill { height: 26px; padding: 0 12px; border-radius: 999px; border: 1px solid; cursor: pointer;
       font-size: 11.5px; font-weight: 700; background: transparent; }
-    .rsd__pill--on { color: #34d399; border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.08); }
+    .rsd__pill--on { color: var(--violet-text, #6d28d9); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
     .rsd__pill:not(.rsd__pill--on):not(.rsd__pill--fixed) { color: var(--text-tertiary); border-color: var(--glass-border); }
     .rsd__pill--fixed { color: var(--text-tertiary); border-color: transparent; cursor: default; font-weight: 500; }
 
@@ -296,7 +296,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
       font-weight: 600; text-align: center; color: var(--text-primary);
       background: var(--input-bg, rgba(255,255,255,.03)); border: 1px solid var(--input-border, var(--glass-border)); }
     .rsd__when-val:focus { outline: none; border-color: rgba(168,85,247,.5); }
-    .rsd__when-custom { font-size: 12px; color: #d97706; }
+    .rsd__when-custom { font-size: 12px; color: var(--text-secondary); }
 
     .rsd__foot { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
     .rsd__addwrap { position: relative; }
@@ -316,7 +316,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
     @media (hover: hover) { .rsd__addmenu button:hover { background: var(--glass-bg-hover, rgba(255,255,255,.06)); } }
 
     .rsd__savestate { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-tertiary); }
-    .rsd__savestate svg { color: #34d399; }
+    .rsd__savestate svg { color: var(--violet-text, #6d28d9); }
   `],
 })
 export class ReportStructureComponent {

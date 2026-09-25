@@ -1,8 +1,83 @@
-<section class="px-4 md:px-6 lg:px-8 pt-3 pb-16 w-full pf-te2-page">
+<section class="px-4 md:px-6 lg:px-8 pt-3 pb-16 w-full pf-te2-page"
+         [class.pf-band-page]="nd()" [class.pf-te2-page--nd]="nd()">
 
   @let d = draft();
 
-  <!-- ─────────────────────────── Sticky header ─────────────────────────── -->
+  <!-- Section glyphs — shared by the tabs row and each card's icon chip. -->
+  <ng-template #secIco let-id>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      @switch (id) {
+        @case ('identity')    { <path d="M20.59 13.41 12 22l-8.59-8.59A2 2 0 0 1 3 12V5a2 2 0 0 1 2-2h7a2 2 0 0 1 1.41.59L22 12z"/><circle cx="7.5" cy="7.5" r=".5"/> }
+        @case ('pricing')     { <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/> }
+        @case ('results')     { <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/> }
+        @case ('layout')      { <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/> }
+        @case ('consumables') { <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/> }
+        @case ('preview')     { <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/> }
+      }
+    </svg>
+  </ng-template>
+
+  @if (nd()) {
+    <!-- NEW DESIGN (ND-PATTERN "Editors"): the band is the same as every
+         step — back · tenant · actions. The pill is the CONTEXT BAR: the
+         record's identity as read-only chips. No title block. -->
+    <pf-hero-band class="pf-te2-band" [back]="true" [backTo]="backUrl()" [customSearch]="true" [contextBar]="true">
+      <ng-container band-actions>
+        <span class="nd-savestate pf-te2-savestate" role="status" aria-live="polite"
+              [attr.aria-label]="dirty() ? 'Unsaved changes' : 'All changes saved'"
+              [title]="dirty() ? 'Unsaved changes — Save to keep them' : 'All changes saved'">
+          @if (dirty()) {
+            <span class="nd-savestate__dot" aria-hidden="true"></span><span class="pf-te2-savestate__t">Unsaved changes</span>
+          } @else {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-te2-savestate__t">All changes saved</span>
+          }
+        </span>
+        @if (canRevert()) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-te2-revert press"
+                  [disabled]="saving() || reverting()" (click)="revertToMaster()"
+                  [attr.aria-label]="reverting() ? 'Reverting' : 'Revert to master'" title="Revert to master">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+            {{ reverting() ? 'Reverting…' : 'Revert to master' }}
+          </button>
+        }
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-te2-save press"
+                [disabled]="saving()" (click)="saveTest()"
+                [attr.aria-label]="saving() ? 'Saving' : 'Save'" title="Save">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </button>
+      </ng-container>
+
+      <div band-search class="nd-ctx pf-te2-ctx">
+        <span class="nd-ctx__primary pf-te2-ctx__name">
+          <span class="pf-te2-ctx__nametext">{{ d.name || ((d.id ? 'Edit ' : 'New ') + (d.type === 'package' ? 'package' : d.type === 'profile' ? 'profile' : 'test')) }}</span>
+          <button type="button" class="nd-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          </button>
+        </span>
+        @if (originChip(); as o) {
+          <span class="nd-ctx__chip pf-te2-ctx__chip pf-te2-ctx__origin" role="note" [title]="o.hint" [attr.aria-label]="o.label + '. ' + o.hint">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="o.icon"/></svg>
+            {{ o.label }}
+          </span>
+        }
+        @for (c of metaChips(); track c.k) {
+          @if (c.k !== 'Origin') {
+            <button type="button" class="nd-ctx__chip pf-te2-ctx__chip press" [attr.data-k]="c.k"
+                    (click)="jumpToSection(c.sec)" [title]="'Go to ' + c.k">
+              <span class="nd-ctx__k">{{ c.k }}</span>
+              @if (c.k === 'Price' && priceIsDefault()) { <span class="nd-dot-unpriced" aria-hidden="true"></span> }
+              <span [class.nd-num]="c.k === 'Code' || c.k === 'Price' || c.k === 'TAT'">{{ c.v }}</span>
+            </button>
+          }
+        }
+      </div>
+    </pf-hero-band>
+  }
+
+  <!-- ─────────────────────────── Sticky header (classic) ─────────────────────────── -->
+  @if (!nd()) {
   <header class="pf-te2-head">
     <button type="button" class="pf-te2-back press" (click)="back()" aria-label="Back to tests">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -40,9 +115,39 @@
       </pf-touch-btn>
     </div>
   </header>
+  }
 
-  <div class="pf-te2" [class.pf-te2--norail]="railHidden()">
-    <!-- ═══════════ Section rail: one task at a time ═══════════ -->
+  <div class="pf-te2-bodywrap" [class.pf-band-body]="nd()" [class.pf-band-body--fill]="nd()">
+  @if (nd()) {
+    <!-- Sections as a TABS ROW (the report-designer precedent): the rail is
+         gone and the content takes the full width. Dots: violet = complete,
+         hollow = something to finish. Below 1024px the preview sits behind
+         the Preview button (a sheet). -->
+    <div class="pf-te2-tabsrow">
+      <div class="nd-tabs pf-te2-tabs" role="tablist" aria-label="Sections">
+        @for (s of sectionNav(); track s.id) {
+          <button type="button" class="nd-tabs__item pf-te2-tab" role="tab"
+                  [attr.aria-selected]="section() === s.id" [attr.aria-controls]="'sec-' + s.id"
+                  [attr.data-sec]="s.id" (click)="jumpToSection(s.id)">
+            <ng-container *ngTemplateOutlet="secIco; context: { $implicit: s.id }"></ng-container>
+            <span>{{ s.label }}</span>
+            <span class="nd-tabs__dot" [class.nd-tabs__dot--ok]="s.ok"
+                  [attr.aria-label]="s.ok ? 'complete' : 'something to finish'"
+                  [title]="s.ok ? 'Complete' : 'Something to finish here'"></span>
+          </button>
+        }
+      </div>
+      <button type="button" class="nd-btn nd-btn--secondary pf-te2-previewbtn press"
+              [attr.aria-expanded]="previewOpen()" aria-controls="pf-te2-preview" (click)="previewOpen.set(true)">
+        <ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'preview' }"></ng-container>
+        Preview
+      </button>
+    </div>
+  }
+
+  <div class="pf-te2" [class.pf-te2--norail]="railHidden() || nd()">
+    <!-- ═══════════ Section rail (classic): one task at a time ═══════════ -->
+    @if (!nd()) {
     <nav class="pf-te2-nav" aria-label="Sections">
       <div class="pf-te2-nav__head">
         <span>Sections</span>
@@ -72,10 +177,11 @@
         </button>
       }
     </nav>
+    }
 
     <!-- ═══════════════════════════ Workspace ═══════════════════════════ -->
     <div class="pf-te2-main">
-      @if (railHidden()) {
+      @if (railHidden() && !nd()) {
         <button type="button" class="pf-te2-side-expand" (click)="toggleRail()"
                 title="Show sections" aria-label="Show section panel">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
@@ -85,17 +191,18 @@
 
       @if (section() === 'identity') {
 <!-- 01 Basics -->
-      <section id="sec-identity" class="pf-te2-sec">
-        <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">Basics</div>
-          <p class="pf-te2-sec__sub">The test's name, department and codes.</p>
+      <section id="sec-identity" class="pf-te2-sec nd-card" role="tabpanel">
+        <div class="pf-te2-sec__label nd-card__head">
+          <span class="nd-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'identity' }"></ng-container></span>
+          <h2 class="nd-card__label pf-te2-sec__title pf-te2-sec__h">Basics</h2>
+          <p class="nd-card__note pf-te2-sec__sub">The test's name, department and codes.</p>
         </div>
-        <div class="pf-te2-sec__body">
+        <div class="pf-te2-sec__body nd-card__body">
           <div class="pf-te2-grid">
             <div class="pf-uf pf-uf--span">
               <label class="pf-uf__lbl">Name</label>
-              <input type="text" class="pf-input pf-uf__in"
-                     [class.pf-input--error]="fieldError('name')"
+              <input type="text" class="nd-input pf-te2-name" #nameInput
+                     [class.nd-input--error]="fieldError('name')"
                      [ngModel]="d.name" (ngModelChange)="patch({ name: $event })" />
               @if (fieldError('name')) { <p class="pf-field-err">{{ fieldError('name') }}</p> }
             </div>
@@ -115,11 +222,11 @@
             </div>
             @if (d.type === 'individual' && isMicroDept()) {
               <div class="pf-uf pf-uf--span">
-                <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="specimenEntry()">
-                  <input type="checkbox" [checked]="specimenEntry()"
-                         (change)="setSpecimenEntry($any($event.target).checked)" />
-                  <span>Specimen at result entry</span>
-                </label>
+                <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="specimenEntry()"
+                (click)="setSpecimenEntry(!(specimenEntry()))">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Specimen at result entry</span>
+        </button>
                 <p class="pf-hint">
                   Adds a "Specimen" dropdown (from the Specimen master) to this
                   test's result entry — the tech records which specimen was
@@ -127,11 +234,11 @@
                 </p>
               </div>
               <div class="pf-uf pf-uf--span">
-                <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="cultureBench()">
-                  <input type="checkbox" [checked]="cultureBench()"
-                         (change)="setCultureBench($any($event.target).checked)" />
-                  <span>Culture bench (C&amp;S workflow)</span>
-                </label>
+                <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="cultureBench()"
+                (click)="setCultureBench(!(cultureBench()))">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Culture bench (C&amp;S workflow)</span>
+        </button>
                 <p class="pf-hint">
                   When on, this test lands on the Culture Bench at lab intake —
                   staged plates &amp; AST instead of the normal result-entry grid.
@@ -141,27 +248,26 @@
             @if (d.type === 'individual' || d.type === 'profile') {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">{{ d.type === 'profile' ? 'Profile code' : 'Test code' }}</label>
-                <input type="text" class="pf-input pf-uf__in pf-input--readonly" readonly aria-readonly="true"
-                       [class.pf-input--muted]="!d.testCode"
+                <input type="text" class="nd-input nd-num" readonly aria-readonly="true"
                        [value]="codeText()" [attr.title]="codeHint" />
                 <p class="pf-hint">{{ codeHint }}</p>
               </div>
             }
             <div class="pf-uf">
               <label class="pf-uf__lbl">Short name</label>
-              <input type="text" class="pf-input pf-uf__in" [ngModel]="d.shortName"
+              <input type="text" class="nd-input" [ngModel]="d.shortName"
                      (ngModelChange)="patch({ shortName: $event })" placeholder="e.g. CBC" />
             </div>
             @if (d.type === 'individual') {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Section</label>
-                <input type="text" class="pf-input pf-uf__in" [ngModel]="d.section"
+                <input type="text" class="nd-input" [ngModel]="d.section"
                        (ngModelChange)="patch({ section: $event })"
                        placeholder="Sub-group under the department" />
               </div>
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Methodology</label>
-                <input type="text" class="pf-input pf-uf__in" [ngModel]="d.methodology"
+                <input type="text" class="nd-input" [ngModel]="d.methodology"
                        (ngModelChange)="patch({ methodology: $event })"
                        placeholder="e.g. Photometry" />
               </div>
@@ -174,11 +280,11 @@
             <div class="pf-profpanel">
               <div class="pf-profpanel__head">
                 <div>
-                  <span class="pf-te2-h">Profiles</span>
+                  <h3 class="pf-te2-h">Profiles</h3>
                   <p class="pf-rr2__sub">Tick the profiles this test belongs to — ordering a ticked profile includes this test.</p>
                 </div>
                 @if (d.id && allProfiles().length > 8) {
-                  <input type="search" class="pf-input pf-input--compact pf-profpanel__search"
+                  <input type="search" class="nd-input pf-profpanel__search" aria-label="Find a profile"
                          placeholder="Find a profile…" [ngModel]="profSearch()"
                          (ngModelChange)="profSearch.set($event)" />
                 }
@@ -190,11 +296,12 @@
               } @else {
                 <div class="pf-profpanel__grid">
                   @for (pr of visibleProfiles(); track pr.id) {
-                    <label class="pf-profpanel__item" [class.pf-profpanel__item--on]="isLinkedProfile(pr.id)">
-                      <input type="checkbox" [checked]="isLinkedProfile(pr.id)"
+                    <label class="nd-row pf-profpanel__item" [class.nd-row--in]="isLinkedProfile(pr.id)">
+                      <input type="checkbox" class="pf-te2-srcheck" [checked]="isLinkedProfile(pr.id)"
                              (change)="toggleProfileMembership(pr, $any($event.target).checked)" />
-                      <span class="pf-profpanel__name">{{ pr.name }}</span>
-                      @if (pr.testCode) { <span class="pf-profpanel__code">{{ pr.testCode }}</span> }
+                      <span class="nd-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                      <span class="nd-row__name pf-profpanel__name">{{ pr.name }}</span>
+                      @if (pr.testCode) { <span class="nd-row__meta nd-num pf-profpanel__code">{{ pr.testCode }}</span> }
                     </label>
                   }
                   @if (visibleProfiles().length === 0) {
@@ -210,12 +317,13 @@
 
       @if (section() === 'pricing') {
 <!-- 02 Pricing & handling -->
-      <section id="sec-pricing" class="pf-te2-sec">
-        <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">Price &amp; sample</div>
-          <p class="pf-te2-sec__sub">What it costs, how long it takes, and how the sample is drawn.</p>
+      <section id="sec-pricing" class="pf-te2-sec nd-card" role="tabpanel">
+        <div class="pf-te2-sec__label nd-card__head">
+          <span class="nd-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'pricing' }"></ng-container></span>
+          <h2 class="nd-card__label pf-te2-sec__title pf-te2-sec__h">Price &amp; sample</h2>
+          <p class="nd-card__note pf-te2-sec__sub">What it costs, how long it takes, and how the sample is drawn.</p>
         </div>
-        <div class="pf-te2-sec__body">
+        <div class="pf-te2-sec__body nd-card__body">
           <div class="pf-te2-grid">
             <div class="pf-uf">
               <label class="pf-uf__lbl">Price @if (priceIsDefault()) { <pf-price-flag /> }</label>
@@ -246,7 +354,7 @@
                              placeholder="— Select specimen —"
                              (valueChange)="patch({ sampleType: $any($event) ?? '' })"></pf-select>
                 } @else {
-                  <input type="text" class="pf-input pf-uf__in" [ngModel]="d.sampleType"
+                  <input type="text" class="nd-input" [ngModel]="d.sampleType"
                          (ngModelChange)="patch({ sampleType: $event })" placeholder="e.g. Serum" />
                 }
               </div>
@@ -257,8 +365,12 @@
               </div>
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Fasting required</label>
-                <pf-segmented [options]="fastingOptions" [value]="d.fastingRequired" size="md"
-                              (valueChange)="patch({ fastingRequired: $event })"></pf-segmented>
+                <span class="nd-seg pf-te2-seg" role="radiogroup" aria-label="Fasting required">
+                  @for (o of fastingOptions; track o.label) {
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="d.fastingRequired === o.value"
+                            (click)="patch({ fastingRequired: o.value })">{{ o.label }}</button>
+                  }
+                </span>
               </div>
             }
           </div>
@@ -306,13 +418,14 @@
       @if (section() === 'results') {
       @if (d.type === 'individual') {
       <!-- 03 Result & ranges -->
-      <section id="sec-results" class="pf-te2-sec pf-te2-sec--stack">
-        <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">Result entry</div>
-          <p class="pf-te2-sec__sub">What the tech enters, and what counts as normal.</p>
-          @if (isSingleValue() && !entryKind()) { <div class="pf-te2-sec__warn">! choose what the tech enters</div> }
+      <section id="sec-results" class="pf-te2-sec pf-te2-sec--stack nd-card" role="tabpanel">
+        <div class="pf-te2-sec__label nd-card__head">
+          <span class="nd-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'results' }"></ng-container></span>
+          <h2 class="nd-card__label pf-te2-sec__title pf-te2-sec__h">Result entry</h2>
+          <p class="nd-card__note pf-te2-sec__sub">What the tech enters, and what counts as normal.</p>
+          @if (isSingleValue() && !entryKind()) { <span class="pf-te2-sec__warn"><span class="nd-dot-unpriced" aria-hidden="true"></span>Choose what the tech enters</span> }
         </div>
-        <div class="pf-te2-sec__body">
+        <div class="pf-te2-sec__body nd-card__body">
           <div class="pf-te2-grid">
             @if (isSingleValue()) {
               <div class="pf-uf">
@@ -352,15 +465,13 @@
                   pick an existing one, or create your own.</p>
               </div>
               <div class="flex items-center gap-2 flex-wrap">
-                <pf-select style="min-width: 280px; max-width: 340px;" size="sm"
+                <pf-select class="pf-te2-ogsel" size="sm"
                            [options]="ogGroupOptions()" [searchable]="true"
                            [value]="groupForField(0)?.code ?? ''"
                            placeholder="— pick an option group —"
                            (valueChange)="applyOptionGroup(0, $event)"></pf-select>
                 @if (!optCustom(0)) {
-                  <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
-                          style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                          (click)="startCustomOption(0)">+ New option group</button>
+                  <button type="button" class="nd-btn nd-btn--tertiary pf-te2-addbtn press" (click)="startCustomOption(0)">+ New option group</button>
                 }
               </div>
               @if (optLocked(0) && groupForField(0); as g) {
@@ -374,14 +485,14 @@
                     </span>
                   }
                 </div>
-                <p class="text-xs" style="color: var(--text-tertiary, #64748b);">
+                <p class="pf-hint">
                   Shared list — used by {{ groupTestCount(g) }} test{{ groupTestCount(g) === 1 ? '' : 's' }}.
                   Editing it in Test Master → Option groups changes all of them.
                 </p>
               } @else if (optCustom(0)) {
                 <div class="pf-newlist__row">
                   <label class="pf-mini-lbl">Option group name</label>
-                  <input type="text" class="pf-input pf-input--compact pf-newlist__name"
+                  <input type="text" class="nd-input nd-input--sm pf-newlist__name"
                          placeholder="e.g. Urine Colour · Positive / Negative"
                          [ngModel]="listNameFor(0)" (ngModelChange)="setListName(0, $event)" />
                 </div>
@@ -391,29 +502,27 @@
                   @for (row of rowsFor(0); track $index; let ri = $index) {
                     <div class="pf-otbl-row pf-otbl-row--nocode">
                       <span class="pf-otbl-n">{{ ri + 1 }}</span>
-                      <input type="text" class="pf-input pf-input--compact" [ngModel]="row.value"
+                      <input type="text" class="nd-input nd-input--sm" [ngModel]="row.value"
                              (ngModelChange)="patchOptionRow(0, ri, { value: $event })" placeholder="Option value" />
                       <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
                              (ngModelChange)="patchOptionRow(0, ri, { normal: $event })" title="Normal (expected)" />
                       <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
                              (ngModelChange)="patchOptionRow(0, ri, { active: $event })" title="Inactive rows are hidden" />
                       <span class="flex">
-                        <button type="button" class="px-1 text-sm" [disabled]="ri === 0" (click)="moveOptionRow(0, ri, -1)" title="Move up">↑</button>
-                        <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(0).length - 1" (click)="moveOptionRow(0, ri, 1)" title="Move down">↓</button>
+                        <button type="button" class="pf-te2-iconbtn press" [disabled]="ri === 0" (click)="moveOptionRow(0, ri, -1)" title="Move up" aria-label="Move up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
+                        <button type="button" class="pf-te2-iconbtn press" [disabled]="ri === rowsFor(0).length - 1" (click)="moveOptionRow(0, ri, 1)" title="Move down" aria-label="Move down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                       </span>
-                      <button type="button" class="px-2 text-sm font-bold c-red" (click)="removeOptionRow(0, ri)" title="Remove option">✕</button>
+                      <button type="button" class="pf-te2-iconbtn pf-te2-iconbtn--danger press" (click)="removeOptionRow(0, ri)" title="Remove option" aria-label="Remove option"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                     </div>
                   }
                   <div>
-                    <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
-                            style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                            (click)="addOptionRow(0)">+ Add option</button>
+                    <button type="button" class="nd-btn nd-btn--tertiary pf-te2-addbtn press" (click)="addOptionRow(0)">+ Add option</button>
                   </div>
                 </div>
                 <div class="pf-newlist__actions">
-                  <button type="button" class="pf-newlist__create press" [disabled]="creatingList()"
+                  <button type="button" class="nd-btn nd-btn--secondary pf-newlist__create press" [disabled]="creatingList()"
                           (click)="createOptionList(0)">{{ creatingList() ? 'Creating…' : 'Create option group' }}</button>
-                  <button type="button" class="pf-newlist__cancel press" (click)="cancelCustomOption(0)">Cancel</button>
+                  <button type="button" class="nd-btn nd-btn--tertiary pf-newlist__cancel press" (click)="cancelCustomOption(0)">Cancel</button>
                   <span class="pf-newlist__hint">Creates the option group under Test Master → Option groups and maps it to this test.</span>
                 </div>
               } @else {
@@ -433,10 +542,10 @@
                 <p class="pf-calc-expr">{{ d.testCode || 'Value' }} = {{ calc.expr }}</p>
               }
               @if (calc.inputs?.length) {
-                <p class="pf-calc-note">Inputs: <span class="mono">{{ calc.inputs!.join(', ') }}</span> — sibling tests on the same order supply these.</p>
+                <p class="pf-calc-note">Inputs: <span class="nd-num">{{ calc.inputs!.join(', ') }}</span> — sibling tests on the same order supply these.</p>
               }
               @if (calc.validWhen) {
-                <p class="pf-calc-note">Only when <span class="mono">{{ calc.validWhen }}</span>.</p>
+                <p class="pf-calc-note">Only when <span class="nd-num">{{ calc.validWhen }}</span>.</p>
               }
             </div>
           }
@@ -463,7 +572,7 @@
                       <p class="pf-qr__summary">
                         @if (qualFields().length > 1) { <span class="pf-qr__title">{{ qf.title }}: </span> }
                         Expected value <span class="pf-rr2__qual-normal">{{ normalsSummary(qf.i) }}</span>
-                        <span class="c-mut">— from the option group; anything else flags abnormal.</span>
+                        <span class="pf-te2-mut">— from the option group; anything else flags abnormal.</span>
                       </p>
                     } @else {
                       <p class="pf-qr__summary pf-rb__prints--todo">
@@ -550,7 +659,7 @@
               @for (p of fields(); let i = $index; track p.id) {
                 <div class="pf-vbatch">
                   <div class="pf-vbatch__head">
-                    <input type="text" class="pf-input pf-input--compact pf-vbatch__name"
+                    <input type="text" class="nd-input nd-input--sm pf-vbatch__name"
                            [ngModel]="p.label" placeholder="Value name — e.g. Haemoglobin"
                            (ngModelChange)="patchField(i, { label: $event, name: deriveName($event, p.name) })" />
                     <pf-field-type-picker size="sm" [value]="p.type"
@@ -564,13 +673,13 @@
                     }
                     <span class="grow"></span>
                     @if ((p.label ?? '').trim()) {
-                      <span class="pf-param2__state c-green">Complete</span>
+                      <span class="pf-param2__state"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Complete</span>
                     } @else {
-                      <span class="pf-param2__state c-amber">needs a name</span>
+                      <span class="pf-param2__state pf-param2__state--todo"><span class="nd-dot-unpriced" aria-hidden="true"></span>Needs a name</span>
                     }
                     @if (fields().length > 1) {
-                      <button type="button" class="pf-vbatch__x" aria-label="Remove this value"
-                              title="Remove this value" (click)="removeField(i)">✕</button>
+                      <button type="button" class="pf-te2-iconbtn pf-te2-iconbtn--danger press" aria-label="Remove this value"
+                              title="Remove this value" (click)="removeField(i)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                     }
                   </div>
 
@@ -617,15 +726,13 @@
                     <div class="flex flex-col gap-1 min-w-0">
                       <span class="pf-mini-lbl">Option group</span>
                       <div class="flex items-center gap-2 flex-wrap">
-                        <pf-select style="min-width: 280px; max-width: 340px;" size="sm"
+                        <pf-select class="pf-te2-ogsel" size="sm"
                                    [options]="ogGroupOptions()" [searchable]="true"
                                    [value]="groupForField(i)?.code ?? ''"
                                    placeholder="— pick an option group —"
                                    (valueChange)="applyOptionGroup(i, $event)"></pf-select>
                         @if (!optCustom(i)) {
-                          <button type="button" class="px-3 py-1.5 rounded-lg text-sm font-bold"
-                                  style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                                  (click)="startCustomOption(i)">+ New option group</button>
+                          <button type="button" class="nd-btn nd-btn--tertiary pf-te2-addbtn press" (click)="startCustomOption(i)">+ New option group</button>
                         }
                       </div>
 
@@ -640,7 +747,7 @@
                             </span>
                           }
                         </div>
-                        <p class="text-xs" style="color: var(--text-tertiary, #64748b);">
+                        <p class="pf-hint">
                           Shared group — used by {{ groupTestCount(g) }} test{{ groupTestCount(g) === 1 ? '' : 's' }}.
                           Changing it in Option groups affects all of them, including this test.
                         </p>
@@ -651,23 +758,21 @@
                           @for (row of rowsFor(i); track $index; let ri = $index) {
                             <div class="pf-otbl-row pf-otbl-row--nocode">
                               <span class="pf-otbl-n">{{ ri + 1 }}</span>
-                              <input type="text" class="pf-input pf-input--compact" [ngModel]="row.value"
+                              <input type="text" class="nd-input nd-input--sm" [ngModel]="row.value"
                                      (ngModelChange)="patchOptionRow(i, ri, { value: $event })" placeholder="Option value" />
                               <input type="checkbox" class="pf-check" [ngModel]="row.normal === true"
                                      (ngModelChange)="patchOptionRow(i, ri, { normal: $event })" title="Normal (expected)" />
                               <input type="checkbox" class="pf-check" [ngModel]="row.active !== false"
                                      (ngModelChange)="patchOptionRow(i, ri, { active: $event })" title="Inactive rows are hidden" />
                               <span class="flex">
-                                <button type="button" class="px-1 text-sm" [disabled]="ri === 0" (click)="moveOptionRow(i, ri, -1)" title="Move up">↑</button>
-                                <button type="button" class="px-1 text-sm" [disabled]="ri === rowsFor(i).length - 1" (click)="moveOptionRow(i, ri, 1)" title="Move down">↓</button>
+                                <button type="button" class="pf-te2-iconbtn press" [disabled]="ri === 0" (click)="moveOptionRow(i, ri, -1)" title="Move up" aria-label="Move up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
+                                <button type="button" class="pf-te2-iconbtn press" [disabled]="ri === rowsFor(i).length - 1" (click)="moveOptionRow(i, ri, 1)" title="Move down" aria-label="Move down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                               </span>
-                              <button type="button" class="px-2 text-sm font-bold c-red" (click)="removeOptionRow(i, ri)" title="Remove option">✕</button>
+                              <button type="button" class="pf-te2-iconbtn pf-te2-iconbtn--danger press" (click)="removeOptionRow(i, ri)" title="Remove option" aria-label="Remove option"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                             </div>
                           }
                           <div>
-                            <button type="button" class="mt-1 px-3 py-1.5 rounded-lg text-sm font-bold"
-                                    style="background: var(--surface-2, #f1f5f9); color: var(--violet-700, #6d28d9);"
-                                    (click)="addOptionRow(i)">+ Add option</button>
+                            <button type="button" class="nd-btn nd-btn--tertiary pf-te2-addbtn press" (click)="addOptionRow(i)">+ Add option</button>
                           </div>
                         </div>
                       } @else {
@@ -684,18 +789,16 @@
                     <pf-validation-editor [type]="p.type" [isRequired]="p.isRequired" [validation]="p.validation ?? null"
                       (change)="patchValidation(i, $event)"></pf-validation-editor>
                     <div class="pf-vbatch__switches">
-                      <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="p.printOnReport !== false"
-                             title="Off = the tech still records this value, but its row never prints on the patient's report">
-                        <input type="checkbox" [checked]="p.printOnReport !== false"
-                               (change)="patchField(i, { printOnReport: $any($event.target).checked ? undefined : false })" />
-                        <span>Prints on the report</span>
-                      </label>
-                      <label class="pf-rep-toggle pf-vbatch__attach" [class.pf-rep-toggle--on]="p.attachments === true"
-                             title="The tech can attach photos/video to THIS value; images can print on the report">
-                        <input type="checkbox" [checked]="p.attachments === true"
-                               (change)="patchField(i, { attachments: $any($event.target).checked || undefined })" />
-                        <span>Photos &amp; video</span>
-                      </label>
+                      <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="p.printOnReport !== false" title="Off = the tech still records this value, but its row never prints on the patient's report"
+                (click)="patchField(i, { printOnReport: !(p.printOnReport !== false) ? undefined : false })">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Prints on the report</span>
+        </button>
+                      <button type="button" class="nd-toggle pf-te2-toggle pf-vbatch__attach" role="switch" [attr.aria-checked]="p.attachments === true" title="The tech can attach photos/video to THIS value; images can print on the report"
+                (click)="patchField(i, { attachments: !(p.attachments === true) || undefined })">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Photos &amp; video</span>
+        </button>
                     </div>
                   </div>
                 </div>
@@ -711,11 +814,11 @@
           <!-- Per-REPORT value picker — the culture bench's checkboxes for
                normal tests: the tech chooses per order what prints. -->
           <div class="pf-uf pf-uf--span">
-            <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="printPickerEnabled()">
-              <input type="checkbox" [checked]="printPickerEnabled()"
-                     (change)="setPrintPickerEnabled($any($event.target).checked)" />
-              <span>Tech picks what prints (per report)</span>
-            </label>
+            <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="printPickerEnabled()"
+                (click)="setPrintPickerEnabled(!(printPickerEnabled()))">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Tech picks what prints (per report)</span>
+        </button>
             <p class="pf-hint">
               When on, result entry shows a print checkbox beside every value — the tech decides
               for EACH order which values reach that report. The bench record keeps everything.
@@ -725,11 +828,11 @@
 
           @if (isSingleValue()) {
             <div class="pf-uf pf-uf--span">
-              <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="attachmentsEnabled()">
-                <input type="checkbox" [checked]="attachmentsEnabled()"
-                       (change)="setAttachmentsEnabled($any($event.target).checked)" />
-                <span>Photos &amp; video at result entry</span>
-              </label>
+              <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="attachmentsEnabled()"
+                (click)="setAttachmentsEnabled(!(attachmentsEnabled()))">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Photos &amp; video at result entry</span>
+        </button>
               <p class="pf-hint">
                 When on, the tech can attach an image or a short video to this result —
                 and choose per image whether it prints on the report. Videos stay lab-only.
@@ -740,12 +843,13 @@
       </section>
       } @else {
       <!-- 03 Members (profile / package) -->
-      <section id="sec-results" class="pf-te2-sec pf-te2-sec--stack">
-        <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">{{ d.type === 'profile' ? 'Profile' : 'Package' }} members</div>
-          <p class="pf-te2-sec__sub">{{ d.type === 'profile' ? 'The tests reported together under this profile.' : 'What this package bundles and bills as one.' }}</p>
+      <section id="sec-results" class="pf-te2-sec pf-te2-sec--stack nd-card" role="tabpanel">
+        <div class="pf-te2-sec__label nd-card__head">
+          <span class="nd-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'results' }"></ng-container></span>
+          <h2 class="nd-card__label pf-te2-sec__title pf-te2-sec__h">{{ d.type === 'profile' ? 'Profile' : 'Package' }} members</h2>
+          <p class="nd-card__note pf-te2-sec__sub">{{ d.type === 'profile' ? 'The tests reported together under this profile.' : 'What this package bundles and bills as one.' }}</p>
         </div>
-        <div class="pf-te2-sec__body">
+        <div class="pf-te2-sec__body nd-card__body">
           <div class="pf-picker-head">
             <div class="min-w-0">
               <p class="pf-picker-sub">
@@ -757,10 +861,11 @@
               </p>
             </div>
             @if (d.type === 'profile') {
-              <label class="pf-rep-toggle" [class.pf-rep-toggle--on]="repetitive()">
-                <input type="checkbox" [checked]="repetitive()" (change)="setRepetitive($any($event.target).checked)" />
-                <span>Repetitive (timed series)</span>
-              </label>
+              <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="repetitive()"
+                (click)="setRepetitive(!(repetitive()))">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Repetitive (timed series)</span>
+        </button>
             }
             <span class="pf-picker-summary" [class.pf-picker-summary--on]="packageItems().length > 0">
               <strong>{{ packageItems().length }}</strong>
@@ -777,7 +882,7 @@
               @for (m of calcMembers(); track m.id) {
                 <div class="pf-calc-members__row">
                   <span class="pf-calc-members__name">{{ m.name }}</span>
-                  <code class="pf-calc-members__f">{{ m.line }}</code>
+                  <span class="nd-num pf-calc-members__f">{{ m.line }}</span>
                   @if (m.gate) { <span class="pf-calc-members__gate">{{ m.gate }}</span> }
                   <button type="button" class="pf-calc-editlink" (click)="openCalcEditor(m.id)">Edit</button>
                 </div>
@@ -789,9 +894,8 @@
                 <div class="pf-calc-edit">
                   <div>
                     <label class="pf-label">Calculated test — receives the value</label>
-                    <select class="pf-input" [ngModel]="ce.targetId" (ngModelChange)="patchCalcEdit({ targetId: $event })">
-                      @for (opt of calcTargetOptions(); track opt.id) { <option [value]="opt.id">{{ opt.name }}</option> }
-                    </select>
+                    <pf-select [options]="calcTargetSelectOptions()" [searchable]="true" [value]="ce.targetId"
+                               (valueChange)="patchCalcEdit({ targetId: $any($event) })"></pf-select>
                   </div>
                   <div>
                     <label class="pf-label">Formula — tap a code to insert it</label>
@@ -801,13 +905,13 @@
                       }
                       <button type="button" class="pf-calc-chipbtn pf-calc-chipbtn--var" title="Patient age in years" (click)="appendCalcToken('AGE')">AGE</button>
                     </div>
-                    <input type="text" class="pf-input pf-calc-edit__expr" spellcheck="false"
+                    <input type="text" class="nd-input nd-num pf-calc-edit__expr" spellcheck="false"
                            placeholder="e.g. BIO153 - BIO155 - (BIO154 / 5)"
                            [ngModel]="ce.expr" (ngModelChange)="patchCalcEdit({ expr: $event })" />
                   </div>
                   <div>
                     <label class="pf-label">Only calculate when — optional gate</label>
-                    <input type="text" class="pf-input" spellcheck="false" placeholder="e.g. BIO154 <= 400"
+                    <input type="text" class="nd-input nd-num" spellcheck="false" placeholder="e.g. BIO154 <= 400"
                            [ngModel]="ce.validWhen" (ngModelChange)="patchCalcEdit({ validWhen: $event })" />
                   </div>
                   @if (calcEditWarning(); as warn) { <p class="pf-calc-edit__warn">{{ warn }}</p> }
@@ -819,7 +923,7 @@
                         @for (ref of calcTryRefs(); track ref.key) {
                           <label class="pf-calc-try__field">
                             <span class="pf-calc-try__code" [title]="ref.name">{{ ref.key }}</span>
-                            <input type="number" inputmode="decimal" step="any" class="pf-input pf-input--compact"
+                            <input type="number" inputmode="decimal" step="any" class="nd-input nd-input--sm"
                                    [placeholder]="ref.placeholder" [ngModel]="calcTryValues()[ref.key] ?? ''"
                                    (ngModelChange)="setCalcTryValue(ref.key, $event)" />
                           </label>
@@ -831,7 +935,7 @@
                   <div class="pf-calc-edit__actions">
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="calcEdit.set(null)">Cancel</pf-touch-btn>
                     @if (calcEditHasExisting()) { <pf-touch-btn size="sm" variant="ghost" (pressed)="removeCalc()">Remove formula</pf-touch-btn> }
-                    <pf-touch-btn size="sm" [disabled]="!ce.expr.trim() || !!calcEditError() || calcSaving()" (pressed)="saveCalc()">
+                    <pf-touch-btn size="sm" variant="secondary" [disabled]="!ce.expr.trim() || !!calcEditError() || calcSaving()" (pressed)="saveCalc()">
                       {{ calcSaving() ? 'Saving…' : 'Save formula' }}
                     </pf-touch-btn>
                   </div>
@@ -859,10 +963,10 @@
                     <ul class="pf-tp__list" cdkDropList [cdkDropListData]="gi" (cdkDropListDropped)="dropSeriesRow($event)">
                       @for (r of g.rows; track r.key) {
                         <li class="pf-tp-row" cdkDrag>
-                          <span class="pf-tp-row__grip" cdkDragHandle aria-hidden="true">⠿</span>
+                          <span class="pf-tp-row__grip" cdkDragHandle aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
                           <span class="pf-tp-row__name">{{ memberName(r.testId) }}</span>
                           <label class="pf-tp-row__off">
-                            <input type="number" inputmode="numeric" min="0" step="5" class="pf-input pf-input--compact pf-tp-row__num"
+                            <input type="number" inputmode="numeric" min="0" step="5" class="nd-input nd-input--sm pf-tp-row__num"
                                    title="Minutes from the first draw" [value]="r.offsetMin"
                                    (change)="setRowOffset(r.key, $any($event.target).value)" />
                             <span class="pf-tp-row__unit">min</span>
@@ -872,7 +976,7 @@
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
                             </button>
                           }
-                          <button type="button" class="pf-tp-row__btn pf-tp-row__btn--danger press" title="Remove this draw" (click)="removeSeriesRow(r.key)">✕</button>
+                          <button type="button" class="pf-tp-row__btn pf-tp-row__btn--danger press" title="Remove this draw" aria-label="Remove this draw" (click)="removeSeriesRow(r.key)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
                         </li>
                       }
                     </ul>
@@ -896,7 +1000,7 @@
                     </span>
                     <span class="pf-member-order__pos">{{ i + 1 }}</span>
                     <span class="pf-tp-row__name">{{ m.name }}</span>
-                    @if (m.code) { <code class="pf-member-order__code">{{ m.code }}</code> }
+                    @if (m.code) { <span class="nd-num pf-member-order__code">{{ m.code }}</span> }
                     <button type="button" class="pf-tp-row__btn press" [disabled]="first" [attr.aria-label]="'Move ' + m.name + ' up'" title="Move up" (click)="moveMember(i, -1)">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
                     </button>
@@ -911,9 +1015,14 @@
 
           <div class="pf-picker-toolbar">
             @if (d.type === 'package') {
-              <pf-segmented [options]="pickFilterOptions" [value]="pickFilter()" size="sm" (valueChange)="pickFilter.set($event)"></pf-segmented>
+              <span class="nd-seg pf-te2-seg" role="radiogroup" aria-label="Show">
+                @for (o of pickFilterOptions; track o.value) {
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="pickFilter() === o.value"
+                          (click)="pickFilter.set(o.value)">{{ o.label }}</button>
+                }
+              </span>
             }
-            <input type="text" class="pf-input pf-picker-search" placeholder="Search by name, code or department…"
+            <input type="search" class="nd-input pf-picker-search" aria-label="Search tests" placeholder="Search by name, code or department…"
                    [ngModel]="packageQuery()" (ngModelChange)="packageQuery.set($event)" />
           </div>
 
@@ -934,18 +1043,19 @@
                   </div>
                   <div class="pf-pick-grid">
                     @for (t of group.tests; track t.id) {
-                      <label class="pf-pkg-pick" [class.pf-pkg-pick--on]="isInPackage(t.id)">
-                        <input type="checkbox" [checked]="isInPackage(t.id)" (change)="togglePackageMember(t.id)" />
+                      <label class="nd-row pf-pkg-pick" [class.nd-row--in]="isInPackage(t.id)">
+                        <input type="checkbox" class="pf-te2-srcheck" [checked]="isInPackage(t.id)" (change)="togglePackageMember(t.id)" />
+                        <span class="nd-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
                         <span class="pf-pkg-pick__body">
                           <span class="pf-pkg-pick__title">
                             <span class="pf-pkg-pick__name">{{ t.name }}</span>
                             @if (t.type === 'profile') { <span class="pf-pkg-badge">Profile</span> }
                             @if (memberCalc(t); as def) {
-                              <span class="pf-pkg-badge pf-pkg-badge--calc" [title]="'Auto-calculated at result entry: ' + calcLine(def)">ƒ Calculated</span>
+                              <span class="pf-pkg-badge pf-pkg-badge--calc" [title]="'Auto-calculated at result entry: ' + calcLine(def)">Calculated</span>
                             }
                           </span>
                           <span class="pf-pkg-pick__meta">
-                            @if (t.testCode) { <span>{{ t.testCode }}</span><span class="pf-pkg-pick__dot">·</span> }
+                            @if (t.testCode) { <span class="nd-num">{{ t.testCode }}</span><span class="pf-pkg-pick__dot">·</span> }
                             <span>TAT {{ t.tatHours }}h</span>
                           </span>
                         </span>
@@ -964,12 +1074,13 @@
 
       @if (section() === 'layout') {
       <!-- 04 Report -->
-      <section id="sec-layout" class="pf-te2-sec pf-te2-sec--stack">
-        <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">Printed report</div>
-          <p class="pf-te2-sec__sub">What the patient's PDF shows for this test — in print order. Drag to rearrange, tap the eye to hide a line.</p>
+      <section id="sec-layout" class="pf-te2-sec pf-te2-sec--stack nd-card" role="tabpanel">
+        <div class="pf-te2-sec__label nd-card__head">
+          <span class="nd-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'layout' }"></ng-container></span>
+          <h2 class="nd-card__label pf-te2-sec__title pf-te2-sec__h">Printed report</h2>
+          <p class="nd-card__note pf-te2-sec__sub">What the patient's PDF shows for this test — in print order. Drag to rearrange, tap the eye to hide a line.</p>
         </div>
-        <div class="pf-te2-sec__body">
+        <div class="pf-te2-sec__body nd-card__body">
           @if (d.type === 'profile' && reportOrderedMembers().length > 0) {
             <div class="pf-tp pf-member-order">
               <div class="pf-tp__hdr">
@@ -987,7 +1098,7 @@
                     </span>
                     <span class="pf-member-order__pos">{{ i + 1 }}</span>
                     <span class="pf-tp-row__name">{{ m.name }}</span>
-                    @if (m.code) { <code class="pf-member-order__code">{{ m.code }}</code> }
+                    @if (m.code) { <span class="nd-num pf-member-order__code">{{ m.code }}</span> }
                     <button type="button" class="pf-tp-row__btn press" [disabled]="first" [attr.aria-label]="'Print ' + m.name + ' earlier'" title="Move up" (click)="moveReportMember(i, -1)">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
                     </button>
@@ -1009,7 +1120,7 @@
                   @if (testColumnsOverride()) {
                     <pf-touch-btn size="sm" variant="ghost" [disabled]="columnsSaving()" (pressed)="revertColumnsToDepartment()">Revert to department</pf-touch-btn>
                   }
-                  <pf-touch-btn size="sm" variant="primary" [disabled]="columnsSaving()" (pressed)="saveColumnsOverride()">
+                  <pf-touch-btn size="sm" variant="secondary" [disabled]="columnsSaving()" (pressed)="saveColumnsOverride()">
                     {{ columnsSaving() ? 'Saving…' : 'Save columns' }}
                   </pf-touch-btn>
                 </div>
@@ -1048,8 +1159,8 @@
               }
             </div>
           } @else {
-            <p class="text-[13px]" style="color: var(--text-tertiary);">
-              <strong style="color: var(--text-secondary);">Printed report</strong> — save this test first, then arrange how its results print.
+            <p class="pf-hint">
+              Save this test first, then arrange how its results print.
             </p>
           }
         </div>
@@ -1058,16 +1169,17 @@
 
       <!-- 05 Consumables -->
       @if (section() === 'consumables' && d.type === 'individual' && canManageInventory()) {
-      <section id="sec-consumables" class="pf-te2-sec pf-te2-sec--stack">
-        <div class="pf-te2-sec__label">
-          <div class="pf-te2-sec__title">Consumables</div>
-          <p class="pf-te2-sec__sub">Stock deducted when this test runs.</p>
+      <section id="sec-consumables" class="pf-te2-sec pf-te2-sec--stack nd-card" role="tabpanel">
+        <div class="pf-te2-sec__label nd-card__head">
+          <span class="nd-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'consumables' }"></ng-container></span>
+          <h2 class="nd-card__label pf-te2-sec__title pf-te2-sec__h">Consumables</h2>
+          <p class="nd-card__note pf-te2-sec__sub">Stock deducted when this test runs.</p>
         </div>
-        <div class="pf-te2-sec__body">
+        <div class="pf-te2-sec__body nd-card__body">
           @if (d.id) {
             <pf-test-consumables class="block" [testId]="d.id || null"></pf-test-consumables>
           } @else {
-            <p class="text-[13px]" style="color: var(--text-tertiary);">Save the test first, then add the inventory items it consumes here.</p>
+            <p class="pf-hint">Save the test first, then add the inventory items it consumes here.</p>
           }
         </div>
       </section>
@@ -1076,16 +1188,37 @@
     </div>
 
     <!-- ═══════════════════════════ Right rail ═══════════════════════════ -->
-    <aside class="pf-te2-aside">
+    <!-- New design: the LIVE PREVIEW is the side card (it adds what the form
+         can't show: the printed page). Below 1024px it is a sheet behind the
+         Preview button. -->
+    @if (nd() && previewOpen()) {
+      <div class="nd-sheet-backdrop pf-te2-previewscrim" (click)="previewOpen.set(false)" aria-hidden="true"></div>
+    }
+    <aside class="pf-te2-aside" id="pf-te2-preview" [class.pf-te2-aside--open]="previewOpen()"
+           [attr.aria-label]="nd() ? 'Live preview' : null">
+      @if (!nd()) {
       <div class="pf-savestate">
-        @if (dirty()) { <span class="c-amber">● unsaved changes</span> }
-        @else { <span class="c-green">● all changes saved</span> }
+        @if (dirty()) { <span class="pf-savestate__pending">Unsaved changes</span> }
+        @else { <span class="pf-savestate__ok">All changes saved</span> }
       </div>
+      }
 
-      <div class="pf-livewrap">
+      <div class="pf-livewrap" [class.nd-card]="nd()">
+        @if (nd()) {
+          <span class="nd-sheet__handle" aria-hidden="true"></span>
+          <div class="nd-card__head pf-livewrap__ndhead">
+            <span class="nd-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'preview' }"></ng-container></span>
+            <span class="nd-card__label">Live preview</span>
+            <span class="nd-card__spacer"></span>
+            <button type="button" class="nd-btn nd-btn--icon pf-te2-previewclose press" (click)="previewOpen.set(false)" aria-label="Close preview" title="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        } @else {
         <div class="pf-livewrap__head">
           <span class="pf-livewrap__k">LIVE PREVIEW</span>
         </div>
+        }
         @if (d.id) {
           <pf-report-pdf-preview class="pf-livewrap__pdf"
             [testId]="d.id"
@@ -1104,5 +1237,6 @@
         }
       </div>
     </aside>
+  </div>
   </div>
 </section>

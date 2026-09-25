@@ -115,7 +115,7 @@ export type PfNumberSize = 'sm' | 'md';
       padding: 0 10px 0 0;
       color: var(--text-muted);
       font-size: 12px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;   /* Noto, never a mono face */
       pointer-events: none;
     }
 

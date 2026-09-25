@@ -163,6 +163,103 @@
 .nd-row--in .nd-row__check { background: var(--text-primary); border-color: transparent; }
 .nd-row--done { background: var(--nd-done-tint); border-color: var(--nd-sel-border); }
 
+/* ── Kit field: a REAL input box (the result-entry field, form-sized) ──
+   <label class="nd-field"><span class="nd-field__lbl">Name</span>
+     <input class="nd-input" …/><p class="nd-field__hint">…</p></label>
+   Read-only (server-assigned codes): [readonly] → dashed, chip surface.
+   Numbers / codes: add .nd-num (tabular). 16px on phones (iOS zoom). */
+.nd-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nd-field__lbl { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.nd-field__hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--text-tertiary); text-wrap: pretty; }
+.nd-input {
+  display: block; box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; padding: 8px 12px;
+  border-radius: var(--nd-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--nd-card-bg)); color: var(--text-primary);
+  font: inherit; font-size: 13.5px; font-weight: 500; line-height: 1.35;
+  transition: border-color var(--nd-dur-fast) ease, box-shadow var(--nd-dur-fast) ease;
+}
+.nd-input::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
+.nd-input:hover { border-color: color-mix(in srgb, var(--text-primary) 38%, transparent); }
+.nd-input:focus {
+  outline: 0; border-color: var(--color-violet-600, #7c3aed);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+}
+.nd-input[readonly] { border-style: dashed; background: var(--nd-chip-bg); color: var(--text-secondary); cursor: default; box-shadow: none; }
+.nd-input--error { border-color: var(--red-border, #ef4444); }
+textarea.nd-input { resize: vertical; line-height: 1.45; }
+@media (max-width: 640px) { .nd-input { min-height: 44px; font-size: 16px; } }
+
+/* ── Context bar: an EDITOR's pill (single-record pages) ─────────────
+   The band pill shows WHO/WHAT is open as read-only chips: the record's
+   name is the primary chip (full, wraps, never truncated) with a quiet
+   pencil; then neutral key/value chips (Code in tabular numbers, Dept …).
+   Project it through pf-hero-band [customSearch] [contextBar] as
+   <div band-search class="nd-ctx">. Phones: one row that scrolls sideways. */
+.nd-ctx { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; min-width: 0; flex: 1 1 auto; padding: 6px 0; }
+.nd-ctx__chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 10px;
+  border-radius: var(--nd-radius-chip); border: 1px solid var(--nd-line); background: var(--nd-chip-bg);
+  color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 500; line-height: 1.2;
+  white-space: nowrap; text-align: left;
+}
+button.nd-ctx__chip { cursor: pointer; transition: border-color var(--nd-dur-fast) ease; }
+button.nd-ctx__chip:hover { border-color: var(--nd-sel-border); }
+.nd-ctx__k { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+.nd-ctx__primary {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0;
+  font-size: 15px; font-weight: 600; line-height: 1.25; color: var(--text-primary);
+  padding-right: 4px; @include nd.no-truncate;
+}
+.nd-ctx__edit {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 28px; height: 28px; border-radius: 8px; border: 0; background: transparent;
+  color: var(--text-tertiary); cursor: pointer;
+}
+.nd-ctx__edit:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
+.nd-ctx__edit:focus-visible, button.nd-ctx__chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+/* The ONE warning mark allowed in a context chip: the amber unpriced dot. */
+.nd-dot-unpriced { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 999px; background: #d97706; }
+@media (max-width: 640px) {
+  .nd-ctx { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 4px 0; }
+  .nd-ctx::-webkit-scrollbar { display: none; }
+  .nd-ctx > * { flex-shrink: 0; }
+  /* The name still wraps (never an ellipsis) — capped to the pill's width. */
+  .nd-ctx__primary { max-width: calc(100vw - 88px); font-size: 14.5px; }
+}
+
+/* ── Tabs row: an editor's sections (replaces a SECTIONS rail) ───────
+   <div class="nd-tabs" role="tablist"> › button.nd-tabs__item[role=tab]
+   [aria-selected] › svg + label + .nd-tabs__dot (violet = complete,
+   hollow neutral = something to finish). Neutral selected segment. */
+.nd-tabs {
+  display: flex; align-items: center; gap: 2px; padding: 3px; min-width: 0; max-width: 100%;
+  border-radius: var(--nd-radius); background: var(--nd-chip-bg); border: 1px solid var(--nd-line);
+  overflow-x: auto; scrollbar-width: none;
+}
+.nd-tabs::-webkit-scrollbar { display: none; }
+.nd-tabs__item {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex: 1 0 auto;
+  height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent;
+  color: var(--text-secondary); font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  transition: background var(--nd-dur-fast) var(--nd-spring), color var(--nd-dur-fast) ease;
+}
+.nd-tabs__item > svg { flex: none; opacity: 0.8; }
+.nd-tabs__item:hover { color: var(--text-primary); }
+.nd-tabs__item[aria-selected='true'] { background: var(--nd-card-bg); color: var(--text-primary); font-weight: 600; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18); }
+.nd-tabs__item[aria-selected='true'] > svg { opacity: 1; color: var(--violet-text, #7c3aed); }
+.nd-tabs__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+.nd-tabs__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; border: 1.5px solid var(--nd-sel-border); background: transparent; }
+.nd-tabs__dot--ok { border-color: transparent; background: var(--color-violet-600, #7c3aed); }
+@media (max-width: 640px) { .nd-tabs__item { height: 40px; flex: 0 0 auto; } }
+
+/* ── Save state (band actions, beside Save) ──────────────────────────
+   Neutral muted text; a violet check when everything is saved, a violet
+   dot while edits are pending. Never green / amber. */
+.nd-savestate { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+.nd-savestate > svg { flex: none; color: var(--violet-text, #7c3aed); }
+.nd-savestate__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+
 /* ── Motion ─────────────────────────────────────────────────────────── */
 @keyframes nd-pop { 0% { transform: scale(0.97); } 60% { transform: scale(1.015); } 100% { transform: none; } }
 @keyframes nd-fade-scale { from { opacity: 0; transform: translateY(-4px) scale(0.97); } to { opacity: 1; transform: none; } }
@@ -171,7 +268,7 @@
 .nd-anim-in { animation: nd-fade-scale var(--nd-dur) var(--nd-spring) both; }
 .nd-anim-rise { animation: nd-rise var(--nd-dur-sheet) var(--nd-spring-bounce) both; }
 @media (prefers-reduced-motion: reduce) {
-  .nd-anim-pop, .nd-anim-in, .nd-anim-rise, .nd-toggle__track, .nd-toggle__knob, .nd-btn { animation: none !important; transition: none !important; }
+  .nd-anim-pop, .nd-anim-in, .nd-anim-rise, .nd-toggle__track, .nd-toggle__knob, .nd-btn, .nd-tabs__item, .nd-input { animation: none !important; transition: none !important; }
 }
 
 /* ── Row actions: TEXT on web, ICON on touch ─────────────────────────
