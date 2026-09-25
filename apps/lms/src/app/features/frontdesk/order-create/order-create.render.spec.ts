@@ -80,10 +80,13 @@ describe('Order & Payments — rendered band, pill and billing header', () => {
     expect(tile.textContent).toContain('(required)');
   });
 
-  it('Confirm without a patient shows the inline hint under the band', async () => {
+  it('Continue to payment without a patient shows the inline hint under the band', async () => {
     vi.useFakeTimers();
-    const { el, f } = render();
-    (el.querySelector('.pf-oc-bill__foot .pf-oc-btn--primary') as HTMLButtonElement).click();
+    const { el, f, c } = render();
+    c._selected.set(['t1']);
+    f.detectChanges();
+    const cont = [...el.querySelectorAll('.pf-oc-bill__foot button')].find(b => b.textContent?.includes('Continue to payment')) as HTMLButtonElement;
+    cont.click();
     vi.advanceTimersByTime(5);
     f.detectChanges();
     expect(el.querySelector('.pf-oc-need')?.textContent).toContain('Pick the patient');
@@ -156,7 +159,7 @@ describe('Order & Payments — catalogue rows', () => {
     expect(hb.querySelector('.pf-price')!.classList).not.toContain('pf-price--unpriced');
     c._selected.set(['t2']);
     f.detectChanges();
-    const cartPrice = el.querySelector('.pf-cart-row .pf-price') as HTMLElement;
+    const cartPrice = el.querySelector('.pf-crt .pf-price') as HTMLElement;
     expect(cartPrice.classList).toContain('pf-price--unpriced');
   });
 
@@ -166,5 +169,36 @@ describe('Order & Payments — catalogue rows', () => {
     f.detectChanges();
     expect(el.querySelector('.pf-oc-cat button button')).toBeNull();
     expect(rowsOf(el)[0].querySelector(':scope > .pf-crow__star')).not.toBeNull();
+  });
+});
+
+describe('Order & Payments — two-phase billing card', () => {
+  const footButtons = (el: HTMLElement) => [...el.querySelectorAll('.pf-oc-bill__foot button')] as HTMLButtonElement[];
+  const cont = (el: HTMLElement) => footButtons(el).find(b => b.textContent?.includes('Continue to payment'));
+
+  it('opens on the CART phase: list + Total + Continue (disabled while empty), no payment section', () => {
+    const { el } = render();
+    expect(el.querySelector('.pf-oc-phase')!.getAttribute('data-phase')).toBe('cart');
+    expect(el.querySelector('.pf-oc-foot-total')?.textContent).toContain('Total');
+    expect(cont(el)?.disabled).toBe(true);
+    expect(footButtons(el).some(b => b.textContent?.includes('Save as draft'))).toBe(true);
+    expect(el.querySelector('pf-inline-payment-panel')).toBeNull();
+    expect(el.querySelector('.pf-cart-disc')).toBeNull();
+  });
+
+  it('Continue (with a patient) goes to PAYMENT; the summary line returns to the cart', () => {
+    const { el, f, c } = render();
+    c._patient.set({ id: 'x', displayName: 'Ms. Sansa Stark' });
+    c._selected.set(['t1', 't2']);
+    f.detectChanges();
+    expect(cont(el)?.disabled).toBe(false);
+    cont(el)!.click();
+    f.detectChanges();
+    expect(el.querySelector('.pf-oc-phase')!.getAttribute('data-phase')).toBe('pay');
+    expect(el.querySelector('.pf-oc-sum')?.textContent).toContain('2 tests');
+    expect(el.querySelector('pf-inline-payment-panel')).not.toBeNull();
+    (el.querySelector('.pf-oc-sum') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(el.querySelector('.pf-oc-phase')!.getAttribute('data-phase')).toBe('cart');
   });
 });

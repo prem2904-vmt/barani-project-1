@@ -101,3 +101,18 @@ describe('InlinePaymentPanel (designer panel)', () => {
     expect(emitted).toEqual([]);
   });
 });
+
+describe('InlinePaymentPanel — due-settlement drawer (payment only)', () => {
+  it('without externalFooter it renders its own Confirm and has no cart phase', () => {
+    const { c, fixture, emitted } = make(300);
+    fixture.componentRef.setInput('allowLater', false);
+    c.setMode('upi');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const btn = el.querySelector('.pf-ipp__confirm') as HTMLButtonElement;
+    expect(btn.textContent).toContain('Confirm ₹300.00 received');
+    expect(el.querySelector('.pf-oc-phase, .pf-oc-sum, .pf-crt')).toBeNull();
+    btn.click();
+    expect(emitted[0]).toEqual({ mode: 'upi' });
+  });
+});

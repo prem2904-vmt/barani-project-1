@@ -351,3 +351,88 @@ describe('Patient is required', () => {
     expect(c.patientMissing()).toBe(false);
   });
 });
+
+describe('Billing phases (cart → payment)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  const tests = [T('esr', 'ESR', 'Haematology'), T('hb', 'Haemoglobin', 'Haematology')];
+
+  it('defaults to the cart phase', () => {
+    const { c } = make(tests);
+    expect(c.billPhaseView()).toBe('cart');
+  });
+
+  it('Continue needs tests; with a patient it moves to payment', () => {
+    const { c } = make(tests);
+    c._patient.set(PATIENTS[0]);
+    c.continueToPayment();
+    expect(c.billPhaseView()).toBe('cart');          // empty cart
+    c.toggleTest(tests[0]);
+    c.continueToPayment();
+    expect(c.billPhaseView()).toBe('pay');
+  });
+
+  it('Continue without a patient nudges and stays on the cart', () => {
+    const { c } = make(tests);
+    c.toggleTest(tests[0]);
+    c.continueToPayment();
+    vi.advanceTimersByTime(1);
+    expect(c.patientNudge()).toBe(true);
+    expect(c.scope()).toBe('patient');
+    expect(c.billPhaseView()).toBe('cart');
+  });
+
+  it('the summary line (editCart) returns to the cart', () => {
+    const { c } = make(tests);
+    c._patient.set(PATIENTS[0]);
+    c.toggleTest(tests[0]);
+    c.continueToPayment();
+    c.editCart();
+    expect(c.billPhaseView()).toBe('cart');
+  });
+
+  it('adding / removing a test (catalogue or dropdown) while paying flips back to the cart', () => {
+    const { c } = make(tests);
+    c._patient.set(PATIENTS[0]);
+    c.toggleTest(tests[0]);
+    c.continueToPayment();
+    c.onPillInput('haem');
+    c.addSearchResult(tests[1]);
+    expect(c.billPhaseView()).toBe('cart');
+    c.continueToPayment();
+    c.removeTest('esr');
+    expect(c.billPhaseView()).toBe('cart');
+  });
+
+  it('clearing the cart returns to the cart phase', () => {
+    const { c } = make(tests);
+    c._patient.set(PATIENTS[0]);
+    c.toggleTest(tests[0]);
+    c.continueToPayment();
+    c.clearCart();
+    expect(c.billPhaseView()).toBe('cart');
+  });
+
+  it('an existing (read-only / paid) order opens on payment; its cart summary expands read-only', () => {
+    const { c } = make(tests);
+    c.viewOrderId.set('o1');
+    c._selected.set(['esr']);
+    c.billPhase.set('pay');                            // what ngOnInit does for ?orderId=
+    expect(c.billPhaseView()).toBe('pay');
+    c.editCart();
+    expect(c.billPhaseView()).toBe('cart');
+    c.toggleTest(tests[1]);                            // locked: no change
+    expect(c.selected()).toEqual(['esr']);
+    c.paidOrderId.set('o2');
+    c.billPhase.set('pay');
+    expect(c.billPhaseView()).toBe('pay');
+  });
+
+  it('?orderId= sets the payment phase on load', () => {
+    const { c } = make(tests);
+    c.route.snapshot.queryParamMap = new Map([['orderId', 'o1']]);
+    c.labCfg.ensureLoaded = () => {};
+    c.ngOnInit();
+    expect(c.billPhase()).toBe('pay');
+  });
+});
