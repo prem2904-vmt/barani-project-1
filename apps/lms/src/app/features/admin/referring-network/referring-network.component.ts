@@ -66,7 +66,11 @@ interface Doctor {
         <pf-hero-band [back]="true" placeholder="Search hospitals — name, code, phone, address…"
                       [value]="hospitalSearch()" (valueChange)="setHospitalSearch($event)">
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openHospitalEditor(null)"
+            <!-- While an editor modal is open its footer Save is the ONE
+                 primary: this steps down (secondary, disabled) behind it. -->
+            <button type="button" class="pf-hb-btn press pf-rn-add"
+                    [class.pf-hb-btn--primary]="!editorOpen()" [class.pf-hb-btn--ghost]="editorOpen()"
+                    [disabled]="editorOpen()" (click)="openHospitalEditor(null)"
                     aria-label="Add hospital">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -533,6 +537,8 @@ export class ReferringNetworkComponent implements OnInit {
   readonly savingHospital = signal(false);
   readonly doctorEditor = signal<Partial<Doctor> | null>(null);
   readonly savingDoctor = signal(false);
+  /** An editor modal is open: its footer Save is the view's ONE primary. */
+  readonly editorOpen = computed(() => !!this.hospitalEditor() || !!this.doctorEditor());
 
   // Inline, per-field backend errors for the editors (e.g. duplicate name/code).
   readonly hospitalFieldErr = signal<Record<string, string>>({});

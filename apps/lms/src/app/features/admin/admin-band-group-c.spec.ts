@@ -170,6 +170,23 @@ describe('Admin band — Referring network', () => {
     expect(names(p.el).length).toBe(2);
   });
 
+  it('an open editor modal owns the ONE primary: the band "Add hospital" steps down + disables', async () => {
+    const p = await render();
+    const add = () => p.el.querySelector<HTMLButtonElement>('pf-hero-band .pf-rn-add')!;
+    expect(add().classList.contains('pf-hb-btn--primary')).toBe(true);
+    add().click();
+    p.f.detectChanges();
+    expect(add().classList.contains('pf-hb-btn--primary')).toBe(false);
+    expect(add().classList.contains('pf-hb-btn--ghost')).toBe(true);
+    expect(add().disabled).toBe(true);
+    const primaries = p.el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary');
+    expect(primaries.length).toBe(1);
+    expect(primaries[0].closest('.pf-rn-modal__ftr')).not.toBeNull();
+    p.cmp.closeHospitalEditor();
+    p.f.detectChanges();
+    expect(add().classList.contains('pf-hb-btn--primary')).toBe(true);
+  });
+
   it('"Add hospital" in the band opens the hospital editor', async () => {
     const p = await render();
     p.actions().find(b => /Add hospital/.test(b.textContent ?? ''))!.click();
