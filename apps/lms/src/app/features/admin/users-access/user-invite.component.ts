@@ -8,7 +8,6 @@ import { Branch } from '../../../shared/models/tenant.model';
 import { Role } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { AlphaDirective } from '../../../shared/directives/alpha.directive';
 import { NumericDirective } from '../../../shared/directives/numeric.directive';
@@ -16,6 +15,10 @@ import { COUNTRY_CODES, getCountryDigitLength } from '../../../shared/utils/coun
 import { OPD_DEPARTMENTS, SPECIALIZATION_SUGGESTIONS } from '../../../shared/opd/medical-catalog';
 import { hasDoctorRole } from '../../../shared/opd/doctor-role';
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ROLE_INFO } from './permission-catalog';
+import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
 
 interface CreateResult { id: string; username: string; displayName: string; }
 
@@ -39,15 +42,37 @@ interface CreateForm {
     FormsModule,
     ScreenHeaderComponent,
     SelectComponent,
-    TileComponent,
     TouchButtonComponent,
+    HeroBandComponent,
     AlphaDirective,
     NumericDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="px-4 md:px-8 pt-6 pb-10">
-      <pf-screen-header
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <!-- ND "Editors": band = back · tenant · the ONE primary; the pill is
+             the CONTEXT BAR (who is being created, as it is typed). -->
+        <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=users'" [customSearch]="true" [contextBar]="true">
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
+                    [disabled]="!canCreate() || saving()" (click)="submit()"
+                    [attr.aria-label]="saving() ? 'Creating user' : 'Create user'" title="Create user">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+              {{ saving() ? 'Creating…' : 'Create user' }}
+            </button>
+          </ng-container>
+          <div band-search class="nd-ctx pf-uf-ctx">
+            <span class="nd-ctx__primary pf-uf-ctx__name">{{ displayPreview() || 'New user' }}</span>
+            @if (form().username.trim()) {
+              <span class="nd-ctx__chip" data-k="Username"><span class="nd-ctx__k">Username</span><span class="nd-num">{{ form().username.trim().toLowerCase() }}</span></span>
+            }
+            <span class="nd-ctx__chip" data-k="Roles"><span class="nd-ctx__k">Roles</span><span>{{ rolesSummary() }}</span></span>
+            <span class="nd-ctx__chip" data-k="Branch"><span class="nd-ctx__k">Branch</span><span>{{ scopeLabel() }}</span></span>
+          </div>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Users"
         title="Create user"
         parentRoute="/admin/users?tab=users"
@@ -57,197 +82,167 @@ interface CreateForm {
         </pf-touch-btn>
       </pf-screen-header>
 
-      <pf-tile tone="default" padding="lg" class="block">
-        <div class="space-y-3">
-          <p class="text-[11px]" style="color: var(--text-muted);"><span class="pf-req">*</span> required</p>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label class="pf-label">Title</label>
-              <select class="pf-input"
-                      [ngModel]="form().title" (ngModelChange)="patch({ title: $event })">
-                <option value="">—</option>
-                <option value="Dr.">Dr.</option>
-                <option value="Mr.">Mr.</option>
-                <option value="Mrs.">Mrs.</option>
-                <option value="Ms.">Ms.</option>
-              </select>
-            </div>
-            <div>
-              <label class="pf-label">First name</label>
-              <input type="text" pfAlpha class="pf-input"
-                     placeholder="e.g. Prem"
-                     [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
-            </div>
-            <div>
-              <label class="pf-label">Last name</label>
-              <input type="text" pfAlpha class="pf-input"
-                     placeholder="e.g. Kumar"
-                     [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label class="pf-label">Username <span class="pf-req">*</span></label>
-              <input type="text" pfAlpha [allowNumbers]="true" class="pf-input" autocomplete="off" autocapitalize="none" spellcheck="false"
-                     [class.pf-input-error]="!!usernameError()"
-                     placeholder="e.g. drpriya"
-                     [ngModel]="form().username" (ngModelChange)="onUsernameChange($event)" (blur)="onUsernameBlur()" />
-              @if (usernameError()) { <p class="pf-field-error">{{ usernameError() }}</p> }
-              <p class="text-[11px] mt-1" style="color: var(--text-muted);">
-                3–32 characters: alphanumeric (letters and digits only). This is what they type to sign in.
-              </p>
-            </div>
-            <div>
-              <label class="pf-label">Phone</label>
-              <div class="flex gap-2 items-center">
-                <select class="pf-input max-w-[105px] shrink-0 text-[13px]"
-                        [ngModel]="countryCode()" (ngModelChange)="onCountryCodeChange($event)">
-                  @for (c of countryCodes; track c.code) {
-                    <option [value]="c.code">{{ c.code }} {{ c.flag }}</option>
-                  }
-                </select>
-                <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()" class="pf-input flex-1"
-                       [placeholder]="phoneMaxDigits() + '-digit mobile number'"
-                       [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+      <div class="pf-band-body">
+        <div class="pf-uf-body">
+          <div class="pf-uf-grid2">
+            <!-- PROFILE -->
+            <section class="nd-card pf-uf-card">
+              <div class="nd-card__head">
+                <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                <h2 class="nd-card__label pf-uf-h">Profile</h2>
+                <span class="nd-card__note"><span class="pf-uf-req">*</span> required</span>
               </div>
-            </div>
-          </div>
+              <div class="nd-card__body">
+                <div class="pf-uf-fields">
+                  <div class="nd-field">
+                    <span class="nd-field__lbl">Title</span>
+                    <pf-select [options]="titleOptions" [value]="form().title" placeholder="—"
+                               (valueChange)="patch({ title: $any($event) ?? '' })"></pf-select>
+                  </div>
+                  <label class="nd-field">
+                    <span class="nd-field__lbl">First name</span>
+                    <input type="text" pfAlpha class="nd-input" placeholder="e.g. Prem"
+                           [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+                  </label>
+                  <label class="nd-field">
+                    <span class="nd-field__lbl">Last name</span>
+                    <input type="text" pfAlpha class="nd-input" placeholder="e.g. Kumar"
+                           [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+                  </label>
+                  <label class="nd-field">
+                    <span class="nd-field__lbl">Username <span class="pf-uf-req">*</span></span>
+                    <input type="text" pfAlpha [allowNumbers]="true" class="nd-input" autocomplete="off" autocapitalize="none" spellcheck="false"
+                           [class.nd-input--error]="!!usernameError()" placeholder="e.g. drpriya"
+                           [ngModel]="form().username" (ngModelChange)="onUsernameChange($event)" (blur)="onUsernameBlur()" />
+                    @if (usernameError()) { <p class="pf-uf-err">{{ usernameError() }}</p> }
+                    <p class="nd-field__hint">3–32 letters and digits. This is what they type to sign in.</p>
+                  </label>
+                  <div class="nd-field">
+                    <span class="nd-field__lbl">Phone</span>
+                    <div class="pf-uf-phone">
+                      <pf-select class="pf-uf-phone__cc" [options]="countryOptions" [value]="countryCode()"
+                                 [searchable]="true" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
+                      <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()"
+                             class="nd-input nd-num pf-uf-phone__num" aria-label="Mobile number"
+                             [placeholder]="phoneMaxDigits() + '-digit mobile number'"
+                             [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-          <div>
-            <label class="pf-label">Password <span class="pf-req">*</span></label>
-            <input type="text" class="pf-input" autocomplete="off"
-                   [class.pf-input-error]="!!passwordError()"
-                   placeholder="Minimum 8 characters"
-                   [ngModel]="form().password" (ngModelChange)="onPasswordChange($event)" />
-            @if (passwordError()) { <p class="pf-field-error">{{ passwordError() }}</p> }
-            <p class="text-[11px] mt-1" style="color: var(--text-muted);">
-              Share this with the user securely — they can change it after signing in, and you can reset it anytime.
-            </p>
-          </div>
-
-          <div>
-            <label class="pf-label">Roles <span class="pf-req">*</span></label>
-            <div class="pf-roles">
-              @for (r of roleOptions(); track r.value) {
-                <label class="pf-role-chip" [class.pf-role-chip--on]="hasRole(r.value)">
-                  <input type="checkbox" [checked]="hasRole(r.value)" (change)="toggleRole(r.value)" />
-                  <span>{{ r.label }}</span>
+            <!-- SIGN-IN + BRANCH -->
+            <section class="nd-card pf-uf-card">
+              <div class="nd-card__head">
+                <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                <h2 class="nd-card__label pf-uf-h">Sign-in &amp; branch</h2>
+              </div>
+              <div class="nd-card__body">
+                <label class="nd-field">
+                  <span class="nd-field__lbl">Password <span class="pf-uf-req">*</span></span>
+                  <input type="text" class="nd-input" autocomplete="off"
+                         [class.nd-input--error]="!!passwordError()" placeholder="Minimum 8 characters"
+                         [ngModel]="form().password" (ngModelChange)="onPasswordChange($event)" />
+                  @if (passwordError()) { <p class="pf-uf-err">{{ passwordError() }}</p> }
+                  <p class="nd-field__hint">Share this with the user securely — they can change it after signing in, and you can reset it anytime.</p>
                 </label>
-              }
-            </div>
-            <p class="text-[11px] mt-1" style="color: var(--text-muted);">
-              Pick one or more roles — the user gets the combined permissions of all selected roles.
-            </p>
+                <div class="nd-field">
+                  <span class="nd-field__lbl">Branch</span>
+                  <pf-select [options]="scopeOptions()" [value]="scopeValue()" placeholder="All branches"
+                             (valueChange)="onScopeChange($event)"></pf-select>
+                  <p class="nd-field__hint">Pick a sub-branch (indented →) to scope the user to that lab only.</p>
+                </div>
+              </div>
+            </section>
           </div>
 
-          <!-- Doctor details (OPD build) — appears only when a doctor-type role
-               is ticked; all fields optional. -->
-          @if (isDoctorSelected()) {
-            <div class="pf-doc">
-              <h3 class="pf-doc__title">Doctor details</h3>
-
-              <div>
-                <label class="pf-label">Medical Registration No.</label>
-                <input type="text" class="pf-input" [ngModel]="doctorReg()" (ngModelChange)="doctorReg.set($event)"
-                       placeholder="NMC / State Medical Council reg. no." />
-              </div>
-
-              <div>
-                <label class="pf-label">Department</label>
-                <pf-select [options]="deptOptions()" [value]="deptSelectValue()"
-                           placeholder="Select a department…" (valueChange)="onDeptChange($event)"></pf-select>
-                @if (deptIsCustom()) {
-                  <input type="text" class="pf-input" style="margin-top: 8px;" [ngModel]="doctorDept()"
-                         (ngModelChange)="doctorDept.set($event)" placeholder="Type the department name" />
+          <!-- ROLES -->
+          <section class="nd-card pf-uf-card">
+            <div class="nd-card__head">
+              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+              <h2 class="nd-card__label pf-uf-h">Roles <span class="pf-uf-req">*</span></h2>
+              <span class="nd-card__note">The user gets the combined permissions of every role switched on.</span>
+            </div>
+            <div class="nd-card__body">
+              <div class="pf-uf-roles">
+                @for (r of roleOptions(); track r.value) {
+                  <button type="button" class="nd-toggle pf-uf-sw press" role="switch" [attr.aria-checked]="hasRole(r.value)"
+                          (click)="toggleRole(r.value)">
+                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    <span class="pf-uf-sw__txt">
+                      <span class="pf-uf-sw__name">{{ r.label }}</span>
+                      @if (r.hint) { <span class="pf-uf-sw__what">{{ r.hint }}</span> }
+                    </span>
+                  </button>
                 }
               </div>
+            </div>
+          </section>
 
-              <div>
-                <label class="pf-label">Specialisation(s)</label>
-                <pf-select [options]="specOptions()" [multiple]="true" [values]="doctorSpecs()"
-                           placeholder="Select specialisation(s)…" (valuesChange)="doctorSpecs.set($event)"></pf-select>
+          <!-- DOCTOR DETAILS (OPD build) — only when a doctor-type role is on. -->
+          @if (isDoctorSelected()) {
+            <section class="nd-card pf-uf-card pf-doc">
+              <div class="nd-card__head">
+                <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg></span>
+                <h2 class="nd-card__label pf-uf-h pf-doc__title">Doctor details</h2>
+                <span class="nd-card__note">Optional</span>
               </div>
-
-              <div>
-                <label class="pf-label">Procedures / surgeries</label>
-                @if (doctorProcs().length) {
-                  <div class="pf-tags">
-                    @for (p of doctorProcs(); track p) {
-                      <span class="pf-tag">{{ p }}<button type="button" (click)="removeProc(p)" aria-label="Remove">×</button></span>
+              <div class="nd-card__body">
+                <div class="pf-uf-fields">
+                  <label class="nd-field">
+                    <span class="nd-field__lbl">Medical Registration No.</span>
+                    <input type="text" class="nd-input nd-num" [ngModel]="doctorReg()" (ngModelChange)="doctorReg.set($event)"
+                           placeholder="NMC / State Medical Council reg. no." />
+                  </label>
+                  <div class="nd-field">
+                    <span class="nd-field__lbl">Department</span>
+                    <pf-select [options]="deptOptions()" [value]="deptSelectValue()"
+                               placeholder="Select a department…" (valueChange)="onDeptChange($event)"></pf-select>
+                    @if (deptIsCustom()) {
+                      <input type="text" class="nd-input" [ngModel]="doctorDept()" aria-label="Department name"
+                             (ngModelChange)="doctorDept.set($event)" placeholder="Type the department name" />
                     }
                   </div>
-                }
-                <input type="text" class="pf-input" [ngModel]="procDraft()"
-                       (ngModelChange)="procDraft.set($event)"
-                       (keydown.enter)="$event.preventDefault(); addProc(procDraft())"
-                       placeholder="Type a procedure, press Enter…" />
+                  <div class="nd-field pf-uf-span">
+                    <span class="nd-field__lbl">Specialisation(s)</span>
+                    <pf-select [options]="specOptions()" [multiple]="true" [values]="doctorSpecs()"
+                               placeholder="Select specialisation(s)…" (valuesChange)="doctorSpecs.set($event)"></pf-select>
+                  </div>
+                  <div class="nd-field pf-uf-span">
+                    <span class="nd-field__lbl">Procedures / surgeries</span>
+                    @if (doctorProcs().length) {
+                      <div class="pf-uf-tags">
+                        @for (p of doctorProcs(); track p) {
+                          <span class="nd-chip nd-chip--static pf-uf-tag">{{ p }}
+                            <button type="button" class="pf-uf-tag__x" (click)="removeProc(p)" [attr.aria-label]="'Remove ' + p">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            </button>
+                          </span>
+                        }
+                      </div>
+                    }
+                    <input type="text" class="nd-input" [ngModel]="procDraft()" aria-label="Add a procedure"
+                           (ngModelChange)="procDraft.set($event)"
+                           (keydown.enter)="$event.preventDefault(); addProc(procDraft())"
+                           placeholder="Type a procedure, press Enter…" />
+                  </div>
+                </div>
               </div>
-            </div>
+            </section>
           }
-
-          <div>
-            <label class="pf-label">Branch</label>
-            <pf-select [options]="scopeOptions()" [value]="scopeValue()"
-                       placeholder="All branches"
-                       (valueChange)="onScopeChange($event)"></pf-select>
-            <p class="text-[11px] mt-1" style="color: var(--text-muted);">
-              Pick a sub-branch (indented →) to scope the user to that lab only.
-            </p>
-          </div>
         </div>
-      </pf-tile>
+      </div>
     </section>
   `,
-  styles: [`
-    .pf-input-error { border-color: var(--danger, #ef4444) !important; }
-    .pf-field-error { margin-top: 4px; font-size: 12px; color: var(--danger, #ef4444); }
-    .pf-req { color: var(--danger, #ef4444); font-weight: 700; margin-left: 2px; }
-
-    .pf-roles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
-    .pf-role-chip {
-      display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
-      padding: 8px 12px; min-height: 40px; border-radius: 10px;
-      border: 1px solid transparent; font-size: 13px; color: var(--text-primary);
-      transition: border-color .15s, background .15s;
-    }
-    .pf-role-chip input { cursor: pointer; width: 16px; height: 16px; flex: 0 0 auto; }
-    .pf-role-chip--on { border-color: var(--brand, #6366f1); background: color-mix(in srgb, var(--brand, #6366f1) 12%, transparent); }
-    @media (pointer: coarse) { :host .pf-role-chip { min-height: 44px; } :host .pf-role-chip input { width: 20px; height: 20px; } :host .pf-input { min-height: 44px; } }
-
-    /* Doctor details (OPD build) */
-    .pf-doc { display: flex; flex-direction: column; gap: 14px; padding: 14px;
-      border-radius: 12px; border: 1px dashed var(--brand, #6366f1);
-      background: color-mix(in srgb, var(--brand, #6366f1) 6%, transparent); }
-    .pf-doc__title { font-size: 13px; font-weight: 700; color: var(--brand, #6366f1);
-      text-transform: uppercase; letter-spacing: .04em; }
-    .pf-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-    .pf-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px;
-      border-radius: 999px; font-size: 12.5px; color: var(--text-primary);
-      background: color-mix(in srgb, var(--brand, #6366f1) 14%, transparent);
-      border: 1px solid color-mix(in srgb, var(--brand, #6366f1) 35%, transparent); }
-    .pf-tag button { border: 0; background: transparent; color: var(--text-secondary);
-      font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; }
-
-    /* App-styled autocomplete popover (specialisation suggestions) */
-    .pf-ac { position: relative; }
-    .pf-ac__pop { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0;
-      max-height: 240px; overflow-y: auto; padding: 4px; border-radius: 12px;
-      background: var(--surface, #0f172a);
-      border: 1px solid var(--glass-border, rgba(255,255,255,0.14));
-      box-shadow: 0 16px 40px rgba(0,0,0,0.45); }
-    .pf-ac__item { display: block; width: 100%; text-align: left; padding: 9px 12px;
-      border: 0; border-radius: 8px; background: transparent; cursor: pointer;
-      font-size: 13.5px; color: var(--text-primary, #e2e8f0); }
-    .pf-ac__item:hover { background: var(--glass-bg-hover, rgba(255,255,255,0.06)); }
-  `]
+  styles: [USER_FORM_STYLES]
 })
 export class UserInviteComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
+  protected readonly theme = inject(ThemeService);
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
@@ -270,8 +265,29 @@ export class UserInviteComponent implements OnInit {
   readonly passwordError = this._passwordError.asReadonly();
 
   readonly roleOptions = computed<PfSelectOption<string>[]>(() =>
-    this._roles().map(r => ({ value: r.id, label: r.name }))
+    this._roles().map(r => ({ value: r.id, label: r.name, hint: ROLE_INFO[r.name] ?? undefined }))
   );
+  readonly titleOptions: PfSelectOption<string>[] = TITLE_OPTIONS;
+  /** Country codes as pf-select options (code + country; no flag emoji). */
+  readonly countryOptions: PfSelectOption<string>[] = COUNTRY_CODES.map(c => ({ value: c.code, label: c.code, hint: c.country }));
+
+  // ── Context bar (new design) ──
+  /** "Dr. Prem Kumar" as it is typed; empty until a name is entered. */
+  readonly displayPreview = computed(() => {
+    const f = this._form();
+    return [f.title, f.firstName, f.fathersName].map(x => (x ?? '').trim()).filter(Boolean).join(' ');
+  });
+  readonly rolesSummary = computed(() => {
+    const ids = this._form().roleIds;
+    if (!ids.length) return 'None yet';
+    const names = this._roles().filter(r => ids.includes(r.id)).map(r => r.name);
+    return names.length ? names.join(', ') : `${ids.length}`;
+  });
+  readonly scopeLabel = computed(() => {
+    const v = this.scopeValue();
+    const o = this.scopeOptions().find(x => x.value === v);
+    return (o?.label ?? 'All branches').replace(/^\s*→\s*/, '').trim() || 'All branches';
+  });
 
   // ── Doctor details (OPD build) — the section appears when a ticked role is a
   //    doctor-type role (role.kind === 'doctor'). All optional; free-add tags. ──

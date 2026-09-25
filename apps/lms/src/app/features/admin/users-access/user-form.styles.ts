@@ -1,0 +1,63 @@
+/**
+ * Shared styles for the Users & Access single-record editors (create user,
+ * edit user, role editor) — ND-PATTERN "Editors": nd-card sections in the
+ * band body, kit fields, slate switches for roles / permissions. Local to
+ * this feature (the nd-kit owns the global pieces).
+ */
+export const USER_FORM_STYLES = `
+  :host { display: block; height: 100%; }
+  .pf-uf-body { display: flex; flex-direction: column; gap: 16px; padding-top: 4px; }
+  .pf-uf-grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (min-width: 1024px) { .pf-uf-grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .pf-uf-card { overflow: visible; }
+  .pf-uf-card .nd-card__body { overflow: visible; padding: 16px 18px 18px; gap: 16px; }
+  .pf-uf-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 16px; }
+  .pf-uf-span { grid-column: 1 / -1; }
+  .pf-uf-req { color: var(--red-text, #b91c1c); font-weight: 600; margin-left: 2px; }
+  .pf-uf-err { margin: 0; font-size: 12px; color: var(--red-text, #b91c1c); }
+  .pf-uf-phone { display: flex; gap: 8px; align-items: flex-start; }
+  .pf-uf-phone__cc { flex: 0 0 116px; min-width: 0; }
+  .pf-uf-phone__num { flex: 1 1 auto; }
+
+  /* Roles / permissions: one slate switch per row, the whole row is the tap target. */
+  .pf-uf-roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+  .pf-uf-sw {
+    display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 52px; padding: 10px 12px;
+    border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm); background: var(--nd-card-bg);
+    text-align: left; white-space: normal; cursor: pointer;
+    transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
+  }
+  .pf-uf-sw:hover { border-color: var(--nd-sel-border); }
+  .pf-uf-sw[aria-checked='true'] { background: var(--nd-in-tint); border-color: var(--nd-sel-border); }
+  .pf-uf-sw:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+  .pf-uf-sw .nd-toggle__track { margin-top: 2px; }
+  .pf-uf-sw__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+  .pf-uf-sw__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
+  .pf-uf-sw__what { font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
+  .pf-uf-sw__code { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
+
+  .pf-uf-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .pf-uf-tag { gap: 4px; padding-right: 4px; cursor: default; }
+  .pf-uf-tag__x { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+    border: 0; border-radius: 6px; background: transparent; color: var(--text-tertiary); cursor: pointer; }
+  .pf-uf-tag__x:hover { color: var(--text-primary); background: var(--nd-card-bg); }
+
+  .pf-uf-ctx__name { overflow-wrap: anywhere; }
+
+  @media (max-width: 640px) {
+    .pf-uf-card .nd-card__body { padding: 12px; }
+    .pf-uf-roles { grid-template-columns: minmax(0, 1fr); }
+    h2.nd-card__label.pf-uf-h { font-size: 12px !important; line-height: 1.3 !important; }
+  }
+  @media (pointer: coarse) { .pf-uf-sw { min-height: 56px; } }
+  @media (prefers-reduced-motion: reduce) { .pf-uf-sw { transition: none; } }
+`;
+
+/** Title (honorific) options — pf-select, never a native select. */
+export const TITLE_OPTIONS = [
+  { value: '', label: '—' },
+  { value: 'Dr.', label: 'Dr.' },
+  { value: 'Mr.', label: 'Mr.' },
+  { value: 'Mrs.', label: 'Mrs.' },
+  { value: 'Ms.', label: 'Ms.' },
+];
