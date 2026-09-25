@@ -54,13 +54,29 @@ The band's pill is the **CONTEXT BAR** for the step:
 - **Search screens:** the pill *is* the search (Order & Payments: scope tiles
   plus input).
 - **Work screens** (Collect; later results, validate, …): the pill holds the
-  current **subject** as read-only chips (patient, order ID, sample IDs), then
-  that screen's **filters** (a `.nd-seg`), then a counter
-  (`.nd-band-chip`).
-- On phones the pill is one row. Keep the subject chips; move the filters into
-  the main card's header; the counter goes to the bottom bar.
+  current **subject** as read-only chips (patient, order ID, sample IDs) and
+  a counter (`.nd-band-chip`). **Filters appear only when they add something
+  the page doesn't already show** — e.g. Collect has none: every vial tile
+  already shows its own state.
+- On phones the pill is one row: keep the subject chips; the counter goes to
+  the bottom bar.
 
-✅ Do: `‹ Micro World` + pill `[Ms. Paravai Munusamy 44/F · AA0007] [Order LAB-2609-000085] … [All·Pending·Drawn·External] [0/1 drawn]`
+### Side card = actions + info the main card doesn't show
+
+Never repeat the main card's items in the side card (Collect: no per-tube
+list). The side card carries one status line (a neutral chip with a violet
+mark), information the main card lacks (only fields the data really has —
+e.g. priority, fasting, referral), a short explanation line, and the footer
+actions.
+
+### Tiles in a row are symmetric
+
+Tiles in a size class share a fixed illustration box (same width + height
+for every container type); illustrations scale into it bottom-centred, so
+the text rows below start at the same y and align across tiles; badges sit
+at the same corner of the box.
+
+✅ Do: `‹ Micro World` + pill `[Ms. Paravai Munusamy 44/F · AA0007] [Order LAB-2609-000085] [Sample 26117] … [0/1 drawn]`
 ❌ Don't: replace the band with a big "Collect sample" / patient-name header.
 
 In-page steps that close rather than navigate pass `[backAction]` to
