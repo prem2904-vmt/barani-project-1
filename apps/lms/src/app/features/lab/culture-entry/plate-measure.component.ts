@@ -33,20 +33,43 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pm-backdrop" [class.pm-backdrop--full]="fullscreen()" (click)="onBackdrop($event)">
-      <div class="pm-panel" [class.pm-panel--full]="fullscreen()" (click)="$event.stopPropagation()">
+      <div class="pm-panel nd-sheet" [class.pm-panel--full]="fullscreen()" role="dialog" aria-modal="true"
+           aria-label="Measure zones from plate" (click)="$event.stopPropagation()">
+        <span class="nd-sheet__handle" aria-hidden="true"></span>
         <div class="pm-head">
-          <div class="min-w-0">
-            <div class="text-sm font-bold" style="color: var(--text-primary);">Measure zones from plate</div>
-            <div class="text-[11px]" style="color: var(--text-tertiary);">{{ stepHint() }}</div>
-          </div>
-          <button type="button" class="pm-icon" (click)="fullscreen.set(!fullscreen())" [title]="fullscreen() ? 'Exit full screen' : 'Full screen'">
+          <span class="nd-card__icon pm-head__ico" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>
+          </span>
+          <span class="nd-card__label pm-head__label">Measure zones</span>
+          <span class="pm-head__grow"></span>
+          <button type="button" class="pm-icon" (click)="fullscreen.set(!fullscreen())"
+                  [attr.aria-label]="fullscreen() ? 'Exit full screen' : 'Full screen'" [title]="fullscreen() ? 'Exit full screen' : 'Full screen'">
             @if (fullscreen()) {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v6H3"/><path d="M15 21v-6h6"/><path d="M3 15h6v6"/><path d="M21 9h-6V3"/></svg>
             } @else {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
             }
           </button>
-          <button type="button" class="pm-x" (click)="close()" title="Close">×</button>
+          <button type="button" class="pm-icon pm-x" (click)="close()" aria-label="Close" title="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="pm-titles">
+          <h2 class="pm-title">Measure zones from plate</h2>
+          <!-- Neutral stepper: Capture → Calibrate → Measure (the real modes). -->
+          <ol class="pm-steps" aria-label="Steps">
+            @for (st of steps; track st.key; let si = $index) {
+              <li class="pm-step" [attr.data-state]="stepState(si)" [attr.aria-current]="stepState(si) === 'active' ? 'step' : null">
+                <span class="pm-step__dot" aria-hidden="true">
+                  @if (stepState(si) === 'done') {
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  }
+                </span>
+                <span class="pm-step__lbl">{{ st.label }}</span>
+              </li>
+            }
+          </ol>
+          <p class="pm-sub">Step {{ stepIndex() + 1 }} of {{ steps.length }} · {{ stepHint() }}</p>
         </div>
 
         @if (mode() === 'capture') {
@@ -58,9 +81,10 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
                 <svg class="pm-guide" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
                   <path d="M0 0H400V300H0Z M200 150 m-122 0 a122 122 0 1 0 244 0 a122 122 0 1 0 -244 0 Z"
                         fill="rgba(0,0,0,0.45)" fill-rule="evenodd"/>
-                  <circle cx="200" cy="150" r="122" fill="none" stroke="rgba(255,255,255,0.92)"
-                          stroke-width="2" stroke-dasharray="11 8"/>
-                  <circle cx="200" cy="150" r="2.5" fill="rgba(255,255,255,0.75)"/>
+                  <circle class="pm-reticle" cx="200" cy="150" r="122" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="1.5"/>
+                  <g class="pm-sweep"><circle cx="200" cy="150" r="122" fill="none" stroke="#a78bfa" stroke-width="2.5"
+                          stroke-linecap="round" stroke-dasharray="70 697" opacity="0.9"/></g>
+                  <path class="pm-cross" d="M192 150h16M200 142v16" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
                 @if (tilt() !== null) {
                   <!-- Bubble level: centred + green when the phone is flat (top-down). -->
@@ -69,16 +93,16 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
                   </div>
                 }
               </div>
-              <p class="text-[12px] text-center mt-2 mb-3" style="color: var(--text-tertiary);">
+              <p class="pm-hinttext">
                 {{ tilt() === null ? 'Fit the whole dish inside the circle, top-down, then capture.'
                    : (tiltOk() ? 'Level — fit the dish inside the circle, then capture.' : 'Tilt the phone flat — shoot straight down at the plate.') }}
               </p>
-              <div class="flex flex-col gap-2 w-full max-w-xs">
-                <button type="button" class="pm-btn pm-btn--primary" (click)="captureFromVideo()">
+              <div class="pm-actions">
+                <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" (click)="captureFromVideo()">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v11H4V7z"/><path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>
                   Capture
                 </button>
-                <label class="pm-btn pm-btn--ghost text-center cursor-pointer">Upload a photo instead
+                <label class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost">Upload a photo instead
                   <input type="file" accept="image/png,image/jpeg,image/webp" (change)="onFilePick($event)" hidden /></label>
               </div>
             } @else {
@@ -86,12 +110,12 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--text-tertiary);">
                 <path d="M4 7h4l2-3h4l2 3h4v11H4V7z"/><path d="M12 11a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
               </svg>
-              <p class="text-[13px] text-center mb-1" style="color: var(--text-secondary);">Take a clear, top-down photo of the plate with the whole dish in frame.</p>
-              @if (camError()) { <p class="text-[12px] text-center mb-2" style="color: var(--red-text);">{{ camError() }}</p> }
-              <div class="flex flex-col gap-2 w-full max-w-xs">
-                @if (isNative()) { <button type="button" class="pm-btn pm-btn--primary" (click)="capturePhoto()">Take photo</button> }
-                @else { <button type="button" class="pm-btn pm-btn--primary" (click)="startCamera()">Open camera</button> }
-                <label class="pm-btn pm-btn--ghost text-center cursor-pointer">{{ isNative() ? 'Choose from gallery' : 'Upload a photo' }}
+              <p class="pm-hinttext pm-hinttext--lead">Take a clear, top-down photo of the plate with the whole dish in frame.</p>
+              @if (camError()) { <p class="pm-hinttext">{{ camError() }}</p> }
+              <div class="pm-actions">
+                @if (isNative()) { <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" (click)="capturePhoto()">Take photo</button> }
+                @else { <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" (click)="startCamera()">Open camera</button> }
+                <label class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost">{{ isNative() ? 'Choose from gallery' : 'Upload a photo' }}
                   <input type="file" accept="image/png,image/jpeg,image/webp" capture="environment" (change)="onFilePick($event)" hidden /></label>
               </div>
             }
@@ -107,12 +131,12 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
                 <image [attr.href]="imageSrc()" x="0" y="0" [attr.width]="natW()" [attr.height]="natH()" preserveAspectRatio="none"></image>
                 @if (calPts().length === 2) {
                   <line [attr.x1]="calPts()[0].x" [attr.y1]="calPts()[0].y" [attr.x2]="calPts()[1].x" [attr.y2]="calPts()[1].y"
-                        stroke="#22d3ee" [attr.stroke-width]="unit()" [attr.stroke-dasharray]="(unit()*2) + ' ' + unit()" />
-                  <text [attr.x]="(calPts()[0].x + calPts()[1].x)/2" [attr.y]="(calPts()[0].y + calPts()[1].y)/2 - unit()" fill="#22d3ee" [attr.font-size]="unit()*3" text-anchor="middle" font-weight="700">{{ dishMm() }} mm</text>
+                        stroke="#a78bfa" [attr.stroke-width]="unit()" [attr.stroke-dasharray]="(unit()*2) + ' ' + unit()" />
+                  <text [attr.x]="(calPts()[0].x + calPts()[1].x)/2" [attr.y]="(calPts()[0].y + calPts()[1].y)/2 - unit()" fill="#a78bfa" [attr.font-size]="unit()*3" text-anchor="middle" font-weight="700">{{ dishMm() }} mm</text>
                 }
                 @for (p of calPts(); track $index) {
-                  <circle [attr.cx]="p.x" [attr.cy]="p.y" [attr.r]="unit()*2.4" fill="rgba(34,211,238,0.25)" stroke="#22d3ee" [attr.stroke-width]="unit()*0.6" />
-                  <circle [attr.cx]="p.x" [attr.cy]="p.y" [attr.r]="unit()*0.9" fill="#22d3ee" />
+                  <circle [attr.cx]="p.x" [attr.cy]="p.y" [attr.r]="unit()*2.4" fill="rgba(167,139,250,0.25)" stroke="#a78bfa" [attr.stroke-width]="unit()*0.6" />
+                  <circle [attr.cx]="p.x" [attr.cy]="p.y" [attr.r]="unit()*0.9" fill="#a78bfa" />
                 }
 
                 @if (mode() === 'measure') {
@@ -127,7 +151,7 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
                         <rect [attr.x]="z.cx - z.r - unit()*1.4" [attr.y]="z.cy - unit()*1.4" [attr.width]="unit()*2.8" [attr.height]="unit()*2.8" fill="#fff" [attr.stroke]="zoneStroke(z)" [attr.stroke-width]="unit()*0.5" />
                         <rect [attr.x]="z.cx - unit()*1.4" [attr.y]="z.cy + z.r - unit()*1.4" [attr.width]="unit()*2.8" [attr.height]="unit()*2.8" fill="#fff" [attr.stroke]="zoneStroke(z)" [attr.stroke-width]="unit()*0.5" />
                         <rect [attr.x]="z.cx - unit()*1.4" [attr.y]="z.cy - z.r - unit()*1.4" [attr.width]="unit()*2.8" [attr.height]="unit()*2.8" fill="#fff" [attr.stroke]="zoneStroke(z)" [attr.stroke-width]="unit()*0.5" />
-                        <circle [attr.cx]="z.cx + z.r*0.71" [attr.cy]="z.cy - z.r*0.71" [attr.r]="unit()*2.8" fill="#ef4444" stroke="#fff" [attr.stroke-width]="unit()*0.6" />
+                        <circle [attr.cx]="z.cx + z.r*0.71" [attr.cy]="z.cy - z.r*0.71" [attr.r]="unit()*2.8" fill="#7c3aed" stroke="#fff" [attr.stroke-width]="unit()*0.6" />
                         <text [attr.x]="z.cx + z.r*0.71" [attr.y]="z.cy - z.r*0.71 + unit()*1.1" fill="#fff" [attr.font-size]="unit()*3.4" text-anchor="middle" font-weight="700">×</text>
                       }
                       <text [attr.x]="z.cx" [attr.y]="z.cy - z.r - unit()" [attr.fill]="zoneStroke(z)" [attr.font-size]="unit()*3" text-anchor="middle" font-weight="700">{{ mmOf(z) }}mm{{ sirOf(z) ? ' · ' + sirLabel(z) : '' }}</text>
@@ -179,7 +203,7 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
                       <li><b>Drag an antibiotic</b> from the list onto a circle</li>
                       <li>Tap the red <b>×</b> on a selected circle to delete</li>
                     </ul>
-                    <button type="button" class="pm-btn pm-btn--primary w-full mt-2" (click)="dismissHint()">Got it</button>
+                    <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--wide" (click)="dismissHint()">Got it</button>
                   </div>
                 </div>
               }
@@ -187,7 +211,7 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
 
             @if (mode() === 'measure') {
               <div class="pm-list">
-                <div class="pm-list-hd">Antibiotics<br /><span style="font-weight:400; color:var(--text-tertiary);">drag onto a zone to assign</span></div>
+                <div class="pm-list-hd">Antibiotics<span class="pm-list-sub">Drag onto a zone to assign</span></div>
                 <input class="pm-search" type="text" placeholder="Search…" [ngModel]="search()" (ngModelChange)="search.set($event)" />
                 @for (ab of filteredAbs(); track ab.i) {
                   <div class="pm-list-item" [class.pm-list-item--assigned]="hasZone(ab.i)" [class.pm-list-item--drag]="dragAb()?.index === ab.i"
@@ -196,7 +220,9 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
                     <span class="flex-1 truncate">{{ ab.name || ('#' + (ab.i+1)) }}</span>
                     @if (hasZone(ab.i)) {
                       <span class="pm-list-mm">{{ mmFor(ab.i) }}mm</span>
-                      <button type="button" class="pm-unassign" (pointerdown)="$event.stopPropagation()" (click)="unassign(ab.i)" title="Unassign">×</button>
+                      <button type="button" class="pm-unassign" (pointerdown)="$event.stopPropagation()" (click)="unassign(ab.i)" [attr.aria-label]="'Unassign ' + ab.name" title="Unassign">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                      </button>
                     }
                   </div>
                 }
@@ -207,37 +233,35 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
 
         @if (mode() === 'calibrate') {
           <div class="pm-controls">
-            <button type="button" class="pm-btn pm-btn--primary w-full mb-2" [disabled]="analyzing()" (click)="autoDetect()">
+            <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost pm-btn--wide" [disabled]="analyzing()" (click)="autoDetect()">
               @if (!analyzing()) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg> }
               {{ analyzing() ? 'Analyzing…' : 'Auto-detect dish + zones' }}
             </button>
-            <div class="text-[11px] text-center mb-2" style="color: var(--text-tertiary);">— or calibrate manually: tap the two rim edges —</div>
-            <div class="flex items-center gap-2 mb-2">
-              <label class="text-[12px]" style="color: var(--text-secondary);">Dish Ø</label>
-              <input type="number" class="pf-input pf-input--compact w-20 text-center" [ngModel]="dishMm()" (ngModelChange)="dishMm.set($event || 90)" />
-              <span class="text-[11px]" style="color: var(--text-tertiary);">mm (standard plate = 90)</span>
-            </div>
-            <div class="flex gap-2">
-              <button type="button" class="pm-btn pm-btn--ghost flex-1" (click)="resetCalibration()">Re-tap rim</button>
-              <button type="button" class="pm-btn pm-btn--primary flex-1" [disabled]="!calibrated()" (click)="goMeasure()">Measure</button>
+            <p class="pm-hinttext">Or calibrate by hand: tap the two opposite rim edges.</p>
+            <label class="pm-dish">
+              <span class="pm-dish__lbl">Dish Ø</span>
+              <input type="number" class="pm-field pm-field--num" [ngModel]="dishMm()" (ngModelChange)="dishMm.set($event || 90)" aria-label="Dish diameter in mm" />
+              <span class="pm-dish__unit">mm · standard plate 90</span>
+            </label>
+            <div class="pm-row">
+              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost" (click)="resetCalibration()">Re-tap rim</button>
+              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" [disabled]="!calibrated()" (click)="goMeasure()">Measure</button>
             </div>
           </div>
         }
 
         @if (mode() === 'measure') {
           <div class="pm-controls">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="text-[11px]" style="color: var(--text-tertiary);">Drag centre to move, edge to resize · <b>double-tap = snap to edge</b> · pinch/scroll to zoom · drag an antibiotic onto a circle.</span>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button type="button" class="pm-btn pm-btn--ghost" (click)="mode.set('calibrate')">Recalibrate</button>
-              <button type="button" class="pm-btn pm-btn--ghost" (click)="retake()">Retake</button>
-              <button type="button" class="pm-btn pm-btn--ghost" [disabled]="analyzing()" (click)="autoDetect()">
+            <p class="pm-hinttext">Drag the centre to move, the edge to resize · double-tap snaps to the edge · pinch or scroll to zoom · drag an antibiotic onto a circle.</p>
+            <div class="pm-row pm-row--wrap">
+              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost" (click)="mode.set('calibrate')">Recalibrate</button>
+              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost" (click)="retake()">Retake</button>
+              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost" [disabled]="analyzing()" (click)="autoDetect()">
                 @if (!analyzing()) { <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></svg> }
                 {{ analyzing() ? '…' : 'Re-detect' }}
               </button>
-              <button type="button" class="pm-btn pm-btn--ghost" [disabled]="!hasUnassigned()" (click)="smartFill()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg> Smart-fill</button>
-              <button type="button" class="pm-btn pm-btn--primary flex-1" [disabled]="busy() || assignedCount() === 0" (click)="apply()">{{ busy() ? 'Saving…' : ('Apply ' + assignedCount() + ' zone' + (assignedCount() === 1 ? '' : 's')) }}</button>
+              <button type="button" class="nd-btn nd-btn--secondary pm-btn pm-btn--ghost" [disabled]="!hasUnassigned()" (click)="smartFill()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg> Smart-fill</button>
+              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="busy() || assignedCount() === 0" (click)="apply()">{{ busy() ? 'Saving…' : ('Apply ' + assignedCount() + ' zone' + (assignedCount() === 1 ? '' : 's')) }}</button>
             </div>
           </div>
         }
@@ -315,6 +339,101 @@ interface PlateAnalysis { imageWidth: number; imageHeight: number; dish?: Analyz
       .pm-list-hd, .pm-search { width: 100%; }
       .pm-list-item { flex: 0 1 auto; padding: 8px 10px; }
       .pm-controls { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+    }
+
+    /* ══ nd-kit restyle (owner): like the scanner modal ══ */
+    .pm-backdrop { background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+    .pm-panel { background: var(--nd-card-bg, var(--bg-card-solid)); border: 1px solid var(--nd-line, var(--glass-border));
+      border-radius: var(--nd-radius-card, 16px); box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22); font-family: inherit;
+      animation: pm-in var(--nd-dur, 320ms) var(--nd-spring, ease) both; }
+    @keyframes pm-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+    .pm-head { gap: 10px; padding: 14px 16px 0; border-bottom: 0; }
+    .pm-head__grow { flex: 1 1 auto; }
+    .pm-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
+      border-radius: 8px; border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer; }
+    .pm-icon:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+    .pm-titles { padding: 10px 16px 12px; border-bottom: 1px solid var(--nd-line); flex-shrink: 0; }
+    .pm-title { margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+    .pm-steps { list-style: none; margin: 10px 0 0; padding: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .pm-step { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); }
+    .pm-step + .pm-step::before { content: ''; width: 18px; height: 1px; background: var(--nd-line); margin-right: 2px; }
+    .pm-step__dot { width: 14px; height: 14px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--nd-sel-border, #9aa4ae); background: transparent; color: var(--text-secondary); }
+    .pm-step[data-state='active'] { color: var(--text-primary); font-weight: 500; }
+    .pm-step[data-state='active'] .pm-step__dot { border-color: var(--color-violet-600, #7c3aed); background: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 18%, transparent); }
+    .pm-step[data-state='done'] .pm-step__dot { border-color: transparent; background: var(--nd-chip-bg); }
+    .pm-sub { margin: 8px 0 0; font-size: 12px; color: var(--text-tertiary); }
+    .pm-capture { padding: 16px; gap: 12px; }
+    .pm-camwrap { max-width: 560px; }
+    .pm-cam { border-radius: var(--nd-radius, 12px); border: 0; }
+    .pm-guide { border-radius: var(--nd-radius, 12px); }
+    .pm-sweep { transform-origin: 200px 150px; animation: pm-sweep 3.2s linear infinite; }
+    @keyframes pm-sweep { to { transform: rotate(360deg); } }
+    .pm-level { border-color: rgba(255,255,255,0.6); background: rgba(8,10,16,0.4); }
+    .pm-level__bubble { background: #ffffff; }
+    .pm-level--ok { border-color: #a78bfa; }
+    .pm-level--ok .pm-level__bubble { background: #a78bfa; }
+    .pm-hinttext { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-tertiary); text-align: center; text-wrap: pretty; }
+    .pm-hinttext--lead { color: var(--text-secondary); }
+    .pm-controls .pm-hinttext { text-align: left; margin-bottom: 10px; }
+    .pm-actions { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 340px; }
+    .pm-btn { font-family: inherit; }
+    .pm-btn.nd-btn { height: 44px; min-height: 44px; font-size: 14px; }
+    label.pm-btn { cursor: pointer; }
+    .pm-btn--wide { width: 100%; margin-bottom: 10px; }
+    .pm-row { display: flex; gap: 8px; }
+    .pm-row > .nd-btn { flex: 1 1 0; }
+    .pm-row--wrap { flex-wrap: wrap; }
+    .pm-row--wrap > .nd-btn { flex: 0 0 auto; }
+    .pm-row--wrap > .pm-apply { flex: 1 1 180px; }
+    .pm-controls { padding: 12px 16px 14px; border-top: 1px solid var(--nd-line); background: var(--nd-card-bg); }
+    .pm-dish { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .pm-dish__lbl { font-size: 13px; color: var(--text-secondary); }
+    .pm-dish__unit { font-size: 12px; color: var(--text-tertiary); }
+    .pm-field { height: 40px; padding: 0 10px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line);
+      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 14px; outline: none; }
+    .pm-field--num { width: 80px; text-align: center; font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
+    .pm-field:focus, .pm-search:focus { border-color: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
+    .pm-stage { border-radius: 0; }
+    .pm-toolbar { background: rgba(15,17,24,0.72); border-color: rgba(255,255,255,0.14); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+    .pm-tool { color: #e5e7eb; }
+    .pm-tool--on { background: rgba(167,139,250,0.28); color: #fff; }
+    .pm-loupe-x::before, .pm-loupe-x::after { background: rgba(167,139,250,0.9); }
+    .pm-hint-card { background: var(--nd-card-bg); border-color: var(--nd-line); border-radius: var(--nd-radius, 12px); }
+    .pm-list { border-left-color: var(--nd-line); }
+    .pm-list-hd { font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-primary);
+      display: flex; flex-direction: column; gap: 2px; }
+    .pm-list-sub { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+    .pm-search { height: 36px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+      font: inherit; font-size: 13px; outline: none; }
+    .pm-list-item { font-weight: 500; font-size: 13px; border-color: var(--nd-line); background: var(--nd-card-bg); color: var(--text-primary); }
+    .pm-list-item--assigned { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); color: var(--text-primary); }
+    .pm-list-mm { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--nd-chip-bg); color: var(--text-secondary); }
+    .pm-unassign { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px;
+      color: var(--text-tertiary); }
+    .pm-unassign:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+    .pm-grip { color: var(--text-muted); }
+    .pm-ghost { background: var(--color-violet-600, #7c3aed); }
+    .pm-backdrop--full { bottom: var(--nd-nav-h, 0px); }
+    /* Phones: a tall sheet ABOVE the always-visible navbar; camera full width. */
+    @media (max-width: 640px) {
+      .pm-backdrop { bottom: var(--nd-nav-h, 0px); align-items: flex-end; padding: 0; }
+      /* position:relative + the kit sheet's bottom offset would lift the panel
+         by the nav height — the backdrop already stops above the nav. */
+      .pm-panel, .pm-panel--full { position: relative; top: auto; bottom: auto; left: auto; right: auto; width: 100%; max-width: none;
+        height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px)); max-height: none;
+        border-radius: 20px 20px 0 0; border-bottom: 0; }
+      .pm-head { padding-top: 6px; }
+      .pm-capture { padding: 12px; justify-content: flex-start; }
+      .pm-camwrap { max-width: none; }
+      .pm-actions { max-width: none; }
+      .pm-icon { width: 44px; height: 44px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pm-sweep, .pm-panel { animation: none; }
+      .pm-sweep { display: none; }
     }
   `]
 })
@@ -426,11 +545,22 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   /** viewBox-relative so handles/strokes stay ~constant on screen as you zoom. */
   readonly unit = computed(() => Math.max(this.view().w, this.view().h) / 220 || 1);
 
+  /** The real steps (modes) for the neutral stepper. */
+  readonly steps: { key: Mode; label: string }[] = [
+    { key: 'capture', label: 'Capture' },
+    { key: 'calibrate', label: 'Calibrate' },
+    { key: 'measure', label: 'Measure zones' },
+  ];
+  stepIndex(): number { return Math.max(0, this.steps.findIndex(st => st.key === this.mode())); }
+  stepState(i: number): 'done' | 'active' | 'todo' {
+    const cur = this.stepIndex();
+    return i < cur ? 'done' : i === cur ? 'active' : 'todo';
+  }
   stepHint(): string {
     switch (this.mode()) {
-      case 'capture': return 'Step 1 — capture the plate';
-      case 'calibrate': return 'Step 2 — auto-detect, or tap the two opposite rim edges';
-      case 'measure': return 'Step 3 — fit each circle, then drag its antibiotic from the list';
+      case 'capture': return 'Capture the plate';
+      case 'calibrate': return 'Auto-detect, or tap the two opposite rim edges';
+      case 'measure': return 'Fit each circle, then drag its antibiotic from the list';
     }
   }
 
@@ -788,10 +918,19 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   lowConf(z: Zone): boolean { return z.abIndex == null && z.auto && (z.conf ?? 100) < 70; }
   abShort(i: number | null): string { if (i == null) return ''; const n = this.antibiotics[i] ?? ''; return n ? n.slice(0, 10) : '#' + (i + 1); }
   abLabel(i: number | null): string { if (i == null) return ''; const n = this.antibiotics[i] ?? ('#' + (i + 1)); return n.length > 16 ? n.slice(0, 15) + '…' : n; }
+  /** Ring colour. Unassigned = the violet accent. Assigned rings: LIGHT mode
+   *  is neutral white (owner: no traffic lights — S/I/R rides in the label);
+   *  dark keeps the S/I/R colours it always had. */
   zoneStroke(z: Zone): string {
+    if (z.abIndex == null) return '#a78bfa';
+    if (this.isLight()) return '#ffffff';
     const s = this.sirOf(z);
     if (s === 'S') return '#10b981'; if (s === 'R') return '#ef4444'; if (s === 'I') return '#f59e0b';
-    return z.abIndex == null ? '#f59e0b' : '#10b981';
+    return '#ffffff';
+  }
+  isLight(): boolean {
+    try { const r = document.documentElement; return r.classList.contains('light') || r.getAttribute('data-theme') === 'light'; }
+    catch { return false; }
   }
   zoneFill(i: number): string {
     if (i === this.dropTarget()) return 'rgba(124,58,237,0.25)';
