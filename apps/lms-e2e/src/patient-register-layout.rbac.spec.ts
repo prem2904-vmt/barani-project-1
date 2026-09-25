@@ -5,8 +5,10 @@ import { loginAs } from './support/auth';
  * Patient registration — REAL layout (ND-PATTERN §15 "one single form, no
  * tabs, keyboard-first"; jsdom can't lay out). Signs in as the seeded Micro
  * World Lab Admin, opens /frontdesk/patients/new and checks: at 1440×900 the
- * three section cards side by side with NO page / body scroll, the pill =
- * the name only, ONE primary, First name focused, Enter to the next field,
+ * three section cards side by side with NO page / body scroll, the pill at
+ * the STANDARD band-pill size (also at 2000px) = the name + the ABHA helpers
+ * at its right, an EMPTY date of birth, no number spinners, ONE primary,
+ * First name focused, Enter to the next field,
  * field-level errors, Title → Sex, 40px fields, no mono / green; at 1024 two
  * columns; at 375 one column scrolling under the pinned band (icon primary,
  * full-width 44px / 16px fields).
@@ -75,8 +77,9 @@ async function shoot(page: Page, name: string) {
   if (!SHOTS) return;
   for (const theme of ['light', 'dark'] as const) {
     await setTheme(page, theme);
-    await page.waitForTimeout(250);
-    await page.screenshot({ path: `${SHOTS}/v2-${name}-${theme}.png`, fullPage: false });
+    // Let the theme cross-fade finish (a mid-fade capture looked half-dark).
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: `${SHOTS}/v3-${name}-${theme}.png`, fullPage: false });
   }
   await setTheme(page, 'light');
 }
@@ -137,8 +140,33 @@ test.describe('Patient registration — real layout (one form)', () => {
     const firstName = page.locator('[data-field="first_name"] input');
     await expect(firstName).toBeVisible({ timeout: 30_000 });
 
-    // Pill = the name only: no tabs, no chips.
+    // Pill = the name ✎ … ABHA helpers (quiet grey, icon + label); no tabs, no chips.
     await expect(page.locator('[role="tablist"], [role="tab"], .nd-ctx__chip, .pf-reg-next')).toHaveCount(0);
+    const pillAbha = ctx.locator('.pf-reg-ctx__abha .nd-btn--quiet');
+    await expect(pillAbha).toHaveCount(2);
+    await expect(pillAbha.first()).toContainText('Fill from ABHA');
+    await expect(page.locator('.pf-wr-card .nd-card__head button')).toHaveCount(0);
+    // The pill is the STANDARD band-pill size, centred — never full width.
+    const pillW = async () => {
+      const b = (await page.locator('pf-hero-band .pf-hb__search').boundingBox())!;
+      const vw = page.viewportSize()!.width;
+      return { w: b.width, left: b.x, right: vw - b.x - b.width };
+    };
+    let pw = await pillW();
+    expect(pw.w).toBeLessThanOrEqual(1124);
+    expect(Math.abs(pw.left - pw.right)).toBeLessThan(4);
+    // The ABHA buttons sit at the pill's right edge.
+    const abhaBox = (await pillAbha.last().boundingBox())!;
+    expect(1440 - pw.right - (abhaBox.x + abhaBox.width)).toBeLessThan(40);
+
+    // Date of birth is EMPTY (no prefilled / greyed date); no spinners anywhere.
+    const dobIn = page.locator('[data-field="date_of_birth"] input[data-pf-stop]');
+    await expect(dobIn).toHaveValue('');
+    await expect(dobIn).toHaveAttribute('placeholder', 'dd/mm/yyyy');
+    const spinners = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLInputElement>('pf-patient-register input'))
+      .filter(i => i.type === 'number' && getComputedStyle(i).appearance !== 'textfield').map(i => i.className));
+    expect(spinners, 'number inputs with spinners').toEqual([]);
+    await expect(page.locator('[data-field="date_of_birth"] .pf-di-dob__age')).toHaveAttribute('inputmode', 'numeric');
     // ONE primary on the page, in the band.
     await expect(page.locator(PRIMARY)).toHaveCount(1);
     await expect(page.locator('pf-hero-band .pf-hb__actions .pf-hb-btn--primary')).toHaveText(/Register patient/);
@@ -171,12 +199,11 @@ test.describe('Patient registration — real layout (one form)', () => {
     await page.keyboard.type('Ramakrishnan');
     await expect(ctx.locator('.pf-reg-ctx__nametext')).toHaveText('Venkatasubramanian Ramakrishnan');
 
-    // 40px fields; quiet grey ABHA buttons in the Identity card header.
+    // 40px fields.
     const h = async (sel: string) => (await page.locator(sel).first().boundingBox())?.height ?? 0;
     expect(await h('[data-field="first_name"] input')).toBeCloseTo(40, 0);
     expect(await h('[data-field="phone"] .pf-di-phone')).toBeCloseTo(40, 0);
-    const abha = page.locator('.pf-wr-card').first().locator('.nd-card__head .nd-btn--quiet');
-    await expect(abha).toHaveCount(2);
+    expect(await h('[data-field="date_of_birth"] input[data-pf-stop]')).toBeCloseTo(40, 0);
 
     const hy = await hygiene(page);
     expect(hy.mono, 'monospace').toEqual([]);
@@ -191,8 +218,8 @@ test.describe('Patient registration — real layout (one form)', () => {
     await expect(page.locator('[data-field="sex"] [role="radio"][aria-checked="true"]')).toHaveText('Other');
 
     // Field-level errors: the missing phone is outlined, has its message and gets focus.
-    const dob = page.locator('[data-field="date_of_birth"] input[type="date"]');
-    if (await dob.count()) await dob.fill('1990-05-15');
+    await dobIn.fill('15051990');
+    await expect(dobIn).toHaveValue('15/05/1990');
     await page.locator('.pf-reg-primary').click();
     const phone = page.locator('[data-field="phone"]');
     await expect(phone.locator('.pf-di-err')).toContainText(/Required/);
@@ -200,6 +227,14 @@ test.describe('Patient registration — real layout (one form)', () => {
     await expect(phone.locator('input[type="tel"]')).toBeFocused();
     await expect(page.locator('[data-field="first_name"] .pf-di-err')).toHaveCount(0);
     await shoot(page, 'register-1440-errors');
+
+    // Wide desktop (the owner's ~2000px): the pill stays the standard size.
+    await page.setViewportSize({ width: 2000, height: 1000 });
+    await page.waitForTimeout(400);
+    pw = await pillW();
+    expect(pw.w).toBeLessThanOrEqual(1124);
+    expect(Math.abs(pw.left - pw.right)).toBeLessThan(4);
+    await shoot(page, 'register-2000');
 
     // ── Tablet: two columns ─────────────────────────────────────────────
     await page.setViewportSize({ width: 1024, height: 768 });
@@ -219,6 +254,11 @@ test.describe('Patient registration — real layout (one form)', () => {
     expect(pb.width).toBeLessThanOrEqual(60);
     expect(pb.y).toBeLessThan((await ctx.boundingBox())!.y);
     await expect(page.locator('.pf-reg-cancel')).toBeHidden();
+    // ABHA helpers are icon-only in the pill on phones.
+    for (const b of await pillAbha.all()) {
+      const bb = (await b.boundingBox())!;
+      expect(bb.width).toBeLessThanOrEqual(44);
+    }
     const card = (await page.locator('.pf-wr-card').first().locator('.nd-card__body').boundingBox())!;
     const fb = (await firstName.boundingBox())!;
     expect(fb.width).toBeGreaterThan(card.width - 40);
@@ -252,6 +292,8 @@ test.describe('Patient registration — real layout (one form)', () => {
     await expect(page.locator(PRIMARY)).toHaveCount(1);
     await expect(page.locator('pf-hero-band .pf-hb-btn--primary')).toHaveText(/Save changes/);
     await expect(page.locator('pf-hero-band .nd-savestate')).toContainText('All changes saved');
+    await expect(ctx.locator('.pf-reg-ctx__abha .nd-btn--quiet')).toHaveText(/Verify \/ create ABHA/);
+    await expect(page.locator('[data-field="date_of_birth"] input[data-pf-stop]')).toHaveValue('12/03/1984');
     await page.locator('[data-field="first_name"] input').fill('Lakshmi V');
     await expect(page.locator('pf-hero-band .nd-savestate')).toContainText('Unsaved changes');
     await shoot(page, 'edit-1440');

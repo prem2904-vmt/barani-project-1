@@ -52,7 +52,14 @@ export async function fillRegistration(page: Page, p: { firstName: string; lastN
   await fieldRow(page, 'Last name').locator('input').first().fill(p.lastName);
   if (p.dob) {
     await revealRegistrationField(page, 'Date of birth');
-    await fieldRow(page, 'Date of birth').locator('input[type="date"]').fill(p.dob);
+    // Classic: a native date input (ISO). New design: typed dd/mm/yyyy.
+    const row = fieldRow(page, 'Date of birth');
+    const native = row.locator('input[type="date"]:not(.pf-di-date__native)');
+    if (await native.count()) await native.fill(p.dob);
+    else {
+      const [y, m, d] = p.dob.split('-');
+      await row.locator('input[data-pf-stop]').fill(`${d}${m}${y}`);
+    }
   }
   await pickSex(page, 'Male');
   await revealRegistrationField(page, 'Phone');

@@ -687,8 +687,14 @@ canonical example is the **test editor**
   columns. Phone: 1 column scrolling under the pinned band. Inside a card
   fields sit two-up; wide ones (Title, DOB ⇄ age, phone, textareas) span
   the card; one column on phones / narrow cards.
-- **Pill = the patient's NAME only** ("New patient" → the FULL live name,
-  "Baby of <mother>"; edit = the patient). Pencil → First name.
+- **Pill = the patient's NAME … + the ABHA helpers**, at the STANDARD band
+  pill size — the search pill's max-width + centring
+  (`pf-hero-band [standardPill]`), never the full band width (the owner saw
+  it edge to edge at ~2000px). Left: the name ("New patient" → the FULL live
+  name, "Baby of <mother>"; edit = the patient) + pencil → First name.
+  Right: **Fill from ABHA** · **Create ABHA** (edit: **Verify / create
+  ABHA**) as quiet grey `.nd-btn--quiet` — icon + label on desktop, icon
+  only on phones. Nothing in the card headers.
 - **Band:** back · tenant · Cancel, Save & book test, Save & book
   appointment (ghosts) and the ONE primary **Register patient** (edit: the
   neutral save state, Cancel, **Save changes**). Phones: Cancel goes, the
@@ -701,12 +707,21 @@ canonical example is the **test editor**
   Tab stop, ←/→ select, Home / End, a letter picks — M / F / O on Sex, M
   cycles Mr. / Mrs. / Ms. / Master on Title). Title → Sex where unambiguous
   (Mr. / Master → Male, Mrs. / Ms. → Female); a manual Sex always wins.
-- **Fewer clicks:** ABHA **Fill from ABHA** / **Create ABHA** (edit: Verify /
-  create) are quiet grey `.nd-btn--quiet` buttons in the Identity card
-  header; DOB-or-age inline; the phone country code defaults to the
+- **Fewer clicks:** DOB-or-age inline; the phone country code defaults to the
   tenant's own (from its phone number, else +91); no confirms except the
   existing duplicate-patient check (`DialogService`, then retry with
   `force`).
+- **Date of birth is EMPTY by default** — a typed `dd/mm/yyyy` box (auto
+  slashes, tabular numbers; a native date input shows today greyed in
+  Safari, so it is never the visible control) + a calendar button over a
+  hidden native picker. Impossible / future dates are an inline error and
+  never stored; no DOB is ever defaulted or submitted unless entered (or
+  derived from a typed age).
+- **No number spinners:** Age is a numeric TEXT box (`inputmode="numeric"`,
+  digits only); a number field that is really a phone ("Additional
+  contact", "Alternate mobile" … by name / label) gets the phone treatment
+  (tel + country code); the kit hides spinners on every
+  `.nd-input[type=number]`.
 - **Errors are field-level:** every invalid field is outlined in error red
   (`.nd-input--error`, stays red while focused) with its message under it
   (`aria-invalid` + `aria-describedby`); focus + scroll go to the FIRST
@@ -728,12 +743,13 @@ canonical example is the **test editor**
 - **Real-layout check:** `apps/lms-e2e/src/patient-register-layout.rbac.spec.ts`
   (seeded Lab Admin; every `/api/patients` write answered in the browser and
   asserted never sent; edit mode loads a made-up patient in the browser):
-  at 1440×900 three cards side by side, no page / body scroll, name-only
-  pill, one primary, First name focused, Enter → Last name, Title → Sex,
+  at 1440×900 three cards side by side, no page / body scroll, the pill at
+  the standard size (also at 2000px) with the ABHA helpers at its right,
+  an empty DOB, no spinners, one primary, First name focused, Enter → Last name, Title → Sex,
   Sex quick key, field errors focusing the first; 1024 two columns; 375 one
   column, icon primary above the pill, full-width 44px / 16px fields, the
   band pinned while the body scrolls. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`
-  (shots `v2-*`).
+  (shots `v3-*`).
 
 ## API summary
 

@@ -138,12 +138,28 @@ describe('Patient registration — new design: ONE form', () => {
     expect(p.getAttribute('aria-label')).toBe('Register patient');
   });
 
-  it('pill = ONLY the name chip — no tabs, no dots, no fact chips', () => {
+  it('pill = the name chip ✎ … and the ABHA helpers at its right — no tabs, no fact chips', () => {
     const { el, txt } = render();
     const ctx = el.querySelector('pf-hero-band .nd-ctx')!;
     expect(txt(ctx.querySelector('.pf-reg-ctx__nametext'))).toBe('New patient');
-    expect(Array.from(ctx.children).map(k => k.className.split(' ')[0])).toEqual(['nd-ctx__primary']);
+    expect(Array.from(ctx.children).map(k => k.className.split(' ')[0])).toEqual(['nd-ctx__primary', 'pf-reg-ctx__abha']);
+    const abha = Array.from(ctx.querySelectorAll('.pf-reg-ctx__abha button'));
+    expect(abha.map(b => b.getAttribute('aria-label'))).toEqual(['Fill from ABHA', 'Create ABHA']);
+    expect(abha.every(b => b.classList.contains('nd-btn--quiet') && !!b.querySelector('svg'))).toBe(true);
     expect(el.querySelector('[role="tablist"], [role="tab"], .nd-ctx__chip, .pf-reg-next')).toBeNull();
+  });
+
+  it('the pill is the STANDARD band-pill size (not full width): pf-hero-band [standardPill]', () => {
+    const { el } = render();
+    const pill = el.querySelector('pf-hero-band .pf-hb__search')!;
+    expect(pill.classList.contains('pf-hb__search--ctx')).toBe(true);
+    expect(pill.classList.contains('pf-hb__search--std')).toBe(true);
+  });
+
+  it('phones: the ABHA helpers are icons (labels kept for AT)', () => {
+    const phone = PATIENT_REGISTER_ND_STYLES.slice(PATIENT_REGISTER_ND_STYLES.indexOf('@media (max-width: 640px)'));
+    expect(phone).toMatch(/\.pf-reg-abha__t \{ position: absolute; width: 1px/);
+    expect(phone).toMatch(/\.pf-reg-ctx__abha \.nd-btn--quiet \{ width: 40px/);
   });
 
   it('every section renders at once, as its own card with "N required"', () => {
@@ -164,7 +180,7 @@ describe('Patient registration — new design: ONE form', () => {
     expect(PATIENT_REGISTER_ND_STYLES).toMatch(/@media \(min-width: 1200px\)[^@]*\.pf-reg-body \{[^}]*overflow: hidden/);
   });
 
-  it('kit fields: nd-input, the amber required dot, tabular numbers, quiet grey ABHA buttons in the Identity card', () => {
+  it('kit fields: nd-input, the amber required dot, tabular numbers; NO ABHA buttons in the card headers', () => {
     const { el } = render();
     const first = el.querySelector('[data-field="first_name"]')!;
     expect(first.querySelector('input.nd-input')).not.toBeNull();
@@ -172,10 +188,40 @@ describe('Patient registration — new design: ONE form', () => {
     expect(el.querySelector('[data-field="phone"] input[type="tel"].nd-num')).not.toBeNull();
     expect(el.querySelector('[data-field="abha_id"] input.nd-input.nd-num')).not.toBeNull();
     expect(el.querySelector('.pf-input')).toBeNull();
-    const abha = Array.from(el.querySelectorAll('.pf-wr-card')[0].querySelectorAll('.nd-card__head button')).map(b => b.textContent!.trim());
-    expect(abha).toEqual(['Fill from ABHA', 'Create ABHA']);
-    expect(el.querySelectorAll('.nd-card__head .nd-btn--quiet').length).toBe(2);
-    expect(el.querySelector('.nd-card__head .nd-rowact, .nd-card__head .nd-btn--secondary')).toBeNull();
+    expect(el.querySelector('.pf-wr-card .nd-card__head button')).toBeNull();
+  });
+
+  it('Date of birth is EMPTY by default (typed dd/mm/yyyy, no native date box) and no DOB is ever submitted', async () => {
+    const r = render();
+    const dob = r.el.querySelector<HTMLInputElement>('[data-field="date_of_birth"] input[data-pf-stop]')!;
+    expect(dob.type).toBe('text');
+    expect(dob.value).toBe('');
+    expect(dob.placeholder).toBe('dd/mm/yyyy');
+    expect(r.el.querySelector('[data-field="date_of_birth"] input.pf-di-date__native')!.getAttribute('tabindex')).toBe('-1');
+    r.fillAll();
+    (r.el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
+    await r.flush();
+    const body = (r.api.post.mock.calls[0] as unknown as [string, Record<string, unknown>])[1];
+    expect(body['dateOfBirth']).toBeUndefined();
+  });
+
+  it('typing a DOB auto-inserts slashes and stores ISO; the age follows', () => {
+    const { el, f } = render();
+    const dob = el.querySelector<HTMLInputElement>('[data-field="date_of_birth"] input[data-pf-stop]')!;
+    dob.value = '15051990';
+    dob.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    expect(dob.value).toBe('15/05/1990');
+    const age = el.querySelector<HTMLInputElement>('[data-field="date_of_birth"] .pf-di-dob__age')!;
+    expect(Number(age.value)).toBeGreaterThanOrEqual(35);
+  });
+
+  it('no number spinners: Age is a numeric TEXT box; number fields are spinner-free', () => {
+    const { el } = render();
+    const age = el.querySelector<HTMLInputElement>('[data-field="date_of_birth"] .pf-di-dob__age')!;
+    expect(age.type).toBe('text');
+    expect(age.getAttribute('inputmode')).toBe('numeric');
+    expect(el.querySelector('input[type="number"]')).toBeNull();
   });
 
   it('the pill name follows what is typed — the FULL name', () => {
@@ -343,6 +389,13 @@ describe('Patient registration — errors + behaviour kept', () => {
   it('the phone country code defaults to the tenant\'s', () => {
     const { el } = render({ tenantPhone: '+44 20 7946 0000' });
     expect(el.querySelector('[data-field="phone"] .pf-dd__value')!.textContent!.trim()).toBe('+44');
+  });
+
+  it('edit mode: "Verify / create ABHA" rides in the pill', async () => {
+    const { el, flush } = render({ patientId: 'p-1' });
+    await flush();
+    const b = el.querySelectorAll('pf-hero-band .pf-reg-ctx__abha button');
+    expect(Array.from(b).map(x => x.getAttribute('aria-label'))).toEqual(['Verify / create ABHA']);
   });
 
   it('ABHA: Fill from ABHA opens the prefill; fetched details fill the form and the pill', async () => {

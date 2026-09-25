@@ -7,10 +7,12 @@
  * form fill the band body at ≥1200px (no page scroll) and handles phones.
  */
 export const PATIENT_REGISTER_ND_STYLES = `
-  /* The pill: the patient's name, nothing else. */
-  .pf-reg-ctx.nd-ctx { flex-wrap: nowrap; padding: 2px 0; }
-  .pf-reg-ctx__name { flex: 0 1 auto; min-width: 0; }
+  /* The pill (standard band-pill size via pf-hero-band [standardPill]):
+     the name ✎ on the left, the ABHA helpers pushed to the right. */
+  .pf-reg-ctx.nd-ctx { flex-wrap: nowrap; gap: 12px; padding: 2px 0; }
+  .pf-reg-ctx__name { flex: 1 1 auto; min-width: 0; }
   .pf-reg-ctx__nametext { min-width: 0; }
+  .pf-reg-ctx__abha { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 
   .pf-reg-savestate__t { white-space: nowrap; }
 
@@ -27,6 +29,11 @@ export const PATIENT_REGISTER_ND_STYLES = `
      only its mark; the band's actions are 44px icons (pf-hero-band). */
   @media (max-width: 640px) {
     .pf-reg-cancel { display: none !important; }
+    /* The pill stays one row: the name wraps, the ABHA helpers are icons. */
+    .pf-reg-ctx.nd-ctx { overflow: visible; }
+    .pf-reg-ctx__name { max-width: none; flex: 1 1 auto; }
+    .pf-reg-abha__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .pf-reg-ctx__abha .nd-btn--quiet { width: 40px; padding: 0; }
     .pf-reg-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   }
 `;

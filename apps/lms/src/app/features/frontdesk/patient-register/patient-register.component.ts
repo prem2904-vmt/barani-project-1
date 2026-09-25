@@ -39,28 +39,6 @@ import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- ABHA helpers ride in the Identity card's header: quiet, neutral. -->
-    <ng-template #abhaTpl>
-      @if (!patientId()) {
-        <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha" (click)="openAbhaPrefill('fetch')"
-                title="Has an ABHA? Scan the card or enter the number to fill the form">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16"/></svg>
-          Fill from ABHA
-        </button>
-        <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha-new" (click)="openAbhaPrefill('create')"
-                title="No ABHA? Create one with Aadhaar OTP — it fills the form">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 9v6M9 12h6"/></svg>
-          Create ABHA
-        </button>
-      } @else {
-        <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha" (click)="abhaWizardOpen.set(true)"
-                title="Create a new ABHA or verify an existing one via ABDM OTP">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-          Verify / create ABHA
-        </button>
-      }
-    </ng-template>
-
     @if (theme.isNewDesign()) {
     <!-- NEW DESIGN (ND-PATTERN §15): ONE form, no tabs, keyboard-first.
          Band = back · tenant · actions (ONE primary); the pill = the
@@ -68,7 +46,7 @@ import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
          (3 / 2 / 1 columns). Ctrl/⌘+Enter saves from anywhere. -->
     <section class="pf-band-page pf-reg">
       <pf-hero-band class="pf-reg-band" [back]="true" [backTo]="parentRoute()" [backAction]="backFn"
-                    [customSearch]="true" [contextBar]="true">
+                    [customSearch]="true" [contextBar]="true" [standardPill]="true">
         <ng-container band-actions>
           @if (patientId()) {
             <span class="nd-savestate pf-reg-savestate" role="status" aria-live="polite"
@@ -111,13 +89,35 @@ import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
           </button>
         </ng-container>
 
-        <!-- The pill = the patient's name, nothing else. -->
+        <!-- The pill (standard band-pill size) = the patient's name ✎ … and,
+             at its right, the ABHA helpers as quiet grey buttons (icon +
+             label on desktop, icon only on phones). -->
         <div band-search class="nd-ctx pf-reg-ctx">
           <span class="nd-ctx__primary pf-reg-ctx__name">
             <span class="pf-reg-ctx__nametext">{{ subjectName() }}</span>
             <button type="button" class="nd-ctx__edit press" (click)="editName()" aria-label="Edit name" title="Edit name">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
             </button>
+          </span>
+          <span class="pf-reg-ctx__abha">
+            @if (!patientId()) {
+              <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha" (click)="openAbhaPrefill('fetch')"
+                      aria-label="Fill from ABHA" title="Has an ABHA? Scan the card or enter the number to fill the form">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16"/></svg>
+                <span class="pf-reg-abha__t">Fill from ABHA</span>
+              </button>
+              <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha-new" (click)="openAbhaPrefill('create')"
+                      aria-label="Create ABHA" title="No ABHA? Create one with Aadhaar OTP — it fills the form">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 9v6M9 12h6"/></svg>
+                <span class="pf-reg-abha__t">Create ABHA</span>
+              </button>
+            } @else {
+              <button type="button" class="nd-btn nd-btn--quiet pf-reg-abha" (click)="abhaWizardOpen.set(true)"
+                      aria-label="Verify / create ABHA" title="Create a new ABHA or verify an existing one via ABDM OTP">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                <span class="pf-reg-abha__t">Verify / create ABHA</span>
+              </button>
+            }
           </span>
         </div>
       </pf-hero-band>
@@ -129,8 +129,6 @@ import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
             [singlePage]="true"
             [nd]="true"
             [hideActions]="true"
-            [stepHeaderTpl]="abhaTpl"
-            [stepHeaderFor]="identityStepId()"
             [context]="context()"
             [initialValues]="initialValues()"
             [submitting]="saving()"
@@ -285,10 +283,6 @@ export class PatientRegisterComponent implements OnInit {
   /** Opened from Order & Payments ("Register a new patient" / "Edit …
    *  details"): after saving (or cancelling) go BACK to that order. */
   protected readonly returnTo = signal<string | null>(null);
-
-  /** The card that carries the ABHA helpers: the one holding the name. */
-  protected readonly identityStepId = computed(() =>
-    this.displayConfig()?.steps.find(s => s.fields.some(f => f.name === 'first_name'))?.id ?? null);
 
   /** The pill's subject: the FULL name as typed (never truncated), else
    *  "New patient" / the loaded name. Baby: "Baby of <mother>". */
