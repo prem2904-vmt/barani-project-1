@@ -9,6 +9,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
+import { DialogService } from '../../../core/services/dialog.service';
 
 /** Band pill tabs — one per independently-saved identity setting. */
 export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
@@ -298,6 +299,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 export class OrganizationSettingsComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   private readonly auth = inject(AuthService);
   protected readonly theme = inject(ThemeService);
 
@@ -403,9 +405,18 @@ export class OrganizationSettingsComponent implements OnInit {
   protected onSlugInput(v: string) {
     this.slug.set((v ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40));
   }
-  protected saveSlug() {
+  /** Changing the handle changes how staff sign in (owner, 2026-09-25):
+   *  confirm first — only when the handle actually changed. */
+  protected async saveSlug(): Promise<void> {
     const s = this.slug();
     if (!s || s === this.slugOriginal()) return;
+    const ok = await this.dialog.confirm({
+      title: 'Change the login handle?',
+      message: 'Changing the login handle changes how staff sign in. Continue?',
+      confirmLabel: 'Change handle',
+      tone: 'danger',
+    });
+    if (!ok) return;
     this.slugSaving.set(true);
     this.api.patch('/api/tenants/current', { slug: s }).subscribe({
       next: () => {
