@@ -209,10 +209,27 @@ export function liveFlag(
 ): LiveFlag | null {
   if (!p || !Number.isFinite(value)) return null;
   const band = selectReferenceRange(bandsForProfile(p.referenceRanges, profileCode), sex, ageYears);
-  const critLow = band?.criticalLow ?? p.criticalLow;
-  const critHigh = band?.criticalHigh ?? p.criticalHigh;
-  if (critLow != null && value < critLow) return { code: 'C', critical: 'low', limit: critLow, band };
-  if (critHigh != null && value > critHigh) return { code: 'C', critical: 'high', limit: critHigh, band };
+  const hit = flagBand(band, value, p);
+  return hit ? { ...hit, band } : null;
+}
+
+/**
+ * The flag for ONE already-chosen band — the body of {@link liveFlag} (and of
+ * mw `FlagOne`) without the band selection: the band's own criticals win over
+ * the parameter pair (strict `<` / `>`), then the shared in-range rule. The
+ * Test Master's range bar and "try a value" tester call this per band so what
+ * the editor SHOWS is literally what result entry computes.
+ */
+export function flagBand(
+  band: (RangeLike & { criticalLow?: number | null; criticalHigh?: number | null }) | null | undefined,
+  value: number,
+  fallback?: { criticalLow?: number | null; criticalHigh?: number | null } | null,
+): Omit<LiveFlag, 'band'> | null {
+  if (!Number.isFinite(value)) return null;
+  const critLow = band?.criticalLow ?? fallback?.criticalLow;
+  const critHigh = band?.criticalHigh ?? fallback?.criticalHigh;
+  if (critLow != null && value < critLow) return { code: 'C', critical: 'low', limit: critLow };
+  if (critHigh != null && value > critHigh) return { code: 'C', critical: 'high', limit: critHigh };
   const fl = flagAgainst(band, value);
-  return fl ? { code: fl, band } : null;
+  return fl ? { code: fl } : null;
 }

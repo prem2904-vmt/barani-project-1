@@ -247,7 +247,9 @@ function scoreRange(r: RangeLike, sex: 'M' | 'F' | 'O' | null, ageYears: number 
   return { eligible: true, score };
 }
 
-function resolveRangeAgeYears(r: RangeLike): { minY: number | null; maxY: number | null; hasAge: boolean } {
+/** A band's age bounds in YEARS (structured fields first, else parsed from
+ *  the segment) — the exact bounds {@link selectReferenceRange} tests. */
+export function resolveRangeAgeYears(r: RangeLike): { minY: number | null; maxY: number | null; hasAge: boolean } {
   if (r.minAge != null || r.maxAge != null) {
     return {
       minY: r.minAge != null ? toYears(r.minAge, r.ageUnit) : null,
