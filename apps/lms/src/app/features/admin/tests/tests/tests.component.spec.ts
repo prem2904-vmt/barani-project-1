@@ -9,6 +9,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
+import { AuthService } from '../../../../core/auth/auth.service';
 
 /**
  * Test Master single-source — Stage 1 safety net for the Test Master GRID.
@@ -38,6 +39,7 @@ function make(tests: any[] = [], depts: any[] = [], opts: { proposals?: any[]; c
       { provide: ToastService, useValue: toasts },
       { provide: ThemeService, useValue: { isDark: () => false } },
       { provide: DialogService, useValue: { confirm: vi.fn(async () => opts.confirm ?? false) } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'u1' }) } },
       { provide: Router, useValue: { navigate: vi.fn() } },
       { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
     ],
@@ -147,10 +149,10 @@ describe('Test Master grid — departments (CURRENT)', () => {
     expect(b[1].id).toBeNull();
   });
 
-  it('toggleDept PATCHes /api/tenants/departments/{id} {isActive} and reloads tests', () => {
-    const { c, api } = make([], [{ id: 'd1', name: 'Haematology', isActive: true }]);
+  it('toggleDept PATCHes /api/tenants/departments/{id} {isActive} and reloads tests (OFF after the confirm)', async () => {
+    const { c, api } = make([], [{ id: 'd1', name: 'Haematology', isActive: true }], { confirm: true });
     api.get.mockClear();
-    c.toggleDept(c.departments()[0]);
+    await c.toggleDept(c.departments()[0]);
     expect(api.patch).toHaveBeenCalledWith('/api/tenants/departments/d1', { isActive: false });
     expect(api.get).toHaveBeenCalledWith('/api/tests/');
   });

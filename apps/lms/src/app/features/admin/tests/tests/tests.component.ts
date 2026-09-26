@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, ViewChild, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ViewChild, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { TubeColorEditorComponent } from '../tube-color-editor.component';
 import { PfSelectOption } from '../../../../shared/primitives/select.component';
 import { FormsModule } from '@angular/forms';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, forkJoin } from 'rxjs';
 import {
@@ -21,6 +22,7 @@ import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { DialogService } from '../../../../core/services/dialog.service';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import { Test } from '../../../../shared/models/test.model';
 import { describeAllRanges } from '../../../../shared/utils/reference-range';
@@ -82,6 +84,21 @@ export type TestRow = Test & {
   _expanded?: boolean;
 };
 
+/** A reactive media query: returns the current match and calls `on` on
+ *  change until the owner is destroyed. Safe where matchMedia is missing. */
+function mq(query: string, ref: DestroyRef, on: (m: boolean) => void): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  const m = window.matchMedia(query);
+  const fn = (e: MediaQueryListEvent) => on(e.matches);
+  try { m.addEventListener?.('change', fn); ref.onDestroy(() => m.removeEventListener?.('change', fn)); } catch { /* old engines */ }
+  return !!m.matches;
+}
+
+/** The side card's remembered state ('1' = collapsed); expanded by default. */
+function readCollapsed(key: string): boolean {
+  try { return localStorage.getItem(key) === '1'; } catch { return false; }
+}
+
 /** Views the band pill's switch can select. */
 type TmView = TestType | 'og' | 'micro' | 'pricing';
 
@@ -91,6 +108,7 @@ type TmView = TestType | 'og' | 'micro' | 'pricing';
   imports: [
     AgGridAngular,
     FormsModule,
+    NgTemplateOutlet,
     ScreenHeaderComponent,
     TouchButtonComponent,
     OptionGroupsPanelComponent,
@@ -228,8 +246,35 @@ export class TestsComponent implements OnInit {
   /** Row actions: TEXT on web, ICON on touch (ND-PATTERN .nd-rowact). */
   readonly web = webPointerSignal();
   readonly isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
-  readonly sideCollapsed = signal(true);
-  toggleSide() { this.sideCollapsed.update(v => !v); }
+  // ── DEPARTMENTS side card (ND-PATTERN "two jobs on one screen") ────────
+  // The grid is the MAIN card (left); the departments filter is the SIDE
+  // card (right, like BILLING). It collapses to a slim strip — remembered
+  // per user — and on narrow widths it is a bottom sheet opened from the
+  // band pill's "Departments" button.
+  private readonly auth = inject(AuthService, { optional: true });
+  private readonly destroyRef = inject(DestroyRef);
+  /** ≤900px: no room for a side column — the card becomes a sheet. */
+  readonly narrow = signal(mq('(max-width: 900px)', this.destroyRef, m => this.narrow?.set(m)));
+  /** The departments sheet (narrow widths only). */
+  readonly deptSheetOpen = signal(false);
+  readonly sideCollapsed = signal(readCollapsed(this.collapseKey()));
+  toggleSide() {
+    const next = !this.sideCollapsed();
+    this.sideCollapsed.set(next);
+    try { localStorage.setItem(this.collapseKey(), next ? '1' : '0'); } catch { /* private mode */ }
+  }
+  private collapseKey(): string {
+    let uid = '';
+    try { uid = this.auth?.user()?.id ?? ''; } catch { /* no session */ }
+    return 'pf:tm:depts-collapsed:' + (uid || 'anon');
+  }
+  openDeptSheet() { this.deptSheetOpen.set(true); }
+  closeDeptSheet() { this.deptSheetOpen.set(false); }
+  /** Row tap: filter the grid; in the sheet, picking closes it. */
+  pickDept(key: string | null) {
+    this.selectDept(key);
+    if (this.narrow()) this.deptSheetOpen.set(false);
+  }
 
   readonly type = this._type.asReadonly();
   readonly selectedDept = this._selectedDept.asReadonly();
@@ -872,10 +917,22 @@ export class TestsComponent implements OnInit {
     });
   }
 
-  toggleDept(d: DeptBucket) {
+  /** On/off switch. Turning a department OFF hides it lab-wide, so that
+   *  asks first (DialogService); turning it back on doesn't. */
+  async toggleDept(d: DeptBucket): Promise<void> {
     if (!d.id) return;
     const id = d.id;
     const next = !d.isActive;
+    if (!next) {
+      const ok = await this.dialog.confirm({
+        title: `Turn off ${d.name}?`,
+        message: `This hides the department lab-wide${d.count ? `, with its ${d.count} ${d.count === 1 ? 'test' : 'tests'}` : ''}, until you turn it back on.`,
+        confirmLabel: 'Turn off',
+        cancelLabel: 'Keep it on',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
     this._depts.update(list => list.map(x => (x.id === id ? { ...x, isActive: next } : x)));
     this.api.patch(`/api/tenants/departments/${id}`, { isActive: next }).subscribe({
       next: () => {

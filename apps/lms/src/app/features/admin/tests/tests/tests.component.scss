@@ -14,44 +14,112 @@
   color: var(--text-tertiary); cursor: pointer; user-select: none; white-space: nowrap; }
 .pf-tm-inactive-toggle input { accent-color: #a855f7; width: 15px; height: 15px; cursor: pointer; }
 
-/* Two-panel layout */
-.pf-tm-panels { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
-@media (max-width: 900px) { .pf-tm-panels { grid-template-columns: 1fr; } }
-.pf-tm-panels--collapsed { grid-template-columns: 1fr; }
-.pf-tm-panels--collapsed .pf-tm-side { display: none; }
-.pf-tm-side-toggle, .pf-tm-side-expand { display: inline-flex; align-items: center; gap: 6px;
-  border: 0; background: transparent; color: var(--text-muted); cursor: pointer;
-  padding: 3px 7px; border-radius: 8px; transition: all .12s; }
-.pf-tm-side-toggle:hover, .pf-tm-side-expand:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-.pf-tm-side-expand { font-size: 12px; font-weight: 600; border: 1px solid var(--glass-border); }
+/* ── Two cards (ND-PATTERN "two jobs on one screen") ─────────────────
+   LEFT the MAIN card (the grid), RIGHT the DEPARTMENTS side card — the
+   BILLING card's anatomy, ~340px. Collapsed it is a slim strip; the column
+   width animates on the nd spring. ≤900px: one column, the side card is a
+   sheet opened from the band pill. */
+.pf-tm-panels {
+  display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start;
+  transition: grid-template-columns var(--nd-dur, 320ms) var(--nd-spring, ease);
+}
+.pf-tm-panels--collapsed { grid-template-columns: minmax(0, 1fr) 52px; }
+.pf-tm-panels--narrow { grid-template-columns: minmax(0, 1fr); }
 
-.pf-tm-side { border: 1px solid var(--nd-line, var(--glass-border)); background: var(--nd-card-bg, var(--glass-bg));
-  border-radius: var(--nd-radius-card, 16px); box-shadow: var(--nd-shadow-sm, none); padding: 10px; position: sticky; top: 12px; }
-.pf-tm-side-head { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-muted); padding: 4px 8px 8px; display: flex; align-items: center; justify-content: space-between; }
-.pf-tm-dept-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
-  max-height: calc(100vh - 240px); overflow-y: auto; }
-@media (max-width: 900px) { .pf-tm-dept-list { max-height: 260px; } }
-.pf-tm-dept { width: 100%; display: flex; align-items: center; gap: 8px; justify-content: space-between;
-  padding: 8px 10px; border-radius: 10px; border: 0; background: transparent; cursor: pointer;
-  text-align: left; color: var(--text-secondary); transition: all .12s; }
-.pf-tm-dept:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-.pf-tm-dept[aria-pressed='true'] { background: var(--nd-sel-bg); color: var(--text-primary);
-  box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
-.pf-tm-dept-name { font-size: 13.5px; font-weight: 500; min-width: 0; overflow-wrap: anywhere;
-  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; }
-.pf-tm-dept-code { font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 500;
-  color: var(--text-tertiary); background: var(--nd-chip-bg); border-radius: 5px; padding: 0 5px; }
-.pf-tm-dept-count { font-size: 12px; font-weight: 600; color: var(--text-muted);
-  background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 999px;
-  min-width: 26px; text-align: center; padding: 1px 7px; flex-shrink: 0; }
+/* MAIN card: head (icon + label + hint + count), the grid fills the body. */
+.pf-tm-main { min-width: 0; }
+.pf-tm-main__head { flex-wrap: nowrap; }
+.pf-tm-hint { color: var(--text-tertiary); }
+.pf-tm-count { flex: none; margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
+.pf-tm-main__body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.pf-tm-deptbtn { height: 36px; min-height: 36px; flex: none; }
+/* The card is the frame: no second border / radius around the grid. */
+.pf-tm-main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
+
+/* SIDE card: sticky beside the grid (classic body scrolls; new design fills). */
+.pf-tm-side, .pf-tm-strip {
+  position: sticky; top: 12px; max-height: calc(100dvh - 180px);
+  animation: pf-tm-side-in var(--nd-dur, 320ms) var(--nd-spring, ease) both;
+}
+@keyframes pf-tm-side-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+.pf-tm-side__collapse, .pf-tm-side__close { width: 32px !important; height: 32px; min-height: 32px; }
+
+/* The collapsed strip: icon + "Departments" set vertically, one target. */
+.pf-tm-strip { min-height: 220px; }
+.pf-tm-strip__btn {
+  flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 10px 0 14px; border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); font: inherit;
+}
+.pf-tm-strip__btn:hover .pf-tm-strip__expand { border-color: var(--nd-sel-border); color: var(--text-primary); }
+.pf-tm-strip__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-tm-strip__expand { width: 32px !important; height: 32px; min-height: 32px; pointer-events: none; }
+.pf-tm-strip__label {
+  writing-mode: vertical-rl; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+/* A filter is on while collapsed: one small violet mark. */
+.pf-tm-strip__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+
+/* Department rows: the whole row filters; the switch is its own target. */
+.pf-tm-dept-list { list-style: none; margin: 0; padding: 8px; gap: 2px; }
+.pf-tm-dept-row { display: flex; align-items: center; gap: 2px; }
+.pf-tm-dept {
+  flex: 1 1 auto; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; cursor: pointer;
+  font: inherit; text-align: left; color: var(--text-primary);
+  transition: background var(--nd-dur-fast, 200ms) ease, box-shadow var(--nd-dur-fast, 200ms) ease;
+}
+.pf-tm-dept:hover { background: var(--nd-chip-bg); }
+.pf-tm-dept:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-tm-dept[aria-pressed='true'] { background: var(--nd-sel-bg); box-shadow: inset 0 0 0 1px var(--nd-sel-border); }
+.pf-tm-dept-name {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  font-size: 13.5px; font-weight: 500;
+}
+.pf-tm-dept-text { overflow-wrap: anywhere; }
+.pf-tm-dept-code {
+  font-size: 11px; font-weight: 500; line-height: 18px; padding: 0 6px; border-radius: 6px;
+  color: var(--text-secondary); background: var(--nd-chip-bg);
+}
+.pf-tm-dept-off {
+  font-size: 11px; font-weight: 500; line-height: 16px; padding: 0 6px; border-radius: 6px;
+  color: var(--text-tertiary); border: 1px solid var(--nd-line);
+}
+.pf-tm-dept-count { flex: none; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
+.pf-tm-dept-row--off .pf-tm-dept-text,
+.pf-tm-dept-row--off .pf-tm-dept-code,
+.pf-tm-dept-row--off .pf-tm-dept-count { opacity: 0.55; }
+.pf-tm-dept-switch { flex: none; justify-content: center; width: 44px; min-height: 44px; }
+.pf-tm-dept-switch:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; border-radius: 10px; }
+.pf-tm-dept-switch-gap { flex: none; width: 44px; }
 .pf-tm-dept-empty { padding: 10px; font-size: 12.5px; color: var(--text-tertiary); }
 
-/* Department row + enable/disable switch */
-.pf-tm-dept-row { display: flex; align-items: center; gap: 6px; }
-.pf-tm-dept-row .pf-tm-dept { flex: 1; min-width: 0; }
-.pf-tm-dept-row--off .pf-tm-dept { opacity: 0.5; }
-.pf-tm-dept-switch { flex-shrink: 0; padding: 0 4px; }   /* kit slate .nd-toggle */
+/* Narrow widths: the side card is a sheet above the always-visible navbar. */
+.pf-tm-sheet-backdrop {
+  display: block; position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h, 0px);
+  z-index: 1001; background: rgba(0, 0, 0, 0.45);
+  animation: pf-tm-fade var(--nd-dur-fast, 200ms) ease both;
+}
+@keyframes pf-tm-fade { from { opacity: 0; } to { opacity: 1; } }
+.pf-tm-side.pf-tm-side--sheet {
+  position: fixed; top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 1002;
+  height: min(78dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 8px));
+  max-height: none; border-radius: 20px 20px 0 0;
+  animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce, ease) both;
+}
+@media (min-width: 641px) {
+  .pf-tm-side.pf-tm-side--sheet { left: max(16px, calc(50% - 300px)); right: max(16px, calc(50% - 300px)); }
+}
+.pf-tm-sheet-handle { display: block; flex: none; width: 40px; height: 5px; margin: 8px auto 2px; border-radius: 999px; background: var(--nd-line); }
+.pf-tm-deptchip { flex-shrink: 0; height: 32px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-tm-panels { transition: none; }
+  .pf-tm-side, .pf-tm-strip, .pf-tm-side.pf-tm-side--sheet, .pf-tm-sheet-backdrop { animation: none; }
+}
+@media (hover: none) and (pointer: coarse) {
+  .pf-tm-side__collapse, .pf-tm-side__close, .pf-tm-strip__expand { width: 44px !important; height: 44px; min-height: 44px; }
+}
 
 /* Individual Name cell: tube-colour swatch + name */
 .pf-tm-name-cell { display: flex; align-items: center; gap: 8px; height: 100%; min-width: 0; }
@@ -60,15 +128,6 @@
 .pf-tm-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Duplicate test code — flag the cell red the instant it collides. */
 .pf-tm-cell-dup { background: rgba(239, 68, 68, 0.24) !important; color: #fecaca !important; font-weight: 600; }
-
-/* Grid */
-.pf-tm-main { min-width: 0; }
-.pf-tm-grid-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin-bottom: 8px; font-size: 12px; color: var(--text-tertiary); }
-.pf-tm-meta-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pf-tm-count-badge { font-weight: 600; color: var(--text-primary); font-size: 13px; }
-.pf-tm-meta-sep { color: var(--text-tertiary, #94a3b8); opacity: 0.6; }
-.pf-tm-hint { color: var(--text-muted); }
 
 /* Status toggle switch in grid */
 .pf-tm-status-switch { flex-shrink: 0; width: 36px; height: 20px; border-radius: 999px; padding: 0;
@@ -80,7 +139,7 @@
   background: #94a3b8; box-shadow: 0 1px 2px rgba(0,0,0,0.3); transition: transform .15s, background .15s; }
 .pf-tm-status-switch--on .pf-tm-status-switch-knob { transform: translateX(16px); background: #ffffff; }
 @media (max-width: 640px) { .pf-tm-hint { display: none; } }
-.pf-tm-grid { display: block; width: 100%; height: calc(100dvh - 260px); min-height: 420px; }
+.pf-tm-grid { display: block; width: 100%; height: calc(100dvh - 300px); min-height: 420px; }
 
 /* Clean 1px right border on 2-column pinned left separator matching header and body rows */
 :host ::ng-deep .ag-pinned-left-header,
@@ -141,7 +200,7 @@
 @media (max-width: 480px) { .pf-tm-form { grid-template-columns: 1fr; } }
 
 @media (hover: none) and (pointer: coarse) {
-  .pf-tm-tree-toggle, .pf-tm-dept-switch,
+  .pf-tm-tree-toggle,
   .pf-tm-actions button, .ag-cell button {
     min-width: 0 !important; min-height: 0 !important;
   }
@@ -154,28 +213,16 @@
 .pf-tm-bandseg { flex-shrink: 0; }
 
 /* Grid view fills the band body: the proposals strip takes what it needs,
-   the rail + grid take the rest and scroll inside themselves. */
+   the two cards take the rest and only their bodies scroll. */
 :host-context(.design-new) .pf-band-body--fill.pf-tm-body > .pf-tm-panels {
   flex: 1 1 auto; min-height: 0; align-items: stretch;
 }
-:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-side {
-  position: static; display: flex; flex-direction: column; min-height: 0;
-}
-:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-panels--collapsed .pf-tm-side { display: none; }
-:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-dept-list { flex: 1 1 auto; min-height: 0; max-height: none; }
-:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-main {
-  display: flex; flex-direction: column; min-height: 0;
+:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-side:not(.pf-tm-side--sheet),
+:host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-strip {
+  position: relative; top: auto; max-height: none; min-height: 0;
 }
 :host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-grid {
-  flex: 1 1 auto; height: auto; min-height: 320px;
-}
-/* ≤900px the rail stacks above the grid — that can't fit one screen, so the
-   body scrolls again and the grid gets a fixed, thumb-friendly height. */
-@media (max-width: 900px) {
-  :host-context(.design-new) .pf-band-body--fill.pf-tm-body { overflow-y: auto !important; }
-  :host-context(.design-new) .pf-band-body--fill.pf-tm-body > .pf-tm-panels { flex: 0 0 auto; }
-  :host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-dept-list { max-height: 260px; }
-  :host-context(.design-new) .pf-band-body--fill.pf-tm-body .pf-tm-grid { flex: none; height: 70dvh; min-height: 360px; }
+  flex: 1 1 auto; height: auto; min-height: 280px;
 }
 
 /* Option groups fill the body too (grid + side card scroll themselves);
