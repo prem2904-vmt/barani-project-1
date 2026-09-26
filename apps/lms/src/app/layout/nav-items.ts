@@ -45,6 +45,18 @@ export interface NavItem {
    * may not include. AND-ed with the other visibility checks.
    */
   module?: ModuleKey;
+  /**
+   * An admin-config screen the Admin home already lists, one tap away
+   * (features/admin/admin-catalog.ts). Hidden from "More" for users who can
+   * open the Admin home, so the menu doesn't repeat it; users WITHOUT Admin
+   * access (e.g. a Branch Manager with manage_branches) still get it here.
+   */
+  adminHome?: boolean;
+}
+
+/** Drop the "More" entries the Admin home already offers (see `adminHome`). */
+export function withoutAdminHomeDupes(items: NavItem[], canOpenAdmin: boolean): NavItem[] {
+  return canOpenAdmin ? items.filter((i) => !i.adminHome) : items;
 }
 
 // Admin is intentionally NOT in the primary nav anymore — it's a
@@ -309,19 +321,19 @@ export const MORE_NAV: NavItem[] = [
     module: 'payroll'
   },
   {
-    id: 'admin-overview', label: 'Admin overview', href: '/admin', exact: true,
+    id: 'admin-overview', adminHome: true, label: 'Admin overview', href: '/admin', exact: true,
     iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
     permissions: ['manage_tests', 'manage_users', 'manage_workflows']
   },
   {
     // Lab module's own settings hub — lab-specific config lives in the Lab world.
-    id: 'lab-settings', label: 'Lab settings', href: '/lab/settings',
+    id: 'lab-settings', adminHome: true, label: 'Lab settings', href: '/lab/settings',
     iconPath: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'],
     permissions: ['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments'],
     module: 'lab'
   },
   {
-    id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
+    id: 'admin-manage', adminHome: true, label: 'Manage settings', href: '/admin/manage',
     iconPath: ['M4 6h16M4 12h16M4 18h16'],
     permissions: ['manage_tests', 'manage_users', 'manage_workflows']
   },
@@ -330,23 +342,23 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['view_tat_dashboard', 'view_dashboard'], module: 'reports'
   },
   {
-    id: 'users', label: 'Users', href: '/admin/users', iconPath: ['M9 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0'],
+    id: 'users', adminHome: true, label: 'Users', href: '/admin/users', iconPath: ['M9 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0'],
     permissions: ['manage_users']
   },
   {
-    id: 'tests', label: 'Tests', href: '/admin/tests', iconPath: ['M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9M6 21h14M9 17h8'],
+    id: 'tests', adminHome: true, label: 'Tests', href: '/admin/tests', iconPath: ['M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9M6 21h14M9 17h8'],
     permissions: ['manage_tests']
   },
   {
-    id: 'branches', label: 'Branches', href: '/admin/branches', iconPath: ['M4 21V7l8-4 8 4v14M9 21v-5h6v5'],
+    id: 'branches', adminHome: true, label: 'Branches', href: '/admin/branches', iconPath: ['M4 21V7l8-4 8 4v14M9 21v-5h6v5'],
     permissions: ['manage_branches']
   },
   {
-    id: 'lab-cfg', label: 'Lab settings', href: '/admin/lab-settings', iconPath: ['M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Zm-2 9h8'],
+    id: 'lab-cfg', adminHome: true, label: 'Lab settings', href: '/admin/lab-settings', iconPath: ['M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Zm-2 9h8'],
     permissions: ['manage_lab_settings', 'manage_departments']
   },
   {
-    id: 'billing', label: 'Billing cfg', href: '/admin/billing', iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
+    id: 'billing', adminHome: true, label: 'Billing cfg', href: '/admin/billing', iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
     permissions: ['manage_billing_config']
   },
   {
@@ -356,39 +368,39 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['collect_payment', 'manage_tenant']
   },
   {
-    id: 'inventory', label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
+    id: 'inventory', adminHome: true, label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
     permissions: ['manage_inventory'], module: 'inventory'
   },
   {
-    id: 'reports-t', label: 'Report Template', href: '/admin/reports', iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
+    id: 'reports-t', adminHome: true, label: 'Report Template', href: '/admin/reports', iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
     permissions: ['manage_report_template']
   },
   {
-    id: 'notifs', label: 'Notifications', href: '/admin/notifications', iconPath: ['M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Zm5 4a1 1 0 0 0 2 0'],
+    id: 'notifs', adminHome: true, label: 'Notifications', href: '/admin/notifications', iconPath: ['M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Zm5 4a1 1 0 0 0 2 0'],
     permissions: ['manage_notifications']
   },
   {
-    id: 'process', label: 'Process builder', href: '/admin/process', iconPath: ['M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z'],
+    id: 'process', adminHome: true, label: 'Process builder', href: '/admin/process', iconPath: ['M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z'],
     permissions: ['manage_workflows']
   },
   {
-    id: 'workflows', label: 'Form Flows', href: '/admin/workflows', iconPath: ['M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10'],
+    id: 'workflows', adminHome: true, label: 'Form Flows', href: '/admin/workflows', iconPath: ['M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10'],
     permissions: ['manage_workflows']
   },
   {
-    id: 'kpis', label: 'KPI cards', href: '/admin/kpis', iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
+    id: 'kpis', adminHome: true, label: 'KPI cards', href: '/admin/kpis', iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
     permissions: ['manage_tenant']
   },
   {
-    id: 'vendors', label: 'Vendor Credit Wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
+    id: 'vendors', adminHome: true, label: 'Vendor Credit Wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
     permissions: ['manage_tenant']
   },
   {
-    id: 'referral-labs', label: 'Referral labs', href: '/admin/referral-labs', iconPath: ['M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9'],
+    id: 'referral-labs', adminHome: true, label: 'Referral labs', href: '/admin/referral-labs', iconPath: ['M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9'],
     permissions: ['manage_tests']
   },
   {
-    id: 'appts', label: 'Appointments', href: '/admin/appointments',
+    id: 'appts', adminHome: true, label: 'Appointments', href: '/admin/appointments',
     iconPath: ['M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'],
     permissions: ['manage_tenant']
   },
@@ -401,14 +413,14 @@ export const MORE_NAV: NavItem[] = [
     permissions: ['manage_home_collection', 'register_patient', 'create_order'], module: 'homeCollection'
   },
   {
-    id: 'audit', label: 'Audit trail', href: '/admin/audit',
+    id: 'audit', adminHome: true, label: 'Audit trail', href: '/admin/audit',
     iconPath: ['M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2',
                'M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2Z',
                'M9 12h6M9 16h6'],
     permissions: ['view_audit_log']
   },
   {
-    id: 'setup', label: 'Branding', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
+    id: 'setup', adminHome: true, label: 'Branding', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
     permissions: ['manage_users']
   }
 ];

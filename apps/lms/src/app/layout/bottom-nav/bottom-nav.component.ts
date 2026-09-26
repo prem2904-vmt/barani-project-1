@@ -22,7 +22,7 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
 import { PushService } from '../../core/services/push.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, withoutAdminHomeDupes } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 
 const DRAG_THRESHOLD_PX = 4;
@@ -537,7 +537,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  reachable there. We prepend ADMIN_NAV into More so admins on
    *  tablet/phone still have one tap to /admin. The permission
    *  filter (`visible`) already gates it for non-admins. */
-  readonly more = computed(() => this.visible([ADMIN_NAV, ...MORE_NAV]));
+  readonly more = computed(() => withoutAdminHomeDupes(this.visible([ADMIN_NAV, ...MORE_NAV]), this.showAdminTab()));
   /** The Admin tab on the floating pill renders only when the user
    *  has at least one manage_* permission (i.e. ADMIN_NAV would
    *  appear in their visible list). Non-admin users see only their

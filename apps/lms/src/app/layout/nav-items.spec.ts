@@ -8,6 +8,7 @@ import {
   navLabel,
   WorkflowNavCtx,
   MORE_NAV,
+  withoutAdminHomeDupes,
 } from './nav-items';
 import { ProcessWorkflowConfig } from '../shared/models/process-workflow.model';
 
@@ -474,5 +475,29 @@ describe('WorkflowNavCtx', () => {
     };
     expect(ctx.hasAnyPermission(['manage_tests', 'manage_users'])).toBe(true);
     expect(ctx.hasAnyPermission(['view_only'])).toBe(false);
+  });
+});
+
+describe('More menu vs the Admin home (no duplicates)', () => {
+  it('admins: every admin-config entry the Admin home lists is dropped from More', () => {
+    const more = withoutAdminHomeDupes(MORE_NAV, true);
+    const ids = more.map((i) => i.id);
+    for (const id of ['admin-overview', 'admin-manage', 'lab-settings', 'users', 'tests', 'billing', 'audit', 'setup']) {
+      expect(ids).not.toContain(id);
+    }
+    // Operational entries stay.
+    expect(ids).toEqual(expect.arrayContaining(['tat', 'daily-statement', 'hc-assign', 'm-opd']));
+  });
+
+  it('non-admins keep them (e.g. a Branch Manager still reaches Branches / Audit trail)', () => {
+    const more = withoutAdminHomeDupes(MORE_NAV, false);
+    expect(more.map((i) => i.id)).toEqual(expect.arrayContaining(['branches', 'audit']));
+  });
+
+  it('every trimmed entry is a real Admin-home page', async () => {
+    const { ADMIN_CATEGORIES } = await import('../features/admin/admin-catalog');
+    const homeHrefs = new Set<string>(['/admin', '/admin/manage', '/lab/settings',
+      ...ADMIN_CATEGORIES.flatMap((c) => c.pages.map((p) => p.href))]);
+    for (const i of MORE_NAV.filter((n) => n.adminHome)) expect(homeHrefs.has(i.href), i.id).toBe(true);
   });
 });

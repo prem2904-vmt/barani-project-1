@@ -304,35 +304,34 @@ describe('Admin band — Modules', () => {
 });
 
 describe('Admin band — Settings hub (/admin/manage)', () => {
-  const make = () => renderBandPage(AdminDashboardComponent, { getFor: (u) => (u === '/api/_seed/summary' ? { permissions: 40, workflows: 3 } : []) });
-  const tileTitles = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-admin-tile__title')).map((t) => t.textContent?.trim());
+  // The hub is the admin directory (ND-PATTERN "Admin pages"): every
+  // category at once — no category pill — and the pill searches pages AND
+  // single settings.
+  const make = () => renderBandPage(AdminDashboardComponent, {
+    getFor: (u) => (u === '/api/_seed/summary' ? { permissions: 40, workflows: 3 } : []),
+    providers: [{ provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true, ensureLoaded: () => undefined } }],
+  });
+  const rowTitles = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-adir__t')).map((t) => t.textContent?.trim());
 
-  it('band + body; the custom header (title, subtitle, search box) is classic-only', () => {
+  it('band + body; the custom header is classic-only; no category pill', () => {
     const p = make();
     expect(p.band()).not.toBeNull();
     expect(p.body()).not.toBeNull();
     expect(p.el.querySelector('.pf-admin-hdr')?.classList.contains('pf-classic-only')).toBe(true);
-    expect(p.tools()!.querySelector('pf-segmented')).not.toBeNull();
+    expect(p.tools()!.querySelector('pf-segmented')).toBeNull();
   });
 
-  it('category switch in the pill swaps the tiles', () => {
+  it('every category shows at once, so any page is one tap', () => {
     const p = make();
-    expect(tileTitles(p.el)).toContain('Users & Access');
-    expect(p.cmp.categoryOptions.map((o: any) => o.label)).toEqual(['People & Access', 'Branches & Org', 'Billing & Finance', 'Platform']);
-    p.cmp.pickCategory('finance');
-    p.f.detectChanges();
-    expect(tileTitles(p.el)).toContain('Billing Config');
-    expect(tileTitles(p.el)).not.toContain('Users & Access');
+    expect(rowTitles(p.el)).toEqual(expect.arrayContaining(['Users & roles', 'Billing settings', 'Process builder', 'Organization & IDs']));
   });
 
-  it('pill search finds settings across every category; picking a category leaves search', () => {
+  it('pill search finds pages and settings across every category; clearing restores the list', () => {
     const p = make();
     p.type('vendor');
-    expect(tileTitles(p.el)).toEqual(expect.arrayContaining(['Vendor Credit Wallets']));
-    expect(tileTitles(p.el)).not.toContain('Users & Access');
-    p.cmp.pickCategory('people');
-    p.f.detectChanges();
-    expect(p.cmp.q()).toBe('');
-    expect(tileTitles(p.el)).toContain('Users & Access');
+    expect(rowTitles(p.el)).toEqual(expect.arrayContaining(['Vendor wallets']));
+    expect(rowTitles(p.el)).not.toContain('Users & roles');
+    p.type('');
+    expect(rowTitles(p.el)).toContain('Users & roles');
   });
 });

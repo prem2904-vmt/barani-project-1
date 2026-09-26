@@ -1,133 +1,56 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
-import { bandFilter } from '../../../shared/utils/band-search';
-
-interface LabTile {
-  title: string;
-  href: string;
-  subtitle: string;
-  iconPath: string;
-}
+import { ADMIN_CATEGORIES, AdminCategory, hubPages, searchAdmin } from '../../admin/admin-catalog';
+import {
+  AdminAccessService, AdminDirectoryComponent, AdminSearchResultsComponent,
+} from '../../admin/admin-directory.component';
 
 /**
- * Lab module settings hub. Everything lab-SPECIFIC lives here inside the Lab
- * world — tests/catalog, report layout, lab settings, referral network,
- * notifications and KPIs — instead of the global admin (which now holds only
- * platform/org concerns). Each future module (OPD, IPD, Pharmacy) ships its own
- * equivalent hub, so no module's config ever pollutes another's or the org admin.
+ * Lab module settings hub (/lab/settings). The Lab category of the admin
+ * catalogue as ONE list (ND-PATTERN "Admin pages"): every lab page one tap
+ * away, only what the user may open. The band pill searches those pages AND
+ * their single settings, deep-linking to the setting's row.
  */
 @Component({
   selector: 'pf-lab-settings-hub',
   standalone: true,
-  imports: [RouterLink, ScreenHeaderComponent, HeroBandComponent],
+  imports: [ScreenHeaderComponent, HeroBandComponent, AdminDirectoryComponent, AdminSearchResultsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band pill (owner): the hub's search filters its tiles. -->
-        <pf-hero-band [back]="true" placeholder="Search lab settings — tests, report, referral, KPIs…"
+        <pf-hero-band [back]="true" placeholder="Search lab settings — try scan, report, tests"
                       [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
         eyebrow="Lab"
-        title="Lab Settings"
-        subtitle="Everything specific to your lab — catalog, report layout, lab settings, referrals, alerts.">
+        title="Lab settings"
+        subtitle="Everything for your lab in one list.">
       </pf-screen-header>
 
       <div class="pf-band-body">
-      <div class="pf-lsh">
-        @for (t of visibleTiles(); track t.href) {
-          <a [routerLink]="t.href" class="pf-lsh__tile nd-card press">
-            <span class="nd-card__icon pf-lsh__ic">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path [attr.d]="t.iconPath"></path>
-              </svg>
-            </span>
-            <span class="pf-lsh__text">
-              <span class="pf-lsh__t">{{ t.title }}</span>
-              <span class="pf-lsh__s">{{ t.subtitle }}</span>
-            </span>
-            <svg class="pf-lsh__chev" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="m9 18 6-6-6-6"></path>
-            </svg>
-          </a>
+        @if (q().trim()) {
+          <pf-admin-search-results [hits]="hits()" [query]="q().trim()"></pf-admin-search-results>
+        } @else {
+          <pf-admin-directory [categories]="[labCat()]" [showHeads]="false"></pf-admin-directory>
         }
-      </div>
-      @if (!visibleTiles().length) {
-        <p class="pf-band-empty">No lab settings match "{{ q() }}".</p>
-      }
       </div>
     </section>
   `,
-  styles: [`
-    .pf-lsh {
-      display: grid; gap: 14px; margin-top: 8px;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    }
-    .pf-lsh__tile {
-      gap: 4px; padding: 18px; text-decoration: none; overflow: visible;
-      transition: border-color var(--nd-dur-fast) ease, transform 100ms ease;
-    }
-    .pf-lsh__tile:hover { border-color: var(--nd-sel-border); }
-    .pf-lsh__tile:active { transform: scale(.99); }
-    .pf-lsh__tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    @media (prefers-reduced-motion: reduce) { .pf-lsh__tile { transition: none; } .pf-lsh__tile:active { transform: none; } }
-    .pf-lsh__ic { width: 40px; height: 40px; border-radius: 11px; margin-bottom: 6px; }
-    .pf-lsh__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .pf-lsh__t { font-size: 15px; font-weight: 600; color: var(--text-primary); }
-    .pf-lsh__s { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
-    .pf-lsh__chev { display: none; color: var(--text-muted, #94a3b8); flex-shrink: 0; }
-
-    /* Phones: drop the 2-up tile grid to a single-column LIST — icon left,
-       text beside it, chevron right. Reads as a settings list, not cards. */
-    @media (max-width: 640px) {
-      .pf-lsh { grid-template-columns: 1fr; gap: 8px; }
-      .pf-lsh__tile { flex-direction: row; align-items: center; gap: 14px; padding: 13px 14px; }
-      .pf-lsh__ic { width: 36px; height: 36px; margin-bottom: 0; }
-      .pf-lsh__text { flex: 1; }
-      .pf-lsh__s { font-size: 12px; }
-      .pf-lsh__chev { display: block; }
-    }
-  `],
 })
-export class LabSettingsHubComponent {
+export class LabSettingsHubComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
-  /** Band pill search over the tiles (title + subtitle). */
+  private readonly access = inject(AdminAccessService);
+  /** Band pill search (pages + single settings of the Lab hub). */
   readonly q = signal('');
-  readonly visibleTiles = computed(() => bandFilter(this.tiles, this.q(), (t) => [t.title, t.subtitle]));
 
-  readonly tiles: LabTile[] = [
-    { title: 'Tests & Packages', href: '/admin/tests',
-      subtitle: 'Tests, parameters, reference ranges, packages',
-      iconPath: 'M11 4h3v9M11 13h3M11 4v9c-4-1-4-7 0-9ZM14 7h2a3 3 0 0 1 3 3M6 21h14M9 17h8' },
-    { title: 'Report Template', href: '/admin/reports',
-      subtitle: 'Branding, header, columns, signatures, colours',
-      iconPath: 'M4 4h11l5 5v11H4zM15 4v5h5M8 14h8M8 18h6' },
-    { title: 'Referral Labs', href: '/admin/referral-labs',
-      subtitle: 'Outsourced / external labs',
-      iconPath: 'M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9' },
-    { title: 'Lab settings', href: '/admin/lab-settings',
-      subtitle: 'Sample finding, queues, payment and validation rules',
-      iconPath: 'M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3ZM8 12h8' },
-    { title: 'Microbiology / Culture', href: '/admin/microbiology',
-      subtitle: 'Culture bench: stage lock timeout, takeover, per-stage TAT',
-      iconPath: 'M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M14 17h.01' },
-    { title: 'Referring Network', href: '/admin/referring-network',
-      subtitle: 'Hospitals + doctors that send patients to your lab',
-      iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01' },
-    { title: 'Home-collection agents', href: '/admin/home-collection',
-      subtitle: 'Agents · coverage areas · weightage',
-      iconPath: 'M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6' },
-    { title: 'Notifications', href: '/admin/notifications',
-      subtitle: 'In-app alerts and overdue warnings',
-      iconPath: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2ZM11 20a1 1 0 0 0 2 0' },
-    { title: 'KPI cards', href: '/admin/kpis',
-      subtitle: 'Pick which KPIs show on each lab screen',
-      iconPath: 'M3 12h4l3-9 4 18 3-9h4' },
-  ];
+  readonly labCat = computed<AdminCategory>(() => {
+    const base = ADMIN_CATEGORIES.find((c) => c.id === 'lab')!;
+    return { ...base, pages: hubPages('lab', this.access) };
+  });
+  readonly hits = computed(() => searchAdmin(this.q(), this.access, [this.labCat()]));
+
+  ngOnInit(): void { this.access.ensureLoaded(); }
 }

@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
 import { NavigationEnd, Router } from '@angular/router';
 import { PRIMARY_NAV } from '../../layout/nav-items';
+import { adminParentFor } from '../../features/admin/admin-catalog';
 
 /**
  * Single source of truth for the mobile "back" affordance.
@@ -90,6 +91,17 @@ export class NavBackService {
     if (normUrl === '/admin/roles/new' || (normUrl.startsWith('/admin/roles/') && normUrl !== '/admin/roles')) {
       return '/admin/users?tab=roles';
     }
+    // Admin pages (ND-PATTERN "Admin pages"): ONE rule — back returns to the
+    // Admin home, scrolled to the page's category (admin-catalog.ts). The
+    // hubs themselves go back to the Admin home.
+    if (normUrl === '/admin/manage' || normUrl === '/lab/settings' || normUrl === '/admin/partners' || normUrl === '/admin/opd') {
+      return '/admin';
+    }
+    if (normUrl.startsWith('/admin/') || normUrl === '/setup') {
+      const adminParent = adminParentFor(normUrl);
+      if (adminParent) return adminParent;
+    }
+
     if (normUrl === '/admin/users' || normUrl === '/admin/roles' || normUrl === '/admin/audit') {
       return '/admin/manage?cat=people';
     }
