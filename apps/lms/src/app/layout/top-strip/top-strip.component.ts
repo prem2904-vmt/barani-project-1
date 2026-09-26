@@ -29,7 +29,7 @@ import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, withoutAdminHomeDupes } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
@@ -267,8 +267,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     if (!inv || !this.auth.hasAnyPermission(inv.permissions ?? [])) return items;
     return [...items, inv];
   }
-  /** More = what the Admin home doesn't already list (for admins). */
-  readonly more = computed(() => withoutAdminHomeDupes(this.visible(MORE_NAV), this.showAdmin()));
+  readonly more = computed(() => this.visible(MORE_NAV));
 
   /** Show the Admin icon-button (in the right cluster) only when the
    *  current user holds at least one manage_* permission. Mirrors the
