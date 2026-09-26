@@ -64,15 +64,16 @@ describe('Process builder — collection in the Lab keeps dispatch + intake', ()
     expect(item(p, 'lab', 'sample_collection').enabled).toBe(true);
   });
 
-  it('dispatch still needs SOME enabled collection', () => {
+  it('dispatch stays on while collection exists (the Collect home copy is always on)', () => {
     const p = make();
     const c = p.cmp as any;
     for (const area of ['collect', 'frontdesk', 'lab']) {
       const at = lane(p, area).items.findIndex(i => i.type === 'sample_collection');
       c.toggleAction(idx(p, area), at);
     }
-    expect(item(p, 'frontdesk', 'dispatch').enabled).toBe(false);
-    expect(item(p, 'lab', 'lab_intake').enabled).toBe(false);
+    expect(lane(p, 'collect').items.find(i => i.type === 'sample_collection')!.enabled).toBe(true);
+    expect(item(p, 'frontdesk', 'dispatch').enabled).toBe(true);
+    expect(item(p, 'lab', 'lab_intake').enabled).toBe(true);
   });
 
   it('saves the admin\'s dispatch/intake state untouched', () => {

@@ -295,11 +295,11 @@ describe('menusFromWorkflow', () => {
   it('filters out disabled actions', () => {
     const cfg = makeCfg(
       [{ id: 'cat1', name: 'Work', order: 1, icon: 'default' }],
-      [{ id: 'act1', type: 'sample_collection', categoryId: 'cat1', enabled: false, order: 1 }]
+      [{ id: 'act1', type: 'result_entry', categoryId: 'cat1', enabled: false, order: 1 }]
     );
     const permCtx: WorkflowNavCtx = {
-      roles: ['collector'],
-      hasAnyPermission: (perms) => perms.includes('collect_sample'),
+      roles: ['tech'],
+      hasAnyPermission: (perms) => perms.includes('enter_result'),
       isSuper: false,
     };
     expect(menusFromWorkflow(cfg, permCtx)).toBeNull();

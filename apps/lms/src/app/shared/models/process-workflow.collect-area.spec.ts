@@ -1,7 +1,7 @@
 import {
   ACTION_POLICY, COLLECT_AREA_ID, COLLECT_AREA_DEFAULT_ROLES, COLLECT_HOME_ACTION_ID,
   ProcessWorkflowConfig, SYSTEM_AREA_SCREEN, areasWithCollection, isLocked, isLockedItem, isRepeatable,
-  normalizeWorkflow, workAreaRoute,
+  isMandatoryItem, normalizeWorkflow, workAreaRoute,
 } from './process-workflow.model';
 
 /** The system Collect work area + the shared normaliser (owner, 2026-09-26). */
@@ -31,8 +31,8 @@ const withCC = (ccEnabled = true): ProcessWorkflowConfig => ({
 });
 
 describe('Collect work area — policy', () => {
-  it('sample_collection is locked to the Collect area, NOT mandatory, still repeatable', () => {
-    expect(ACTION_POLICY['sample_collection']).toEqual({ home: 'collect', locked: true });
+  it('sample_collection is locked to the Collect area, home copy always on, still repeatable', () => {
+    expect(ACTION_POLICY['sample_collection']).toEqual({ home: 'collect', locked: true, homeMandatory: true });
     expect(isLocked('sample_collection')).toBe(true);
     expect(isRepeatable('sample_collection')).toBe(true);
   });
@@ -91,9 +91,9 @@ describe('normalizeWorkflow', () => {
     expect(normalizeWorkflow(out)).toBe(out);
   });
 
-  it('keeps the adopted menu\'s enabled state', () => {
+  it('an adopted menu\'s collection comes in ON (the home copy is always on)', () => {
     const out = normalizeWorkflow(withCC(false));
-    expect(out.actions.find(a => a.categoryId === 'collect')!.enabled).toBe(false);
+    expect(out.actions.find(a => a.categoryId === 'collect')!.enabled).toBe(true);
   });
 
   it('re-adds only the home copy when the Collect area exists without one', () => {
@@ -127,5 +127,37 @@ describe('normalizeWorkflow', () => {
     const cfg: ProcessWorkflowConfig = { categories: [cat('lab', 'Lab', 0)], actions: [act('b1', 'result_entry', 'lab')] };
     const out = normalizeWorkflow(cfg);
     expect([...out.categories].sort((a, b) => a.order - b.order).map(c => c.id)).toEqual(['collect', 'lab']);
+  });
+});
+
+describe('Collect home copy is always on (owner: only roles change)', () => {
+  it('isMandatoryItem pins only the home copy', () => {
+    expect(isMandatoryItem('sample_collection', 'collect')).toBe(true);
+    expect(isMandatoryItem('sample_collection', 'frontdesk')).toBe(false);
+    expect(isMandatoryItem('sample_collection', 'lab')).toBe(false);
+    expect(isMandatoryItem('patient_registration', 'frontdesk')).toBe(true);
+  });
+
+  it('normaliser switches a saved-off home copy back on, leaves other copies alone', () => {
+    const cfg: ProcessWorkflowConfig = {
+      categories: [cat('frontdesk', 'Frontdesk', 0), cat('collect', 'Collect', 1), cat('lab', 'Lab', 2)],
+      actions: [
+        act('h', 'sample_collection', 'collect', false),
+        act('l', 'sample_collection', 'lab', false),
+      ],
+    };
+    const out = normalizeWorkflow(cfg);
+    expect(out.actions.find(a => a.id === 'h')!.enabled).toBe(true);
+    expect(out.actions.find(a => a.id === 'l')!.enabled).toBe(false);
+    expect(normalizeWorkflow(out)).toBe(out);
+  });
+
+  it('an adopted dedicated menu comes in enabled', () => {
+    const cfg: ProcessWorkflowConfig = {
+      categories: [cat('frontdesk', 'Frontdesk', 0), cat('cc', 'Collection Center', 1)],
+      actions: [act('c', 'sample_collection', 'cc', false)],
+    };
+    const out = normalizeWorkflow(cfg);
+    expect(out.actions.find(a => a.id === 'c')).toMatchObject({ categoryId: 'collect', enabled: true });
   });
 });

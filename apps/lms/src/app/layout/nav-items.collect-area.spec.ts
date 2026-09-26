@@ -38,12 +38,14 @@ describe('menusFromWorkflow — system Collect work area', () => {
     expect(collectItems(items).length).toBe(0);
   });
 
-  it('switching the Collect area\'s home copy off drops it from the nav (the nav follows the workflow)', () => {
+  it('the Collect area\'s home copy is always on — a saved "off" still shows Collect; roles/permission gate it', () => {
     const cfg = stored();
     cfg.categories.push(cat('collect', 'Collect', 1));
     cfg.actions.push(act('collect-home', 'sample_collection', 'collect', false));
     const items = menusFromWorkflow(cfg, ctxWith('collect_sample', 'register_patient'))!;
-    expect(items.some(i => i.id === 'collect')).toBe(false);
+    expect(items.some(i => i.id === 'collect')).toBe(true);
+    const noCollect = menusFromWorkflow(cfg, ctxWith('register_patient'))!;
+    expect(noCollect.some(i => i.id === 'collect')).toBe(false);
   });
 
   it('the shells\' fallback adds nothing when a workflow is configured — no duplicate Collect', () => {

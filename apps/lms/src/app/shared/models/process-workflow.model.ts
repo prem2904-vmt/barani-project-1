@@ -151,9 +151,11 @@ export function workAreaIconPath(key: string | null | undefined): string[] {
  * custom area) stay freely movable, removable and toggleable. Use
  * isLockedItem() for a placed item; isLocked() only says the TYPE has a lock.
  */
-export interface ActionPolicy { home: string; locked?: boolean; mandatory?: boolean; }
+export interface ActionPolicy { home: string; locked?: boolean; mandatory?: boolean; homeMandatory?: boolean; }
 export const ACTION_POLICY: Record<string, ActionPolicy> = {
-  sample_collection:    { home: 'collect',   locked: true },
+  // homeMandatory: the Collect area's home copy is always on (only its roles
+  // change — owner 2026-09-26); copies placed in other areas stay toggleable.
+  sample_collection:    { home: 'collect',   locked: true, homeMandatory: true },
   patient_registration: { home: 'frontdesk', locked: true, mandatory: true },
   appointment:          { home: 'frontdesk', locked: true },
   walk_in_order:        { home: 'frontdesk', locked: true },
@@ -265,6 +267,15 @@ export function isLockedItem(type: string, areaId: string | null | undefined): b
   return !isRepeatable(type) || areaId === actionHome(type);
 }
 
+/** Can THIS placed item never be switched off? Mandatory types everywhere, plus
+ *  a `homeMandatory` type's copy in its home area (the Collect area's Sample
+ *  collection) — its other copies stay toggleable. */
+export function isMandatoryItem(type: string, areaId: string | null | undefined): boolean {
+  if (isMandatory(type)) return true;
+  const pol = ACTION_POLICY[type];
+  return !!pol?.homeMandatory && areaId === pol.home;
+}
+
 /** The system "Collect" work-area: its screen is the Collect page
  *  (/sample-collection) and it is the locked home of `sample_collection`. */
 export const COLLECT_AREA_ID = 'collect';
@@ -305,6 +316,15 @@ export function normalizeWorkflow<T extends ProcessWorkflowConfig | null | undef
     id: COLLECT_HOME_ACTION_ID, type: 'sample_collection', categoryId: COLLECT_AREA_ID, order, enabled: true,
   });
 
+  // The home copy is always on (homeMandatory) — heal a saved "off".
+  const homeOff = actions.some(a => a.type === 'sample_collection' && a.categoryId === COLLECT_AREA_ID && !a.enabled);
+  if (homeOff) {
+    return normalizeWorkflow({
+      ...cfg,
+      actions: actions.map(a => a.type === 'sample_collection' && a.categoryId === COLLECT_AREA_ID ? { ...a, enabled: true } : a),
+    } as T);
+  }
+
   if (cfg.categories.some(c => c.id === COLLECT_AREA_ID)) {
     if (hasHomeCopy(actions)) return cfg;
     const n = actions.filter(a => a.categoryId === COLLECT_AREA_ID).length;
@@ -324,7 +344,7 @@ export function normalizeWorkflow<T extends ProcessWorkflowConfig | null | undef
     return {
       ...cfg,
       categories: cfg.categories.map(c => c.id === oldId ? { ...c, id: COLLECT_AREA_ID } : c),
-      actions: actions.map(a => a.categoryId === oldId ? { ...a, categoryId: COLLECT_AREA_ID } : a),
+      actions: actions.map(a => a.categoryId === oldId ? { ...a, categoryId: COLLECT_AREA_ID, enabled: true } : a),
     } as T;
   }
 

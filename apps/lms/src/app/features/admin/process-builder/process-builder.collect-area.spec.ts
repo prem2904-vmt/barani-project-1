@@ -89,35 +89,28 @@ describe('Process builder — Collect work area', () => {
     expect(lane(p, 'collect').items.filter(i => i.type === 'sample_collection').length).toBe(1);
   });
 
-  it('toggling the home copy off leaves the other copies (and dispatch) working', () => {
+  it('the home copy in Collect cannot be switched off; other copies still toggle', () => {
     const p = make();
     const c = p.cmp as any;
-    c.toggleAction(idx(p, 'collect'), 0);
-    expect(lane(p, 'collect').items[0].enabled).toBe(false);
-    expect(lane(p, 'frontdesk').items.find(i => i.type === 'sample_collection')!.enabled).toBe(true);
-    expect(lane(p, 'billdesk').items.find(i => i.type === 'sample_collection')!.enabled).toBe(true);
-    expect(lane(p, 'frontdesk').items.find(i => i.type === 'dispatch')!.enabled).toBe(true);
-    // Toggle it back on: only that copy flips.
     c.toggleAction(idx(p, 'collect'), 0);
     expect(lane(p, 'collect').items[0].enabled).toBe(true);
-  });
-
-  it('switching the LAST enabled copy off cascades dispatch (+ its coupled intake) off', () => {
-    const p = make();
-    const c = p.cmp as any;
-    c.toggleAction(idx(p, 'collect'), 0);
+    expect(c.mandatory('sample_collection', 'collect')).toBe(true);
+    expect(c.mandatory('sample_collection', 'frontdesk')).toBe(false);
     const fdAt = lane(p, 'frontdesk').items.findIndex(i => i.type === 'sample_collection');
     c.toggleAction(idx(p, 'frontdesk'), fdAt);
-    expect(lane(p, 'frontdesk').items.find(i => i.type === 'dispatch')!.enabled).toBe(true);   // counter copy still on
-    const bdAt = lane(p, 'billdesk').items.findIndex(i => i.type === 'sample_collection');
-    c.toggleAction(idx(p, 'billdesk'), bdAt);
-    expect(lane(p, 'frontdesk').items.find(i => i.type === 'dispatch')!.enabled).toBe(false);
-    expect(lane(p, 'lab').items.find(i => i.type === 'lab_intake')!.enabled).toBe(false);
-    // Re-enabling dispatch pulls collection back via ONE copy (the home copy).
-    const dAt = lane(p, 'frontdesk').items.findIndex(i => i.type === 'dispatch');
-    c.toggleAction(idx(p, 'frontdesk'), dAt);
+    expect(lane(p, 'frontdesk').items[fdAt].enabled).toBe(false);
+  });
+
+  it('switching every OTHER copy off keeps dispatch on — the home copy still satisfies it', () => {
+    const p = make();
+    const c = p.cmp as any;
+    for (const area of ['frontdesk', 'billdesk']) {
+      const at = lane(p, area).items.findIndex(i => i.type === 'sample_collection');
+      c.toggleAction(idx(p, area), at);
+    }
     expect(lane(p, 'collect').items[0].enabled).toBe(true);
-    expect(lane(p, 'frontdesk').items.find(i => i.type === 'sample_collection')!.enabled).toBe(false);
+    expect(lane(p, 'frontdesk').items.find(i => i.type === 'dispatch')!.enabled).toBe(true);
+    expect(lane(p, 'lab').items.find(i => i.type === 'lab_intake')!.enabled).toBe(true);
   });
 
   it('saving persists the Collect area', () => {

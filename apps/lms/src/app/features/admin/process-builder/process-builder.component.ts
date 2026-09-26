@@ -11,7 +11,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
-import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLockedItem, isMandatory, isRepeatable, actionHome, normalizeWorkflow, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
+import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLockedItem, isMandatoryItem, isRepeatable, actionHome, normalizeWorkflow, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
@@ -196,9 +196,9 @@ const LANE_COLOR = '#7c3aed';
                       @for (p of iconFor(item.type); track $index) { <path [attr.d]="p" /> }
                     </svg>
                     <span class="pb-label">{{ labelFor(item) }}</span>
-                    <button type="button" class="nd-toggle pb-toggle" role="switch" [attr.aria-checked]="item.enabled" [disabled]="mandatory(item.type)" (click)="toggleAction(li, ii)"
+                    <button type="button" class="nd-toggle pb-toggle" role="switch" [attr.aria-checked]="item.enabled" [disabled]="mandatory(item.type, lane.cat.id)" (click)="toggleAction(li, ii)"
                             [attr.aria-label]="labelFor(item) + (item.enabled ? ' — shown' : ' — hidden')"
-                            [title]="mandatory(item.type) ? 'Required — always on' : (item.enabled ? 'Enabled' : 'Hidden')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+                            [title]="mandatory(item.type, lane.cat.id) ? 'Required — always on' : (item.enabled ? 'Enabled' : 'Hidden')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
                     @if (locked(item.type, lane.cat.id)) {
                       <svg class="pb-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" [attr.title]="'Locked to this area'">
                         <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
@@ -619,6 +619,7 @@ export class ProcessBuilderComponent implements OnInit {
         if (home && !home.items.some(it => it.type === type)) {
           home.items.push({ id: crypto.randomUUID(), type, enabled: true });
         }
+        if (home && pol.homeMandatory) for (const it of home.items) if (it.type === type) it.enabled = true;
         continue;
       }
       // Pull any stray copies out of non-home areas (capture one to reuse).
@@ -652,7 +653,7 @@ export class ProcessBuilderComponent implements OnInit {
       changed = false;
       const on = new Set(lanes.flatMap(l => l.items).filter(i => i.enabled).map(i => i.type));
       for (const ln of lanes) for (const it of ln.items) {
-        if (!it.enabled || isMandatory(it.type)) continue;
+        if (!it.enabled || isMandatoryItem(it.type, ln.cat.id)) continue;
         const partnerOff = coupledTypes(it.type).some(p => !on.has(p));
         const reqOff = requiresOf(it.type).some(r => !on.has(r));
         if (partnerOff || reqOff) { it.enabled = false; changed = true; }
@@ -727,7 +728,7 @@ export class ProcessBuilderComponent implements OnInit {
         ...ln,
         items: ln.items.map(it => {
           const d = desired.get(it.type);
-          return d === undefined || isMandatory(it.type) ? it : { ...it, enabled: d };
+          return d === undefined || isMandatoryItem(it.type, ln.cat.id) ? it : { ...it, enabled: d };
         }),
       })));
     }
@@ -766,8 +767,9 @@ export class ProcessBuilderComponent implements OnInit {
     this.dirty.set(true);
   }
   toggleAction(laneIdx: number, itemIdx: number) {
-    const cur = this.lanes()[laneIdx]?.items[itemIdx];
-    if (!cur || isMandatory(cur.type)) return;
+    const lane = this.lanes()[laneIdx];
+    const cur = lane?.items[itemIdx];
+    if (!cur || isMandatoryItem(cur.type, lane.cat.id)) return;
     this.applyEnabled(cur.type, !cur.enabled, cur.id);
   }
 
@@ -830,7 +832,7 @@ export class ProcessBuilderComponent implements OnInit {
           if (it.type === type && itemId) return it.id === itemId ? { ...it, enabled: d } : it;
           if (d && pick.get(it.type) !== it.id) return it;
         }
-        return { ...it, enabled: isMandatory(it.type) ? true : d };
+        return { ...it, enabled: isMandatoryItem(it.type, ln.cat.id) ? true : d };
       }),
     })));
     if (missing.length) {
@@ -849,7 +851,7 @@ export class ProcessBuilderComponent implements OnInit {
   locked(type: string, areaId?: string | null): boolean { return isLockedItem(type, areaId); }
   /** 'lane-<areaId>' drop-list id → the area id. */
   private laneIdOf(listId: string): string | null { return listId.startsWith('lane-') ? listId.slice(5) : null; }
-  mandatory(type: string): boolean { return isMandatory(type); }
+  mandatory(type: string, areaId?: string | null): boolean { return isMandatoryItem(type, areaId); }
 
   // ── Workflow ops ─────────────────────────────────────────────────
   selectWorkflow(id: string) { const w = this.workflows().find(x => x.id === id); if (w) this.loadInto(w); }
