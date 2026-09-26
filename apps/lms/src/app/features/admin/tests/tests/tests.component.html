@@ -194,12 +194,44 @@
        copies named) — Accept all / Dismiss all. Hidden when none wait. -->
   <pf-catalog-proposals-panel [proposals]="proposals()" [tests]="allTests()"
                               (changed)="onProposalsChanged()"></pf-catalog-proposals-panel>
-  <!-- Two jobs on one screen (ND-PATTERN): the grid is the MAIN card
-       (left, the work); DEPARTMENTS is the SIDE card (right, the filter),
-       styled like BILLING. It collapses to a slim strip (remembered per
+  <!-- Two jobs on one screen (ND-PATTERN): DEPARTMENTS is a FILTER
+       companion, so it sits on the LEFT (read left to right: filter, then
+       content); the grid is the MAIN card on the right. Styled like BILLING. It collapses to a slim strip (remembered per
        user); on narrow widths it is a sheet opened from the band pill. -->
   <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()" [class.pf-tm-panels--narrow]="narrow()">
-    <!-- ── MAIN card: the test grid ──────────────────────── -->
+    <!-- ── SIDE card (LEFT): DEPARTMENTS — the filter comes first ── -->
+    @if (narrow()) {
+      @if (deptSheetOpen()) {
+        <div class="nd-sheet-backdrop pf-tm-sheet-backdrop" (click)="closeDeptSheet()"></div>
+        <aside class="nd-card pf-tm-side pf-tm-side--sheet" role="dialog" aria-modal="true" aria-label="Departments"
+               (keydown.escape)="closeDeptSheet()">
+          <span class="nd-sheet__handle pf-tm-sheet-handle" aria-hidden="true"></span>
+          <ng-container *ngTemplateOutlet="deptHead; context: { sheet: true }"></ng-container>
+          <ng-container *ngTemplateOutlet="deptBody"></ng-container>
+        </aside>
+      }
+    } @else if (sideCollapsed()) {
+      <aside class="nd-card pf-tm-strip" aria-label="Departments">
+        <button type="button" class="pf-tm-strip__btn" (click)="toggleSide()"
+                title="Show departments" aria-label="Show departments" aria-expanded="false">
+          <span class="nd-btn nd-btn--icon pf-tm-strip__expand" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </span>
+          <span class="nd-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          </span>
+          <span class="pf-tm-strip__label">Departments</span>
+          @if (selectedDept()) { <span class="pf-tm-strip__dot" aria-hidden="true"></span> }
+        </button>
+      </aside>
+    } @else {
+      <aside class="nd-card pf-tm-side" aria-label="Departments">
+        <ng-container *ngTemplateOutlet="deptHead; context: { sheet: false }"></ng-container>
+        <ng-container *ngTemplateOutlet="deptBody"></ng-container>
+      </aside>
+    }
+
+    <!-- ── MAIN card (RIGHT): the test grid ──────────────── -->
     <section class="nd-card pf-tm-main" aria-label="Test Master">
       <header class="nd-card__head pf-tm-main__head">
         <span class="nd-card__icon" aria-hidden="true">
@@ -247,38 +279,6 @@
         </ag-grid-angular>
       </div>
     </section>
-
-    <!-- ── SIDE card: DEPARTMENTS (like BILLING) ─────────── -->
-    @if (narrow()) {
-      @if (deptSheetOpen()) {
-        <div class="nd-sheet-backdrop pf-tm-sheet-backdrop" (click)="closeDeptSheet()"></div>
-        <aside class="nd-card pf-tm-side pf-tm-side--sheet" role="dialog" aria-modal="true" aria-label="Departments"
-               (keydown.escape)="closeDeptSheet()">
-          <span class="nd-sheet__handle pf-tm-sheet-handle" aria-hidden="true"></span>
-          <ng-container *ngTemplateOutlet="deptHead; context: { sheet: true }"></ng-container>
-          <ng-container *ngTemplateOutlet="deptBody"></ng-container>
-        </aside>
-      }
-    } @else if (sideCollapsed()) {
-      <aside class="nd-card pf-tm-strip" aria-label="Departments">
-        <button type="button" class="pf-tm-strip__btn" (click)="toggleSide()"
-                title="Show departments" aria-label="Show departments" aria-expanded="false">
-          <span class="nd-btn nd-btn--icon pf-tm-strip__expand" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-          </span>
-          <span class="nd-card__icon" aria-hidden="true">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-          </span>
-          <span class="pf-tm-strip__label">Departments</span>
-          @if (selectedDept()) { <span class="pf-tm-strip__dot" aria-hidden="true"></span> }
-        </button>
-      </aside>
-    } @else {
-      <aside class="nd-card pf-tm-side" aria-label="Departments">
-        <ng-container *ngTemplateOutlet="deptHead; context: { sheet: false }"></ng-container>
-        <ng-container *ngTemplateOutlet="deptBody"></ng-container>
-      </aside>
-    }
   </div>
 
   <ng-template #deptHead let-sheet="sheet">
@@ -295,7 +295,7 @@
       } @else {
         <button type="button" class="nd-btn nd-btn--icon pf-tm-side__collapse" (click)="toggleSide()"
                 title="Hide departments" aria-label="Hide departments" aria-expanded="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
       }
     </header>

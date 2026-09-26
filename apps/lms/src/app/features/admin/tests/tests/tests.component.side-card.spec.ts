@@ -15,8 +15,8 @@ import { AuthService } from '../../../../core/auth/auth.service';
 
 /**
  * Test Master LIST — two cards (ND-PATTERN "two jobs on one screen"):
- * the grid is the MAIN card (left), DEPARTMENTS the SIDE card (right, the
- * BILLING anatomy). Rows filter the grid, the slate switch asks before
+ * DEPARTMENTS is the SIDE card on the LEFT (a filter companion: filter
+ * first, then content; the BILLING anatomy), the grid the MAIN card (right). Rows filter the grid, the slate switch asks before
  * turning a department OFF, the card collapses to a strip (remembered per
  * user) and on narrow widths it is a sheet opened from the band pill.
  * Child components (AG-Grid, band, panels) are left as unknown elements so
@@ -92,14 +92,15 @@ describe('Test Master list — main card + DEPARTMENTS side card', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('main card (left) holds the grid with the count + the muted hint; side card (right) comes after it', () => {
+  it('side card (LEFT, the filter) comes first; the main card (right) holds the grid with the count + the muted hint', () => {
     const { el } = render();
     const panels = el.querySelector('.pf-tm-panels')!;
     const main = panels.querySelector(':scope > section.nd-card.pf-tm-main')!;
     const side = panels.querySelector(':scope > aside.nd-card.pf-tm-side')!;
     expect(main).toBeTruthy();
     expect(side).toBeTruthy();
-    expect(main.compareDocumentPosition(side) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(side.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(panels.firstElementChild).toBe(side);
     expect(main.querySelector('ag-grid-angular')).toBeTruthy();
     expect(main.querySelector('.pf-tm-count')!.textContent).toContain('3 tests');
     expect(main.querySelector('.nd-card__note')!.textContent).toContain('Double-click a cell to edit');
@@ -110,7 +111,9 @@ describe('Test Master list — main card + DEPARTMENTS side card', () => {
     const head = el.querySelector('.pf-tm-side .nd-card__head')!;
     expect(head.querySelector('.nd-card__icon svg')).toBeTruthy();
     expect(head.querySelector('.nd-card__label')!.textContent!.trim()).toBe('Departments');
-    expect(head.querySelector('button.pf-tm-side__collapse[aria-label="Hide departments"]')).toBeTruthy();
+    const collapse = head.querySelector('button.pf-tm-side__collapse[aria-label="Hide departments"]')!;
+    expect(collapse).toBeTruthy();
+    expect(collapse.querySelector('path')!.getAttribute('d')).toBe('M15 18l-6-6 6-6');   // collapse points LEFT
   });
 
   it('renders "All" + one row per department: name, code chip (tabular), count and a slate switch', () => {
@@ -183,6 +186,8 @@ describe('Test Master list — main card + DEPARTMENTS side card', () => {
     expect(strip.querySelector('.nd-card__icon')).toBeTruthy();
     expect(strip.querySelector('.pf-tm-strip__label')!.textContent!.trim()).toBe('Departments');
     expect(el.querySelector('.pf-tm-panels')!.classList.contains('pf-tm-panels--collapsed')).toBe(true);
+    expect(el.querySelector('.pf-tm-panels')!.firstElementChild).toBe(strip);                       // strip on the LEFT edge
+    expect(strip.querySelector('.pf-tm-strip__expand path')!.getAttribute('d')).toBe('M9 18l6-6-6-6'); // expand points RIGHT
     expect(localStorage.getItem(KEY)).toBe('1');
 
     strip.querySelector<HTMLButtonElement>('button[aria-label="Show departments"]')!.click();

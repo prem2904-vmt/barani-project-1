@@ -15,15 +15,16 @@
 .pf-tm-inactive-toggle input { accent-color: #a855f7; width: 15px; height: 15px; cursor: pointer; }
 
 /* ── Two cards (ND-PATTERN "two jobs on one screen") ─────────────────
-   LEFT the MAIN card (the grid), RIGHT the DEPARTMENTS side card — the
-   BILLING card's anatomy, ~340px. Collapsed it is a slim strip; the column
+   LEFT the DEPARTMENTS side card (a FILTER companion: filter first, then
+   content) — the BILLING card's anatomy, ~340px; RIGHT the MAIN card (the
+   grid). Collapsed it is a slim strip; the column
    width animates on the nd spring. ≤900px: one column, the side card is a
    sheet opened from the band pill. */
 .pf-tm-panels {
-  display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start;
+  display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start;
   transition: grid-template-columns var(--nd-dur, 320ms) var(--nd-spring, ease);
 }
-.pf-tm-panels--collapsed { grid-template-columns: minmax(0, 1fr) 52px; }
+.pf-tm-panels--collapsed { grid-template-columns: 52px minmax(0, 1fr); }
 .pf-tm-panels--narrow { grid-template-columns: minmax(0, 1fr); }
 
 /* MAIN card: head (icon + label + hint + count), the grid fills the body. */
@@ -41,7 +42,7 @@
   position: sticky; top: 12px; max-height: calc(100dvh - 180px);
   animation: pf-tm-side-in var(--nd-dur, 320ms) var(--nd-spring, ease) both;
 }
-@keyframes pf-tm-side-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+@keyframes pf-tm-side-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 .pf-tm-side__collapse, .pf-tm-side__close { width: 32px !important; height: 32px; min-height: 32px; }
 
 /* The collapsed strip: icon + "Departments" set vertically, one target. */

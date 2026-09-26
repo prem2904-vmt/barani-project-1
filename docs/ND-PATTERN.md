@@ -74,24 +74,30 @@ actions.
 
 ### Two jobs on one screen = main card + side card
 
-**Two jobs on one screen = main card (left, the work) + side card (right, the
-companion: filter / summary / actions), styled like BILLING, collapsible to a
-strip; a sheet on phones.**
+**Two jobs on one screen = a main card (the work) + a side card (the
+companion), styled like BILLING, collapsible to a strip; a sheet on phones.
+Which side it sits on depends on what the companion does:**
 
-- Order & Payments: the catalogue (main) + BILLING (side). Test Master
-  (`features/admin/tests/tests/`): the test grid (main; its header has the
-  count + the muted "Double-click a cell to edit" hint) + DEPARTMENTS (side,
-  ~340px).
-- The side card is an `.nd-card` with the BILLING header: violet icon chip +
+- **FILTER / NAVIGATION companion → LEFT.** Reading goes left to right:
+  filter first, then the content it filters. Test Master
+  (`features/admin/tests/tests/`): DEPARTMENTS (~340px) on the left, the
+  test grid (main; its header has the count + the muted "Double-click a cell
+  to edit" hint) on the right, filling the rest.
+- **ACTION / SUMMARY companion → RIGHT.** What you do with the work comes
+  after it. Order & Payments: the catalogue (main) on the left, BILLING
+  (totals, confirm) on the right.
+- Both are the same `.nd-card` with the BILLING header: violet icon chip +
   UPPERCASE label + a neutral collapse icon button. Rows are whole-row
   targets with the neutral selected state; a switch in a row is a separate
   target (slate `.nd-toggle`), and switching OFF something that hides it
   lab-wide asks first (`DialogService`). Disabled items are muted with an
   "Off" tag; counts are plain muted tabular numbers.
-- **Collapse** turns the card into a slim vertical strip (icon + the label
-  set vertically, one expand target). The state is remembered per user
-  (`localStorage`, wrapped in try/catch) and the column width animates on
-  `--nd-spring` (none under reduced motion).
+- **Collapse** turns the card into a slim vertical strip ON ITS OWN EDGE
+  (icon + the label set vertically, one expand target). Chevrons point the
+  way the card moves: a left card collapses ‹ and expands ›, a right card
+  the reverse. The state is remembered per user (`localStorage`, wrapped in
+  try/catch) and the column width animates on `--nd-spring` (none under
+  reduced motion).
 - **Narrow widths (≤900px):** no side column. The main card is full width
   and the side card opens as a sheet (above the navbar; handle, backdrop,
   × to close) from a button in the band pill (Test Master: "Departments").

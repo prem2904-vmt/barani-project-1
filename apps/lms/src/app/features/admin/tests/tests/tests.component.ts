@@ -247,8 +247,9 @@ export class TestsComponent implements OnInit {
   readonly web = webPointerSignal();
   readonly isCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
   // ── DEPARTMENTS side card (ND-PATTERN "two jobs on one screen") ────────
-  // The grid is the MAIN card (left); the departments filter is the SIDE
-  // card (right, like BILLING). It collapses to a slim strip — remembered
+  // The departments filter is the SIDE card on the LEFT (a filter companion:
+  // filter first, then content; BILLING's anatomy); the grid is the MAIN
+  // card on the right. It collapses to a slim strip — remembered
   // per user — and on narrow widths it is a bottom sheet opened from the
   // band pill's "Departments" button.
   private readonly auth = inject(AuthService, { optional: true });
