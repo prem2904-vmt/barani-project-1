@@ -103,14 +103,21 @@ export interface ValidationConfig {
 
 // ── Reference ranges (lab-specific — keeps test-editor semantics) ─────
 
+/**
+ * One group of patients' reference range — the simple model (owner,
+ * 2026-09-26): Who (`sex`) + Age, `min` = L, `max` = H, `criticalLow` = CL,
+ * `criticalHigh` = CH, and `reportText` printed on the report exactly as
+ * typed. value < L → L, > H → H, < CL / > CH → critical; on a limit = not
+ * flagged. `segment`, `label`, `minOp` / `maxOp` are LEGACY: read (until the
+ * data is migrated), never written by new saves.
+ */
 export interface ReferenceRange {
-  segment: string; // e.g. "Male adult", "Female adult", "0-1 yr"
+  /** Legacy free-text population ("Male adult", "0-1 yr", "prediabetes"). */
+  segment?: string;
   min?: number | null;
   max?: number | null;
-  // First-class bound comparators. Absent op = backward-compatible defaults:
-  // a two-sided band is inclusive on both bounds (min ≤ v ≤ max is normal),
-  // a one-sided band behaves/renders as strict `<`/`>`. 'lte'/'gte' make the
-  // boundary value normal and print ≤/≥. Mirrors mw `RangeDef.MinOp/MaxOp`.
+  /** Legacy comparators: only an explicit strict 'gt' / 'lt' still flags the
+   *  limit itself; absent = on the limit is normal. Mirrors mw `RangeDef`. */
   minOp?: 'gt' | 'gte' | null;
   maxOp?: 'lt' | 'lte' | null;
   unit?: string | null;
@@ -131,10 +138,11 @@ export interface ReferenceRange {
    *  or reported UNDER the profile with this test code (e.g. CSF analysis).
    *  Mirrors mw `RangeDef.ProfileCode`. */
   profileCode?: string | null;
-  /** Overrides the name printed under this range on the report. Left blank,
-   *  the name is composed from `sex` + the age bounds ("Adult Male"), which
-   *  keeps the whole catalogue phrased consistently. */
+  /** Legacy: overrides the name printed under this range on the report. */
   label?: string | null;
+  /** What the report prints as the reference range, exactly as typed.
+   *  Blank = "L–H unit". */
+  reportText?: string | null;
 }
 
 // ── Per-type config blocks (stubs where complex renders aren't needed yet) ─

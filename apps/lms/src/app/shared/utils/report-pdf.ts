@@ -2049,8 +2049,11 @@ function buildPanelGroup(
         // real abnormality letters print — 'N' (normal) must never leak onto
         // the row ("92 mg/dL N"). Same whitelist as the legacy path.
         const sv = r.parameterName ? savedFlagOf({ flagged: savedValues }, r.parameterName) : undefined;
-        const hasSaved = (!!sv && typeof sv === 'object' && 'flag' in sv) || !!rc.saved;
-        const savedCode = sv && typeof sv === 'object' && 'flag' in sv ? flagCodeOf(sv.flag) : flagCodeOf(rc.flag);
+        // The preview has no saved result — mw puts the row's flag on the row.
+        const rowFlag = r.flag != null ? r.flag : undefined;
+        const hasSaved = (!!sv && typeof sv === 'object' && 'flag' in sv) || !!rc.saved || rowFlag !== undefined;
+        const savedCode = sv && typeof sv === 'object' && 'flag' in sv ? flagCodeOf(sv.flag)
+          : rc.saved ? flagCodeOf(rc.flag) : flagCodeOf(rowFlag ?? rc.flag);
         const savedLetter = savedCode === 'N' ? '' : savedCode;
         const label = hasSaved ? '' : flagLabel(r);
         const letter = hasSaved ? savedLetter
@@ -2582,6 +2585,10 @@ function renderColumnarTable(
             styles['fontStyle'] = 'bold';
             if (theme.flagStyle === 'bold_color') styles['textColor'] = abnColor;
           }
+          // A chosen option that is NOT ticked Normal (mw saves 'A' — only
+          // when its option list has at least one Normal) always prints bold,
+          // whatever the indicator setting (owner 2026-09-26).
+          if (r.flag === 'A') styles['fontStyle'] = 'bold';
           if (adminColor) { styles['textColor'] = adminColor; styles['fontStyle'] = 'bold'; }
         }
         // Conditional bold (condition `then.bold`) — bolds name + result.
@@ -2599,7 +2606,7 @@ function renderColumnarTable(
         ? { arrow: r.isLow ? 'down' : 'up',
             color: theme.flagStyle === 'bold_color' ? abnColor : BLACK,
             text: String(resultCellText),
-            bold: !isNormal && theme.flagIndicator !== 'none' }
+            bold: (!isNormal && theme.flagIndicator !== 'none') || r.flag === 'A' }
         : null);
     }
   }

@@ -107,7 +107,7 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
 
   it('adultReferenceRange is RE-DERIVED from the single numeric band when the band changes', () => {
     const { c, api } = make({ test: baseTest({ adultReferenceRange: 'stale' }) });
-    c.patchRangeAt(0, 0, { min: 136 });
+    c.setBands(0, [{ min: 136, max: 145 }]);
     c.saveTest();
     const body = lastPatchBody(api);
     expect(body.adultReferenceRange).toBe('136–145');
@@ -116,8 +116,8 @@ describe('TestEditor load → save round-trip (CURRENT)', () => {
 
   it('multi-band numeric value → flat adultReferenceRange is blanked when the bands change', () => {
     const { c, api } = make({ test: baseTest({ parameters: P([{ name: 'hb', type: 'numeric',
-      referenceRanges: [{ min: 13, max: 17 }] }]) }) });
-    c.addRange(0);
+      referenceRanges: [{ sex: 'M', min: 13, max: 17 }] }]) }) });
+    c.setBands(0, [{ sex: 'M', min: 13, max: 17 }, { sex: 'F', min: 12, max: 16 }]);
     c.saveTest();
     expect(lastPatchBody(api).adultReferenceRange).toBe('');
   });
@@ -588,99 +588,81 @@ describe('TestEditor — two sequences: lab entry order vs printed report order 
   });
 });
 
-describe('TestEditor — reference-range comparator per band (≤ / ≥, QA 2026-09-24)', () => {
-  const one = (band: any) => baseTest({ adultReferenceRange: '',
-    parameters: P([{ name: 'prog', title: 'Progesterone', type: 'numeric', unit: 'ng/mL', referenceRanges: [band] }]) });
-  const savedBand = (api: any) => JSON.parse(lastPatchBody(api).parametersJson).parameters[0].referenceRanges[0];
+describe('TestEditor — reference ranges, the simple model (owner 2026-09-26)', () => {
+  const one = (param: any) => baseTest({ adultReferenceRange: '',
+    parameters: P([{ name: 'hb', title: 'Haemoglobin', type: 'numeric', unit: 'g/dL', ...param }]) });
+  const savedParam = (api: any) => JSON.parse(lastPatchBody(api).parametersJson).parameters[0];
 
-  const boundOfBand = (band: any) => {
-    TestBed.resetTestingModule();
-    return make({ test: one(band) }).c.rangeRows()[0].bound;
-  };
-  it('existing bands read as today: two-sided = Low – high, one-sided without op = strict', () => {
-    expect(boundOfBand({ min: 135, max: 145 })).toBe('between');
-    expect(boundOfBand({ min: null, max: 0.89 })).toBe('lt');
-    expect(boundOfBand({ min: 60, max: null })).toBe('gt');
-    expect(boundOfBand({ min: null, max: 0.89, maxOp: 'lte' })).toBe('lte');
-  });
-
-  it('picking ≤ on a "< 0.89" band saves maxOp lte and the flat range prints ≤', () => {
-    const { c, api } = make({ test: one({ segment: 'default', min: null, max: 0.89 }) });
-    c.onRangeCellChanged({ data: { ...c.rangeRows()[0], bound: 'lte' }, colDef: { field: 'bound' } });
-    expect(c.rangeRows()[0].bound).toBe('lte');
+  it('legacy test-wide criticals open as each group\'s CL / CH — and opening is not an edit', () => {
+    const { c, api } = make({ test: one({ criticalLow: 7, criticalHigh: 20,
+      referenceRanges: [{ sex: 'M', minAge: 18, min: 13, max: 17 }, { sex: 'F', minAge: 18, min: 12, max: 16, criticalLow: 6 }] }) });
+    expect(c.fields()[0].referenceRanges).toEqual([
+      { sex: 'M', minAge: 18, min: 13, max: 17, criticalLow: 7, criticalHigh: 20 },
+      { sex: 'F', minAge: 18, min: 12, max: 16, criticalLow: 6, criticalHigh: 20 },
+    ]);
+    c.patch({ methodology: 'Cyanmethaemoglobin' });
     c.saveTest();
-    expect(savedBand(api)).toEqual({ segment: 'default', min: null, max: 0.89, maxOp: 'lte' });
-    expect(lastPatchBody(api).adultReferenceRange).toBe('≤ 0.89');
+    expect(lastPatchBody(api).parametersJson).toBeUndefined();
   });
 
-  it('picking ≥ on a two-sided band keeps the low value as the one-sided limit', () => {
-    const { c, api } = make({ test: one({ segment: 'default', min: 60, max: 90 }) });
-    c.setRangeBound(0, 0, 'gte');
+  it('a range edit saves the groups with CL / CH and the typed report text; the test-wide pair is gone', () => {
+    const { c, api } = make({ test: one({ criticalLow: 7, referenceRanges: [{ sex: 'any', min: 12, max: 16 }] }) });
+    c.setBands(0, [{ sex: 'any', minAge: null, maxAge: null, ageUnit: 'years', min: 12, max: 16,
+      criticalLow: 7, criticalHigh: null, reportText: '12 – 16 g/dL' }]);
     c.saveTest();
-    expect(savedBand(api)).toEqual({ segment: 'default', min: 60, max: null, minOp: 'gte' });
-    expect(lastPatchBody(api).adultReferenceRange).toBe('≥ 60');
+    const p = savedParam(api);
+    expect(p.criticalLow).toBeUndefined();
+    expect(p.referenceRanges).toEqual([{ sex: 'any', minAge: null, maxAge: null, ageUnit: 'years', min: 12, max: 16,
+      criticalLow: 7, criticalHigh: null, reportText: '12 – 16 g/dL' }]);
+    // The flat column follows the typed text.
+    expect(lastPatchBody(api).adultReferenceRange).toBe('12 – 16 g/dL');
   });
 
-  it('Low – high on a one-sided band opens both cells until the other value is typed, and drops the op', () => {
-    const { c, api } = make({ test: one({ segment: 'default', min: null, max: 14, maxOp: 'lte' }) });
-    c.setRangeBound(0, 0, 'between');
-    expect(c.rangeRows()[0].bound).toBe('between');
-    c.patchRangeAt(0, 0, { min: 2 });
-    c.saveTest();
-    expect(savedBand(api)).toEqual({ segment: 'default', min: 2, max: 14 });
-  });
-
-  it('the value cells follow the comparator: ≤ uses Normal high only', () => {
-    const { c } = make({ test: one({ min: null, max: 0.89, maxOp: 'lte' }) });
-    const col = (f: string) => c.rangeColDefs.find((x: any) => x.field === f);
-    const row = { data: c.rangeRows()[0] };
-    expect(col('min').editable(row)).toBe(false);
-    expect(col('max').editable(row)).toBe(true);
-    expect(col('min').headerName).toBe('Normal low');
-    expect(col('criticalLow').headerName).toBe('Critical low');
-    expect(col('criticalHigh').headerTooltip).toContain('Critical high');
+  it('there is no Advanced grid any more', () => {
+    const { c } = make();
+    expect((c as any).rangeColDefs).toBeUndefined();
+    expect((c as any).rangeAdvanced).toBeUndefined();
   });
 });
 
 
 describe('TestEditor reference-range validation (range-insight.ts)', () => {
-  it('a range error blocks Save — no PATCH, a warning naming the value + range, Result entry opens', () => {
+  it('a range error blocks Save — no PATCH, a warning naming the value + group, Result entry opens', () => {
     const { c, api, toasts } = make();
-    c.patchRangeAt(0, 0, { criticalHigh: 140 });           // inside 135–145
+    c.setBands(0, [{ min: 135, max: 145, criticalHigh: 140 }]);
     expect(c.rangeErrors().length).toBe(1);
-    expect(c.rangeCellIssue(0, 0, 'criticalHigh')).toBe('error');
     c.saveTest();
     expect(api.patch).not.toHaveBeenCalled();
-    expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('range 1: Critical high (140) is inside the normal range'));
+    expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('group 1: CH (140) must not be below H (145).'));
     expect(c.section()).toBe('results');
   });
 
-  it('an error the test ALREADY had when opened (legacy data) is shown but does not block an unrelated save — like mw', () => {
+  it('an error the test ALREADY had when opened also blocks Save until it is fixed (owner 2026-09-26)', () => {
     const { c, api } = make({ test: baseTest({ parameters: P([{ name: 'sodium', type: 'numeric', unit: 'mmol/L',
       referenceRanges: [{ min: 135, max: 145, criticalHigh: 140 }] }]) }) });
-    expect(c.rangeCellIssue(0, 0, 'criticalHigh')).toBe('error');
-    expect(c.rangeErrors()).toEqual([]);
+    expect(c.rangeErrors().length).toBe(1);
     c.patch({ methodology: 'Indirect ISE' });
     c.saveTest();
-    expect(api.patch).toHaveBeenCalled();
-    c.patchRangeAt(0, 0, { min: 150 });                    // a NEW error blocks
-    expect(c.rangeErrors().length).toBeGreaterThan(0);
-  });
-
-  it('warnings never block Save', () => {
-    const { c, api } = make();
-    c.patchRangeAt(0, 0, { min: 140, max: 140 });          // single-value normal = a warning
+    expect(api.patch).not.toHaveBeenCalled();
+    c.setBands(0, [{ min: 135, max: 145, criticalHigh: 160 }]);
     expect(c.rangeErrors()).toEqual([]);
-    expect(c.rangeCellIssue(0, 0, 'max')).toBe('warning');
     c.saveTest();
     expect(api.patch).toHaveBeenCalled();
+  });
+
+  it('two groups covering the same patients block Save', () => {
+    const { c, api } = make();
+    c.setBands(0, [{ sex: 'any', min: 135, max: 145 }, { sex: 'M', minAge: 18, min: 136, max: 146 }]);
+    expect(c.rangeErrors()[0].issue.message).toContain('Overlaps group 1');
+    c.saveTest();
+    expect(api.patch).not.toHaveBeenCalled();
   });
 
   it('mw refusing the ranges (range_invalid) is a warning that opens Result entry', () => {
-    const { c, toasts } = make({ patchErr: { error: { message: 'sodium, range 1: Normal to (1) is below Normal from (2).', field: 'referenceRanges' } } });
+    const { c, toasts } = make({ patchErr: { error: { message: 'sodium, group 1: L (2) must not be above H (1).', field: 'referenceRanges' } } });
     c.patch({ methodology: 'x' });
     c.saveTest();
-    expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('Normal to (1)'));
+    expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('L (2) must not be above H (1)'));
     expect(c.section()).toBe('results');
   });
 

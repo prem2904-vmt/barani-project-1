@@ -835,93 +835,84 @@ canonical example is the **test editor**
   band pinned while the body scrolls. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`
   (shots `v3-*`).
 
-## 16. Reference ranges = one compact table, one row per group
+## 16. Reference ranges = H, L, CL, CH and a report box
 
-Owner, 2026-09-26 (second pass): the per-group "Critical low / Low / Normal /
-High / Critical high" tables were still confusing — Haemoglobin repeated the
-block six times, ages read "0.0767 years", Low / High duplicated Normal.
-Persona: "a doctor and a technician who hasn't cleared 12th grade must be
-able to use this." The model now follows the LIS standard (OpenELIS result
-limits, OpenMRS concept numeric, HL7 OBX-7 / OBX-8): **one row per
-population, Normal low / high + Critical low / high; H / L are derived from
-Normal, never typed.**
+Owner, 2026-09-26 (FINAL — replaces the table experiments): "keep it very
+simple — H, L, CL, CH and a report box; the reference range is typed as text
+itself so it's simple and neat." Every numeric value has a list of **groups**
+(Who + Age); each group has four optional limits and the words the report
+prints.
 
 `pf-range-table` (`features/admin/tests/test-editor/range-table.component.ts`,
 byte-identical in prefrontal-admin-ui) on the **Result entry** tab. Shared
-logic: `shared/utils/range-insight.ts` (validation, tester) and
-`shared/utils/flag-conditions.ts` (report conditions). Nothing decides a flag
-of its own: every verdict is `flagBand` (= `liveFlag` = mw `FlagOne`), every
-band choice the ONE resolver.
+logic: `shared/utils/range-insight.ts` (validation, tester),
+`shared/utils/reference-range.ts` (the ONE resolver, flag rule, report text)
+and `shared/utils/flag-conditions.ts` (report conditions). Nothing decides a
+flag of its own: every verdict is `flagBand` (= `liveFlag` = mw `FlagOne`).
 
 ```
-Below Low prints L · above High prints H · past a Critical limit alerts the doctor.
-Who        Age                  Low (L) if below g/dL  High (H) if above  Critical if below  Critical if above
-[Anyone ▾] [0–28 days        ▾] [L < 14 ]              [H > 22 ]          [C < 7 ]           [C > 20 ]         ⚠ ×
-[Anyone ▾] [28 days – 1 year ▾] [L < 9.5]              [H > 14 ]          [C < 7 ]           [C > 20 ]           ×
-[Male   ▾] [18 years+        ▾] [L < 13 ]              [H > 17 ]          [C < none]         [C > none]          ×
+Who        Age                L g/dL  H      CL     CH     Report text
+[Anyone ▾] [0–28 days      ▾] [14  ]  [22 ]  [7  ]  [25 ]  [14–22 g/dL (placeholder)         ] ×
+[Male   ▾] [18 years+      ▾] [13  ]  [17 ]  [7  ]  [20 ]  [13 – 17 g/dL                     ] ×
+[Female ▾] [18 years+      ▾] [12  ]  [16 ]  [7  ]  [20 ]  [12 – 16 g/dL                     ] ×
 + Add group
-Try a value [6] for [Female ▾] aged [35] [years ▾]  → Critical low
-Advanced — edit every field in a grid
+Try a value [6] for [Female ▾] aged [35] [years ▾] → Critical low
 ```
 
-- **Columns:** Who (`pf-select` Anyone / Male / Female) · Age · Low (L) if
-  below (the unit ONCE, muted, in this header) · High (H) if above ·
-  Critical if below · Critical if above · a quiet row ×. The Normal limits
-  ARE the L / H flags, so the screen says so: one lead line ("Below Low
-  prints L · above High prints H · past a Critical limit alerts the
-  doctor.") replaces the host's sub-line, and **every box carries the flag
-  it prints as a small chip on its left edge** — `L <`, `H >`, `C <`, `C >`
-  (result-flag tones: L blue, H amber, C critical red, palette tokens at low
-  strength, light + dark). A one-sided strict Normal shows the true edge
-  (`H ≥ 200` for "below 200"). Noto, tabular numbers, 1px row lines, no
-  dots, no bars, no footnotes. Fits the Result entry card at 1440 with no
-  sideways scroll.
-- **Blank = none.** A blank box reads "none" — a blank Low means nothing is
-  flagged L. A group with nothing set is harmless; its quiet icon says
-  "Nothing set for this group — add limits or remove it". Critical limits set once for the whole test show as a **grey
-  placeholder** in every row, with one quiet line: "Grey critical limits are
-  set once for the whole test. Type in a box to use a different limit for
-  that group."
-- **Age in natural units:** stored as today (`minAge` / `maxAge` /
-  `ageUnit`), shown as people say it — `0–28 days`, `1–12 months`, `28 days –
-  1 year`, `18 years+`, `Any age` (0.0767 years → 28 days). The Age cell is
-  a field-like button; it opens a row underneath: From [n] [unit] to [n]
-  [unit] (blank "to" = and over) + quick ages (Any age · Newborn 0–28 days ·
-  Infant 1–12 months · Child 1–12 years · Teen 12–18 years · Adult 18 years+
-  · Senior 65 years+). One unit both sides → stored in that unit; mixed →
-  stored in years, and the side that wasn't changed keeps its exact stored
-  value.
-- **Written normals** ("Negative"): the four limit cells become one
-  "Normal value [Negative]" field.
-- **Edge rule (≤ / <) lives only in Advanced.** Production semantics are
-  unchanged: criticals strict (below / above), two-sided Normal inclusive,
-  one-sided strict unless the band carries ≤ / ≥.
-- **Validation is gentle.** A NEW error (made in this session) = a red
-  outline on the boxes it concerns + ONE line under the row, in the table's
-  words ("Critical above (18) can't be inside Normal — make it 22 or
-  more."); new errors still block Save (mw `ReferenceRangeValidator` refuses
-  the same set). Errors the test already had when opened (legacy catalogue
-  data, e.g. HEM011 newborn: critical above 20 inside Normal 14–22) and all
-  warnings (overlaps, age / sex gaps, unit) are a **quiet warning icon** with
-  a tooltip — never red, never blocking. Test-wide notes are one muted line
-  under the table.
-- **Try a value:** ONE line — value · for Anyone / Male / Female · aged [n]
-  [days / months / years] → the flag ("→ Critical low"; criticals in error
-  red, everything else plain text).
-- **Advanced** ("Advanced — edit every field in a grid", a quiet link) is
-  the AG-Grid: printed label overrides, profile-scoped bands, ≤ / <
-  comparators, every stored field. Never the default.
-- **Stored data unchanged:** reads and writes the existing band fields only;
-  an untouched band is never re-written (same object), an edit changes only
-  its own fields, typing the same value or a non-number stores nothing.
-  Setting Male / Female on a band whose age lived only in its legacy segment
-  label carries that age over as structured fields.
-- **Phones (≤640px):** one compact card per group — line 1 "Female · 18
-  years+", line 2 "L < 12 · H > 16 · Critical < 7 · > 20" (pieces never
-  break mid-way); tap to edit: Who as a segmented control, the age editor,
-  then the same four chip-prefixed boxes in a 2-column grid; 44px
-  targets, 16px inputs, "Remove this group" as a quiet action. "+ Add group"
-  under the cards.
+- **Columns:** Who (`pf-select` Anyone / Male / Female) · Age · **L** ·
+  **H** · **CL** · **CH** (the unit ONCE, muted, in the L header; each header
+  and box names itself in full for screen readers — "L — below this prints L
+  (low)") · **Report text** (the wide column) · a quiet ×. Plain number boxes:
+  no chips, no bars, no zones, no footnotes, no Advanced grid. Noto with
+  tabular numbers, 1px row lines, palette tokens, light + dark.
+- **Flag rule** (mw `ResultFlaggingService` = client `flagAgainst` /
+  `flagBand`): value < L → **L**; value > H → **H**; value < CL or > CH →
+  **critical** (stored "C", the existing critical marker, alerts and
+  notifications). **On a limit = not flagged.** A blank limit = no flag on
+  that side. One-sided groups are inclusive too ("≤ 200").
+- **Report text** prints on the report EXACTLY as typed — "Normal: 70–99 ·
+  Prediabetes: 100–125 · Diabetes: ≥126", "12 – 16 g/dL", "Follicular
+  2.9–14.6 · Luteal 1.4–8.9". Nothing is derived or templated. Blank prints
+  the simple fallback "L–H unit" ("13–17 g/dL", "≤ 200 mg/dL"), shown as the
+  box's placeholder so the author sees what will print. When no group matches
+  the patient (unknown sex / age) the report lists every group, each prefixed
+  with its who ("Female: 12 – 16 g/dL").
+- **Age in natural units:** stored as `minAge` / `maxAge` / `ageUnit`, shown
+  as people say it — `0–28 days`, `28 days – 1 year`, `18 years+`, `Any age`.
+  The Age cell is a field-like button; it opens a row underneath: From [n]
+  [unit] to [n] [unit] (blank "to" = and over). Touching ages are fine: "1–6
+  years" + "6–10 years" — a patient on the 6th birthday gets the second group.
+- **Strict validation, blocking Save** (client `validateRanges` = mw
+  `ReferenceRangeValidator`): age from < to · L ≤ H · CL ≤ L · CH ≥ H · CL <
+  CH · no two groups cover the same patients (Anyone overlaps Male and
+  Female; ages overlap as [from, to); profile-scoped groups only clash within
+  their profile). Each problem is ONE plain line under its row ("CH (20) must
+  not be below H (22).", "Overlaps group 1 (Male · 18 years+) — two groups
+  cannot cover the same patients.") with the box outlined. Data saved before
+  these rules opens with the same line and **must be fixed before that test
+  saves** — no grandfathering (mw refuses any range change that is invalid).
+- **Stored shape** (`referenceRanges[]`, backward compatible): `{ sex,
+  minAge, maxAge, ageUnit, min (L), max (H), criticalLow (CL), criticalHigh
+  (CH), reportText, profileCode? }`. An untouched group is never re-written;
+  an edited group is written in this shape — a legacy `segment` becomes
+  structured sex / age, a legacy authored `label` becomes the report text so
+  the report does not change silently, `segment` / `label` / `minOp` /
+  `maxOp` are dropped (still READ until the catalogue is migrated; an
+  explicit legacy strict op still flags its limit). Test-wide
+  `criticalLow` / `criticalHigh` open as each group's CL / CH (a group's own
+  wins) and leave the parameter on the next range save.
+- **Try a value:** ONE small line — value · for Anyone / Male / Female · aged
+  [n] [days / months / years] → the flag (criticals in error red).
+- **Phones (≤640px):** one card per group — line 1 "Female · 18 years+",
+  line 2 the report text (or the fallback); tap to edit: Who as a segmented
+  control, the age editor, L / H / CL / CH in a 2-column grid, the Report
+  text; 44px targets, 16px inputs, "Remove this group" as a quiet action;
+  "+ Add group" under the cards.
+- **Dropdown results:** a chosen option NOT ticked Normal prints **bold** on
+  the report and its preview (mw saves "A"; `report-pdf.ts` bolds it whatever
+  the indicator setting) — only when that option list has at least one option
+  ticked Normal; with none ticked nothing is bolded (tick the normals, e.g.
+  "Not Seen").
 - **Report conditions** (Printed report tab) keep the flag choices: *is
   Critical high · is High (not critical) · is High or critical high · is
   Normal · is Low or critical low · is Low (not critical) · is Critical low ·
@@ -931,10 +922,11 @@ Advanced — edit every field in a grid
   wins, ↑ / ↓ to reorder; blocks print independently.
 - **Real-layout check:** `apps/lms-e2e/src/test-editor-ranges.rbac.spec.ts`
   (seeded Lab Admin, HEM011, read-only — writes are aborted): ONE table with
-  the seven headers, the lead line and L / H / C chips, no bars / grid / footnotes, natural-unit ages, no red on
-  open, nothing past the card at 1440, the age editor, the one-line tester,
-  Advanced reaches the grid; at 375 cards (44px / 16px boxes, nothing past
-  the card); `SHOTS_DIR=…` saves 1440 / 375 × light / dark.
+  the eight headers (Who · Age · L · H · CL · CH · Report text), no chips /
+  bars / grid / footnotes, natural-unit ages, nothing past the card at 1440,
+  the age editor, the one-line tester; at 375 cards (line 1 who · age, line 2
+  the report text; 44px / 16px boxes, nothing past the card);
+  `SHOTS_DIR=…` saves 1440 / 375 × light / dark.
 
 ## 17. Billing counter
 

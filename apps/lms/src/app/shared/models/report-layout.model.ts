@@ -295,6 +295,10 @@ export interface ResolvedRow {
   /** Hex color or null for default. */
   color?: string | null;
   isBold: boolean;
+  /** mw's flag for this row's value ('H' | 'L' | 'C' | 'A' | 'N' | '') — the
+   *  report PREVIEW (no saved result) carries it so a non-normal dropdown
+   *  option prints bold there too. Null / absent = not computed. */
+  flag?: string | null;
 }
 
 export interface ResolvedChart {

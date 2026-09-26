@@ -1,6 +1,10 @@
 import {
+  bandReportText,
   flagAgainst,
+  matchReferenceRange,
   normalizeSex,
+  reportRangeText,
+  summarizeRanges,
   parseSegmentAge,
   parseSegmentSex,
   selectReferenceRange,
@@ -137,9 +141,13 @@ describe('flagAgainst', () => {
     expect(flagAgainst({ min: 40 }, 50)).toBe('N');
   });
 
-  it('treats an op-less one-sided bound as STRICT: 140 against "< 140" is High', () => {
-    expect(flagAgainst({ max: 140 }, 140)).toBe('H');
-    expect(flagAgainst({ min: 40 }, 40)).toBe('L');
+  it('a value ON a one-sided limit is normal (simple model); legacy strict ops still flag it', () => {
+    expect(flagAgainst({ max: 140 }, 140)).toBe('N');
+    expect(flagAgainst({ min: 40 }, 40)).toBe('N');
+    expect(flagAgainst({ max: 140 }, 140.01)).toBe('H');
+    expect(flagAgainst({ min: 40 }, 39.99)).toBe('L');
+    expect(flagAgainst({ max: 140, maxOp: 'lt' }, 140)).toBe('H');
+    expect(flagAgainst({ min: 40, minOp: 'gt' }, 40)).toBe('L');
   });
 
   it('treats an explicit inclusive op as ≤/≥: 140 against "≤ 140" is Normal', () => {
@@ -160,5 +168,36 @@ describe('flagAgainst', () => {
     expect(flagAgainst(undefined, 5)).toBeNull();
     expect(flagAgainst(null, 5)).toBeNull();
     expect(flagAgainst({ segment: 'normal' }, 5)).toBeNull();
+  });
+});
+
+describe('report text — the simple model prints what was typed', () => {
+  const unit = 'g/dL';
+  const F = { sex: 'F' as const, minAge: 18, min: 12, max: 16, reportText: '12 – 16 g/dL' };
+  const M = { sex: 'M' as const, minAge: 18, min: 13, max: 17 };
+  it('a typed report text prints verbatim; blank prints "L–H unit" with no who', () => {
+    expect(bandReportText(F, unit)).toBe('12 – 16 g/dL');
+    expect(bandReportText({ ...F, reportText: '  Normal: 70–99 · Prediabetes: 100–125 · Diabetes: ≥126 ' }, 'mg/dL'))
+      .toBe('Normal: 70–99 · Prediabetes: 100–125 · Diabetes: ≥126');
+    expect(bandReportText(M, unit)).toBe('13–17 g/dL');
+    expect(bandReportText({ max: 200 }, 'mg/dL')).toBe('≤ 200 mg/dL');
+    expect(bandReportText({ min: 60 }, '')).toBe('≥ 60');
+    expect(bandReportText({}, unit)).toBeNull();
+  });
+  it('a legacy group keeps its legacy line until migrated', () => {
+    expect(bandReportText({ segment: 'adult_male', min: 13, max: 17 }, unit)).toBe('Adult Male: 13–17 g/dL');
+    expect(bandReportText({ segment: 'n', label: 'Negative' }, '')).toBe('Negative');
+  });
+  it('matched on merit → that group alone; otherwise every group with its who', () => {
+    expect(reportRangeText([F, M], { range: F, isSpecific: true }, unit)).toBe('12 – 16 g/dL');
+    expect(reportRangeText([F, M], { range: F, isSpecific: false }, unit)).toBe('Adult Female: 12 – 16 g/dL\nAdult Male: 13–17 g/dL');
+    expect(reportRangeText([{ sex: 'any' as const, min: 1, max: 2, reportText: 'up to 2' }], { range: undefined, isSpecific: false }, unit)).toBe('up to 2');
+    expect(summarizeRanges([F, M], unit)).toBe('Adult Female: 12 – 16 g/dL · Adult Male: 13–17 g/dL');
+  });
+  it('touching ages: the patient on the shared birthday gets the group that starts there', () => {
+    const kids = [{ sex: 'any' as const, minAge: 1, maxAge: 6, min: 1 }, { sex: 'any' as const, minAge: 6, maxAge: 10, min: 2 }];
+    expect(selectReferenceRange(kids, null, 6)).toBe(kids[1]);
+    expect(selectReferenceRange(kids, null, 5.5)).toBe(kids[0]);
+    expect(matchReferenceRange(kids, null, 6)).toEqual({ range: kids[1], isSpecific: true });
   });
 });

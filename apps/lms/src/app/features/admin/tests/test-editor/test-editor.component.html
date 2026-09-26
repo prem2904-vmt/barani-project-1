@@ -544,8 +544,7 @@
             <div class="pf-rr2__head">
               <div>
                 <span class="pf-te2-h">Reference ranges — what counts as normal</span>
-                <!-- The plain range table carries its own one-line flag key — no second sub-line. -->
-                @if (rangeAdvanced() || numericFields().length !== 1 || (effRangeMode() === 'qualitative' && qualFields().length)) {
+                @if (numericFields().length !== 1 || (effRangeMode() === 'qualitative' && qualFields().length)) {
                   <p class="pf-rr2__sub">Prints on the report next to the result and decides the flag.</p>
                 }
               </div>
@@ -602,30 +601,11 @@
                 }
               </div>
             } @else if (numericFields().length === 1) {
-              <!-- The range GRID — Test Master's AG-Grid language: one band per
-                   row, everything editable in place, criticals per sex/age. -->
-              <!-- The plain interpretation table (owner 2026-09-26): one per sex/age
-                   group, linked limits; the AG-Grid stays behind "Advanced". -->
+              <!-- Reference ranges (owner 2026-09-26, final): ONE compact table —
+                   Who · Age · L · H · CL · CH · Report text. ND-PATTERN §16. -->
               @if (numericFields()[0]; as nf) {
-                @if (!rangeAdvanced()) {
-                  <pf-range-table [param]="$any(nf)" [unit]="nf.unit || d.unit || ''"
-                                  (bandsChange)="setBands(fields().indexOf(nf), $event)"></pf-range-table>
-                } @else {
-                <div class="pf-rrgrid-wrap">
-                <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
-                  [rowData]="rangeRows()" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
-                  [getRowId]="$any(rangeRowId)"
-                  domLayout="autoHeight" [stopEditingWhenCellsLoseFocus]="true"
-                  [singleClickEdit]="true" [popupParent]="gridPopupParent"
-                  (cellValueChanged)="onRangeCellChanged($event)"
-                  (cellClicked)="onRangeCellClicked($event)">
-                </ag-grid-angular>
-                <div class="pf-rt3__foot">
-                  <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add range</button>
-                </div>
-              </div>
-                }
-                <button type="button" class="pf-linklike pf-rr-adv" (click)="rangeAdvanced.set(!rangeAdvanced())">{{ rangeAdvanced() ? 'Back to the simple table' : 'Advanced — edit every field in a grid' }}</button>
+                <pf-range-table [param]="$any(nf)" [unit]="nf.unit || d.unit || ''"
+                                (bandsChange)="setBands(fields().indexOf(nf), $event)"></pf-range-table>
               }
             }
           </div>
@@ -685,35 +665,8 @@
 
                   @if (isNumericType(p.type)) {
                     <p class="pf-vbatch__sub">Reference ranges — prints next to the result and decides the flag.</p>
-                    @if (!rangeAdvanced()) {
-                      <pf-range-table [param]="$any(p)" [unit]="p.unit || ''" (bandsChange)="setBands(i, $event)"></pf-range-table>
-                    } @else {
-                    <div class="pf-rrgrid-wrap">
-                      <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
-                        [rowData]="rangeRowsFor(i)" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
-                        [getRowId]="$any(rangeRowId)"
-                        domLayout="autoHeight" [stopEditingWhenCellsLoseFocus]="true"
-                        [singleClickEdit]="true" [popupParent]="gridPopupParent"
-                        (cellValueChanged)="onRangeCellChanged($event)"
-                        (cellClicked)="onRangeCellClicked($event)">
-                      </ag-grid-angular>
-                      <div class="pf-rt3__foot">
-                        <button type="button" class="pf-rb__add press" (click)="addRange(i)">+ Add range</button>
-                      </div>
-                    </div>
-                    }
-                    <button type="button" class="pf-linklike pf-rr-adv" (click)="rangeAdvanced.set(!rangeAdvanced())">{{ rangeAdvanced() ? 'Back to the simple table' : 'Advanced — edit every field in a grid' }}</button>
-                    <div class="grid gap-2 grid-cols-2 md:grid-cols-4">
-                      <label class="flex flex-col gap-0.5 min-w-0" title="A result below this is flagged C (Critical low) — used when the band has no critical low of its own.">
-                        <span class="pf-mini-lbl">Critical low</span>
-                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.criticalLow ?? null"
-                                          (valueChange)="patchField(i, { criticalLow: $event ?? undefined })"></pf-number-input>
-                      </label>
-                      <label class="flex flex-col gap-0.5 min-w-0" title="A result above this is flagged C (Critical high) — used when the band has no critical high of its own.">
-                        <span class="pf-mini-lbl">Critical high</span>
-                        <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.criticalHigh ?? null"
-                                          (valueChange)="patchField(i, { criticalHigh: $event ?? undefined })"></pf-number-input>
-                      </label>
+                    <pf-range-table [param]="$any(p)" [unit]="p.unit || ''" (bandsChange)="setBands(i, $event)"></pf-range-table>
+                    <div class="grid gap-2 grid-cols-2">
                       <label class="flex flex-col gap-0.5 min-w-0">
                         <span class="pf-mini-lbl">Plausible low</span>
                         <pf-number-input size="sm" [allowEmpty]="true" [step]="0.1" [value]="p.validLow ?? null"

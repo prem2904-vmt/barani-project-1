@@ -3331,6 +3331,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   refLabel(p: TestParameter): string {
     if (p.normalValue) return p.normalValue;
     const r = this.rangeFor(p);
+    // The group's typed report text prints exactly as typed (simple model).
+    if (r?.reportText?.trim()) return r.reportText.trim();
     // Route through the shared formatter so one-sided bands ("< 200",
     // "≤ 140") get a label too — they used to render blank here.
     const text = formatRange(r);

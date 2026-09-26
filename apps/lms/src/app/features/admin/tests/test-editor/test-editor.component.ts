@@ -19,7 +19,6 @@ import {
   FieldTypePickerComponent,
   FormField,
   FormFieldType,
-  ReferenceRange,
   ShowWhen,
   ValidationEditorComponent,
   ValidationPatch,
@@ -29,16 +28,11 @@ import { parseCalc, lintExpr, evaluateCalc, CALC_CONSTANT_DEFAULTS, CalcDef } fr
 import { NumberInputComponent } from '../../../../shared/primitives/number-input.component';
 import { CurrencyInrPipe } from '../../../../shared/pipes/currency-inr.pipe';
 import { SegmentedOption } from '../../../../shared/primitives/segmented.component';
-import { AgGridAngular } from 'ag-grid-angular';
-import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, ModuleRegistry } from 'ag-grid-community';
 import { ThemeService } from '../../../../core/services/theme.service';
-import { gridThemeDark, gridThemeLight } from '../tests/tests.component';
-import { RangeSelectEditorComponent, RangeSelectOption } from './range-select-editor.component';
-import { RangeTableComponent } from './range-table.component';
+import { RangeTableComponent, blankGroup, liftParamCriticals } from './range-table.component';
 import { validateRanges, type RangeIssue } from '../../../../shared/utils/range-insight';
 import { hasLegacyFields, loadEditorFields, newFieldId, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
 
-ModuleRegistry.registerModules([AllCommunityModule]);
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from '../test-layout-editor.component';
@@ -54,8 +48,7 @@ interface OgGroupLite {
   values: { code: string | null; value: string; normal: boolean; active: boolean }[];
   links: { testId: string }[];
 }
-import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../../shared/utils/reference-range';
-import { RANGE_BOUND_OPTIONS, RangeBound, boundLabel, boundOf, boundUses, withBound } from '../../../../shared/utils/range-bound';
+import { formatRange, summarizeRanges } from '../../../../shared/utils/reference-range';
 import { NavBackService } from '../../../../core/services/nav-back.service';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
 import { DEFAULT_TEST_PRICE, effectivePrice, isPriceDefault } from '../../../../shared/utils/test-pricing';
@@ -152,7 +145,6 @@ function makeEmptyDraft(): DraftTest {
   selector: 'pf-test-editor',
   standalone: true,
   imports: [
-    AgGridAngular,
     FormsModule,
     CurrencyInrPipe,
     NumberInputComponent,
@@ -605,32 +597,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (numeric.length !== 1) return current;
     const bands = numeric[0].referenceRanges ?? [];
     if (bands.length !== 1) return '';
-    return formatRange(bands[0]) ?? '';
+    return bands[0].reportText?.trim() || formatRange(bands[0]) || '';
   }
 
-
-  protected needsAdvancedRanges(p: FormField): boolean {
-    const bands = p.referenceRanges ?? [];
-    if (bands.length > 1) return true;
-    const b = bands[0];
-    if (!b) return false;
-    return !!(b.sex && b.sex !== 'any') || b.minAge != null || b.maxAge != null || !!b.label;
-  }
-
-  protected showAdvancedRanges(p: FormField): boolean {
-    return this.needsAdvancedRanges(p);
-  }
-
-  protected firstBand(p: FormField): ReferenceRange {
-    return (p.referenceRanges ?? [])[0] ?? { segment: 'normal', min: null, max: null };
-  }
-
-  protected bandsCaption(p: FormField): string {
-    const bands = p.referenceRanges ?? [];
-    if (bands.length === 0) return 'No range set';
-    if (bands.length > 1) return `${bands.length} ranges by sex / age`;
-    return deriveRangeLabel(bands[0]) ?? 'Applies to every patient';
-  }
 
   protected readonly numericFields = computed(() =>
     this.fields().filter(f => this.isNumericType(f.type)));
@@ -655,10 +624,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     return out;
   });
-  /** Reference ranges: the plain table by default; the AG-Grid (every
-   *  stored field, labels, one-off comparators) only behind "Advanced". */
-  readonly rangeAdvanced = signal(false);
-  /** The table's edit — the stored band shape, written back unchanged. */
+  /** The table's edit — the group list, written back unchanged. */
   setBands(i: number, bands: unknown[]) {
     if (i < 0) return;
     this.patchField(i, { referenceRanges: bands as FormField['referenceRanges'] });
@@ -674,20 +640,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     return out;
   });
-  /** Errors the test already had when it was opened (legacy catalogue data):
-   *  shown in red, but — like mw's update check — they don't block Save, so an
-   *  unrelated edit is never held hostage. Any NEW error blocks. */
-  private readonly _loadedRangeErrors = signal<Set<string>>(new Set());
-  readonly rangeErrors = computed(() =>
-    this.allRangeErrors().filter(e => !this._loadedRangeErrors().has(e.key)));
-  /** The grid cell carries an error / warning outline (cellClassRules). */
-  rangeCellIssue(i: number, ri: number, field: string): 'error' | 'warning' | null {
-    const list = this.rangeIssues().get(i) ?? [];
-    const hit = list.filter(x => x.band === ri && (x.field === field
-      || (field === 'minAge' && x.field === 'maxAge') || (field === 'sex' && x.field === 'sex')));
-    if (hit.some(x => x.severity === 'error')) return 'error';
-    return hit.length ? 'warning' : null;
-  }
+  /** Every range problem blocks Save — including ones the test already had
+   *  when it was opened (owner 2026-09-26: legacy data opens with a clear row
+   *  message and must be fixed before that test saves; mw refuses the same). */
+  readonly rangeErrors = this.allRangeErrors;
 
   // ── Plain-language entry kind ─────────────────────────────────────
   // Doctors think "what will the tech enter", not "parameters". For the
@@ -703,159 +659,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   ];
   readonly isSingleValue = computed(() => this.fields().length <= 1);
 
-  // ── Reference-range GRID (Test Master's AG-Grid language) ──────────
   private readonly themeSvc = inject(ThemeService);
-  /** AG popup editors attach to <body> so they float ABOVE the panel instead
-   *  of clipping inside the grid's own stacking context. */
-  readonly gridPopupParent: HTMLElement | undefined =
-    typeof document !== 'undefined' ? document.body : undefined;
   /** Left section rail hide/unhide — remembered across visits. */
   readonly railHidden = signal<boolean>(
     typeof localStorage !== 'undefined' && localStorage.getItem('pf-te2-rail') === 'hidden');
   toggleRail() {
     this.railHidden.update(v => !v);
     try { localStorage.setItem('pf-te2-rail', this.railHidden() ? 'hidden' : 'shown'); } catch { /* private mode */ }
-  }
-  readonly rangeGridTheme = computed(() =>
-    (this.themeSvc.isDark() ? gridThemeDark : gridThemeLight)
-      .withParams({ rowHeight: 48, headerHeight: 42, cellHorizontalPadding: 14 }));
-  /** Row view-model: one reference band per row, editable in place.
-   *  MUST be a computed — a method here returns a fresh array every change
-   *  detection pass, which makes AG-Grid reset its rows and instantly close
-   *  any editor that tries to open (the click looks dead). */
-  readonly rangeRows = computed<Array<Record<string, unknown>>>(() => {
-    const p = this.firstNumericField();
-    if (!p) return [];
-    const i = this.fields().indexOf(p);
-    return (p.referenceRanges ?? []).map((r, ri) => ({
-      i, ri,
-      sex: r.sex ?? 'any',
-      agePreset: this.agePresetFor(i, ri),
-      minAge: r.minAge ?? null, maxAge: r.maxAge ?? null, ageUnit: r.ageUnit ?? 'years',
-      bound: this.boundFor(i, ri, r),
-      min: r.min ?? null, max: r.max ?? null,
-      criticalLow: r.criticalLow ?? null, criticalHigh: r.criticalHigh ?? null,
-      prints: (r.min != null || r.max != null) ? (r.label || this.autoRangeLabel(r)) : '—',
-    }));
-  });
-  /** Stable row identity so edits survive row-data refreshes. */
-  readonly rangeRowId = (p: { data: { ri: number } }) => String(p.data.ri);
-  /** Multi-value tests: one grid per numeric value — LITERALLY the same
-   *  editor as the single-value grid, stacked (owner: a 2nd value is "just
-   *  another row", never a different-looking editor). Same memoization rule
-   *  as rangeRows: one computed map, stable arrays per change-detection. */
-  private static readonly EMPTY_RANGE_ROWS: Array<Record<string, unknown>> = [];
-  readonly rangeRowsByField = computed<Map<number, Array<Record<string, unknown>>>>(() => {
-    const out = new Map<number, Array<Record<string, unknown>>>();
-    this.fields().forEach((p, i) => {
-      if (!this.isNumericType(p.type)) return;
-      out.set(i, (p.referenceRanges ?? []).map((r, ri) => ({
-        i, ri,
-        sex: r.sex ?? 'any',
-        agePreset: this.agePresetFor(i, ri),
-        minAge: r.minAge ?? null, maxAge: r.maxAge ?? null, ageUnit: r.ageUnit ?? 'years',
-        bound: this.boundFor(i, ri, r),
-        min: r.min ?? null, max: r.max ?? null,
-        criticalLow: r.criticalLow ?? null, criticalHigh: r.criticalHigh ?? null,
-        prints: (r.min != null || r.max != null) ? (r.label || this.autoRangeLabel(r)) : '—',
-      })));
-    });
-    return out;
-  });
-  rangeRowsFor(i: number): Array<Record<string, unknown>> {
-    return this.rangeRowsByField().get(i) ?? TestEditorComponent.EMPTY_RANGE_ROWS;
-  }
-  readonly rangeDefaultColDef: ColDef = {
-    editable: true, sortable: false, resizable: true, suppressHeaderMenuButton: true,
-    // Validation lands on the exact cell: red = blocks Save, amber = a warning.
-    cellClassRules: {
-      'pf-rrgrid__cell--err': p => !!p.colDef.field && !!p.data
-        && this.rangeCellIssue(p.data.i, p.data.ri, p.colDef.field) === 'error',
-      'pf-rrgrid__cell--warn': p => !!p.colDef.field && !!p.data
-        && this.rangeCellIssue(p.data.i, p.data.ri, p.colDef.field) === 'warning',
-    },
-  };
-  private static readonly SEX_OPTS: RangeSelectOption[] = [
-    { value: 'any', label: 'Everyone' }, { value: 'M', label: 'Men' }, { value: 'F', label: 'Women' },
-  ];
-  private static readonly AGE_UNIT_OPTS: RangeSelectOption[] = [
-    { value: 'years', label: 'years' }, { value: 'months', label: 'months' }, { value: 'days', label: 'days' },
-  ];
-  /** Chevroned display for dropdown cells — the cell LOOKS clickable. */
-  private ddCell(label: (v: unknown) => string) {
-    return (p: { value: unknown }) =>
-      `<span class="pf-rrgrid__dd"><span class="pf-rrgrid__dd-lbl">${label(p.value)}</span>` +
-      `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>`;
-  }
-  readonly rangeColDefs: ColDef[] = [
-    { field: 'sex', headerName: 'Who', minWidth: 116, flex: 1,
-      cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
-      cellEditorParams: { options: TestEditorComponent.SEX_OPTS },
-      cellRenderer: this.ddCell(v => (({ any: 'Everyone', M: 'Men', F: 'Women' }) as Record<string, string>)[String(v ?? 'any')] ?? 'Everyone') },
-    { field: 'agePreset', headerName: 'Age group', minWidth: 150, flex: 1.2,
-      cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
-      cellEditorParams: () => ({ options: [
-        ...this.agePresets.map(a => ({ value: a.key, label: a.label })),
-        { value: 'custom', label: 'Custom (edit the age cells)' },
-      ] satisfies RangeSelectOption[] }),
-      cellRenderer: this.ddCell(v => v === 'custom' ? 'Custom'
-        : (this.agePresets.find(a => a.key === v)?.label ?? 'All ages')) },
-    { field: 'minAge', headerName: 'From age', minWidth: 88, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
-    { field: 'maxAge', headerName: 'To age', minWidth: 82, flex: .7, cellClass: 'pf-rrgrid__num', valueFormatter: p => p.value ?? '—' },
-    { field: 'ageUnit', headerName: 'Age in', minWidth: 100, flex: .7,
-      cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
-      cellEditorParams: { options: TestEditorComponent.AGE_UNIT_OPTS },
-      cellRenderer: this.ddCell(v => String(v ?? 'years')) },
-    // Comparator per band (owner/QA 2026-09-24): a two-sided low – high
-    // range, or ONE bound with its operator — "≤ 0.89", "≥ 60". Inclusive
-    // operators make the limit itself normal (flag + printed symbol).
-    { field: 'bound', headerName: 'Normal is', minWidth: 138, flex: 1,
-      headerTooltip: 'Low – high: normal between two values. <, ≤, >, ≥: one limit — ≤ / ≥ count the limit itself as normal.',
-      cellEditor: RangeSelectEditorComponent, cellEditorPopup: true,
-      cellEditorParams: { options: RANGE_BOUND_OPTIONS.map(o => ({ value: o.value, label: o.label })) },
-      tooltipValueGetter: p => RANGE_BOUND_OPTIONS.find(o => o.value === p.value)?.hint ?? '',
-      cellRenderer: this.ddCell(v => boundLabel(String(v ?? 'between'))) },
-    { field: 'min', headerName: 'Normal low', minWidth: 96, flex: .7, cellClass: 'pf-rrgrid__num',
-      headerTooltip: 'Lowest normal value — a result below it is flagged L (Low).',
-      editable: p => boundUses(p.data?.bound as RangeBound, 'min'),
-      valueFormatter: p => boundUses(p.data?.bound as RangeBound, 'min') ? (p.value ?? '—') : '' },
-    { field: 'max', headerName: 'Normal high', minWidth: 98, flex: .7, cellClass: 'pf-rrgrid__num',
-      headerTooltip: 'Highest normal value — a result above it is flagged H (High).',
-      editable: p => boundUses(p.data?.bound as RangeBound, 'max'),
-      valueFormatter: p => boundUses(p.data?.bound as RangeBound, 'max') ? (p.value ?? '—') : '' },
-    { field: 'criticalLow', headerName: 'Critical low', minWidth: 104, flex: .8,
-      headerTooltip: 'Panic limit for this group — a result below it is flagged C (Critical low).',
-      cellClass: 'pf-rrgrid__num pf-rrgrid__crit', valueFormatter: p => p.value ?? '—' },
-    { field: 'criticalHigh', headerName: 'Critical high', minWidth: 108, flex: .8,
-      headerTooltip: 'Panic limit for this group — a result above it is flagged C (Critical high).',
-      cellClass: 'pf-rrgrid__num pf-rrgrid__crit', valueFormatter: p => p.value ?? '—' },
-    { field: 'prints', headerName: 'On the report', minWidth: 150, flex: 1.5,
-      cellClass: 'pf-rrgrid__prints', tooltipField: 'prints',
-      cellEditor: 'agTextCellEditor' },
-    { colId: 'del', headerName: '', editable: false, width: 44, maxWidth: 44, resizable: false,
-      cellClass: 'pf-rrgrid__del',
-      cellRenderer: () => '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>' },
-  ];
-  onRangeCellChanged(e: CellValueChangedEvent) {
-    const i = e.data.i as number, ri = e.data.ri as number;
-    const f = e.colDef.field;
-    if (f === 'sex') this.patchRangeAt(i, ri, { sex: e.data.sex });
-    else if (f === 'ageUnit') this.patchRangeAt(i, ri, { ageUnit: e.data.ageUnit });
-    else if (f === 'agePreset') this.setAgePreset(i, ri, e.data.agePreset);
-    else if (f === 'bound') this.setRangeBound(i, ri, e.data.bound as RangeBound);
-    else if (f === 'prints') {
-      // Editing the printed text writes the range's custom label; clearing it
-      // returns to the automatic wording.
-      const v = String(e.newValue ?? '').trim();
-      this.patchRangeAt(i, ri, { label: v || null });
-    }
-    else if (f === 'minAge' || f === 'maxAge' || f === 'min' || f === 'max'
-             || f === 'criticalLow' || f === 'criticalHigh') {
-      this.patchRangeAt(i, ri, { [f]: this.toNum(e.data[f]) });
-    }
-  }
-  onRangeCellClicked(e: CellClickedEvent) {
-    if (e.colDef.colId === 'del') this.removeRange(e.data.i, e.data.ri);
   }
   readonly entryKind = computed<string>(() => {
     const fs = this.fields();
@@ -893,16 +703,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  autoRangeLabel(r: ReferenceRange): string {
-    return deriveRangeLabel(r) ?? 'No qualifier — applies to everyone';
-  }
-
   paramSummary(p: FormField): string {
     const bits: string[] = [];
     if (this.isNumericType(p.type)) {
-      const bands = describeAllRanges(p.referenceRanges);
-      if (bands.length) {
-        bits.push(bands.join(' · ') + (p.unit ? ' ' + p.unit : ''));
+      const bands = summarizeRanges(p.referenceRanges, p.unit);
+      if (bands) {
+        bits.push(bands);
       } else if (p.unit) {
         bits.push(p.unit);
       }
@@ -1094,79 +900,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     return chips;
   });
 
-  /** The first numeric parameter drives the "how it's judged" visual + sentences. */
-  private readonly firstNumericField = computed<FormField | null>(() => this.numericFields()[0] ?? null);
 
   /** Critical/normal/high band for the visual bar. Null when there's no numeric basis. */
-
-  /** Reference ranges rendered as plain sentences (first numeric parameter). */
-  // ── Simplified range editing (HCP-friendly) ─────────────────────────
-  // Doctors think in "who + normal band", not comparators and age units.
-  // Each band edits IN PLACE: sex, a life-stage preset, low/high. The
-  // precise grid stays available for comparator ops / custom print labels.
-  readonly agePresets: ReadonlyArray<{ key: string; label: string; minAge: number | null; maxAge: number | null; ageUnit: 'years' | 'months' | 'days' }> = [
-    { key: 'all',     label: 'All ages',        minAge: null, maxAge: null, ageUnit: 'years' },
-    { key: 'newborn', label: 'Newborn (0–28 d)', minAge: 0,   maxAge: 28,   ageUnit: 'days' },
-    { key: 'infant',  label: 'Infant (< 1 yr)',  minAge: 0,   maxAge: 1,    ageUnit: 'years' },
-    { key: 'child',   label: 'Child (1–12 yr)',  minAge: 1,   maxAge: 12,   ageUnit: 'years' },
-    { key: 'teen',    label: 'Teen (12–18 yr)',  minAge: 12,  maxAge: 18,   ageUnit: 'years' },
-    { key: 'adult',   label: 'Adult (18+)',      minAge: 18,  maxAge: null, ageUnit: 'years' },
-    { key: 'senior',  label: 'Senior (65+)',     minAge: 65,  maxAge: null, ageUnit: 'years' },
-  ];
-  /** Bands the user switched to "Low – high" while they still hold one
-   *  value — shown as two-sided (both cells editable) until the other value
-   *  is typed. Pure UI state, like _customAge. */
-  private readonly _betweenPick = signal<Record<string, boolean>>({});
-  private boundFor(i: number, ri: number, r: ReferenceRange): RangeBound {
-    return this._betweenPick()[`${i}:${ri}`] ? 'between' : boundOf(r);
-  }
-  /** Switch one band's comparator (Normal is: low – high / < / ≤ / > / ≥). */
-  setRangeBound(i: number, ri: number, bound: RangeBound) {
-    const band = this._fields()[i]?.referenceRanges?.[ri];
-    if (!band || !RANGE_BOUND_OPTIONS.some(o => o.value === bound)) return;
-    this._betweenPick.update(m => ({ ...m, [`${i}:${ri}`]: bound === 'between' }));
-    if (boundOf(band) === bound) return;
-    this._fields.update(list => list.map((p, idx) => {
-      if (idx !== i) return p;
-      const ranges = [...(p.referenceRanges ?? [])];
-      ranges[ri] = withBound(ranges[ri], bound);
-      return { ...p, referenceRanges: ranges };
-    }));
-    this.persistFieldsToDraft();
-  }
-  private readonly _customAge = signal<Record<string, boolean>>({});
-
-  rangeAt(i: number, ri: number) { return this.fields()[i]?.referenceRanges?.[ri] ?? null; }
-  addRangeToFirstNumeric() {
-    const p = this.firstNumericField();
-    if (p) this.addRange(this.fields().indexOf(p));
-  }
-  /** Loose numeric parse for the borderless sentence-bar inputs. */
-  toNum(v: unknown): number | null {
-    const n = parseFloat(String(v ?? '').replace(',', '.'));
-    return Number.isFinite(n) ? n : null;
-  }
-  rangeUnitFor(i: number): string { return this.fields()[i]?.unit || this._draft().unit || ''; }
-
-  agePresetFor(i: number, ri: number): string {
-    if (this._customAge()[`${i}:${ri}`]) return 'custom';
-    const r = this.rangeAt(i, ri);
-    if (!r) return 'all';
-    const hit = this.agePresets.find(p =>
-      (p.minAge ?? null) === (r.minAge ?? null)
-      && (p.maxAge ?? null) === (r.maxAge ?? null)
-      && (r.minAge == null && r.maxAge == null ? true : (p.ageUnit === (r.ageUnit ?? 'years'))));
-    return hit?.key ?? 'custom';
-  }
-  setAgePreset(i: number, ri: number, key: string) {
-    if (key === 'custom') {
-      this._customAge.update(m => ({ ...m, [`${i}:${ri}`]: true }));
-      return;
-    }
-    this._customAge.update(m => ({ ...m, [`${i}:${ri}`]: false }));
-    const p = this.agePresets.find(x => x.key === key);
-    if (p) this.patchRangeAt(i, ri, { minAge: p.minAge, maxAge: p.maxAge, ageUnit: p.ageUnit });
-  }
 
   /** Sticky wayfinding for the long form: one link per visible section,
    *  with its completion state folded in from the publish checklist. */
@@ -1214,31 +949,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.setOptionRows(i, this.rowsFor(i).map(r =>
       r.value === value ? { ...r, normal: r.normal !== true } : r));
   }
-
-  readonly rangeSentences = computed<Array<{ who: string; rule: string; prints: string; i: number; ri: number }>>(() => {
-    const p = this.firstNumericField();
-    if (!p) return [];
-    const i = this.fields().indexOf(p);
-    const unit = p.unit || this._draft().unit || '';
-    return (p.referenceRanges ?? []).map((r, ri) => {
-      const sex = r.sex && r.sex !== 'any' ? (r.sex === 'M' ? 'Male' : 'Female') : 'Any sex';
-      const age = (r.minAge != null || r.maxAge != null)
-        ? `${r.minAge ?? 0}–${r.maxAge ?? '∞'} ${r.ageUnit ?? 'years'}`
-        : 'any age';
-      const who = `${sex} · ${age} →`;
-      let rule: string;
-      if (r.min == null && r.max == null) {
-        rule = 'no numeric range';
-      } else {
-        const parts: string[] = [];
-        if (r.min != null) parts.push((this.minOpShown(r) === 'gte' ? '≥ ' : '> ') + r.min);
-        if (r.min != null && r.max != null) parts.push('and');
-        if (r.max != null) parts.push((this.maxOpShown(r) === 'lte' ? '≤ ' : '< ') + r.max);
-        rule = parts.join(' ') + (unit ? ' ' + unit : '');
-      }
-      return { who, rule, prints: r.label || this.autoRangeLabel(r), i, ri };
-    });
-  });
 
   /** "Ready to publish?" checklist — real form state, adapts to test type. */
   readonly publishChecklist = computed<Array<{ label: string; ok: boolean; action?: TestSection }>>(() => {
@@ -1956,7 +1666,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       outsourcedVendorId: t.outsourcedVendorId ?? '',
       outsourcedDepartmentId: t.outsourcedDepartmentId ?? ''
     });
-    this._fields.set(this.loadParameters(t.parameters ?? ''));
+    // Legacy test-wide criticals become each group's CL / CH (simple model).
+    this._fields.set(this.loadParameters(t.parameters ?? '').map(f => liftParamCriticals(f)));
     if (t.type === 'package' || t.type === 'profile') {
       try {
         const blob = JSON.parse(t.parameters ?? '{}');
@@ -1996,7 +1707,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     // must be loaded up-front rather than on a tab switch.
     if (this.onePage()) this.ensureLayoutData();
     this._baseline = this.buildSaveBody(this._draft());
-    this._loadedRangeErrors.set(new Set(this.allRangeErrors().map(e => e.key)));
     this.dirty.set(false);   // fresh load is clean
     this._previewToken.update(v => v + 1);
   }
@@ -2120,7 +1830,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       isRequired: false,
       isConditional: false,
       unit: '',
-      referenceRanges: [{ segment: 'normal', min: null, max: null }]
+      referenceRanges: [blankGroup()]
     };
     this._fields.update(list => [...list, field]);
     this.persistFieldsToDraft();
@@ -2130,42 +1840,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this._fields.update(list =>
       list.map((p, idx) => idx === i ? { ...p, ...updates } : p)
     );
-    this.persistFieldsToDraft();
-  }
-
-  minOpShown(r: ReferenceRange): 'gt' | 'gte' {
-    return r.minOp ?? (r.max != null ? 'gte' : 'gt');
-  }
-  maxOpShown(r: ReferenceRange): 'lt' | 'lte' {
-    return r.maxOp ?? (r.min != null ? 'lte' : 'lt');
-  }
-
-  patchRangeAt(i: number, ri: number, updates: Partial<ReferenceRange>) {
-    this._fields.update(list => list.map((p, idx) => {
-      if (idx !== i) return p;
-      const ranges = [...(p.referenceRanges ?? [])];
-      if (ri < 0 || ri >= ranges.length) return p;
-      const next: ReferenceRange = { ...ranges[ri], segment: ranges[ri].segment ?? 'normal', ...updates };
-      if (next.sex === 'any') next.sex = undefined;
-      ranges[ri] = next;
-      return { ...p, referenceRanges: ranges };
-    }));
-    this.persistFieldsToDraft();
-  }
-
-  addRange(i: number) {
-    this._fields.update(list => list.map((p, idx) => idx === i
-      ? { ...p, referenceRanges: [...(p.referenceRanges ?? []), { segment: 'normal', min: null, max: null }] }
-      : p));
-    this.persistFieldsToDraft();
-  }
-
-  removeRange(i: number, ri: number) {
-    this._fields.update(list => list.map((p, idx) => {
-      if (idx !== i) return p;
-      const ranges = (p.referenceRanges ?? []).filter((_, k) => k !== ri);
-      return { ...p, referenceRanges: ranges };
-    }));
     this.persistFieldsToDraft();
   }
 
@@ -2288,7 +1962,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       const first = this.rangeErrors()[0];
       const n = this.rangeErrors().length;
       this.jumpToSection('results');
-      this.toasts.warning(`Fix the reference range${n > 1 ? 's' : ''} first — ${first.field}${first.issue.band != null ? `, range ${first.issue.band + 1}` : ''}: ${first.issue.message}${n > 1 ? ` (+${n - 1} more)` : ''}`);
+      this.toasts.warning(`Fix the reference range${n > 1 ? 's' : ''} first — ${first.field}${first.issue.band != null ? `, group ${first.issue.band + 1}` : ''}: ${first.issue.message}${n > 1 ? ` (+${n - 1} more)` : ''}`);
       return;
     }
 

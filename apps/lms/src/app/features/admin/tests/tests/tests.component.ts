@@ -25,7 +25,7 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import { Test } from '../../../../shared/models/test.model';
-import { describeAllRanges } from '../../../../shared/utils/reference-range';
+import { summarizeRanges } from '../../../../shared/utils/reference-range';
 import { tubeColor, TUBE_COLORS } from '../../../../shared/utils/tube-colors';
 import { ScreenHeaderComponent } from '../../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
@@ -972,11 +972,8 @@ export class TestsComponent implements OnInit {
       const blob = JSON.parse(t.parameters);
       const p = Array.isArray(blob?.parameters) ? blob.parameters[0] : undefined;
       if (!p) return '';
-      const bands = describeAllRanges(p.referenceRanges);
-      if (bands.length) {
-        const unit = p.unit ? ` ${p.unit}` : '';
-        return bands.join(' · ') + unit;
-      }
+      const bands = summarizeRanges(p.referenceRanges, p.unit);
+      if (bands) return bands;
       if (p.normalValue) return String(p.normalValue);
       return '';
     } catch { return ''; }

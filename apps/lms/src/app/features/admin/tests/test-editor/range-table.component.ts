@@ -2,16 +2,16 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input
 import { NgTemplateOutlet } from '@angular/common';
 import { PfSelectOption, SelectComponent } from '../../../../shared/primitives/select.component';
 import {
-  LEVEL_LABEL, effectiveCriticals, fmtNum, tryValue, validateRanges,
-  type FlagLevel, type InsightBand, type InsightParam, type RangeIssue,
+  LEVEL_LABEL, bandSex, effectiveCriticals, fmtNum, tryValue, validateRanges,
+  type FlagLevel, type InsightBand, type InsightParam, type RangeField, type RangeIssue,
 } from '../../../../shared/utils/range-insight';
-import { parseSegmentSex, resolveRangeAgeYears } from '../../../../shared/utils/reference-range';
+import { bandReportText, resolveRangeAgeYears } from '../../../../shared/utils/reference-range';
 
 export type AgeUnit = 'days' | 'months' | 'years';
 const PER_YEAR: Record<AgeUnit, number> = { years: 1, months: 12, days: 365.25 };
 const UNITS: readonly AgeUnit[] = ['days', 'months', 'years'];
 
-/** A number the table edits, by its stored field. */
+/** A number the table edits, by its stored field (L = min, H = max). */
 export type LimitKey = 'min' | 'max' | 'criticalLow' | 'criticalHigh';
 
 /** One side of an age span in natural units ("28 days", "18 years"). */
@@ -53,24 +53,7 @@ export function ageWords(from: AgeSide | null, to: AgeSide | null): string {
   return `${fmtNum(f.n)} ${unitWord(f.unit, f.n)} – ${fmtNum(t.n)} ${unitWord(t.unit, t.n)}`;
 }
 
-export const AGE_PRESETS: ReadonlyArray<{ key: string; label: string; from: AgeSide | null; to: AgeSide | null }> = [
-  { key: 'all', label: 'Any age', from: null, to: null },
-  { key: 'newborn', label: 'Newborn 0–28 days', from: { n: 0, unit: 'days' }, to: { n: 28, unit: 'days' } },
-  { key: 'infant', label: 'Infant 1–12 months', from: { n: 1, unit: 'months' }, to: { n: 12, unit: 'months' } },
-  { key: 'child', label: 'Child 1–12 years', from: { n: 1, unit: 'years' }, to: { n: 12, unit: 'years' } },
-  { key: 'teen', label: 'Teen 12–18 years', from: { n: 12, unit: 'years' }, to: { n: 18, unit: 'years' } },
-  { key: 'adult', label: 'Adult 18 years+', from: { n: 18, unit: 'years' }, to: null },
-  { key: 'senior', label: 'Senior 65 years+', from: { n: 65, unit: 'years' }, to: null },
-];
-
-/** A band's patients: structured sex first, else the legacy segment label. */
-function sexOf(b: InsightBand): 'M' | 'F' | 'any' {
-  if (b.sex === 'M' || b.sex === 'F') return b.sex;
-  if (b.sex === 'any') return 'any';
-  return parseSegmentSex(b.segment) ?? 'any';
-}
-
-/** The age a band applies to, in natural units (stored days / months shown as stored). */
+/** The age a group applies to, in natural units (stored days / months shown as stored). */
 export function ageOf(b: InsightBand): { from: AgeSide | null; to: AgeSide | null } {
   const u = (b.ageUnit ?? 'years') as AgeUnit;
   if ((b.minAge != null || b.maxAge != null) && (u === 'days' || u === 'months')) {
@@ -87,72 +70,117 @@ export function ageOf(b: InsightBand): { from: AgeSide | null; to: AgeSide | nul
   return { from, to };
 }
 
-interface FieldIssue { text: string; fields: Array<LimitKey | 'age'> }
+/** A group as the simple model stores it (owner, 2026-09-26): Who, Age,
+ *  L / H / CL / CH and the Report text — nothing else. Legacy `segment`,
+ *  `label`, `minOp` / `maxOp` are read, never written. */
+export interface SimpleGroup {
+  sex: 'any' | 'M' | 'F';
+  minAge: number | null;
+  maxAge: number | null;
+  ageUnit: AgeUnit;
+  min: number | null;
+  max: number | null;
+  criticalLow: number | null;
+  criticalHigh: number | null;
+  reportText: string | null;
+  profileCode?: string | null;
+}
+
+/**
+ * A (possibly legacy) group → the simple stored shape. Sex / age a legacy
+ * `segment` implied become structured; the parameter-level criticals fill a
+ * group's blank CL / CH; a legacy authored label keeps printing by becoming
+ * the Report text, so an edit never silently changes the report.
+ */
+export function toSimpleGroup(b: InsightBand, param?: InsightParam | null, unit?: string | null): SimpleGroup {
+  const sex = bandSex(b) ?? 'any';
+  let minAge = b.minAge ?? null, maxAge = b.maxAge ?? null;
+  let ageUnit = ((b.ageUnit ?? 'years') as AgeUnit);
+  if (minAge == null && maxAge == null) {
+    const a = resolveRangeAgeYears(b);
+    if (a.hasAge) { minAge = a.minY != null ? round(a.minY, 6) : null; maxAge = a.maxY != null ? round(a.maxY, 6) : null; ageUnit = 'years'; }
+  }
+  const crit = effectiveCriticals(b, param);
+  const legacyLabel = !b.reportText?.trim() && !!b.label?.trim();
+  const reportText = b.reportText?.trim() || (legacyLabel ? bandReportText({ ...b, reportText: null }, unit) : null) || null;
+  const out: SimpleGroup = {
+    sex, minAge, maxAge, ageUnit,
+    min: b.min ?? null, max: b.max ?? null,
+    criticalLow: crit.low, criticalHigh: crit.high,
+    reportText,
+  };
+  if (b.profileCode) out.profileCode = b.profileCode;
+  return out;
+}
+
+/** A new, empty group: Anyone, any age, no limits, no report text. */
+export function blankGroup(): SimpleGroup {
+  return {
+    sex: 'any', minAge: null, maxAge: null, ageUnit: 'years',
+    min: null, max: null, criticalLow: null, criticalHigh: null, reportText: null,
+  };
+}
+
+/**
+ * Legacy test-wide criticals (`criticalLow` / `criticalHigh` on the
+ * parameter) → each group's own CL / CH (a group's own value wins), and the
+ * test-wide pair is dropped. Flags are unchanged (mw reads group ?? test-wide).
+ * A parameter with no groups keeps its pair. Returns the same object when
+ * there is nothing to lift.
+ */
+export function liftParamCriticals<T extends InsightParam>(p: T): T {
+  const bands = p.referenceRanges ?? [];
+  if (!bands.length || (p.criticalLow == null && p.criticalHigh == null)) return p;
+  const next = bands.map(b => ({
+    ...b,
+    criticalLow: b.criticalLow ?? p.criticalLow ?? null,
+    criticalHigh: b.criticalHigh ?? p.criticalHigh ?? null,
+  }));
+  const out = { ...p, referenceRanges: next } as T;
+  delete (out as InsightParam).criticalLow;
+  delete (out as InsightParam).criticalHigh;
+  return out;
+}
+
 export interface RowView {
   index: number;
   band: InsightBand;
   sex: 'M' | 'F' | 'any';
   who: string;
   age: { from: AgeSide | null; to: AgeSide | null; text: string };
-  text: boolean;                  // a written normal ("Negative") — no numbers
-  inherited: { criticalLow: number | null; criticalHigh: number | null };
-  boxes: LimitBox[];              // Low · High · Critical low · Critical high, in column order
-  summary: string;                // phone line 2
-  error: FieldIssue | null;       // a NEW error: red outline + one line
-  quiet: string[];                // pre-existing errors + warnings: a subtle icon
+  /** What prints when the Report text is blank (the input's placeholder). */
+  fallback: string;
+  /** Phone line 2: the report text, else the fallback. */
+  prints: string;
+  /** ONE plain line — the first problem with this group (blocks Save). */
+  error: string | null;
+  errField: RangeField | null;
   profile: string;
 }
 
-/** One limit box as shown: its header words and the flag chip inside it. */
-export interface LimitBox {
-  key: LimitKey;
-  head: string;                   // column header = the box's accessible name
-  chip: string;                   // "L <", "H >", "C <", "C >" (≤ / ≥ on a one-sided strict Normal)
-  tone: 'l' | 'h' | 'c';
-  placeholder: string;            // blank = "none" (or the test-wide critical, grey)
-  title: string;
-}
-
-/** The column headers — also each box's accessible name. */
-export const LIMIT_HEAD: Record<LimitKey, string> = {
-  min: 'Low (L) if below', max: 'High (H) if above',
-  criticalLow: 'Critical if below', criticalHigh: 'Critical if above',
-};
-
-/**
- * The comparison each Normal limit prints with — production's rule
- * (reference-range `flagAgainst`): two-sided Normal is inclusive (L < low,
- * H > high); one-sided is strict unless the band carries ≥ / ≤, so "Normal
- * below 200" prints H at 200 (H ≥ 200). Display only.
- */
-export function normalOps(b: InsightBand): { low: '<' | '≤'; high: '>' | '≥' } {
-  const lowIncl = b.minOp === 'gte' || (b.minOp == null && b.max != null);
-  const highIncl = b.maxOp === 'lte' || (b.maxOp == null && b.min != null);
-  return {
-    low: b.min != null && !lowIncl ? '≤' : '<',
-    high: b.max != null && !highIncl ? '≥' : '>',
-  };
-}
-
-const EMPTY_GROUP = 'Nothing set for this group — add limits or remove it';
+/** The four limit columns: stored field, header, accessible name. */
+export const LIMITS: ReadonlyArray<{ key: LimitKey; head: string; name: string }> = [
+  { key: 'min', head: 'L', name: 'L — below this prints L (low)' },
+  { key: 'max', head: 'H', name: 'H — above this prints H (high)' },
+  { key: 'criticalLow', head: 'CL', name: 'CL — below this is critical' },
+  { key: 'criticalHigh', head: 'CH', name: 'CH — above this is critical' },
+];
 
 let seq = 0;
 const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 
 /**
- * Reference ranges as ONE compact table (the LIS standard — OpenELIS result
- * limits, OpenMRS concept numeric): one row per group of patients.
+ * Reference ranges as ONE compact table (owner, 2026-09-26: "keep it very
+ * simple — H, L, CL, CH and a report box"):
  *
- *   Who | Age | Low (L) if below (unit) | High (H) if above | Critical if below | Critical if above | ×
+ *   Who | Age | L | H | CL | CH | Report text | ×
  *
- * The two Normal limits ARE the L / H flags — each box carries the flag it
- * prints as a chip ("L <", "H >", "C <", "C >"); blank = none. Criticals are strict
- * (below / above), two-sided Normal is inclusive, one-sided strict unless the
- * band carries ≤ / ≥ — production's rule (range-insight → flagBand = mw
- * FlagOne); the comparator itself lives only in Advanced. Maps 1:1 to the
- * stored band fields (min / max / criticalLow / criticalHigh / sex / minAge /
- * maxAge / ageUnit / label); an untouched band is never re-written. Phones get
- * one compact card per group (tap to edit).
+ * value < L → L, > H → H, < CL or > CH → critical; on a limit = not flagged;
+ * blank = no flag on that side. The Report text prints on the report exactly
+ * as typed; blank prints "L–H unit". Every problem is one plain line under
+ * its row and blocks Save (mw refuses the same set). An untouched group is
+ * never re-written; an edited group is stored in the simple shape
+ * ({@link toSimpleGroup}). Phones: one card per group, tap to edit.
  * Shared byte-identical by prefrontal-ui and prefrontal-admin-ui.
  */
 @Component({
@@ -162,23 +190,22 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rtb">
-      <p class="rtb__lead">Below <b>Low</b> prints <b>L</b> · above <b>High</b> prints <b>H</b> · past a <b>Critical</b> limit alerts the doctor.</p>
-
       @if (!phone()) {
         <table class="rtb__table">
           <colgroup>
-            <col class="rtb__c-who" /><col class="rtb__c-age" /><col class="rtb__c-lim" /><col class="rtb__c-lim" />
-            <col class="rtb__c-crit" /><col class="rtb__c-crit" /><col class="rtb__c-x" />
+            <col class="rtb__c-who" /><col class="rtb__c-age" />
+            <col class="rtb__c-lim" /><col class="rtb__c-lim" /><col class="rtb__c-lim" /><col class="rtb__c-lim" />
+            <col class="rtb__c-txt" /><col class="rtb__c-x" />
           </colgroup>
           <thead>
             <tr>
               <th scope="col">Who</th>
               <th scope="col">Age</th>
-              <th scope="col">{{ heads.min }} @if (unitText()) {<span class="rtb__unit">{{ unitText() }}</span>}</th>
-              <th scope="col">{{ heads.max }}</th>
-              <th scope="col">{{ heads.criticalLow }}</th>
-              <th scope="col">{{ heads.criticalHigh }}</th>
-              <th scope="col"><span class="rtb__sr">Actions</span></th>
+              @for (l of limits; track l.key; let first = $first) {
+                <th scope="col" class="rtb__num" [title]="l.name">{{ l.head }}@if (first && unitText()) {<span class="rtb__unit">{{ unitText() }}</span>}</th>
+              }
+              <th scope="col">Report text</th>
+              <th scope="col"><span class="rtb__sr">Remove</span></th>
             </tr>
           </thead>
           <tbody>
@@ -186,36 +213,23 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
               <tr class="rtb__row" [class.rtb__row--err]="!!r.error" [attr.data-who]="r.who + ' · ' + r.age.text">
                 <td>
                   <pf-select size="sm" class="rtb__sel" [options]="sexOptions" [value]="r.sex"
+                             [class.rtb__sel--err]="r.errField === 'sex'"
                              (valueChange)="setSex(r.index, $any($event))"></pf-select>
                   @if (r.profile) { <span class="rtb__tag">only in {{ r.profile }}</span> }
                 </td>
                 <td>
-                  <button type="button" class="rtb__agebtn" [class.rtb__in--err]="hasErr(r, 'age')"
+                  <button type="button" class="rtb__agebtn" [class.rtb__in--err]="r.errField === 'age' || r.errField === 'sex'"
                           [attr.aria-expanded]="ageOpen() === r.index" [attr.aria-label]="'Age: ' + r.age.text + '. Change'"
                           (click)="toggleAge(r.index)">
                     <span>{{ r.age.text }}</span>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                   </button>
                 </td>
-                @if (r.text) {
-                  <td colspan="4">
-                    <span class="rtb__pair">
-                      <span class="rtb__muted">Normal value</span>
-                      <input class="rtb__in rtb__in--text" type="text" [value]="r.band.label || ''" aria-label="Normal value"
-                             (change)="setLabel(r.index, $any($event.target).value)" (keydown.enter)="$any($event.target).blur()" />
-                    </span>
-                  </td>
-                } @else {
-                  @for (b of r.boxes; track b.key) {
-                    <td><ng-container *ngTemplateOutlet="limitBox; context: { $implicit: r, b: b }"></ng-container></td>
-                  }
+                @for (l of limits; track l.key) {
+                  <td><ng-container *ngTemplateOutlet="limitBox; context: { $implicit: r, l: l }"></ng-container></td>
                 }
+                <td><ng-container *ngTemplateOutlet="textBox; context: { $implicit: r }"></ng-container></td>
                 <td class="rtb__acts">
-                  @if (r.quiet.length) {
-                    <span class="rtb__warn" role="img" tabindex="0" [attr.aria-label]="r.quiet.join(' ')" [title]="r.quiet.join('\\n')">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-                    </span>
-                  }
                   <button type="button" class="rtb__rm" [attr.aria-label]="'Remove group ' + r.who + ' · ' + r.age.text"
                           title="Remove group" (click)="removeBand(r.index)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -223,17 +237,17 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
                 </td>
               </tr>
               @if (ageOpen() === r.index) {
-                <tr class="rtb__subrow"><td colspan="7">
+                <tr class="rtb__subrow"><td colspan="8">
                   <ng-container *ngTemplateOutlet="ageEditor; context: { $implicit: r }"></ng-container>
                 </td></tr>
               }
               @if (r.error) {
-                <tr class="rtb__subrow"><td colspan="7"><p class="rtb__msg" role="alert">{{ r.error.text }}</p></td></tr>
+                <tr class="rtb__subrow"><td colspan="8"><p class="rtb__msg" role="alert">{{ r.error }}</p></td></tr>
               }
             }
           </tbody>
           <tfoot>
-            <tr><td colspan="7">
+            <tr><td colspan="8">
               <button type="button" class="rtb__add" (click)="addBand()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 Add group
@@ -242,7 +256,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
           </tfoot>
         </table>
       } @else {
-        @if (unitText()) { <p class="rtb__note">Values in {{ unitText() }}</p> }
+        @if (unitText()) { <p class="rtb__note">L · H · CL · CH in {{ unitText() }}</p> }
         <ul class="rtb__cards">
           @for (r of rows(); track r.index) {
             <li class="rtb__card" [class.rtb__card--open]="cardOpen() === r.index" [class.rtb__row--err]="!!r.error">
@@ -250,16 +264,11 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
                       (click)="cardOpen.set(cardOpen() === r.index ? null : r.index)">
                 <span class="rtb__cardtxt">
                   <span class="rtb__l1">{{ r.who }} · {{ r.age.text }}@if (r.profile) { <span class="rtb__tag">only in {{ r.profile }}</span> }</span>
-                  <span class="rtb__l2">{{ r.summary }}</span>
+                  <span class="rtb__l2">{{ r.prints }}</span>
                 </span>
-                @if (r.quiet.length) {
-                  <span class="rtb__warn" role="img" [attr.aria-label]="r.quiet.join(' ')" [title]="r.quiet.join('\\n')">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-                  </span>
-                }
                 <svg class="rtb__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
               </button>
-              @if (r.error) { <p class="rtb__msg" role="alert">{{ r.error.text }}</p> }
+              @if (r.error) { <p class="rtb__msg" role="alert">{{ r.error }}</p> }
               @if (cardOpen() === r.index) {
                 <div class="rtb__cardbody">
                   <div class="rtb__seg" role="radiogroup" aria-label="Who">
@@ -269,18 +278,14 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
                     }
                   </div>
                   <ng-container *ngTemplateOutlet="ageEditor; context: { $implicit: r }"></ng-container>
-                  @if (r.text) {
-                    <label class="rtb__fld"><span class="rtb__muted">Normal value</span>
-                      <input class="rtb__in" type="text" [value]="r.band.label || ''" (change)="setLabel(r.index, $any($event.target).value)" />
-                    </label>
-                  } @else {
-                    <div class="rtb__grid2">
-                      @for (b of r.boxes; track b.key) {
-                        <label class="rtb__fld"><span class="rtb__muted">{{ b.head }}</span>
-                          <ng-container *ngTemplateOutlet="limitBox; context: { $implicit: r, b: b }"></ng-container></label>
-                      }
-                    </div>
-                  }
+                  <div class="rtb__grid2">
+                    @for (l of limits; track l.key) {
+                      <label class="rtb__fld"><span class="rtb__muted">{{ l.head }}</span>
+                        <ng-container *ngTemplateOutlet="limitBox; context: { $implicit: r, l: l }"></ng-container></label>
+                    }
+                  </div>
+                  <label class="rtb__fld"><span class="rtb__muted">Report text</span>
+                    <ng-container *ngTemplateOutlet="textBox; context: { $implicit: r }"></ng-container></label>
                   <button type="button" class="rtb__add rtb__add--rm" (click)="removeBand(r.index)">Remove this group</button>
                 </div>
               }
@@ -293,12 +298,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
         </button>
       }
 
-      @if (inheritsCritical()) {
-        <p class="rtb__note">Grey critical limits are set once for the whole test. Type in a box to use a different limit for that group.</p>
-      }
-      @for (m of paramMessages(); track $index) {
-        <p class="rtb__note">{{ m }}</p>
-      }
+      @if (paramMessage(); as m) { <p class="rtb__msg" role="alert">{{ m }}</p> }
 
       @if (rows().length) {
         <div class="rtb__try">
@@ -314,46 +314,38 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
           <pf-select size="sm" class="rtb__sel rtb__sel--unit" [options]="unitOptions" [value]="tryUnit()"
                      (valueChange)="tryUnit.set($any($event))"></pf-select>
           @if (tried(); as t) {
-            <span class="rtb__verdict" [attr.data-level]="t" aria-live="polite">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-              <span class="rtb__vtext">{{ t === 'none' ? 'Not flagged' : label(t) }}</span>
-            </span>
+            <span class="rtb__verdict" [attr.data-level]="t" aria-live="polite">→ {{ t === 'none' ? 'Not flagged' : label(t) }}</span>
           }
         </div>
       }
     </div>
 
-    <!-- One limit box: the flag it prints sits inside, on the left ("L <"). -->
-    <ng-template #limitBox let-r let-b="b">
-      <span class="rtb__lim" [attr.data-tone]="b.tone">
-        <span class="rtb__flag" aria-hidden="true">{{ b.chip }}</span>
-        <input class="rtb__in rtb__in--lim" type="text" inputmode="decimal" autocomplete="off"
-               [placeholder]="b.placeholder" [title]="b.title" [attr.aria-label]="b.head"
-               [class.rtb__in--err]="hasErr(r, b.key)" [value]="num(r.band[b.key])"
-               (change)="setLimit(r.index, b.key, $any($event.target))" (keydown.enter)="$any($event.target).blur()" />
-      </span>
+    <ng-template #limitBox let-r let-l="l">
+      <input class="rtb__in rtb__in--lim" type="text" inputmode="decimal" autocomplete="off"
+             [attr.aria-label]="l.name" [title]="l.name"
+             [class.rtb__in--err]="r.errField === l.key || (r.errField === 'max' && l.key === 'min')"
+             [value]="num(r.band[l.key] ?? inherited(r.band, l.key))"
+             (change)="setLimit(r.index, l.key, $any($event.target))" (keydown.enter)="$any($event.target).blur()" />
+    </ng-template>
+
+    <ng-template #textBox let-r>
+      <input class="rtb__in rtb__in--text" type="text" autocomplete="off" aria-label="Report text — prints exactly as typed"
+             [value]="r.band.reportText || ''" [placeholder]="r.fallback" [title]="r.band.reportText || r.fallback"
+             (change)="setText(r.index, $any($event.target).value)" (keydown.enter)="$any($event.target).blur()" />
     </ng-template>
 
     <ng-template #ageEditor let-r>
       <div class="rtb__ageed" role="group" [attr.aria-label]="'Age for ' + r.who">
-        <div class="rtb__agefields">
-          <span class="rtb__muted">From</span>
-          <input class="rtb__in rtb__in--age" type="text" inputmode="decimal" autocomplete="off" aria-label="Age from" placeholder="0"
-                 [value]="r.age.from ? num(r.age.from.n) : ''" (change)="setAgeSide(r, 'from', $any($event.target).value, null)" />
-          <pf-select size="sm" class="rtb__sel rtb__sel--unit" [options]="unitOptions" [value]="r.age.from?.unit || r.age.to?.unit || 'years'"
-                     (valueChange)="setAgeSide(r, 'from', null, $any($event))"></pf-select>
-          <span class="rtb__muted">to</span>
-          <input class="rtb__in rtb__in--age" type="text" inputmode="decimal" autocomplete="off" aria-label="Age to" placeholder="and over"
-                 [value]="r.age.to ? num(r.age.to.n) : ''" (change)="setAgeSide(r, 'to', $any($event.target).value, null)" />
-          <pf-select size="sm" class="rtb__sel rtb__sel--unit" [options]="unitOptions" [value]="r.age.to?.unit || r.age.from?.unit || 'years'"
-                     (valueChange)="setAgeSide(r, 'to', null, $any($event))"></pf-select>
-        </div>
-        <div class="rtb__presets" role="group" aria-label="Quick ages">
-          @for (p of presets; track p.key) {
-            <button type="button" class="rtb__chip" [attr.aria-pressed]="presetOn(p, r)"
-                    (click)="setAge(r.index, p.from, p.to)">{{ p.label }}</button>
-          }
-        </div>
+        <span class="rtb__muted">From</span>
+        <input class="rtb__in rtb__in--age" type="text" inputmode="decimal" autocomplete="off" aria-label="Age from" placeholder="0"
+               [value]="r.age.from ? num(r.age.from.n) : ''" (change)="setAgeSide(r, 'from', $any($event.target).value, null)" />
+        <pf-select size="sm" class="rtb__sel rtb__sel--unit" [options]="unitOptions" [value]="r.age.from?.unit || r.age.to?.unit || 'years'"
+                   (valueChange)="setAgeSide(r, 'from', null, $any($event))"></pf-select>
+        <span class="rtb__muted">to</span>
+        <input class="rtb__in rtb__in--age" type="text" inputmode="decimal" autocomplete="off" aria-label="Age to" placeholder="and over"
+               [value]="r.age.to ? num(r.age.to.n) : ''" (change)="setAgeSide(r, 'to', $any($event.target).value, null)" />
+        <pf-select size="sm" class="rtb__sel rtb__sel--unit" [options]="unitOptions" [value]="r.age.to?.unit || r.age.from?.unit || 'years'"
+                   (valueChange)="setAgeSide(r, 'to', null, $any($event))"></pf-select>
       </div>
     </ng-template>
   `,
@@ -363,11 +355,9 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
       --rtb-line: var(--nd-line, var(--glass-border, #e5e7eb));
       --rtb-err: var(--red-border, #dc2626);
       --rtb-field: color-mix(in srgb, var(--text-primary) 22%, transparent);
-      display: flex; flex-direction: column; gap: 12px; font-family: inherit; font-variant-numeric: tabular-nums;
+      display: flex; flex-direction: column; gap: 10px; font-family: inherit; font-variant-numeric: tabular-nums;
     }
     :host-context(.dark) .rtb { --rtb-err: #f87171; }
-    .rtb__lead { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-tertiary); }
-    .rtb__lead b { font-weight: 600; color: var(--text-secondary); }
     .rtb__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .rtb__muted { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
     .rtb__unit { margin-left: 6px; font-weight: 400; color: var(--text-tertiary); }
@@ -375,20 +365,18 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 
     /* ── Desktop table ─────────────────────────────────────────────── */
     .rtb__table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .rtb__c-who { width: 124px; }
-    .rtb__c-age { width: auto; }
-    .rtb__c-lim { width: 136px; }
-    .rtb__c-crit { width: 124px; }
-    .rtb__c-x { width: 64px; }
-    .rtb__table th, .rtb__table td { padding: 6px 10px 6px 0; text-align: left; vertical-align: middle; }
-    .rtb__table thead th { font-size: 12px; font-weight: 500; color: var(--text-secondary); padding-bottom: 8px; vertical-align: bottom; }
+    .rtb__c-who { width: 108px; }
+    .rtb__c-age { width: 182px; }
+    .rtb__c-lim { width: 70px; }
+    .rtb__c-txt { width: auto; }
+    .rtb__c-x { width: 40px; }
+    .rtb__table th, .rtb__table td { padding: 6px 8px 6px 0; text-align: left; vertical-align: middle; }
+    .rtb__table thead th { font-size: 12px; font-weight: 500; color: var(--text-secondary); padding-bottom: 8px; vertical-align: bottom; white-space: nowrap; }
     .rtb__row { border-top: 1px solid var(--rtb-line); }
     .rtb__table tfoot tr { border-top: 1px solid var(--rtb-line); }
     .rtb__table tfoot td { padding: 6px 0 0; }
     .rtb__subrow td { padding: 0 0 10px; white-space: normal !important; }
     .rtb__acts { padding-right: 0 !important; text-align: right !important; white-space: nowrap; }
-    .rtb__pair { display: flex; align-items: center; gap: 6px; }
-    .rtb__dash { color: var(--text-tertiary); flex: none; }
     .rtb__sel { display: block; min-width: 0; }
 
     .rtb__in {
@@ -402,22 +390,8 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__in:focus { outline: none; border-color: var(--color-violet-600, #7c3aed);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
     .rtb__in--err, .rtb__in--err:hover { border-color: var(--rtb-err); }
-    .rtb__in--text { max-width: 260px; }
-
-    /* A limit box: the flag it prints sits inside, on the left — "L <", "H >",
-       "C <", "C >". The app's result-flag tones (L blue, H amber, C red) at
-       low strength; palette tokens, so light and dark both follow the theme. */
-    .rtb__lim { position: relative; display: block; min-width: 0; }
-    .rtb__lim[data-tone='l'] { --rtb-tone: var(--blue-text, #2563eb); }
-    .rtb__lim[data-tone='h'] { --rtb-tone: var(--amber-text, #b45309); }
-    .rtb__lim[data-tone='c'] { --rtb-tone: var(--red-text, #dc2626); }
-    .rtb__flag {
-      position: absolute; left: 7px; top: 50%; transform: translateY(-50%); pointer-events: none;
-      padding: 1px 5px; border-radius: 5px; font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap;
-      font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--rtb-tone) 85%, var(--text-tertiary));
-      background: color-mix(in srgb, var(--rtb-tone) 10%, transparent);
-    }
-    .rtb__in--lim { padding-left: 42px; }
+    .rtb__in--lim { padding: 0 8px; }
+    .rtb__in--text { font-weight: 400; text-overflow: ellipsis; }
 
     .rtb__agebtn {
       display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; height: 36px; padding: 0 8px 0 10px;
@@ -429,15 +403,13 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__agebtn > svg { flex: none; color: var(--text-tertiary); transition: transform .2s ease; }
     .rtb__agebtn[aria-expanded='true'] > svg { transform: rotate(180deg); }
     .rtb__agebtn:hover { border-color: color-mix(in srgb, var(--text-primary) 38%, transparent); }
-    .rtb__agebtn:focus-visible, .rtb__rm:focus-visible, .rtb__add:focus-visible, .rtb__chip:focus-visible,
-    .rtb__segi:focus-visible, .rtb__cardhead:focus-visible, .rtb__warn:focus-visible {
+    .rtb__agebtn:focus-visible, .rtb__rm:focus-visible, .rtb__add:focus-visible,
+    .rtb__segi:focus-visible, .rtb__cardhead:focus-visible {
       outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 
     .rtb__rm { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; vertical-align: middle;
       border-radius: 8px; background: transparent; color: var(--text-tertiary); cursor: pointer; }
     .rtb__rm:hover { color: var(--text-primary); background: var(--nd-chip-bg, rgba(127,127,127,.12)); }
-    .rtb__warn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 30px; vertical-align: middle;
-      color: var(--text-tertiary); cursor: help; border-radius: 6px; }
 
     .rtb__add { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; height: 32px; padding: 0 10px 0 6px;
       border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13px; font-weight: 500;
@@ -449,25 +421,19 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__note { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-tertiary); }
 
     /* Age editor (desktop: a row under the group; phone: inside the card). */
-    .rtb__ageed { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px;
+    .rtb__ageed { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px;
       background: var(--nd-chip-bg, rgba(127,127,127,.08)); }
-    .rtb__agefields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .rtb__in--age { width: 72px; }
     .rtb__sel--unit { width: 112px; }
-    .rtb__presets { display: flex; gap: 6px; flex-wrap: wrap; }
-    .rtb__chip { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--rtb-line); cursor: pointer;
-      background: var(--nd-card-bg, transparent); color: var(--text-secondary); font: inherit; font-size: 12px; }
-    .rtb__chip:hover { color: var(--text-primary); border-color: var(--nd-sel-border, #9aa4ae); }
-    .rtb__chip[aria-pressed='true'] { color: var(--text-primary); border-color: var(--nd-sel-border, #9aa4ae); font-weight: 500; }
 
-    /* Try a value — one line. */
-    .rtb__try { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--rtb-line); }
-    .rtb__trylbl { font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-right: 2px; }
-    .rtb__in--try { width: 96px; }
-    .rtb__in--tage { width: 64px; }
-    .rtb__sel--try { width: 120px; }
-    .rtb__verdict { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
-    .rtb__verdict > svg { color: var(--text-tertiary); }
+    /* Try a value — one small line. */
+    .rtb__try { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .rtb__trylbl { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+    .rtb__try .rtb__in { height: 32px; font-size: 13px; }
+    .rtb__in--try { width: 84px; }
+    .rtb__in--tage { width: 60px; }
+    .rtb__sel--try { width: 112px; }
+    .rtb__verdict { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .rtb__verdict[data-level='critical_low'], .rtb__verdict[data-level='critical_high'] { color: var(--rtb-err); }
 
     /* ── Phone cards ───────────────────────────────────────────────── */
@@ -480,7 +446,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
       border-radius: 12px; }
     .rtb__cardtxt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .rtb__l1 { font-size: 15px; font-weight: 600; line-height: 1.3; }
-    .rtb__l2 { font-size: 14px; color: var(--text-secondary); line-height: 1.35; }
+    .rtb__l2 { font-size: 14px; color: var(--text-secondary); line-height: 1.35; overflow-wrap: anywhere; }
     .rtb__chev { flex: none; color: var(--text-tertiary); transition: transform .2s ease; }
     .rtb__card--open .rtb__chev { transform: rotate(180deg); }
     .rtb__cardbody { display: flex; flex-direction: column; gap: 12px; padding: 4px 14px 12px; }
@@ -494,14 +460,10 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
       box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 500; }
 
     @media (max-width: 640px) {
-      .rtb__in, .rtb__agebtn { height: 44px; font-size: 16px; }
-      .rtb__in--lim { padding-left: 46px; }
-      .rtb__flag { font-size: 12px; }
-      .rtb__rm, .rtb__add { min-height: 44px; }
-      .rtb__chip { height: 36px; font-size: 13px; }
-      .rtb__ageed { padding: 10px; }
-      .rtb__agefields { display: grid; grid-template-columns: auto 1fr 1fr; }
-      .rtb__agefields > .rtb__muted:nth-of-type(2) { grid-column: 1; }
+      .rtb__in, .rtb__agebtn, .rtb__try .rtb__in { height: 44px; font-size: 16px; }
+      .rtb__rm, .rtb__add, .rtb__segi { min-height: 44px; }
+      .rtb__ageed { display: grid; grid-template-columns: auto 1fr 1fr; padding: 10px; }
+      .rtb__ageed > .rtb__muted:nth-of-type(2) { grid-column: 1; }
       .rtb__in--age { width: 100%; }
       .rtb__sel--unit { width: auto; }
       .rtb__in--try { flex: 1 1 110px; width: auto; }
@@ -516,9 +478,9 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 export class RangeTableComponent {
   /** The numeric parameter (referenceRanges + criticals + unit). */
   readonly param = input<InsightParam | null>(null);
-  /** Shown once, in the Normal range header ("g/dL"). */
+  /** Shown once, in the table header ("g/dL"). */
   readonly unit = input<string>('');
-  /** The new band list — the host writes it to the parameter unchanged. */
+  /** The new group list — the host writes it to the parameter unchanged. */
   readonly bandsChange = output<InsightBand[]>();
 
   /** Phones (≤640px) get one card per group instead of the table. */
@@ -534,15 +496,8 @@ export class RangeTableComponent {
     { value: 'any', label: 'Anyone' }, { value: 'M', label: 'Male' }, { value: 'F', label: 'Female' },
   ];
   readonly unitOptions: PfSelectOption[] = UNITS.map(u => ({ value: u, label: u }));
-  readonly presets = AGE_PRESETS;
-  readonly heads = LIMIT_HEAD;
+  readonly limits = LIMITS;
   readonly uid = `rtb-try-${++seq}`;
-
-  /** Error keys the test already had when it was opened (legacy catalogue
-   *  data) — a quiet icon, never red; like the host, they don't block Save.
-   *  Keyed band|field|message; shifted when a group is removed. */
-  private baseline: Set<string> | null = null;
-  private baselineFor: string | null = null;
 
   constructor() {
     const mq = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -556,60 +511,27 @@ export class RangeTableComponent {
   }
 
   private readonly bands = computed<InsightBand[]>(() => this.param()?.referenceRanges ?? []);
-  private readonly issues = computed<RangeIssue[]>(() => {
-    const p = this.param();
-    if (!p) return [];
-    const list = validateRanges({ ...p, unit: p.unit || this.unit() || null });
-    const id = `${p.name ?? ''}`;
-    if (this.baseline == null || this.baselineFor !== id) {
-      this.baselineFor = id;
-      this.baseline = new Set(list.filter(i => i.severity === 'error').map(issueKey));
-    }
-    return list;
-  });
+  private readonly issues = computed<RangeIssue[]>(() => validateRanges(this.param()));
   readonly unitText = computed(() => (this.param()?.unit || this.unit() || '').trim());
-  /** Some group shows the test-wide critical limit as a grey placeholder. */
-  readonly inheritsCritical = computed(() => !!this.param()?.referenceRanges?.length && this.rows().some(r => !r.text
-    && (r.inherited.criticalLow != null || r.inherited.criticalHigh != null)));
-  /** Test-wide notes (coverage gaps, unit) — one quiet line each. */
-  readonly paramMessages = computed(() => this.issues().filter(i => i.band == null).map(i => i.message));
+  /** A test-wide problem (legacy criticals with no groups) — one line. */
+  readonly paramMessage = computed(() => this.issues().find(i => i.band == null)?.message ?? null);
 
   readonly rows = computed<RowView[]>(() => {
-    const p = this.param();
     const issues = this.issues();
-    const base = this.baseline ?? new Set<string>();
+    const unit = this.unitText();
     return this.bands().map((band, index) => {
-      const own = issues.filter(i => i.band === index);
-      const fresh = own.filter(i => i.severity === 'error' && !base.has(issueKey(i)));
-      const quiet = own.filter(i => !fresh.includes(i))
-        .map(i => (i.severity === 'error' ? `Saved like this before — please check: ${i.message}`
-          : /^Empty range/.test(i.message) ? EMPTY_GROUP : i.message));
+      const first = issues.find(i => i.band === index) ?? null;
       const age = ageOf(band);
-      const sex = sexOf(band);
-      const hasNum = band.min != null || band.max != null || band.criticalLow != null || band.criticalHigh != null;
-      const crit = effectiveCriticals(band, p);
-      const ops = normalOps(band);
-      const inherited = {
-        criticalLow: band.criticalLow == null ? p?.criticalLow ?? null : null,
-        criticalHigh: band.criticalHigh == null ? p?.criticalHigh ?? null : null,
-      };
-      const inh = (k: 'criticalLow' | 'criticalHigh', word: string): Pick<LimitBox, 'placeholder' | 'title'> =>
-        inherited[k] != null ? { placeholder: fmtNum(inherited[k]!), title: `From the test-wide critical ${word}` }
-          : { placeholder: 'none', title: '' };
-      const boxes: LimitBox[] = [
-        { key: 'min', head: LIMIT_HEAD.min, chip: `L ${ops.low}`, tone: 'l', placeholder: 'none', title: '' },
-        { key: 'max', head: LIMIT_HEAD.max, chip: `H ${ops.high}`, tone: 'h', placeholder: 'none', title: '' },
-        { key: 'criticalLow', head: LIMIT_HEAD.criticalLow, chip: 'C <', tone: 'c', ...inh('criticalLow', 'low') },
-        { key: 'criticalHigh', head: LIMIT_HEAD.criticalHigh, chip: 'C >', tone: 'c', ...inh('criticalHigh', 'high') },
-      ];
+      const sex = bandSex(band) ?? 'any';
+      const fallback = bandReportText({ ...band, reportText: null }, unit) ?? '';
       return {
-        index, band, sex, quiet,
+        index, band, sex,
         who: SEX_WORD[sex],
         age: { ...age, text: ageWords(age.from, age.to) },
-        text: !hasNum && !!band.label?.trim(),
-        inherited, boxes,
-        summary: summaryOf(band, crit, ops),
-        error: fresh.length ? explain(fresh[0], band, crit) : null,
+        fallback,
+        prints: band.reportText?.trim() || fallback || 'No limits set',
+        error: first?.message ?? null,
+        errField: first?.field ?? null,
         profile: (band.profileCode ?? '').trim(),
       };
     });
@@ -627,9 +549,13 @@ export class RangeTableComponent {
 
   label(l: FlagLevel): string { return LEVEL_LABEL[l]; }
   num(n: number | null | undefined): string { return n == null ? '' : fmtNum(n); }
-  hasErr(r: RowView, f: LimitKey | 'age'): boolean { return !!r.error?.fields.includes(f); }
-  presetOn(p: (typeof AGE_PRESETS)[number], r: RowView): boolean {
-    return ageWords(p.from, p.to) === r.age.text;
+  /** A legacy test-wide critical shows in a group's CL / CH box (it applies there). */
+  inherited(b: InsightBand, key: LimitKey): number | null {
+    const p = this.param();
+    if (key === 'criticalLow') return p?.criticalLow ?? null;
+    if (key === 'criticalHigh') return p?.criticalHigh ?? null;
+    void b;
+    return null;
   }
   parse(s: string | null | undefined): number | null {
     const t = String(s ?? '').trim().replace(',', '.');
@@ -638,15 +564,17 @@ export class RangeTableComponent {
     return Number.isFinite(v) ? v : null;
   }
 
-  // ── Edits: each replaces ONE band; every other band keeps its object ──
+  // ── Edits: each rewrites ONE group in the simple shape; others keep their object ──
   private emit(next: InsightBand[]) { this.bandsChange.emit(next); }
-  private patch(i: number, patch: Partial<InsightBand>) {
-    const b = this.bands()[i] as Record<string, unknown> | undefined;
+  private patch(i: number, patch: Partial<SimpleGroup>) {
+    const b = this.bands()[i];
     if (!b) return;
+    const simple = toSimpleGroup(b, this.param(), this.unitText());
+    const cur = simple as unknown as Record<string, unknown>;
     const p = patch as Record<string, unknown>;
-    const changed = Object.keys(p).some(k => b[k] !== p[k] && !(b[k] == null && p[k] == null));
+    const changed = Object.keys(p).some(k => cur[k] !== p[k] && !(cur[k] == null && p[k] == null));
     if (!changed) return;
-    this.emit(this.bands().map((x, k) => (k === i ? { ...x, ...patch } : x)));
+    this.emit(this.bands().map((x, k) => (k === i ? ({ ...simple, ...patch } as InsightBand) : x)));
   }
 
   /** A typed limit. Not a number → the box is restored, nothing is stored. */
@@ -655,24 +583,15 @@ export class RangeTableComponent {
     const v = this.parse(raw);
     const b = this.bands()[i];
     if (!b) return;
-    if (raw && v == null) { el.value = this.num(b[key] as number | null | undefined); return; }
-    if (key === 'min') this.patch(i, v == null ? { min: null, ...(b.minOp != null ? { minOp: null } : {}) } : { min: v });
-    else if (key === 'max') this.patch(i, v == null ? { max: null, ...(b.maxOp != null ? { maxOp: null } : {}) } : { max: v });
-    else this.patch(i, { [key]: v });
+    if (raw && v == null) { el.value = this.num((b[key] as number | null | undefined) ?? this.inherited(b, key)); return; }
+    this.patch(i, { [key]: v });
   }
-  setLabel(i: number, text: string) { this.patch(i, { label: String(text ?? '').trim() || null }); }
+  setText(i: number, text: string) { this.patch(i, { reportText: String(text ?? '').trim() || null }); }
 
   setSex(i: number, v: 'M' | 'F' | 'any') {
     const b = this.bands()[i];
-    if (!b || sexOf(b) === v) return;
-    const patch: Partial<InsightBand> = { sex: v };
-    // A structured sex stops the resolver reading the age out of the legacy
-    // segment label — carry that age over as structured fields.
-    if (v !== 'any' && b.minAge == null && b.maxAge == null) {
-      const a = resolveRangeAgeYears(b);
-      if (a.hasAge) Object.assign(patch, { minAge: a.minY, maxAge: a.maxY, ageUnit: 'years' });
-    }
-    this.patch(i, patch);
+    if (!b || (bandSex(b) ?? 'any') === v) return;
+    this.patch(i, { sex: v });
   }
 
   toggleAge(i: number) { this.ageOpen.set(this.ageOpen() === i ? null : i); }
@@ -695,8 +614,8 @@ export class RangeTableComponent {
 
   /**
    * Write an age. One unit both sides → stored in that unit ("0–28 days").
-   * Mixed ("28 days – 1 year") → stored in years like today's catalogue; a
-   * side the user did not change keeps its exact stored value.
+   * Mixed ("28 days – 1 year") → stored in years; a side the user did not
+   * change keeps its exact stored value.
    */
   setAge(i: number, from: AgeSide | null, to: AgeSide | null, was?: { from: AgeSide | null; to: AgeSide | null }) {
     const b = this.bands()[i];
@@ -721,67 +640,15 @@ export class RangeTableComponent {
   }
 
   addBand() {
-    const last = this.bands()[this.bands().length - 1];
-    const copy: InsightBand = last
-      ? { segment: 'normal', sex: 'any', min: last.min ?? null, max: last.max ?? null,
-          ...(last.minOp ? { minOp: last.minOp } : {}), ...(last.maxOp ? { maxOp: last.maxOp } : {}),
-          ...(last.criticalLow != null ? { criticalLow: last.criticalLow } : {}),
-          ...(last.criticalHigh != null ? { criticalHigh: last.criticalHigh } : {}) }
-      : { segment: 'normal', sex: 'any', min: null, max: null };
     const n = this.bands().length;
-    this.emit([...this.bands(), copy]);
+    this.emit([...this.bands(), blankGroup() as InsightBand]);
     if (this.phone()) this.cardOpen.set(n);
+    else this.ageOpen.set(n);
   }
 
   removeBand(i: number) {
-    if (this.baseline) {
-      const shifted = new Set<string>();
-      for (const k of this.baseline) {
-        const [band, ...rest] = k.split('|');
-        const n = band === '' ? null : Number(band);
-        if (n === i) continue;
-        shifted.add([n != null && n > i ? String(n - 1) : band, ...rest].join('|'));
-      }
-      this.baseline = shifted;
-    }
     this.ageOpen.set(null);
     this.cardOpen.set(null);
     this.emit(this.bands().filter((_, k) => k !== i));
   }
-}
-
-const issueKey = (i: RangeIssue) => `${i.band ?? ''}|${i.field ?? ''}|${i.message}`;
-
-/** Phone line 2: "L < 12 · H > 16 · Critical < 7 · > 20". */
-function summaryOf(b: InsightBand, crit: { low: number | null; high: number | null },
-  ops: { low: string; high: string }): string {
-  const n = fmtNum;
-  const parts: string[] = [];
-  const nb = (t: string) => t.replace(/ /g, '\u00a0');
-  if (b.min != null) parts.push(`L ${ops.low} ${n(b.min)}`);
-  if (b.max != null) parts.push(`H ${ops.high} ${n(b.max)}`);
-  if (!parts.length && b.label?.trim()) parts.push(`Normal: ${b.label.trim()}`);
-  const c = [crit.low != null ? `< ${n(crit.low)}` : '', crit.high != null ? `> ${n(crit.high)}` : ''].filter(Boolean);
-  if (c.length) parts.push(`Critical ${c.join(' · ')}`);
-  if (!parts.length) parts.push('Nothing set');
-  // Each piece stays on one line ("Critical < 7" never breaks after "<").
-  return parts.map(p => p.split(' · ').map(nb).join(' · ')).join(' · ');
-}
-
-/** A new error, in the table's own words, with the boxes it concerns. */
-function explain(i: RangeIssue, b: InsightBand, crit: { low: number | null; high: number | null }): FieldIssue {
-  const n = (x: number | null | undefined) => (x == null ? '' : fmtNum(x));
-  const m = i.message;
-  if (i.field === 'max') return { text: `Normal runs backwards: ${n(b.min)} is above ${n(b.max)}.`, fields: ['min', 'max'] };
-  if (i.field === 'maxAge' || i.field === 'minAge') return { text: 'Age “from” is after age “to”.', fields: ['age'] };
-  if (i.field === 'criticalLow') {
-    if (/must be below Critical high/.test(m)) return { text: `Critical below (${n(crit.low)}) must be less than critical above (${n(crit.high)}).`, fields: ['criticalLow', 'criticalHigh'] };
-    if (/inside the normal range/.test(m)) return { text: `Critical below (${n(crit.low)}) can’t be inside Normal — make it ${n(b.min)} or less.`, fields: ['criticalLow', 'min'] };
-    return { text: `Critical below (${n(crit.low)}) must be less than the top of Normal (${n(b.max)}).`, fields: ['criticalLow', 'max'] };
-  }
-  if (i.field === 'criticalHigh') {
-    if (/inside the normal range/.test(m)) return { text: `Critical above (${n(crit.high)}) can’t be inside Normal — make it ${n(b.max)} or more.`, fields: ['criticalHigh', 'max'] };
-    return { text: `Critical above (${n(crit.high)}) must be more than the bottom of Normal (${n(b.min)}).`, fields: ['criticalHigh', 'min'] };
-  }
-  return { text: m, fields: [] };
 }

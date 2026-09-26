@@ -15,6 +15,8 @@ import {
   describeAllRanges,
   normalizeSex,
   selectReferenceRange,
+  isLegacyGroup,
+  summarizeRanges,
 } from "../../../shared/utils/reference-range";
 import { flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
 import { effectiveMethodology } from "../../../shared/utils/methodology";
@@ -1162,8 +1164,10 @@ export class SampleResultEntryComponent {
     // no patient sex/age in scope, so naming a single band would be a guess —
     // showing them all is the honest form, and the backend still decides the
     // flag that gets persisted and printed.
-    const bands = describeAllRanges(p.referenceRanges);
-    if (bands.length) return bands.join(" · ");
+    const bands = (p.referenceRanges ?? []).some(b => b.reportText?.trim() || !isLegacyGroup(b))
+      ? summarizeRanges(p.referenceRanges, p.unit)
+      : describeAllRanges(p.referenceRanges).join(" · ");
+    if (bands) return bands;
     if (p.normalValue) return p.normalValue;
     return "";
   }

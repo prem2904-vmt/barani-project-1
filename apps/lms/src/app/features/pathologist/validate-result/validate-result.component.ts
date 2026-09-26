@@ -1169,7 +1169,7 @@ export class ValidateResultComponent implements OnInit {
       const critHigh = r?.criticalHigh ?? p.criticalHigh ?? undefined;
       const saved = savedFlagOf(snap, p.name);
       const unit = (saved?.unit ?? p.unit) || undefined;
-      const rangeText = saved ? (saved.range ?? null) : formatRange(r);
+      const rangeText = saved ? (saved.range ?? null) : (r?.reportText?.trim() || formatRange(r));
       return {
         name: p.name,
         title: p.title,

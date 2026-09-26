@@ -93,8 +93,12 @@ describe('describeAllRanges', () => {
 
 describe('formatRange', () => {
   it('renders one-sided bounds, which lipids and enzymes rely on', () => {
-    expect(formatRange({ max: 200 })).toBe('< 200');
-    expect(formatRange({ min: 40 })).toBe('> 40');
+    // A value on the limit is normal (simple model) → ≤ / ≥; only an
+    // explicit legacy strict op prints < / >.
+    expect(formatRange({ max: 200 })).toBe('≤ 200');
+    expect(formatRange({ min: 40 })).toBe('≥ 40');
+    expect(formatRange({ max: 200, maxOp: 'lt' })).toBe('< 200');
+    expect(formatRange({ min: 40, minOp: 'gt' })).toBe('> 40');
     expect(formatRange({ min: 13, max: 17 })).toBe('13–17');
   });
 

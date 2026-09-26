@@ -16,10 +16,11 @@ export interface RangeLike {
   min?: number | null;
   max?: number | null;
   /**
-   * First-class bound comparators. Backward-compatible defaults when an op is
-   * ABSENT: a two-sided band stays INCLUSIVE on both bounds (min ≤ v ≤ max is
-   * normal — today's semantics), while a one-sided band renders and flags as
-   * STRICT `<`/`>` (today's glyphs). Mirrors mw `RangeDef.MinOp/MaxOp`.
+   * LEGACY bound comparators (read, never written by new saves). The simple
+   * model (owner, 2026-09-26): `min` = L, `max` = H, a value ON a limit is
+   * not flagged — so an absent op is inclusive on both sides, one-sided too.
+   * Only an explicit legacy strict op ('gt' / 'lt') still flags the limit
+   * itself, until the data is migrated. Mirrors mw `RangeDef.MinOp/MaxOp`.
    */
   minOp?: 'gt' | 'gte' | null;
   maxOp?: 'lt' | 'lte' | null;
@@ -27,8 +28,12 @@ export interface RangeLike {
   minAge?: number | null;
   maxAge?: number | null;
   ageUnit?: 'years' | 'months' | 'days' | null;
-  /** Admin's override for the auto-derived friendly name. */
+  /** Admin's override for the auto-derived friendly name (legacy). */
   label?: string | null;
+  /** What the report prints as the reference range, EXACTLY as typed
+   *  ("Normal: 70–99 · Prediabetes: 100–125"). Blank = the simple fallback
+   *  "L–H unit". Mirrors mw `RangeDef.ReportText`. */
+  reportText?: string | null;
 }
 
 /** Normalize a free-text sex to 'M' | 'F' | 'O' or null. */
@@ -53,17 +58,7 @@ export function selectReferenceRange<T extends RangeLike>(
   ageYears: number | null
 ): T | undefined {
   if (!ranges || ranges.length === 0) return undefined;
-  let best: T | undefined;
-  let bestScore = -Infinity;
-  for (const r of ranges) {
-    const { eligible, score } = scoreRange(r, sex, ageYears);
-    if (!eligible) continue;
-    if (score > bestScore) {
-      bestScore = score;
-      best = r;
-    }
-  }
-  return best ?? ranges[0];
+  return pickBest(ranges, sex, ageYears).best ?? ranges[0];
 }
 
 /**
@@ -78,15 +73,39 @@ export function matchReferenceRange<T extends RangeLike>(
   ageYears: number | null
 ): { range: T | undefined; isSpecific: boolean } {
   if (!ranges || ranges.length === 0) return { range: undefined, isSpecific: false };
+  const { best, score } = pickBest(ranges, sex, ageYears);
+  if (!best) return { range: ranges[0], isSpecific: false };
+  return { range: best, isSpecific: score > 0 };
+}
+
+/**
+ * The winner among eligible bands: highest score, then first declared — with
+ * one tie-break for touching ages ("1–6 years" then "6–10 years"): a patient
+ * exactly on the shared birthday belongs to the group that STARTS there, so
+ * a group whose age-to equals the patient's age loses a tie. Eligibility
+ * itself stays inclusive on age-to (older catalogues rely on it).
+ * Mirrors mw `ReferenceRangeResolver.Select`.
+ */
+function pickBest<T extends RangeLike>(
+  ranges: readonly T[], sex: 'M' | 'F' | 'O' | null, ageYears: number | null,
+): { best: T | undefined; score: number } {
   let best: T | undefined;
   let bestScore = -Infinity;
+  let bestEdge = false;
   for (const r of ranges) {
     const { eligible, score } = scoreRange(r, sex, ageYears);
     if (!eligible) continue;
-    if (score > bestScore) { bestScore = score; best = r; }
+    const edge = ageYears != null && atAgeTo(r, ageYears);
+    if (score > bestScore || (score === bestScore && bestEdge && !edge)) {
+      bestScore = score; best = r; bestEdge = edge;
+    }
   }
-  if (!best) return { range: ranges[0], isSpecific: false };
-  return { range: best, isSpecific: bestScore > 0 };
+  return { best, score: bestScore };
+}
+
+function atAgeTo(r: RangeLike, ageYears: number): boolean {
+  const a = resolveRangeAgeYears(r);
+  return a.hasAge && a.maxY != null && Math.abs(a.maxY - ageYears) < 1e-9;
 }
 
 /**
@@ -166,38 +185,88 @@ const prettify = (s: string): string =>
     .map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 
 /**
- * Band values as display text: "13–17", "< 200", "> 40", "≤ 140", "≥ 40".
- * Two-sided display is unchanged by ops; a one-sided bound prints ≤/≥ when its
- * op is inclusive, else the strict default glyph. Mirrors `Format` (mw).
+ * Band values as display text: "13–17", "≤ 200", "≥ 40". A value on a limit
+ * is normal, so a one-sided band prints ≤ / ≥; only an explicit LEGACY strict
+ * op ('lt' / 'gt') prints < / >. Mirrors `Format` (mw).
  */
 export function formatRange(r: RangeLike | undefined | null): string | null {
   if (!r) return null;
   if (r.min != null && r.max != null) return `${num(r.min)}–${num(r.max)}`;
-  if (r.max != null) return `${r.maxOp === 'lte' ? '≤' : '<'} ${num(r.max)}`;
-  if (r.min != null) return `${r.minOp === 'gte' ? '≥' : '>'} ${num(r.min)}`;
+  if (r.max != null) return `${r.maxOp === 'lt' ? '<' : '≤'} ${num(r.max)}`;
+  if (r.min != null) return `${r.minOp === 'gt' ? '>' : '≥'} ${num(r.min)}`;
   return null;
 }
 
+/** A group saved before the simple model (it carries a free-text segment or
+ *  a printed-name label) — printed the legacy way until it is migrated. */
+export function isLegacyGroup(r: RangeLike): boolean {
+  return !!r.label?.trim() || !!r.segment?.trim();
+}
+
 /**
- * Flag a numeric value against ONE band — the client mirror of the flagging
+ * What the report prints for ONE group: its `reportText` exactly as typed;
+ * else the simple fallback "13–17 g/dL" (numbers + unit, no who); a legacy
+ * group keeps its legacy line ("Adult Male: 13–17 g/dL"). Null when there is
+ * nothing to print. Mirrors mw `ReferenceRangeResolver.BandText`.
+ */
+export function bandReportText(r: RangeLike | null | undefined, unit?: string | null): string | null {
+  if (!r) return null;
+  const typed = r.reportText?.trim();
+  if (typed) return typed;
+  const text = formatRange(r);
+  const u = (unit ?? '').trim();
+  const withUnit = text ? (u ? `${text} ${u}` : text) : null;
+  if (!isLegacyGroup(r)) return withUnit;
+  const label = deriveRangeLabel(r);
+  if (!withUnit) return r.label?.trim() && label ? label : null;
+  return label ? `${label}: ${withUnit}` : withUnit;
+}
+
+/** The friendly "who" of a group from its sex / age only ("Adult Male",
+ *  "Female"), ignoring any legacy label or segment; null = everyone. */
+export function groupWho(r: RangeLike): string | null {
+  return deriveRangeLabel({ sex: r.sex, minAge: r.minAge, maxAge: r.maxAge, ageUnit: r.ageUnit });
+}
+
+/**
+ * The report's reference text for a patient: the matched group alone when it
+ * matched on merit; otherwise every group, one per line — a simple-model
+ * group prefixed with its who ("Female: 12 – 16 g/dL"), a legacy group as
+ * its legacy line. Mirrors mw `ReferenceRangeResolver.ReportRangeText`.
+ */
+export function reportRangeText(
+  ranges: readonly RangeLike[] | null | undefined,
+  match: { range: RangeLike | undefined; isSpecific: boolean },
+  unit?: string | null,
+): string | null {
+  if (match.isSpecific && match.range) return bandReportText(match.range, unit);
+  const lines: string[] = [];
+  for (const r of ranges ?? []) {
+    const line = bandReportText(r, unit);
+    if (!line) continue;
+    const who = r.reportText?.trim() || !isLegacyGroup(r) ? groupWho(r) : null;
+    lines.push(who ? `${who}: ${line}` : line);
+  }
+  return lines.length ? lines.join('\n') : null;
+}
+
+/**
+ * Flag a numeric value against ONE group — the client mirror of the flagging
  * rule inside mw `ResultFlaggingService.FlagOne`, shared by result entry and
  * validate-result so there is exactly one implementation.
  *
- * Flags when EITHER bound exists (one-sided bands used to render "< 200" but
- * never flag). Op-absent defaults: a two-sided band stays inclusive-normal
- * (min ≤ v ≤ max = 'N'); a one-sided bound is STRICT, so 140 against "< 140"
- * is 'H'. An explicit inclusive op ('lte'/'gte') moves the boundary value back
- * into normal. Returns null when there is no band or no usable bound.
+ * The simple model (owner, 2026-09-26): value < L → 'L'; value > H → 'H'; ON
+ * a limit = normal; a blank limit = no flag on that side. Only an explicit
+ * LEGACY strict op ('gt' / 'lt', un-migrated data) also flags the limit
+ * itself. Returns null when the group has no L and no H.
  */
 export function flagAgainst(
   r: RangeLike | undefined | null,
   value: number
 ): 'L' | 'H' | 'N' | null {
   if (!r || (r.min == null && r.max == null)) return null;
-  const minInclusive = r.minOp === 'gte' || (r.minOp == null && r.max != null);
-  const maxInclusive = r.maxOp === 'lte' || (r.maxOp == null && r.min != null);
-  if (r.min != null && (minInclusive ? value < r.min : value <= r.min)) return 'L';
-  if (r.max != null && (maxInclusive ? value > r.max : value >= r.max)) return 'H';
+  if (r.min != null && (r.minOp === 'gt' ? value <= r.min : value < r.min)) return 'L';
+  if (r.max != null && (r.maxOp === 'lt' ? value >= r.max : value > r.max)) return 'H';
   return 'N';
 }
 
@@ -222,6 +291,20 @@ export function describeAllRanges(ranges: readonly RangeLike[] | undefined | nul
     out.push(label ? `${label}: ${text}` : text);
   }
   return out;
+}
+
+/**
+ * Every group on ONE line — the Test Master grid, the editor's value summary
+ * and the bench's no-patient hint: "Female: 12 – 16 g/dL · Male: 13 – 17
+ * g/dL"; an all-legacy list keeps "Label: 13–17 · … unit".
+ */
+export function summarizeRanges(ranges: readonly RangeLike[] | null | undefined, unit?: string | null): string {
+  const list = ranges ?? [];
+  const u = (unit ?? '').trim();
+  if (list.some(r => r.reportText?.trim() || !isLegacyGroup(r)))
+    return (reportRangeText(list, { range: undefined, isSpecific: false }, u) ?? '').split('\n').join(' · ');
+  const lines = describeAllRanges(list);
+  return lines.length ? lines.join(' · ') + (u ? ` ${u}` : '') : '';
 }
 
 function scoreRange(r: RangeLike, sex: 'M' | 'F' | 'O' | null, ageYears: number | null): { eligible: boolean; score: number } {
