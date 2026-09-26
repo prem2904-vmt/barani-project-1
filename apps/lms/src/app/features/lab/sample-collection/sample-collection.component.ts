@@ -538,6 +538,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   // "Collect Sample" button). On close, we send them back to that origin
   // instead of leaving them stranded on the queue.
   private _returnTo: string | null = null;
+  /** Queue mode reached from another screen's band "Collect" (?from=…, no
+   *  orderId): the queue band shows Back to that screen. */
+  private readonly _queueFrom = signal<string | null>(null);
+  readonly queueFrom = this._queueFrom.asReadonly();
+  readonly queueBackFn = () => { const t = this._queueFrom(); if (t) this.router.navigateByUrl(t); };
 
   @ViewChild("drawerEl") private drawerRef?: ElementRef<HTMLElement>;
   private teleportedEl: HTMLElement | null = null;
@@ -1099,6 +1104,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       // the only screen that links here today.
       const from = this.route.snapshot.queryParamMap.get("from");
       this._returnTo = from && from.startsWith("/") ? from : "/frontdesk";
+    } else {
+      // The band "Collect" button (pf-collect-band-button) opens the
+      // unfiltered queue with ?from=… — Back on the queue band returns there.
+      const from = this.route.snapshot.queryParamMap.get("from");
+      this._queueFrom.set(from && from.startsWith("/") && !from.startsWith("//") ? from : null);
     }
 
     // /pending-collection only returns samples currently in pending status.

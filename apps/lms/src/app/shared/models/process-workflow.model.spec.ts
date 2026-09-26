@@ -24,6 +24,9 @@ import {
   collectsAtFrontdesk,
   hasDedicatedCollection,
   collectsAtBillingCounter,
+  areasWithCollection,
+  screenWorkArea,
+  BILLING_COUNTER_SCREEN,
   LAB_MENU_ID,
   collectsInLab,
   enforceCollectInLab,
@@ -892,5 +895,54 @@ describe('collectsAtBillingCounter', () => {
     expect(collectsAtBillingCounter(cfg(['frontdesk'], 'frontdesk'))).toBe(false);
     expect(collectsAtBillingCounter(cfg(['billdesk'], 'billdesk', false))).toBe(false);
     expect(collectsAtBillingCounter(null)).toBe(false);
+  });
+});
+
+describe('areasWithCollection / screenWorkArea (band Collect entry point)', () => {
+  const act = (id: string, type: string, categoryId: string, enabled = true) =>
+    ({ id, type, categoryId, enabled, order: 0 });
+  const cfg = {
+    categories: [],
+    actions: [
+      act('r', 'patient_registration', 'frontdesk'),
+      act('b', 'billing', 'billdesk'),
+      act('c1', 'sample_collection', 'frontdesk'),
+      act('c2', 'sample_collection', 'billdesk'),
+      act('c3', 'sample_collection', 'lab', false),
+      act('c4', 'sample_collection', 'custom1'),
+    ],
+  };
+
+  it('lists every area holding an ENABLED sample_collection, once each', () => {
+    expect(areasWithCollection(cfg).sort()).toEqual(['billdesk', 'custom1', 'frontdesk']);
+  });
+
+  it('no workflow configured → []', () => {
+    expect(areasWithCollection(null)).toEqual([]);
+    expect(areasWithCollection(undefined)).toEqual([]);
+    expect(areasWithCollection({ categories: [], actions: [] })).toEqual([]);
+  });
+
+  it('keeps collectsAtBillingCounter consistent with it', () => {
+    expect(collectsAtBillingCounter(cfg)).toBe(true);
+  });
+
+  it('maps screens to their work-area like the nav', () => {
+    expect(screenWorkArea('frontdesk', cfg)).toBe('frontdesk');
+    expect(screenWorkArea(BILLING_COUNTER_SCREEN, cfg)).toBe('billdesk');
+    expect(screenWorkArea('lab', cfg)).toBe('lab');
+    expect(screenWorkArea('custom1', cfg)).toBe('custom1');
+    expect(screenWorkArea('', cfg)).toBeNull();
+  });
+
+  it('billing counter with billing off → no area', () => {
+    const off = { ...cfg, actions: cfg.actions.map(a => a.type === 'billing' ? { ...a, enabled: false } : a) };
+    expect(screenWorkArea(BILLING_COUNTER_SCREEN, off)).toBeNull();
+  });
+
+  it('frontdesk follows the registration menu', () => {
+    const moved = { categories: [], actions: [act('r', 'patient_registration', 'reception')] };
+    expect(screenWorkArea('frontdesk', moved)).toBe('reception');
+    expect(screenWorkArea('frontdesk', null)).toBe('frontdesk');
   });
 });

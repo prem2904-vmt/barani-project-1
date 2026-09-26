@@ -78,6 +78,11 @@
       }
     </div>
 
+    <ng-container band-actions>
+      <!-- Band "Collect" (ND §1): only when the billing area holds collection. -->
+      <pf-collect-band-button area="billing-counter" [orderId]="collectOrderId()" />
+    </ng-container>
+
     <ng-container band-inline>
       @if (!scan.manualEntry()) {
         <button type="button" class="pf-hb-tool press pf-bc-scan" (click)="startScan()"

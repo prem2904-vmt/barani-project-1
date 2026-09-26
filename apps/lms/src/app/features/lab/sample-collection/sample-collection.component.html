@@ -13,6 +13,7 @@
            so the seam stays flush like every other band screen. -->
       @if (!deepLinkMode() && !embedded && theme.isNewDesign()) {
       <pf-hero-band
+        [back]="!!queueFrom()" [backAction]="queueFrom() ? queueBackFn : null"
         [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
         [value]="scanValue()"
         (valueChange)="onSearchInput($event)"
@@ -45,6 +46,7 @@
       @if (!deepLinkMode() && !embedded) {
       <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
       <pf-screen-header
+        [noBack]="!!queueFrom() && theme.isNewDesign()"
         eyebrow="Lab · Collection"
         title="Sample collection"
         subtitle="Scan the barcode from reception, or tap a patient to draw vials.">

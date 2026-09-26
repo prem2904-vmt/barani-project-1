@@ -22,6 +22,7 @@ import { collectsAtBillingCounter } from '../../shared/models/process-workflow.m
 import { CurrencyInrPipe } from '../../shared/pipes/currency-inr.pipe';
 import { plural } from '../../shared/utils/plural';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { CollectBandButtonComponent } from '../../shared/components/collect-band-button/collect-band-button.component';
 import { ScanIconComponent } from '../../shared/components/icons/scan-icon.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
@@ -179,7 +180,7 @@ export function waitingLabel(iso: string | null | undefined, now: number): strin
   standalone: true,
   imports: [
     DatePipe, NgTemplateOutlet, CurrencyInrPipe,
-    HeroBandComponent, ScanIconComponent, BarcodeScannerModalComponent, NdDateComponent,
+    HeroBandComponent, CollectBandButtonComponent, ScanIconComponent, BarcodeScannerModalComponent, NdDateComponent,
     InlinePaymentPanelComponent, ZoomSourceDirective, ZoomTargetDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -254,6 +255,9 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
    *  same menu as `billing` (Process builder). Otherwise the paid patient
    *  goes on to the collection queue and no "Collect sample" is offered. */
   readonly collectsHere = computed(() => collectsAtBillingCounter(this.process?.active() ?? null));
+  /** Band "Collect" context: the selected patient's order (or the one just
+   *  paid); none → the general collection queue. */
+  readonly collectOrderId = computed(() => this.selectedOrderId() ?? this.paid()?.orderId ?? null);
 
   // ── Outstanding balances / refunds owed ───────────────────────────────
   private readonly _due = signal<OutstandingRow[]>([]);

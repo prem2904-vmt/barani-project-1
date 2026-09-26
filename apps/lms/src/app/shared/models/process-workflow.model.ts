@@ -261,6 +261,36 @@ export function collectionLocations(cfg: ProcessWorkflowConfig | null | undefine
     .map(a => a.categoryId))];
 }
 
+/**
+ * The work-areas (category ids) that hold an ENABLED `sample_collection` in the
+ * active workflow — the Process builder's placements. Drives the band "Collect"
+ * entry point (pf-collect-band-button): every screen of such an area gets it.
+ * No workflow configured → [] (no band button; screens keep their own flows).
+ */
+export function areasWithCollection(cfg: ProcessWorkflowConfig | null | undefined): string[] {
+  return collectionLocations(cfg);
+}
+
+/** Screen key for the separate billing counter (/billing-counter). It has no
+ *  fixed work-area id — it belongs to whichever area holds `billing`. */
+export const BILLING_COUNTER_SCREEN = 'billing-counter';
+
+/**
+ * The work-area a SCREEN belongs to, mirroring the nav's area → route mapping
+ * (SYSTEM_AREA_SCREEN / COUNTER_SCREEN / `/w/:id`):
+ *   • 'frontdesk'        → the menu holding registration (FD landing, Order & Payments)
+ *   • 'billing-counter'  → the menu holding the enabled `billing` action
+ *   • anything else      → taken as the area id itself ('lab', a `/w/:id` menuId)
+ */
+export function screenWorkArea(screen: string, cfg: ProcessWorkflowConfig | null | undefined): string | null {
+  if (!screen) return null;
+  if (screen === 'frontdesk') return frontdeskMenu(cfg) ?? 'frontdesk';
+  if (screen === BILLING_COUNTER_SCREEN) {
+    return cfg?.actions?.find(a => a.type === 'billing' && a.enabled)?.categoryId ?? null;
+  }
+  return screen;
+}
+
 /** True when collection is placed in the frontdesk menu. */
 export function collectsAtFrontdesk(cfg: ProcessWorkflowConfig | null | undefined): boolean {
   const fd = frontdeskMenu(cfg);
@@ -284,7 +314,7 @@ export function hasDedicatedCollection(cfg: ProcessWorkflowConfig | null | undef
 export function collectsAtBillingCounter(cfg: ProcessWorkflowConfig | null | undefined): boolean {
   const bill = cfg?.actions?.find(a => a.type === 'billing' && a.enabled)?.categoryId;
   if (!bill || bill === frontdeskMenu(cfg)) return false;
-  return collectionLocations(cfg).includes(bill);
+  return areasWithCollection(cfg).includes(bill);
 }
 
 /** The categoryId of the built-in Lab work-area (see SYSTEM_AREA_SCREEN). */

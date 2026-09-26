@@ -48,6 +48,9 @@
         Edit order
       </button>
       }
+      <!-- Band "Collect" (ND §1): only when the front desk holds collection.
+           Once the order is saved it opens collection for THAT order. -->
+      <pf-collect-band-button area="frontdesk" [orderId]="collectOrderId()" [from]="collectFrom()" />
     </ng-container>
 
     <div band-search #pill class="pf-us">

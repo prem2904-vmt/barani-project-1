@@ -34,6 +34,7 @@ import { formatPatientInfo, formatPatientMeta } from '../../../shared/models/pat
 import { ApiError } from '../../../shared/models/api-response.model';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { CollectBandButtonComponent } from '../../../shared/components/collect-band-button/collect-band-button.component';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
@@ -71,7 +72,7 @@ const COUNTERS: CounterSpec[] = [
   imports: [
     TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, SegmentedComponent,
+    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
     ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -156,6 +157,8 @@ const COUNTERS: CounterSpec[] = [
             </svg>
             Refresh
           </button>
+          <!-- Band "Collect" (ND §1): only when the Lab area holds collection. -->
+          <pf-collect-band-button area="lab" />
         </ng-container>
       </pf-hero-band>
       }

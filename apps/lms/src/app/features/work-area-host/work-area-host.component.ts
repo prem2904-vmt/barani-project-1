@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { catalogFor } from '../../shared/models/process-workflow.model';
 import { portablePanel } from '../../shared/workflow/portable-panels';
+import { CollectBandButtonComponent } from '../../shared/components/collect-band-button/collect-band-button.component';
 
 interface HostItem { type: string; label: string; hint?: string; iconPath: string[]; route: string; cmp: Type<unknown> | null; }
 
@@ -19,7 +20,7 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
 @Component({
   selector: 'pf-work-area-host',
   standalone: true,
-  imports: [NgComponentOutlet],
+  imports: [NgComponentOutlet, CollectBandButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wah px-4 md:px-8 lg:px-10 pt-6 pb-12">
@@ -27,6 +28,9 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
         <header class="wah-hd">
           <span class="wah-dot" [style.background]="m.color"></span>
           <h1 class="wah-title">{{ m.name }}</h1>
+          <!-- No band on this host: the "Collect" entry point sits at the
+               header's right (ND §1), general queue. -->
+          <span class="wah-hd__actions"><pf-collect-band-button [area]="m.id" /></span>
         </header>
         @if (items().length === 0) {
           <p class="wah-empty">No actions you can access in this area.</p>
@@ -56,6 +60,7 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
   styles: [`
     .wah-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
     .wah-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .wah-hd__actions { margin-left: auto; display: flex; align-items: center; }
     .wah-title { margin: 0; font-size: 22px; font-weight: 700; color: var(--text-primary); }
     .wah-empty { font-size: 13px; color: var(--text-tertiary); padding: 24px 0; }
     .wah-block { border: 1px solid var(--glass-border); border-radius: 14px; background: var(--glass-bg); margin-bottom: 16px; overflow: hidden; }
