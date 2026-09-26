@@ -85,8 +85,8 @@
   animation: pf-fade 240ms ease both;
 }
 
-:root.dark .pf-drawer-bd,
-:root[data-theme='dark'] .pf-drawer-bd {
+:host-context(.dark) .pf-drawer-bd,
+:host-context([data-theme='dark']) .pf-drawer-bd {
   background: rgba(0, 0, 0, 0.45);
 }
 
@@ -115,9 +115,10 @@
   animation: pf-drawer-in 240ms var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
 }
 
-/* New design (bottom navbar): no top strip — the drawer floats inside the
-   viewport between the band and the docked bar. */
-:root.nav-bottom .pf-drawer {
+/* New design (bottom navbar): no top strip — the drawer uses the full height
+   from the top down to the docked bar. :host-context, not :root — Angular's
+   emulated encapsulation scopes :root selectors so they never match. */
+:host-context(.nav-bottom) .pf-drawer {
   top: 12px;
   bottom: calc(var(--nd-nav-h, 0px) + 12px);
 }
@@ -125,7 +126,7 @@
 /* Below the desktop breakpoint the floating nav pill is visible: keep the
  * drawer's bottom edge above it (classic). */
 @media (max-width: 1279px) {
-  :root:not(.nav-bottom) .pf-drawer {
+  :host-context(html:not(.nav-bottom)) .pf-drawer {
     bottom: calc(var(--tab-nav-total-height, 0px) + 8px);
   }
 }
@@ -302,8 +303,9 @@
   position: sticky;
   bottom: 0;
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Up to 3 per row; a short last row stretches to fill the width. */
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
   background: var(--nd-card-bg);
@@ -311,7 +313,8 @@
 }
 
 .pf-drawer__actions .pf-drawer__act {
-  width: 100%;
+  flex: 1 1 calc((100% - 16px) / 3);
+  min-width: 0;
   min-height: 40px;
   height: 40px;
   padding: 0 10px;
@@ -334,6 +337,7 @@
 }
 
 .pf-drawer__actions--touch .pf-drawer__act {
+  flex: none;
   width: 44px;
   min-width: 44px;
   height: 44px;
@@ -772,7 +776,7 @@
 /* ── Phones: a full-height sheet above the navbar ─────── */
 @media (max-width: 640px) {
   .pf-drawer,
-  :root.nav-bottom .pf-drawer {
+  :host-context(.nav-bottom) .pf-drawer {
     left: 0;
     right: 0;
     width: 100%;
@@ -781,7 +785,7 @@
     border-radius: 0;
   }
 
-  :root.nav-bottom .pf-drawer {
+  :host-context(.nav-bottom) .pf-drawer {
     bottom: var(--nd-nav-h, 0px);
   }
 

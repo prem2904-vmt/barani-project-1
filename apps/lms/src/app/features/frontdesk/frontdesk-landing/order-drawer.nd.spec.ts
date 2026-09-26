@@ -165,3 +165,21 @@ describe('order-drawer helpers', () => {
     expect(orderStatusState({ status: 'cancelled' })).toBe('stopped');
   });
 });
+
+describe('Order drawer — top space, Cancel order, full-width rows (owner 2026-09-26)', () => {
+  it('uses :host-context, never :root (Angular scopes :root so it never matches)', () => {
+    expect(css).not.toMatch(/:root/);
+    expect(rule(':host-context(.nav-bottom) .pf-drawer')).toMatch(/top:\s*12px/);
+  });
+
+  it('labels the destructive action "Cancel order"', () => {
+    expect(html).toMatch(/<span class="pf-drawer__act-t">Cancel order<\/span>/);
+  });
+
+  it('web actions wrap in rows that stretch to fill the width; touch icons stay 44px', () => {
+    expect(rule('.pf-drawer__actions')).toMatch(/display:\s*flex/);
+    expect(rule('.pf-drawer__actions')).toMatch(/flex-wrap:\s*wrap/);
+    expect(rule('.pf-drawer__actions .pf-drawer__act')).toMatch(/flex:\s*1 1/);
+    expect(rule('.pf-drawer__actions--touch .pf-drawer__act')).toMatch(/flex:\s*none/);
+  });
+});
