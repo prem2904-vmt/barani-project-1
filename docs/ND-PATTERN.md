@@ -940,6 +940,68 @@ with an ACTION / SUMMARY companion (owner, 2026-09-26):
   date, no monospace, no page scroll, the grouped dropdown at the pill's
   width, the strip, and the 375 switch. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
 
+## 18. Messages
+
+`/messages` (`features/messages/`) — team chat on the kit (owner, 2026-09-26).
+`MessagesRouteComponent` picks the screen live: the new design renders
+`MessagesNdComponent`, which EXTENDS the classic page (realtime SignalR,
+unread, typing, receipts, attachments, calls, deep links `?c=`, modals are
+the same code); classic keeps its page.
+
+- **Band:** back · tenant · actions = a neutral "Reconnecting…" chip (only
+  while a hub is down), the sounds toggle and **New chat** — both ghosts.
+  The page's ONE primary is the composer's **Send**.
+- **Pill = the context bar:** "Search conversations and people" (a
+  conversation matches on its name AND every participant; people come from
+  the directory and open a direct chat) + an `All · Unread · Groups · Calls`
+  `.nd-seg` radio group (one Tab stop, arrows move). Calls swaps the list
+  for the call log in the same card.
+- **CONVERSATIONS = LEFT card** (a navigation companion, §1 "two jobs"),
+  ~360px, BILLING header + collapse to a left strip (remembered per user,
+  `pf:msgs:list-collapsed:<uid>`). Rows (≥60px, whole-row target, neutral
+  selected state): avatar (+ presence dot: violet reachable, slate busy,
+  muted red calls-blocked, hollow offline), the FULL name (wraps), tabular
+  time, a one-row preview with an SVG kind icon (attachment / deleted /
+  sent check — never emoji; ellipsis only on that one row, never cut in
+  code), unread = a NEUTRAL chip with a violet dot (never a loud badge).
+- **THREAD = main card:** head = avatar + name (wraps) + status (presence /
+  "N members" / "typing…") + the record chip; quiet 36px icon buttons
+  (search in conversation, mute, voice call — audio only, members). Calm
+  bubbles: ours a subtle violet tint, theirs neutral; muted Noto tabular
+  times; sent = a muted check, SEEN = a violet double check; day
+  separators as a neutral chip on a hairline; voice notes a kit player
+  (play · track · time — never native `<audio controls>`), files / shared
+  records as neutral cards with the violet icon chip; hover (tap on touch)
+  toolbar with SVG actions.
+- **Composer, sticky at the card floor:** a quiet attach icon (menu:
+  Attach a file · Share a patient · Emoji), the kit field with the **mic
+  INSIDE it**, and **Send** as the one primary icon button (disabled when
+  there's nothing to send). Enter sends, Shift+Enter is a new line. Voice
+  notes = the chat-windows contract: mic → the recording row (time,
+  discard, stop) → stop gives a PREVIEW (play / discard) → Send or Enter
+  uploads + sends; nothing leaves before that.
+- **≤900px: one pane at a time.** The list is the screen; a row tap PUSHES
+  the thread (slide, §9 step → step), the band's back chevron / edge
+  swipe pops it (the list slides back). Deep links open instantly. In a
+  thread the pill becomes "Search in <name>".
+- **The navbar is never hidden** — `html.pf-chat-immersive` (classic's
+  WhatsApp mode) is never set by the new design; the page fits above the
+  bar and modals are sheets above it. Inputs 16px on phones, 44px touch
+  targets, safe areas via the shell.
+- **Motion:** only messages that arrive / are sent while the thread is
+  open fade + slide in (6px, ~260ms, `--nd-spring`); history and older
+  pages never animate. Nothing moves under reduced motion.
+- **Floating chat windows** (`shared/components/chat-windows/`) match:
+  neutral avatars, the same calm bubbles, Noto tabular times, Send as the
+  window's one primary, unread heads as a neutral chip + violet dot.
+- **Real-layout check:** `apps/lms-e2e/src/messages-layout.rbac.spec.ts`
+  (seeded Lab Admin, READ-ONLY: chat REST answered in the browser from
+  made-up fixtures, both SignalR hubs a local fake WebSocket that answers
+  every invocation and pushes one message) asserts the left card, one
+  primary, the mic inside the field, no page scroll, no monospace, no
+  immersive class, the collapse strip, and at 375 the push + composer
+  above the navbar. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
+
 ## API summary
 
 ```
