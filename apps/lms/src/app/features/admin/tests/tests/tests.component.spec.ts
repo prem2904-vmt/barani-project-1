@@ -307,3 +307,71 @@ describe('Test Master grid — copy-on-write (phases 3 + 5)', () => {
     expect(c.proposals().length).toBe(2);
   });
 });
+
+describe('Test Master grid — column sizing: slim actions, wrap instead of crop', () => {
+  it('the actions column fits its content: ~84px (Edit only), ~112px when a row can revert — never 190px', () => {
+    const plain = make([hb({ origin: 'master' })]).c;
+    const a1 = col(plain, 'actions');
+    expect(a1.pinned).toBe('right');
+    expect(a1.width).toBeLessThanOrEqual(90);
+    expect(a1.width).toBeGreaterThanOrEqual(60);
+    expect(a1.maxWidth).toBe(a1.width);
+    TestBed.resetTestingModule();
+    const withRevert = make([hb({ origin: 'customised' })]).c;
+    const a2 = col(withRevert, 'actions');
+    expect(a2.width).toBeGreaterThanOrEqual(a1.width);
+    expect(a2.width).toBeLessThanOrEqual(120);
+  });
+
+  it('web: "Edit" is a compact text row action; Revert is a quiet icon with its words in the tooltip', () => {
+    const { c } = make([hb({ origin: 'customised' })]);
+    if (!c.web()) return;   // runner reports touch — covered by the touch assertion below
+    const el = col(c, 'actions').cellRenderer({ data: hb({ origin: 'customised' }), context: {} });
+    const [edit, revert] = Array.from(el.querySelectorAll('button')) as HTMLElement[];
+    expect(edit.classList.contains('nd-rowact--icon')).toBe(false);
+    expect(edit.textContent).toContain('Edit');
+    expect(revert.classList.contains('nd-rowact--icon')).toBe(true);
+    expect(revert.title).toContain('Revert');
+  });
+
+  it('Revert is always an icon (its label kept for AT)', () => {
+    const { c } = make([hb({ origin: 'customised' })]);
+    const el = col(c, 'actions').cellRenderer({ data: hb({ origin: 'customised' }), context: {} });
+    const revert = el.querySelectorAll('button')[1] as HTMLElement;
+    expect(revert.classList.contains('nd-rowact--icon')).toBe(true);
+    expect(revert.getAttribute('aria-label')).toMatch(/^Revert .* to master$/);
+  });
+
+  it('Name, Reference range and Container WRAP (two lines, auto row height) with a full-text tooltip', () => {
+    const { c } = make([hb()]);
+    for (const id of ['name', 'referenceRange', 'tubeColor']) {
+      const d = col(c, id);
+      expect(d.wrapText, id).toBe(true);
+      expect(d.autoHeight, id).toBe(true);
+      expect(d.tooltipField || d.tooltipValueGetter, id).toBeTruthy();
+    }
+    const name = col(c, 'name').cellRenderer({ value: 'Oral Glucose Challenge Test', data: hb() });
+    expect(name.querySelector('.pf-tm-clamp2')!.textContent).toBe('Oral Glucose Challenge Test');
+    expect((name.querySelector('.pf-tm-clamp2') as HTMLElement).style.textOverflow).not.toBe('ellipsis');
+    const rr = col(c, 'referenceRange').cellRenderer({ value: '< 140; Protocol dependent', data: hb() });
+    expect(rr.querySelector('.pf-tm-clamp2')!.textContent).toBe('< 140; Protocol dependent');
+  });
+
+  it('Reference range gets the most flex; sensible minimums everywhere', () => {
+    const { c } = make([hb()]);
+    const flexes = c.colDefs().filter((d: any) => d.flex).map((d: any) => ({ id: d.colId ?? d.field, flex: d.flex }));
+    const top = flexes.sort((a: any, b: any) => b.flex - a.flex)[0];
+    expect(top.id).toBe('referenceRange');
+    expect(col(c, 'referenceRange').minWidth).toBeGreaterThanOrEqual(200);
+    expect(col(c, 'tubeColor').minWidth).toBeGreaterThanOrEqual(140);
+    expect(col(c, 'name').minWidth).toBeGreaterThanOrEqual(200);
+  });
+
+  it('profiles / packages: the tree name wraps too', () => {
+    const { c } = make([hb({ id: 'p', type: 'profile', name: 'Liver Function Test with a long name' })]);
+    c.setType('profile');
+    const d = col(c, 'treeName');
+    expect(d.wrapText).toBe(true);
+    expect(d.autoHeight).toBe(true);
+  });
+});

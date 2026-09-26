@@ -49,6 +49,24 @@ async function shoot(page: Page, name: string) {
   await setTheme(page, 'light');
 }
 
+/** The grid's fit: the actions column is slim, and wrap cells are NOT
+ *  ellipsised (each clamps to ≤ 2 lines, the text's own width). */
+async function gridFit(page: Page) {
+  return page.evaluate(() => {
+    const acts = Array.from(document.querySelectorAll<HTMLElement>('.pf-tm-main .ag-row .ag-cell[col-id="actions"]'));
+    const actW = acts.length ? Math.round(acts[0].getBoundingClientRect().width) : -1;
+    // Gap: space between the cell's left edge and its first button.
+    const gap = acts.length ? Math.round(acts[0].querySelector('button')!.getBoundingClientRect().x - acts[0].getBoundingClientRect().x) : -1;
+    const clamps = Array.from(document.querySelectorAll<HTMLElement>('.pf-tm-main .pf-tm-clamp2'));
+    const ellipsis = clamps.filter(e => getComputedStyle(e).textOverflow === 'ellipsis').length;
+    const lines = clamps.map(e => Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight || '18')));
+    // The Edit button sits fully inside its cell (not clipped by the card).
+    const clip = acts.length ? (() => { const b = acts[0].querySelector('button')!.getBoundingClientRect();
+      const card = document.querySelector('.pf-tm-main')!.getBoundingClientRect(); return b.right > card.right - 1; })() : true;
+    return { actW, gap, clip, clamps: clamps.length, ellipsis, maxLines: Math.max(0, ...lines) };
+  });
+}
+
 async function noPageScroll(page: Page) {
   return page.evaluate(() => {
     const main = document.querySelector('.shell-main') as HTMLElement | null;
@@ -88,6 +106,14 @@ test.describe('Test Master — main card + DEPARTMENTS side card', () => {
     const ps = await noPageScroll(page);
     expect(ps.doc).toBeLessThanOrEqual(1);
     expect(ps.main).toBeLessThanOrEqual(1);
+    let fit = await gridFit(page);
+    expect(fit.actW).toBeGreaterThan(50);
+    expect(fit.actW).toBeLessThanOrEqual(120);        // no ~190px column
+    expect(fit.gap).toBeLessThanOrEqual(40);          // no empty gap before "Edit"
+    expect(fit.clip).toBe(false);
+    expect(fit.clamps).toBeGreaterThan(10);
+    expect(fit.ellipsis).toBe(0);
+    expect(fit.maxLines).toBeLessThanOrEqual(2);
     await shoot(page, '1440-expanded');
 
     // Row tap filters the grid (read-only; "All" restores it).
@@ -108,7 +134,24 @@ test.describe('Test Master — main card + DEPARTMENTS side card', () => {
     expect(stb.width).toBeLessThan(64);
     expect(stb.x + stb.width).toBeLessThanOrEqual((await main.boundingBox())!.x + 1);   // strip on the LEFT edge
     expect((await main.boundingBox())!.width).toBeGreaterThan(mb.width + 250);
+    fit = await gridFit(page);
+    expect(fit.ellipsis).toBe(0);
+    expect(fit.maxLines).toBeLessThanOrEqual(2);
     await shoot(page, '1440-collapsed');
+    // 1280: both states.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.waitForTimeout(500);
+    await shoot(page, '1280-collapsed');
+    await strip.locator('button').click();
+    await expect(side).toBeVisible();
+    await page.waitForTimeout(500);
+    fit = await gridFit(page);
+    expect(fit.ellipsis).toBe(0);
+    expect(fit.maxLines).toBeLessThanOrEqual(2);
+    await shoot(page, '1280-expanded');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await side.locator('.pf-tm-side__collapse').click();
+    await expect(strip).toBeVisible();
     await strip.locator('button').click();
     await expect(side).toBeVisible();
 

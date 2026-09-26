@@ -99,6 +99,31 @@ function readCollapsed(key: string): boolean {
   try { return localStorage.getItem(key) === '1'; } catch { return false; }
 }
 
+/** Long text WRAPS to at most two lines with the row growing to fit
+ *  (ND §5 "no truncation when there is room"); `.pf-tm-clamp2` caps it at
+ *  two lines and the column's tooltip keeps the full text. */
+const WRAP2: Pick<ColDef, 'wrapText' | 'autoHeight' | 'cellClass'> = {
+  wrapText: true, autoHeight: true, cellClass: 'pf-tm-wrap',
+};
+
+/** Plain text cell that wraps to two lines (reference range). */
+function clampRenderer(p: ICellRendererParams): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'pf-tm-wrapcell';
+  const t = document.createElement('span');
+  t.className = 'pf-tm-clamp2';
+  t.textContent = p.valueFormatted ?? (p.value == null ? '' : String(p.value));
+  wrap.appendChild(t);
+  return wrap;
+}
+
+/** The actions column fits its content: web "Edit" (+ a 28px Revert icon
+ *  where one applies); touch 44px icons. */
+export function actionsWidth(web: boolean, revert: boolean): { width: number; minWidth: number; maxWidth: number } {
+  const w = web ? (revert ? 112 : 84) : (revert ? 112 : 64);
+  return { width: w, minWidth: w, maxWidth: w };
+}
+
 /** Views the band pill's switch can select. */
 type TmView = TestType | 'og' | 'micro' | 'pricing';
 
@@ -478,6 +503,11 @@ export class TestsComponent implements OnInit {
     return cols.filter(c => !drop.has(String(c.field ?? c.colId ?? '')));
   }
 
+  /** Any row of this view offers "Revert to master"? Sizes the actions
+   *  column (from the loaded list, not the filtered rows, so typing a
+   *  search never re-lays the columns out). */
+  readonly anyRevert = computed(() => this._tests().some(t => t.type === this._type() && canRevertToMaster(t as TestRow)));
+
   readonly colDefs = computed<ColDef<TestRow>[]>(() => {
     const view = this._type();
 
@@ -485,7 +515,7 @@ export class TestsComponent implements OnInit {
       return [
         {
           // Codes are server-assigned and never change — not editable here.
-          headerName: 'Code', field: 'testCode', editable: false, minWidth: 120, maxWidth: 160, sort: 'asc', pinned: 'left',
+          headerName: 'Code', field: 'testCode', editable: false, width: 116, minWidth: 100, maxWidth: 130, sort: 'asc', pinned: 'left',
           comparator: (a: string | null, b: string | null) => compareTestCodes(a, b),
           cellRenderer: this.codeCellRenderer,
           tooltipValueGetter: p => {
@@ -493,14 +523,16 @@ export class TestsComponent implements OnInit {
             return tColor ? `Container: ${tColor.label}` : undefined;
           },
         },
-        // Wide enough that names don't truncate (ND §5); uniform row height.
-        { headerName: 'Name', field: 'name', editable: true, width: 300, minWidth: 200, pinned: 'left',
-          cellRenderer: this.plainNameRenderer, tooltipField: 'name' },
+        // Names WRAP (up to 2 lines, auto row height) instead of an ellipsis
+        // (ND §5); the full name stays in the tooltip.
+        { headerName: 'Name', field: 'name', editable: true, width: 250, minWidth: 200, pinned: 'left',
+          ...WRAP2, cellRenderer: this.plainNameRenderer, tooltipField: 'name' },
         this.originColDef(),
-        { headerName: 'Short', field: 'shortName', editable: true, minWidth: 120 },
-        { headerName: 'Section', field: 'section', editable: true, minWidth: 130 },
+        { headerName: 'Short', field: 'shortName', editable: true, flex: 1, minWidth: 110 },
+        { headerName: 'Section', field: 'section', editable: true, flex: 1, minWidth: 120 },
         {
-          headerName: 'Container', field: 'tubeColor', editable: true, minWidth: 160,
+          headerName: 'Container', field: 'tubeColor', editable: true, flex: 1.3, minWidth: 150,
+          ...WRAP2, tooltipValueGetter: p => tubeColor(p.data?.tubeColor)?.label,
           cellRenderer: this.containerRenderer,
           cellEditor: TubeColorEditorComponent,
           cellEditorParams: {
@@ -523,6 +555,7 @@ export class TestsComponent implements OnInit {
       {
         headerName: 'Name', colId: 'treeName', flex: 3, minWidth: 260, pinned: 'left',
         sortable: false, filter: false, editable: false, sort: null,
+        ...WRAP2, tooltipValueGetter: p => p.data?.name,
         cellRenderer: this.nameCellRenderer,
         valueGetter: p => p.data?.name,
       },
@@ -534,14 +567,15 @@ export class TestsComponent implements OnInit {
       },
       { headerName: 'Short', field: 'shortName', editable: true, minWidth: 110, sortable: false, filter: false },
       {
-        headerName: 'Container', field: 'tubeColor', editable: true, minWidth: 160, sortable: false, filter: false,
+        headerName: 'Container', field: 'tubeColor', editable: true, flex: 1.3, minWidth: 150, sortable: false, filter: false,
+        ...WRAP2, tooltipValueGetter: p => tubeColor(p.data?.tubeColor)?.label,
         cellRenderer: this.containerRenderer,
         cellEditor: TubeColorEditorComponent,
         cellEditorParams: {
           choices: TUBE_COLORS.map(c => ({ key: c.key, label: c.label, hex: c.hex })),
         },
       },
-      { ...this.derivedRangeColDef(), minWidth: 150, sortable: false, filter: false },
+      { ...this.derivedRangeColDef(), minWidth: 180, sortable: false, filter: false },
       { ...this.derivedUnitColDef(), sortable: false, filter: false },
       { ...this.priceColDef(true), sortable: false, filter: false },
       this.statusColDef(),
@@ -568,8 +602,8 @@ export class TestsComponent implements OnInit {
    *  from the first value's bands. The flat column is never shown. */
   private derivedRangeColDef(): ColDef<TestRow> {
     return {
-      headerName: 'Reference range', colId: 'referenceRange', minWidth: 200, flex: 2,
-      editable: false,
+      headerName: 'Reference range', colId: 'referenceRange', minWidth: 220, flex: 3,
+      editable: false, ...WRAP2, cellRenderer: clampRenderer,
       valueGetter: p => this.derivedRange(p.data),
       tooltipValueGetter: p => this.derivedRange(p.data) || 'Comes from the test\'s values — edit ranges in the test editor',
     };
@@ -578,7 +612,7 @@ export class TestsComponent implements OnInit {
   /** Unit = DERIVED from the values (the printed unit), read-only. */
   private derivedUnitColDef(): ColDef<TestRow> {
     return {
-      headerName: 'Unit', colId: 'unit', minWidth: 100, editable: false,
+      headerName: 'Unit', colId: 'unit', flex: 0.8, minWidth: 100, editable: false,
       valueGetter: p => this.derivedUnit(p.data),
       tooltipValueGetter: () => 'Comes from the test\'s values — edit it in the test editor',
     };
@@ -663,7 +697,7 @@ export class TestsComponent implements OnInit {
    *  Shown as just the price ("₹1"): plain text, right-aligned, tabular. */
   private priceColDef(editable: boolean): ColDef<TestRow> {
     return {
-      headerName: 'Price (₹)', field: 'price', editable, minWidth: 150, maxWidth: 190,
+      headerName: 'Price (₹)', field: 'price', editable, minWidth: 110, maxWidth: 140,
       cellEditor: 'agNumberCellEditor',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) ? Math.max(0, n) : p.oldValue; },
       valueFormatter: p => (p.value == null ? '' : '₹' + Number(p.value).toLocaleString('en-IN')),
@@ -675,9 +709,9 @@ export class TestsComponent implements OnInit {
   /** Individual-view name cell: the name plus a quiet "Not offered here" tag. */
   private plainNameRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;gap:8px;height:100%;min-width:0;';
+    wrap.className = 'pf-tm-wrapcell';
     const name = document.createElement('span');
-    name.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    name.className = 'pf-tm-clamp2';
     name.textContent = params.value ?? params.data?.name ?? '';
     wrap.appendChild(name);
     if (params.data && !isOffered(params.data)) wrap.appendChild(notOfferedElement());
@@ -695,7 +729,7 @@ export class TestsComponent implements OnInit {
     const tColor = tubeColor(params.data?.tubeColor);
 
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;gap:8px;height:100%;min-width:0;';
+    wrap.className = 'pf-tm-wrapcell';
 
     const dot = document.createElement('span');
     // A tube-cap colour is DATA (ND §2 functional exception), not decoration.
@@ -706,7 +740,7 @@ export class TestsComponent implements OnInit {
     wrap.appendChild(dot);
 
     const text = document.createElement('span');
-    text.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    text.className = 'pf-tm-clamp2';
     text.textContent = tColor ? tColor.label : '—';
     wrap.appendChild(text);
     return wrap;
@@ -715,14 +749,16 @@ export class TestsComponent implements OnInit {
   private actionsRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
     const data = params.data;
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:6px;height:100%;';
+    wrap.className = 'pf-tm-acts';
     const web = this.web();
-    // Kit row action: compact TEXT button on web, a 44px neutral ICON on touch
-    // (label kept for AT via aria-label + the visually-hidden .nd-rowact__t).
-    const act = (label: string, aria: string, path: string, run: () => void) => {
+    // Kit row action: compact TEXT "Edit" on web, a 44px neutral ICON on
+    // touch (label kept for AT via aria-label + the visually-hidden
+    // .nd-rowact__t). Revert — only where it applies — is always a quiet
+    // icon (a compact 28px one on web) with its words in the tooltip.
+    const act = (label: string, aria: string, path: string, run: () => void, icon = false) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'nd-rowact' + (web ? '' : ' nd-rowact--icon');
+      b.className = 'nd-rowact' + (!web || icon ? ' nd-rowact--icon' : '') + (web && icon ? ' pf-tm-rowact-sm' : '');
       b.title = aria;
       b.setAttribute('aria-label', aria);
       b.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
@@ -740,17 +776,18 @@ export class TestsComponent implements OnInit {
     if (data && canRevertToMaster(data)) {
       wrap.appendChild(act('Revert', 'Revert ' + (data.name || 'test') + ' to master',
         '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>',
-        () => (params.context as { revert?: (row: TestRow) => void })?.revert?.(data)));
+        () => (params.context as { revert?: (row: TestRow) => void })?.revert?.(data), true));
     }
     return wrap;
   };
 
   private actionsColDef(): ColDef<TestRow> {
     return {
-      headerName: '', colId: 'actions', cellRenderer: this.actionsRenderer,
-      editable: false, sortable: false, filter: false, resizable: false,
-      // Web: "Edit" / "Revert" text buttons; touch: two 44px icons.
-      minWidth: this.web() ? 170 : 110, maxWidth: this.web() ? 190 : 120, pinned: 'right',
+      headerName: '', colId: 'actions', cellRenderer: this.actionsRenderer, cellClass: 'pf-tm-acts-cell',
+      editable: false, sortable: false, filter: false, resizable: false, suppressSizeToFit: true,
+      // Fits its content — no empty gap before "Edit".
+      ...actionsWidth(this.web(), this.anyRevert()),
+      pinned: 'right',
     };
   }
 
@@ -781,7 +818,7 @@ export class TestsComponent implements OnInit {
     }
 
     const label = document.createElement('span');
-    label.className = 'pf-tm-tree-name' + (data?._hasChildren ? ' pf-tm-tree-name--bundle' : '');
+    label.className = 'pf-tm-tree-name pf-tm-clamp2' + (data?._hasChildren ? ' pf-tm-tree-name--bundle' : '');
     label.textContent = data?.name ?? '';
     wrap.appendChild(label);
     if (data && !isOffered(data)) wrap.appendChild(notOfferedElement());

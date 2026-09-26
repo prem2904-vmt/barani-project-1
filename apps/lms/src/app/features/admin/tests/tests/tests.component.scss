@@ -232,3 +232,30 @@
   :host-context(.design-new) .pf-band-body--fill.pf-tm-body:has(pf-option-groups-panel) { overflow-y: auto !important; }
 }
 
+
+/* ── Grid cells: wrap, don't crop (ND §5) ─────────────────────────────
+   Name / Reference range / Container wrap to at most TWO lines and the row
+   grows to fit (wrapText + autoHeight); the tooltip keeps the full text.
+   Renderer DOM is built outside Angular, hence ::ng-deep. */
+:host ::ng-deep .ag-cell.pf-tm-wrap { line-height: 1.4; }
+/* Rows grow with wrapped cells: every cell stays vertically centred. */
+:host ::ng-deep .pf-tm-main .ag-row .ag-cell { display: flex; align-items: center; }
+:host ::ng-deep .pf-tm-main .ag-row .ag-cell.ag-right-aligned-cell { justify-content: flex-end; }
+:host ::ng-deep .pf-tm-main .ag-row .ag-cell > .ag-cell-wrapper,
+:host ::ng-deep .pf-tm-main .ag-row .ag-cell > .pf-tm-wrapcell,
+:host ::ng-deep .pf-tm-main .ag-row .ag-cell > .pf-tm-tree-cell { flex: 1 1 auto; min-width: 0; }
+:host ::ng-deep .pf-tm-wrapcell {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  min-height: 42px; padding: 6px 0; box-sizing: border-box;
+}
+:host ::ng-deep .pf-tm-clamp2 {
+  min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden; white-space: normal !important; text-overflow: clip; overflow-wrap: anywhere;
+}
+:host ::ng-deep .pf-tm-tree-cell { min-height: 42px; padding: 6px 0; box-sizing: border-box; }
+
+/* Actions column: fits its content — "Edit" (+ a quiet Revert icon). */
+:host ::ng-deep .ag-cell.pf-tm-acts-cell { padding-left: 6px; padding-right: 6px; }
+:host ::ng-deep .pf-tm-acts { display: flex; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+:host ::ng-deep .nd-rowact.nd-rowact--icon.pf-tm-rowact-sm { width: 28px; min-width: 28px; height: 28px; min-height: 28px; }
+:host ::ng-deep .pf-tm-rowact-sm > svg { width: 14px; height: 14px; }
