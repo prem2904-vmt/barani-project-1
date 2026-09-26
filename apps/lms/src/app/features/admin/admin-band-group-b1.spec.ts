@@ -62,22 +62,47 @@ describe('Admin band — Billing config (/admin/billing)', () => {
   const make = () => renderBandPage(BillingConfigComponent, {
     getFor: (url) => url === '/api/config/billing' ? { tenantId: 't1', gstEnabled: false, invoicePrefix: 'INV' }
       : url === '/api/config/invoice-template' ? {}
+      : url === '/api/tenants/branches' ? [{ id: 'b1', name: 'Main', code: 'MN' }]
       : [],
   });
 
-  it('GST / Discounts / Invoice are the tabs-only pill; the in-page switch is classic-only', () => {
+  it('flattened: no pill tabs, the pill names the page; header classic-only', () => {
     const p = make();
     expect(p.bandInput()).toBeNull();
-    expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label'))).toEqual(['GST Setup', 'Discounts', 'Invoice']);
+    expect(pillTabs(p.el).length).toBe(0);
+    expect(p.el.querySelector('pf-hero-band .pf-hb__tools h1.nd-band-page')?.textContent).toContain('Billing settings');
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.body()?.querySelector(':scope > .pf-classic-only pf-segmented')).not.toBeNull();
+    expect(p.el.querySelector('pf-hero-band pf-segmented')).toBeNull();
   });
 
-  it('clicking a pill tab switches the section', () => {
+  it('all four sections render at once, in order, with the jump list', () => {
     const p = make();
-    tabByLabel(p.el, 'Discounts').click();
+    const ids = Array.from(p.body()!.querySelectorAll('section.nd-setsec')).map((s) => s.id);
+    expect(ids).toEqual(['sec-gst', 'sec-discounts', 'sec-bill', 'sec-look']);
+    expect(p.body()!.querySelectorAll('pf-settings-jump .nd-setjump__item').length).toBe(4);
+  });
+
+  it('every search anchor exists on the page', () => {
+    const p = make();
+    for (const id of ['gst', 'gstin', 'discounts', 'invoice-number', 'proforma', 'upi', 'bank', 'bill-template', 'letterhead']) {
+      expect(p.el.querySelector('#' + id), id).not.toBeNull();
+    }
+  });
+
+  it('GST scope is a radiogroup of radios; picking one patches the config', () => {
+    const p = make();
+    const group = p.el.querySelector<HTMLElement>('[role="radiogroup"][aria-labelledby="bc-gst-scope"]')!;
+    expect(group).not.toBeNull();
+    const radios = Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+    expect(radios.map((r) => r.getAttribute('aria-label'))).toEqual(['Each branch', 'Each region', 'Whole lab']);
+    radios[2].click();
     p.f.detectChanges();
-    expect(p.cmp.tab()).toBe('discounts');
+    expect(p.cmp.config().gstScope).toBe('tenant');
+  });
+
+  it('bill number shows a "Looks like" preview', () => {
+    const p = make();
+    expect(p.el.querySelector('#invoice-number .nd-set__preview')?.textContent).toContain(`INV/${new Date().getFullYear()}/`);
   });
 
   it('Save sits in the band actions and posts the billing config', () => {
@@ -98,18 +123,21 @@ describe('Admin band — Branding (/setup)', () => {
     return { ...p, tenantState };
   };
 
-  it('"What to show" is the tabs-only pill; header and in-page switch are classic-only', () => {
+  it('no pill tabs: the pill names the page; "What the top bar shows" is an in-page radiogroup', () => {
     const p = make();
     expect(p.bandInput()).toBeNull();
-    expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label'))).toEqual(['Both', 'Logo only', 'Name only']);
+    expect(p.tools()!.querySelector('pf-segmented')).toBeNull();
+    expect(p.tools()!.querySelector('h1.nd-band-page')?.textContent).toContain('Branding');
+    const g = p.body()!.querySelector('[role="radiogroup"][aria-labelledby="sw-mode-l"]')!;
+    expect(Array.from(g.querySelectorAll('[role="radio"]')).map((b) => b.getAttribute('aria-label'))).toEqual(['Both', 'Logo only', 'Name only']);
     expect(p.headerIsClassicOnly()).toBe(true);
   });
 
-  it('switching the pill changes the mode; Save (band) enables when dirty and patches the tenant', async () => {
+  it('switching the mode changes it; Save (band) enables when dirty and patches the tenant', async () => {
     const p = make();
     const save = () => p.actions().find((b) => b.textContent?.includes('Save'))! as HTMLButtonElement;
     expect(save().disabled).toBe(true);
-    tabByLabel(p.el, 'Name only').click();
+    p.body()!.querySelector<HTMLButtonElement>('[role="radio"][aria-label="Name only"]')!.click();
     p.f.detectChanges();
     expect(p.cmp.branding().brandingMode).toBe('name');
     expect(save().disabled).toBe(false);

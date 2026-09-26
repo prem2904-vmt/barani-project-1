@@ -4,41 +4,38 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { SettingAnchorDirective } from '../../../shared/components/settings-page/setting-anchor.directive';
 import { ThemeService } from '../../../core/services/theme.service';
-
-/** Band pill tabs — one per section card. */
-export type CultureSettingsTab = 'lock' | 'tat';
 
 interface StageTat { stageKey: string; tatHours: number; }
 interface MicroSettings { lockTimeoutMinutes: number; allowSupervisorTakeover: boolean; stageTats: StageTat[]; }
 
 const STAGE_LABELS: Record<string, string> = {
-  gram: 'Gram / Direct smear',
+  gram: 'Gram stain',
   growth: 'Growth check',
-  identification: 'Organism identification',
-  ast: 'Antibiotic sensitivity',
+  identification: 'Organism ID',
+  ast: 'Antibiotic test',
 };
 
 /**
  * Microbiology / Culture settings — the culture bench's stage soft-lock timeout,
  * the supervisor-takeover switch, and per-stage turnaround targets that drive the
- * overdue alerts. Kit cards (nd-card) with the icon-chip header; slate switch; kit fields.
+ * overdue alerts. ONE scrolling page (ND-PATTERN §19): kit sections + .nd-set rows,
+ * slate switch, kit fields; `stage-lock` / `turnaround` are search anchors.
  */
 @Component({
   selector: 'pf-culture-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SettingAnchorDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
+    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band (owner): no search — the two cards become tabs in a
-             tabs-only pill; Save rides the band actions. -->
-        <pf-hero-band [back]="true" backTo="/lab/settings" [tabsOnly]="true">
+        <!-- ND-PATTERN §19: one scrolling page, no pill tabs; the pill names
+             the page; Save rides the band actions. -->
+        <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
-                          (valueChange)="tab.set($event)"></pf-segmented>
+            <h1 class="nd-band-page">Microbiology</h1>
           </ng-container>
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
@@ -55,7 +52,7 @@ const STAGE_LABELS: Record<string, string> = {
       }
       <pf-screen-header class="pf-classic-only"
         eyebrow="Lab · Microbiology" title="Culture settings"
-        subtitle="Stage lock + turnaround for the culture bench"
+        subtitle="Step lock and time targets for the culture bench"
         parentRoute="/lab/settings">
         <div actions>
           <button type="button" class="pf-cs__save press" [disabled]="saving()" (click)="save()">
@@ -65,49 +62,65 @@ const STAGE_LABELS: Record<string, string> = {
       </pf-screen-header>
 
       <div class="pf-band-body">
-      <div class="pf-band-narrow">
-      @if (showSec('lock')) {
-      <section class="nd-card pf-cs__card">
+      <div class="nd-setpage">
+      <div class="nd-setcol">
+      <section class="nd-card nd-setsec" id="sec-lock" aria-labelledby="pf-cs-h-lock">
         <div class="nd-card__head">
           <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
-          <h3 class="nd-card__label pf-cs__title">Stage lock</h3>
+          <h2 class="nd-card__label pf-cs__title" id="pf-cs-h-lock">Step lock</h2>
         </div>
-        <div class="pf-cs__body">
-          <p class="pf-cs__hint">When a tech picks up a stage it's locked to them. If it sits idle this long,
-            it's auto-released back to the pool so an absent tech never strands a case. Set 0 to never auto-release.</p>
-          <div class="pf-cs__row">
-            <label class="pf-cs__lbl" for="pf-cs-lock">Auto-release after</label>
-            <input id="pf-cs-lock" type="number" min="0" max="1440" inputmode="numeric" class="nd-input nd-num pf-cs__num" [(ngModel)]="lockTimeoutMinutes" />
-            <span class="pf-cs__lbl">minutes idle</span>
+        <div class="nd-set" pfSettingAnchor="stage-lock">
+          <div class="nd-set__text">
+            <label class="nd-set__label" for="pf-cs-lock">Free a held step after</label>
+            <p class="nd-set__help">Idle minutes before the step goes back. 0 = never.</p>
           </div>
-          <button type="button" class="nd-toggle pf-cs__check" role="switch" [attr.aria-checked]="allowSupervisorTakeover"
-                  (click)="allowSupervisorTakeover = !allowSupervisorTakeover">
-            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-            <span>Allow a supervisor to force-release a stage another tech holds</span>
-          </button>
+          <div class="nd-set__ctl">
+            <input id="pf-cs-lock" type="number" min="0" max="1440" inputmode="numeric" class="nd-input nd-num pf-cs__num"
+                   aria-describedby="pf-cs-lock-u" [(ngModel)]="lockTimeoutMinutes" />
+            <span class="pf-cs__unit" id="pf-cs-lock-u">minutes</span>
+          </div>
+        </div>
+        <div class="nd-set">
+          <div class="nd-set__text">
+            <p class="nd-set__label" id="pf-cs-takeover-l">Supervisor can take over</p>
+            <p class="nd-set__help">A supervisor can free a step someone else holds.</p>
+          </div>
+          <div class="nd-set__ctl">
+            <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="allowSupervisorTakeover"
+                    aria-labelledby="pf-cs-takeover-l"
+                    (click)="allowSupervisorTakeover = !allowSupervisorTakeover">
+              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            </button>
+          </div>
         </div>
       </section>
-      }
 
-      @if (showSec('tat')) {
-      <section class="nd-card pf-cs__card">
+      <section class="nd-card nd-setsec" id="sec-tat" aria-labelledby="pf-cs-h-tat">
         <div class="nd-card__head">
           <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-          <h3 class="nd-card__label pf-cs__title">Turnaround targets</h3>
+          <h2 class="nd-card__label pf-cs__title" id="pf-cs-h-tat">Time targets</h2>
         </div>
-        <div class="pf-cs__body">
-          <p class="pf-cs__hint">Each stage raises an "overdue" alert once it runs past its target.</p>
-          @for (t of stageTats(); track t.stageKey) {
-            <div class="pf-cs__row">
-              <label class="pf-cs__lbl pf-cs__lbl--wide" [attr.for]="'pf-cs-tat-' + t.stageKey">{{ label(t.stageKey) }}</label>
-              <input [id]="'pf-cs-tat-' + t.stageKey" type="number" min="1" max="336" inputmode="numeric" class="nd-input nd-num pf-cs__num"
-                     [ngModel]="t.tatHours" (ngModelChange)="setTat(t.stageKey, $event)" />
-              <span class="pf-cs__lbl">hours</span>
+        <div class="nd-set" pfSettingAnchor="turnaround">
+          <div class="nd-set__text">
+            <p class="nd-set__label">Hours before a step is late</p>
+            <p class="nd-set__help">A late step sends an overdue alert.</p>
+          </div>
+        </div>
+        @for (t of stageTats(); track t.stageKey) {
+          <div class="nd-set nd-set--sub">
+            <div class="nd-set__text">
+              <label class="nd-set__label" [attr.for]="'pf-cs-tat-' + t.stageKey">{{ label(t.stageKey) }}</label>
             </div>
-          }
-        </div>
+            <div class="nd-set__ctl">
+              <input [id]="'pf-cs-tat-' + t.stageKey" type="number" min="1" max="336" inputmode="numeric" class="nd-input nd-num pf-cs__num"
+                     [attr.aria-describedby]="'pf-cs-tat-u-' + t.stageKey"
+                     [ngModel]="t.tatHours" (ngModelChange)="setTat(t.stageKey, $event)" />
+              <span class="pf-cs__unit" [id]="'pf-cs-tat-u-' + t.stageKey">hours</span>
+            </div>
+          </div>
+        }
       </section>
-      }
+      </div>
       </div>
       </div>
     </section>
@@ -116,31 +129,15 @@ const STAGE_LABELS: Record<string, string> = {
     .pf-cs__save { padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; color: #fff;
       background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-cs__save:disabled { opacity: .5; cursor: default; }
-    .pf-cs__card { margin-bottom: 16px; }
     .pf-cs__title { margin: 0; }
-    .pf-cs__body { padding: 16px 18px 18px; }
-    .pf-cs__hint { margin: 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; text-wrap: pretty; }
-    .pf-cs__row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-    .pf-cs__lbl { font-size: 13px; color: var(--text-secondary); }
-    .pf-cs__lbl--wide { min-width: 190px; }
     .pf-cs__num { width: 96px; text-align: right; }
-    .pf-cs__check { margin-top: 16px; font-size: 13px; white-space: normal; text-align: left; min-height: 32px; }
+    .pf-cs__unit { font-size: 13px; color: var(--text-secondary); }
   `],
 })
 export class CultureSettingsComponent {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
-
-  /** Band pill tabs (new design). Classic shows both cards, as before. */
-  readonly tabOptions: SegmentedOption<CultureSettingsTab>[] = [
-    { value: 'lock', label: 'Stage lock' },
-    { value: 'tat', label: 'Turnaround' },
-  ];
-  readonly tab = signal<CultureSettingsTab>('lock');
-  showSec(key: CultureSettingsTab): boolean {
-    return !this.theme.isNewDesign() || this.tab() === key;
-  }
 
   lockTimeoutMinutes = 60;
   allowSupervisorTakeover = true;

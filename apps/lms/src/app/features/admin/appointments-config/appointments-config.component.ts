@@ -10,80 +10,40 @@ import { NumberInputComponent } from '../../../shared/primitives/number-input.co
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
+import { SettingsJumpComponent, SettingsSection } from '../../../shared/components/settings-page/settings-jump.component';
+import { SettingAnchorDirective } from '../../../shared/components/settings-page/setting-anchor.directive';
 
-/** Band pill tabs — one per section card. */
-export type AppointmentsTab = 'mode' | 'slots' | 'priority';
-
-interface ModeOption { value: QueueMode; label: string; desc: string }
-
-const MODES: ModeOption[] = [
-  { value: 'token_queue', label: 'Token queue', desc: 'Patients check in, get a token, and are called by priority. Full real-time queue board.' },
-  { value: 'walk_up', label: 'Walk-up', desc: 'No formal queue — patients served roughly first-come. The board is a simple "who\'s here" list.' },
-  { value: 'home_collection', label: 'Home collection', desc: 'Appointments are home-collection visits, ordered by scheduled time rather than a counter queue.' }
+/** Queue type: 3 short choices (a segmented radiogroup) + ONE help line each. */
+const MODES: Array<SegmentedOption<QueueMode> & { help: string }> = [
+  { value: 'token_queue', label: 'Token', help: 'Patients get a token and are called in order.' },
+  { value: 'walk_up', label: 'Walk-in', help: 'No tokens. Serve people as they come.' },
+  { value: 'home_collection', label: 'Home visits', help: 'Visits are ordered by their booked time.' },
 ];
 
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, SettingsJumpComponent, SettingAnchorDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
-    /* Page is fluid; guard against any accidental horizontal overflow only. */
     :host { display: block; width: 100%; }
-    /* ── ND audit: kit cards + neutral mode tiles ── */
-    .pf-ap-card { margin-bottom: 16px; }
-    .pf-ap-card .pf-section-title { margin: 0; }
-    .pf-ap-body { padding: 16px 18px 18px; }
-    .pf-ap-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); }
-    .pf-ap-hint--top { margin: 0 0 12px; }
-    .pf-mode-btn {
-      display: flex; flex-direction: column; gap: 4px; height: 100%; padding: 12px 14px;
-      border-radius: var(--nd-radius); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
-      cursor: pointer; transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
+    .pf-ap-grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .pf-ap-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 28rem; }
+    .pf-ap-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    @media (max-width: 640px) {
+      .pf-ap-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
-    .pf-mode-btn:hover { border-color: var(--nd-sel-border); }
-    .pf-mode-btn[aria-checked='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
-    .pf-mode-btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    .pf-mode-btn__t { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-    .pf-mode-btn__d { font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
-
-    /* Touch: the "Open 24×7" slate switch row is a >=44px tap zone. */
-    @media (pointer: coarse) {
-      :host .pf-check-row {
-        min-height: 44px;
-      }
-    }
-
-    /* Touch: each mode tile is a full-row choice; ensure a tall enough tap
-       target on coarse pointers without altering its desktop appearance. */
-    @media (pointer: coarse) {
-      :host .pf-mode-btn { min-height: 44px; }
-    }
-
-    /* Hover affordances only where a real pointer can hover, so taps don't
-       leave sticky hover states on touch devices. */
-    @media (hover: hover) {
-      :host .pf-mode-btn:hover { opacity: 0.95; }
-    }
-
-    /* Phone (<=640): the 2-col priority grid can get tight on very narrow
-       devices — collapse to a single column below 380px only. Desktop and
-       iPad are unaffected (they already use sm:grid-cols-3). */
     @media (max-width: 379px) {
-      :host .pf-priority-grid {
-        grid-template-columns: minmax(0, 1fr) !important;
-      }
+      .pf-ap-grid, .pf-ap-grid--2 { grid-template-columns: minmax(0, 1fr); }
     }
   `],
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band (owner): no search — the three sections become tabs in a
-             tabs-only pill; Save rides the band actions. -->
+        <!-- ONE scrolling page (ND-PATTERN §19): no pill tabs; Save rides the band. -->
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
-                          (valueChange)="tab.set($event)"></pf-segmented>
+            <h1 class="nd-band-page">Appointments &amp; queue</h1>
           </ng-container>
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || !cfg()"
@@ -101,7 +61,7 @@ const MODES: ModeOption[] = [
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Appointments & queue"
-        subtitle="Choose how this branch runs its front desk, and tune the priority engine.">
+        subtitle="Queue type, booking slots and who goes next.">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving() || !cfg()" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
@@ -111,92 +71,102 @@ const MODES: ModeOption[] = [
       @if (!cfg()) {
         <p class="pf-band-empty">Loading…</p>
       } @else {
-        @if (showSec('mode')) {
-        <!-- Queue mode -->
-        <section class="nd-card pf-ap-card">
-          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="nd-card__label pf-section-title">Queue mode</h3></div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pf-ap-body" role="radiogroup" aria-label="Queue mode">
-            @for (m of modes; track m.value) {
-              <!-- Neutral selected tile (ND-PATTERN §3), never a violet tile. -->
-              <button type="button" class="pf-mode-btn nd-tile-sel text-left" role="radio"
-                      [attr.aria-checked]="cfg()!.queueMode === m.value" (click)="setMode(m.value)">
-                <span class="pf-mode-btn__t">{{ m.label }}</span>
-                <span class="pf-mode-btn__d">{{ m.desc }}</span>
-              </button>
-            }
+      <div class="nd-setpage nd-setpage--jump">
+        <pf-settings-jump [sections]="sections"></pf-settings-jump>
+        <div class="nd-setcol">
+
+        <!-- Queue -->
+        <section class="nd-card nd-setsec" id="sec-queue" aria-labelledby="sec-queue-h">
+          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h2 class="nd-card__label" id="sec-queue-h">Queue</h2></div>
+          <div class="nd-set" pfSettingAnchor="queue-mode">
+            <div class="nd-set__text">
+              <span class="nd-set__label" id="queue-mode-l">Queue type</span>
+              <p class="nd-set__help">{{ modeHelp() }}</p>
+            </div>
+            <div class="nd-set__ctl">
+              <pf-segmented size="sm" [options]="modes" [value]="cfg()!.queueMode" ariaLabelledby="queue-mode-l"
+                            (valueChange)="setMode($event)"></pf-segmented>
+            </div>
           </div>
         </section>
 
-        }
-
-        @if (showSec('slots')) {
-        <!-- Slot config -->
-        <section class="nd-card pf-ap-card">
-          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><h3 class="nd-card__label pf-section-title">Booking slots</h3></div>
-          <div class="pf-ap-body">
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label class="flex flex-col gap-1">
-              <span class="nd-field__lbl">Time between appointments (min)</span>
-              <pf-number-input [value]="cfg()!.slotMinutes" [step]="5" [min]="5" [max]="240"
-                (valueChange)="patch({ slotMinutes: $event ?? 30 })"></pf-number-input>
-            </label>
-            <label class="flex flex-col gap-1">
-              <span class="nd-field__lbl">Concurrent slots</span>
-              <pf-number-input [value]="cfg()!.maxConcurrentSlots" [step]="1" [min]="1"
-                (valueChange)="patch({ maxConcurrentSlots: $event ?? 1 })"></pf-number-input>
-            </label>
-            <div class="pf-check-row flex items-center sm:mt-6">
-              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="cfg()!.open24h"
+        <!-- Booking -->
+        <section class="nd-card nd-setsec" id="sec-booking" aria-labelledby="sec-booking-h">
+          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><h2 class="nd-card__label" id="sec-booking-h">Booking</h2></div>
+          <div class="nd-set" pfSettingAnchor="booking-slots">
+            <div class="nd-set__text">
+              <span class="nd-set__label">Booking slots</span>
+              <p class="nd-set__help">Slot length and patients per slot.</p>
+            </div>
+            <div class="nd-set__ctl pf-ap-grid pf-ap-grid--2">
+              <label class="pf-ap-field">
+                <span class="nd-field__lbl">Minutes per slot</span>
+                <pf-number-input [value]="cfg()!.slotMinutes" [step]="5" [min]="5" [max]="240"
+                  (valueChange)="patch({ slotMinutes: $event ?? 30 })"></pf-number-input>
+              </label>
+              <label class="pf-ap-field">
+                <span class="nd-field__lbl">Patients per slot</span>
+                <pf-number-input [value]="cfg()!.maxConcurrentSlots" [step]="1" [min]="1"
+                  (valueChange)="patch({ maxConcurrentSlots: $event ?? 1 })"></pf-number-input>
+              </label>
+            </div>
+          </div>
+          <div class="nd-set">
+            <div class="nd-set__text">
+              <span class="nd-set__label" id="open24-l">Open all day, every day</span>
+              <p class="nd-set__help">Off lets you set opening hours.</p>
+            </div>
+            <div class="nd-set__ctl">
+              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="cfg()!.open24h" aria-labelledby="open24-l"
                       (click)="patch({ open24h: !cfg()!.open24h })">
                 <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                <span>Open 24×7</span>
               </button>
             </div>
           </div>
-
           @if (!cfg()!.open24h) {
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-              <label class="flex flex-col gap-1">
-                <span class="nd-field__lbl">Start time</span>
-                <input type="time" class="nd-input nd-num" [value]="startTime()"
-                  (change)="setStart($any($event.target).value)" />
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="nd-field__lbl">End time</span>
-                <input type="time" class="nd-input nd-num" [value]="endTime()"
-                  (change)="setEnd($any($event.target).value)" />
-              </label>
+            <div class="nd-set nd-set--sub">
+              <div class="nd-set__text">
+                <span class="nd-set__label">Opening hours</span>
+                <p class="nd-set__help">Same hours every day.</p>
+              </div>
+              <div class="nd-set__ctl pf-ap-grid pf-ap-grid--2">
+                <div class="pf-ap-field">
+                  <label class="nd-field__lbl" for="ap-start">Opens at</label>
+                  <input id="ap-start" type="time" class="nd-input nd-num" [value]="startTime()"
+                    (change)="setStart($any($event.target).value)" />
+                </div>
+                <div class="pf-ap-field">
+                  <label class="nd-field__lbl" for="ap-end">Closes at</label>
+                  <input id="ap-end" type="time" class="nd-input nd-num" [value]="endTime()"
+                    (change)="setEnd($any($event.target).value)" />
+                </div>
+              </div>
             </div>
-            <p class="pf-ap-hint">
-              Booking is open every day from <span class="nd-num">{{ startTime() }}</span> to <span class="nd-num">{{ endTime() }}</span>,
-              in <span class="nd-num">{{ cfg()!.slotMinutes }}</span>-minute steps.
-            </p>
           }
+        </section>
+
+        <!-- Who goes next -->
+        <section class="nd-card nd-setsec" id="sec-priority" aria-labelledby="sec-priority-h">
+          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span><h2 class="nd-card__label" id="sec-priority-h">Who goes next</h2></div>
+          <div class="nd-set" pfSettingAnchor="priority">
+            <div class="nd-set__text">
+              <span class="nd-set__label">Priority points</span>
+              <p class="nd-set__help">Most points is called first. Urgent always goes first.</p>
+            </div>
+            <div class="nd-set__ctl nd-set__ctl--wide pf-ap-grid">
+              @for (f of optionFields; track f.key) {
+                <label class="pf-ap-field">
+                  <span class="nd-field__lbl">{{ f.label }}</span>
+                  <pf-number-input [value]="opt(f.key)" [step]="f.step" [min]="0"
+                    (valueChange)="patchOpt(f.key, $event ?? 0)"></pf-number-input>
+                </label>
+              }
+            </div>
           </div>
         </section>
 
-        }
-
-        @if (showSec('priority')) {
-        <!-- Priority engine -->
-        <section class="nd-card pf-ap-card">
-          <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></span><h3 class="nd-card__label pf-section-title">Priority engine</h3></div>
-          <div class="pf-ap-body">
-          <p class="pf-ap-hint pf-ap-hint--top">
-            Higher score = called sooner. score = base(type) + minutes&nbsp;waited × weight − late penalty; urgent jumps to the top.
-          </p>
-          <div class="pf-priority-grid grid grid-cols-2 sm:grid-cols-3 gap-3">
-            @for (f of optionFields; track f.key) {
-              <label class="flex flex-col gap-1">
-                <span class="nd-field__lbl">{{ f.label }}</span>
-                <pf-number-input [value]="opt(f.key)" [step]="f.step" [min]="0"
-                  (valueChange)="patchOpt(f.key, $event ?? 0)"></pf-number-input>
-              </label>
-            }
-          </div>
-          </div>
-        </section>
-        }
+        </div>
+      </div>
       }
       </div>
     </section>
@@ -207,28 +177,26 @@ export class AppointmentsConfigComponent implements OnInit {
   private readonly toast = inject(ToastService);
   protected readonly theme = inject(ThemeService);
 
-  /** Band pill tabs (new design). Classic shows every card, as before. */
-  readonly tabOptions: SegmentedOption<AppointmentsTab>[] = [
-    { value: 'mode', label: 'Queue mode' },
-    { value: 'slots', label: 'Booking slots' },
-    { value: 'priority', label: 'Priority engine' },
+  /** "On this page" jump list (desktop). */
+  readonly sections: SettingsSection[] = [
+    { id: 'sec-queue', label: 'Queue' },
+    { id: 'sec-booking', label: 'Booking' },
+    { id: 'sec-priority', label: 'Who goes next' },
   ];
-  readonly tab = signal<AppointmentsTab>('mode');
-  showSec(key: AppointmentsTab): boolean {
-    return !this.theme.isNewDesign() || this.tab() === key;
-  }
 
   readonly modes = MODES;
+  /** One help line for the chosen queue type. */
+  readonly modeHelp = computed(() => MODES.find(m => m.value === this._cfg()?.queueMode)?.help ?? 'How the front desk calls patients.');
   readonly optionFields: { key: keyof AppointmentConfig['queueOptions']; label: string; step: number }[] = [
-    { key: 'baseAppointment', label: 'Appointment base', step: 50 },
-    { key: 'baseWalkin', label: 'Walk-in base', step: 50 },
-    { key: 'baseFollowup', label: 'Follow-up base', step: 50 },
-    { key: 'waitWeight', label: 'Wait weight / min', step: 1 },
-    { key: 'appointmentGraceMinutes', label: 'Grace (min)', step: 5 },
-    { key: 'latePenalty', label: 'Late penalty', step: 50 },
+    { key: 'baseAppointment', label: 'Booked patient points', step: 50 },
+    { key: 'baseWalkin', label: 'Walk-in points', step: 50 },
+    { key: 'baseFollowup', label: 'Follow-up points', step: 50 },
+    { key: 'waitWeight', label: 'Points per minute waiting', step: 1 },
+    { key: 'appointmentGraceMinutes', label: 'Late grace (min)', step: 5 },
+    { key: 'latePenalty', label: 'Points lost if late', step: 50 },
     { key: 'noShowThresholdMinutes', label: 'No-show after (min)', step: 5 },
-    { key: 'avgCollectionMinutes', label: 'Avg collection (min)', step: 1 },
-    { key: 'urgentOverrideScore', label: 'Urgent score', step: 100 }
+    { key: 'avgCollectionMinutes', label: 'Minutes per patient', step: 1 },
+    { key: 'urgentOverrideScore', label: 'Urgent points', step: 100 }
   ];
 
   private readonly _cfg = signal<AppointmentConfig | null>(null);

@@ -77,9 +77,8 @@ describe('ND audit D — Modules', () => {
   });
 });
 
-describe('ND audit D — tile hubs (Lab settings, Partners, OPD)', () => {
+describe('ND audit D — tile hubs (Partners, OPD)', () => {
   for (const [name, cmp, sel] of [
-    ['Lab settings hub', LabSettingsHubComponent, '.pf-lsh__tile'],
     ['Partners', PartnersComponent, '.pf-ph__tile'],
     ['OPD', OpdAdminComponent, '.pf-lsh__tile'],
   ] as const) {
@@ -93,6 +92,23 @@ describe('ND audit D — tile hubs (Lab settings, Partners, OPD)', () => {
       hygiene(p.el);
     });
   }
+});
+
+/** The Lab hub + settings hub render the admin directory (ND-PATTERN "Admin
+ *  pages"): kit-card categories, one row per page, SVG icons, no primary. */
+const entitlementsStub = { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true, ensureLoaded: vi.fn() } };
+describe('ND audit D — Lab settings hub (directory list)', () => {
+  it('band search; ONE kit card listing every lab page as a row; no primary', () => {
+    const p = renderBandPage(LabSettingsHubComponent, { providers: [entitlementsStub] });
+    expect(p.bandInput()).not.toBeNull();
+    const card = p.body()!.querySelector('.pf-adir__cat.nd-card')!;
+    expect(card).not.toBeNull();
+    const rows = card.querySelectorAll('a.pf-adir__row');
+    expect(rows.length).toBeGreaterThan(5);
+    expect(rows[0].querySelector('.pf-adir__ic[aria-hidden="true"] svg')).not.toBeNull();
+    expect(primaries(p.el)).toBe(0);
+    hygiene(p.el);
+  });
 });
 
 describe('ND audit D — settings pages (Microbiology, OPD settings)', () => {
@@ -156,15 +172,14 @@ describe('ND audit D — Overview (/admin) and settings hub (/admin/manage)', ()
     hygiene(p.el);
   });
 
-  it('Manage: the category pane is ONE kit card with the BILLING header and a plain muted count; no rainbow chips', () => {
-    const p = renderBandPage(AdminDashboardComponent);
-    const pane = p.el.querySelector('.pf-admin-pane.nd-card')!;
-    expect(pane).not.toBeNull();
-    const head = pane.querySelector('.nd-card__head')!;
+  it('Manage: every category is a kit card with the BILLING header, pages one tap away; no category pill', () => {
+    const p = renderBandPage(AdminDashboardComponent, { providers: [entitlementsStub] });
+    expect(p.tools()!.querySelector('pf-segmented')).toBeNull();
+    const cards = p.body()!.querySelectorAll('.pf-adir__cat.nd-card');
+    expect(cards.length).toBeGreaterThan(4);
+    const head = cards[0].querySelector('.nd-card__head')!;
     expect(head.querySelector('.nd-card__icon svg')).not.toBeNull();
-    expect(head.querySelector('.nd-card__label')).not.toBeNull();
-    expect(head.querySelector('.pf-admin-pane__count')!.textContent).toMatch(/\d+ settings?/);
-    expect(pane.querySelector('.pf-admin-tile .nd-card__icon')).not.toBeNull();
+    expect(head.querySelector('h2.nd-card__label')).not.toBeNull();
     expect(p.el.querySelector('[data-g]')).toBeNull();
     expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
@@ -379,21 +394,20 @@ describe('ND audit D — Appointments & queue', () => {
     providers: [{ provide: AppointmentQueueService, useValue: { getConfig: vi.fn(() => of(cfg)), saveConfig: vi.fn((c: unknown) => of(c)) } }],
   });
 
-  it('queue mode = neutral selected tiles (role=radio), kit card, ONE primary', () => {
+  it('queue type = neutral segmented radiogroup on a kit card, ONE primary', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('.pf-ap-card.nd-card')!;
+    const card = p.el.querySelector('.nd-setsec.nd-card')!;
     expect(card.querySelector('.nd-card__head .nd-card__icon')).not.toBeNull();
-    const radios = card.querySelectorAll('.pf-mode-btn[role="radio"]');
+    const radios = card.querySelectorAll('[role="radiogroup"] [role="radio"]');
     expect(radios.length).toBeGreaterThanOrEqual(2);
-    expect(card.querySelectorAll('.pf-mode-btn[aria-checked="true"]').length).toBe(1);
+    expect(card.querySelectorAll('[role="radio"][aria-checked="true"]').length).toBe(1);
     expect(p.el.querySelector('pf-tile')).toBeNull();
     hygiene(p.el);
   });
 
   it('Open 24×7 is a slate switch; turning it off shows kit time fields', () => {
     const p = render();
-    p.cmp.tab.set('slots'); p.f.detectChanges();
     const sw = p.el.querySelector<HTMLButtonElement>('.nd-toggle[role="switch"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('true');
     sw.click(); p.f.detectChanges();
@@ -445,24 +459,23 @@ describe('ND audit D — Lab settings', () => {
     ],
   });
 
-  it('autosave is stated in the band (neutral + violet check); no primary; cards have the BILLING header', () => {
+  it('autosave is stated in the band (neutral + violet check); no primary; sections have the BILLING header', () => {
     const p = render();
     const st = p.el.querySelector('pf-hero-band .pf-hb__actions .nd-savestate')!;
-    expect(st.textContent).toContain('Changes save automatically');
+    expect(st.textContent).toContain('Saves by itself');
     expect(st.querySelector('svg')).not.toBeNull();
     expect(primaries(p.el)).toBe(0);
-    const cards = p.body()!.querySelectorAll('.pf-ls__card.nd-card');
-    expect(cards.length).toBeGreaterThan(2);
+    const cards = p.body()!.querySelectorAll('.nd-setsec.nd-card');
+    expect(cards.length).toBe(5);
     expect(Array.from(cards).every(c => !!c.querySelector('.nd-card__head .nd-card__icon'))).toBe(true);
     hygiene(p.el);
   });
 
-  it('option cards are NEUTRAL radios (aria-checked, no --on class); rule switches are slate role=switch', () => {
+  it('choices are NEUTRAL segmented radios (aria-checked, no --on class); rule switches are slate role=switch', () => {
     const p = render();
-    expect(p.el.querySelector('.pf-ls__gate[role="radiogroup"] .pf-ls__gate-opt[role="radio"]')).not.toBeNull();
-    expect(p.el.querySelector('[class*="gate-opt--on"]')).toBeNull();
-    p.cmp.tab.set('rules'); p.f.detectChanges();
-    const sw = p.el.querySelectorAll('.pf-ls__card .nd-toggle[role="switch"]');
+    expect(p.el.querySelector('pf-segmented [role="radiogroup"] [role="radio"][aria-checked="true"]')).not.toBeNull();
+    expect(p.el.querySelector('[class*="--on"]')).toBeNull();
+    const sw = p.el.querySelectorAll('#sec-rules .nd-toggle[role="switch"]');
     expect(sw.length).toBeGreaterThanOrEqual(3);
     expect(p.el.querySelectorAll('input.nd-input.nd-num').length).toBe(3);
     hygiene(p.el);
