@@ -620,7 +620,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Price shown and totalled for a test: the DTO's effective price for the
    *  acting branch (pricing table), ₹1 when nobody has priced it. */
   priceOf(t: Test | null | undefined): number { return effectivePrice(t); }
-  /** Still at the ₹1 default → the "₹1 · not priced yet" marker. */
+  /** Still at the ₹1 default (data only — the UI shows just the price). */
   notPriced(t: Test | null | undefined): boolean { return isPriceDefault(t); }
   isNotPriced(id: string): boolean { return isPriceDefault(this._tests().find(x => x.id === id)); }
 
@@ -1332,10 +1332,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return w ? `${w} · ${this.testDisplayName(t)}` : this.testDisplayName(t);
   }
   private readonly inrFmt = new CurrencyInrPipe();
-  /** Screen-reader label: type, name, price (+ not priced), cart state. */
+  /** Screen-reader label: type, name, price, cart state. */
   rowLabel(t: Test): string {
     const w = this.typeWord(t);
-    const price = this.inrFmt.transform(this.priceOf(t)) + (this.notPriced(t) ? ', not priced yet' : '');
+    const price = this.inrFmt.transform(this.priceOf(t));
     return `${w ? w + ': ' : ''}${this.testDisplayName(t)}, ${price}${this.isSelected(t.id) ? ', in cart' : ''}`;
   }
 

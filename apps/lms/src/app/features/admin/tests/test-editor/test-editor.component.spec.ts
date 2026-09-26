@@ -297,7 +297,7 @@ describe('TestEditor — price via the pricing table (phase 2)', () => {
     expect(pricing.save).toHaveBeenCalledWith([{ testId: 'new1', price: 650, taxSlab: 0 }]);
   });
 
-  it('a new test left at ₹1 writes no price (stays "not priced yet")', () => {
+  it('a new test left at ₹1 writes no price (stays at the default)', () => {
     const { c, pricing } = make({ id: null });
     c.patch({ name: 'Ferritin' });
     c.saveTest();
@@ -313,10 +313,10 @@ describe('TestEditor — price via the pricing table (phase 2)', () => {
     expect(c.dirty()).toBe(true);
   });
 
-  it('a test still at the default shows the "₹1 · not priced yet" chip until the price changes', () => {
+  it('a test still at the default shows just its price ("₹1.00"), no "not priced" notice', () => {
     const { c } = make({ test: baseTest({ price: 1, priceIsDefault: true }) });
     expect(c.priceIsDefault()).toBe(true);
-    expect(c.metaChips().find((x: any) => x.k === 'Price').v).toBe('₹1 · not priced yet');
+    expect(c.metaChips().find((x: any) => x.k === 'Price').v).toBe('₹1.00');
     c.patch({ price: 120 });
     expect(c.priceIsDefault()).toBe(false);
     expect(c.metaChips().find((x: any) => x.k === 'Price').v).toBe('₹120.00');

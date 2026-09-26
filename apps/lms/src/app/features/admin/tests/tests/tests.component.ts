@@ -33,8 +33,8 @@ import { OptionGroupsPanelComponent } from './option-groups-panel.component';
 import { MicroMastersPanelComponent } from './micro-masters-panel.component';
 import { PricingComponent } from '../../pricing/pricing.component';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
-import { notOfferedElement, priceFlagElement } from '../../../../shared/primitives/price-flag.component';
-import { isOffered, isPriceDefault } from '../../../../shared/utils/test-pricing';
+import { notOfferedElement } from '../../../../shared/primitives/price-flag.component';
+import { isOffered } from '../../../../shared/utils/test-pricing';
 import { originBadgeElement } from '../../../../shared/primitives/origin-badge.component';
 import {
   canRevertToMaster, originLabel, restoreDefaultsMessage, restoreDefaultsSummary, revertToMasterPath,
@@ -659,36 +659,18 @@ export class TestsComponent implements OnInit {
 
   /** Price cell = the acting branch's EFFECTIVE price from the pricing
    *  table. Edits are held in `_priceDirty` and flushed through the bulk
-   *  price endpoint — never the test row (a price is not a test change). A
-   *  test still at the ₹1 default shows the "₹1 · not priced yet" pill. */
+   *  price endpoint — never the test row (a price is not a test change).
+   *  Shown as just the price ("₹1"): plain text, right-aligned, tabular. */
   private priceColDef(editable: boolean): ColDef<TestRow> {
     return {
       headerName: 'Price (₹)', field: 'price', editable, minWidth: 150, maxWidth: 190,
       cellEditor: 'agNumberCellEditor',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) ? Math.max(0, n) : p.oldValue; },
       valueFormatter: p => (p.value == null ? '' : '₹' + Number(p.value).toLocaleString('en-IN')),
-      cellStyle: { fontWeight: '600' },
-      cellClassRules: { 'pf-not-priced': p => this.showsDefaultPrice(p.data) },
-      cellRenderer: this.priceCellRenderer,
+      type: 'rightAligned',
+      cellStyle: { fontVariantNumeric: 'tabular-nums' },
     };
   }
-
-  /** Still at the ₹1 default AND not being edited right now. */
-  showsDefaultPrice(t?: TestRow): boolean {
-    return !!t && isPriceDefault(t) && !this._priceDirty().has(t.id);
-  }
-
-  private priceCellRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;height:100%;min-width:0;';
-    if (!params.data) return wrap;
-    if (this.showsDefaultPrice(params.data)) {
-      wrap.appendChild(priceFlagElement());
-    } else {
-      wrap.textContent = params.valueFormatted ?? String(params.value ?? '');
-    }
-    return wrap;
-  };
 
   /** Individual-view name cell: the name plus a quiet "Not offered here" tag. */
   private plainNameRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {

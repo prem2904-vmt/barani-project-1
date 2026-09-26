@@ -1,29 +1,16 @@
-import { TestBed } from '@angular/core/testing';
-import { PriceFlagComponent, notOfferedElement, priceFlagElement } from './price-flag.component';
+import { notOfferedElement } from './price-flag.component';
+import * as mod from './price-flag.component';
 
-describe('PriceFlag — "₹1 · not priced yet"', () => {
-  it('component renders the owner wording with an SVG glyph (no emoji)', () => {
-    const f = TestBed.createComponent(PriceFlagComponent);
-    f.detectChanges();
-    const el: HTMLElement = f.nativeElement;
-    expect(el.textContent?.trim()).toBe('₹1 · not priced yet');
-    expect(el.querySelector('.pf-price-flag svg')).not.toBeNull();
+describe('Price display — just the price (no "not priced yet" marker)', () => {
+  it('the "₹1 · not priced yet" pill is gone (no component, no grid element)', () => {
+    expect((mod as any).PriceFlagComponent).toBeUndefined();
+    expect((mod as any).priceFlagElement).toBeUndefined();
   });
 
-  it('compact drops the ₹1 prefix', () => {
-    const f = TestBed.createComponent(PriceFlagComponent);
-    f.componentRef.setInput('compact', true);
-    f.detectChanges();
-    expect((f.nativeElement as HTMLElement).textContent?.trim()).toBe('not priced yet');
-  });
-
-  it('grid DOM builders render the same pill family', () => {
-    const p = priceFlagElement();
-    expect(p.className).toBe('pf-price-flag');
-    expect(p.textContent).toBe('₹1 · not priced yet');
-    expect(p.querySelector('svg')).not.toBeNull();
+  it('"Not offered here" stays: a quiet neutral tag with an SVG glyph', () => {
     const off = notOfferedElement();
     expect(off.className).toContain('pf-price-flag--off');
     expect(off.textContent).toBe('Not offered here');
+    expect(off.querySelector('svg')).not.toBeNull();
   });
 });

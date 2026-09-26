@@ -155,6 +155,15 @@ In-page steps that close rather than navigate pass `[backAction]` to
 ✅ Do: a disabled "Collect all to finish" is secondary; it turns primary when enabled.
 ❌ Don't: a gradient cart icon, a gradient ₹/% toggle, a violet "selected" payment tile.
 
+### Prices are just the price
+
+A price shows as **just the price**, e.g. "₹1": plain normal text, right
+aligned, tabular numbers — everywhere (Test Master grid, Pricing, Order &
+Payments catalogue / dropdown / cart, booking, the test editor). There is NO
+"not priced yet" notice in any form (no amber tag pill, no amber dot, no
+tooltip, no "N not priced" count), even for a test still at the ₹1 default.
+"Not offered here" (a neutral tag) is a different thing and stays.
+
 ### Palette: primary + neutrals only
 
 The palette is **primary (violet)**, **secondary and tertiary (neutrals and
@@ -166,7 +175,8 @@ pill. Functional exceptions — these are data or warnings, not decoration:
 - tube cap colours and the red blood-fill animation (Collect);
 - the muted-red **Urgent** toggle (`.nd-toggle--urgent`);
 - error red for validation / short payments;
-- the amber **unpriced / required** dot;
+- the amber **required** dot (`.nd-dot-unpriced`, a legacy class name — it
+  marks REQUIRED fields only);
 - the **AI-in-progress rainbow glow** (`.nd-ai-glow`, below) — the ONE
   allowed multicolour: **AI in progress only; never decorative.**
 
@@ -231,7 +241,7 @@ pill. Functional exceptions — these are data or warnings, not decoration:
 
 - The row: `.nd-row` > `.nd-row__check` · `.nd-row__code` (mono, violet) ·
   `.nd-row__name` (wraps, up to 2 lines) · `.nd-row__meta` (muted) ·
-  `.nd-row__value` (right aligned, e.g. the price and the unpriced dot).
+  `.nd-row__value` (right aligned, e.g. the price).
   Rows are at least 52px tall.
 - Search results are **one per row**, so the ranked order reads top to
   bottom and ↑/↓ moves one row. Never lay search results out in a multi-column
@@ -901,7 +911,7 @@ Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row
 Numbers  .nd-num (Noto Sans + tabular-nums; .nd-mono is an alias)
 Fields   .nd-field › __lbl · .nd-input(--error)[readonly] · __hint
 Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit (+ the section tabs in the pill)
-         .nd-ctx__chip · __k · .nd-dot-unpriced (identity facts only where no section shows them)
+         .nd-ctx__chip · __k · .nd-dot-unpriced = the amber REQUIRED dot (identity facts only where no section shows them)
          .nd-tabs[role=tablist] › .nd-tabs__item[role=tab][aria-selected] › .nd-tabs__dot(--ok) · .nd-savestate(__dot)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise

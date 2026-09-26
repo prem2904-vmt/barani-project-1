@@ -18,7 +18,7 @@ import { AuthService } from '../../../core/auth/auth.service';
  * The orderable list (GET /api/tests/?activeOnly=true) carries the EFFECTIVE
  * price for the acting branch (pricing table) + `priceIsDefault` + `isOffered`.
  * The cart totals that price (₹1 when nobody priced the test, flagged
- * "₹1 · not priced yet"), members covered by a package in the cart are ₹0,
+ * just "₹1"), members covered by a package in the cart are ₹0,
  * GST is per line at each test's own `taxSlab`, and a test that isn't offered
  * here never reaches the picker.
  */
@@ -94,7 +94,7 @@ describe('OrderCreate pricing (pricing-table DTO)', () => {
     expect(c.discountOverCap()).toBe(true);
   });
 
-  it('an unpriced test defaults to ₹1 and is flagged "₹1 · not priced yet" in the cart', () => {
+  it('an unpriced test defaults to ₹1 (data knows it is the default; the UI shows just the price)', () => {
     const c = make([T('new', 1, { priceIsDefault: true })]);
     c._selected.set(['new']);
     expect(c.subtotal()).toBe(1);

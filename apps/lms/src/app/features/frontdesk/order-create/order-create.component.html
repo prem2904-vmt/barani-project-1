@@ -1013,11 +1013,9 @@
     </div>
   </ng-template>
 
-  <!-- Price: plain small text; unpriced = muted + a tiny dot ("Not priced yet"). -->
+  <!-- Price: just the price — plain small text, right-aligned, tabular. -->
   <ng-template #priceTpl let-t>
-    <span class="pf-price" [class.pf-price--unpriced]="notPriced(t)" [attr.title]="notPriced(t) ? 'Not priced yet' : null">
-      {{ priceOf(t) | inr }}@if (notPriced(t)) {<span class="pf-price__dot" aria-hidden="true"></span><span class="sr-only"> (not priced yet)</span>}
-    </span>
+    <span class="pf-price">{{ priceOf(t) | inr }}</span>
   </ng-template>
 
   <!-- Scope icons: Tests (flask) · Patient · Doctor (stethoscope) · Hospital. -->

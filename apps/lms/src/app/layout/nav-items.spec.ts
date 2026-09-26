@@ -5,6 +5,7 @@ import {
   ROUTE_NAV_PERMS,
   PRIMARY_NAV,
   menusFromWorkflow,
+  navLabel,
   WorkflowNavCtx,
   MORE_NAV,
 } from './nav-items';
@@ -256,6 +257,23 @@ describe('menusFromWorkflow', () => {
       isSuper: false,
     };
     expect(menusFromWorkflow(cfg, restrictedCtx)).toBeNull();
+  });
+
+  it('work-area names show in sentence case in the nav ("billing" → "Billing"; the built-ins already are)', () => {
+    const cfg = makeCfg(
+      [{ id: 'cat1', name: '  billing ', order: 1, icon: 'default' }, { id: 'cat2', name: 'Frontdesk', order: 2, icon: 'default' }],
+      [{ id: 'a1', type: 'sample_collection', categoryId: 'cat1', enabled: true, order: 1 },
+       { id: 'a2', type: 'sample_collection', categoryId: 'cat2', enabled: true, order: 1 }]
+    );
+    const labels = menusFromWorkflow(cfg, { ...baseCtx, isSuper: true })!.map(i => i.label);
+    expect(labels).toContain('Billing');
+    expect(labels).toContain('Frontdesk');
+    expect(labels).not.toContain('billing');
+    expect(navLabel('lab')).toBe('Lab');
+    expect(navLabel('My Work')).toBe('My Work');
+    expect(navLabel('')).toBe('');
+    // Every built-in label starts with a capital.
+    for (const i of [...PRIMARY_NAV, ...MORE_NAV, ADMIN_NAV]) expect(i.label.charAt(0)).toBe(i.label.charAt(0).toUpperCase());
   });
 
   it('builds nav items from enabled categories with accessible actions', () => {

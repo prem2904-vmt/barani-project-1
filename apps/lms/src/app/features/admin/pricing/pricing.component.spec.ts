@@ -57,15 +57,13 @@ describe('PricingComponent — reads the pricing-table DTO', () => {
     expect(byId['t2'].deptId).toBe('d2');      // falls back to departmentId
   });
 
-  it('flags tests still at the default: "₹1 · not priced yet" until the price is edited', () => {
+  it('a test still at the default is just "₹1": the row knows it (data), no "not priced" notice or count', () => {
     const { c } = make();
     const row = c.filtered().find(r => r.id === 't2')!;
     expect(row.notPriced).toBe(true);
-    expect(c.showsNotPriced('t2')).toBe(true);
-    expect(c.showsNotPriced('t1')).toBe(false);
-    expect(c.notPricedCount()).toBe(1);
-    c.setPrice('t2', 90);
-    expect(c.showsNotPriced('t2')).toBe(false);
+    expect(row.orig).toBe(1);
+    expect((c as any).showsNotPriced).toBeUndefined();
+    expect((c as any).notPricedCount).toBeUndefined();
   });
 
   it('isOffered=false rows read as not offered', () => {

@@ -173,13 +173,10 @@ describe('Test Master grid — TARGET behaviour', () => {
     expect(rr.valueGetter({ data: hb({ adultReferenceRange: '11–16' }) })).toContain('12–17');
   });
 
-  it('TARGET phase 2: price cell edits the tenant pricing table (never a test override) and flags ₹1 defaults', () => {
+  it('TARGET phase 2: price cell edits the tenant pricing table (never a test override); no ₹1 "not priced" flag', () => {
     const { c, api, pricing } = make([hb({ price: 1, priceIsDefault: true })]);
-    const rule = col(c, 'price').cellClassRules?.['pf-not-priced'];
-    expect(rule).toBeDefined();
-    expect(rule({ data: c.rowData()[0] })).toBe(true);
+    expect(col(c, 'price').cellClassRules).toBeUndefined();
     c.onCellValueChanged({ colDef: { field: 'price' }, newValue: '200', oldValue: 1, data: { id: 't1' } });
-    expect(rule({ data: c.rowData()[0] })).toBe(false);   // being priced → no flag
     c.saveAll();
     expect(api.patch).not.toHaveBeenCalled();
     expect(pricing.save).toHaveBeenCalledWith([{ testId: 't1', price: 200 }]);
@@ -199,14 +196,13 @@ describe('Test Master grid — TARGET behaviour', () => {
 });
 
 describe('Test Master grid — pricing table (phase 2)', () => {
-  it('the price cell renders the "₹1 · not priced yet" pill for a default row, the ₹ value otherwise', () => {
-    const { c } = make([hb({ price: 1, priceIsDefault: true }), hb({ id: 't2', testCode: 'HEM013', price: 150, priceIsDefault: false })]);
-    const renderer = col(c, 'price').cellRenderer;
-    const def = renderer({ data: c.rowData().find((r: any) => r.id === 't1'), value: 1, valueFormatted: '₹1' });
-    expect(def.textContent).toContain('₹1 · not priced yet');
-    expect(def.querySelector('svg')).not.toBeNull();       // SVG icon, not emoji
-    const priced = renderer({ data: c.rowData().find((r: any) => r.id === 't2'), value: 150, valueFormatted: '₹150' });
-    expect(priced.textContent).toBe('₹150');
+  it('the price cell is just the price — "₹1" for a default row too: plain, right-aligned, tabular', () => {
+    const { c } = make([hb({ price: 1, priceIsDefault: true })]);
+    const p = col(c, 'price');
+    expect(p.cellRenderer).toBeUndefined();              // no pill / flag renderer
+    expect(p.valueFormatter({ value: 1 })).toBe('₹1');
+    expect(p.type).toBe('rightAligned');
+    expect(p.cellStyle).toEqual({ fontVariantNumeric: 'tabular-nums' });
   });
 
   it('price-only edits save through ONE bulk call, no test PATCH', () => {

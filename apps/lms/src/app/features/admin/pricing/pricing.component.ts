@@ -11,7 +11,6 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
-import { PriceFlagComponent } from '../../../shared/primitives/price-flag.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TestPricingService } from '../../../core/services/test-pricing.service';
 import {
@@ -39,7 +38,7 @@ export interface PriceRow {
  * scrolls — only the rows region does (natural page scroll on phone).
  *
  * Prices live ONLY in the pricing table: every test starts at the ₹1 default
- * (flagged "₹1 · not priced yet") until priced here. Reads come from
+ * (shown as just "₹1") until priced here. Reads come from
  * GET /api/tests (the DTO carries the effective price + `priceIsDefault` +
  * `isOffered`); writes go through PATCH /api/tests/prices/bulk only.
  *
@@ -50,7 +49,7 @@ export interface PriceRow {
 @Component({
   selector: 'pf-pricing',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, PriceFlagComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-pricing" [class.pf-pricing--embedded]="embedded()">
@@ -86,7 +85,6 @@ export interface PriceRow {
           }
           <span class="pf-pricing__count ml-auto">
             <span class="nd-num">{{ filtered().length }}</span> test{{ filtered().length === 1 ? '' : 's' }}
-            @if (notPricedCount() > 0) { · <span class="nd-dot-unpriced" aria-hidden="true"></span> <span class="nd-num">{{ notPricedCount() }}</span> not priced yet }
           </span>
         </div>
 
@@ -133,8 +131,6 @@ export interface PriceRow {
                     <span>{{ r.deptName || 'No department' }}</span>
                     @if (!offeredNow(r.id)) {
                       <span class="pf-price-flag pf-price-flag--off">Not offered here</span>
-                    } @else if (showsNotPriced(r.id)) {
-                      <pf-price-flag />
                     }
                   </p>
                 </div>
@@ -300,7 +296,6 @@ export class PricingComponent implements OnInit {
   /** The picker's shown value ('' resolves to the acting branch). */
   readonly scopeValue = computed(() => this.scope() || (this.auth.activeBranchId?.() ?? TENANT_PRICE_SCOPE));
 
-  readonly notPricedCount = computed(() => this.filtered().filter(r => this.showsNotPriced(r.id)).length);
 
   private readonly _departments = signal<Department[]>([]);
 
@@ -342,12 +337,6 @@ export class PricingComponent implements OnInit {
   offeredNow(id: string): boolean {
     const o = this.offeredEdits();
     return id in o ? o[id] : (this._rows().find(r => r.id === id)?.offered ?? true);
-  }
-
-  /** "₹1 · not priced yet" until the price is edited away from the default. */
-  showsNotPriced(id: string): boolean {
-    const row = this._rows().find(r => r.id === id);
-    return !!row && row.notPriced && this.round2(this.edits()[id]) === this.round2(row.orig);
   }
 
   setOffered(id: string, on: boolean) {

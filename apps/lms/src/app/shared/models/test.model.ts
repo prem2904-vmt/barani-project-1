@@ -23,7 +23,7 @@ export interface Test {
   price: number;
   discount: number;
   /** True = nobody has priced this test yet: it bills at the ₹1 default and
-   *  shows the "₹1 · not priced yet" marker. */
+   *  shows just the price ("₹1"). */
   priceIsDefault?: boolean;
   /** False = not offered at this tenant/branch: hidden from ordering
    *  (ordering it anyway → 409 `not_offered`). Absent = offered. */

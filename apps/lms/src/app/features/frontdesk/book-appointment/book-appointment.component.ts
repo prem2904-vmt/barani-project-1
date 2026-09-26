@@ -27,7 +27,6 @@ import {
 } from "../../../shared/models/patient.model";
 import { Test } from "../../../shared/models/test.model";
 import { effectivePrice, isOffered, isPriceDefault } from "../../../shared/utils/test-pricing";
-import { PriceFlagComponent } from "../../../shared/primitives/price-flag.component";
 import { CurrencyInrPipe } from "../../../shared/pipes/currency-inr.pipe";
 import {
   filterTestList,
@@ -78,7 +77,6 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
     ScreenHeaderComponent,
     LoadingLogoComponent,
     PatientSearchComponent,
-    PriceFlagComponent,
     CurrencyInrPipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -743,7 +741,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                     @for (t of selectedTests(); track t.id) {
                       <div class="inline-flex items-center justify-end gap-1.5">
                         <span>{{ t.name }}</span>
-                        @if (isPriceDefault(t)) { <pf-price-flag /> } @else { <span>({{ priceOf(t) | inr }})</span> }
+                        <span class="nd-num">({{ priceOf(t) | inr }})</span>
                       </div>
                     }
                   </div>
@@ -1194,7 +1192,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 
   /** The acting branch's price for a test (₹1 when nobody has priced it). */
   priceOf(t: Test): number { return effectivePrice(t); }
-  /** Still at the ₹1 default → "₹1 · not priced yet". */
+  /** Still at the ₹1 default (data only — the UI shows just the price). */
   isPriceDefault(t: Test): boolean { return isPriceDefault(t); }
   isNotPriced(id: string): boolean { return isPriceDefault(this._tests().find(t => t.id === id)); }
 

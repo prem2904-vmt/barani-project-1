@@ -5,7 +5,7 @@
  * (lists, picker, single test) carry the EFFECTIVE price for the acting
  * branch in `price` / `discount` / `taxSlab`, plus:
  *   - `priceIsDefault`: nobody has priced this test yet, so it bills at the
- *     ₹1 default and the UI shows the quiet "₹1 · not priced yet" marker;
+ *     ₹1 default; the UI shows just the price ("₹1"), no marker;
  *   - `isOffered`: false = hidden from ordering at this tenant/branch.
  *
  * Writes go ONLY through `PATCH /api/tests/prices/bulk` (see
@@ -16,9 +16,6 @@
 
 /** Every test bills at ₹1 until the tenant (or branch) prices it. */
 export const DEFAULT_TEST_PRICE = 1;
-
-/** The owner-approved wording of the "still at the default" marker. */
-export const NOT_PRICED_LABEL = '₹1 · not priced yet';
 
 /** The price-bearing slice of a test DTO. Loose on purpose: callers pass
  *  full `Test` rows, grid rows and picker rows alike. */

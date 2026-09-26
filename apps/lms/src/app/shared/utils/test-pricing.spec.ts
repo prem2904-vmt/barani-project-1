@@ -1,13 +1,13 @@
 import {
-  DEFAULT_TEST_PRICE, NOT_PRICED_LABEL, PRICE_BULK_PATH, TENANT_PRICE_SCOPE,
+  DEFAULT_TEST_PRICE, PRICE_BULK_PATH, TENANT_PRICE_SCOPE,
   effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, priceBulkBody, priceListUrl, roundPaiseHalfEven, taxSlabOf,
 } from './test-pricing';
 import { ApiError } from '../models/api-response.model';
 
 describe('test-pricing (pricing single source)', () => {
-  it('the default is ₹1 with the owner-approved wording', () => {
+  it('the default is ₹1 (shown as just the price; no "not priced" wording)', async () => {
     expect(DEFAULT_TEST_PRICE).toBe(1);
-    expect(NOT_PRICED_LABEL).toBe('₹1 · not priced yet');
+    expect((await import('./test-pricing') as any).NOT_PRICED_LABEL).toBeUndefined();
     expect(PRICE_BULK_PATH).toBe('/api/tests/prices/bulk');
   });
 

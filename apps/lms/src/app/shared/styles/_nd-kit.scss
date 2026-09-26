@@ -256,7 +256,9 @@ button.nd-ctx__chip:hover { border-color: var(--nd-sel-border); }
 }
 .nd-ctx__edit:hover { color: var(--text-primary); background: var(--nd-chip-bg); }
 .nd-ctx__edit:focus-visible, button.nd-ctx__chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-/* The ONE warning mark allowed in a context chip: the amber unpriced dot. */
+/* The ONE warning mark allowed in a context chip: the amber REQUIRED dot
+   (class name kept for compatibility — there is no "unpriced" marker any
+   more: a default-priced test shows just "₹1"). */
 .nd-dot-unpriced { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 999px; background: #d97706; }
 @media (max-width: 640px) {
   .nd-ctx { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 4px 0; }

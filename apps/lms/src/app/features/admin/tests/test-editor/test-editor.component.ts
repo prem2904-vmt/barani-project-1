@@ -58,8 +58,7 @@ import { describeAllRanges, deriveRangeLabel, formatRange } from '../../../../sh
 import { RANGE_BOUND_OPTIONS, RangeBound, boundLabel, boundOf, boundUses, withBound } from '../../../../shared/utils/range-bound';
 import { NavBackService } from '../../../../core/services/nav-back.service';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
-import { PriceFlagComponent } from '../../../../shared/primitives/price-flag.component';
-import { DEFAULT_TEST_PRICE, NOT_PRICED_LABEL, effectivePrice, isPriceDefault } from '../../../../shared/utils/test-pricing';
+import { DEFAULT_TEST_PRICE, effectivePrice, isPriceDefault } from '../../../../shared/utils/test-pricing';
 import { OriginBadgeComponent } from '../../../../shared/primitives/origin-badge.component';
 import {
   ORIGIN_ICON_PATHS, TestOrigin, canRevertToMaster, isCloneMode, originHint, originLabel, originOf, revertToMasterPath,
@@ -168,7 +167,6 @@ function makeEmptyDraft(): DraftTest {
     DragDropModule,
     ReportColumnsEditorComponent,
     ReportPdfPreviewComponent,
-    PriceFlagComponent,
     OriginBadgeComponent,
     HeroBandComponent,
     RangeInsightComponent,
@@ -266,7 +264,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
    *  test = the ₹1 default. */
   private readonly _savedPrice = signal<{ price: number; taxSlab: number; isDefault: boolean }>(
     { price: DEFAULT_TEST_PRICE, taxSlab: 0, isDefault: true });
-  /** Still at the ₹1 default and not being changed → "₹1 · not priced yet". */
+  /** Still at the ₹1 default and not being changed (data only — no UI notice). */
   readonly priceIsDefault = computed(() => {
     const sp = this._savedPrice();
     const d = this._draft();
@@ -1080,7 +1078,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       const sample = [(d.sampleType ?? '').trim(), tube].filter(Boolean).join(' · ');
       chips.push({ k: 'Sample', v: sample || '—', sec: 'pricing' });
     }
-    chips.push({ k: 'Price', v: this.priceIsDefault() ? NOT_PRICED_LABEL : '₹' + (d.price ?? 0).toFixed(2), sec: 'pricing' });
+    chips.push({ k: 'Price', v: '₹' + (d.price ?? 0).toFixed(2), sec: 'pricing' });
     chips.push({ k: 'TAT', v: (d.tatHours ?? 0) + ' hrs', sec: 'pricing' });
     if (d.type === 'individual') {
       chips.push({ k: 'Fasting', v: d.fastingRequired ? 'Yes' : 'No', sec: 'pricing' });
@@ -1694,7 +1692,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** A member's effective price (₹1 when nobody priced it). */
   priceOf(t: Test): number { return effectivePrice(t); }
-  isDefaultPriced(t: Test): boolean { return isPriceDefault(t); }
 
   readonly packageMembersTotal = computed(() => {
     const by = this._memberById();

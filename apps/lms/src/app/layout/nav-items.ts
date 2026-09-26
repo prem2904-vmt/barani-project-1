@@ -217,6 +217,14 @@ export interface WorkflowNavCtx {
  * generic /w/:id host) — never a tile grid. Returns null when there's no usable
  * workflow so callers fall back to the original PRIMARY_NAV (never lock out).
  */
+/** A work area's name as a nav label: trimmed, first letter capitalised
+ *  ("billing" → "Billing"). The tenant types the name in the workflow
+ *  builder; nav labels are always sentence case like the built-in ones. */
+export function navLabel(name: string | null | undefined): string {
+  const t = (name ?? '').trim();
+  return t ? t.charAt(0).toLocaleUpperCase() + t.slice(1) : t;
+}
+
 export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined, ctx: WorkflowNavCtx): NavItem[] | null {
   if (!cfg?.categories?.length) return null;
   // The flask/tube "Collect" icon (matches the PRIMARY_NAV sample-collection item).
@@ -256,7 +264,7 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
       ?? [...new Set(accessible.flatMap(a => catalogFor(a.type)?.permissions ?? []))];
     items.push({
       id: area.id,
-      label: area.name,
+      label: navLabel(area.name),
       href: route,
       iconPath: workAreaIconPath(area.icon),
       permissions: areaPerms.length ? areaPerms : undefined,

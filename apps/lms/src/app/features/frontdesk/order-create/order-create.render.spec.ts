@@ -150,22 +150,22 @@ describe('Order & Payments — catalogue rows', () => {
     expect(row.querySelector('.pf-crow__main')!.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('an unpriced test shows a muted price with a dot titled "Not priced yet" (also in the cart)', () => {
+  it('a test still at the ₹1 default shows just its price — no dot, no "Not priced yet" (also in the cart)', () => {
     const { el, f, c } = render();
     c.setCategoryTab('all');
     f.detectChanges();
     const urine = rowsOf(el).find(r => r.textContent?.includes('Urine Glucose'))!;
     const price = urine.querySelector('.pf-price') as HTMLElement;
-    expect(price.classList).toContain('pf-price--unpriced');
-    expect(price.getAttribute('title')).toBe('Not priced yet');
-    expect(price.querySelector('.pf-price__dot')).not.toBeNull();
-    expect(el.querySelector('pf-price-flag')).toBeNull();
-    const hb = rowsOf(el).find(r => r.textContent?.includes('Haemoglobin'))!;
-    expect(hb.querySelector('.pf-price')!.classList).not.toContain('pf-price--unpriced');
+    expect(price.textContent!.trim()).toMatch(/^₹\s?1(\.00)?$/);
+    expect(price.getAttribute('title')).toBeNull();
+    expect(price.querySelector('.pf-price__dot')).toBeNull();
+    expect(el.textContent).not.toMatch(/not priced/i);
+    expect(el.querySelector('pf-price-flag, .pf-price--unpriced')).toBeNull();
     c._selected.set(['t2']);
     f.detectChanges();
     const cartPrice = el.querySelector('.pf-crt .pf-price') as HTMLElement;
-    expect(cartPrice.classList).toContain('pf-price--unpriced');
+    expect(cartPrice.querySelector('.pf-price__dot')).toBeNull();
+    expect(cartPrice.classList).not.toContain('pf-price--unpriced');
   });
 
   it('the favourite star is a sibling button, not nested in the row button', () => {

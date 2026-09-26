@@ -12,7 +12,7 @@ import { AppointmentBookingService } from '../../../core/services/appointment-bo
 /**
  * Test Master single source — phase 2: booking price display.
  * "Total Price" = Σ effective DTO price (pricing table) of the selected tests;
- * a test nobody priced is ₹1 and shows "₹1 · not priced yet"; a test that
+ * a test nobody priced is ₹1 and shows just "₹1"; a test that
  * isn't offered here is not in the picker.
  */
 function make(tests: any[]) {
@@ -54,7 +54,7 @@ describe('BookAppointment price display (pricing-table DTO)', () => {
     expect(c.selectedTestsTotal()).toBe(0);
   });
 
-  it('an unpriced test shows ₹1 with the "not priced yet" flag and totals at ₹1', () => {
+  it('an unpriced test is ₹1 (data knows it is the default) and totals at ₹1', () => {
     const c = make([{ id: 'n', name: 'NEW', isActive: true }]);
     c.toggleTest('n');
     expect(c.selectedTestsTotal()).toBe(1);

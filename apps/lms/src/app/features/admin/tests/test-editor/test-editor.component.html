@@ -313,7 +313,7 @@
         <div class="pf-te2-sec__body nd-card__body">
           <div class="pf-te2-grid">
             <div class="pf-uf">
-              <label class="pf-uf__lbl">Price @if (priceIsDefault()) { <pf-price-flag /> }</label>
+              <label class="pf-uf__lbl">Price</label>
               <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹"
                                (valueChange)="patch({ price: $event ?? 0 })"></pf-number-input>
               @if (fieldError('price')) { <p class="pf-field-err">{{ fieldError('price') }}</p> }
@@ -1052,7 +1052,7 @@
                             <span>TAT {{ t.tatHours }}h</span>
                           </span>
                         </span>
-                        <span class="pf-pkg-pick__price">@if (isDefaultPriced(t)) { <pf-price-flag /> } @else { {{ priceOf(t) | inr }} }</span>
+                        <span class="pf-pkg-pick__price nd-num">{{ priceOf(t) | inr }}</span>
                       </label>
                     }
                   </div>

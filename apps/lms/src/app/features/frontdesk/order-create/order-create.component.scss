@@ -2902,7 +2902,7 @@
 .pf-crow__star:focus-visible { opacity: 1; }
 .pf-crow__star--fav { color: var(--color-warning, #f59e0b); opacity: 1; }
 
-/* Price: plain, small, right-aligned; unpriced = muted + tiny dot. */
+/* Price: just the price — plain, small, right-aligned, tabular. */
 .pf-price {
   flex-shrink: 0;
   display: inline-flex;
@@ -2910,13 +2910,11 @@
   gap: 4px;
   margin-left: auto;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   white-space: nowrap;
 }
-.pf-price--unpriced { color: var(--text-muted); font-weight: 500; }
-.pf-price__dot { width: 5px; height: 5px; border-radius: 999px; background: var(--color-warning, #f59e0b); }
 
 /* Dropdown rows (mixed types): the type is the row outline. */
 .pf-us__trow[data-type='profile'] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-type-profile) 70%, transparent); }
@@ -3528,7 +3526,7 @@
 
 /* ════ Palette rule (owner): primary (violet) + neutrals / slate only. No
    green / teal decoration. Functional exceptions: red Urgent + validation
-   errors, amber unpriced / required dot, tube caps. ════ */
+   errors, amber required dot, tube caps. ════ */
 .pf-cart-line__save { color: var(--violet-text, #6d28d9); }
 .pf-cart-collected {
   color: var(--text-secondary);
