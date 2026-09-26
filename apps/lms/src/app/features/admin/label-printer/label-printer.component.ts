@@ -168,7 +168,7 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
           <span class="pf-eyebrow">Code</span>
           <p class="pf-val">
             {{ codeLabel() }}
-            <span class="pf-hint">· set by admin in Lab settings (per branch)</span>
+            <span class="pf-hint">· set by admin in Lab settings (organisation policy)</span>
           </p>
         </div>
 

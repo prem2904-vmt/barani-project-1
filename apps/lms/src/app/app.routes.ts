@@ -6,7 +6,6 @@ import { AuthService } from './core/auth/auth.service';
 import { landingGuard } from './core/auth/landing.guard';
 import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
-import { settingsGuard } from './features/settings/settings.guard';
 import { FRONTDESK_PERMS } from './layout/nav-items';
 import { workflowGuard, workflowGuardAny } from './core/auth/workflow.guard';
 import { ShellComponent } from './layout/shell/shell.component';
@@ -84,14 +83,6 @@ export const appRoutes: Route[] = [
         path: 'admin',
         canActivate: [adminGuard],
         loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
-      },
-      {
-        // Settings — one search-first page for every setting (rows save as
-        // you go). Open to any manage_* holder; each row checks its own
-        // permission. The old admin pages keep working alongside it.
-        path: 'settings',
-        canActivate: [settingsGuard],
-        loadComponent: () => import('./features/settings/settings-home.component').then(m => m.SettingsHomeComponent)
       },
       {
         // The settings hub (relevance-grouped tiles) — reached from the

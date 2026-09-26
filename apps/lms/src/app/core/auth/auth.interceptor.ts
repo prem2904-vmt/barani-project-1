@@ -12,10 +12,8 @@ function withAuth(req: HttpRequest<unknown>, auth: AuthService): HttpRequest<unk
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
   // Branch switcher: tell the backend which branch to scope this request to.
   // The server validates it against the user's permitted branches.
-  // A caller that names the branch itself (Settings editing another branch's
-  // row) keeps it; the server still validates it against the user's branches.
   const branch = auth.activeBranchId();
-  if (branch && !req.headers.has('X-Active-Branch')) headers['X-Active-Branch'] = branch;
+  if (branch) headers['X-Active-Branch'] = branch;
   return req.clone({ setHeaders: headers });
 }
 

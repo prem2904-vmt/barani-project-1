@@ -4,13 +4,6 @@ import { Observable, catchError, map, throwError, timeout } from 'rxjs';
 import { ApiError, ApiResponse } from '../../shared/models/api-response.model';
 import { PlatformService } from './platform.service';
 
-/** Optional per-request extras (headers only, for now). */
-export interface ApiRequestOptions { headers?: Record<string, string> }
-
-function httpOpts(opts?: ApiRequestOptions): { headers?: Record<string, string> } {
-  return opts?.headers ? { headers: opts.headers } : {};
-}
-
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   protected readonly http = inject(HttpClient);
@@ -24,24 +17,20 @@ export class ApiService {
   readonly isLoading = this._isLoading.asReadonly();
   readonly error = this._error.asReadonly();
 
-  /* `opts.headers` is optional and additive. Settings uses it to send an
-     explicit X-Active-Branch for ONE call (a branch-scoped row editing a
-     branch other than the active one); the auth interceptor keeps a header
-     the caller already set. */
-  get<T>(path: string, opts?: ApiRequestOptions): Observable<T> {
-    return this.wrap(this.http.get<ApiResponse<T>>(`${this.baseUrl}${path}`, httpOpts(opts)));
+  get<T>(path: string): Observable<T> {
+    return this.wrap(this.http.get<ApiResponse<T>>(`${this.baseUrl}${path}`));
   }
 
-  post<T>(path: string, body: unknown, opts?: ApiRequestOptions): Observable<T> {
-    return this.wrap(this.http.post<ApiResponse<T>>(`${this.baseUrl}${path}`, body, httpOpts(opts)));
+  post<T>(path: string, body: unknown): Observable<T> {
+    return this.wrap(this.http.post<ApiResponse<T>>(`${this.baseUrl}${path}`, body));
   }
 
-  patch<T>(path: string, body: unknown = {}, opts?: ApiRequestOptions): Observable<T> {
-    return this.wrap(this.http.patch<ApiResponse<T>>(`${this.baseUrl}${path}`, body, httpOpts(opts)));
+  patch<T>(path: string, body: unknown = {}): Observable<T> {
+    return this.wrap(this.http.patch<ApiResponse<T>>(`${this.baseUrl}${path}`, body));
   }
 
-  put<T>(path: string, body: unknown = {}, opts?: ApiRequestOptions): Observable<T> {
-    return this.wrap(this.http.put<ApiResponse<T>>(`${this.baseUrl}${path}`, body, httpOpts(opts)));
+  put<T>(path: string, body: unknown = {}): Observable<T> {
+    return this.wrap(this.http.put<ApiResponse<T>>(`${this.baseUrl}${path}`, body));
   }
 
   delete<T>(path: string): Observable<T> {

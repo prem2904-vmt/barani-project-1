@@ -29,8 +29,7 @@ import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, SETTINGS_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
-import { hasAnyManage } from '../../features/settings/settings-access';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
@@ -277,9 +276,6 @@ export class TopStripComponent implements OnInit, OnDestroy {
   readonly showAdmin = computed(() =>
     !ADMIN_NAV.permissions || this.auth.hasAnyPermission(ADMIN_NAV.permissions)
   );
-  /** Settings: anyone holding any manage_* permission (owner). */
-  readonly showSettings = computed(() => hasAnyManage(this.auth.permissions()));
-  protected readonly settingsNav = SETTINGS_NAV;
 
   protected readonly branch = computed(() =>
     this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? 'Branch');

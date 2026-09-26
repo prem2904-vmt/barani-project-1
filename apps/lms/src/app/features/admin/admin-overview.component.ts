@@ -116,15 +116,6 @@ interface KpiCard {
         <!-- Refresh is a quiet button on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
         <ng-container band-actions>
-          <!-- The one Settings page (search-first; rows save as you go). -->
-          <a routerLink="/settings" class="pf-hb-btn pf-hb-btn--ghost press pf-ov__settings" aria-label="Settings">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
-              <path d="M12 2v2M12 22v-2M14 12h8M2 12h2m15.07-7.07-1.41 1.41M6.34 17.66l-1.41 1.41m14.14 0-1.41-1.41M6.34 6.34 4.93 4.93"/>
-            </svg>
-            Settings
-          </a>
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="load()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -382,13 +373,7 @@ interface KpiCard {
         </div>
 
         <!-- Shortcuts into the settings hub, grouped by relevance. -->
-        <p class="pf-ov__section pf-ov__section--row">
-          <span>Manage</span>
-          <a routerLink="/settings" class="nd-btn nd-btn--tertiary pf-ov__settings-link">
-            All settings
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-          </a>
-        </p>
+        <p class="pf-ov__section">Manage</p>
         <div class="pf-ov__cards">
           @for (g of groups; track g.cat) {
             <a
@@ -783,22 +768,6 @@ interface KpiCard {
         letter-spacing: 0.12em;
         color: var(--text-muted);
         margin: 22px 0 10px;
-      }
-      .pf-ov__section--row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }
-      .pf-ov__settings-link {
-        height: 32px;
-        display: inline-flex;
-        align-items: center;
-        gap: 2px;
-        font-size: 12.5px;
-        letter-spacing: 0;
-        text-transform: none;
-        text-decoration: none;
       }
       .pf-ov__cards {
         display: grid;

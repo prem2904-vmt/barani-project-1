@@ -182,6 +182,16 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                                   @if (!d.isActive) {
                                     <span class="nd-chip nd-chip--static pf-br-chip">Inactive</span>
                                   }
+                                  <input type="number" inputmode="numeric" min="1" max="99"
+                                         class="nd-input nd-num pf-sample-input pf-sample-input--pill" placeholder="01" aria-label="Sample code"
+                                         title="Sample # — 2-digit code (01–99) prefixing the short sample barcode"
+                                         [class.pf-input-error]="!!sampleCodeError()[d.id]"
+                                         [value]="d.sampleCode ?? ''"
+                                         (input)="clearSampleCodeError(d.id)"
+                                         (change)="saveSampleCode(d, $any($event.target).value)" />
+                                  @if (sampleCodeError()[d.id]) {
+                                    <p class="pf-field-error">{{ sampleCodeError()[d.id] }}</p>
+                                  }
                                   <button type="button" class="pf-unassign pf-dept-power"
                                           (click)="toggleDeptActive(d)"
                                           [attr.aria-label]="d.isActive ? 'Deactivate department' : 'Reactivate department'"
@@ -358,6 +368,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     .pf-br-note { margin: 0 0 10px; padding: 8px 12px; border-radius: var(--nd-radius-sm); font-size: 12px; line-height: 1.5;
       color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
     .pf-br-assign { width: 170px; }
+    .pf-sample-input.nd-input { min-height: 30px; }
     .pf-unassign svg { display: block; }
 
     .pf-branch-toggle {
@@ -456,6 +467,29 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       .pf-unassign:hover { background: var(--bg-hover); color: var(--text-primary); }
     }
 
+    /* ── Per-department sample code (2-digit prefix) ── */
+    .pf-sample-field {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pf-sample-label {
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .pf-sample-input {
+      width: 64px;
+      text-align: center;
+      padding: 6px 8px;
+      -moz-appearance: textfield;
+    }
+    .pf-sample-input::-webkit-outer-spin-button,
+    .pf-sample-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
     .pf-container-ctl { display: inline-flex; align-items: center; gap: 6px; }
     .pf-container-color {
       width: 30px; height: 30px; padding: 0; border: 1px solid var(--glass-border);
@@ -464,6 +498,13 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     .pf-container-color::-webkit-color-swatch { border: none; border-radius: 6px; }
     .pf-container-color::-moz-color-swatch { border: none; border-radius: 6px; }
     .pf-container-label { width: 140px; padding: 6px 8px; }
+    /* Compact variant inside the assigned-department pill */
+    .pf-sample-input--pill {
+      width: 52px;
+      padding: 2px 6px;
+      font-size: 12px;
+    }
+
     /* ── Inline field error (routed from the shared ApiError contract) ── */
     .pf-input-error {
       border-color: #ef4444 !important;
@@ -594,7 +635,8 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     /* ── Inactive departments: greyed but still operable (the toggle must
        stay clickable so an admin can reactivate). ── */
     .pf-dept-row--inactive > div:first-child,
-    .pf-dept-pill--inactive > span:first-child { opacity: 0.5; }
+    .pf-dept-pill--inactive > span:first-child,
+    .pf-dept-pill--inactive .pf-sample-input { opacity: 0.5; }
     .pf-dept-row--inactive,
     .pf-dept-pill--inactive { border-style: dashed; }
 
@@ -760,6 +802,15 @@ export class BranchesComponent implements OnInit {
   protected readonly addingSubBranchFor = signal<string | null>(null);
   private readonly _subBranchDraft = signal({ name: '', code: '', type: 'lab', city: '' });
   readonly subBranchDraft = this._subBranchDraft.asReadonly();
+
+  /** Per-department inline sample-code error (deptId → message), routed from
+   *  the shared ApiError contract (field "sampleCode" / code "sample_code_taken"). */
+  private readonly _sampleCodeError = signal<Record<string, string>>({});
+  readonly sampleCodeError = this._sampleCodeError.asReadonly();
+  clearSampleCodeError(deptId: string) {
+    if (!this._sampleCodeError()[deptId]) return;
+    this._sampleCodeError.update(m => { const { [deptId]: _drop, ...rest } = m; return rest; });
+  }
 
   ngOnInit() {
     // Hierarchical fetch pulls branches with their sub-branches+departments eagerly
@@ -958,8 +1009,48 @@ export class BranchesComponent implements OnInit {
   // "add department" UI anywhere in the LMS.
   protected readonly DEPARTMENTS_FROM_MASTER = DEPARTMENTS_FROM_MASTER;
 
+  /**
+   * Persist a department's 2-digit sample code. Empty input clears it (null);
+   * otherwise the value is clamped to 1–99 before PATCHing. No-ops when the
+   * value is unchanged or invalid (e.g. non-numeric).
+   */
+  saveSampleCode(dept: Department, raw: string) {
+    const trimmed = (raw ?? '').trim();
+    let sampleCode: number | null;
+    if (trimmed === '') {
+      sampleCode = null;
+    } else {
+      const n = Math.floor(Number(trimmed));
+      if (!Number.isFinite(n)) { return; }
+      sampleCode = Math.min(99, Math.max(1, n));
+    }
+
+    const current = dept.sampleCode ?? null;
+    if (current === sampleCode) { return; }
+
+    this.api.patch<Department>('/api/tenants/departments/' + dept.id, { sampleCode }).subscribe({
+      next: () => {
+        this.clearSampleCodeError(dept.id);
+        this._departments.update(list =>
+          list.map(d => d.id === dept.id ? { ...d, sampleCode: sampleCode ?? undefined } : d));
+        this.toasts.success(
+          sampleCode === null
+            ? 'Sample code cleared'
+            : `Sample code set to ${String(sampleCode).padStart(2, '0')}`);
+      },
+      error: e => {
+        const err = ApiError.from(e);
+        if (err.field === 'sampleCode' || err.code === 'sample_code_taken') {
+          this._sampleCodeError.update(m => ({ ...m, [dept.id]: err.message }));
+        } else {
+          this.toasts.error(err.message);
+        }
+      }
+    });
+  }
+
   /** Persist the department's sample container colour + label (the collector's
-   *  tube guide). PATCH /api/tenants/departments/:id. */
+   *  tube guide). Same PATCH endpoint as sample code. */
   saveContainer(dept: Department, color: string, label: string) {
     const containerColor = /^#[0-9a-fA-F]{6}$/.test((color ?? '').trim()) ? color.trim().toLowerCase() : null;
     const containerLabel = (label ?? '').trim() || null;

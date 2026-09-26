@@ -10,7 +10,7 @@ import { BranchLabConfigService } from '../services/branch-lab-config.service';
  * label roll, and print darkness are PHYSICAL to that workstation.
  *
  * The machine-readable CODE (barcode | qr | datamatrix) is deliberately NOT
- * here — it's a per-branch policy set by admin (branch lab config), so every
+ * here — it's an organisation policy set by admin (branch lab config), so every
  * station encodes labels the same way. This service reads it from there.
  */
 export interface PrintConfig {
@@ -99,7 +99,7 @@ export class PrintConfigService {
     return { density: c.density - 1, speed: c.speed - 1 };
   }
 
-  /** The admin-set code (per-branch policy), read from the branch lab config. */
+  /** The admin-set code (org policy), read from the branch lab config. */
   codeMode(): LabelCodeMode {
     const m = this.branchCfg.config()?.labelCodeMode ?? 'barcode';
     return (m === ('both' as string) ? 'barcode' : m) as LabelCodeMode;
