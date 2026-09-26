@@ -972,8 +972,8 @@ mode of payment and the payment taken right here.** Three cards: QUEUE
   patient waiting to pay in the active branch, **oldest first**. Source:
   `GET /api/billing/outstanding` `due` (branch-scoped bills with balance > 0
   — in separate-counter mode Order & Payments raises the bill at
-  registration, so this IS the "awaiting billing" list, plus pay-later
-  remainders) + today's orders with `billStatus = 'unbilled'` from
+  registration, so this IS the "awaiting billing" list) **minus balances
+  deferred with Pay later** (`payLater: true` on the row) + today's orders with `billStatus = 'unbilled'` from
   `GET /api/orders/today` (bill not raised yet; billed on payment). Order
   number / tests come from today's feed, else one `GET /api/orders/{id}` per
   older balance (capped). Row: full name (wraps, never cut), order number ·
@@ -987,16 +987,33 @@ mode of payment and the payment taken right here.** Three cards: QUEUE
   = the subject (full name, order number, date), a neutral status chip, the
   items (bill lines with prices, else the order's tests), Discount / Payable
   / Paid / Balance, then **Payment**: Order & Payments'
-  `InlinePaymentPanelComponent` (`[externalFooter]`, `[allowLater]="false"`
-  — a due is cleared here, never re-deferred; Pay now UPI / Card / Cash /
-  Split, Bill to vendor, UPI QR, cash change), re-created per order. The
+  `InlinePaymentPanelComponent` (`[externalFooter]`, `[allowLater]="true"`;
+  Pay now UPI / Card / Cash / Split, Bill to vendor, **Pay later** with an
+  optional advance, UPI QR, cash change), re-created per order. The
   money is recorded here — `POST /api/billing/{id}/payment` (split = one per
   part; vendor = `/api/vendors/{id}/charge` first; no bill yet =
   `POST /api/billing/` first). **Never navigates to `/frontdesk/order`.**
   Discount rules / approvals stay where the bill is raised (Order &
   Payments); the counter shows the discount already on the bill.
+- **Pay later** (2026-09-26) — the same rules as Order & Payments, which has
+  no pay-later permission, reason or approval: the bill is raised (or kept)
+  with its balance (no bill yet = `POST /api/billing/`), an optional advance
+  is one `POST /api/billing/{id}/payment`, then
+  `POST /api/billing/{id}/pay-later` stamps `Bill.Metadata.payLater` (perm
+  `collect_payment` | `create_bill`; money / status untouched). Nothing else
+  changes: raising the bill moves the order `created → billed`, and the
+  branch **payment gate** (`paymentGateStage` dispatch / report) still holds
+  it server-side until the balance is paid — the counter only names it
+  (`paymentGateStage` on the branch lab config). The patient **leaves the
+  queue at once** (session set, then the server's `payLater` flag for every
+  cashier) and the balance stays in MONEY's **Balances due** ("· Pay later"
+  in the row). Picking that row reopens the cart with **Collect ₹X** and Pay
+  later available again (a partial = a new advance).
 - **ONE primary per state**, in the card's sticky footer: **Collect ₹X**
-  (vendor: "Bill ₹X to vendor") — a disabled secondary until the panel is
+  (vendor: "Bill ₹X to vendor"; **Pay later picked: "Save — pay later"**,
+  with an advance "Collect ₹A — rest later"). Pay later itself is a neutral
+  choice in the panel's segmented track, never a second violet button. The
+  CTA is a disabled secondary until the panel is
   complete (e.g. cash received typed), primary once it can go. **Refund ₹X**
   for a refund owed (Cash / UPI / Card slate `.nd-seg`,
   `POST /api/billing/{id}/refund`; without `process_refund` a note, no
@@ -1006,7 +1023,10 @@ mode of payment and the payment taken right here.** Three cards: QUEUE
   invoice generator as Order & Payments) and **Next patient** (primary —
   opens the oldest remaining; "Done" when the queue is empty). The paid
   patient drops off the queue at once (kept off until the server list
-  catches up). **No "Collect sample" / label step here UNLESS the workflow
+  catches up). **After Pay later** the same compact state reads **"Bill
+  saved — ₹X due later"** (name, advance · mode or "Pay later", invoice
+  number, the gate note) with **Print bill** (secondary, same generator —
+  the invoice shows the balance) and **Next patient**. **No "Collect sample" / label step here UNLESS the workflow
   puts collection at this counter:** `collectsAtBillingCounter(cfg)`
   (`shared/models/process-workflow.model.ts`) — an enabled
   `sample_collection` in the same Process-builder menu as the enabled
@@ -1029,12 +1049,15 @@ mode of payment and the payment taken right here.** Three cards: QUEUE
   the queue **full screen**; tapping a patient **zooms** the cart in
   (`[pfZoomSource]` row → `[pfZoomTarget]` card, `zoom.runLocal`) and the
   band's back (`[backAction]`) zooms back to the list. Opening a balance
-  from Money flips to the cart. 44px targets, 16px inputs.
+  from Money flips to the cart. 44px targets, 16px inputs — including the
+  shared payment panel's choices, tenders and advance field (scoped
+  `.pf-bc-pay ::ng-deep` at ≤640px).
 - **Real-layout check:** `apps/lms-e2e/src/billing-counter-layout.rbac.spec.ts`
   (seeded Lab Admin, read-only — writes aborted) asserts the pill, Queue
   left / Billing / Money ~400px right, no primary at rest, the queue's
   oldest-first order, a pick → the cart with the payment panel and at most
-  one primary, no navigation to `/frontdesk/order`, no visible native date,
+  one primary, Pay later picked → exactly one primary "Save — pay later"
+  (never clicked), no navigation to `/frontdesk/order`, no visible native date,
   no monospace, no page scroll, the grouped dropdown at the pill's width,
   the strip, and at 375 the full-screen queue → cart → back and the switch.
   `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.

@@ -240,6 +240,13 @@
   .pf-bc-rmodes { align-self: stretch; display: flex; }
   .pf-bc-rmodes .nd-seg__item { flex: 1 1 0; height: 44px; }
   .pf-bc-main .nd-card__foot .nd-btn { min-height: 44px; }
+  /* The shared payment panel (Pay now / vendor / Pay later + advance):
+     44px targets, 16px inputs — scoped to this counter only. */
+  .pf-bc-pay ::ng-deep {
+    .pf-ipp__kind, .pf-ipp__tender, .pf-ipp__quick button { height: 44px; }
+    .pf-ipp__input { height: 44px; font-size: 16px; }
+    .pf-ipp__link { min-height: 44px; }
+  }
 }
 @media (hover: none) and (pointer: coarse) {
   .pf-bc-collapse, .pf-bc-strip__expand { width: 44px !important; height: 44px; min-height: 44px; }

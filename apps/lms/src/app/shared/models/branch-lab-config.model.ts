@@ -35,6 +35,9 @@ export interface BranchLabConfig {
   /** Branch lab structure, copied from the branch: 'integrated' (all departments
    *  run as one lab) hides the department on lab tubes; 'standalone' shows it. */
   labStructure?: 'integrated' | 'standalone' | string | null;
+  /** Server-resolved payment gate: where an unpaid (e.g. pay-later) order is
+   *  held — 'dispatch' | 'report' | 'none'. Enforced server-side. */
+  paymentGateStage?: 'none' | 'dispatch' | 'report';
   metadata?: string | null;
   createdBy?: string | null;
   createdAt: string;

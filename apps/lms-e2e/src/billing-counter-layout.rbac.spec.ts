@@ -10,9 +10,11 @@ import { loginAs } from './support/auth';
  *    MONEY (~400px) on the RIGHT; no tabs, no page scroll, no monospace
  *    computed, no native date control visible, no primary with nothing
  *    picked; a queue pick → the cart with the inline payment panel and at
- *    most one primary, never a hop to /frontdesk/order; the grouped
+ *    most one primary, never a hop to /frontdesk/order; Pay later picked →
+ *    exactly one primary "Save — pay later" (not clicked); the grouped
  *    type-ahead; collapse → a strip on the RIGHT edge and back.
- *  - 375: the queue full screen → tap → the cart → band back → the queue;
+ *  - 375: the queue full screen → tap → the cart (Pay later: 44px choices,
+ *    16px inputs, one primary) → band back → the queue;
  *    the pill's two-way switch shows Money.
  * Screenshots (light + dark) into $SHOTS_DIR. CORS_RELAY=1 relays backend
  * calls so it can run against a static build on a spare port.
@@ -145,6 +147,15 @@ test.describe('Billing counter — QUEUE + BILLING + MONEY', () => {
       const noSideways = await page.evaluate(() => document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth);
       expect(noSideways).toBeLessThanOrEqual(1);
       await shoot(page, '1440-cart');
+      // Pay later: a neutral choice in the panel; the ONE primary becomes
+      // "Save — pay later" (never clicked — writes are blocked anyway).
+      const later = main.locator('.pf-ipp__kind', { hasText: 'Pay later' });
+      if (await later.count()) {
+        await later.click();
+        await expect(page.locator('.nd-btn--primary:visible')).toHaveCount(1);
+        await expect(page.locator('.nd-btn--primary:visible')).toHaveText(/Save — pay later/);
+        await shoot(page, '1440-paylater');
+      }
       await main.locator('.pf-bc-clear').click();
     }
 
@@ -200,6 +211,15 @@ test.describe('Billing counter — QUEUE + BILLING + MONEY', () => {
       await page.waitForTimeout(1000);
       expect(page.url()).not.toContain('/frontdesk/order');
       await shoot(page, '375-cart');
+      const laterPh = main.locator('.pf-ipp__kind', { hasText: 'Pay later' });
+      if (await laterPh.count()) {
+        await laterPh.click();
+        expect((await laterPh.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        const adv = main.locator('.pf-ipp__input').first();
+        expect(await adv.evaluate(e => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
+        await expect(page.locator('.nd-btn--primary:visible')).toHaveCount(1);
+        await shoot(page, '375-paylater');
+      }
       await page.locator('pf-hero-band .pf-hb__back').click();
       await expect(queue).toBeVisible();
       expect(page.url()).toContain('/billing-counter');

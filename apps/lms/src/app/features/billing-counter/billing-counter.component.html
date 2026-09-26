@@ -185,18 +185,29 @@
 
         <div class="nd-card__body pf-bc-main__body">
           @if (paid(); as pd) {
-            <!-- ── Paid: compact success, then the next patient ── -->
+            <!-- ── Paid (or saved for Pay later): compact success, then the next patient ── -->
             <div class="pf-bc-done nd-anim-in" role="status">
               <span class="pf-bc-done__mark" aria-hidden="true">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
                      stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
               </span>
+              @if (pd.later) {
+                <p class="pf-bc-done__title">Bill saved — <span class="nd-num">{{ pd.due | inr }}</span> due later</p>
+                <p class="pf-bc-done__name">{{ pd.name }}</p>
+                <p class="pf-bc-done__meta">
+                  @if (pd.amount > 0) { <span class="nd-num">{{ pd.amount | inr }}</span> advance · {{ modeLabel(pd.advanceMode) }} }
+                  @else { Pay later }
+                  @if (pd.bill?.invoiceNumber) { · Invoice <span class="nd-num">{{ pd.bill?.invoiceNumber }}</span> }
+                </p>
+                <p class="pf-bc-done__hint">{{ gateNote() }} It stays in Balances due.</p>
+              } @else {
               <p class="pf-bc-done__title"><span class="nd-num">{{ pd.amount | inr }}</span> received</p>
               <p class="pf-bc-done__name">{{ pd.name }}</p>
               <p class="pf-bc-done__meta">
                 {{ modeLabel(pd.mode) }}
                 @if (pd.bill?.invoiceNumber) { · Invoice <span class="nd-num">{{ pd.bill?.invoiceNumber }}</span> }
               </p>
+              }
               <p class="pf-bc-done__hint">
                 @if (collectsHere()) { Collect the sample here next. }
                 @else { They can go to sample collection now. }
@@ -255,12 +266,14 @@
 
               @if (canCollect()) {
                 <!-- Mode of payment: Order & Payments' own panel (modes, split,
-                     vendor, UPI QR, cash change). Re-created per order. -->
+                     vendor, UPI QR, cash change, Pay later + optional advance).
+                     Re-created per order. Pay later is a choice inside the
+                     panel's neutral track — never a second primary. -->
                 <section class="pf-bc-pay" aria-label="Payment">
                   <p class="pf-bc-sec">Payment</p>
                   @for (k of [selectedOrderId()]; track k) {
                     <pf-inline-payment-panel [amount]="payAmount()" [patientPhone]="o.patient?.phone"
-                                             [busy]="paying()" [allowLater]="false" [externalFooter]="true"
+                                             [busy]="paying()" [allowLater]="true" [externalFooter]="true"
                                              [vendorHint]="o.refHospitalName ?? ''"
                                              (confirm)="confirmPayment($event)"></pf-inline-payment-panel>
                   }
@@ -331,7 +344,7 @@
         @if (paid()) {
           <footer class="nd-card__foot">
             <button type="button" class="nd-btn nd-btn--secondary" [disabled]="printing()" (click)="printReceipt()">
-              {{ printing() ? 'Preparing…' : 'Print receipt' }}
+              {{ printing() ? 'Preparing…' : (paid()?.later ? 'Print bill' : 'Print receipt') }}
             </button>
             @if (collectsHere()) {
               <button type="button" class="nd-btn nd-btn--primary pf-bc-primary" (click)="collectSample()">Collect sample</button>
@@ -441,7 +454,7 @@
                         (click)="openOutstanding(r)">
                   <span class="pf-bc-mrow__text">
                     <span class="pf-bc-mrow__name">{{ r.patientName || 'Unnamed patient' }}</span>
-                    <span class="pf-bc-mrow__meta nd-num">{{ r.createdAt | date:'d MMM' }} · paid {{ r.totalPaid | inr }} of {{ r.totalPayable | inr }}</span>
+                    <span class="pf-bc-mrow__meta nd-num">{{ r.createdAt | date:'d MMM' }}@if (r.payLater) { · Pay later } · paid {{ r.totalPaid | inr }} of {{ r.totalPayable | inr }}</span>
                   </span>
                   <span class="pf-bc-mrow__amt nd-num">{{ r.balance | inr }}</span>
                 </button>

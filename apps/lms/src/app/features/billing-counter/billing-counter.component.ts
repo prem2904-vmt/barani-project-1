@@ -8,6 +8,8 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
+import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
+import { BillingEventsService } from '../../core/services/billing-events.service';
 import { ScanService } from '../../core/services/scan.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ZoomTransitionService } from '../../core/navigation/zoom-transition';
@@ -41,6 +43,9 @@ export interface OutstandingRow {
   balance: number;
   status: string;
   createdAt: string;
+  /** Deferred at the counter (POST /api/billing/{id}/pay-later): still due,
+   *  but no longer "waiting to pay" in the queue. */
+  payLater?: boolean;
 }
 
 interface ReconcileModeRow { mode: string; count: number; total: number; }
@@ -88,13 +93,19 @@ export interface QueueRow {
   mrn?: string;
 }
 
-/** The compact success state after a payment. */
+/** The compact success state after a payment — or after Pay later. */
 export interface PaidState {
   orderId: string;
   name: string;
+  /** Collected now (for Pay later: the advance, often 0). */
   amount: number;
   mode: string;
   bill: Bill | null;
+  /** Pay later: the bill is saved with this balance still due. */
+  later?: boolean;
+  due?: number;
+  /** Pay later with an advance: how the advance was tendered. */
+  advanceMode?: string;
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -181,6 +192,8 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService, { optional: true });
   private readonly process = inject(ProcessWorkflowService, { optional: true });
+  private readonly labCfg = inject(BranchLabConfigService, { optional: true });
+  private readonly billingEvents = inject(BillingEventsService, { optional: true });
   private readonly zoom = inject(ZoomTransitionService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly scan = inject(ScanService);
@@ -215,6 +228,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     try { this.process?.loadActive(); } catch { /* nav falls back */ }
+    try { this.labCfg?.ensureLoaded(); } catch { /* gate hint is optional */ }
     this.loadOutstanding();
     this.loadToday();
     this.loadReconcile();
@@ -246,7 +260,12 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly _refundsOwed = signal<OutstandingRow[]>([]);
   protected readonly loadingOutstanding = signal(false);
   private outstandingLoaded = false;
-  readonly due = this._due.asReadonly();
+  /** Balances due — a balance deferred here this session reads as Pay later
+   *  even before the server's flag comes back. */
+  readonly due = computed<OutstandingRow[]>(() => {
+    const later = this._laterIds();
+    return later.size ? this._due().map(r => !r.payLater && later.has(r.orderId) ? { ...r, payLater: true } : r) : this._due();
+  });
   readonly refundsOwed = this._refundsOwed.asReadonly();
   readonly moneyCount = computed(() => this._due().length + this._refundsOwed().length);
 
@@ -294,6 +313,10 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   /** Paid at this counter this session — kept off the queue even if a poll
    *  lands before the server's outstanding list catches up. */
   private readonly _paidIds = signal<ReadonlySet<string>>(new Set());
+  /** Deferred (Pay later) at this counter this session — off the queue at
+   *  once, still listed in MONEY's balances due. The server's `payLater`
+   *  flag keeps them off for every cashier after the next refresh. */
+  private readonly _laterIds = signal<ReadonlySet<string>>(new Set());
 
   private loadToday() {
     this.api.get<Order[]>('/api/orders/today').subscribe({
@@ -330,10 +353,13 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   /** Every patient waiting to pay, OLDEST first. */
   readonly queue = computed<QueueRow[]>(() => {
     const paid = this._paidIds();
+    const later = this._laterIds();
     const rows: QueueRow[] = [];
     const seen = new Set<string>();
     for (const r of this._due()) {
       if (paid.has(r.orderId) || seen.has(r.orderId)) continue;
+      // Pay later: the balance is due, but the patient isn't in the line.
+      if (r.payLater || later.has(r.orderId)) { seen.add(r.orderId); continue; }
       seen.add(r.orderId);
       const o = this.orderById(r.orderId);
       rows.push({
@@ -348,7 +374,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
       });
     }
     for (const o of this._today()) {
-      if (seen.has(o.id) || paid.has(o.id) || o.billStatus !== 'unbilled') continue;
+      if (seen.has(o.id) || paid.has(o.id) || later.has(o.id) || o.billStatus !== 'unbilled') continue;
       if (o.status === 'cancelled' || o.status === 'draft') continue;
       seen.add(o.id);
       rows.push({
@@ -400,14 +426,30 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     this._due.update(list => list.filter(r => r.orderId !== orderId));
   }
 
-  /** Forget session-paid ids the server no longer lists as due. */
+  /** Pay later: keep the balance in MONEY (flagged) but off the queue. */
+  private markLater(orderId: string, bill: Bill, name: string) {
+    this._laterIds.update(s => new Set([...s, orderId]));
+    this._paidIds.update(s => { const n = new Set(s); n.delete(orderId); return n; });
+    const row: OutstandingRow = {
+      billId: bill.id, orderId, patientId: bill.patientId, patientName: name,
+      totalPayable: bill.totalPayable, totalPaid: bill.totalPaid, balance: bill.balance,
+      status: bill.status, createdAt: bill.createdAt || new Date().toISOString(), payLater: true,
+    };
+    this._due.update(list => list.some(r => r.orderId === orderId)
+      ? list.map(r => r.orderId === orderId ? { ...r, ...row, patientName: r.patientName || name, createdAt: r.createdAt } : r)
+      : [row, ...list]);
+  }
+
+  /** Forget session-paid / deferred ids the server no longer lists as due. */
   private prunePaid() {
-    const ids = this._paidIds();
-    if (!ids.size) return;
     const still = new Set(this._due().map(r => r.orderId));
     const today = new Set(this._today().filter(o => o.billStatus === 'unbilled').map(o => o.id));
-    const next = new Set([...ids].filter(id => still.has(id) || today.has(id)));
-    if (next.size !== ids.size) this._paidIds.set(next);
+    for (const sig of [this._paidIds, this._laterIds]) {
+      const ids = sig();
+      if (!ids.size) continue;
+      const next = new Set([...ids].filter(id => still.has(id) || today.has(id)));
+      if (next.size !== ids.size) sig.set(next);
+    }
   }
 
   // ── Day-end reconciliation ────────────────────────────────────────────
@@ -829,11 +871,21 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   /** The cart takes money: something is owed and it isn't paid yet here. */
   readonly canCollect = computed(() => !!this.selectedOrder() && !this.paid() && this.payAmount() > 0);
 
-  /** The ONE primary: "Collect ₹X" (vendor: "Bill ₹X to vendor"). */
+  /** Pay later is picked in the panel (a secondary choice, not a CTA). */
+  readonly laterPicked = computed(() => this.payPanel()?.mode() === 'later');
+
+  /** The ONE primary: "Collect ₹X" (vendor: "Bill ₹X to vendor"; Pay later:
+   *  "Save — pay later", or "Collect ₹A — rest later" with an advance). */
   readonly collectLabel = computed(() => {
-    if (this.paying()) return 'Collecting…';
+    const p = this.payPanel();
+    const mode = p?.mode();
+    if (this.paying()) return mode === 'later' ? 'Saving…' : 'Collecting…';
     const amt = inrFmt.format(this.payAmount());
-    return this.payPanel()?.mode() === 'wallet' ? `Bill ${amt} to vendor` : `Collect ${amt}`;
+    if (mode === 'later') {
+      const adv = p?.advanceNum() ?? 0;
+      return adv > 0 ? `Collect ${inrFmt.format(adv)} — rest later` : 'Save — pay later';
+    }
+    return mode === 'wallet' ? `Bill ${amt} to vendor` : `Collect ${amt}`;
   });
   /** Until the panel is complete (e.g. cash received typed) the CTA is a
    *  disabled secondary; it turns primary when it can go (ND-PATTERN §2). */
@@ -850,10 +902,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   async confirmPayment(d: InlinePaymentResult) {
     const orderId = this.selectedOrderId();
     if (!orderId || this.paying()) return;
-    if (d.mode === 'later') {
-      this.toasts.error('This balance must be cleared here — pay by cash, UPI, card or vendor.');
-      return;
-    }
+    if (d.mode === 'later') { await this.saveLater(orderId, d); return; }
     this.paying.set(true);
     try {
       let bill = this.selectedBill();
@@ -903,6 +952,69 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
       this.paying.set(false);
     }
   }
+
+  /** Pay later — the same rules as Order & Payments: the bill is raised (or
+   *  kept) with its balance, an optional advance is recorded as a payment,
+   *  and nothing else changes; the branch payment gate (dispatch / report)
+   *  still holds the order until the balance is paid. The bill is stamped
+   *  `payLater` so the patient leaves the waiting queue for every cashier;
+   *  the balance stays in MONEY's "Balances due" for later collection. */
+  private async saveLater(orderId: string, d: InlinePaymentResult) {
+    this.paying.set(true);
+    try {
+      let bill = this.selectedBill();
+      if (!bill) {
+        const row = this.outstandingFor(orderId);
+        bill = row?.billId
+          ? await firstValueFrom(this.api.get<Bill>(`/api/billing/${row.billId}`))
+          : await firstValueFrom(this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }));
+      }
+      if (!bill) throw new Error('Could not raise the bill for this order');
+      if (!(decimal2(bill.balance) > 0)) throw new Error('Nothing left to collect on this bill');
+      let latest: Bill = bill;
+      const adv = decimal2(Math.min(d.advanceAmount ?? 0, bill.balance));
+      if (adv > 0) {
+        latest = (await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+          amount: adv, mode: d.advanceMode ?? 'cash',
+        }))) ?? latest;
+      }
+      if (decimal2(latest.balance) > 0) {
+        // Best-effort stamp: an older server without the endpoint still keeps
+        // the patient off this counter's queue for the session.
+        try {
+          latest = (await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/pay-later`, {}))) ?? latest;
+        } catch { /* session set covers it */ }
+      }
+      const o = this.selectedOrder();
+      const name = (o && this.orderPatientName(o)) || this.queue().find(r => r.orderId === orderId)?.name || 'Patient';
+      const due = Math.max(0, decimal2(latest.balance));
+      this.selectedBill.set(latest);
+      this.paid.set({
+        orderId, name, amount: adv, mode: 'later', bill: latest,
+        later: due > 0, due, advanceMode: adv > 0 ? (d.advanceMode ?? 'cash') : undefined,
+      });
+      if (due > 0) this.markLater(orderId, latest, name); else this.markPaid(orderId);
+      this.toasts.success(due > 0 ? `Bill saved — ${inrFmt.format(due)} due later` : 'Payment collected');
+      this.billingEvents?.notifyPayLater();
+      this.loadOutstanding(true);
+      this.loadToday();
+      if (adv > 0) this.loadReconcile();
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.paying.set(false);
+    }
+  }
+
+  /** Where the branch holds a pay-later order until the balance is paid
+   *  (Lab settings → payment gate). Read-only here — the gate is enforced
+   *  by the server; the counter only says it. */
+  readonly gateNote = computed(() => {
+    const stage = this.labCfg?.config()?.paymentGateStage;
+    return stage === 'dispatch' ? 'Samples are held at dispatch until it is paid.'
+      : stage === 'report' ? 'The report is released once it is paid.'
+      : 'Collect it before the report is handed over.';
+  });
 
   /** The next patient in the queue (the paid one has already dropped off). */
   readonly nextRow = computed<QueueRow | null>(() => {

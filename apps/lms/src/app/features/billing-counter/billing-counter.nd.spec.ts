@@ -68,6 +68,9 @@ const WF_COLLECT_ELSEWHERE: ProcessWorkflowConfig = {
 interface Opts {
   narrow?: boolean; phone?: boolean; lookupFails?: boolean; empty?: boolean;
   workflow?: ProcessWorkflowConfig | null; canRefund?: boolean;
+  /** The server already flags o1's balance as Pay later. */
+  o1PayLater?: boolean;
+  gate?: 'none' | 'dispatch' | 'report';
 }
 
 function render(opts: Opts = {}) {
@@ -75,9 +78,27 @@ function render(opts: Opts = {}) {
     matches: q.includes('900px') ? !!(opts.narrow || opts.phone) : q.includes('640px') ? !!opts.phone : false,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
   });
+  // Live balances per bill, so an advance leaves the rest due.
+  const bal: Record<string, number> = { b1: 1000, b3: 300, b4: 450 };
+  const stamped = new Set<string>(opts.o1PayLater ? ['b1'] : []);
+  let created = false;
+  const payable: Record<string, number> = { b1: 1200, b3: 300, b4: 450 };
+  const billNow = (id: string, extra: any = {}) => ({
+    ...BILL1, id, orderId: extra.orderId ?? BILL1.orderId, patientId: 'p1', createdAt: '2026-09-26T08:01:00Z',
+    totalPayable: payable[id] ?? 1200, totalPaid: (payable[id] ?? 1200) - (bal[id] ?? 0), balance: bal[id] ?? 0,
+    status: (bal[id] ?? 0) <= 0 ? 'paid' : 'pending', ...extra,
+  });
   const api = {
     get: vi.fn((url: string) => {
-      if (url.startsWith('/api/billing/outstanding')) return of(opts.empty ? { due: [], refundsOwed: [] } : { due: [DUE, DUE3], refundsOwed: [REFUND] });
+      if (url.startsWith('/api/billing/outstanding')) {
+        if (opts.empty) return of({ due: [], refundsOwed: [] });
+        // Like the server: live balances, the payLater stamp, bills raised here.
+        const row = (d: any) => ({ ...d, balance: bal[d.billId], totalPaid: payable[d.billId] - bal[d.billId], payLater: stamped.has(d.billId) });
+        const due = [DUE, DUE3, ...(created ? [{ ...DUE, billId: 'b4', orderId: 'o4', patientId: 'p4', patientName: 'Meena Kumari', createdAt: '2026-09-26T09:05:00Z' }] : [])]
+          .map(row).filter(r => r.balance > 0);
+        return of({ due, refundsOwed: [REFUND] });
+      }
+      if (url === '/api/tenants/branch-lab-config') return of(opts.gate ? { paymentGateStage: opts.gate } : null);
       if (url.startsWith('/api/billing/reconcile')) return of(RECON);
       if (url.startsWith('/api/billing/lookup')) return opts.lookupFails ? throwError(() => new Error('No order matches that code')) : of({ orderId: 'o1' });
       if (url.startsWith('/api/billing/b1')) return of(BILL1);
@@ -93,8 +114,18 @@ function render(opts: Opts = {}) {
       return of(null);
     }),
     post: vi.fn((url: string, body: any) => {
+      if (url === '/api/billing/') created = true;
       if (url === '/api/billing/') return of({ ...BILL1, id: 'b4', orderId: body.orderId, totalPayable: 450, totalPaid: 0, balance: 450, totalDiscount: 0, items: [] });
-      if (url.endsWith('/payment')) return of({ ...BILL1, id: url.split('/')[3], totalPaid: BILL1.totalPayable, balance: 0, status: 'paid' });
+      if (url.endsWith('/payment')) {
+        const id = url.split('/')[3];
+        bal[id] = Math.max(0, (bal[id] ?? 0) - body.amount);
+        return of(billNow(id));
+      }
+      if (url.endsWith('/pay-later')) {
+        const id = url.split('/')[3];
+        stamped.add(id);
+        return of(billNow(id, { orderId: id === 'b4' ? 'o4' : id === 'b3' ? 'o3' : 'o1', metadata: '{"payLater":{}}' }));
+      }
       if (url.endsWith('/refund')) return of({ ...BILL1, id: 'b2', orderId: 'o2', totalPayable: 300, totalPaid: 300, balance: 0, items: [] });
       return of({});
     }),
@@ -233,11 +264,12 @@ describe('Billing counter — select → cart → pay here', () => {
     expect(dues).toContain('Payable');
     expect(dues).toContain('Paid');
     expect(main.querySelector('.pf-bc-dues__bal')?.textContent).toContain('1,000');
-    // Order & Payments' own payment panel, never the Pay-later option here.
+    // Order & Payments' own payment panel — Pay later included (a neutral
+    // choice in the panel's track, not a second primary).
     const panel = main.querySelector('pf-inline-payment-panel');
     expect(panel).toBeTruthy();
     expect(panel!.textContent).toContain('Pay now');
-    expect(panel!.textContent).not.toContain('Pay later');
+    expect(panel!.textContent).toContain('Pay later');
     // Until the panel is complete the CTA is a disabled secondary: no primary.
     expect(primaries(el).length).toBe(0);
     const cta = main.querySelector('.nd-card__foot .pf-bc-primary') as HTMLButtonElement;
@@ -309,17 +341,153 @@ describe('Billing counter — select → cart → pay here', () => {
     expect(c.queue().map((r: any) => r.orderId)).toEqual(['o3', 'o1']);
   });
 
-  it('split pays each part; Pay later is refused (a due is cleared here)', async () => {
-    const { f, c, api, toasts } = render();
+  it('split pays each part', async () => {
+    const { f, c, api } = render();
     c.selectRow(c.queue()[1]);
     f.detectChanges();
     await flush();
-    await c.confirmPayment({ mode: 'later' });
-    expect(toasts.error).toHaveBeenCalled();
-    expect(api.post).not.toHaveBeenCalled();
     await c.confirmPayment({ mode: 'split', splitParts: [{ mode: 'cash', amount: 400 }, { mode: 'upi', amount: 600 }] });
     expect(api.post).toHaveBeenCalledWith('/api/billing/b1/payment', { amount: 400, mode: 'cash' });
     expect(api.post).toHaveBeenCalledWith('/api/billing/b1/payment', { amount: 600, mode: 'upi' });
+  });
+});
+
+describe('Billing counter — Pay later', () => {
+  async function openO1(opts: Opts = {}) {
+    const r = render(opts);
+    r.c.selectRow(r.c.queue().find((x: any) => x.orderId === 'o1'));
+    r.f.detectChanges();
+    await flush();
+    r.f.detectChanges();
+    return r;
+  }
+
+  it('is available in the cart; picking it makes the ONE primary "Save — pay later"', async () => {
+    const { f, el, c } = await openO1();
+    const kinds = Array.from(el.querySelectorAll('.pf-ipp__kind')).map(b => b.textContent?.trim());
+    expect(kinds).toContain('Pay later');
+    // At rest (cash, nothing typed) there is no primary.
+    expect(primaries(el).length).toBe(0);
+    (Array.from(el.querySelectorAll('.pf-ipp__kind')).find(b => b.textContent?.trim() === 'Pay later') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(c.laterPicked()).toBe(true);
+    const ps = primaries(el);
+    expect(ps.length).toBe(1);
+    expect(ps[0].textContent?.trim()).toBe('Save — pay later');
+    // The Pay-later choice itself is never violet primary.
+    expect(el.querySelector('.pf-ipp__kind.nd-btn--primary')).toBeNull();
+    // With an advance the label says what is collected now.
+    c.payPanel().setAdvance('300');
+    f.detectChanges();
+    expect(primaries(el).length).toBe(1);
+    expect(primaries(el)[0].textContent).toMatch(/Collect ₹300(\.00)? — rest later/);
+  });
+
+  it('records the bill with its balance (no payment), stamps it pay-later, shows the saved state', async () => {
+    const { f, el, c, api, router, toasts } = await openO1();
+    await c.confirmPayment({ mode: 'later' });
+    f.detectChanges();
+    const posts = api.post.mock.calls.map((x: any[]) => x[0]);
+    expect(posts).toEqual(['/api/billing/b1/pay-later']);
+    expect(posts.some((u: string) => u.endsWith('/payment'))).toBe(false);
+    const done = el.querySelector('.pf-bc-done')!;
+    expect(done.textContent).toContain('Bill saved');
+    expect(done.textContent).toMatch(/₹1,000(\.00)?\s*due later/);
+    expect(done.textContent).toContain('Paravai Munusamy');
+    expect(toasts.success).toHaveBeenCalledWith(expect.stringContaining('due later'));
+    // Print the bill (secondary) + Next patient (the ONE primary).
+    const foot = el.querySelector('.pf-bc-main .nd-card__foot')!;
+    expect(Array.from(foot.querySelectorAll('.nd-btn--secondary')).map(b => b.textContent?.trim())).toContain('Print bill');
+    const ps = primaries(el);
+    expect(ps.length).toBe(1);
+    expect(ps[0].textContent?.trim()).toBe('Next patient');
+    neverToOrderScreen(router);
+  });
+
+  it('an advance is recorded as a payment; the rest stays due', async () => {
+    const { f, el, c, api } = await openO1();
+    await c.confirmPayment({ mode: 'later', advanceAmount: 300, advanceMode: 'upi' });
+    f.detectChanges();
+    expect(api.post).toHaveBeenCalledWith('/api/billing/b1/payment', { amount: 300, mode: 'upi' });
+    expect(api.post).toHaveBeenCalledWith('/api/billing/b1/pay-later', {});
+    expect(c.paid().due).toBe(700);
+    expect(el.querySelector('.pf-bc-done')?.textContent).toMatch(/₹700(\.00)?\s*due later/);
+    expect(el.querySelector('.pf-bc-done')?.textContent).toMatch(/₹300(\.00)?\s*advance · UPI/);
+    expect(c.due().find((r: any) => r.orderId === 'o1').balance).toBe(700);
+  });
+
+  it('an order with no bill yet is billed, then saved for later', async () => {
+    const { f, c, api } = render();
+    c.selectRow(c.queue().find((x: any) => x.orderId === 'o4'));
+    f.detectChanges();
+    await flush();
+    await c.confirmPayment({ mode: 'later' });
+    expect(api.post).toHaveBeenCalledWith('/api/billing/', { orderId: 'o4', discount: 0 });
+    expect(api.post).toHaveBeenCalledWith('/api/billing/b4/pay-later', {});
+    expect(c.queue().map((r: any) => r.orderId)).not.toContain('o4');
+    expect(c.due().find((r: any) => r.orderId === 'o4')?.balance).toBe(450);
+  });
+
+  it('leaves the "waiting to pay" queue at once and shows in MONEY → Balances due', async () => {
+    const { f, el, c } = await openO1();
+    await c.confirmPayment({ mode: 'later' });
+    f.detectChanges();
+    expect(c.queue().map((r: any) => r.orderId)).toEqual(['o3', 'o4']);
+    expect(el.querySelector('.pf-bc-queue')?.textContent).not.toContain('Paravai');
+    const mrow = Array.from(el.querySelectorAll('.pf-bc-side .pf-bc-mrow')).find(r => r.textContent?.includes('Paravai'))!;
+    expect(mrow).toBeTruthy();
+    expect(mrow.textContent).toContain('Pay later');
+    expect(mrow.querySelector('.pf-bc-mrow__amt')?.textContent).toContain('1,000');
+    // A refresh that still lists the balance keeps them off the queue.
+    c.poll();
+    f.detectChanges();
+    expect(c.queue().map((r: any) => r.orderId)).not.toContain('o1');
+  });
+
+  it('the server flag keeps a pay-later balance off the queue for every cashier', () => {
+    const { el, c } = render({ o1PayLater: true });
+    expect(c.queue().map((r: any) => r.orderId)).toEqual(['o3', 'o4']);
+    expect(el.querySelector('.pf-bc-side')?.textContent).toContain('Paravai Munusamy');
+  });
+
+  it('picking the balance in MONEY reopens the cart with "Collect ₹X" and Pay later again', async () => {
+    const { f, el, c } = render({ o1PayLater: true });
+    const mrow = Array.from(el.querySelectorAll('.pf-bc-side .pf-bc-mrow')).find(r => r.textContent?.includes('Paravai')) as HTMLButtonElement;
+    mrow.click();
+    f.detectChanges();
+    await flush();
+    f.detectChanges();
+    expect(c.selectedOrderId()).toBe('o1');
+    const cta = el.querySelector('.pf-bc-main .nd-card__foot .pf-bc-primary') as HTMLButtonElement;
+    expect(cta.textContent).toMatch(/Collect ₹1,000/);
+    const kinds = Array.from(el.querySelectorAll('.pf-ipp__kind')).map(b => b.textContent?.trim());
+    expect(kinds).toContain('Pay later');
+    c.payPanel().setMode('upi');
+    f.detectChanges();
+    expect(primaries(el).length).toBe(1);
+  });
+
+  it('respects the payment gate: nothing but the bill is touched; the note names the gate', async () => {
+    const dispatch = await openO1({ gate: 'dispatch' });
+    await dispatch.c.confirmPayment({ mode: 'later' });
+    dispatch.f.detectChanges();
+    const urls = dispatch.api.post.mock.calls.map((x: any[]) => x[0]);
+    expect(urls.every((u: string) => u.startsWith('/api/billing/'))).toBe(true);
+    expect(dispatch.el.querySelector('.pf-bc-done__hint')?.textContent).toContain('dispatch');
+    TestBed.resetTestingModule();
+    const report = await openO1({ gate: 'report' });
+    await report.c.confirmPayment({ mode: 'later' });
+    report.f.detectChanges();
+    expect(report.el.querySelector('.pf-bc-done__hint')?.textContent).toContain('report');
+  });
+
+  it('collection at the billing counter: "Collect sample" stays the primary after Pay later', async () => {
+    const { f, el, c } = await openO1({ workflow: WF_COLLECT_AT_BILLING });
+    await c.confirmPayment({ mode: 'later' });
+    f.detectChanges();
+    const ps = primaries(el);
+    expect(ps.length).toBe(1);
+    expect(ps[0].textContent?.trim()).toBe('Collect sample');
   });
 });
 
