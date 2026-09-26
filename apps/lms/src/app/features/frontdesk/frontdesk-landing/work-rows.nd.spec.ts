@@ -85,9 +85,9 @@ describe('Frontdesk work rows — anatomy', () => {
     expect(status).toMatch(/border: 0/);
     expect(status).toMatch(/padding: 0/);
     expect(status).toMatch(/font-weight: 500/);
-    expect(status).toMatch(/font-size: 13\.5px/);
+    expect(status).toMatch(/font-size: 12\.5px/);
     const dot = rule('.pf-wrow__dot');
-    expect(dot).toMatch(/width: 7px/);
+    expect(dot).toMatch(/width: 6px/);
     expect(dot).toMatch(/background: var\(--pf-tone\)/);
   });
 
@@ -269,5 +269,15 @@ describe('Frontdesk selection clears on Esc, tab switch and search change', () =
     proto['setWorkQuery'].call(h, 'sasi');
     expect(h.workSel.count()).toBe(0);
     expect(h.workQuery()).toBe('sasi');
+  });
+});
+
+describe('Work rows — status stacked above the action (owner: compact right column)', () => {
+  it('status and action share ONE right column: status on top, action below', () => {
+    const css = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/styles/_work-rows.scss', 'utf8');
+    expect(css).toMatch(/grid-template-areas: 'body status' 'body acts';/);
+    expect(css).toMatch(/grid-template-areas: 'check body status' 'check body acts';/);
+    expect(css).toMatch(/\.pf-wrow__acts:empty \{ display: none; \}/);
+    expect(css).toMatch(/:has\(\.pf-wrow__acts:empty\) \.pf-wrow__status \{ grid-row: 1 \/ span 2;/);
   });
 });

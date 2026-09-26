@@ -11,11 +11,13 @@
   --pf-wrow-act-w: 104px;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-areas: 'body status acts';
+  /* Status sits ABOVE the action in one narrow right column (owner: "not
+     consuming more space"), like the classic list. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'body status' 'body acts';
   align-items: center;
   column-gap: 12px;
-  row-gap: 8px;
+  row-gap: 6px;
   min-height: 64px;
   padding: 10px 12px 10px 14px;
   border-radius: var(--nd-radius, 12px);
@@ -26,8 +28,8 @@
   transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
 }
 .pf-wlist--sel .pf-wrow {
-  grid-template-columns: 20px minmax(0, 1fr) auto auto;
-  grid-template-areas: 'check body status acts';
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-areas: 'check body status' 'check body acts';
   padding-left: 12px;
 }
 .pf-wrow:hover { border-color: var(--nd-sel-border); }
@@ -44,7 +46,7 @@
 .pf-wrow[data-priority='STAT'] { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--red-text, #dc2626) 75%, transparent); }
 .pf-wrow[data-priority='Urgent'] { box-shadow: inset 3px 0 0 #d97706; }
 
-.pf-wrow__check { grid-area: check; justify-self: center; }
+.pf-wrow__check { grid-area: check; justify-self: center; align-self: center; }
 .pf-wrow__check--none { width: 20px; height: 20px; }
 
 .pf-wrow__body { grid-area: body; min-width: 0; }
@@ -86,18 +88,21 @@
   --pf-tone: var(--amber-text);
   grid-area: status;
   justify-self: end;
+  align-self: end;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   padding: 0;
   border: 0;
   background: none;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 500;
-  line-height: 18px;
+  line-height: 16px;
   white-space: nowrap;
   color: var(--pf-tone);
 }
+/* No action on this row → the status centres vertically on its own. */
+.pf-wrow:has(.pf-wrow__acts:empty) .pf-wrow__status { grid-row: 1 / span 2; align-self: center; }
 .pf-wrow__status[data-tone='green'] { --pf-tone: var(--green-text); }
 .pf-wrow__status[data-tone='blue'] { --pf-tone: var(--blue-text); }
 .pf-wrow__status[data-tone='red'] { --pf-tone: var(--red-text); }
@@ -107,8 +112,8 @@
 }
 .pf-wrow__dot {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
   background: var(--pf-tone);
 }
@@ -117,13 +122,13 @@
    the action lines up in every row. */
 .pf-wrow__acts {
   grid-area: acts;
+  align-self: start;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  min-width: var(--pf-wrow-act-w);
 }
-.pf-wrow__acts:empty { min-width: var(--pf-wrow-act-w); }
+.pf-wrow__acts:empty { display: none; }
 
 /* Touch: long-press selects, so no callout / text selection on the row. */
 @media (pointer: coarse) {
