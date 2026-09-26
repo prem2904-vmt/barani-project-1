@@ -106,6 +106,8 @@ import { savedValueRows } from '../../../shared/utils/result-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { drawerAgeSex, drawerName, orderStatusState } from './order-drawer';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -2805,6 +2807,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return patientDisplayName(this.patientFor(id)) || 'Patient';
   }
   protected readonly formatPatient = formatPatientInfo;
+  /** Drawer headers (ND): the FULL name (never cut), age/sex on the quiet meta line. */
+  protected readonly drawerName = drawerName;
+  protected readonly drawerAgeSex = drawerAgeSex;
+  /** Status chip dot: neutral chip, violet dot while in flight / done. */
+  protected readonly orderStatusState = orderStatusState;
+  /** Text actions on web, icon actions on touch (ND §6 row actions). */
+  readonly webPointer = webPointerSignal();
   hasOutstanding(pid?: string): boolean {
     if (!pid) return false;
     return this._bills().some(b => b.patientId === pid && b.balance > 0);

@@ -119,6 +119,13 @@
 .nd-btn.nd-btn--primary:hover:not(:disabled) { filter: brightness(1.05); }
 .nd-btn.nd-btn--secondary { @include nd.btn-secondary; box-shadow: none; }
 .nd-btn.nd-btn--tertiary { border: 0; background: transparent; color: var(--violet-text, #6d28d9); padding: 0 6px; }
+/* Danger-secondary: a destructive action (Cancel order) as a muted-red
+   OUTLINE — never a filled red button. Keep its confirm (DialogService). */
+.nd-btn.nd-btn--danger {
+  border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 55%, transparent);
+  background: transparent; color: var(--red-text, #dc2626); box-shadow: none;
+}
+.nd-btn.nd-btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--red-text, #dc2626) 8%, transparent); }
 .nd-btn.nd-btn--icon {
   width: 44px; padding: 0; background: var(--nd-card-bg); border: 1px solid var(--nd-line);
   color: var(--text-secondary);

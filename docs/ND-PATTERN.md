@@ -154,6 +154,9 @@ In-page steps that close rather than navigate pass `[backAction]` to
 - **Secondary** (`.nd-btn--secondary`, outline, like "Save as draft"): Can't
   collect, Label by hand, Save as draft.
 - **Tertiary** (`.nd-btn--tertiary`, text): Clear, Discard draft, Edit.
+- **Danger** (`.nd-btn--danger`, muted-red outline): destructive actions such as
+  Cancel order. Never a filled red button; the confirm stays (DialogService /
+  the screen's confirm card).
 - **Icon** (`.nd-btn--icon`, neutral): close, "more".
 - Everything else is neutral: tiles, chips, segmented controls, counters,
   badges, thumbnails.
@@ -1181,7 +1184,7 @@ exact PDF on screen. Visual redesign only: every action and API is unchanged.
 Layout   .nd-page · .nd-head(__back|__who|__title|__meta|__actions) · .nd-band-chip
          .nd-body · .nd-body--split
 Card     .nd-card · .nd-card__head · __icon · __label · __note · __spacer · __body · __foot · .nd-span
-Buttons  .nd-btn + --primary | --secondary | --tertiary | --icon | --quiet (neutral grey helper)
+Buttons  .nd-btn + --primary | --secondary | --tertiary | --danger | --icon | --quiet (neutral grey helper)
 Select   .nd-seg / .nd-seg__item[aria-checked] · .nd-chip[aria-pressed] · .nd-chip--static · .nd-tile-sel
 Toggle   .nd-toggle[role=switch][aria-checked] › .nd-toggle__track › .nd-toggle__knob · .nd-toggle--urgent
 Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done

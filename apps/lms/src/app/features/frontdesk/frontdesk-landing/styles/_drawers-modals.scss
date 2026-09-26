@@ -70,116 +70,126 @@
   color: var(--text-primary);
 }
 
-/* ── Order drawer ───────────────────────────────────────── */
+/* ── Order drawer (ND) ──────────────────────────────────────────────────
+   Shared by the order, home-collection and payment drawers on this page.
+   ND rules: Noto Sans only (tabular numbers, never monospace), palette =
+   violet + neutrals, full names wrap (never an ellipsis), a sticky footer
+   that is always fully visible above the docked navbar. */
 .pf-drawer-bd {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(15, 23, 42, 0.32);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   z-index: 44;
-  animation: pf-fade 0.2s ease both;
+  animation: pf-fade 240ms ease both;
 }
 
-:root.light .pf-drawer-bd {
-  background: rgba(100, 70, 160, 0.18);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+:root.dark .pf-drawer-bd,
+:root[data-theme='dark'] .pf-drawer-bd {
+  background: rgba(0, 0, 0, 0.45);
 }
 
 .pf-drawer {
   position: fixed;
   right: 0;
-  /* Top-strip is sticky-top with mt-2 (8px) + pt-3 (12px) + ~64px pill
-   * = ~84px total footprint on desktop. Start the drawer just below
-   * that so the top-nav (Home/Frontdesk/Lab/…) stays visible and
-   * clickable while an order panel is open. */
+  /* Classic top-strip footprint (~84px) — the top-nav stays reachable. */
   top: 5.5rem;
-  bottom: 0;
-  width: min(100%, 440px);
-  background: var(--bg-primary);
-  border-left: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 24px 0 0 24px;
-  box-shadow: -28px 0 80px rgba(0, 0, 0, 0.3),
-    -4px 0 24px rgba(139, 92, 246, 0.1),
-    inset 1px 0 0 rgba(139, 92, 246, 0.06);
+  /* Never under the docked bottom navbar (new design): the footer used to
+   * be cropped because the drawer ran to bottom:0 behind the bar. */
+  bottom: var(--nd-nav-h, 0px);
+  width: min(100%, 460px);
+  max-width: 100%;
+  background: var(--nd-card-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--nd-line);
+  border-right: 0;
+  border-radius: var(--nd-radius-card) 0 0 var(--nd-radius-card);
+  box-shadow: -24px 0 60px rgba(15, 23, 42, 0.18);
   z-index: 45;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
-  animation: pf-drawer-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  font-variant-numeric: tabular-nums;
+  animation: pf-drawer-in 240ms var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
 }
 
-/* At viewports below the desktop breakpoint the floating bottom-nav pill
- * is visible (top-strip's center nav is hidden there). Lift the drawer so
- * its bottom edge sits ABOVE the nav pill — without this the drawer
- * (z=45) covers the nav (z=30) and the user can't switch screens while
- * an order is open. */
+/* New design (bottom navbar): no top strip — the drawer floats inside the
+   viewport between the band and the docked bar. */
+:root.nav-bottom .pf-drawer {
+  top: 12px;
+  bottom: calc(var(--nd-nav-h, 0px) + 12px);
+}
+
+/* Below the desktop breakpoint the floating nav pill is visible: keep the
+ * drawer's bottom edge above it (classic). */
 @media (max-width: 1279px) {
-  .pf-drawer {
+  :root:not(.nav-bottom) .pf-drawer {
     bottom: calc(var(--tab-nav-total-height, 0px) + 8px);
   }
 }
 
-@media (max-width: 480px) {
-  .pf-drawer {
-    border-radius: 20px 0 0 20px;
-    width: 100%;
+@media (prefers-reduced-motion: reduce) {
+  .pf-drawer,
+  .pf-drawer-bd {
+    animation: none;
   }
 }
 
-/* ── Drawer header — matches top-strip glass pill ─────── */
-/* Top padding used to be calc(navbar-height + 28px) because the drawer
- * started at top:0 and had to push its own content below the page nav.
- * The drawer now starts at top: 5.5rem so the header just needs normal
- * vertical breathing room. */
+/* ── Header: avatar · name + meta · status + close on ONE grid ───────── */
 .pf-drawer__hdr {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 18px 18px 18px;
-  background: var(--header-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--header-border);
-  position: relative;
+  column-gap: 12px;
+  padding: 16px 16px 14px 20px;
+  background: var(--nd-card-bg);
+  border-bottom: 1px solid var(--nd-line);
   flex-shrink: 0;
 }
 
-.pf-drawer__hdr::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #8b5cf6, #d946ef 60%, transparent);
-  opacity: 0.65;
-}
-
 .pf-drawer__hdr-info {
-  flex: 1;
   min-width: 0;
 }
 
-.pf-drawer__hdr-eyebrow {
-  font-size: 9.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: var(--text-muted);
-  margin: 0 0 4px;
+.pf-drawer__hdr-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+  /* The FULL name: wraps (two lines), never an ellipsis (ND §5). */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
-.pf-drawer__hdr-name {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
+.pf-drawer__hdr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Meta items keep their "·" with the item that follows, so a wrap never
+   leaves a dangling separator at a line end. */
+.pf-drawer__mi {
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: -0.01em;
+}
+
+.pf-drawer__mi + .pf-drawer__mi::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--text-muted);
 }
 
 .pf-drawer__hdr-actions {
@@ -187,26 +197,57 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  align-self: start;
+}
+
+/* Status = the neutral ND chip; its small dot is the one accent. */
+.pf-drawer__status {
+  height: 28px;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.pf-drawer__status-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-violet-600, #7c3aed);
+}
+
+.pf-drawer__status[data-state='idle'] .pf-drawer__status-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--nd-sel-border);
+}
+
+.pf-drawer__status[data-state='stopped'] .pf-drawer__status-dot {
+  background: var(--red-text, #dc2626);
 }
 
 .pf-drawer__close {
-  width: 32px;
-  height: 32px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-muted);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--nd-radius-sm);
+  background: var(--nd-card-bg);
+  border: 1px solid var(--nd-line);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: border-color var(--nd-dur-fast, 200ms) ease, color var(--nd-dur-fast, 200ms) ease;
 }
 
 .pf-drawer__close:hover {
-  background: rgba(139, 92, 246, 0.12);
-  border-color: rgba(139, 92, 246, 0.3);
+  border-color: var(--nd-sel-border);
   color: var(--text-primary);
+}
+
+.pf-drawer__close:focus-visible {
+  outline: 2px solid var(--color-violet-600, #7c3aed);
+  outline-offset: 2px;
 }
 
 /* ── Drawer body ──────────────────────────────────────── */
@@ -214,8 +255,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 18px;
-  background: var(--bg-primary);
+  overscroll-behavior: contain;
+  padding: 16px 20px 20px;
+  background: var(--nd-card-bg);
 }
 
 /* ── Drawer footer ────────────────────────────────────── */
@@ -253,80 +295,100 @@
   box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
 }
 
-/* ── Compact icon action row (order drawer) ───────────── */
+/* ── Order drawer actions: sticky footer, always fully visible ───────
+   Web: labelled secondary TEXT buttons in a 3-column grid. Touch: 44px
+   neutral icon buttons (label kept for AT). Cancel = danger-secondary. */
 .pf-drawer__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px 18px 18px;
-  border-top: 1px solid var(--header-border);
-  background: var(--header-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  position: sticky;
+  bottom: 0;
   flex-shrink: 0;
-}
-.pf-actbtn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  width: 62px;
-  padding: 10px 4px 8px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(217, 70, 239, 0.07));
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: var(--violet-text);
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-.pf-actbtn svg { display: block; }
-.pf-actbtn__label {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  line-height: 1;
-}
-.pf-actbtn:hover:not(:disabled) {
-  background: var(--gradient-primary);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 4px 18px rgba(139, 92, 246, 0.4);
-  transform: translateY(-1px);
-}
-.pf-actbtn:disabled { opacity: 0.5; cursor: not-allowed; }
-.pf-actbtn--danger {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(248, 113, 113, 0.08));
-  border-color: rgba(239, 68, 68, 0.4);
-  color: var(--red-text);
-}
-.pf-actbtn--danger:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ef4444, #f87171);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 4px 18px rgba(239, 68, 68, 0.4);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: var(--nd-card-bg);
+  border-top: 1px solid var(--nd-line);
 }
 
-/* ── Meta grid ────────────────────────────────────────── */
+.pf-drawer__actions .pf-drawer__act {
+  width: 100%;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 10px;
+}
+
+.pf-drawer__actions .pf-drawer__act > svg {
+  display: none;
+  flex: none;
+}
+
+.pf-drawer__actions .pf-drawer__act:focus-visible {
+  outline: 2px solid var(--color-violet-600, #7c3aed);
+  outline-offset: 2px;
+}
+
+.pf-drawer__actions--touch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pf-drawer__actions--touch .pf-drawer__act {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.pf-drawer__actions--touch .pf-drawer__act.nd-btn--secondary {
+  border-color: var(--nd-line);
+  background: var(--nd-card-bg);
+  color: var(--text-secondary);
+}
+
+.pf-drawer__actions--touch .pf-drawer__act > svg {
+  display: block;
+}
+
+.pf-drawer__actions--touch .pf-drawer__act-t {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Destructive last, in the final column (web grid). */
+.pf-drawer__actions:not(.pf-drawer__actions--touch) .pf-drawer__act.nd-btn--danger {
+  grid-column: -2;
+}
+
+/* Destructive last: pushed to the far end on touch. */
+.pf-drawer__actions--touch .pf-drawer__act.nd-btn--danger {
+  margin-left: auto;
+}
+
+/* ── Facts: an ND key/value grid ──────────────────────── */
 .pf-drawer__meta {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0 0 20px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  background: var(--nd-card-bg);
+  border: 1px solid var(--nd-line);
+  border-radius: var(--nd-radius);
   overflow: hidden;
 }
 
 .pf-drawer__meta>div {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 13px 16px;
-  border-right: 1px solid var(--glass-border);
-  border-bottom: 1px solid var(--glass-border);
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid var(--nd-line);
+  border-bottom: 1px solid var(--nd-line);
 }
 
 .pf-drawer__meta>div:nth-child(2n) {
@@ -337,29 +399,39 @@
   border-bottom: none;
 }
 
+/* ND field label: sentence case, secondary — not letter-spaced mono. */
 .pf-drawer__meta dt {
-  font-size: 9.5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-muted);
   margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-secondary);
 }
 
 .pf-drawer__meta dd {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.35;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
-.pf-drawer__eyebrow {
-  font-size: 10px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+.pf-drawer__meta dd.pf-drawer__none {
+  font-weight: 400;
   color: var(--text-muted);
+}
+
+/* Section title = the ND card label (Noto, uppercase, secondary). */
+.pf-drawer__eyebrow {
   margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
 /* ── Preliminary report ─────────────────────────────────── */
@@ -367,8 +439,8 @@
   margin: 14px 0 18px;
   padding: 14px 16px 4px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(34, 211, 238, 0.06), rgba(16, 185, 129, 0.04));
-  border: 1px solid rgba(34, 211, 238, 0.34);
+  background: var(--nd-done-tint);
+  border: 1px solid var(--nd-line);
 }
 
 .pf-prelim__hdr {
@@ -385,10 +457,8 @@
   width: 22px;
   height: 22px;
   border-radius: 9999px;
-  background: rgba(34, 211, 238, 0.22);
-  color: var(--cyan-text);
-  font-size: 12px;
-  font-weight: 700;
+  background: var(--color-violet-600, #7c3aed);
+  color: #fff;
   flex-shrink: 0;
 }
 
@@ -396,27 +466,22 @@
   flex: 1;
   min-width: 0;
   margin: 0;
-  color: var(--cyan-text);
+  color: var(--text-secondary);
 }
 
 .pf-prelim__count {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-tertiary);
-  padding: 2px 8px;
-  border-radius: 9999px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  font-variant-numeric: tabular-nums;
 }
 
 .pf-prelim__sample {
   padding: 10px 12px;
   margin-bottom: 10px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
+  background: var(--nd-card-bg);
+  border: 1px solid var(--nd-line);
 }
 
 .pf-prelim__sample-hdr {
@@ -425,18 +490,16 @@
   gap: 8px;
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--nd-line);
 }
 
 .pf-prelim__sample-dept {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 600;
   padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(34, 211, 238, 0.16);
-  color: var(--cyan-text);
+  border-radius: 6px;
+  background: var(--nd-chip-bg);
+  color: var(--text-secondary);
 }
 
 .pf-prelim__sample-name {
@@ -488,7 +551,7 @@
 }
 
 .pf-prelim__row[data-flag='abnormal'] {
-  background: rgba(245, 158, 11, 0.08);
+  background: color-mix(in srgb, var(--red-text, #dc2626) 6%, transparent);
 }
 
 .pf-prelim__row[data-flag='critical'] {
@@ -501,7 +564,6 @@
 }
 
 .pf-prelim__row-value {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-weight: 700;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
@@ -514,25 +576,24 @@
 }
 
 .pf-prelim__row-range {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
   white-space: pre-line;   /* a typed multi-line reference keeps its lines */
 }
 
 .pf-prelim__row-flag {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  padding: 2px 6px;
-  border-radius: 9999px;
-  background: rgba(16, 185, 129, 0.16);
-  color: var(--green-text);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--nd-radius-chip);
+  background: var(--nd-chip-bg);
+  color: var(--text-secondary);
 }
 
 .pf-prelim__row-flag[data-flag='abnormal'] {
-  background: rgba(245, 158, 11, 0.20);
-  color: var(--amber-text);
+  background: color-mix(in srgb, var(--red-text, #dc2626) 10%, transparent);
+  color: var(--red-text);
 }
 
 .pf-prelim__row-flag[data-flag='critical'] {
@@ -565,97 +626,123 @@
   }
 }
 
+/* ── Timeline (ND): 24px markers, connector through their centres ──── */
 .pf-vtl {
   list-style: none;
   padding: 0;
   margin: 0;
-  position: relative;
-}
-
-.pf-vtl::before {
-  content: '';
-  position: absolute;
-  left: 11px;
-  top: 20px;
-  bottom: 20px;
-  width: 2px;
-  background: linear-gradient(to bottom, rgba(139, 92, 246, 0.3), rgba(139, 92, 246, 0.06));
-  border-radius: 2px;
 }
 
 .pf-vtl__row {
+  --pf-vtl-marker: 24px;
   position: relative;
-  display: flex;
-  gap: 14px;
-  padding: 5px 0 16px;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: var(--pf-vtl-marker) minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  padding-bottom: 16px;
+}
+
+.pf-vtl__row:last-child {
+  padding-bottom: 0;
+}
+
+/* Connector: from this marker's bottom to the next marker's top, centred
+   on the 24px marker column (x = 12px). */
+.pf-vtl__row:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--pf-vtl-marker) / 2 - 1px);
+  top: calc(var(--pf-vtl-marker) + 2px);
+  bottom: 2px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--nd-line);
+}
+
+.pf-vtl__row[data-state='done']:not(:last-child)::before {
+  background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 45%, transparent);
 }
 
 .pf-vtl__node {
   position: relative;
   z-index: 1;
-  width: 24px;
-  height: 24px;
+  box-sizing: border-box;
+  width: var(--pf-vtl-marker);
+  height: var(--pf-vtl-marker);
   border-radius: 9999px;
-  background: var(--bg-card-solid);
-  border: 2px solid rgba(139, 92, 246, 0.2);
+  background: var(--nd-card-bg);
+  border: 1.5px solid var(--nd-sel-border);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  flex-shrink: 0;
 }
 
 .pf-vtl__row[data-state='done'] .pf-vtl__node {
-  background: #5c9e86;
-  border-color: #5c9e86;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+  background: var(--color-violet-600, #7c3aed);
+  border-color: var(--color-violet-600, #7c3aed);
 }
 
+/* Current step: a violet ring with a violet centre + a soft pulse. */
 .pf-vtl__row[data-state='active'] .pf-vtl__node {
-  background: #f59e0b;
-  border-color: #f59e0b;
-  animation: pf-tl-pulse 1.6s infinite;
+  border: 2px solid var(--color-violet-600, #7c3aed);
+  background: var(--nd-card-bg);
+  animation: pf-tl-pulse 1.8s ease-out infinite;
 }
 
+.pf-vtl__row[data-state='active'] .pf-vtl__node::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--color-violet-600, #7c3aed);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-vtl__row[data-state='active'] .pf-vtl__node {
+    animation: none;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-violet-600, #7c3aed) 16%, transparent);
+  }
+}
+
+.pf-vtl__text {
+  min-width: 0;
+}
+
+/* Title line-height = the marker height, so the title centres on it. */
 .pf-vtl__label {
-  margin: 2px 0 0;
-  font-size: 13.5px;
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
+  line-height: var(--pf-vtl-marker);
   color: var(--text-primary);
-  line-height: 1.3;
 }
 
 .pf-vtl__status {
-  margin: 3px 0 0;
-  font-size: 11px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
   color: var(--text-tertiary);
-  letter-spacing: 0.02em;
-}
-
-.pf-vtl__row[data-state='done'] .pf-vtl__label {
-  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .pf-vtl__row[data-state='pending'] .pf-vtl__label {
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .pf-vtl__row[data-state='pending'] .pf-vtl__status {
   color: var(--text-muted);
-  opacity: 0.7;
 }
 
 @keyframes pf-tl-pulse {
-
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.55);
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-violet-600, #7c3aed) 35%, transparent);
   }
 
-  50% {
-    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  100% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-violet-600, #7c3aed) 0%, transparent);
   }
 }
 
@@ -669,15 +756,86 @@
   }
 }
 
+/* Slide in from the right (~240ms). */
 @keyframes pf-drawer-in {
   from {
-    transform: translateX(20px);
+    transform: translateX(24px);
     opacity: 0;
   }
 
   to {
     transform: translateX(0);
     opacity: 1;
+  }
+}
+
+/* ── Phones: a full-height sheet above the navbar ─────── */
+@media (max-width: 640px) {
+  .pf-drawer,
+  :root.nav-bottom .pf-drawer {
+    left: 0;
+    right: 0;
+    width: 100%;
+    top: env(safe-area-inset-top, 0px);
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  :root.nav-bottom .pf-drawer {
+    bottom: var(--nd-nav-h, 0px);
+  }
+
+  /* Name gets the full middle column; the status chip drops under the
+     meta line and the close button stays top-right. */
+  .pf-drawer__hdr {
+    padding: 14px 12px 12px 16px;
+    column-gap: 10px;
+    row-gap: 8px;
+    align-items: start;
+  }
+
+  .pf-drawer__hdr > pf-avatar {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .pf-drawer__hdr-info {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .pf-drawer__hdr-actions {
+    display: contents;
+  }
+
+  .pf-drawer__status {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .pf-drawer__close {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .pf-drawer__close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .pf-drawer__body {
+    padding: 14px 16px 18px;
+  }
+
+  .pf-drawer__actions {
+    padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pf-drawer__actions .pf-drawer__act {
+    min-height: 44px;
+    height: 44px;
   }
 }
 
