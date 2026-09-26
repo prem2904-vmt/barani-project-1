@@ -10,6 +10,8 @@ export type ToggleSize = 'sm' | 'md';
     <button type="button"
             role="switch"
             [attr.aria-checked]="checked"
+            [attr.aria-label]="ariaLabel || null"
+            [attr.aria-labelledby]="ariaLabelledby || null"
             [class]="rootClasses"
             [disabled]="disabled"
             (click)="toggle($event)">
@@ -29,6 +31,7 @@ export type ToggleSize = 'sm' | 'md';
     }
     button:active:not(:disabled) { transform: scale(0.97); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 
     .sz-sm { width: 40px; height: 24px; }
     .sz-md { width: 52px; height: 30px; }
@@ -63,6 +66,10 @@ export class ToggleComponent {
   @Input() checked = false;
   @Input() size: ToggleSize = 'md';
   @Input() disabled = false;
+  /** Accessible name when no visible label is referenced. */
+  @Input() ariaLabel = '';
+  /** Id of the visible label that names this switch. */
+  @Input() ariaLabelledby = '';
   @Output() checkedChange = new EventEmitter<boolean>();
 
   get rootClasses(): string {

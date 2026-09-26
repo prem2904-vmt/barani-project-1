@@ -81,6 +81,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
               <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
             </svg>
             <input class="pf-hb__input" type="text"
+                   [attr.aria-label]="searchLabel() || placeholder()"
                    [placeholder]="placeholder()"
                    [value]="value()"
                    (input)="valueChange.emit($any($event.target).value)"
@@ -389,6 +390,8 @@ export class HeroBandComponent {
 
   /** Placeholder for the built-in search input. */
   readonly placeholder = input<string>('Search');
+  /** Accessible name for the built-in search input (defaults to the placeholder). */
+  readonly searchLabel = input<string>('');
   /** Controlled value for the built-in search input. */
   readonly value = input<string>('');
   /** True when the host projects its own search control via [band-search]. */

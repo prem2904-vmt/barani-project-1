@@ -22,6 +22,8 @@ export type PfNumberSize = 'sm' | 'md';
       <input type="text"
              inputmode="decimal"
              class="field"
+             [attr.aria-label]="ariaLabel || null"
+             [attr.aria-labelledby]="ariaLabelledby || null"
              [value]="displayValue()"
              [placeholder]="placeholder"
              [disabled]="disabled"
@@ -170,6 +172,10 @@ export class NumberInputComponent implements OnDestroy {
   @Input() placeholder = '';
   @Input() suffix?: string;
   @Input() disabled = false;
+  /** Accessible name when no visible label is referenced. */
+  @Input() ariaLabel = '';
+  /** Id of the visible label that names the field. */
+  @Input() ariaLabelledby = '';
   @Input() allowEmpty = false;
 
   @Output() valueChange = new EventEmitter<number | null>();
