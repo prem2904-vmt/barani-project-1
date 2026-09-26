@@ -260,7 +260,7 @@ function coerceCellText(raw: unknown): string {
           </div>
         }
         @if (pdfError()) {
-          <div class="pf-rv-pdf-error">
+          <div class="pf-rv-pdf-error" [pfZoomTarget]="zoomKeys()">
             <p>{{ pdfError() }}</p>
             <pf-touch-btn size="sm" variant="secondary" (pressed)="renderPdfView()">Try again</pf-touch-btn>
           </div>
