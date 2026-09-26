@@ -43,7 +43,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
                 <path d="M7 8v8M10.5 8v8M14 8v8M17 8v8"/>
               </svg>
             </span>
-            <span class="nd-card__label pf-sc__label">{{ manualOnly ? 'Enter sample' : 'Scan sample' }}</span>
+            <span class="nd-card__label pf-sc__label">{{ manualOnly ? 'Enter ' + noun : 'Scan ' + noun }}</span>
             <button type="button" class="pf-sc__close press" (click)="cancel()" aria-label="Close" title="Close">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -58,7 +58,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
               <span class="pf-sc__expect-id">{{ expectedBarcode }}</span>
             </div>
           } @else if (manualOnly) {
-            <p class="pf-sc__sub">Type the sample ID from the container.</p>
+            <p class="pf-sc__sub">Type the {{ noun }} ID{{ noun === 'sample' ? ' from the container' : '' }}.</p>
           }
         </header>
 
@@ -127,7 +127,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
           @if (!manualMode()) {
             <p class="pf-sc__status" aria-live="polite">
               <span class="pf-sc__pulse" [class.pf-sc__pulse--live]="cameraReady()" aria-hidden="true"></span>
-              {{ cameraReady() ? 'Point the camera at the sample barcode, or scan with a handheld scanner.'
+              {{ cameraReady() ? 'Point the camera at the ' + noun + ' barcode, or scan with a handheld scanner.'
                                : 'Scan with a handheld scanner, or wait for the camera.' }}
             </p>
             @if (hidShown(); as hid) {
@@ -184,11 +184,11 @@ import { NumPadComponent } from '../../primitives/num-pad.component';
                 <!-- Short sample IDs (LAB26001, BIO260800003…) don't segment —
                      type the full number off the container. Same handleScan path,
                      so the wrong-vial guard still applies. -->
-                <label class="pf-sc__manual-hint" for="pf-sc-free">Type the sample ID written on the container.</label>
+                <label class="pf-sc__manual-hint" for="pf-sc-free">Type the {{ noun }} ID{{ noun === 'sample' ? ' written on the container' : '' }}.</label>
                 <input #manualInput id="pf-sc-free"
                        class="pf-sc__free-input uppercase"
                        type="text" autocapitalize="characters" autocomplete="off" spellcheck="false"
-                       [placeholder]="expectedBarcode || 'Sample ID'"
+                       [placeholder]="expectedBarcode || nounId"
                        [ngModel]="manualFree()"
                        (ngModelChange)="manualFree.set($event)"
                        (keydown.enter)="submitManualFree()" />
@@ -482,6 +482,10 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   /** Manual-mode tenants: the modal is typing-only — no camera ever starts,
    *  no "Use camera" toggle. The title/hints read as "enter", not "scan". */
   @Input() manualOnly = false;
+  /** What is being scanned, for the header / hints ("sample" by default;
+   *  the billing counter passes "invoice or order"). Additive. */
+  @Input() noun = 'sample';
+  protected get nounId(): string { return this.noun.charAt(0).toUpperCase() + this.noun.slice(1) + ' ID'; }
 
   /** Caller titles say "Scan vial to claim" etc. — reword for typing-only. */
   protected get displayTitle(): string {
