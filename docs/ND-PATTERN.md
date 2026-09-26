@@ -276,14 +276,16 @@ whose small violet dot is the one accent.
 Canonical: the Frontdesk work list (`frontdesk-landing`, `.pf-wrow`,
 `work-selection.ts`).
 
-- **Row:** `[checkbox] · FULL name + quiet meta · status chip · action`.
+- **Row:** `[checkbox] · FULL name + quiet meta · status · action`.
   - The name wraps and is never cut.
   - Meta is one muted tabular line joined with `·`, never `|`: "22/M · AA0006 ·
     1 sample · 9:48 PM".
   - No department code chips.
-  - Status is the neutral `.nd-chip--static` with a 7px dot: violet while in
-    flight or done, a hollow ring before billing, red only for cancelled or
-    rejected. Never amber or green words.
+  - Status is a 7px dot plus a coloured word, with no chip, border or background
+    (owner, 2026-09-26). Tones come from the accent tokens: billed or done is
+    green, dispatched is blue, in lab, collected or partial is amber, cancelled
+    or rejected is red. This is the one place row status may be green or amber.
+    Drawers and detail screens keep the neutral chip.
   - The action is `.nd-rowact` (text on web, a 44px icon plus `aria-label` on
     touch) in a right-aligned slot of fixed width, so it lines up in every row.
   - The whole row opens the detail; the checkbox and actions stop propagation.
