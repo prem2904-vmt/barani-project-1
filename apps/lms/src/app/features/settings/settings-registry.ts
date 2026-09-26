@@ -1,5 +1,7 @@
+import { QUEUE_DEFAULTS } from './adapters/appointments.adapter';
+import { DATE_OPTIONS } from './id-format';
 import { ADMIN_PERMS } from './settings-access';
-import { GroupId, SettingDef, SettingsGroup, SettingsTool } from './settings.model';
+import { ControlDef, FieldDef, GroupId, KeyReader, SettingDef, SettingsGroup, SettingsTool } from './settings.model';
 
 /**
  * THE list of settings. Every row names its store (adapter + key), who may
@@ -13,6 +15,27 @@ import { GroupId, SettingDef, SettingsGroup, SettingsTool } from './settings.mod
 const LAB_SETTINGS = ['manage_lab_settings'] as const;
 const TENANT = ['manage_tenant'] as const;
 const ADMIN = ADMIN_PERMS;
+const ME: readonly string[] = [];
+
+const SEPARATORS = [{ value: '-', label: '-' }, { value: '/', label: '/' }, { value: '', label: 'None' }];
+
+/** Fields of an ID-number editor ("Change" under "… looks like"). */
+function idFields(scope: 'patient' | 'sample' | 'order'): FieldDef[] {
+  const own = (r: KeyReader) => scope !== 'patient' || r('patient.enabled') === true;
+  return [
+    ...(scope === 'patient' ? [
+      { key: 'patient.enabled', label: 'Use my own format', control: { kind: 'switch' } as ControlDef },
+      { key: 'patient.prefix', label: 'Starts with', visibleWhen: own,
+        control: { kind: 'text', maxLength: 6, placeholder: 'e.g. DEL', sanitize: (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) } as ControlDef },
+    ] : []),
+    { key: `${scope}.datePrefix`, label: 'Date part', visibleWhen: own, control: { kind: 'select', options: DATE_OPTIONS } },
+    { key: `${scope}.separator`, label: 'Between parts', visibleWhen: own, control: { kind: 'segmented', options: SEPARATORS } },
+    { key: `${scope}.padding`, label: 'Digits', visibleWhen: own, control: { kind: 'number', min: 1, max: 10 } },
+    { key: `${scope}.letters`, label: 'Add letters (AA001)', visibleWhen: own, control: { kind: 'switch' } },
+    { key: `${scope}.letterCount`, label: 'How many letters', visibleWhen: (r) => own(r) && r(`${scope}.letters`) === true,
+      control: { kind: 'segmented', options: [1, 2, 3, 4].map((n) => ({ value: n, label: 'A'.repeat(n) })) } },
+  ];
+}
 
 export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   { id: 'frontdesk', label: 'Front desk', icon: 'M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6' },
@@ -54,6 +77,88 @@ export const SETTINGS: readonly SettingDef[] = [
     scope: 'branch', screens: ['frontdesk'],
     permission: LAB_SETTINGS, adapter: 'labModes', key: 'counters',
   },
+  {
+    id: 'fd.queueMode', group: 'frontdesk', label: 'How patients wait',
+    synonyms: ['queue', 'token', 'walk-in', 'walk in', 'home visit', 'appointment'],
+    control: { kind: 'segmented', options: [
+      { value: 'token_queue', label: 'Token number' },
+      { value: 'walk_up', label: 'Walk-in' },
+      { value: 'home_collection', label: 'Home visits' },
+    ] },
+    scope: 'branch', screens: ['appointments'],
+    permission: TENANT, adapter: 'appointments', key: 'queueMode',
+  },
+  {
+    id: 'fd.openHours', group: 'frontdesk', label: 'Open hours',
+    synonyms: ['timing', 'hours', 'opening', 'closing', '24x7', 'booking', 'appointment', 'slot'],
+    control: {
+      kind: 'composite',
+      preview: (r) => (r('open24h') === true ? 'Open all day and night' : `Open ${r('hours.from')} to ${r('hours.to')}`),
+      fields: [
+        { key: 'open24h', label: 'Open all day and night', control: { kind: 'switch' } },
+        { key: 'hours.from', label: 'Opens at', control: { kind: 'time' }, visibleWhen: (r) => r('open24h') !== true },
+        { key: 'hours.to', label: 'Closes at', control: { kind: 'time' }, visibleWhen: (r) => r('open24h') !== true },
+      ],
+    },
+    scope: 'branch', screens: ['frontdesk', 'appointments'],
+    permission: TENANT, adapter: 'appointments', key: 'open24h',
+  },
+  {
+    id: 'fd.slot', group: 'frontdesk', label: 'Time per appointment',
+    synonyms: ['slot', 'duration', 'appointment', 'booking', 'minutes'],
+    control: { kind: 'number', min: 5, max: 240, step: 5, unit: 'min' },
+    scope: 'branch', screens: ['appointments'],
+    permission: TENANT, adapter: 'appointments', key: 'slotMinutes',
+  },
+  {
+    id: 'fd.perSlot', group: 'frontdesk', label: 'Patients per time slot',
+    synonyms: ['concurrent', 'slot', 'capacity', 'appointment', 'booking'],
+    control: { kind: 'number', min: 1, max: 50, step: 1 },
+    scope: 'branch', screens: ['appointments'],
+    permission: TENANT, adapter: 'appointments', key: 'maxConcurrentSlots',
+  },
+  {
+    id: 'fd.opdMode', group: 'frontdesk', label: 'Repeat-visit discount (OPD)',
+    synonyms: ['follow-up', 'follow up', 'opd', 'consultation', 'discount', 'repeat'],
+    control: { kind: 'segmented', options: [
+      { value: 'off', label: 'Off' },
+      { value: 'auto', label: 'Automatic' },
+      { value: 'assisted', label: 'Front desk decides' },
+    ] },
+    scope: 'tenant', module: 'opd',
+    permission: ADMIN, adapter: 'opd', key: 'followUpMode',
+  },
+  {
+    id: 'fd.opdTiers', group: 'frontdesk', label: 'Repeat-visit discount rules (OPD)',
+    help: 'e.g. within 7 days, 100% off.',
+    synonyms: ['follow-up', 'tier', 'opd', 'discount', 'repeat'],
+    control: { kind: 'tiers' }, scope: 'tenant', module: 'opd',
+    permission: ADMIN, adapter: 'opd', key: 'tiers',
+    visibleWhen: (c) => c.value('fd.opdMode') !== 'off',
+  },
+  {
+    id: 'fd.priority', group: 'frontdesk', label: 'Who gets called first', advanced: true,
+    help: 'Expert scoring. Leave as is unless told.',
+    synonyms: ['priority', 'score', 'queue', 'no-show', 'late', 'grace', 'urgent'],
+    control: {
+      kind: 'composite',
+      preview: (r) => `Booked ${r('opt.baseAppointment')} · Walk-in ${r('opt.baseWalkin')} · Urgent ${r('opt.urgentOverrideScore')}`,
+      fields: [
+        { key: 'opt.baseAppointment', label: 'Points for booked patient', control: { kind: 'number', min: 0, max: 99999, step: 50 } },
+        { key: 'opt.baseWalkin', label: 'Points for walk-in', control: { kind: 'number', min: 0, max: 99999, step: 50 } },
+        { key: 'opt.baseFollowup', label: 'Points for follow-up', control: { kind: 'number', min: 0, max: 99999, step: 50 } },
+        { key: 'opt.waitWeight', label: 'Extra points per minute waiting', control: { kind: 'number', min: 0, max: 1000, step: 1 } },
+        { key: 'opt.appointmentGraceMinutes', label: 'Late allowance', control: { kind: 'number', min: 0, max: 240, step: 5, unit: 'min' } },
+        { key: 'opt.latePenalty', label: 'Points lost if late', control: { kind: 'number', min: 0, max: 99999, step: 50 } },
+        { key: 'opt.noShowThresholdMinutes', label: 'Mark no-show after', control: { kind: 'number', min: 1, max: 1440, step: 5, unit: 'min' } },
+        { key: 'opt.avgCollectionMinutes', label: 'Minutes per collection', control: { kind: 'number', min: 1, max: 120, step: 1, unit: 'min' } },
+        { key: 'opt.urgentOverrideScore', label: 'Points for urgent', control: { kind: 'number', min: 0, max: 99999, step: 100 } },
+      ],
+      reset: Object.fromEntries(Object.entries(QUEUE_DEFAULTS).map(([k, v]) => ['opt.' + k, v])),
+    },
+    scope: 'branch', screens: ['appointments'],
+    permission: TENANT, adapter: 'appointments', key: 'opt.baseAppointment',
+  },
 
   // ── Collection ─────────────────────────────────────────────────────────
   {
@@ -80,6 +185,15 @@ export const SETTINGS: readonly SettingDef[] = [
     permission: LAB_SETTINGS, adapter: 'blc', key: 'labelCodeMode',
   },
   {
+    id: 'col.sampleId', group: 'collection', label: 'Tube number looks like',
+    help: 'The number on each tube. Restarts each month.',
+    synonyms: ['sample id', 'sample number', 'tube id', 'barcode', 'format', 'prefix', 'numbering'],
+    control: { kind: 'composite', preview: (r) => String(r('sample.preview')), fields: idFields('sample') },
+    scope: 'tenant', screens: ['collect'],
+    permission: TENANT, adapter: 'idFormat', key: 'sample.datePrefix',
+    confirm: { title: 'Change how tube numbers look?', message: 'Only new tubes change. Old numbers stay.', confirmLabel: 'Change', tone: 'primary' },
+  },
+  {
     id: 'col.trackStock', group: 'collection', label: 'Track stock (tubes, kits)',
     help: "Stock goes down at collection. Out-of-stock tests can't be ordered.",
     synonyms: ['inventory', 'stock', 'kit', 'consumable', 'reagent'],
@@ -92,6 +206,58 @@ export const SETTINGS: readonly SettingDef[] = [
     synonyms: ['no-scan', 'no scan', 'override', 'claim', 'damaged label', 'barcode'],
     control: { kind: 'switch' }, scope: 'tenant', screens: ['receive', 'mywork'],
     permission: LAB_SETTINGS, adapter: 'tenant', key: 'allowNoScanClaim',
+  },
+  {
+    id: 'col.printer', group: 'collection', label: 'Sticker printer',
+    synonyms: ['printer', 'label printer', 'bluetooth', 'usb', 'pair', 'connect'],
+    control: { kind: 'link', preview: (r) => String(r('printer')), link: { label: 'Connect', href: '/printing' } },
+    scope: 'device', screens: ['collect'],
+    permission: ME, adapter: 'print', key: 'printer',
+  },
+  {
+    id: 'col.stickerSize', group: 'collection', label: 'Sticker size',
+    synonyms: ['label size', 'width', 'height', 'mm', 'sticker', 'label'],
+    control: {
+      kind: 'composite', preview: (r) => `${r('labelWidthMm')} × ${r('labelHeightMm')} mm`,
+      fields: [
+        { key: 'labelWidthMm', label: 'Width', control: { kind: 'number', min: 10, max: 120, unit: 'mm' } },
+        { key: 'labelHeightMm', label: 'Height', control: { kind: 'number', min: 10, max: 120, unit: 'mm' } },
+      ],
+    },
+    scope: 'device', screens: ['collect'],
+    permission: ME, adapter: 'print', key: 'labelWidthMm',
+  },
+  {
+    id: 'col.darkness', group: 'collection', label: 'Print darkness',
+    help: '1 is light, 15 is dark.',
+    synonyms: ['density', 'dark', 'light', 'faint', 'print quality', 'sticker'],
+    control: { kind: 'number', min: 1, max: 15, step: 1 },
+    scope: 'device', screens: ['collect'],
+    permission: ME, adapter: 'print', key: 'density',
+  },
+  {
+    id: 'col.nudge', group: 'collection', label: 'Move print on sticker', advanced: true,
+    help: 'Use the arrows in Printer setup.',
+    synonyms: ['align', 'alignment', 'offset', 'nudge', 'shift', 'rotate'],
+    control: { kind: 'link', link: { label: 'Adjust', href: '/printing' } },
+    scope: 'device', screens: ['collect'],
+    permission: ME, adapter: 'print', key: 'offsetXmm',
+  },
+  {
+    id: 'col.speed', group: 'collection', label: 'Print speed', advanced: true,
+    help: 'Slower prints sharper.',
+    synonyms: ['speed', 'slow', 'fast', 'sticker', 'print quality'],
+    control: { kind: 'number', min: 1, max: 5, step: 1 },
+    scope: 'device', screens: ['collect'],
+    permission: ME, adapter: 'print', key: 'speed',
+  },
+  {
+    id: 'col.codeSize', group: 'collection', label: 'Code size on sticker', advanced: true,
+    help: 'Too small and scanners miss it.',
+    synonyms: ['barcode size', 'qr size', 'scale', 'sticker'],
+    control: { kind: 'number', min: 50, max: 130, step: 5, unit: '%' },
+    scope: 'device', screens: ['collect'],
+    permission: ME, adapter: 'print', key: 'codeScalePct',
   },
 
   // ── Lab work ───────────────────────────────────────────────────────────
@@ -169,6 +335,38 @@ export const SETTINGS: readonly SettingDef[] = [
     permission: LAB_SETTINGS, adapter: 'tenant', key: 'calc.NORMAL_HCT',
   },
   {
+    id: 'lab.cultureRelease', group: 'lab', label: 'Culture: free a step after',
+    help: 'If nobody works on it. 0 = never.',
+    synonyms: ['culture', 'microbiology', 'lock', 'timeout', 'release', 'idle'],
+    control: { kind: 'number', min: 0, max: 1440, step: 5, unit: 'min' },
+    scope: 'tenant', screens: ['culture'],
+    permission: LAB_SETTINGS, adapter: 'micro', key: 'lockTimeoutMinutes',
+  },
+  {
+    id: 'lab.cultureTakeover', group: 'lab', label: 'Culture: supervisor can take over',
+    synonyms: ['culture', 'microbiology', 'takeover', 'force release', 'supervisor'],
+    control: { kind: 'switch' }, scope: 'tenant', screens: ['culture'],
+    permission: LAB_SETTINGS, adapter: 'micro', key: 'allowSupervisorTakeover',
+  },
+  {
+    id: 'lab.cultureTat', group: 'lab', label: 'Culture: time allowed per step',
+    help: 'Alert when a step runs late.',
+    synonyms: ['culture', 'microbiology', 'tat', 'turnaround', 'overdue', 'gram', 'growth', 'ast', 'sensitivity'],
+    control: {
+      kind: 'composite',
+      preview: (r) => ['tat.gram', 'tat.growth', 'tat.identification', 'tat.ast']
+        .map((k) => (r(k) == null ? '–' : `${r(k)} h`)).join(' · '),
+      fields: [
+        { key: 'tat.gram', label: 'Smear', control: { kind: 'number', min: 1, max: 720, unit: 'h' } },
+        { key: 'tat.growth', label: 'Growth check', control: { kind: 'number', min: 1, max: 720, unit: 'h' } },
+        { key: 'tat.identification', label: 'Identify organism', control: { kind: 'number', min: 1, max: 720, unit: 'h' } },
+        { key: 'tat.ast', label: 'Antibiotic test', control: { kind: 'number', min: 1, max: 720, unit: 'h' } },
+      ],
+    },
+    scope: 'tenant', screens: ['culture'],
+    permission: LAB_SETTINGS, adapter: 'micro', key: 'tat.gram',
+  },
+  {
     id: 'lab.labStructure', group: 'lab', label: 'How tubes are shared', advanced: true,
     help: 'One lab: same colour tests share a tube.',
     synonyms: ['lab structure', 'integrated', 'standalone', 'space', 'vial', 'prefix'],
@@ -180,6 +378,212 @@ export const SETTINGS: readonly SettingDef[] = [
     scope: 'branch',
     permission: LAB_SETTINGS, adapter: 'blc', key: 'labStructure',
     confirm: { title: 'Change how tubes are shared?', message: 'New orders use this. Old tubes stay as they are.', confirmLabel: 'Change', tone: 'danger' },
+  },
+
+  // ── Reports & printing ─────────────────────────────────────────────────
+  {
+    id: 'rep.billDesign', group: 'reports', label: 'Bill design',
+    synonyms: ['invoice template', 'bill template', 'letterhead', 'cash bill', 'receipt', 'style'],
+    control: { kind: 'select', options: [
+      { value: 'classic', label: 'Classic' },
+      { value: 'modern', label: 'Modern' },
+      { value: 'letterhead', label: 'Letterhead' },
+      { value: 'cashbill', label: 'Cash bill' },
+    ], link: { label: 'Preview and edit', href: '/admin/billing', permission: ['manage_tenant'] } },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'invoice', key: 'template',
+  },
+  {
+    id: 'rep.billPaper', group: 'reports', label: 'Bill paper size',
+    help: 'Only for Cash bill.',
+    synonyms: ['paper', 'thermal', 'receipt', 'roll', 'a4', 'size'],
+    control: { kind: 'segmented', options: [
+      { value: 'a4', label: 'A4' },
+      { value: 'thermal', label: '4 inch' },
+      { value: 'thermal_3in', label: '3 inch' },
+      { value: 'thermal_25in', label: '2.5 inch' },
+    ] },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'invoice', key: 'paperSize',
+    visibleWhen: (c) => c.value('rep.billDesign') === 'cashbill',
+  },
+  {
+    id: 'rep.docPrinter', group: 'reports', label: 'Bill and report printer',
+    help: 'Desktop app only.',
+    synonyms: ['printer', 'a4 printer', 'invoice printer', 'document printer'],
+    control: { kind: 'select', optionsKey: 'documentPrinters' },
+    scope: 'device',
+    permission: ME, adapter: 'print', key: 'documentPrinter',
+    visibleWhen: (c) => c.isElectron,
+  },
+  {
+    id: 'rep.signature', group: 'reports', alsoIn: ['people'], label: 'My signature',
+    help: 'Printed on reports you approve.',
+    synonyms: ['signature', 'sign', 'e-sign', 'pathologist'],
+    control: { kind: 'link', preview: (r) => String(r('signature')), link: { label: 'Draw', href: '/signature' } },
+    scope: 'user', screens: ['pathologist'],
+    permission: ME, adapter: 'me', key: 'signature',
+  },
+  {
+    id: 'rep.regNo', group: 'reports', alsoIn: ['people'], label: 'My registration number',
+    help: 'Printed under your signature.',
+    synonyms: ['registration', 'council', 'reg no', 'mci', 'license', 'signature'],
+    control: { kind: 'text', maxLength: 40, placeholder: 'e.g. TNMC 12345' },
+    scope: 'user', screens: ['pathologist'],
+    permission: ME, adapter: 'me', key: 'registrationId',
+  },
+  {
+    id: 'rep.printLogo', group: 'reports', label: 'Print logo on bill', advanced: true,
+    synonyms: ['logo', 'bill', 'invoice', 'letterhead'],
+    control: { kind: 'switch' }, scope: 'tenant',
+    permission: TENANT, adapter: 'invoice', key: 'showLogo',
+  },
+  {
+    id: 'rep.printGstin', group: 'reports', label: 'Print GST number on bill', advanced: true,
+    synonyms: ['gstin', 'gst', 'bill', 'invoice'],
+    control: { kind: 'switch' }, scope: 'tenant',
+    permission: TENANT, adapter: 'invoice', key: 'showGstin',
+  },
+  {
+    id: 'rep.printQr', group: 'reports', label: 'Print tracking QR on bill', advanced: true,
+    synonyms: ['qr', 'tracking', 'status', 'bill', 'invoice'],
+    control: { kind: 'switch' }, scope: 'tenant',
+    permission: TENANT, adapter: 'invoice', key: 'showTrackingQr',
+  },
+  {
+    id: 'rep.billTitle', group: 'reports', label: 'Bill title', advanced: true,
+    synonyms: ['tax invoice', 'bill of supply', 'document type', 'invoice'],
+    control: { kind: 'segmented', options: [
+      { value: 'auto', label: 'Auto' },
+      { value: 'tax_invoice', label: 'Tax invoice' },
+      { value: 'bill_of_supply', label: 'Bill of supply' },
+    ] },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'invoice', key: 'documentMode',
+  },
+
+  // ── Billing & money ────────────────────────────────────────────────────
+  {
+    id: 'bil.gst', group: 'money', label: 'Charge GST',
+    help: 'Off: bills say "Bill of Supply".',
+    synonyms: ['gst', 'tax', 'bill of supply', 'tax invoice'],
+    control: { kind: 'switch' }, scope: 'tenant', screens: ['billing'],
+    permission: TENANT, adapter: 'billing', key: 'gstEnabled',
+  },
+  {
+    id: 'bil.gstin', group: 'money', label: 'GST number',
+    help: "Saved numbers aren't shown here. Type to replace.",
+    synonyms: ['gstin', 'gst', 'tax number', 'state code'],
+    control: { kind: 'text', maxLength: 15, placeholder: '15 letters and digits',
+      sanitize: (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15) },
+    scope: 'branch',
+    permission: TENANT, adapter: 'gst', key: 'gstin',
+  },
+  {
+    id: 'bil.discounts', group: 'money', label: 'Allow discounts',
+    synonyms: ['discount', 'concession', 'offer'],
+    control: { kind: 'switch' }, scope: 'tenant', screens: ['billing'],
+    permission: TENANT, adapter: 'billing', key: 'allowDiscounts',
+  },
+  {
+    id: 'bil.maxDisc', group: 'money', label: 'Front desk can give up to',
+    synonyms: ['discount', 'limit', 'cap', 'percent', 'give_discount'],
+    control: { kind: 'number', min: 0, max: 100, step: 1, unit: '%' },
+    scope: 'tenant', screens: ['billing'],
+    permission: TENANT, adapter: 'billing', key: 'maxDiscountPct',
+    visibleWhen: (c) => c.value('bil.discounts') !== false,
+  },
+  {
+    id: 'bil.overDisc', group: 'money', label: 'Senior staff can give up to',
+    synonyms: ['discount', 'override', 'limit', 'cap', 'percent'],
+    control: { kind: 'number', min: 0, max: 100, step: 1, unit: '%' },
+    scope: 'tenant', screens: ['billing'],
+    permission: TENANT, adapter: 'billing', key: 'overrideDiscountPct',
+    visibleWhen: (c) => c.value('bil.discounts') !== false,
+  },
+  {
+    id: 'bil.approval', group: 'money', label: 'Second person must approve above',
+    synonyms: ['discount', 'approval', 'threshold', 'approve', 'percent'],
+    control: { kind: 'number', min: 0, max: 100, step: 1, unit: '%' },
+    scope: 'tenant', screens: ['billing'],
+    permission: TENANT, adapter: 'billing', key: 'approvalThresholdPct',
+    visibleWhen: (c) => c.value('bil.discounts') !== false,
+  },
+  {
+    id: 'bil.invoiceNo', group: 'money', label: 'Bill number looks like',
+    synonyms: ['invoice number', 'invoice prefix', 'bill number', 'numbering', 'series', 'start'],
+    control: {
+      kind: 'composite', preview: (r) => `${r('invoicePrefix')}/${new Date().getFullYear()}/${r('invoiceStartNumber')}`,
+      fields: [
+        { key: 'invoicePrefix', label: 'Starts with', control: { kind: 'text', maxLength: 12, sanitize: (v) => v.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 12) } },
+        { key: 'invoiceStartNumber', label: 'First number', control: { kind: 'number', min: 1, max: 99999999, step: 1 } },
+      ],
+    },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'billing', key: 'invoicePrefix',
+    confirm: { title: 'Change how bill numbers look?', message: 'Only new bills change. Old numbers stay.', confirmLabel: 'Change', tone: 'primary' },
+  },
+  {
+    id: 'bil.fullPay', group: 'money', label: 'Bill number only after full payment',
+    help: "Until then it's an estimate.",
+    synonyms: ['proforma', 'estimate', 'invoice', 'full payment', 'unpaid'],
+    control: { kind: 'switch' }, scope: 'tenant', screens: ['billing'],
+    permission: TENANT, adapter: 'billing', key: 'invoiceOnFullPaymentOnly',
+  },
+  {
+    id: 'bil.upi', group: 'money', label: 'UPI ID for online payment',
+    help: 'e.g. clinic@axis. Patients pay from their phone.',
+    synonyms: ['upi', 'vpa', 'gpay', 'phonepe', 'paytm', 'online payment'],
+    control: { kind: 'text', maxLength: 60, placeholder: 'name@bank', sanitize: (v) => v.replace(/\s/g, '') },
+    scope: 'tenant', screens: ['billing'],
+    permission: TENANT, adapter: 'billing', key: 'upiVpa',
+  },
+  {
+    id: 'bil.bank', group: 'money', label: 'Bank account',
+    synonyms: ['bank', 'account', 'ifsc', 'settlement', 'neft'],
+    control: {
+      kind: 'composite',
+      preview: (r) => {
+        const no = String(r('bankAccountNumber') ?? '');
+        const bank = String(r('bankName') ?? '');
+        return no ? `${bank ? bank + ' ' : ''}••••${no.slice(-4)}` : 'Not set';
+      },
+      fields: [
+        { key: 'bankAccountName', label: 'Account holder', control: { kind: 'text', maxLength: 80 } },
+        { key: 'bankAccountNumber', label: 'Account number', control: { kind: 'text', maxLength: 20, sanitize: (v) => v.replace(/[^0-9]/g, '') } },
+        { key: 'bankIfsc', label: 'IFSC', control: { kind: 'text', maxLength: 11, sanitize: (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '') } },
+        { key: 'bankName', label: 'Bank name', control: { kind: 'text', maxLength: 60 } },
+      ],
+    },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'billing', key: 'bankAccountNumber',
+  },
+  {
+    id: 'bil.upiName', group: 'money', label: 'UPI name shown to patient', advanced: true,
+    synonyms: ['upi', 'payee', 'name'],
+    control: { kind: 'text', maxLength: 60 }, scope: 'tenant',
+    permission: TENANT, adapter: 'billing', key: 'upiPayeeName',
+  },
+  {
+    id: 'bil.gstScope', group: 'money', label: 'GST filed', advanced: true,
+    synonyms: ['gst', 'scope', 'region', 'filing'],
+    control: { kind: 'segmented', options: [
+      { value: 'branch', label: 'Each branch' },
+      { value: 'region', label: 'By region' },
+      { value: 'tenant', label: 'Whole lab' },
+    ] },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'billing', key: 'gstScope',
+  },
+  {
+    id: 'bil.filing', group: 'money', label: 'GST return every', advanced: true,
+    synonyms: ['gst', 'filing', 'monthly', 'quarterly', 'return'],
+    control: { kind: 'segmented', options: [
+      { value: 'monthly', label: 'Month' },
+      { value: 'quarterly', label: '3 months' },
+    ] },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'billing', key: 'filingFrequency',
   },
 
   // ── Lab setup ──────────────────────────────────────────────────────────
@@ -215,6 +619,45 @@ export const SETTINGS: readonly SettingDef[] = [
     control: { kind: 'text', maxLength: 30, sanitize: (v) => v.replace(/[^\p{L}\p{N} &._'-]/gu, '').slice(0, 30) },
     scope: 'tenant',
     permission: ADMIN, adapter: 'tenant', key: 'brandingName',
+  },
+  {
+    id: 'setup.patientId', group: 'setup', label: 'Patient number looks like',
+    help: 'Old numbers never change.',
+    synonyms: ['patient id', 'mrn', 'uhid', 'registration number', 'format', 'prefix'],
+    control: {
+      kind: 'composite',
+      preview: (r) => (r('patient.enabled') === true ? String(r('patient.preview')) : 'Built-in numbering'),
+      fields: idFields('patient'),
+    },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'idFormat', key: 'patient.enabled',
+    confirm: { title: 'Change how patient numbers look?', message: 'Only new patients change. Old numbers stay.', confirmLabel: 'Change', tone: 'primary' },
+  },
+  {
+    id: 'setup.orderId', group: 'setup', label: 'Order number looks like',
+    synonyms: ['order id', 'order number', 'format', 'prefix', 'numbering'],
+    control: { kind: 'composite', preview: (r) => String(r('order.preview')), fields: idFields('order') },
+    scope: 'tenant',
+    permission: TENANT, adapter: 'idFormat', key: 'order.datePrefix',
+    confirm: { title: 'Change how order numbers look?', message: 'Only new orders change. Old numbers stay.', confirmLabel: 'Change', tone: 'primary' },
+  },
+  {
+    id: 'setup.addons', group: 'setup', label: 'Lab add-ons',
+    help: 'Turn Lab features on or off.',
+    synonyms: ['module', 'modules', 'feature', 'extension', 'home collection', 'microbiology', 'messages', 'inventory', 'add-on'],
+    control: {
+      kind: 'composite', inline: true,
+      preview: (r) => `Coming soon: ${r('comingSoon')}`,
+      fields: [
+        { key: 'lab.homeCollection', label: 'Home collection', control: { kind: 'switch' } },
+        { key: 'lab.microbiology', label: 'Microbiology (culture)', control: { kind: 'switch' } },
+        { key: 'lab.reports', label: 'Reports', control: { kind: 'switch' } },
+        { key: 'lab.messages', label: 'Messages', control: { kind: 'switch' } },
+        { key: 'inventory', label: 'Stock (inventory)', control: { kind: 'switch' } },
+      ],
+    },
+    scope: 'tenant',
+    permission: ADMIN, adapter: 'modules', key: 'lab.reports',
   },
   {
     id: 'setup.slug', group: 'setup', label: 'Staff sign-in name', advanced: true,

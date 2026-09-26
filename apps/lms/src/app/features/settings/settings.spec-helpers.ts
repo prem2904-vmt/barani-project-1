@@ -78,6 +78,8 @@ export function settingsProviders(o: HarnessOpts = {}) {
   const off = new Set(o.modulesOff ?? []);
   const entitlements = {
     ensureLoaded: vi.fn(async () => undefined),
+    loaded: () => true,
+    refresh: vi.fn(),
     moduleEnabled: (k: string) => !off.has(k),
     moduleOn: (k: string) => !off.has(k),
     featureOn: (_m: string, k: string) => !off.has(k),

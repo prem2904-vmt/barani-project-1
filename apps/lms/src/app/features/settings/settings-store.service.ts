@@ -3,11 +3,22 @@ import { AuthService } from '../../core/auth/auth.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { SettingAdapter } from './adapters/adapter';
+import { ALERT_PERMS, AlertsAdapter } from './adapters/alerts.adapter';
+import { AppointmentsAdapter } from './adapters/appointments.adapter';
 import { AutoAssignAdapter } from './adapters/auto-assign.adapter';
+import { BillingAdapter } from './adapters/billing.adapter';
 import { BranchLabConfigAdapter } from './adapters/branch-lab-config.adapter';
+import { GstAdapter } from './adapters/gst.adapter';
+import { IdFormatAdapter } from './adapters/id-format.adapter';
+import { InvoiceTemplateAdapter } from './adapters/invoice-template.adapter';
 import { LabModesAdapter } from './adapters/lab-modes.adapter';
+import { MeAdapter } from './adapters/me.adapter';
+import { MicroAdapter } from './adapters/micro.adapter';
+import { ModulesAdapter } from './adapters/modules.adapter';
+import { OpdAdapter } from './adapters/opd.adapter';
+import { PrintConfigAdapter } from './adapters/print-config.adapter';
 import { TenantSettingsAdapter } from './adapters/tenant.adapter';
-import { AccessContext, canSee } from './settings-access';
+import { AccessContext, canSee, hasAny } from './settings-access';
 import { SETTINGS, SETTINGS_BY_ID } from './settings-registry';
 import { AdapterKey, RowContext, SettingDef } from './settings.model';
 
@@ -30,7 +41,23 @@ export class SettingsStore {
     blc: inject(BranchLabConfigAdapter),
     autoAssign: inject(AutoAssignAdapter),
     labModes: inject(LabModesAdapter),
+    billing: inject(BillingAdapter),
+    invoice: inject(InvoiceTemplateAdapter),
+    gst: inject(GstAdapter),
+    idFormat: inject(IdFormatAdapter),
+    appointments: inject(AppointmentsAdapter),
+    micro: inject(MicroAdapter),
+    opd: inject(OpdAdapter),
+    alerts: inject(AlertsAdapter),
+    print: inject(PrintConfigAdapter),
+    me: inject(MeAdapter),
+    modules: inject(ModulesAdapter),
   };
+  private readonly alerts = inject(AlertsAdapter);
+
+  /** Every row: the registry + one row per in-app alert (from the backend
+   *  catalog, once loaded). */
+  readonly rows = computed<SettingDef[]>(() => [...SETTINGS, ...this.alerts.defs()]);
 
   /** Register a store (phase-2 adapters, tests). */
   register(key: AdapterKey, adapter: SettingAdapter): void { this.adapters[key] = adapter; }
@@ -83,6 +110,8 @@ export class SettingsStore {
 
   ensure(defs: readonly SettingDef[]): void {
     this.entitlements.ensureLoaded();
+    // Alert rows exist only once the catalog is in: load it for those allowed.
+    if (hasAny(this.access().perms, ALERT_PERMS)) this.alerts.ensure();
     const seen = new Set<string>();
     for (const d of defs) {
       const a = this.adapters[d.adapter];
@@ -110,5 +139,5 @@ export class SettingsStore {
   }
 
   /** All rows the user may see (page and sheets). */
-  readonly allowedRows = computed(() => SETTINGS.filter((d) => this.allowed(d)));
+  readonly allowedRows = computed(() => this.rows().filter((d) => this.allowed(d)));
 }

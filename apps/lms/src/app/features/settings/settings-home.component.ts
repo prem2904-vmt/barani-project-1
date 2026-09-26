@@ -40,7 +40,7 @@ export class SettingsHomeComponent implements AfterViewInit {
   /** Groups whose "More options" is open. */
   readonly openMore = signal<ReadonlySet<GroupId>>(new Set());
 
-  private readonly allowedRows = computed(() => SETTINGS.filter((d) => this.store.allowed(d)));
+  private readonly allowedRows = computed(() => this.store.allowedRows());
   private readonly allowedTools = computed(() => SETTINGS_TOOLS.filter((t) => canSee(t, this.store.access())));
 
   readonly groups = computed<GroupView[]>(() => {

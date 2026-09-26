@@ -39,7 +39,7 @@ export type ScreenKey =
 export type ControlKind =
   | 'switch' | 'segmented' | 'select' | 'number' | 'text' | 'time'
   | 'readonly' | 'link' | 'composite'
-  | 'logo' | 'dept-pool' | 'tiers' | 'alerts' | 'addons' | 'signature';
+  | 'logo' | 'dept-pool' | 'tiers';
 
 export interface SettingOption<V = unknown> { value: V; label: string }
 
@@ -67,8 +67,13 @@ export interface ControlDef {
   preview?: (read: KeyReader) => string;
   /** dept-pool: which leg (technicians who enter / doctors who check). */
   leg?: 'tech' | 'validator';
-  /** alerts: only these catalog modules (screen sheets). Empty = all. */
-  alertModules?: string[];
+  /** select: read the options from this adapter key (e.g. system printers). */
+  optionsKey?: string;
+  /** composite: the fields show at once (no "Change" step). A switch with
+   *  `fields` shows them under the row while it is on. */
+  inline?: boolean;
+  /** composite: "Reset to default" writes these values. */
+  reset?: Record<string, unknown>;
 }
 
 export interface FieldDef {
@@ -98,6 +103,10 @@ export interface SettingDef {
   group: GroupId;
   /** Also listed in these groups (same row, same store). */
   alsoIn?: GroupId[];
+  /** Small sub-heading inside the group (Alerts: where it happens). */
+  subgroup?: string;
+  /** A static chip beside the scope chip (Alerts: who gets it). */
+  note?: string;
   /** 2–6 plain words. */
   label: string;
   /** Optional one-liner, 12 words or fewer. */

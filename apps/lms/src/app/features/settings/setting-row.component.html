@@ -50,14 +50,18 @@
     @if (crumb()) { <span class="pf-sr__crumb">{{ groupLabel() }}</span> }
     <span class="pf-sr__label" [id]="'lbl-' + def().id">{{ def().label }}</span>
     @if (def().help) { <span class="pf-sr__help">{{ def().help }}</span> }
-    @if (scopeText()) {
+    @if (scopeText() || def().note) {
       <span class="pf-sr__scope">
         @if (canPickBranch()) {
-          <pf-select class="pf-sr__branch" size="sm" [options]="branchOptions()" [value]="store.branchId() ?? ''"
-                     [triggerLabel]="scopeText()" (valueChange)="store.setBranch($event)"></pf-select>
-        } @else {
+          <span class="nd-chip nd-chip--static pf-sr__chip pf-sr__chip--pick">
+            <span>{{ scopePrefix() }}:</span>
+            <pf-select class="pf-sr__branch" size="sm" [options]="branchOptions()" [value]="store.branchId() ?? ''"
+                       (valueChange)="store.setBranch($event)"></pf-select>
+          </span>
+        } @else if (scopeText()) {
           <span class="nd-chip nd-chip--static pf-sr__chip">{{ scopeText() }}</span>
         }
+        @if (def().note) { <span class="nd-chip nd-chip--static pf-sr__chip">{{ def().note }}</span> }
       </span>
     }
   </div>
@@ -83,9 +87,14 @@
         }
       }
       @case ('composite') {
-        <span class="pf-sr__preview nd-num">{{ previewText() }}</span>
-        <button type="button" class="nd-btn nd-btn--secondary pf-sr__change" [attr.aria-expanded]="editing()"
-                [disabled]="!loaded()" (click)="openEditor()">{{ editing() ? 'Done' : 'Change' }}</button>
+        @if (!c().inline) {
+          <span class="pf-sr__preview nd-num">{{ previewText() }}</span>
+          <button type="button" class="nd-btn nd-btn--secondary pf-sr__change" [attr.aria-expanded]="editing()"
+                  [disabled]="!loaded()" (click)="openEditor()">{{ editing() ? 'Done' : 'Change' }}</button>
+        }
+      }
+      @case ('tiers') {
+        <span class="pf-sr__ro nd-num">{{ tiers().length }} {{ tiers().length === 1 ? 'rule' : 'rules' }}</span>
       }
       @case ('logo') {
         <div class="pf-sr__logo">
@@ -107,6 +116,12 @@
       }
       @default {
         <ng-container *ngTemplateOutlet="ctl; context: { $implicit: c(), key: def().key, v: value(), lbl: 'lbl-' + def().id }"></ng-container>
+        @if (c().link && linkAllowed()) {
+          <button type="button" class="nd-btn nd-btn--tertiary pf-sr__link" (click)="go(c().link!.href)">
+            {{ c().link!.label }}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        }
       }
     }
   </div>
@@ -125,8 +140,8 @@
   <p class="pf-sr__err" role="alert">{{ error() }}</p>
 }
 
-@if (c().kind === 'composite' && editing()) {
-  <div class="pf-sr__fields">
+@if (showFields()) {
+  <div class="pf-sr__fields" [class.pf-sr__fields--inline]="c().kind === 'switch'">
     @for (f of c().fields ?? []; track f.key) {
       @if (fieldVisible(f)) {
         <div class="pf-sr__field" [class.pf-sr__field--switch]="f.control.kind === 'switch'">
@@ -135,7 +150,38 @@
         </div>
       }
     }
-    <p class="pf-sr__looks">Looks like <strong class="nd-num">{{ previewText() }}</strong></p>
+    @if (c().kind === 'composite' && c().preview) {
+      @if (c().inline) {
+        <p class="pf-sr__looks">{{ previewText() }}</p>
+      } @else {
+        <p class="pf-sr__looks">Looks like <strong class="nd-num">{{ previewText() }}</strong></p>
+      }
+    }
+    @if (c().reset) {
+      <button type="button" class="nd-btn nd-btn--tertiary pf-sr__reset" (click)="resetDefaults()">Reset to default</button>
+    }
+  </div>
+}
+
+@if (c().kind === 'tiers') {
+  <div class="pf-sr__tiers">
+    @for (t of tiers(); track $index; let i = $index) {
+      <div class="pf-sr__tier">
+        <span class="pf-sr__tier-t">Within</span>
+        <pf-number-input class="pf-sr__tier-n" [value]="t.withinDays" [min]="1" [max]="365" suffix="days"
+                         (valueChange)="tierChanged(i, 'withinDays', $event)"></pf-number-input>
+        <span class="pf-sr__tier-t">get</span>
+        <pf-number-input class="pf-sr__tier-n" [value]="t.discountPercent" [min]="0" [max]="100" suffix="% off"
+                         (valueChange)="tierChanged(i, 'discountPercent', $event)"></pf-number-input>
+        <button type="button" class="nd-btn nd-btn--icon pf-sr__tier-x" [attr.aria-label]="'Remove rule ' + (i + 1)"
+                (click)="removeTier(i)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    } @empty {
+      <p class="pf-sr__help">No rules yet.</p>
+    }
+    <button type="button" class="nd-btn nd-btn--secondary pf-sr__tier-add" [disabled]="!loaded()" (click)="addTier()">Add rule</button>
   </div>
 }
 
