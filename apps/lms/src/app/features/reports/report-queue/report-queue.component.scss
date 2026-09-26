@@ -1,3 +1,5 @@
+@use '../../../shared/styles/nd-mixins' as nd;
+
 /* ───────────────────────────────────────────────────────────────
  NON-SCROLL WORK LAYOUT (all sizes — approved desktop change).
  The page fills the shell's main area exactly and never scrolls
@@ -80,7 +82,7 @@
   font-weight: 600;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: inherit;
   letter-spacing: -0.01em;
 }
 .pf-rq-stat:hover .pf-rq-stat__value {
@@ -310,244 +312,6 @@
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-/* Cards list — the Partial tab renders this directly under the
- segmented filter, same vertical rhythm as the PDF list. No
- highlighted wrapper any more; the cards stand on their own. */
-.pf-prelim-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.pf-prelim-card {
-  border-radius: 12px;
-  background: var(--bg-card-solid, rgba(20, 22, 30, 0.6));
-  border: 1px solid var(--glass-border);
-  overflow: hidden;
-  transition: border-color 0.18s;
-}
-.pf-prelim-card--open {
-  border-color: rgba(34, 211, 238, 0.45);
-}
-
-.pf-prelim-card__head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  cursor: pointer;
-  text-align: left;
-}
-.pf-prelim-card__head:hover {
-  background: var(--glass-bg);
-}
-.pf-prelim-card__name {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pf-prelim-card__meta {
-  margin: 2px 0 0;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pf-prelim-card__count {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  background: rgba(34, 211, 238, 0.16);
-  color: #67e8f9;
-  border: 1px solid rgba(34, 211, 238, 0.34);
-}
-.pf-prelim-card__chev {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  transition: transform 0.18s;
-}
-.pf-prelim-card--open .pf-prelim-card__chev {
-  transform: rotate(180deg);
-}
-
-.pf-prelim-card__body {
-  padding: 4px 14px 14px;
-  border-top: 1px solid var(--glass-border);
-}
-.pf-prelim-card__sample {
-  padding: 10px 12px;
-  margin-top: 10px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--glass-border);
-}
-.pf-prelim-card__sample-hdr {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--glass-border);
-}
-.pf-prelim-card__sample-dept {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(34, 211, 238, 0.16);
-  color: #67e8f9;
-}
-.pf-prelim-card__sample-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.pf-prelim-card__test {
-  margin-bottom: 8px;
-}
-.pf-prelim-card__test:last-child {
-  margin-bottom: 0;
-}
-.pf-prelim-card__test-name {
-  margin: 0 0 4px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.pf-prelim-card__no-values {
-  margin: 0;
-  padding: 6px 0;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-  font-style: italic;
-}
-.pf-prelim-card__values {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.pf-prelim-card__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(
-      0,
-      1.2fr
-    ) auto;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-}
-.pf-prelim-card__row[data-flag="abnormal"] {
-  background: rgba(245, 158, 11, 0.08);
-}
-.pf-prelim-card__row[data-flag="critical"] {
-  background: rgba(239, 68, 68, 0.1);
-}
-.pf-prelim-card__row-name {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-.pf-prelim-card__row-value {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-.pf-prelim-card__row-unit {
-  font-weight: 400;
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
-.pf-prelim-card__row-range {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10.5px;
-  color: var(--text-tertiary);
-}
-.pf-prelim-card__row-flag {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  padding: 2px 6px;
-  border-radius: 9999px;
-  background: rgba(16, 185, 129, 0.16);
-  color: #6ee7b7;
-}
-.pf-prelim-card__row-flag[data-flag="abnormal"] {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-}
-.pf-prelim-card__row-flag[data-flag="critical"] {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
-}
-
-.pf-prelim-card__pending {
-  margin: 12px 0 0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgba(245, 158, 11, 0.08);
-  border-left: 3px solid #f59e0b;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.pf-prelim-card__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--glass-border);
-}
-@media (max-width: 639px) {
-  .pf-prelim-card__actions {
-    justify-content: stretch;
-  }
-  .pf-prelim-card__actions > * {
-    flex: 1 1 0;
-  }
-}
-
-@media (max-width: 639px) {
-  .pf-prelim-card__row {
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "name flag" "value flag" "range flag";
-    gap: 2px 12px;
-  }
-  .pf-prelim-card__row-name {
-    grid-area: name;
-  }
-  .pf-prelim-card__row-value {
-    grid-area: value;
-  }
-  .pf-prelim-card__row-range {
-    grid-area: range;
-  }
-  .pf-prelim-card__row-flag {
-    grid-area: flag;
-    align-self: center;
-  }
-}
-
 /* ───────────────────────────────────────────────────────────────
  CROSS-PLATFORM ADDITIVE OVERRIDES — phone / iPad / touch only.
  Desktop-web (>=1280px) is intentionally untouched: every rule
@@ -598,9 +362,6 @@
   .pf-rq-iconbtn {
     min-height: 44px;
   }
-  .pf-prelim-card__head {
-    min-height: 52px;
-  }
   .pf-results-search__clear {
     width: 32px;
     height: 32px;
@@ -626,9 +387,6 @@
   .pf-rq-iconbtn--wa:hover {
     background: transparent;
     color: var(--text-secondary);
-  }
-  .pf-prelim-card__head:hover {
-    background: transparent;
   }
   .pf-results-search__clear:hover {
     background: transparent;
@@ -828,11 +586,6 @@
 @media (max-width: 640px) {
   :host-context(.design-new) .pf-rq-filter-m,
   :host-context(.design-new) .pf-rq-filter-active { display: none !important; }
-  /* The phone block above hides EVERY pf-segmented, which also swallowed
-     the band's strip — so removing the icon row left the screen with no
-     filter at all. Bring back just the band one (the classic strip keeps
-     .pf-classic-only, so it stays hidden here). */
-  :host-context(.design-new) pf-segmented.pf-rq-bandseg { display: inline-flex; }
 }
 
 /* ── Row actions: View · Share ▾ · More ────────────────────────────
@@ -931,4 +684,171 @@
 
   .pf-rq-menu__item { min-height: 46px; font-size: 14px; padding: 11px 12px; }
   .pf-rq-menu__bd { background: rgba(0, 0, 0, 0.32); }
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+   REPORTS LIST — new design (docs/ND-PATTERN.md → "Reports list").
+   One status filter in the band pill (neutral segmented, plain tabular
+   counts), then a stack of cards with ONE anatomy on every tab:
+   full name + "29/M · MRN · Order … · time" (Noto, tabular, wraps) +
+   neutral chips + secondary row actions (report) or a collapse (partial).
+   Palette only; red is kept for Failed / Unpaid / Critical.
+   ═════════════════════════════════════════════════════════════════════ */
+
+/* ── Band filter (projected into the pill's tools slot) ── */
+.pf-rq-seg { flex-shrink: 0; }
+.pf-rq-seg__item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pf-rq-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+.pf-rq-seg__count { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
+.pf-rq-seg__item[aria-checked='true'] .pf-rq-seg__count { color: var(--text-secondary); }
+.pf-rq-seg__count--warn,
+.pf-rq-seg__item[aria-checked='true'] .pf-rq-seg__count--warn { color: var(--red-text, #b91c1c); }
+
+/* ── List + card ── */
+.pf-rq-list { list-style: none; margin: 0; padding: 2px 0 4px; display: flex; flex-direction: column; gap: 10px; }
+.pf-rq-card { @include nd.card; min-width: 0; }
+.pf-rq-card__head {
+  display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap;
+  width: 100%; min-height: 64px; padding: 12px 14px;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+}
+.pf-rq-card__toggle { cursor: pointer; border-radius: var(--nd-radius-card); transition: background var(--nd-dur-fast) ease; }
+.pf-rq-card__toggle:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) {
+  .pf-rq-card__toggle:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
+}
+.pf-rq-card.is-open > .pf-rq-card__toggle { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.pf-rq-card__who { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pf-rq-card__name {
+  display: block; margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--text-primary);
+  @include nd.no-truncate;
+}
+.pf-rq-card__meta {
+  display: block; margin: 0; font-size: 12.5px; line-height: 1.35; color: var(--text-tertiary);
+  @include nd.no-truncate;
+}
+.pf-rq-card__chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pf-rq-card .nd-chip { height: 26px; padding: 0 9px; font-size: 12px; }
+.pf-rq-status[data-status='delivered'] > svg { color: var(--violet-text, #7c3aed); }
+.pf-rq-status[data-status='failed'],
+.pf-rq-unpaid { color: var(--red-text, #b91c1c); }
+.pf-rq-card__chev { flex: none; color: var(--text-tertiary); transition: transform var(--nd-dur) var(--nd-spring); }
+.pf-rq-card.is-open .pf-rq-card__chev { transform: rotate(180deg); }
+
+/* Row actions: kit .nd-rowact (secondary text on web, 44px icons on touch). */
+.pf-rq-card__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
+.pf-rq-split--nd { position: relative; display: inline-flex; }
+.pf-rq-split--nd .pf-rq-split__face { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.pf-rq-split--nd .pf-rq-split__caret {
+  padding: 0 8px; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0;
+}
+.pf-rq-split--nd .pf-rq-split__caret > svg { display: block; }
+.pf-rq-split--nd .pf-rq-split__caret.nd-rowact--icon { width: 40px; min-width: 40px; }
+/* More is an icon on web too: a 32px square that matches the text actions. */
+.pf-rq-more:not(.nd-rowact--icon) { width: 32px; padding: 0; }
+.pf-rq-more:not(.nd-rowact--icon) > svg { display: block; }
+.pf-rq-more:not(.nd-rowact--icon) .nd-rowact__t {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+.pf-rq-card__acts .nd-rowact[aria-expanded='true'] { color: var(--violet-text, #7c3aed); }
+
+/* ── Partial card: collapse on the kit's motion ── */
+.pf-rq-card__collapse {
+  display: grid; grid-template-rows: 0fr; visibility: hidden;
+  transition: grid-template-rows var(--nd-dur-fast) var(--nd-spring), visibility 0s linear var(--nd-dur-fast);
+}
+.pf-rq-card.is-open > .pf-rq-card__collapse {
+  grid-template-rows: 1fr; visibility: visible;
+  transition: grid-template-rows var(--nd-dur) var(--nd-spring), visibility 0s;
+}
+.pf-rq-card__inner { min-height: 0; overflow: hidden; }
+.pf-rq-card__body { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--nd-line); }
+.pf-rq-card__foot { display: flex; justify-content: flex-end; padding: 0 14px 14px; }
+
+.pf-rq-dept {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border: 1px solid var(--nd-line); border-radius: var(--nd-radius);
+}
+.pf-rq-dept__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pf-rq-card .pf-rq-dept__code { height: 22px; padding: 0 7px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-secondary); }
+.pf-rq-dept__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.pf-rq-dept__note { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
+
+.pf-rq-test { display: flex; flex-direction: column; gap: 4px; }
+.pf-rq-test + .pf-rq-test { padding-top: 8px; border-top: 1px solid var(--nd-line); }
+.pf-rq-test__name {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0; font-size: 13px; font-weight: 500; line-height: 1.35; color: var(--text-primary);
+}
+.pf-rq-test__mark { flex: none; width: 8px; height: 8px; border-radius: 999px; border: 1.5px solid var(--text-tertiary); }
+.pf-rq-test__mark--ready { background: var(--color-violet-600, #7c3aed); border-color: var(--color-violet-600, #7c3aed); }
+.pf-rq-test__state { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
+.pf-rq-test[data-ready='true'] .pf-rq-test__state { color: var(--text-secondary); }
+.pf-rq-test__status { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
+
+.pf-rq-culture { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 12.5px; line-height: 1.4; }
+.pf-rq-culture__row { display: contents; }
+.pf-rq-culture dt { color: var(--text-tertiary); }
+.pf-rq-culture dd { margin: 0; color: var(--text-primary); @include nd.no-truncate; }
+
+.pf-rq-values { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-rq-value {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) 64px;
+  gap: 8px; align-items: center; padding: 5px 8px; border-radius: 8px; font-size: 12.5px;
+}
+.pf-rq-value[data-flag='abnormal'],
+.pf-rq-value[data-flag='critical'] { background: var(--nd-chip-bg); }
+.pf-rq-value__name { color: var(--text-primary); }
+.pf-rq-value__val { font-weight: 600; color: var(--text-primary); }
+.pf-rq-value__unit { margin-left: 4px; font-size: 11.5px; font-weight: 400; color: var(--text-tertiary); }
+.pf-rq-value__range { font-size: 12px; color: var(--text-tertiary); }
+.pf-rq-value__flag { text-align: right; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.pf-rq-value__flag[data-flag='critical'] { color: var(--red-text, #b91c1c); }
+
+/* Pending: a neutral info row, SVG clock, department NAMES. */
+.pf-rq-pending {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0;
+  padding: 10px 12px; border-radius: var(--nd-radius-sm);
+  background: var(--nd-chip-bg); color: var(--text-secondary); font-size: 12.5px; line-height: 1.45;
+}
+.pf-rq-pending > svg { flex: none; margin-top: 1px; color: var(--text-tertiary); }
+.pf-rq-pending__dept { font-weight: 600; color: var(--text-primary); }
+
+.pf-rq-card--skel .pf-rq-card__who { gap: 8px; }
+.pf-rq-empty { min-height: 260px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-rq-card__collapse,
+  .pf-rq-card.is-open > .pf-rq-card__collapse,
+  .pf-rq-card__chev,
+  .pf-rq-card__toggle { transition: none !important; }
+}
+
+/* ── Phones (≤640px): the filter scrolls in its own row (the band does
+   that), cards stack, every target is 44px. ── */
+@media (max-width: 640px) {
+  .pf-rq-seg { margin-inline: auto; }
+  .pf-rq-seg__item { height: 44px; padding: 0 14px; font-size: 13px; }
+  .pf-rq-card__toggle {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 10px;
+  }
+  .pf-rq-card__toggle .pf-rq-card__who { grid-column: 1; grid-row: 1; }
+  .pf-rq-card__toggle .pf-rq-chip { grid-column: 1; grid-row: 2; justify-self: start; }
+  .pf-rq-card__toggle .pf-rq-card__chev { grid-column: 2; grid-row: 1; margin-top: 2px; }
+  .pf-rq-card__acts { width: 100%; margin-left: 0; justify-content: flex-end; }
+  /* 44px targets on phones whatever the pointer (a narrow desktop window too). */
+  .pf-rq-card__acts .nd-rowact { height: 44px; min-height: 44px; }
+  .pf-rq-card__acts .pf-rq-more:not(.nd-rowact--icon) { width: 44px; }
+  /* The classic phone rule stretches every .pf-rq-split; the ND cells keep their size. */
+  .pf-rq-card__acts .pf-rq-split--nd { flex: none; min-width: auto; }
+  .pf-rq-card__foot .nd-btn { width: 100%; }
+  .pf-rq-value {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'name flag' 'val flag' 'range flag';
+    gap: 2px 12px;
+  }
+  .pf-rq-value__name { grid-area: name; }
+  .pf-rq-value__val { grid-area: val; }
+  .pf-rq-value__range { grid-area: range; }
+  .pf-rq-value__flag { grid-area: flag; align-self: center; }
 }

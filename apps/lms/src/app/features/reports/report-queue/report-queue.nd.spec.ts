@@ -1,0 +1,386 @@
+import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
+import { signal } from '@angular/core';
+import { of, EMPTY } from 'rxjs';
+import { vi } from 'vitest';
+import { ReportQueueComponent } from './report-queue.component';
+import { cultureStagesDone, cultureSummary, deptCountLabel, pendingStatus } from './report-queue.partial';
+import { ApiService } from '../../../core/services/api.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
+
+/**
+ * Reports list on the nd pattern (docs/ND-PATTERN.md → "Reports list"):
+ * ONE status filter in the band pill (no duplicate stats strip, no colour
+ * dots), cards with the full name + Noto meta, no primary on the page, and
+ * the Partial tab's truthful per-department model (the owner's order:
+ * a signed-out culture on one Microbiology tube, an identification still on
+ * a second Microbiology tube, and a Molecular tube in progress).
+ */
+const FULL_NAME = 'Mr. Sathish Kumaravel Ramasamy';
+const PATIENT = { displayName: FULL_NAME, age: 29, sex: 'Male', mrn: 'AA0012', phone: '9876543210' };
+const CULTURE_PARAMS = JSON.stringify({ parameters: [], microFormat: 'culture_sensitivity' });
+const CULTURE_RESULT = JSON.stringify({
+  note: 'Gram / Direct smear: …',
+  stages: [
+    { key: 'gram', caseLabel: null, values: { fields: [{ name: 'pus_cells', title: 'Pus Cells', value: 'Few' }] } },
+    { key: 'growth', caseLabel: null, values: { fields: [
+      { name: 'growth', title: 'Growth', value: 'Growth Detected' },
+      { name: 'colony_count', title: 'Colony Count', value: '<10⁴ CFU/mL' }] } },
+    { key: 'identification', caseLabel: null, values: { fields: [{ name: 'organism', title: 'Organism isolated', value: 'Abiotrophia spp.' }] } },
+    { key: 'ast', caseLabel: null, values: {} },
+  ],
+  values: {
+    noGrowth: false,
+    organisms: [{ name: 'Abiotrophia spp.', antibiotics: [
+      { name: 'Amoxicillin-Clavulanate', interpretation: '' }, { name: 'Cefixime', interpretation: '' },
+      { name: 'Ceftazidime', interpretation: '' }, { name: 'Imipenem', interpretation: '' },
+      { name: 'Ceftriaxone', interpretation: 'R' }, { name: 'Cefuroxime', interpretation: '' },
+      { name: 'Cefoperazone-Sulbactam', interpretation: '' }, { name: 'Piperacillin-Tazobactam', interpretation: '' },
+    ] }],
+  },
+});
+const MIC = { id: 'dep-mic', code: 'MIC', name: 'Microbiology' };
+const MOL = { id: 'dep-mol', code: 'MOL', name: 'Molecular Diagnostics' };
+const HAEM = { id: 'dep-hae', code: 'HAE', name: 'Haematology' };
+
+const PARTIAL_ORDER = {
+  id: '7920cd24-aa27-48da-bc33-35f60010178a', orderNumber: 'LAB-2609-000089', createdAt: '2026-09-26T13:07:00Z',
+  patient: PATIENT,
+  samples: [
+    { id: 's-mic-1', status: 'received', departmentId: MIC.id, department: MIC, tests: [
+      { id: 'ot-cult', status: 'validated', currentResult: CULTURE_RESULT,
+        test: { name: 'Bacterial Culture & Sensitivity', parameters: CULTURE_PARAMS } }] },
+    { id: 's-mic-2', status: 'dispatched', departmentId: MIC.id, department: MIC, tests: [
+      { id: 'ot-ident', status: 'pending', currentResult: null,
+        test: { name: 'Bacterial Identification', parameters: CULTURE_PARAMS } }] },
+    { id: 's-mol', status: 'received', departmentId: MOL.id, department: MOL, tests: [
+      { id: 'ot-pcr', status: 'in_progress', currentResult: null,
+        test: { name: 'Bacterial PCR Detection', parameters: JSON.stringify({ parameters: [] }) } }] },
+  ],
+};
+/** A plain-values partial: Haematology ready (with a High + Critical), Micro pending. */
+const VALUES_ORDER = {
+  id: 'aaaa1111-0000-0000-0000-000000000000', orderNumber: null, createdAt: '2026-09-26T05:00:00Z',
+  patient: { displayName: 'Ms. Paravai Munusamy', age: 44, sex: 'Female', mrn: 'AA0007' },
+  samples: [
+    { id: 's-hae', status: 'received', departmentId: HAEM.id, department: HAEM, tests: [
+      { id: 'ot-cbc', status: 'validated',
+        currentResult: JSON.stringify({ values: { hb: '18', k: '7' }, flagged: { hb: { flag: 'H', range: '12–15' }, k: { flag: 'C' } } }),
+        test: { name: 'CBC', parameters: JSON.stringify({ parameters: [
+          { name: 'hb', title: 'Haemoglobin', unit: 'g/dL' }, { name: 'k', title: 'Potassium', unit: 'mmol/L' }] }) } }] },
+    { id: 's-mic-3', status: 'received', departmentId: MIC.id, department: MIC, tests: [
+      { id: 'ot-urine', status: 'entered', currentResult: null, test: { name: 'Urine Culture', parameters: CULTURE_PARAMS } }] },
+  ],
+};
+
+const rep = (id: string, deliveryStatus: string, type = 'final', extra: Record<string, unknown> = {}) => ({
+  id, orderId: `o-${id}`, patientId: 'p1', type, status: 'generated', deliveryStatus,
+  createdAt: '2026-09-26T13:07:00Z', qrToken: 't',
+  order: { id: `o-${id}`, orderNumber: 'LAB-2609-000102', patient: PATIENT },
+  ...extra,
+});
+const QUEUE = [
+  rep('r1', 'pending'), rep('r2', 'pending', 'partial'), rep('r3', 'delivered'), rep('r4', 'failed'),
+];
+
+const realMatchMedia = (window as any).matchMedia;
+afterEach(() => {
+  TestBed.resetTestingModule();
+  (window as any).matchMedia = realMatchMedia;
+  vi.restoreAllMocks();
+});
+
+async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean } = {}) {
+  (window as any).matchMedia = (q: string) => ({
+    matches: q.includes('hover') ? !opts.touch : false,
+    addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+  });
+  const api = {
+    get: vi.fn((url: string) => {
+      if (url === '/api/reports/queue') return of(opts.queue ?? QUEUE);
+      if (url === '/api/orders/today') return of(opts.orders ?? [PARTIAL_ORDER, VALUES_ORDER]);
+      if (url === '/api/billing/outstanding') return of({ due: [{ orderId: 'o-r1' }] });
+      return of([]);
+    }),
+    post: vi.fn(() => of({})),
+  };
+  const router = { url: '/reports', navigate: vi.fn(() => Promise.resolve(true)), events: of() };
+  TestBed.configureTestingModule({
+    providers: [
+      { provide: ApiService, useValue: api },
+      { provide: HttpClient, useValue: {} },
+      { provide: ThemeService, useValue: { isNewDesign: signal(opts.nd !== false), isDark: signal(false) } },
+      { provide: LiveQueueService, useValue: { on: () => EMPTY } },
+      { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
+      { provide: DialogService, useValue: { prompt: vi.fn(async () => null), confirm: vi.fn(async () => false) } },
+      { provide: NavBackService, useValue: { showBack: () => false, back: vi.fn(), backTo: vi.fn() } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World' }), hasPermission: () => true } },
+      { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
+      { provide: ZoomTransitionService, useValue: { holding: signal(false), tap: () => true, rearm() {}, attachSource() {}, detachSource() {} } },
+      { provide: Router, useValue: router },
+    ],
+  });
+  const f = TestBed.createComponent(ReportQueueComponent);
+  f.detectChanges();
+  await f.whenStable();
+  f.detectChanges();
+  const c = f.componentInstance as any;
+  const el = f.nativeElement as HTMLElement;
+  const tab = (v: string) => {
+    (el.querySelector(`.pf-rq-seg [data-filter="${v}"]`) as HTMLElement).click();
+    f.detectChanges();
+  };
+  return { f, el, c, api, router, tab };
+}
+
+const primaries = (el: HTMLElement) =>
+  el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary, pf-touch-btn[variant="primary"], .pf-btn--primary');
+/** Component CSS with Angular's scoping attributes stripped. */
+const css = () => ((ReportQueueComponent as any).ɵcmp.styles as string[]).join('\n')
+  .replace(/\[_ng(content|host)-%COMP%\]/g, '');
+/** Just the new-design rules (the classic look keeps its own palette). */
+const ndCss = () => css().slice(css().indexOf('.pf-rq-seg'));
+
+describe('Reports list (nd) — band', () => {
+  it('ONE status filter in the pill: neutral radios with plain tabular counts, no stats strip', async () => {
+    const { el } = await render();
+    const band = el.querySelector('pf-hero-band') as HTMLElement;
+    const seg = band.querySelector('.nd-seg.pf-rq-seg') as HTMLElement;
+    expect(seg.getAttribute('role')).toBe('radiogroup');
+    const items = [...seg.querySelectorAll<HTMLElement>('[role=radio]')];
+    expect(items.map(i => i.querySelector('.pf-rq-seg__lbl')!.textContent!.trim()))
+      .toEqual(['All', 'Completed', 'Partial', 'Delivered', 'Failed']);
+    expect(items.map(i => i.querySelector('.pf-rq-seg__count')!.textContent!.trim())).toEqual(['4', '2', '2', '1', '1']);
+    items.forEach(i => expect(i.querySelector('.pf-rq-seg__count')!.classList).toContain('nd-num'));
+    // Default = Completed, raised neutral (aria-checked), never a gradient.
+    expect(seg.querySelector('[aria-checked="true"]')?.getAttribute('data-filter')).toBe('pending');
+    // No duplicate strip anywhere, no second filter control.
+    expect(el.querySelector('.pf-rq-stats, .pf-rq-stat, .pf-rq-statbtn, pf-segmented, .pf-rq-filter-m')).toBeNull();
+    expect(el.querySelectorAll('[role=radiogroup]').length).toBe(1);
+  });
+
+  it('no coloured status dots — only Failed may use the muted red (its count)', async () => {
+    const { el } = await render();
+    expect(el.querySelector('.seg-dot, .pf-rq-stat__dot, .pf-rq-row__accent')).toBeNull();
+    const warn = [...el.querySelectorAll('.pf-rq-seg__count--warn')];
+    expect(warn.length).toBe(1);
+    expect(warn[0].closest('[data-filter]')?.getAttribute('data-filter')).toBe('failed');
+    expect(ndCss()).not.toMatch(/#(a78bfa|f59e0b|38bdf8|10b981|f43f5e)/i);
+  });
+
+  it('arrow keys move the filter (radiogroup)', async () => {
+    const { el, c, f } = await render();
+    const seg = el.querySelector('.pf-rq-seg') as HTMLElement;
+    seg.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    f.detectChanges();
+    expect(c.filter()).toBe('partial');
+  });
+
+  it('Generate is a quiet band action — the page has no primary on any tab', async () => {
+    const { el, tab, c, f } = await render();
+    const gen = el.querySelector('.pf-rq-generate') as HTMLElement;
+    expect(gen.classList).toContain('pf-hb-btn--ghost');
+    for (const v of ['all', 'pending', 'delivered', 'failed', 'partial']) {
+      tab(v);
+      expect(primaries(el).length).toBeLessThanOrEqual(1);
+      expect(primaries(el).length).toBe(0);
+    }
+    c.toggle(PARTIAL_ORDER.id); f.detectChanges();
+    expect(primaries(el).length).toBe(0);
+    expect(el.querySelector('.pf-rq-genpartial')!.classList).toContain('nd-btn--secondary');
+  });
+});
+
+describe('Reports list (nd) — report cards (Completed / Delivered / Failed / All)', () => {
+  it('full name, Noto meta with the order number, neutral chips, secondary row actions, zoom source', async () => {
+    const { el, f, tab } = await render();
+    tab('all');
+    const cards = [...el.querySelectorAll<HTMLElement>('.pf-rq-card--report')];
+    expect(cards.length).toBe(4);
+    const first = cards[0];
+    expect(first.querySelector('.pf-rq-card__name')!.textContent!.trim()).toBe(FULL_NAME);
+    const meta = first.querySelector('.pf-rq-card__meta')!.textContent!.trim();
+    expect(meta).toContain('29/M · AA0012 · Order LAB-2609-000102');
+    expect(meta).not.toContain('|');
+    expect(el.textContent).not.toContain('..');
+    // Status chips are neutral kit chips; Unpaid / Failed are the red ones.
+    expect(first.querySelector('.pf-rq-status')!.classList).toContain('nd-chip');
+    expect(first.querySelector('.pf-rq-unpaid')).not.toBeNull();
+    expect(cards[1].querySelector('.pf-rq-type')!.textContent!.trim()).toBe('Preliminary');
+    expect(cards[2].querySelector('.pf-rq-status svg')).not.toBeNull();   // delivered = violet check
+    expect(el.querySelector('pf-chip')).toBeNull();
+    // Row actions: kit .nd-rowact (secondary), text on web.
+    const acts = first.querySelectorAll('.nd-rowact');
+    expect(acts.length).toBe(5);
+    expect(first.querySelector('.nd-rowact[aria-label="View"]')!.classList).not.toContain('nd-rowact--icon');
+    // List → report view zoom keeps working: every card is a zoom source.
+    const zs = f.debugElement.queryAll(By.directive(ZoomSourceDirective));
+    expect(zs.length).toBe(4);
+    expect(zs[0].injector.get(ZoomSourceDirective).keys()).toEqual(['r1', 'o-r1']);
+  });
+
+  it('touch: row actions become 44px icons (label kept for AT)', async () => {
+    const { el, tab } = await render({ touch: true });
+    tab('all');
+    const view = el.querySelector('.pf-rq-card--report .nd-rowact[aria-label="View"]') as HTMLElement;
+    expect(view.classList).toContain('nd-rowact--icon');
+    expect(view.querySelector('.nd-rowact__t')!.textContent).toBe('View');
+  });
+
+  it('View opens the report', async () => {
+    const { el, tab, router } = await render();
+    tab('all');
+    (el.querySelector('.pf-rq-card--report .nd-rowact[aria-label="View"]') as HTMLElement).click();
+    expect(router.navigate).toHaveBeenCalledWith(['/reports/view', 'r1']);
+  });
+
+  it('empty states use .nd-empty', async () => {
+    const { el, tab } = await render({ queue: [], orders: [] });
+    tab('delivered');
+    expect(el.querySelector('.nd-empty .nd-empty__title')!.textContent).toContain('No reports here');
+    tab('partial');
+    expect(el.querySelector('.nd-empty .nd-empty__title')!.textContent).toContain('No partial reports');
+  });
+});
+
+describe('Reports list (nd) — Partial tab, truthful per department', () => {
+  async function openPartial() {
+    const r = await render();
+    r.tab('partial');
+    const card = r.el.querySelector(`.pf-rq-card--partial`) as HTMLElement;
+    (card.querySelector('.pf-rq-card__toggle') as HTMLElement).click();
+    r.f.detectChanges();
+    return { ...r, card };
+  }
+
+  it('header: full name (wraps), "29/M · AA0012 · Order …" in Noto, a neutral department chip', async () => {
+    const { card } = await openPartial();
+    expect(card.querySelector('.pf-rq-card__name')!.textContent!.trim()).toBe(FULL_NAME);
+    const meta = card.querySelector('.pf-rq-card__meta')!.textContent!.trim();
+    expect(meta.startsWith('29/M · AA0012 · Order LAB-2609-000089 · ')).toBe(true);
+    expect(meta).not.toMatch(/\||#7920cd24|created/);
+    // 2 departments (MIC with 2 tubes, MOL): MIC is partly ready, MOL pending.
+    const chip = card.querySelector('.pf-rq-chip') as HTMLElement;
+    expect(chip.classList).toContain('nd-chip');
+    expect(chip.textContent!.trim()).toBe('1 of 2 departments partly ready');
+  });
+
+  it('Microbiology is ONE section that says what prints: the culture ready, the identification pending', async () => {
+    const { card } = await openPartial();
+    const depts = [...card.querySelectorAll<HTMLElement>('.pf-rq-dept')];
+    expect(depts.length).toBe(1);                      // MOL has nothing ready → named in "Still pending" only
+    const mic = depts[0];
+    expect(mic.querySelector('.pf-rq-dept__code')!.classList).toContain('nd-chip');
+    expect(mic.querySelector('.pf-rq-dept__name')!.textContent!.trim()).toBe('Microbiology');
+    expect(mic.querySelector('.pf-rq-dept__note')!.textContent!.trim()).toBe('1 of 2 tests ready');
+    const tests = [...mic.querySelectorAll<HTMLElement>('.pf-rq-test')];
+    expect(tests.map(t => t.querySelector('.pf-rq-test__state')!.textContent!.trim())).toEqual(['Ready', 'Pending']);
+    expect(tests[1].querySelector('.pf-rq-test__status')!.textContent).toContain('Sample not received at the lab yet');
+  });
+
+  it('culture tests show the stage summary, never "No parameter values"', async () => {
+    const { card, el } = await openPartial();
+    const dl = card.querySelector('.pf-rq-culture') as HTMLElement;
+    const rows = [...dl.querySelectorAll('.pf-rq-culture__row')]
+      .map(r => `${r.querySelector('dt')!.textContent!.trim()} ${r.querySelector('dd')!.textContent!.trim()}`);
+    expect(rows).toEqual(['Growth Growth Detected (<10⁴ CFU/mL)', 'Organism Abiotrophia spp.', 'AST 8 drugs · 1 resistant']);
+    expect(el.textContent).not.toMatch(/No parameter values/i);
+  });
+
+  it('pending = a neutral info row with an SVG clock and department NAMES (no emoji, no amber)', async () => {
+    const { card } = await openPartial();
+    const p = card.querySelector('.pf-rq-pending') as HTMLElement;
+    expect(p.querySelector('svg')).not.toBeNull();
+    const txt = p.textContent!.replace(/\s+/g, ' ');
+    expect(txt).toContain('Microbiology (1 of 2 tests)');
+    expect(txt).toContain('Molecular Diagnostics');
+    expect(txt).not.toMatch(/⏳|MIC,|MOL/);
+    expect(ndCss()).not.toMatch(/245,\s*158,\s*11|#f59e0b|34,\s*211,\s*238|#67e8f9/);
+  });
+
+  it('Generate partial PDF (secondary) sends only the fully validated tubes', async () => {
+    const { card, api, f } = await openPartial();
+    (card.querySelector('.pf-rq-genpartial') as HTMLElement).click();
+    f.detectChanges();
+    expect(api.post).toHaveBeenCalledWith('/api/reports/generate/partial', { orderId: PARTIAL_ORDER.id, sampleIds: ['s-mic-1'] });
+  });
+
+  it('plain results: value rows with words for flags (High / Critical), no glyphs', async () => {
+    const r = await render();
+    r.tab('partial');
+    r.c.toggle(VALUES_ORDER.id); r.f.detectChanges();
+    const card = r.el.querySelectorAll<HTMLElement>('.pf-rq-card--partial')[1];
+    expect(card.querySelector('.pf-rq-card__meta')!.textContent).toContain('44/F · AA0007 · Order #AAAA1111');
+    expect(card.querySelector('.pf-rq-chip')!.textContent!.trim()).toBe('1 of 2 departments ready');
+    const flags = [...card.querySelectorAll('.pf-rq-value__flag')].map(x => x.textContent!.trim());
+    expect(flags).toEqual(['High', 'Critical']);
+    expect(card.textContent).not.toMatch(/[⚠⚑✓]/);
+    expect(card.querySelector('.pf-rq-pending')!.textContent).toContain('Microbiology');
+  });
+
+  it('collapse: aria-expanded + inert when closed; motion is off under reduced motion', async () => {
+    const r = await render();
+    r.tab('partial');
+    const card = r.el.querySelector('.pf-rq-card--partial') as HTMLElement;
+    const btn = card.querySelector('.pf-rq-card__toggle') as HTMLElement;
+    const body = card.querySelector('.pf-rq-card__collapse') as HTMLElement;
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    expect(body.hasAttribute('inert')).toBe(true);
+    btn.click(); r.f.detectChanges();
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    expect(body.hasAttribute('inert')).toBe(false);
+    expect(css()).toMatch(/prefers-reduced-motion: reduce[\s\S]*pf-rq-card__collapse/);
+  });
+
+  it('the Partial tab honours the band search', async () => {
+    const r = await render();
+    r.tab('partial');
+    r.c.setQuery('paravai'); r.f.detectChanges();
+    const names = [...r.el.querySelectorAll('.pf-rq-card--partial .pf-rq-card__name')].map(n => n.textContent!.trim());
+    expect(names).toEqual(['Ms. Paravai Munusamy']);
+  });
+});
+
+describe('Reports list (nd) — one font, no native controls', () => {
+  it('no monospace anywhere in the component CSS; no native select / datalist', async () => {
+    const { el } = await render();
+    expect(css()).not.toMatch(/monospace|JetBrains|Courier/i);
+    expect(el.querySelector('select, datalist')).toBeNull();
+  });
+});
+
+describe('report-queue.partial helpers', () => {
+  it('culture progress in plain words', () => {
+    const t = (status: string, currentResult: string | null = null) => ({ status, currentResult } as any);
+    const snap3 = JSON.stringify({ stages: [{ key: 'gram' }, { key: 'growth' }, { key: 'identification' }, { key: 'growth', caseLabel: 'Sub A' }] });
+    expect(cultureStagesDone(snap3)).toBe(3);
+    expect(pendingStatus(t('in_progress', snap3), { status: 'received' }, true)).toBe('Culture in progress · 3 of 4 stages done');
+    expect(pendingStatus(t('in_progress'), { status: 'received' }, true)).toBe('Culture in progress on the bench');
+    expect(pendingStatus(t('entered'), { status: 'received' }, true)).toBe('Culture awaiting sign-out');
+    expect(pendingStatus(t('entered'), { status: 'received' }, false)).toBe('Awaiting validation');
+    expect(pendingStatus(t('validated'), { status: 'received' }, false)).toContain('rest of its tube');
+    expect(pendingStatus(t('pending'), { status: 'received' }, false)).toBe('Not started');
+  });
+
+  it('no growth reads as such; empty snapshot = no lines', () => {
+    expect(cultureSummary(JSON.stringify({ values: { noGrowth: true, organisms: [] }, stages: [] })))
+      .toEqual([{ label: 'Growth', value: 'No growth' }]);
+    expect(cultureSummary(null)).toEqual([]);
+  });
+
+  it('department count label', () => {
+    expect(deptCountLabel(1, 0, 3)).toBe('1 of 3 departments ready');
+    expect(deptCountLabel(0, 1, 2)).toBe('1 of 2 departments partly ready');
+    expect(deptCountLabel(1, 1, 3)).toBe('1 of 3 departments ready · 1 partly');
+  });
+});

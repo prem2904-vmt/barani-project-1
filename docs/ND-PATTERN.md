@@ -271,6 +271,47 @@ received / done row goes quieter (muted text + a small violet check), never
 a green or amber pill. The next step on a culture case is a neutral chip
 whose small violet dot is the one accent.
 
+### List rows & multi-select
+
+Canonical: the Frontdesk work list (`frontdesk-landing`, `.pf-wrow`,
+`work-selection.ts`).
+
+- **Row:** `[checkbox] · FULL name + quiet meta · status chip · action`.
+  - The name wraps and is never cut.
+  - Meta is one muted tabular line joined with `·`, never `|`: "22/M · AA0006 ·
+    1 sample · 9:48 PM".
+  - No department code chips.
+  - Status is the neutral `.nd-chip--static` with a 7px dot: violet while in
+    flight or done, a hollow ring before billing, red only for cancelled or
+    rejected. Never amber or green words.
+  - The action is `.nd-rowact` (text on web, a 44px icon plus `aria-label` on
+    touch) in a right-aligned slot of fixed width, so it lines up in every row.
+  - The whole row opens the detail; the checkbox and actions stop propagation.
+- **Checkbox:** the kit's `.nd-check` (`button role="checkbox"`,
+  `aria-checked`, `aria-label="Select <name>"`, Space toggles), a 20px rounded
+  square that turns violet with a white check.
+  - Show it only on lists that have bulk actions, and only on rows that can
+    take them.
+  - A row that can't take them keeps an empty column, so the rows stay aligned.
+- **Selected row:** violet at about 7% over the card, plus a 1px violet border.
+  No gradient.
+- **One model:** the checkbox, the tint and the count all read one computed
+  list (the rows shown that are eligible and selected). Never tint from a raw
+  id set while counting a filtered subset; that gave "1 selected" with three
+  rows tinted.
+- **Selection bar:**
+  - It sits above the list, outside the scroller, on the card surface with a
+    hairline.
+  - Contents: "3 selected" (Noto, not uppercase), then Select all / Clear,
+    then the bulk actions (at most ONE primary), then a labelled ×.
+  - It slides and fades in; there is no motion under reduced motion.
+  - On phones it docks at the card's bottom above the navbar, with two equal
+    44px buttons.
+- **Clearing:** the selection clears on Esc (unless a drawer is open), a tab
+  switch, a search change and a date-range change.
+  - Shift-click selects a range on web.
+  - A long-press selects on touch.
+
 ### Work queues: adaptive tile grid, 3/2/1 columns by container width
 
 Queue / My Work / Completed / Culture lists use `<ul [ndTileGrid]="…">`
@@ -1177,6 +1218,39 @@ exact PDF on screen. Visual redesign only: every action and API is unchanged.
   `.nd-empty`, no native controls / glyphs, reduced motion, palette). Real
   layout: `apps/lms-e2e/src/report-view-layout.rbac.spec.ts` (read only;
   `REPORT_ID=… BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`).
+
+## 20. Reports list
+
+`/reports` (`features/reports/report-queue/`) — the delivery queue that opens
+the Report view (§19). The New design only; classic is unchanged.
+
+- **Band:** search + ONE status filter in the pill: a kit `.nd-seg`
+  radiogroup (All · Completed · Partial · Delivered · Failed), the raised
+  neutral selected tab, counts as plain `.nd-num` text; no colour dots (a
+  non-zero Failed count is the only red). No second stats strip, no stats
+  popover. Band actions **Refresh** and **Generate** are both quiet ghosts:
+  reports generate themselves on validation (+ the page's backfill), so
+  "Generate for an order id" is a fallback, not the page's main action — the
+  list has NO primary. Phones: the filter scrolls in its own row, 44px tabs.
+- **One card anatomy on every tab:** FULL patient name (wraps, never
+  `formatPatientInfo`) + "29/M · MRN · Order LAB-… · time" (Noto, tabular, no
+  "|", no mono) + neutral chips. Report cards: status (Delivered = violet
+  check; Failed / Unpaid = muted red text), "Preliminary" for a partial PDF,
+  and `.nd-rowact` actions (View · Download · Share ▾ · More — text on web,
+  44px icons on touch). The card is the `[pfZoomSource]="[r.id, r.orderId]"`.
+- **Partial cards** (`report-queue.partial.ts`) are grouped by DEPARTMENT,
+  not tube: a department is ready / partly ready / pending, and a test is
+  "ready" exactly when its tube is fully validated (that is what
+  `generate/partial` prints). Chip: "1 of 3 departments ready" (or "partly
+  ready"). Partly-ready departments mark each test Ready / Pending with where
+  it is ("Sample not received at the lab yet", "Awaiting validation",
+  "Culture in progress · 2 of 4 stages done"). Culture tests show Growth ·
+  Organism · AST (n drugs · r resistant) from the snapshot's stages — never
+  "No parameter values". Pending = a neutral info row with an SVG clock and
+  department NAMES. "Generate partial PDF" is secondary. Expand/collapse =
+  grid-rows on `--nd-spring` (off under reduced motion), `inert` when closed.
+- **Empty:** `.nd-empty`. **Specs:** `report-queue.nd.spec.ts`; real layout
+  `apps/lms-e2e/src/reports-list-layout.rbac.spec.ts` (read only).
 
 ## API summary
 

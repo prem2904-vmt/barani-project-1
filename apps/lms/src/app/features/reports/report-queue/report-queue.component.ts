@@ -23,7 +23,9 @@ import { ToastService } from "../../../core/services/toast.service";
 import { Report } from "../../../shared/models/report.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { Order, OrderTest } from "../../../shared/models/order.model";
-import { formatPatientInfo } from "../../../shared/models/patient.model";
+import { formatPatientInfo, formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
+import { buildPartialOrders, orderLabel, type PrelimOrder, type PrelimRow } from "./report-queue.partial";
+import { webPointerSignal } from "../../../shared/utils/pointer-mode";
 import {
   ChipComponent,
   ChipTone,
@@ -47,34 +49,6 @@ import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
-
-interface PrelimRow {
-  name: string;
-  title: string;
-  value: unknown;
-  unit?: string;
-  range?: string;
-  flag: "normal" | "abnormal" | "critical";
-}
-interface PrelimTest {
-  id: string;
-  name: string;
-  values: PrelimRow[];
-}
-interface PrelimSample {
-  id: string;
-  deptName: string;
-  deptCode: string;
-  tests: PrelimTest[];
-}
-interface PrelimOrder {
-  id: string;
-  patientName: string;
-  patientMeta: string;
-  totalSamples: number;
-  validatedSamples: PrelimSample[];
-  pendingSampleNames: string[];
-}
 
 @Component({
   selector: "pf-report-queue",
@@ -100,6 +74,57 @@ interface PrelimOrder {
 export class ReportQueueComponent implements OnInit {
   formatReportPatient(p: any): string {
     return formatPatientInfo(p);
+  }
+
+  // ── New design (docs/ND-PATTERN.md → "Reports list") ─────────────
+  /** Web (fine pointer) = text row actions; touch = 44px icon actions. */
+  readonly web = webPointerSignal();
+
+  /** FULL patient name — never cut (formatPatientInfo stops at 15 chars). */
+  reportPatientName(r: Report): string {
+    return patientDisplayName(r.order?.patient as never) || `Report #${r.id.slice(0, 8).toUpperCase()}`;
+  }
+
+  /** "29/M · AA0012 · Order LAB-2609-000089 · 26 Sep, 6:37 PM" — no "|", no mono. */
+  reportMeta(r: Report): string {
+    const p = r.order?.patient;
+    const o = r.order as { id: string; orderNumber?: string | null } | undefined;
+    const when = this.shortWhen(r.createdAt);
+    return [p ? formatPatientMeta(p as never) : "", o?.id ? orderLabel(o) : "", when].filter(Boolean).join(" · ");
+  }
+
+  private shortWhen(iso: string | undefined): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase();
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return time;
+    return `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, ${time}`;
+  }
+
+  /** ONE status filter, in the band pill: a neutral segmented control
+   *  (raised neutral selected tab), plain tabular counts, no colour dots. */
+  readonly ndFilters = computed<{ value: Filter; label: string; count: number }[]>(() => [
+    { value: "all", label: "All", count: this.items().length },
+    { value: "pending", label: "Completed", count: this.counts().pending },
+    { value: "partial", label: "Partial", count: this.partialOrders().length },
+    { value: "delivered", label: "Delivered", count: this.counts().delivered },
+    { value: "failed", label: "Failed", count: this.counts().failed },
+  ]);
+
+  /** Roving arrow keys across the band filter (radiogroup). */
+  onFilterKey(ev: KeyboardEvent) {
+    const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
+    if (!keys.includes(ev.key)) return;
+    ev.preventDefault();
+    const list = this.ndFilters();
+    const i = list.findIndex((f) => f.value === this._filter());
+    const next = ev.key === "Home" ? 0 : ev.key === "End" ? list.length - 1
+      : (i + (ev.key === "ArrowRight" ? 1 : -1) + list.length) % list.length;
+    this.setFilter(list[next].value);
+    const host = ev.currentTarget as HTMLElement | null;
+    (host?.querySelectorAll<HTMLElement>("[role=radio]")[next])?.focus();
   }
   private readonly api = inject(ApiService);
   /** Design gate: the hero band renders in the NEW design only. */
@@ -371,7 +396,7 @@ export class ReportQueueComponent implements OnInit {
   generatePartial(po: PrelimOrder) {
     if (this._generating()) return;
     this._generating.set(po.id);
-    const sampleIds = po.validatedSamples.map((s) => s.id);
+    const sampleIds = po.readySampleIds;
     this.api
       .post<Report>("/api/reports/generate/partial", {
         orderId: po.id,
@@ -396,51 +421,17 @@ export class ReportQueueComponent implements OnInit {
       });
   }
 
-  /** Build PrelimOrder rows for any order with ≥1 validated sample.
-   *  validate-result already used the same projection — we replicate
-   *  it locally so this screen has no dependency on FD landing's
-   *  helpers. */
-  readonly partialOrders = computed<PrelimOrder[]>(() => {
-    const out: PrelimOrder[] = [];
-    for (const o of this._todayOrders()) {
-      const samples = (o.samples ?? []).filter((s) => s.status !== "rejected");
-      if (samples.length === 0) continue;
-      const validated: PrelimSample[] = [];
-      const pendingNames: string[] = [];
-      for (const s of samples) {
-        const tests = s.tests ?? [];
-        const allDone =
-          tests.length > 0 && tests.every((t) => t.status === "validated");
-        if (allDone) {
-          validated.push({
-            id: s.id,
-            deptName: s.department?.name ?? "",
-            deptCode: s.department?.code ?? "",
-            tests: tests.map((t) => ({
-              id: t.id,
-              name: t.test?.name ?? "Test",
-              values: this.extractValues(t),
-            })),
-          });
-        } else {
-          pendingNames.push(s.department?.code || s.department?.name || "Tube");
-        }
-      }
-      // Skip orders with no validated samples (nothing to show) and
-      // orders with EVERYTHING validated (those go through the regular
-      // PDF queue, not here).
-      if (validated.length === 0 || validated.length === samples.length)
-        continue;
-      out.push({
-        id: o.id,
-        patientName: o.patient ? formatPatientInfo(o.patient) : "Patient",
-        patientMeta: `#${o.id.slice(0, 8)} · created ${this.formatTime(o.createdAt)}`,
-        totalSamples: samples.length,
-        validatedSamples: validated,
-        pendingSampleNames: pendingNames,
-      });
-    }
-    return out;
+  /** Orders with ≥1 fully validated tube and ≥1 that isn't — grouped by
+   *  DEPARTMENT with per-test readiness (see report-queue.partial.ts for why
+   *  the old per-tube count read "MIC" as both ready and pending). */
+  readonly partialOrders = computed<PrelimOrder[]>(() =>
+    buildPartialOrders(this._todayOrders(), (t) => this.extractValues(t)));
+
+  /** The Partial tab honours the band search too. */
+  readonly visiblePartials = computed<PrelimOrder[]>(() => {
+    const q = this._query().trim().toLowerCase();
+    const l = this.partialOrders();
+    return q ? l.filter((po) => po.searchText.includes(q)) : l;
   });
 
   /** Preliminary values with the flag + range mw SAVED with the result
@@ -454,19 +445,8 @@ export class ReportQueueComponent implements OnInit {
       unit: r.unit,
       range: r.range,
       flag: r.flag,
+      code: r.code,
     }));
-  }
-
-  private formatTime(iso: string): string {
-    try {
-      const d = new Date(iso);
-      return d.toLocaleTimeString(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-      });
-    } catch {
-      return "";
-    }
   }
 
   ngOnInit() {
