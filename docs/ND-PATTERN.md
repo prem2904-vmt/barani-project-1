@@ -898,6 +898,48 @@ its own: every verdict is `flagBand` (the body of `liveFlag` = mw
   no monospace, 44px fields and no sideways scroll at 375; `SHOTS_DIR=…`
   saves 1440 / 375 × light / dark.
 
+## 17. Billing counter
+
+`/billing-counter` (`features/billing-counter/`, branches in
+`billing_mode = separate_counter`) — the "two jobs on one screen" pattern
+with an ACTION / SUMMARY companion (owner, 2026-09-26):
+
+- **Band:** back · tenant. The pill is ONE unified search — "Search patient,
+  phone, MRN, order or invoice ID" — with the scan icon (invoice / order
+  barcodes, the shared scanner with `noun="invoice or order"`) inside the
+  field. The type-ahead is ONE dropdown, grouped **Patients** / **Orders &
+  invoices** (the exact `/api/billing/lookup` hit + open balances whose
+  patient name matches), one row per result, ↑/↓ across both groups.
+  **Enter** on an exact order / invoice ID (nothing highlighted) opens it
+  directly. No separate "Invoice / order ID + Open" row, no KPI strip.
+- **No Find & bill / Money tabs on desktop** — both cards show. ≤900px only
+  one fits: a compact neutral two-way `.nd-seg` switch (Billing · Money · n)
+  in the pill's tools row; opening an order from Money flips back to Billing.
+- **LEFT main card BILLING:** empty = "Find an order to bill" + one short
+  line. A patient → their orders still to bill (kit rows). An order → the
+  subject (full name, order number, date), a neutral status chip (violet dot;
+  violet check when paid), the items (bill lines with prices when a bill
+  exists, else the order's tests) and Payable / Paid / Balance.
+- **ONE primary per view**, in the card's sticky footer: **Collect ₹X**
+  (balance, or the order total when unbilled) · **Refund ₹X** · none when
+  nothing is selected or the order is settled ("Open order" secondary for
+  receipts). The primary hands the order to Order & Payments, whose
+  new-design inline payment panel takes the money / refund and prints the
+  receipt — the counter never re-implements payment.
+- **RIGHT side card MONEY (400px):** "Balances due / refunds owed" (calm
+  11px uppercase titles, Noto — never spaced mono; rows = patient + amount,
+  tap opens the order in Billing; refunds as −₹, no amber / red pills), then
+  "Day-end summary" with the **kit date** (`pf-nd-date`: typed dd/mm/yyyy +
+  calendar button over a hidden native picker) and a Mode / Count / Total
+  table (Cash, UPI, Card… capitalised; tabular numbers), then Collected /
+  Refunded / **Net** (600). Collapses to a strip on the RIGHT edge (›
+  hides, ‹ shows; remembered per user).
+- **Real-layout check:** `apps/lms-e2e/src/billing-counter-layout.rbac.spec.ts`
+  (seeded Lab Admin, read-only — writes aborted) asserts the pill, no tabs,
+  Billing left / Money ~400px right, no primary at rest, no visible native
+  date, no monospace, no page scroll, the grouped dropdown at the pill's
+  width, the strip, and the 375 switch. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
+
 ## API summary
 
 ```
@@ -910,6 +952,7 @@ Toggle   .nd-toggle[role=switch][aria-checked] › .nd-toggle__track › .nd-tog
 Row      .nd-row › __check · __code · __name · __meta · __value · .nd-row--in · .nd-row--done
 Numbers  .nd-num (Noto Sans + tabular-nums; .nd-mono is an alias)
 Fields   .nd-field › __lbl · .nd-input(--error)[readonly] · __hint
+Date     pf-nd-date[value][max][label] (typed dd/mm/yyyy + hidden native picker; ISO out)
 Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit (+ the section tabs in the pill)
          .nd-ctx__chip · __k · .nd-dot-unpriced = the amber REQUIRED dot (identity facts only where no section shows them)
          .nd-tabs[role=tablist] › .nd-tabs__item[role=tab][aria-selected] › .nd-tabs__dot(--ok) · .nd-savestate(__dot)

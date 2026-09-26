@@ -1,0 +1,382 @@
+<section class="pf-band-page pf-bc">
+  <!-- Band (ND-PATTERN §1): back · tenant, and the pill = the CONTEXT BAR.
+       ONE unified search finds patients AND orders / invoices; the scan icon
+       for invoice / order barcodes rides inside the field. -->
+  <pf-hero-band class="pf-bc-band" [back]="true" backTo="/frontdesk" [customSearch]="true">
+    <div band-search class="pf-bc-us" #pill>
+      <label class="pf-bc-us__field">
+        <svg class="pf-bc-us__glass" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+        </svg>
+        <span class="sr-only">Search patient, phone, MRN, order or invoice ID</span>
+        <input #searchInput type="text" class="pf-bc-us__input" autocomplete="off" spellcheck="false"
+               role="combobox" aria-autocomplete="list" aria-controls="pf-bc-drop"
+               [attr.aria-expanded]="dropOpen()"
+               [attr.aria-activedescendant]="dropOpen() && highlight() >= 0 ? 'pf-bc-opt-' + highlight() : null"
+               [placeholder]="placeholder()"
+               [value]="query()"
+               (input)="onQuery($any($event.target).value)"
+               (focus)="onFocus()" (blur)="onBlur()"
+               (keydown.arrowDown)="onArrow($event, 1)" (keydown.arrowUp)="onArrow($event, -1)"
+               (keydown.enter)="onEnter($event)" (keydown.escape)="closeDrop()" />
+      </label>
+      @if (searching() || resolving()) { <span class="pf-bc-us__spin" aria-hidden="true"></span> }
+      @if (query()) {
+        <button type="button" class="pf-bc-us__clear" (click)="clearQuery()" aria-label="Clear search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      }
+
+      <!-- ONE dropdown, grouped: Patients / Orders & invoices. One row per
+           result; ↑/↓ walk the rows across both groups. -->
+      @if (dropOpen()) {
+        <div class="pf-bc-scrim" [style.top.px]="dropBox()?.top" (mousedown)="$event.preventDefault()" (click)="closeDrop()"></div>
+        <div id="pf-bc-drop" class="pf-bc-drop nd-anim-in" role="listbox" aria-label="Search results"
+             [style.left.px]="dropBox()?.left" [style.top.px]="dropBox()?.top" [style.width.px]="dropBox()?.width"
+             [style.max-height.px]="dropBox()?.maxH">
+          @if (query().trim().length < 2 && !idLike(query())) {
+            <p class="pf-bc-drop__note">Type at least 2 characters: a name, phone, MRN, order or invoice ID.</p>
+          } @else {
+            <div class="pf-bc-drop__group" role="group" aria-labelledby="pf-bc-g-p">
+              <p class="pf-bc-drop__title" id="pf-bc-g-p">Patients</p>
+              @for (r of patientRows(); track r.key) {
+                <button type="button" class="pf-bc-drop__row" role="option" [id]="'pf-bc-opt-' + r.index"
+                        [attr.aria-selected]="highlight() === r.index"
+                        (mouseenter)="highlight.set(r.index)" (mousedown)="$event.preventDefault()" (click)="pick(r)">
+                  <span class="pf-bc-drop__text">
+                    <span class="pf-bc-drop__name">{{ r.title }}</span>
+                    @if (r.meta) { <span class="pf-bc-drop__meta nd-num">{{ r.meta }}</span> }
+                  </span>
+                </button>
+              } @empty {
+                <p class="pf-bc-drop__note">{{ searching() ? 'Searching…' : 'No patient matches.' }}</p>
+              }
+            </div>
+            <div class="pf-bc-drop__group" role="group" aria-labelledby="pf-bc-g-o">
+              <p class="pf-bc-drop__title" id="pf-bc-g-o">Orders &amp; invoices</p>
+              @for (r of orderRows(); track r.key) {
+                <button type="button" class="pf-bc-drop__row" role="option" [id]="'pf-bc-opt-' + r.index"
+                        [attr.aria-selected]="highlight() === r.index"
+                        (mouseenter)="highlight.set(r.index)" (mousedown)="$event.preventDefault()" (click)="pick(r)">
+                  <span class="pf-bc-drop__text">
+                    <span class="pf-bc-drop__name nd-num">{{ r.title }}</span>
+                    @if (r.meta) { <span class="pf-bc-drop__meta">{{ r.meta }}</span> }
+                  </span>
+                  @if (r.amount) { <span class="pf-bc-drop__amt nd-num">{{ r.amount }}</span> }
+                </button>
+              } @empty {
+                <p class="pf-bc-drop__note">
+                  {{ searching() ? 'Looking up…' : 'No order or invoice matches. Press Enter to look up an exact ID.' }}
+                </p>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <ng-container band-inline>
+      @if (!scan.manualEntry()) {
+        <button type="button" class="pf-hb-tool press pf-bc-scan" (click)="startScan()"
+                title="Scan an invoice or order barcode" aria-label="Scan an invoice or order barcode">
+          <pf-scan-icon [size]="18" />
+        </button>
+      }
+    </ng-container>
+
+    <!-- Narrow widths only one card fits: a compact switch between them. -->
+    <ng-container band-tools>
+      @if (narrow()) {
+        <div class="nd-seg pf-bc-switch" role="radiogroup" aria-label="Billing counter view">
+          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="pane() === 'bill'"
+                  (click)="pane.set('bill')">Billing</button>
+          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="pane() === 'money'"
+                  (click)="pane.set('money')">
+            Money@if (moneyCount() > 0) {<span class="pf-bc-switch__n nd-num">&nbsp;· {{ moneyCount() }}</span>}
+          </button>
+        </div>
+      }
+    </ng-container>
+  </pf-hero-band>
+
+  <div class="pf-band-body pf-band-body--fill pf-bc-body">
+    <div class="pf-bc-panels" [class.pf-bc-panels--collapsed]="moneyCollapsed() && !narrow()"
+         [class.pf-bc-panels--narrow]="narrow()">
+
+      <!-- ══ MAIN card (LEFT): BILLING — the work ══════════════════════ -->
+      @if (!narrow() || pane() === 'bill') {
+      <section class="nd-card pf-bc-main" aria-label="Billing">
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/>
+            </svg>
+          </span>
+          <span class="nd-card__label">Billing</span>
+          <span class="nd-card__spacer"></span>
+          @if (selectedOrderId() || selectedPatient()) {
+            <button type="button" class="nd-btn nd-btn--tertiary pf-bc-clear" (click)="clearSelection()">Clear</button>
+          }
+        </header>
+
+        <div class="nd-card__body pf-bc-main__body">
+          @if (selectedOrderId()) {
+            <!-- ── One order: what is billed, what is owed ── -->
+            @if (loadingOrder()) {
+              <p class="pf-bc-muted">Loading the order…</p>
+            } @else if (selectedOrder(); as o) {
+              <div class="pf-bc-subject">
+                <p class="pf-bc-subject__name">{{ orderPatientName(o) }}</p>
+                <p class="pf-bc-subject__meta">
+                  <span class="nd-num">{{ orderLabel(o) }}</span>
+                  · {{ o.createdAt | date:'d MMM, h:mm a' }}
+                  @if (o.priority && o.priority !== 'Normal') { · {{ o.priority }} }
+                </p>
+                <span class="nd-chip nd-chip--static pf-bc-status">
+                  @if (billState() === 'paid') {
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="pf-bc-check"><path d="M20 6 9 17l-5-5"/></svg>
+                  } @else { <span class="pf-bc-dot" aria-hidden="true"></span> }
+                  {{ billStateLabel() }}
+                </span>
+              </div>
+
+              <p class="pf-bc-sec">Items</p>
+              <ul class="pf-bc-items">
+                @for (it of orderItems(); track it.key) {
+                  <li class="pf-bc-item">
+                    <span class="pf-bc-item__name">{{ it.name }}</span>
+                    @if (it.price != null) { <span class="pf-bc-item__amt nd-num">{{ it.price | inr }}</span> }
+                  </li>
+                } @empty {
+                  <li class="pf-bc-muted">No tests on this order.</li>
+                }
+              </ul>
+
+              <dl class="pf-bc-dues">
+                @if (dues().payable != null) {
+                  <div><dt>Payable</dt><dd class="nd-num">{{ dues().payable | inr }}</dd></div>
+                }
+                @if (dues().paid != null) {
+                  <div><dt>Paid</dt><dd class="nd-num">{{ dues().paid | inr }}</dd></div>
+                }
+                @if (dues().balance != null) {
+                  <div class="pf-bc-dues__bal">
+                    <dt>{{ (dues().balance ?? 0) < 0 ? 'Refund owed' : 'Balance' }}</dt>
+                    <dd class="nd-num">{{ absAmount(dues().balance) | inr }}</dd>
+                  </div>
+                }
+              </dl>
+            } @else {
+              <p class="pf-bc-muted">Couldn't load this order.</p>
+            }
+          } @else if (selectedPatient(); as p) {
+            <!-- ── One patient: the orders still to bill ── -->
+            <div class="pf-bc-subject">
+              <p class="pf-bc-subject__name">{{ display(p) }}</p>
+              <p class="pf-bc-subject__meta nd-num">{{ patientMeta(p) }}@if (p.phone) { · {{ p.phone }} }</p>
+            </div>
+            <p class="pf-bc-sec">Orders to bill</p>
+            @if (loadingOrders()) {
+              <p class="pf-bc-muted">Loading orders…</p>
+            } @else {
+              <ul class="pf-bc-list">
+                @for (o of billableOrders(); track o.id) {
+                  <li>
+                    <button type="button" class="nd-row pf-bc-orow" (click)="openOrder(o.id)">
+                      <span class="pf-bc-orow__text">
+                        <span class="nd-row__name nd-num">{{ orderLabel(o) }}</span>
+                        <span class="pf-bc-orow__meta">
+                          {{ plural(totalTests(o), 'test') }} · {{ o.createdAt | date:'d MMM, h:mm a' }}
+                          @if (o.priority && o.priority !== 'Normal') { · {{ o.priority }} }
+                        </span>
+                      </span>
+                      @if (orderAmount(o); as amt) { <span class="nd-row__value nd-num">{{ amt | inr }}</span> }
+                      <svg class="pf-bc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                  </li>
+                } @empty {
+                  <li class="pf-bc-muted">Every order for this patient is billed.</li>
+                }
+              </ul>
+            }
+          } @else {
+            <!-- Resting state: friendly and short. -->
+            <div class="pf-bc-empty">
+              <span class="nd-card__icon pf-bc-empty__icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              </span>
+              <p class="pf-bc-empty__title">Find an order to bill</p>
+              <p class="pf-bc-empty__hint">Search or scan above, or pick a balance from Money.</p>
+            </div>
+          }
+        </div>
+
+        <!-- Sticky footer: ONE primary only when there is money to move. -->
+        @if (selectedOrderId() && selectedOrder()) {
+          <footer class="nd-card__foot">
+            @if (selectedPatient()) {
+              <button type="button" class="nd-btn nd-btn--secondary" (click)="backToPatient()">All orders</button>
+            }
+            @if (primary(); as act) {
+              <button type="button" class="nd-btn nd-btn--primary pf-bc-primary" (click)="runPrimary()">{{ act.label }}</button>
+            } @else {
+              <button type="button" class="nd-btn nd-btn--secondary" (click)="openInOrderScreen()">Open order</button>
+            }
+          </footer>
+        }
+      </section>
+      }
+
+      <!-- ══ SIDE card (RIGHT): MONEY — a summary companion ════════════ -->
+      @if (narrow()) {
+        @if (pane() === 'money') {
+          <aside class="nd-card pf-bc-side" aria-label="Money">
+            <ng-container *ngTemplateOutlet="moneyHead; context: { collapsible: false }"></ng-container>
+            <ng-container *ngTemplateOutlet="moneyBody"></ng-container>
+          </aside>
+        }
+      } @else if (moneyCollapsed()) {
+        <aside class="nd-card pf-bc-strip" aria-label="Money">
+          <button type="button" class="pf-bc-strip__btn" (click)="toggleMoney()"
+                  title="Show money" aria-label="Show money" aria-expanded="false">
+            <span class="nd-btn nd-btn--icon pf-bc-strip__expand" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </span>
+            <span class="nd-card__icon" aria-hidden="true">
+              <ng-container *ngTemplateOutlet="walletIcon"></ng-container>
+            </span>
+            <span class="pf-bc-strip__label">Money</span>
+            @if (moneyCount() > 0) { <span class="pf-bc-strip__n nd-num">{{ moneyCount() }}</span> }
+          </button>
+        </aside>
+      } @else {
+        <aside class="nd-card pf-bc-side" aria-label="Money">
+          <ng-container *ngTemplateOutlet="moneyHead; context: { collapsible: true }"></ng-container>
+          <ng-container *ngTemplateOutlet="moneyBody"></ng-container>
+        </aside>
+      }
+    </div>
+  </div>
+
+  <ng-template #walletIcon>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-2"/>
+      <path d="M16 12h5v4h-5a2 2 0 0 1 0-4Z"/>
+    </svg>
+  </ng-template>
+
+  <ng-template #moneyHead let-collapsible="collapsible">
+    <header class="nd-card__head">
+      <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="walletIcon"></ng-container></span>
+      <span class="nd-card__label">Money</span>
+      <span class="nd-card__spacer"></span>
+      @if (moneyCount() > 0) { <span class="pf-bc-count nd-num">{{ moneyCount() }} open</span> }
+      @if (collapsible) {
+        <button type="button" class="nd-btn nd-btn--icon pf-bc-collapse" (click)="toggleMoney()"
+                title="Hide money" aria-label="Hide money" aria-expanded="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      }
+    </header>
+  </ng-template>
+
+  <ng-template #moneyBody>
+    <div class="nd-card__body pf-bc-money">
+      <!-- Balances the patient owes + refunds the lab owes. -->
+      <section class="pf-bc-msec" aria-labelledby="pf-bc-due-t">
+        <h3 class="pf-bc-sec" id="pf-bc-due-t">Balances due / refunds owed</h3>
+        @if (loadingOutstanding()) {
+          <p class="pf-bc-muted">Loading balances…</p>
+        } @else if (due().length === 0 && refundsOwed().length === 0) {
+          <p class="pf-bc-muted">Nothing due and no refunds owed.</p>
+        } @else {
+          <ul class="pf-bc-mlist">
+            @for (r of due(); track r.billId) {
+              <li>
+                <button type="button" class="pf-bc-mrow" [attr.aria-pressed]="selectedOrderId() === r.orderId"
+                        (click)="openOutstanding(r)">
+                  <span class="pf-bc-mrow__text">
+                    <span class="pf-bc-mrow__name">{{ r.patientName || 'Unnamed patient' }}</span>
+                    <span class="pf-bc-mrow__meta nd-num">{{ r.createdAt | date:'d MMM' }} · paid {{ r.totalPaid | inr }} of {{ r.totalPayable | inr }}</span>
+                  </span>
+                  <span class="pf-bc-mrow__amt nd-num">{{ r.balance | inr }}</span>
+                </button>
+              </li>
+            }
+            @for (r of refundsOwed(); track r.billId) {
+              <li>
+                <button type="button" class="pf-bc-mrow" [attr.aria-pressed]="selectedOrderId() === r.orderId"
+                        (click)="openOutstanding(r)">
+                  <span class="pf-bc-mrow__text">
+                    <span class="pf-bc-mrow__name">{{ r.patientName || 'Unnamed patient' }}</span>
+                    <span class="pf-bc-mrow__meta nd-num">Refund · {{ r.createdAt | date:'d MMM' }}</span>
+                  </span>
+                  <span class="pf-bc-mrow__amt nd-num">−{{ refundAmount(r) | inr }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <!-- Day-end summary: per-mode totals for one business day. -->
+      <section class="pf-bc-msec" aria-labelledby="pf-bc-day-t">
+        <div class="pf-bc-dayhead">
+          <h3 class="pf-bc-sec" id="pf-bc-day-t">Day-end summary</h3>
+          <pf-nd-date class="pf-bc-date" label="Business day" inputId="pf-bc-date"
+                      [value]="reconcileDate()" [max]="today" (valueChange)="setReconcileDate($event)"></pf-nd-date>
+        </div>
+        @if (loadingReconcile()) {
+          <p class="pf-bc-muted">Loading summary…</p>
+        } @else if (reconcile(); as r) {
+          <table class="pf-bc-recon">
+            <thead>
+              <tr><th scope="col">Mode</th><th scope="col" class="num">Count</th><th scope="col" class="num">Total</th></tr>
+            </thead>
+            <tbody>
+              @for (p of r.payments; track p.mode) {
+                <tr>
+                  <td>{{ modeLabel(p.mode) }}</td>
+                  <td class="num nd-num">{{ p.count }}</td>
+                  <td class="num nd-num">{{ p.total | inr }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="pf-bc-recon__empty">No payments on this day</td></tr>
+              }
+              @for (f of r.refunds; track f.mode) {
+                <tr class="pf-bc-recon__refund">
+                  <td>{{ modeLabel(f.mode) }} refund</td>
+                  <td class="num nd-num">{{ f.count }}</td>
+                  <td class="num nd-num">−{{ f.total | inr }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <dl class="pf-bc-totals">
+            <div><dt>Collected</dt><dd class="nd-num">{{ r.totalCollected | inr }}</dd></div>
+            <div><dt>Refunded</dt><dd class="nd-num">{{ r.totalRefunded | inr }}</dd></div>
+            <div class="pf-bc-totals__net"><dt>Net</dt><dd class="nd-num">{{ r.net | inr }}</dd></div>
+          </dl>
+        } @else {
+          <p class="pf-bc-muted">Couldn't load the summary for this day.</p>
+        }
+      </section>
+    </div>
+  </ng-template>
+
+  <!-- The ONE shared scanner (ND-PATTERN §11) for invoice / order barcodes. -->
+  @if (scanning()) {
+    <pf-barcode-scanner-modal title="Scan an invoice or order" noun="invoice or order"
+                              [manualOnly]="scan.manualEntry()"
+                              (matched)="onScanned($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
+  }
+</section>
