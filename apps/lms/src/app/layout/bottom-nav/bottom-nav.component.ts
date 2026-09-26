@@ -22,7 +22,8 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
 import { PushService } from '../../core/services/push.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, SETTINGS_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { hasAnyManage } from '../../features/settings/settings-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 
 const DRAG_THRESHOLD_PX = 4;
@@ -545,12 +546,15 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   readonly showAdminTab = computed(() =>
     !ADMIN_NAV.permissions || this.auth.hasAnyPermission(ADMIN_NAV.permissions)
   );
+  /** Settings: anyone holding any manage_* permission (owner). */
+  readonly showSettingsTab = computed(() => hasAnyManage(this.auth.permissions()));
+  protected readonly settingsNav = SETTINGS_NAV;
 
   /** Compact (icon-only on mobile) when 4+ buttons are visible. With
    *  fewer the bar would otherwise look like a tiny floating widget;
    *  showing labels at low counts gives each button room to breathe. */
   readonly compactMode = computed(() => {
-    const total = this.primary().length + (this.showAdminTab() ? 1 : 0);
+    const total = this.primary().length + (this.showAdminTab() ? 1 : 0) + (this.showSettingsTab() ? 1 : 0);
     return total >= 4;
   });
 

@@ -195,32 +195,6 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('collection')) {
-      <!-- Sample ID — short sample barcode number width (tenant-wide) -->
-      <section class="nd-card pf-ls__card">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg></span><h3 class="nd-card__label pf-ls__title">Sample ID</h3></div>
-        <div class="pf-ls__cardbody">
-        <p class="pf-ls__hint">
-          The short sample barcode is <strong>DD</strong>(dept) + <strong>YY</strong>(year) +
-          this many digits, e.g. <span class="nd-num">012600001</span>. Set each department's
-          2-digit code in <strong>Departments</strong>.
-        </p>
-        <div class="mt-4 flex flex-wrap items-end gap-4">
-          <label class="block max-w-[160px]">
-            <span class="nd-field__lbl">Number width</span>
-            <input class="nd-input nd-num mt-1" type="number" min="1" max="9"
-                   [ngModel]="sampleNumberWidth()"
-                   (ngModelChange)="sampleNumberWidth.set(+$event)"
-                   (blur)="saveSampleNumberWidth()" />
-          </label>
-          <p class="text-[13px] pb-2" style="color: var(--text-secondary);">
-            Preview: <strong class="nd-num" style="color: var(--text-primary);">{{ sampleBarcodePreview() }}</strong>
-          </p>
-        </div>
-      </div>
-      </section>
-      }
-
       @if (showSec('rules')) {
       <!-- Calculation constants (tenant-wide) — feed calculated results. -->
       <section class="nd-card pf-ls__card">
@@ -326,15 +300,15 @@ interface AutoAssignConfig {
       }
 
       @if (showSec('collection')) {
-      <!-- Specimen label CODE — an org-wide policy. Label SIZE + printer + darkness
+      <!-- Specimen label CODE — set per branch. Label SIZE + printer + darkness
            are per-station (a user's Print settings), never stored in the cloud. -->
       <section class="nd-card pf-ls__card">
         <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></span><h3 class="nd-card__label pf-ls__title">Specimen label code</h3></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
-          The <strong>one</strong> machine-readable code printed on every tube label across the
-          organisation. A tube label can't fit more than one. Label size, printer &amp; darkness
-          are set per station under <strong>Print settings</strong> (profile menu).
+          The <strong>one</strong> machine-readable code printed on every tube label in
+          <strong>this branch</strong>. A tube label can't fit more than one. Label size, printer &amp;
+          darkness are set per station under <strong>Print settings</strong> (profile menu).
         </p>
 
         <div class="pf-ls__gate mt-3" role="radiogroup">
@@ -714,20 +688,6 @@ export class LabSettingsComponent implements OnInit {
     { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared vial with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
     { value: 'standalone', label: 'Standalone', desc: 'Every department is split into its own space — its own sample-ID prefix (the department code), and a separate vial per department even for the same tube colour.' },
   ];
-  // ── Sample ID — running-number width of the short sample barcode ──
-  /** Editable number width (1–9). Seeded from the tenant once it loads. */
-  protected readonly sampleNumberWidth = signal(5);
-  /** Keep the editable signal in sync with the loaded/saved tenant. */
-  private readonly _swSync = effect(() => {
-    const w = this.tenantState.tenant()?.sampleNumberWidth;
-    if (typeof w === 'number') this.sampleNumberWidth.set(Math.min(Math.max(w, 1), 9));
-  });
-  /** Live example barcode: dept 01 + last-2-digit year + zero-padded number. */
-  protected readonly sampleBarcodePreview = computed(() => {
-    const yy = String(new Date().getFullYear() % 100).padStart(2, '0');
-    const width = Math.min(Math.max(this.sampleNumberWidth() || 1, 1), 9);
-    return '01' + yy + '1'.padStart(width, '0');
-  });
   readonly collectionMode = this.labCfg.collectionMode;
   readonly billingMode = this.labCfg.billingMode;
 
@@ -1016,16 +976,6 @@ export class LabSettingsComponent implements OnInit {
     if ((next ? JSON.stringify(next) : null) === curNorm) return;
     this.api.patch<Tenant>('/api/tenants/current', { calcConstants: next }).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success('Calculation constants saved'); },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
-  }
-
-  /** Clamp to 1–9, then PATCH the tenant-wide sample number width. */
-  saveSampleNumberWidth() {
-    const width = Math.min(Math.max(Math.trunc(this.sampleNumberWidth() || 1), 1), 9);
-    this.sampleNumberWidth.set(width);
-    this.api.patch<Tenant>('/api/tenants/current', { sampleNumberWidth: width }).subscribe({
-      next: t => { this.tenantState.update(t); this.toasts.success('Sample number width saved'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }

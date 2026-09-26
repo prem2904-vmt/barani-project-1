@@ -1,0 +1,156 @@
+<!-- One control, by kind. Used for the row itself and for each field of a
+     composite row's inline editor ("Change"). -->
+<ng-template #ctl let-c let-key="key" let-v="v" let-lbl="lbl">
+  @switch (c.kind) {
+    @case ('switch') {
+      <button type="button" class="nd-toggle pf-sr__switch" role="switch"
+              [attr.aria-checked]="v === true" [attr.aria-labelledby]="lbl"
+              [disabled]="!loaded()" (click)="toggle(key)">
+        <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+      </button>
+    }
+    @case ('segmented') {
+      <div class="nd-seg pf-sr__seg" role="radiogroup" [attr.aria-labelledby]="lbl"
+           [style.--pf-sr-n]="c.options?.length ?? 1">
+        @for (o of c.options; track o.value) {
+          <button type="button" class="nd-seg__item" role="radio"
+                  [attr.aria-checked]="optionPressed(v, o.value)" [disabled]="!loaded()"
+                  (click)="pick(c, asString(o.value), key)">{{ o.label }}</button>
+        }
+      </div>
+    }
+    @case ('select') {
+      <pf-select class="pf-sr__select" [options]="selectOptionsFor(c)" [value]="asString(v)"
+                 [disabled]="!loaded()" [placeholder]="c.placeholder ?? 'Pick one'"
+                 (valueChange)="pick(c, $event, key)"></pf-select>
+    }
+    @case ('number') {
+      <pf-number-input class="pf-sr__num" [value]="asNumber(v)" [min]="c.min" [max]="c.max"
+                       [step]="c.step ?? 1" [suffix]="c.unit" [allowEmpty]="!!c.allowEmpty"
+                       [placeholder]="c.placeholder ?? ''" [disabled]="!loaded()"
+                       (valueChange)="numberChanged($event, key)"></pf-number-input>
+    }
+    @case ('text') {
+      <input class="nd-input pf-sr__input" type="text" [value]="asString(v)"
+             [attr.maxlength]="c.maxLength ?? null" [attr.placeholder]="c.placeholder ?? null"
+             [attr.aria-labelledby]="lbl" [disabled]="!loaded()" autocomplete="off"
+             (input)="textInput($event, c)" (blur)="textCommit($event, key)"
+             (keydown.enter)="textEnter($event)" />
+    }
+    @case ('time') {
+      <input class="nd-input nd-num pf-sr__time" type="time" [value]="asString(v)"
+             [attr.aria-labelledby]="lbl" [disabled]="!loaded()"
+             (change)="commit($any($event.target).value, key)" />
+    }
+  }
+</ng-template>
+
+<div class="pf-sr__main">
+  <div class="pf-sr__text">
+    @if (crumb()) { <span class="pf-sr__crumb">{{ groupLabel() }}</span> }
+    <span class="pf-sr__label" [id]="'lbl-' + def().id">{{ def().label }}</span>
+    @if (def().help) { <span class="pf-sr__help">{{ def().help }}</span> }
+    @if (scopeText()) {
+      <span class="pf-sr__scope">
+        @if (canPickBranch()) {
+          <pf-select class="pf-sr__branch" size="sm" [options]="branchOptions()" [value]="store.branchId() ?? ''"
+                     [triggerLabel]="scopeText()" (valueChange)="store.setBranch($event)"></pf-select>
+        } @else {
+          <span class="nd-chip nd-chip--static pf-sr__chip">{{ scopeText() }}</span>
+        }
+      </span>
+    }
+  </div>
+
+  <div class="pf-sr__ctl">
+    @switch (c().kind) {
+      @case ('readonly') {
+        <span class="pf-sr__ro">{{ readonlyText() }}</span>
+        @if (linkAllowed()) {
+          <button type="button" class="nd-btn nd-btn--tertiary pf-sr__link" (click)="go(c().link!.href)">
+            {{ c().link!.label }}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        }
+      }
+      @case ('link') {
+        @if (previewText()) { <span class="pf-sr__ro">{{ previewText() }}</span> }
+        @if (c().link; as l) {
+          <button type="button" class="nd-btn nd-btn--secondary pf-sr__link" (click)="go(l.href)">
+            {{ l.label }}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        }
+      }
+      @case ('composite') {
+        <span class="pf-sr__preview nd-num">{{ previewText() }}</span>
+        <button type="button" class="nd-btn nd-btn--secondary pf-sr__change" [attr.aria-expanded]="editing()"
+                [disabled]="!loaded()" (click)="openEditor()">{{ editing() ? 'Done' : 'Change' }}</button>
+      }
+      @case ('logo') {
+        <div class="pf-sr__logo">
+          @if (asString(value())) {
+            <img class="pf-sr__logo-img" [src]="asString(value())" alt="Lab logo" />
+          }
+          <button type="button" class="nd-btn nd-btn--secondary" [disabled]="!loaded()" (click)="pickLogo()">
+            {{ asString(value()) ? 'Replace' : 'Upload' }}
+          </button>
+          @if (asString(value())) {
+            <button type="button" class="nd-btn nd-btn--tertiary" (click)="commit('')">Remove</button>
+          }
+          <input #logoInput type="file" accept="image/*" class="pf-sr__file" tabindex="-1" aria-hidden="true"
+                 (change)="onLogo($any($event.target).files)" />
+        </div>
+      }
+      @case ('dept-pool') {
+        <span class="pf-sr__ro nd-num">{{ departments().length }} {{ departments().length === 1 ? 'department' : 'departments' }}</span>
+      }
+      @default {
+        <ng-container *ngTemplateOutlet="ctl; context: { $implicit: c(), key: def().key, v: value(), lbl: 'lbl-' + def().id }"></ng-container>
+      }
+    }
+  </div>
+
+  <span class="pf-sr__state" role="status" aria-live="polite">
+    @if (status() === 'saved') {
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      <span>Saved</span>
+    } @else if (status() === 'saving') {
+      <span class="pf-sr__saving">Saving</span>
+    }
+  </span>
+</div>
+
+@if (error()) {
+  <p class="pf-sr__err" role="alert">{{ error() }}</p>
+}
+
+@if (c().kind === 'composite' && editing()) {
+  <div class="pf-sr__fields">
+    @for (f of c().fields ?? []; track f.key) {
+      @if (fieldVisible(f)) {
+        <div class="pf-sr__field" [class.pf-sr__field--switch]="f.control.kind === 'switch'">
+          <span class="pf-sr__flbl" [id]="'lbl-' + def().id + '-' + f.key">{{ f.label }}</span>
+          <ng-container *ngTemplateOutlet="ctl; context: { $implicit: f.control, key: f.key, v: fieldValue(f), lbl: 'lbl-' + def().id + '-' + f.key }"></ng-container>
+        </div>
+      }
+    }
+    <p class="pf-sr__looks">Looks like <strong class="nd-num">{{ previewText() }}</strong></p>
+  </div>
+}
+
+@if (c().kind === 'dept-pool') {
+  <div class="pf-sr__pools">
+    @for (d of departments(); track d.id) {
+      <div class="pf-sr__pool">
+        <span class="pf-sr__pool-name" [id]="'lbl-' + def().id + '-' + d.id">{{ d.name }}</span>
+        <pf-select class="pf-sr__pool-sel" [multiple]="true" [searchable]="true"
+                   [options]="autoAssign.options()" [values]="poolValues(d.id)"
+                   placeholder="Shared list (nobody picked)"
+                   (valuesChange)="commit($any($event), poolKey(d.id))"></pf-select>
+      </div>
+    } @empty {
+      @if (loaded()) { <p class="pf-sr__help">No departments yet. Add them in Branches.</p> }
+    }
+  </div>
+}

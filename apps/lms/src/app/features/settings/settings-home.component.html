@@ -1,0 +1,103 @@
+<section class="pf-band-page pf-set">
+  <!-- The band pill IS the search. Rows autosave, so the band's only action
+       is the neutral save state (ND §14). -->
+  <pf-hero-band [back]="true" backTo="/admin"
+                placeholder="Search settings — try 'barcode', 'discount', 'printer'"
+                [value]="q()" (valueChange)="q.set($event)">
+    <ng-container band-actions>
+      <span class="nd-savestate pf-set__save" role="status" title="Every change saves as you make it">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        <span class="pf-set__save-t">Changes save as you go</span>
+      </span>
+    </ng-container>
+  </pf-hero-band>
+
+  <div class="pf-band-body pf-band-body--fill pf-set__body">
+    <!-- Group chips: jump links, not tabs. -->
+    <nav class="pf-set__chips" aria-label="Setting groups">
+      @for (v of groups(); track v.group.id) {
+        <button type="button" class="nd-chip pf-set__chip" (click)="jump(v.group.id)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="v.group.icon"/></svg>
+          {{ v.group.label }}
+        </button>
+      }
+    </nav>
+
+    <div class="pf-set__list" #list>
+      <div class="pf-set__col">
+        @if (searching()) {
+          <section class="nd-card pf-set__card" aria-label="Search results">
+            <header class="nd-card__head">
+              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+              <h2 class="nd-card__label">Results</h2>
+              <span class="nd-card__spacer"></span>
+              <span class="pf-set__count nd-num">{{ resultCount() }} for “{{ q().trim() }}”</span>
+            </header>
+            <div class="pf-set__rows">
+              @for (d of resultRows(); track d.id) {
+                <pf-setting-row [def]="d" [crumb]="true"></pf-setting-row>
+              }
+            </div>
+            @if (resultTools().length) {
+              <div class="pf-set__tools">
+                <span class="pf-set__tools-lbl">Tools</span>
+                @for (t of resultTools(); track t.id) {
+                  <a class="pf-set__tool" [routerLink]="t.href">
+                    <span class="pf-set__tool-txt"><span class="pf-set__tool-t">{{ t.label }}</span>@if (t.help) {<span class="pf-set__tool-h">{{ t.help }}</span>}</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                  </a>
+                }
+              </div>
+            }
+            @if (!resultCount()) {
+              <p class="pf-band-empty pf-set__empty">No settings match “{{ q().trim() }}”.</p>
+            }
+          </section>
+        } @else {
+          @for (v of groups(); track v.group.id) {
+            <section class="nd-card pf-set__card" [id]="'grp-' + v.group.id" [attr.aria-labelledby]="'grp-t-' + v.group.id">
+              <header class="nd-card__head">
+                <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="v.group.icon"/></svg></span>
+                <h2 class="nd-card__label" [id]="'grp-t-' + v.group.id">{{ v.group.label }}</h2>
+                @if (v.group.id === 'alerts') { <span class="nd-card__note">In-app alerts only.</span> }
+              </header>
+
+              @if (v.main.length) {
+                <div class="pf-set__rows">
+                  @for (d of v.main; track d.id) { <pf-setting-row [def]="d"></pf-setting-row> }
+                </div>
+              }
+
+              @if (v.more.length) {
+                <button type="button" class="pf-set__more" [attr.aria-expanded]="isMoreOpen(v.group.id)"
+                        (click)="setMore(v.group.id, !isMoreOpen(v.group.id))">
+                  More options <span class="nd-num">({{ v.more.length }})</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                @if (isMoreOpen(v.group.id)) {
+                  <div class="pf-set__rows pf-set__rows--more">
+                    @for (d of v.more; track d.id) { <pf-setting-row [def]="d"></pf-setting-row> }
+                  </div>
+                }
+              }
+
+              @if (v.tools.length) {
+                <div class="pf-set__tools">
+                  <span class="pf-set__tools-lbl">Tools</span>
+                  @for (t of v.tools; track t.id) {
+                    <a class="pf-set__tool" [routerLink]="t.href">
+                      <span class="pf-set__tool-txt"><span class="pf-set__tool-t">{{ t.label }}</span>@if (t.help) {<span class="pf-set__tool-h">{{ t.help }}</span>}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                    </a>
+                  }
+                </div>
+              }
+            </section>
+          } @empty {
+            <p class="pf-band-empty pf-set__empty">Nothing to set up here with your access.</p>
+          }
+        }
+      </div>
+    </div>
+  </div>
+</section>
