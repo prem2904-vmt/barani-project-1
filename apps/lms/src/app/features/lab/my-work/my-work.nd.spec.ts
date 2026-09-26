@@ -4,6 +4,8 @@ import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { MyWorkComponent } from './my-work.component';
+import { SampleCollectionComponent } from '../sample-collection/sample-collection.component';
+import { CollectBandButtonComponent } from '../../../shared/components/collect-band-button/collect-band-button.component';
 import { ApiService } from '../../../core/services/api.service';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { LiveQueueService } from '../../../core/services/live-queue.service';
@@ -18,7 +20,7 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { ThemeService } from '../../../core/services/theme.service';
 
 /** My Work in the new design: palette only (no colour dots on the tabs). */
-function make(newDesign: boolean, web = false) {
+function make(newDesign: boolean, web = false, process: Record<string, unknown> = { isEnabled: () => true, dispatchStepEnabled: () => false }) {
   (window as any).matchMedia = (q: string) => ({ matches: web && q === '(hover: hover) and (pointer: fine)', addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
   const loose = () => new Proxy({}, { get: (_t, k) => (k === 'then' ? undefined : () => undefined) });
   TestBed.configureTestingModule({
@@ -28,7 +30,7 @@ function make(newDesign: boolean, web = false) {
       { provide: LiveQueueService, useValue: { on: () => of() } },
       { provide: ToastService, useValue: loose() },
       { provide: DialogService, useValue: loose() },
-      { provide: ProcessWorkflowService, useValue: { isEnabled: () => true, dispatchStepEnabled: () => false } },
+      { provide: ProcessWorkflowService, useValue: process },
       { provide: BranchLabConfigService, useValue: loose() },
       { provide: ScanService, useValue: { manualEntry: () => false } },
       { provide: TenantEntitlementsService, useValue: loose() },
@@ -110,5 +112,36 @@ describe('My Work — round 6 (owner): sample ID is the primary line', () => {
   });
   it('normal-priority tiles lose the stripe (urgent / high keep theirs)', () => {
     expect(css()).toMatch(/\.pf-tq[^{\s]*:not\(\.pf-tq--urgent\):not\(\.pf-tq--high\)[^{]*\.pf-tq__cap[^{]*\{[^}]*transparent/);
+  });
+});
+
+/** Owner (2026-09-26): no embedded COLLECT side panel in My Work — the band
+ *  "Collect" button is the entry point. Collection placed in the Lab no longer
+ *  takes over the left slot; the layout is intake (if on) + the work pane. */
+describe('My Work — no embedded Collect pane', () => {
+  const deps = (): unknown[] => {
+    const d = (MyWorkComponent as any).ɵcmp?.dependencies;
+    return (typeof d === 'function' ? d() : d) ?? [];
+  };
+
+  it('never embeds the sample-collection screen', () => {
+    const c = make(true, true, { isEnabled: () => true, collectsInLab: () => true, dispatchStepEnabled: () => false });
+    expect(c.showCollect).toBeUndefined();
+    expect(c.showLeftPane).toBeUndefined();
+    expect(deps()).toContain(CollectBandButtonComponent);   // the band entry point stays
+    expect(deps()).not.toContain(SampleCollectionComponent);
+  });
+
+  it('collect-in-lab with intake ON: Lab Intake keeps its normal slot', () => {
+    const c = make(false, true, { isEnabled: () => true, collectsInLab: () => true, dispatchStepEnabled: () => false });
+    expect(c.showIntake()).toBe(true);
+    expect(c.leftPaneOpen()).toBe(true);   // classic: intake always open
+  });
+
+  it('collect-in-lab with intake OFF: full-width work pane (no left column)', () => {
+    const off = (t: string) => t !== 'lab_intake';
+    const c = make(false, true, { isEnabled: off, collectsInLab: () => true, dispatchStepEnabled: () => false });
+    expect(c.showIntake()).toBe(false);
+    expect(c.leftPaneOpen()).toBe(false);
   });
 });
