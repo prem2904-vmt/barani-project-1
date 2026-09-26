@@ -6,7 +6,6 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
-import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { PrinterService } from '../../../core/printer/printer.service';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -86,23 +85,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
         eyebrow="Frontdesk · Billing"
         title="Collect payment"
         [subtitle]="subtitle()">
-        <!-- Admin toggle: when OFF, the Order tab stops auto-routing here
-             after save and raises a billing request instead. Flag is
-             persisted in localStorage via FrontdeskSettingsService. -->
-        <label actions class="pf-collect-toggle"
-               title="When ON, payment is collected at the front desk after each order. When OFF, a separate billing request is raised and the front desk skips this screen.">
-          <input type="checkbox"
-                 [checked]="collectsBilling()"
-                 (change)="setCollectsBilling($any($event.target).checked)" />
-          <span>Front desk collects payment</span>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-               class="pf-collect-toggle__hint" aria-hidden="true">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/>
-            <path d="M12 17h.01"/>
-          </svg>
-        </label>
         <button actions type="button" class="pf-toolbar-btn pf-no-print"
                 (click)="saveDraft()" [disabled]="paid() || !bill()"
                 title="Save as draft (resume later)">
@@ -572,34 +554,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
   `,
   styles: [`
-    /* Admin flag in the header: "Frontdesk collects" toggles whether the
-     * Order tab routes here automatically after save. */
-    .pf-collect-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-radius: 9999px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      cursor: pointer;
-      user-select: none;
-    }
-    .pf-collect-toggle:hover { background: var(--glass-bg-hover); }
-    .pf-collect-toggle input[type="checkbox"] {
-      width: 14px;
-      height: 14px;
-      accent-color: #a855f7;
-    }
-    .pf-collect-toggle__hint {
-      color: var(--text-muted);
-      cursor: help;
-    }
-    .pf-collect-toggle:hover .pf-collect-toggle__hint { color: var(--text-secondary); }
-
     .pf-eyebrow {
       margin: 0;
       font-size: 10.5px;
@@ -1589,7 +1543,6 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
      * On touch they were applying on tap-and-hold; neutralise the
      * sticky hover by gating the page's own hover rules. */
     @media (hover: none) {
-      .pf-collect-toggle:hover,
       .pf-mode:not(.pf-mode--on):hover,
       .pf-toolbar-btn:hover:not([disabled]),
       .pf-bill-print-icon:hover,
@@ -1618,7 +1571,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     @media print {
       :host { display: block; background: white; }
       .pf-no-print, pf-screen-header, .pf-discount,
-      .pf-bill-actions, .pf-collect-toggle { display: none !important; }
+      .pf-bill-actions { display: none !important; }
       .grid { display: block !important; }
     }
   `]
@@ -1631,7 +1584,6 @@ export class BillingComponent implements OnInit, OnChanges {
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
   private readonly location = inject(Location);
-  private readonly settings = inject(FrontdeskSettingsService);
   private readonly billingEvents = inject(BillingEventsService);
   private readonly printer = inject(PrinterService);
 
@@ -1661,9 +1613,6 @@ export class BillingComponent implements OnInit, OnChanges {
       error: () => { /* keep the current bill on a transient error */ }
     });
   }
-
-  readonly collectsBilling = this.settings.collectsBilling;
-  setCollectsBilling(v: boolean) { this.settings.setCollectsBilling(v); }
 
   readonly modes = PAY_MODES;
   readonly quickAdd = QUICK_ADD;

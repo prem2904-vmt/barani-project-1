@@ -42,9 +42,6 @@ interface Category {
   /** One-line description shown under the pane title — frames what
    *  the user can do in this section. */
   blurb: string;
-  /** Footer bullet points: 2–3 short tips / typical tasks for the
-   *  section. Fills the dead space below sparse tile lists. */
-  tips: string[];
   tiles: Tile[];
 }
 
@@ -177,27 +174,6 @@ interface Category {
               }
             </div>
 
-            <!-- Footer "what's in this section" panel — pads the bottom
-                 of the pane for sparse categories (Identity has only 2
-                 tiles; would otherwise leave a big dark void). -->
-            <aside class="pf-admin-tips">
-              <h3 class="pf-admin-tips__title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 16v-4M12 8h.01"/>
-                </svg>
-                What you can do here
-              </h3>
-              <ul class="pf-admin-tips__list">
-                @for (tip of cat.tips; track tip) {
-                  <li class="pf-admin-tips__item">
-                    <span class="pf-admin-tips__bullet" aria-hidden="true"></span>
-                    {{ tip }}
-                  </li>
-                }
-              </ul>
-            </aside>
           }
         </div>
       </div>
@@ -292,7 +268,7 @@ interface Category {
     .pf-admin-pane { min-width: 0; overflow: visible; }
     .pf-admin-pane__hdr { margin: 0; }
     .pf-admin-pane__blurb { margin: 0; }
-    .pf-admin-pane__grid, .pf-admin-tips { margin-left: 16px; margin-right: 16px; }
+    .pf-admin-pane__grid { margin-left: 16px; margin-right: 16px; }
     .pf-admin-pane__grid { margin-top: 16px; }
     .pf-admin-pane > :last-child { margin-bottom: 16px; }
     .pf-admin-pane__title { margin: 0; }
@@ -338,35 +314,6 @@ interface Category {
     .pf-admin-tile:hover .pf-admin-tile__arrow {
       color: var(--text-primary);
       transform: translateX(3px);
-    }
-
-    /* ── Tips panel below the grid ──────────────────────── */
-    .pf-admin-tips {
-      margin-top: 18px;
-      padding: 14px 16px;
-      border-radius: 12px;
-      background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line);
-    }
-    .pf-admin-tips__title {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 12px; font-weight: 600;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      color: var(--text-secondary);
-      margin: 0 0 10px;
-    }
-    .pf-admin-tips__list {
-      list-style: none; padding: 0; margin: 0;
-      display: flex; flex-direction: column; gap: 6px;
-    }
-    .pf-admin-tips__item {
-      display: flex; align-items: flex-start; gap: 10px;
-      font-size: 12.5px; line-height: 1.45;
-      color: var(--text-secondary);
-    }
-    .pf-admin-tips__bullet {
-      flex-shrink: 0; margin-top: 7px;
-      width: 6px; height: 6px; border-radius: 9999px; background: var(--nd-sel-border);
     }
 
     /* ─────────────────────────────────────────────────────────────
@@ -479,11 +426,6 @@ export class AdminDashboardComponent implements OnInit {
       iconPath: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
       iconExtra: 'M2.5 21a6.5 6.5 0 0 1 13 0M17 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
       blurb: 'Who can do what — staff, roles and a full audit trail of every change.',
-      tips: [
-        'Invite new staff by email; they pick a password on first sign-in.',
-        'Permissions are bundled into roles (Reception, Lab Tech, Pathologist…).',
-        'The audit trail records every change — who, when, before → after.'
-      ],
       tiles: [
         { title: 'Users & Access', href: '/admin/users', gradient: 'violet',
           iconPath: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
@@ -502,11 +444,6 @@ export class AdminDashboardComponent implements OnInit {
       iconPath: 'M4 21V7l8-4 8 4v14',
       iconExtra: 'M9 21v-5h6v5',
       blurb: 'The structure of your lab — branches, departments, collection/billing modes, queues, referrers.',
-      tips: [
-        'Add branches as you grow; toggle front-desk vs dedicated-counter collection per branch.',
-        'Configure queue modes, slots and home-collection agent coverage.',
-        'Maintain the referring hospitals + doctors that send you patients.'
-      ],
       tiles: [
         { title: 'Branches & Departments', href: '/admin/branches', gradient: 'sky',
           iconPath: 'M4 21V7l8-4 8 4v14', iconExtra: 'M9 21v-5h6v5M12 8v4m-2-2h4',
@@ -532,11 +469,6 @@ export class AdminDashboardComponent implements OnInit {
       iconPath: 'M3 5h18v14H3z',
       iconExtra: 'M3 10h18M7 15h3',
       blurb: 'Money flow — GST registration, discount policy, invoice numbering, vendor (B2B) wallets.',
-      tips: [
-        'Set GST rate + filing frequency per branch; tax slabs roll up automatically.',
-        'Cap reception discounts to keep margins; require approval above a threshold.',
-        'Vendor wallets let referring hospitals / collection centres run on credit.'
-      ],
       tiles: [
         { title: 'Finance', href: '/finance', gradient: 'emerald',
           iconPath: 'M3 3v18h18', iconExtra: 'M7 14l4-4 3 3 5-6',
@@ -560,11 +492,6 @@ export class AdminDashboardComponent implements OnInit {
       iconPath: 'M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z',
       iconExtra: 'M9 7h6M12 14V10',
       blurb: 'Cross-module platform controls — enable modules, and design the menus/forms staff use.',
-      tips: [
-        'Modules: turn products (Lab, OPD, IPD, Pharmacy…) and their features on or off.',
-        'Process builder: which menus exist, what actions sit inside, and who can use them.',
-        'Form flows: drag-build the Patient Register, Order Create and Appointment fields.'
-      ],
       tiles: [
         { title: 'Process builder', href: '/admin/process', gradient: 'pink',
           iconPath: 'M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z',

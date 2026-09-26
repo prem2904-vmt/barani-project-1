@@ -8,7 +8,6 @@ import { OrderCreateComponent } from './order-create.component';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -36,7 +35,6 @@ function make(tests: any[], perms: string[] = []) {
       { provide: Router, useValue: stub },
       { provide: NavBackService, useValue: stub },
       { provide: Location, useValue: stub },
-      { provide: FrontdeskSettingsService, useValue: stub },
       { provide: BranchLabConfigService, useValue: stub },
       { provide: ProcessWorkflowService, useValue: stub },
       { provide: AuthService, useValue: { hasPermission: (p: string) => perms.includes(p) } },

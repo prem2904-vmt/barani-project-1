@@ -5,7 +5,6 @@ import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
-import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -59,7 +58,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
   private readonly locationSvc = inject(Location);
-  private readonly settings = inject(FrontdeskSettingsService);
   // Workflow is the source of truth for whether billing is a separate counter.
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly process = inject(ProcessWorkflowService);

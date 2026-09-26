@@ -4,23 +4,6 @@
     eyebrow="Frontdesk · Billing"
     title="Collect payment"
     [subtitle]="subtitle()">
-    <!-- Admin toggle: when OFF, the Order tab stops auto-routing here
-         after save and raises a billing request instead. Flag is
-         persisted in localStorage via FrontdeskSettingsService. -->
-    <label actions class="pf-collect-toggle"
-           title="When ON, payment is collected at the front desk after each order. When OFF, a separate billing request is raised and the front desk skips this screen.">
-      <input type="checkbox"
-             [checked]="collectsBilling()"
-             (change)="setCollectsBilling($any($event.target).checked)" />
-      <span>Front desk collects payment</span>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-           class="pf-collect-toggle__hint" aria-hidden="true">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3.5"/>
-        <path d="M12 17h.01"/>
-      </svg>
-    </label>
     <button actions type="button" class="pf-toolbar-btn pf-no-print"
             (click)="saveDraft()" [disabled]="paid() || !bill()"
             title="Save as draft (resume later)">

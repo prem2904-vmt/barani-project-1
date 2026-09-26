@@ -8,7 +8,6 @@ import { OrderCreateComponent } from './order-create.component';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { FrontdeskSettingsService } from '../../../core/services/frontdesk-settings.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
@@ -50,7 +49,6 @@ function render(q: Array<[string, string]> = []) {
       { provide: Router, useValue: router },
       { provide: NavBackService, useValue: { showBack: () => true, back() {}, backTo() {} } },
       { provide: Location, useValue: {} },
-      { provide: FrontdeskSettingsService, useValue: {} },
       { provide: BranchLabConfigService, useValue: { ensureLoaded() {}, billingMode: () => 'front_desk', collectsAtFrontdesk: () => false } },
       { provide: ProcessWorkflowService, useValue: { isEnabled: () => true } },
       { provide: TenantStateService, useValue: { tenant: signal(null) } },
