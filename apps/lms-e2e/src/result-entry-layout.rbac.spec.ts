@@ -21,9 +21,9 @@ const SHOTS = process.env['SHOTS_DIR'] || '';
 async function openSample(page: Page): Promise<boolean> {
   await page.goto('/lab/my-work');
   await page.waitForLoadState('networkidle').catch(() => {});
-  const tile = page.locator('[data-vt-sample]').first();
+  const tile = page.locator('[data-zoom-src]').first();
   if (await tile.count()) {
-    await page.goto(`/lab/sample/${await tile.getAttribute('data-vt-sample')}`);
+    await page.goto(`/lab/sample/${await tile.getAttribute('data-zoom-src')}`);
     return true;
   }
   const code = process.env['RESULT_BARCODE'] || '26124';

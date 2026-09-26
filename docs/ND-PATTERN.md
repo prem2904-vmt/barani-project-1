@@ -72,6 +72,31 @@ mark), information the main card lacks (only fields the data really has —
 e.g. priority, fasting, referral), a short explanation line, and the footer
 actions.
 
+### Two jobs on one screen = main card + side card
+
+**Two jobs on one screen = main card (left, the work) + side card (right, the
+companion: filter / summary / actions), styled like BILLING, collapsible to a
+strip; a sheet on phones.**
+
+- Order & Payments: the catalogue (main) + BILLING (side). Test Master
+  (`features/admin/tests/tests/`): the test grid (main; its header has the
+  count + the muted "Double-click a cell to edit" hint) + DEPARTMENTS (side,
+  ~340px).
+- The side card is an `.nd-card` with the BILLING header: violet icon chip +
+  UPPERCASE label + a neutral collapse icon button. Rows are whole-row
+  targets with the neutral selected state; a switch in a row is a separate
+  target (slate `.nd-toggle`), and switching OFF something that hides it
+  lab-wide asks first (`DialogService`). Disabled items are muted with an
+  "Off" tag; counts are plain muted tabular numbers.
+- **Collapse** turns the card into a slim vertical strip (icon + the label
+  set vertically, one expand target). The state is remembered per user
+  (`localStorage`, wrapped in try/catch) and the column width animates on
+  `--nd-spring` (none under reduced motion).
+- **Narrow widths (≤900px):** no side column. The main card is full width
+  and the side card opens as a sheet (above the navbar; handle, backdrop,
+  × to close) from a button in the band pill (Test Master: "Departments").
+  Picking a row in the sheet applies it and closes the sheet.
+
 ### Card headers and row actions
 
 - Every card / pane header is the BILLING header: a violet icon chip
@@ -284,6 +309,27 @@ group's grid. **Search results stay one per row** (section 6).
   (a confirm tap, e.g. a drawn vial), `.nd-anim-rise` (a sheet).
 - Stagger list rows by about 18ms.
 - Everything is off under `prefers-reduced-motion`.
+- **Navigation motion — one rule: list → detail = ZOOM, step → step =
+  SLIDE.**
+  - **Zoom** (`core/navigation/zoom-transition.ts` + `zoom.directive.ts`):
+    put `[pfZoomSource]="keys"` on the tile/row that opens a detail and
+    `[pfZoomTarget]="keys"` on the detail's main card AND its loading
+    skeleton. Keys are the ids either side answers to — list both when a
+    redirect changes the id (culture page: `[orderTestId, sampleId]`).
+    Only the TAPPED source is named (`pf-zoom`), only during the
+    transition; the box morphs ~400ms on `--nd-spring` while the content
+    stays natural size and cross-fades (no stretched text). Render the
+    skeleton while `zoom.holding()` too, so the named card is never
+    swapped mid-morph. Back reverses it (into the tile, or toward where it
+    was). No tap → no zoom (scan / search / deep link are instant). A
+    double tap is swallowed. In-page details (Collect's collection view)
+    use `zoom.runLocal('in' | 'out', update)`; gated opens (scan to claim,
+    a reason prompt) call `zoom.rearm(key)` right before navigating.
+  - **Slide** (`core/navigation/slide-transition.ts`): a flow's next step
+    (Order & Payments / front desk → Collect) slides forward; back
+    reverses. Everything else swaps instantly.
+  - Real-browser proof: `apps/lms-e2e/src/zoom-transition.rbac.spec.ts`
+    (every module pair, 5 taps each).
 
 ## 10. Always
 
@@ -382,12 +428,11 @@ unit of work. It follows the band rules above with these specifics
 - Order-level extras above the cards only when they apply: the
   validator's "Submitted …" line, the slate **Include Trendogram** toggle
   (+ range picker), the flags the last submit raised.
-- **Zoom from the queue:** tiles carry `data-vt-sample="<id>"`;
-  `core/navigation/zoom-transition.ts` names ONLY the tapped tile
-  `sample-<id>` for the transition; the first RESULTS card (or its
-  skeleton) carries the same `view-transition-name`, so the tile morphs
-  into it (~400ms, nd spring); back reverses it. No View Transitions or
-  reduced motion → instant.
+- **Zoom from the queue:** tiles carry `[pfZoomSource]="tube.sampleId"`;
+  the RESULTS skeleton (held through the morph) and then the first card
+  carry `[pfZoomTarget]`, so the tapped tile morphs into it (~400ms, nd
+  spring); back reverses it (§9 "list → detail = zoom"). No View
+  Transitions or reduced motion → instant.
 - **Real-layout check:** `apps/lms-e2e/src/result-entry-layout.rbac.spec.ts`
   (seeded Lab Admin; opens a tube via My Work's band search) asserts at
   375px: name cell ≥200px, full-width ≥44px field, 44px band icons, no
