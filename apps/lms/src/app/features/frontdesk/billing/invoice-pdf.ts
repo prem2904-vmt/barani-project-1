@@ -66,7 +66,12 @@ const TEXT_PRIMARY = '#0f172a';
 const TEXT_MUTED = '#64748b';
 const HAIR = '#e2e8f0';
 
-export function generateInvoicePdf(input: InvoicePdfInput): string | void {
+/** Staff "open order" QR on invoices — disabled for now (owner, 2026-09-26).
+ *  The patient result-tracking QR is unaffected. Flip to re-enable. */
+export const STAFF_ORDER_QR_ENABLED = false;
+
+export function generateInvoicePdf(rawInput: InvoicePdfInput): string | void {
+  const input: InvoicePdfInput = STAFF_ORDER_QR_ENABLED ? rawInput : { ...rawInput, orderQrDataUrl: undefined };
   const {
     bill, order, invoiceNumber, effectivePayable, tatLabel, practice = {},
     qrDataUrl, orderQrDataUrl, docTitle, action = 'save',

@@ -1,4 +1,5 @@
-import { invoiceTemplateFieldsFrom } from './invoice-pdf';
+import { STAFF_ORDER_QR_ENABLED, invoiceTemplateFieldsFrom } from './invoice-pdf';
+import { readFileSync } from 'node:fs';
 
 describe('invoiceTemplateFieldsFrom', () => {
   it('returns empty object when template is null', () => {
@@ -169,5 +170,13 @@ describe('invoiceTemplateFieldsFrom', () => {
     expect(result.tagline).toBe('Express Diagnostics');
     expect(result.jurisdiction).toBeUndefined();
     expect(result.accentColor).toBeUndefined();
+  });
+});
+
+describe('staff order QR on invoices (owner 2026-09-26: disabled for now)', () => {
+  it('is switched off; the entry strips orderQrDataUrl before any layout draws', () => {
+    expect(STAFF_ORDER_QR_ENABLED).toBe(false);
+    const src = readFileSync('apps/lms/src/app/features/frontdesk/billing/invoice-pdf.ts', 'utf8');
+    expect(src).toMatch(/STAFF_ORDER_QR_ENABLED \? rawInput : \{ \.\.\.rawInput, orderQrDataUrl: undefined \}/);
   });
 });
