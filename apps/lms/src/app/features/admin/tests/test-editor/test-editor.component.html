@@ -544,7 +544,10 @@
             <div class="pf-rr2__head">
               <div>
                 <span class="pf-te2-h">Reference ranges — what counts as normal</span>
-                <p class="pf-rr2__sub">Prints on the report next to the result and decides the flag.</p>
+                <!-- The plain range table carries its own one-line flag key — no second sub-line. -->
+                @if (rangeAdvanced() || numericFields().length !== 1 || (effRangeMode() === 'qualitative' && qualFields().length)) {
+                  <p class="pf-rr2__sub">Prints on the report next to the result and decides the flag.</p>
+                }
               </div>
 
             </div>

@@ -16,12 +16,12 @@ function make(param: InsightParam, opts: { unit?: string; phone?: boolean } = {}
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
   const rowEls = () => [...el.querySelectorAll<HTMLTableRowElement>('tbody tr.rtb__row')];
-  /** One row as the eye reads it: age · normal from · normal to · crit below · crit above. */
+  /** One row as the eye reads it: age · low (L) · high (H) · critical below · critical above. */
   const read = (i = 0) => {
     const tr = rowEls()[i];
     const v = (label: string) => (tr.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement | null)?.value ?? null;
     return [tr.querySelector('.rtb__agebtn span')!.textContent!.trim(),
-      v('Normal from'), v('Normal to'), v('Critical below'), v('Critical above')];
+      v('Low (L) if below'), v('High (H) if above'), v('Critical if below'), v('Critical if above')];
   };
   const type = (label: string, value: string, i = 0) => {
     const inp = rowEls()[i].querySelector(`input[aria-label="${label}"]`) as HTMLInputElement;
@@ -55,7 +55,7 @@ describe('pf-range-table — one compact table, one row per group', () => {
     expect(rowEls()[5].getAttribute('data-who')).toBe('Female · 18 years+');
     // No Low / High rows to type — they are derived from Normal.
     expect(el.textContent).not.toMatch(/Critical low|Result is/);
-    // Unit once, in the Normal range header.
+    // Unit once, in the first number header.
     expect(el.querySelectorAll('.rtb__unit')).toHaveLength(1);
     expect(el.querySelector('thead .rtb__unit')!.textContent).toBe('g/dL');
   });
@@ -94,16 +94,16 @@ describe('pf-range-table — one compact table, one row per group', () => {
     const odd: InsightBand = { segment: 'adult_male', sex: 'M', minAge: 18, min: 13, max: 17, label: 'Adult Male', profileCode: 'X', unit: 'g/dL', maxOp: 'lte' };
     const { type, emitted } = make({ unit: 'g/dL', referenceRanges: [odd, HB[5]] });
     expect(emitted).toEqual([]);
-    type('Normal to', '17');                              // same value → nothing emitted
+    type('High (H) if above', '17');                              // same value → nothing emitted
     expect(emitted).toEqual([]);
-    type('Normal to', '17.5');
+    type('High (H) if above', '17.5');
     expect(emitted.at(-1)).toEqual([{ ...odd, max: 17.5 }, HB[5]]);
     expect(emitted.at(-1)![1]).toBe(HB[5]);              // the other band is the SAME object
-    type('Normal to', 'abc');                             // not a number → nothing stored
+    type('High (H) if above', 'abc');                             // not a number → nothing stored
     expect(emitted).toHaveLength(1);
-    type('Normal to', '');                                // cleared → its ≤ goes with it
+    type('High (H) if above', '');                                // cleared → its ≤ goes with it
     expect(emitted.at(-1)![0]).toEqual({ ...odd, max: null, maxOp: null });
-    type('Critical above', '21', 1);
+    type('Critical if above', '21', 1);
     expect(emitted.at(-1)![1]).toEqual({ ...HB[5], criticalHigh: 21 });
   });
 
@@ -114,11 +114,11 @@ describe('pf-range-table — one compact table, one row per group', () => {
     expect(el.querySelectorAll('.rtb__in--err')).toHaveLength(0);
     expect(rowEls()[0].querySelector('.rtb__warn')!.getAttribute('aria-label')).toMatch(/Saved like this before/);
     // A new mistake on another row is named on that row, with red boxes.
-    type('Critical below', '12', 2);
+    type('Critical if below', '12', 2);
     expect(c.rows()[2].error!.text).toBe('Critical below (12) can’t be inside Normal — make it 11 or less.');
     expect(el.querySelectorAll('.rtb__msg')).toHaveLength(1);
     expect([...rowEls()[2].querySelectorAll('.rtb__in--err')].map(i => i.getAttribute('aria-label')))
-      .toEqual(['Normal from', 'Critical below']);
+      .toEqual(['Low (L) if below', 'Critical if below']);
     // Removing a group above keeps the legacy row quiet (baseline shifts).
     c.removeBand(1); f.detectChanges();
     expect(c.rows()[0].error).toBeNull();
@@ -129,7 +129,7 @@ describe('pf-range-table — one compact table, one row per group', () => {
     const { el, emitted } = make({ unit: '', referenceRanges: [{ segment: 'n', label: 'Negative' }] });
     const inp = el.querySelector('input[aria-label="Normal value"]') as HTMLInputElement;
     expect(inp.value).toBe('Negative');
-    expect(el.querySelector('input[aria-label="Normal from"]')).toBeNull();
+    expect(el.querySelector('input[aria-label="Low (L) if below"]')).toBeNull();
     inp.value = 'Non-reactive'; inp.dispatchEvent(new Event('change'));
     expect(emitted.at(-1)).toEqual([{ segment: 'n', label: 'Non-reactive' }]);
   });
@@ -154,7 +154,7 @@ describe('pf-range-table — one compact table, one row per group', () => {
 
   it('criticals set once for the whole test show as a placeholder, not a value', () => {
     const { rowEls, el } = make({ unit: 'x', criticalLow: 5, referenceRanges: [{ segment: 'n', min: 10, max: 20 }] });
-    const inp = rowEls()[0].querySelector('input[aria-label="Critical below"]') as HTMLInputElement;
+    const inp = rowEls()[0].querySelector('input[aria-label="Critical if below"]') as HTMLInputElement;
     expect(inp.value).toBe('');
     expect(inp.placeholder).toBe('5');
     expect(el.textContent).toContain('Grey critical limits are set once for the whole test.');
@@ -175,12 +175,52 @@ describe('pf-range-table — one compact table, one row per group', () => {
     expect(el.querySelector('table')).toBeNull();
     const cards = [...el.querySelectorAll('.rtb__card')];
     expect(cards.map(c => c.querySelector('.rtb__l1')!.textContent!.trim())).toEqual(['Female · 18 years+', 'Anyone · Any age']);
-    expect(cards.map(c => c.querySelector('.rtb__l2')!.textContent!.trim().replace(/\u00a0/g, ' '))).toEqual(['Normal 12 – 16 · Critical < 7 · > 20', 'Normal below 200']);
+    expect(cards.map(c => c.querySelector('.rtb__l2')!.textContent!.trim().replace(/\u00a0/g, ' '))).toEqual(['L < 12 · H > 16 · Critical < 7 · > 20', 'H ≥ 200']);
     (cards[0].querySelector('.rtb__cardhead') as HTMLButtonElement).click(); f.detectChanges();
     const body = el.querySelector('.rtb__card--open .rtb__cardbody')!;
     const inputs = body.querySelectorAll<HTMLInputElement>('.rtb__grid2 input');
     expect(inputs).toHaveLength(4);
     inputs[1].value = '15.5'; inputs[1].dispatchEvent(new Event('change')); f.detectChanges();
     expect(emitted.at(-1)![0]).toEqual({ ...HB[5], max: 15.5 });
+  });
+
+  it('the flags are visible: headers name them, each box carries its chip, blank = "none"', () => {
+    const { el, rowEls } = make({ unit: 'mg/dL', referenceRanges: [
+      { segment: 'n', sex: 'any', min: 70, max: 140, criticalLow: 40, criticalHigh: 600 },
+      { segment: 'n2', sex: 'M', max: 200 },
+    ] });
+    const heads = [...el.querySelectorAll('thead th')].map(t => t.textContent!.replace(/\s+/g, ' ').trim());
+    expect(heads).toEqual(['Who', 'Age', 'Low (L) if below mg/dL', 'High (H) if above', 'Critical if below', 'Critical if above', 'Actions']);
+    expect(el.querySelector('.rtb__lead')!.textContent!.trim())
+      .toBe('Below Low prints L · above High prints H · past a Critical limit alerts the doctor.');
+    const chips = (i: number) => [...rowEls()[i].querySelectorAll('.rtb__flag')].map(c => c.textContent!.trim());
+    expect(chips(0)).toEqual(['L <', 'H >', 'C <', 'C >']);
+    // One-sided "below 200" is strict — 200 itself prints H.
+    expect(chips(1)).toEqual(['L <', 'H ≥', 'C <', 'C >']);
+    expect([...rowEls()[0].querySelectorAll('.rtb__lim')].map(l => l.getAttribute('data-tone'))).toEqual(['l', 'h', 'c', 'c']);
+    expect(rowEls()[0].querySelector('.rtb__flag')!.getAttribute('aria-hidden')).toBe('true');
+    const low2 = rowEls()[1].querySelector('input[aria-label="Low (L) if below"]') as HTMLInputElement;
+    expect(low2.value).toBe('');
+    expect(low2.placeholder).toBe('none');
+    expect(el.textContent).not.toContain('no limit');
+    expect(el.querySelector('[placeholder="no limit"]')).toBeNull();
+  });
+
+  it('an empty group is harmless — its quiet icon says so plainly', () => {
+    const { rowEls, c } = make({ unit: 'mg/dL', referenceRanges: [{ segment: 'n', sex: 'any', min: 70, max: 140 }, { segment: 'e', sex: 'M' }] });
+    expect(c.rows()[1].error).toBeNull();
+    expect(c.rows()[1].quiet).toContain('Nothing set for this group — add limits or remove it');
+    expect(rowEls()[1].querySelector('.rtb__warn')!.getAttribute('title')).toContain('Nothing set for this group — add limits or remove it');
+    expect(c.rows()[1].summary.replace(/\u00a0/g, ' ')).toBe('Nothing set');
+  });
+
+  it('phones: the edit view uses the same chip-prefixed boxes', () => {
+    const { el, f } = make({ unit: 'mg/dL', referenceRanges: [{ segment: 'n', sex: 'any', min: 70, max: 140, criticalLow: 40, criticalHigh: 600 }] }, { phone: true });
+    expect(el.querySelector('.rtb__l2')!.textContent!.trim().replace(/\u00a0/g, ' ')).toBe('L < 70 · H > 140 · Critical < 40 · > 600');
+    (el.querySelector('.rtb__cardhead') as HTMLButtonElement).click(); f.detectChanges();
+    const body = el.querySelector('.rtb__cardbody')!;
+    expect([...body.querySelectorAll('.rtb__fld > .rtb__muted')].map(s => s.textContent!.trim()))
+      .toEqual(['Low (L) if below', 'High (H) if above', 'Critical if below', 'Critical if above']);
+    expect([...body.querySelectorAll('.rtb__flag')].map(c => c.textContent!.trim())).toEqual(['L <', 'H >', 'C <', 'C >']);
   });
 });

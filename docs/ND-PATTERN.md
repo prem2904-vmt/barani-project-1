@@ -849,24 +849,31 @@ of its own: every verdict is `flagBand` (= `liveFlag` = mw `FlagOne`), every
 band choice the ONE resolver.
 
 ```
-Outside Normal prints H / L · past a Critical limit alerts the doctor.
-Who        Age                  Normal range  g/dL   Critical below  Critical above
-[Anyone ▾] [0–28 days        ▾] [14 ] – [22 ]        [ 7 ]           [20 ]        ⚠ ×
-[Anyone ▾] [28 days – 1 year ▾] [9.5] – [14 ]        [ 7 ]           [20 ]          ×
-[Male   ▾] [18 years+        ▾] [13 ] – [17 ]        [ 7 ]           [20 ]          ×
+Below Low prints L · above High prints H · past a Critical limit alerts the doctor.
+Who        Age                  Low (L) if below g/dL  High (H) if above  Critical if below  Critical if above
+[Anyone ▾] [0–28 days        ▾] [L < 14 ]              [H > 22 ]          [C < 7 ]           [C > 20 ]         ⚠ ×
+[Anyone ▾] [28 days – 1 year ▾] [L < 9.5]              [H > 14 ]          [C < 7 ]           [C > 20 ]           ×
+[Male   ▾] [18 years+        ▾] [L < 13 ]              [H > 17 ]          [C < none]         [C > none]          ×
 + Add group
 Try a value [6] for [Female ▾] aged [35] [years ▾]  → Critical low
 Advanced — edit every field in a grid
 ```
 
-- **Columns:** Who (`pf-select` Anyone / Male / Female) · Age · Normal range
-  (`[low] – [high]`, the unit ONCE in the header) · Critical below · Critical
-  above · a quiet row ×. Noto, tabular numbers, 1px row lines, no fills, no
+- **Columns:** Who (`pf-select` Anyone / Male / Female) · Age · Low (L) if
+  below (the unit ONCE, muted, in this header) · High (H) if above ·
+  Critical if below · Critical if above · a quiet row ×. The Normal limits
+  ARE the L / H flags, so the screen says so: one lead line ("Below Low
+  prints L · above High prints H · past a Critical limit alerts the
+  doctor.") replaces the host's sub-line, and **every box carries the flag
+  it prints as a small chip on its left edge** — `L <`, `H >`, `C <`, `C >`
+  (result-flag tones: L blue, H amber, C critical red, palette tokens at low
+  strength, light + dark). A one-sided strict Normal shows the true edge
+  (`H ≥ 200` for "below 200"). Noto, tabular numbers, 1px row lines, no
   dots, no bars, no footnotes. Fits the Result entry card at 1440 with no
   sideways scroll.
-- **Blank = no limit.** Normal with one side blank = "below 140" / "above
-  40" (≤ / ≥ stored on the band read "up to" / "at least"); a blank critical
-  = none. Critical limits set once for the whole test show as a **grey
+- **Blank = none.** A blank box reads "none" — a blank Low means nothing is
+  flagged L. A group with nothing set is harmless; its quiet icon says
+  "Nothing set for this group — add limits or remove it". Critical limits set once for the whole test show as a **grey
   placeholder** in every row, with one quiet line: "Grey critical limits are
   set once for the whole test. Type in a box to use a different limit for
   that group."
@@ -879,7 +886,7 @@ Advanced — edit every field in a grid
   · Senior 65 years+). One unit both sides → stored in that unit; mixed →
   stored in years, and the side that wasn't changed keeps its exact stored
   value.
-- **Written normals** ("Negative"): the Normal + critical cells become one
+- **Written normals** ("Negative"): the four limit cells become one
   "Normal value [Negative]" field.
 - **Edge rule (≤ / <) lives only in Advanced.** Production semantics are
   unchanged: criticals strict (below / above), two-sided Normal inclusive,
@@ -905,9 +912,9 @@ Advanced — edit every field in a grid
   Setting Male / Female on a band whose age lived only in its legacy segment
   label carries that age over as structured fields.
 - **Phones (≤640px):** one compact card per group — line 1 "Female · 18
-  years+", line 2 "Normal 12 – 16 · Critical < 7 · > 20" (pieces never break
-  mid-way); tap to edit: Who as a segmented control, the age editor, then
-  Normal from / to and Critical below / above in a 2-column grid; 44px
+  years+", line 2 "L < 12 · H > 16 · Critical < 7 · > 20" (pieces never
+  break mid-way); tap to edit: Who as a segmented control, the age editor,
+  then the same four chip-prefixed boxes in a 2-column grid; 44px
   targets, 16px inputs, "Remove this group" as a quiet action. "+ Add group"
   under the cards.
 - **Report conditions** (Printed report tab) keep the flag choices: *is
@@ -919,7 +926,7 @@ Advanced — edit every field in a grid
   wins, ↑ / ↓ to reorder; blocks print independently.
 - **Real-layout check:** `apps/lms-e2e/src/test-editor-ranges.rbac.spec.ts`
   (seeded Lab Admin, HEM011, read-only — writes are aborted): ONE table with
-  the six headers, no bars / grid / footnotes, natural-unit ages, no red on
+  the seven headers, the lead line and L / H / C chips, no bars / grid / footnotes, natural-unit ages, no red on
   open, nothing past the card at 1440, the age editor, the one-line tester,
   Advanced reaches the grid; at 375 cards (44px / 16px boxes, nothing past
   the card); `SHOTS_DIR=…` saves 1440 / 375 × light / dark.

@@ -96,11 +96,45 @@ export interface RowView {
   age: { from: AgeSide | null; to: AgeSide | null; text: string };
   text: boolean;                  // a written normal ("Negative") — no numbers
   inherited: { criticalLow: number | null; criticalHigh: number | null };
+  boxes: LimitBox[];              // Low · High · Critical low · Critical high, in column order
   summary: string;                // phone line 2
   error: FieldIssue | null;       // a NEW error: red outline + one line
   quiet: string[];                // pre-existing errors + warnings: a subtle icon
   profile: string;
 }
+
+/** One limit box as shown: its header words and the flag chip inside it. */
+export interface LimitBox {
+  key: LimitKey;
+  head: string;                   // column header = the box's accessible name
+  chip: string;                   // "L <", "H >", "C <", "C >" (≤ / ≥ on a one-sided strict Normal)
+  tone: 'l' | 'h' | 'c';
+  placeholder: string;            // blank = "none" (or the test-wide critical, grey)
+  title: string;
+}
+
+/** The column headers — also each box's accessible name. */
+export const LIMIT_HEAD: Record<LimitKey, string> = {
+  min: 'Low (L) if below', max: 'High (H) if above',
+  criticalLow: 'Critical if below', criticalHigh: 'Critical if above',
+};
+
+/**
+ * The comparison each Normal limit prints with — production's rule
+ * (reference-range `flagAgainst`): two-sided Normal is inclusive (L < low,
+ * H > high); one-sided is strict unless the band carries ≥ / ≤, so "Normal
+ * below 200" prints H at 200 (H ≥ 200). Display only.
+ */
+export function normalOps(b: InsightBand): { low: '<' | '≤'; high: '>' | '≥' } {
+  const lowIncl = b.minOp === 'gte' || (b.minOp == null && b.max != null);
+  const highIncl = b.maxOp === 'lte' || (b.maxOp == null && b.min != null);
+  return {
+    low: b.min != null && !lowIncl ? '≤' : '<',
+    high: b.max != null && !highIncl ? '≥' : '>',
+  };
+}
+
+const EMPTY_GROUP = 'Nothing set for this group — add limits or remove it';
 
 let seq = 0;
 const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
@@ -109,9 +143,10 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
  * Reference ranges as ONE compact table (the LIS standard — OpenELIS result
  * limits, OpenMRS concept numeric): one row per group of patients.
  *
- *   Who | Age | Normal range (unit) | Critical below | Critical above | ×
+ *   Who | Age | Low (L) if below (unit) | High (H) if above | Critical if below | Critical if above | ×
  *
- * Low / High are DERIVED (outside Normal), never typed. Criticals are strict
+ * The two Normal limits ARE the L / H flags — each box carries the flag it
+ * prints as a chip ("L <", "H >", "C <", "C >"); blank = none. Criticals are strict
  * (below / above), two-sided Normal is inclusive, one-sided strict unless the
  * band carries ≤ / ≥ — production's rule (range-insight → flagBand = mw
  * FlagOne); the comparator itself lives only in Advanced. Maps 1:1 to the
@@ -127,21 +162,22 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rtb">
-      <p class="rtb__lead">Outside <b>Normal</b> prints <b>H</b> / <b>L</b> · past a <b>Critical</b> limit alerts the doctor.</p>
+      <p class="rtb__lead">Below <b>Low</b> prints <b>L</b> · above <b>High</b> prints <b>H</b> · past a <b>Critical</b> limit alerts the doctor.</p>
 
       @if (!phone()) {
         <table class="rtb__table">
           <colgroup>
-            <col class="rtb__c-who" /><col class="rtb__c-age" /><col class="rtb__c-normal" />
+            <col class="rtb__c-who" /><col class="rtb__c-age" /><col class="rtb__c-lim" /><col class="rtb__c-lim" />
             <col class="rtb__c-crit" /><col class="rtb__c-crit" /><col class="rtb__c-x" />
           </colgroup>
           <thead>
             <tr>
               <th scope="col">Who</th>
               <th scope="col">Age</th>
-              <th scope="col">Normal range @if (unitText()) {<span class="rtb__unit">{{ unitText() }}</span>}</th>
-              <th scope="col">Critical below</th>
-              <th scope="col">Critical above</th>
+              <th scope="col">{{ heads.min }} @if (unitText()) {<span class="rtb__unit">{{ unitText() }}</span>}</th>
+              <th scope="col">{{ heads.max }}</th>
+              <th scope="col">{{ heads.criticalLow }}</th>
+              <th scope="col">{{ heads.criticalHigh }}</th>
               <th scope="col"><span class="rtb__sr">Actions</span></th>
             </tr>
           </thead>
@@ -162,7 +198,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
                   </button>
                 </td>
                 @if (r.text) {
-                  <td colspan="3">
+                  <td colspan="4">
                     <span class="rtb__pair">
                       <span class="rtb__muted">Normal value</span>
                       <input class="rtb__in rtb__in--text" type="text" [value]="r.band.label || ''" aria-label="Normal value"
@@ -170,31 +206,9 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
                     </span>
                   </td>
                 } @else {
-                  <td>
-                    <span class="rtb__pair">
-                      <input class="rtb__in" type="text" inputmode="decimal" autocomplete="off" placeholder="no limit"
-                             [class.rtb__in--err]="hasErr(r, 'min')" [value]="num(r.band.min)" aria-label="Normal from"
-                             (change)="setLimit(r.index, 'min', $any($event.target))" (keydown.enter)="$any($event.target).blur()" />
-                      <span class="rtb__dash" aria-hidden="true">–</span>
-                      <input class="rtb__in" type="text" inputmode="decimal" autocomplete="off" placeholder="no limit"
-                             [class.rtb__in--err]="hasErr(r, 'max')" [value]="num(r.band.max)" aria-label="Normal to"
-                             (change)="setLimit(r.index, 'max', $any($event.target))" (keydown.enter)="$any($event.target).blur()" />
-                    </span>
-                  </td>
-                  <td>
-                    <input class="rtb__in" type="text" inputmode="decimal" autocomplete="off"
-                           [placeholder]="r.inherited.criticalLow != null ? num(r.inherited.criticalLow) : 'none'"
-                           [title]="r.inherited.criticalLow != null ? 'From the test-wide critical low' : ''"
-                           [class.rtb__in--err]="hasErr(r, 'criticalLow')" [value]="num(r.band.criticalLow)" aria-label="Critical below"
-                           (change)="setLimit(r.index, 'criticalLow', $any($event.target))" (keydown.enter)="$any($event.target).blur()" />
-                  </td>
-                  <td>
-                    <input class="rtb__in" type="text" inputmode="decimal" autocomplete="off"
-                           [placeholder]="r.inherited.criticalHigh != null ? num(r.inherited.criticalHigh) : 'none'"
-                           [title]="r.inherited.criticalHigh != null ? 'From the test-wide critical high' : ''"
-                           [class.rtb__in--err]="hasErr(r, 'criticalHigh')" [value]="num(r.band.criticalHigh)" aria-label="Critical above"
-                           (change)="setLimit(r.index, 'criticalHigh', $any($event.target))" (keydown.enter)="$any($event.target).blur()" />
-                  </td>
+                  @for (b of r.boxes; track b.key) {
+                    <td><ng-container *ngTemplateOutlet="limitBox; context: { $implicit: r, b: b }"></ng-container></td>
+                  }
                 }
                 <td class="rtb__acts">
                   @if (r.quiet.length) {
@@ -209,17 +223,17 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
                 </td>
               </tr>
               @if (ageOpen() === r.index) {
-                <tr class="rtb__subrow"><td colspan="6">
+                <tr class="rtb__subrow"><td colspan="7">
                   <ng-container *ngTemplateOutlet="ageEditor; context: { $implicit: r }"></ng-container>
                 </td></tr>
               }
               @if (r.error) {
-                <tr class="rtb__subrow"><td colspan="6"><p class="rtb__msg" role="alert">{{ r.error.text }}</p></td></tr>
+                <tr class="rtb__subrow"><td colspan="7"><p class="rtb__msg" role="alert">{{ r.error.text }}</p></td></tr>
               }
             }
           </tbody>
           <tfoot>
-            <tr><td colspan="6">
+            <tr><td colspan="7">
               <button type="button" class="rtb__add" (click)="addBand()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 Add group
@@ -261,20 +275,10 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
                     </label>
                   } @else {
                     <div class="rtb__grid2">
-                      <label class="rtb__fld"><span class="rtb__muted">Normal from</span>
-                        <input class="rtb__in" type="text" inputmode="decimal" placeholder="no limit" [class.rtb__in--err]="hasErr(r, 'min')"
-                               [value]="num(r.band.min)" (change)="setLimit(r.index, 'min', $any($event.target))" /></label>
-                      <label class="rtb__fld"><span class="rtb__muted">Normal to</span>
-                        <input class="rtb__in" type="text" inputmode="decimal" placeholder="no limit" [class.rtb__in--err]="hasErr(r, 'max')"
-                               [value]="num(r.band.max)" (change)="setLimit(r.index, 'max', $any($event.target))" /></label>
-                      <label class="rtb__fld"><span class="rtb__muted">Critical below</span>
-                        <input class="rtb__in" type="text" inputmode="decimal" [class.rtb__in--err]="hasErr(r, 'criticalLow')"
-                               [placeholder]="r.inherited.criticalLow != null ? num(r.inherited.criticalLow) : 'none'"
-                               [value]="num(r.band.criticalLow)" (change)="setLimit(r.index, 'criticalLow', $any($event.target))" /></label>
-                      <label class="rtb__fld"><span class="rtb__muted">Critical above</span>
-                        <input class="rtb__in" type="text" inputmode="decimal" [class.rtb__in--err]="hasErr(r, 'criticalHigh')"
-                               [placeholder]="r.inherited.criticalHigh != null ? num(r.inherited.criticalHigh) : 'none'"
-                               [value]="num(r.band.criticalHigh)" (change)="setLimit(r.index, 'criticalHigh', $any($event.target))" /></label>
+                      @for (b of r.boxes; track b.key) {
+                        <label class="rtb__fld"><span class="rtb__muted">{{ b.head }}</span>
+                          <ng-container *ngTemplateOutlet="limitBox; context: { $implicit: r, b: b }"></ng-container></label>
+                      }
                     </div>
                   }
                   <button type="button" class="rtb__add rtb__add--rm" (click)="removeBand(r.index)">Remove this group</button>
@@ -319,6 +323,17 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
       }
     </div>
 
+    <!-- One limit box: the flag it prints sits inside, on the left ("L <"). -->
+    <ng-template #limitBox let-r let-b="b">
+      <span class="rtb__lim" [attr.data-tone]="b.tone">
+        <span class="rtb__flag" aria-hidden="true">{{ b.chip }}</span>
+        <input class="rtb__in rtb__in--lim" type="text" inputmode="decimal" autocomplete="off"
+               [placeholder]="b.placeholder" [title]="b.title" [attr.aria-label]="b.head"
+               [class.rtb__in--err]="hasErr(r, b.key)" [value]="num(r.band[b.key])"
+               (change)="setLimit(r.index, b.key, $any($event.target))" (keydown.enter)="$any($event.target).blur()" />
+      </span>
+    </ng-template>
+
     <ng-template #ageEditor let-r>
       <div class="rtb__ageed" role="group" [attr.aria-label]="'Age for ' + r.who">
         <div class="rtb__agefields">
@@ -362,11 +377,11 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .rtb__c-who { width: 124px; }
     .rtb__c-age { width: auto; }
-    .rtb__c-normal { width: 216px; }
-    .rtb__c-crit { width: 108px; }
+    .rtb__c-lim { width: 136px; }
+    .rtb__c-crit { width: 124px; }
     .rtb__c-x { width: 64px; }
     .rtb__table th, .rtb__table td { padding: 6px 10px 6px 0; text-align: left; vertical-align: middle; }
-    .rtb__table thead th { font-size: 12px; font-weight: 500; color: var(--text-secondary); padding-bottom: 8px; white-space: nowrap; }
+    .rtb__table thead th { font-size: 12px; font-weight: 500; color: var(--text-secondary); padding-bottom: 8px; vertical-align: bottom; }
     .rtb__row { border-top: 1px solid var(--rtb-line); }
     .rtb__table tfoot tr { border-top: 1px solid var(--rtb-line); }
     .rtb__table tfoot td { padding: 6px 0 0; }
@@ -388,6 +403,21 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
     .rtb__in--err, .rtb__in--err:hover { border-color: var(--rtb-err); }
     .rtb__in--text { max-width: 260px; }
+
+    /* A limit box: the flag it prints sits inside, on the left — "L <", "H >",
+       "C <", "C >". The app's result-flag tones (L blue, H amber, C red) at
+       low strength; palette tokens, so light and dark both follow the theme. */
+    .rtb__lim { position: relative; display: block; min-width: 0; }
+    .rtb__lim[data-tone='l'] { --rtb-tone: var(--blue-text, #2563eb); }
+    .rtb__lim[data-tone='h'] { --rtb-tone: var(--amber-text, #b45309); }
+    .rtb__lim[data-tone='c'] { --rtb-tone: var(--red-text, #dc2626); }
+    .rtb__flag {
+      position: absolute; left: 7px; top: 50%; transform: translateY(-50%); pointer-events: none;
+      padding: 1px 5px; border-radius: 5px; font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap;
+      font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--rtb-tone) 85%, var(--text-tertiary));
+      background: color-mix(in srgb, var(--rtb-tone) 10%, transparent);
+    }
+    .rtb__in--lim { padding-left: 42px; }
 
     .rtb__agebtn {
       display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; height: 36px; padding: 0 8px 0 10px;
@@ -465,6 +495,8 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 
     @media (max-width: 640px) {
       .rtb__in, .rtb__agebtn { height: 44px; font-size: 16px; }
+      .rtb__in--lim { padding-left: 46px; }
+      .rtb__flag { font-size: 12px; }
       .rtb__rm, .rtb__add { min-height: 44px; }
       .rtb__chip { height: 36px; font-size: 13px; }
       .rtb__ageed { padding: 10px; }
@@ -503,6 +535,7 @@ export class RangeTableComponent {
   ];
   readonly unitOptions: PfSelectOption[] = UNITS.map(u => ({ value: u, label: u }));
   readonly presets = AGE_PRESETS;
+  readonly heads = LIMIT_HEAD;
   readonly uid = `rtb-try-${++seq}`;
 
   /** Error keys the test already had when it was opened (legacy catalogue
@@ -549,21 +582,33 @@ export class RangeTableComponent {
       const own = issues.filter(i => i.band === index);
       const fresh = own.filter(i => i.severity === 'error' && !base.has(issueKey(i)));
       const quiet = own.filter(i => !fresh.includes(i))
-        .map(i => (i.severity === 'error' ? `Saved like this before — please check: ${i.message}` : i.message));
+        .map(i => (i.severity === 'error' ? `Saved like this before — please check: ${i.message}`
+          : /^Empty range/.test(i.message) ? EMPTY_GROUP : i.message));
       const age = ageOf(band);
       const sex = sexOf(band);
       const hasNum = band.min != null || band.max != null || band.criticalLow != null || band.criticalHigh != null;
       const crit = effectiveCriticals(band, p);
+      const ops = normalOps(band);
+      const inherited = {
+        criticalLow: band.criticalLow == null ? p?.criticalLow ?? null : null,
+        criticalHigh: band.criticalHigh == null ? p?.criticalHigh ?? null : null,
+      };
+      const inh = (k: 'criticalLow' | 'criticalHigh', word: string): Pick<LimitBox, 'placeholder' | 'title'> =>
+        inherited[k] != null ? { placeholder: fmtNum(inherited[k]!), title: `From the test-wide critical ${word}` }
+          : { placeholder: 'none', title: '' };
+      const boxes: LimitBox[] = [
+        { key: 'min', head: LIMIT_HEAD.min, chip: `L ${ops.low}`, tone: 'l', placeholder: 'none', title: '' },
+        { key: 'max', head: LIMIT_HEAD.max, chip: `H ${ops.high}`, tone: 'h', placeholder: 'none', title: '' },
+        { key: 'criticalLow', head: LIMIT_HEAD.criticalLow, chip: 'C <', tone: 'c', ...inh('criticalLow', 'low') },
+        { key: 'criticalHigh', head: LIMIT_HEAD.criticalHigh, chip: 'C >', tone: 'c', ...inh('criticalHigh', 'high') },
+      ];
       return {
         index, band, sex, quiet,
         who: SEX_WORD[sex],
         age: { ...age, text: ageWords(age.from, age.to) },
         text: !hasNum && !!band.label?.trim(),
-        inherited: {
-          criticalLow: band.criticalLow == null ? p?.criticalLow ?? null : null,
-          criticalHigh: band.criticalHigh == null ? p?.criticalHigh ?? null : null,
-        },
-        summary: summaryOf(band, crit),
+        inherited, boxes,
+        summary: summaryOf(band, crit, ops),
         error: fresh.length ? explain(fresh[0], band, crit) : null,
         profile: (band.profileCode ?? '').trim(),
       };
@@ -707,18 +752,18 @@ export class RangeTableComponent {
 
 const issueKey = (i: RangeIssue) => `${i.band ?? ''}|${i.field ?? ''}|${i.message}`;
 
-/** Phone line 2: "Normal 12 – 16 · Critical < 7 · > 20". */
-function summaryOf(b: InsightBand, crit: { low: number | null; high: number | null }): string {
+/** Phone line 2: "L < 12 · H > 16 · Critical < 7 · > 20". */
+function summaryOf(b: InsightBand, crit: { low: number | null; high: number | null },
+  ops: { low: string; high: string }): string {
   const n = fmtNum;
   const parts: string[] = [];
   const nb = (t: string) => t.replace(/ /g, '\u00a0');
-  if (b.min != null && b.max != null) parts.push(`Normal ${n(b.min)} – ${n(b.max)}`);
-  else if (b.max != null) parts.push(`Normal ${b.maxOp === 'lte' ? 'up to' : 'below'} ${n(b.max)}`);
-  else if (b.min != null) parts.push(`Normal ${b.minOp === 'gte' ? 'at least' : 'above'} ${n(b.min)}`);
-  else if (b.label?.trim()) parts.push(`Normal: ${b.label.trim()}`);
-  else parts.push('No normal range');
+  if (b.min != null) parts.push(`L ${ops.low} ${n(b.min)}`);
+  if (b.max != null) parts.push(`H ${ops.high} ${n(b.max)}`);
+  if (!parts.length && b.label?.trim()) parts.push(`Normal: ${b.label.trim()}`);
   const c = [crit.low != null ? `< ${n(crit.low)}` : '', crit.high != null ? `> ${n(crit.high)}` : ''].filter(Boolean);
   if (c.length) parts.push(`Critical ${c.join(' · ')}`);
+  if (!parts.length) parts.push('Nothing set');
   // Each piece stays on one line ("Critical < 7" never breaks after "<").
   return parts.map(p => p.split(' · ').map(nb).join(' · ')).join(' · ');
 }

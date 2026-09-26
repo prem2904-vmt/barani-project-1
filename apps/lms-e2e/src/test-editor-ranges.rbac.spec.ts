@@ -5,8 +5,8 @@ import { loginAs } from './support/auth';
  * Test editor — reference ranges (ND-PATTERN §16). Signs in as the seeded Lab
  * Admin, opens Haemoglobin (HEM011 — sex/age bands with criticals, or
  * $TEST_CODE / $TEST_ID), goes to Result entry and checks the ONE compact
- * table (one row per group) + the one-line tester at 1440, and the compact
- * group cards at 375.
+ * table (one row per group, L / H / C chips in every box) + the one-line
+ * tester at 1440, and the compact group cards at 375.
  * READ-ONLY: edits stay in the draft and it never saves.
  * Screenshots (1440 / 375 × light / dark) into $SHOTS_DIR when set.
  * CORS_RELAY=1 relays backend calls so a static build on :4310 can run it.
@@ -81,7 +81,11 @@ test.describe('Test editor — reference ranges as one compact table', () => {
     // ONE table; no bars, no AG-Grid, no per-level rows, no footnotes by default.
     await expect(table.locator('table.rtb__table')).toHaveCount(1);
     await expect(page.locator('pf-range-insight, .rin__bar, .pf-rrgrid')).toHaveCount(0);
-    await expect(table.locator('thead th')).toHaveText(['Who', 'Age', /Normal range/, 'Critical below', 'Critical above', /Actions/]);
+    await expect(table.locator('thead th')).toHaveText(['Who', 'Age', /^Low \(L\) if below/, 'High (H) if above', 'Critical if below', 'Critical if above', /Actions/]);
+    // The flags are visible: every number box carries the flag it prints.
+    await expect(table.locator('.rtb__lead')).toHaveText(/Below Low prints L · above High prints H/);
+    await expect(table.locator('tbody tr.rtb__row').first().locator('.rtb__flag')).toHaveText([/^L [<≤]$/, /^H [>≥]$/, 'C <', 'C >']);
+    await expect(table.locator('input[placeholder="no limit"]')).toHaveCount(0);
     await expect(table).not.toContainText('Exactly on a limit');
     await expect(table).not.toContainText('Result is');
     const rows = table.locator('tbody tr.rtb__row');
@@ -131,15 +135,16 @@ test.describe('Test editor — reference ranges as one compact table', () => {
     await expect(table.locator('table.rtb__table')).toHaveCount(0);
     expect(await cards.count()).toBeGreaterThanOrEqual(2);
     await expect(cards.first().locator('.rtb__l1')).toContainText('·');
-    await expect(cards.first().locator('.rtb__l2')).toContainText('Normal');
+    await expect(cards.first().locator('.rtb__l2')).toHaveText(/^(L[\s\u00a0][<≤]|H[\s\u00a0][>≥]|Normal:|Critical|Nothing)/);
     await cards.first().scrollIntoViewIfNeeded();
     await shoot(page, 'ranges-375-cards');
     await cards.first().locator('.rtb__cardhead').click();
+    await expect(cards.first().locator('.rtb__grid2 .rtb__flag')).toHaveText([/^L /, /^H /, 'C <', 'C >']);
     const box = await cards.first().locator('.rtb__grid2 input').first().boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
     const fs = await cards.first().locator('.rtb__grid2 input').first().evaluate(e => parseFloat(getComputedStyle(e).fontSize));
     expect(fs).toBeGreaterThanOrEqual(16);
-    await cards.first().scrollIntoViewIfNeeded();
+    await cards.first().locator('.rtb__grid2').scrollIntoViewIfNeeded();
     await shoot(page, 'ranges-375-edit');
     await table.locator('.rtb__in--try').fill('6');
     await table.locator('.rtb__try').scrollIntoViewIfNeeded();
