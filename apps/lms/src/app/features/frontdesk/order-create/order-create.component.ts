@@ -1,9 +1,10 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, AfterViewInit, HostListener, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, OnDestroy, AfterViewInit, HostListener, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TrendTest } from '../../../shared/utils/trend-chart';
 import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
@@ -824,6 +825,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       error: () => { /* silent: empty recent list */ }
     });
 
+    // Draft shelf: a later ?patientId= on this SAME, reused screen (another
+    // parked order tapped in the app bar) swaps the patient + cart in place.
+    this.stagedPid = this.route.snapshot.queryParamMap.get('patientId');
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(q => this.onQueryChange(q));
+
     // Deep-link support — if the route carries ?patientId= (e.g. coming
     // from a patient profile), pre-attach. Otherwise the inline picker
     // handles selection in-page.
@@ -924,12 +932,72 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  /** Save the current cart to localStorage under the patient's id.
-   *  No-op when there's no patient or nothing in the cart. */
-  saveDraft() {
+  // ── Draft shelf: another parked order, same screen ──────────────────
+  /** The patientId this screen has on stage — from the URL it opened with,
+   *  or written by the screen itself (attachPatient / clearPatient). A
+   *  query emission equal to it is the screen's own URL sync, not a switch. */
+  private stagedPid: string | null = null;
+  private readonly destroyRef = inject(DestroyRef);
+
+  /** The router REUSES this screen for /frontdesk/order?patientId=A → …=B
+   *  (the app bar's draft chips), so the patient is followed LIVE. Bill /
+   *  edit URLs (?orderId, ?editOrderId) keep their own flows untouched. */
+  private onQueryChange(q: ParamMap) {
+    const pid = q.get('patientId');
+    // No patient in the URL ("New order", ×), or a bill/edit URL: nothing to
+    // switch — just remember it so a later tap on ANY draft counts.
+    if (!pid || q.has('orderId') || q.has('editOrderId')) { this.stagedPid = pid; return; }
+    if (pid === this.stagedPid) return;
+    this.switchToPatient(pid);
+  }
+
+  /** Put patient `pid`'s parked order on stage: park the cart on screen
+   *  first (never lose a picked test), reset every per-order field, then
+   *  load the patient and restore their draft — the same path a fresh
+   *  /frontdesk/order?patientId= visit takes. */
+  private switchToPatient(pid: string) {
+    this.parkCurrentCart();
+    this.stagedPid = pid;
+    this._patient.set(null);
+    this._selected.set([]);
+    this._specimens.set({});
+    this._hasDraft.set(false);
+    this.setPriority('Normal');
+    this.discountValue.set('');
+    this.discountKind.set('flat');
+    this.refHospitalName.set('');
+    this.refHospitalSuggestions.set([]);
+    this.refHospitalError.set(null);
+    this.refDoctorName.set('');
+    this.refDoctorSuggestions.set([]);
+    this.refDoctorError.set(null);
+    this.viewOrderId.set(null);
+    this.editOrderId.set(null);
+    this._order.set(null);
+    this.currentBill.set(null);
+    this.collectedTestIds.set(new Set());
+    this.billPhase.set('cart');
+    this.setQuery('');
+    this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${pid}`).subscribe({
+      next: res => {
+        if (this.stagedPid !== pid) return;          // superseded by a later switch
+        this._patient.set(res.patient);
+        this.restoreDraftFor(pid);
+      },
+      error: () => { if (this.stagedPid === pid) this.toasts.error('Could not load patient'); }
+    });
+  }
+
+  /** The cart on stage (a patient + at least one test, not an existing
+   *  order) is saved as that patient's draft — silently, no navigation. */
+  private parkCurrentCart() {
     const p = this._patient();
-    if (!p) { this.toasts.warning('Pick a patient first'); return; }
-    if (this._selected().length === 0) { this.toasts.info('Cart is empty — nothing to save'); return; }
+    if (!p || this.viewOrderId() || this.editOrderId() || this._selected().length === 0) return;
+    if (this.writeDraft(p)) this.toasts.info(`${patientDisplayName(p) || 'Patient'}'s order kept as a draft`);
+  }
+
+  /** Persist the cart as `p`'s draft (the Draft tab / shelf read this key). */
+  private writeDraft(p: Patient): boolean {
     try {
       localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify({
         savedAt: Date.now(),
@@ -940,6 +1008,20 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         // a lookup (the key only carries the id).
         patient: p
       }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Save the current cart to localStorage under the patient's id.
+   *  No-op when there's no patient or nothing in the cart. */
+  saveDraft() {
+    const p = this._patient();
+    if (!p) { this.toasts.warning('Pick a patient first'); return; }
+    if (this._selected().length === 0) { this.toasts.info('Cart is empty — nothing to save'); return; }
+    try {
+      if (!this.writeDraft(p)) throw new Error('storage');
       this._hasDraft.set(true);
       this.toasts.success('Saved as draft');
       // After saving there's nothing left to do here — return to FD so
@@ -1346,6 +1428,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   attachPatient(p: Patient) {
     if (!p) return;
     this.patientNudge.set(false);
+    this.stagedPid = p.id;               // our own URL sync — not a draft switch
     this.router.navigate([], { queryParams: { patientId: p.id }, queryParamsHandling: 'merge' });
     this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${p.id}`).subscribe({
       next: res => {
@@ -2165,6 +2248,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!this._patient()) return;
     this._patient.set(null);
     this._hasDraft.set(false);
+    this.stagedPid = null;
     this.router.navigate?.([], { queryParams: { patientId: null }, queryParamsHandling: 'merge' });
   }
 

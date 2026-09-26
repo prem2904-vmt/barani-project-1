@@ -31,7 +31,7 @@ function make(tests: any[], perms: string[] = []) {
     providers: [
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {}, warning() {} } },
-      { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map(), queryParamMap: new Map() } } },
+      { provide: ActivatedRoute, useValue: { queryParamMap: of(new Map()), snapshot: { paramMap: new Map(), queryParamMap: new Map() } } },
       { provide: Router, useValue: stub },
       { provide: NavBackService, useValue: stub },
       { provide: Location, useValue: stub },

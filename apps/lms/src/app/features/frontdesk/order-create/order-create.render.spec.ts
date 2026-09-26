@@ -40,7 +40,7 @@ function render(opts: { web?: boolean; lg?: boolean; phone?: boolean } = {}) {
         get: vi.fn((url: string) => of(url.startsWith('/api/tests/') ? CATALOGUE : url.startsWith('/api/test-picker/recent') ? ['t1', 'p1', 'k1'] : [])),
         post: vi.fn(() => of({})), patch: vi.fn(() => of({})), delete: vi.fn(() => of({})) } },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {}, warning() {} } },
-      { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map(), queryParamMap: new Map([['patientId', 'x']]) } } },
+      { provide: ActivatedRoute, useValue: { queryParamMap: of(new Map([['patientId', 'x']])), snapshot: { paramMap: new Map(), queryParamMap: new Map([['patientId', 'x']]) } } },
       { provide: Router, useValue: { navigate: vi.fn(() => Promise.resolve(true)), navigateByUrl: vi.fn(() => Promise.resolve(true)) } },
       { provide: NavBackService, useValue: { showBack: () => true, back() {}, backTo() {} } },
       { provide: Location, useValue: {} },

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   HostListener,
   afterRenderEffect,
@@ -11,6 +12,8 @@ import {
   viewChild,
 } from "@angular/core";
 import { TrendTest } from "../../../shared/utils/trend-chart";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { combineLatest } from "rxjs";
 import {
   describeAllRanges,
   normalizeSex,
@@ -123,6 +126,7 @@ export class SampleResultEntryComponent {
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
   private readonly tenantState = inject(TenantStateService);
+  private readonly destroyRef = inject(DestroyRef);
 
   // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
   /** The route's sample id, known before the tube loads — the RESULTS
@@ -294,6 +298,10 @@ export class SampleResultEntryComponent {
   }
   ngOnDestroy() {
     this.closeInfo();
+    // Leaving the screen (another draft on a different route, a culture
+    // redirect, the back chevron…) must never drop typing: park the pending
+    // local copy and push the pending server autosave now.
+    this.flushPending();
   }
   /** Tapping anywhere else closes the peek. The icon's own pointerdown is
    *  remembered so its click toggles it shut instead of re-opening. */
@@ -1117,7 +1125,8 @@ export class SampleResultEntryComponent {
           payload,
         ),
       );
-      this._lastSavedAt.set(new Date());
+      // A flush on the way to another tube must not stamp "Saved" on it.
+      if (this._sample()?.id === s.id) this._lastSavedAt.set(new Date());
       // Keep the local crash-recovery copy until a manual save/submit clears it.
     } catch {
       /* silent — the localStorage draft remains the fallback */
@@ -1528,38 +1537,95 @@ export class SampleResultEntryComponent {
     }
   }
 
-  async ngOnInit() {
-    const id = this.route.snapshot.paramMap.get("sampleId");
-    this.routeSampleId.set(id);
-    this.validateMode.set(this.route.snapshot.queryParamMap.get('validate') === '1');
-    this.viewOnly.set(this.route.snapshot.queryParamMap.get('view') === '1');
+  /** "sampleId|mode" of the tube on stage — a route emission for the same
+   *  key is a no-op (re-tapping the draft you're on reloads nothing). */
+  private loadedKey: string | null = null;
+  /** Bumps per switch; a slower earlier load never paints over a later one. */
+  private loadSeq = 0;
+
+  ngOnInit() {
+    // The router REUSES this component for /lab/sample/A → /lab/sample/B
+    // (draft shelf, tube tabs, notifications, scan): the tube is driven by
+    // the LIVE param + query streams, never a one-off snapshot read — that
+    // snapshot read is what kept tube A on screen after tapping B's draft.
+    combineLatest([this.route.paramMap, this.route.queryParamMap])
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(([p, q]) => void this.onRoute(
+        p.get("sampleId"), q.get("validate") === "1", q.get("view") === "1"));
+  }
+
+  /** Show the tube the URL names. Same tube + mode → nothing happens.
+   *  Another tube → the current one's typing is saved first (local copy +
+   *  server draft), per-tube UI state is reset, and the new tube loads. */
+  private async onRoute(id: string | null, validate: boolean, view: boolean) {
+    const key = `${id ?? ""}|${validate ? "v" : ""}${view ? "r" : ""}`;
+    if (key === this.loadedKey) return;
+    const first = this.loadedKey === null;
+    this.loadedKey = key;
+    if (!first) this.flushPending();
+    this.validateMode.set(validate);
+    this.viewOnly.set(view);
+    this.routeSampleId.set(id);          // the tab indicator moves now
     if (!id) {
       this._loading.set(false);
       return;
     }
+    if (!first) this.resetForSwitch(id);
+    this._loading.set(true);
     await this.load(id);
   }
 
-  /** Switch to a sibling tube of the same order without leaving the screen —
-   *  the route param is snapshot-read, so update the URL and reload state
-   *  in place (OPS-51: FBS/PPBS live in different tubes of one order). */
+  /** Save whatever the tech typed on the tube on stage, without waiting:
+   *  the debounced localStorage copy is written under ITS key (restored on
+   *  the next visit), and a pending background server draft is sent now. */
+  private flushPending() {
+    this.flushLocalDraft();
+    if (this.autosaveTimer !== null) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+      void this.autoSaveDraft();         // snapshots sample + values synchronously
+    }
+  }
+
+  /** Per-tube state that must not leak into the next tube. The tube TABS
+   *  stay (a sibling switch never blinks the strip; load() re-syncs them). */
+  private resetForSwitch(nextId: string) {
+    this.closeInfo();
+    this.tubeMenuOpen.set(false);
+    this._quickNote.set(null);
+    this._flags.set([]);
+    this._comments.set([]);
+    this._lastSavedAt.set(null);
+    this._calcOverridden.set(new Set());
+    this._attach.set({});
+    this._reportHidden.set({});
+    this.draftKey = null;                // no stray debounced write under the old key
+    if (!this._tubeTabs().some((t) => t.id === nextId)) {
+      // A different ORDER, not a sibling tube: order-level UI resets too.
+      this._tubeTabs.set([]);
+      this.trendogramOn.set(false);
+      this.trendogramDuration.set("5");
+    }
+  }
+
+  /** Switch to a sibling tube of the same order without leaving the screen:
+   *  the URL moves and the route stream (onRoute) saves this tube's typing
+   *  and loads the next one in place (OPS-51: FBS/PPBS live in different
+   *  tubes of one order). */
   async openSibling(id: string) {
     if (!id || id === this.activeTubeId()) return;
-    // Park the current tube's pending local draft under ITS key before the
-    // key moves to the next tube.
-    this.flushLocalDraft();
     this.routeSampleId.set(id);          // the tab indicator moves now
-    this._loading.set(true);
     await this.router.navigate(["/lab/sample", id], { replaceUrl: false });
-    await this.load(id);
   }
 
   private async load(id: string) {
-    this.draftKey = `pf-lms.sre-draft.${id}`;
+    const seq = ++this.loadSeq;
     try {
       const sample = await firstValueFrom(
         this.api.get<OrderSample>(`/api/samples/${id}/tests`),
       );
+      if (seq !== this.loadSeq) return;  // superseded by a later switch
+      this.draftKey = `pf-lms.sre-draft.${id}`;
       this._sample.set(this.normalizeSample(sample ?? null));
       this.syncTubeTabs(this._sample());
       // Pre-fill from any existing currentResult JSON so the tech can edit
@@ -1576,9 +1642,9 @@ export class SampleResultEntryComponent {
       this.seedCalcState();
       await this.loadComments();
     } catch (e) {
-      this.toasts.error("Could not load sample");
+      if (seq === this.loadSeq) this.toasts.error("Could not load sample");
     } finally {
-      this._loading.set(false);
+      if (seq === this.loadSeq) this._loading.set(false);
     }
   }
 

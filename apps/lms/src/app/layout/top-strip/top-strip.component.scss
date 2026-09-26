@@ -1391,6 +1391,42 @@ a.pf-ts-tenant:hover {
 }
 .pf-draftshelf__pop-item:hover { background: var(--bg-hover); color: var(--text-primary); }
 
+/* SELECTED draft — the draft whose screen is on stage (DraftShelfService
+   .activeId: path + identifying query, updated on every navigation). The
+   `--on` modifier opts the chip, the "+N" button and the popover row into
+   the app's ONE selected look (styles.scss "PRIMARY COLOUR AUDIT": quiet
+   violet tint + violet ink + hairline ring, light and dark) — the same
+   treatment as this bar's active work area. Here we only add what that
+   rule can't know: the dashed "unfinished" border goes solid (ring), the
+   label/sub inks, and no pointer (the selected chip is not a link). */
+.pf-draftshelf__chip--on,
+.pf-draftshelf__pop-item--on { font-weight: 600; cursor: default; }
+.pf-draftshelf__chip--on { border-style: solid; }
+.pf-draftshelf__chip--on .pf-draftshelf__lbl,
+.pf-draftshelf__pop-item--on .pf-draftshelf__lbl { color: #6d28d9; }
+.pf-draftshelf__chip--on .pf-draftshelf__sub,
+.pf-draftshelf__pop-item--on .pf-draftshelf__sub { color: #7c3aed; opacity: 0.8; }
+:host-context(.dark) .pf-draftshelf__chip--on .pf-draftshelf__lbl,
+:host-context(.dark) .pf-draftshelf__pop-item--on .pf-draftshelf__lbl { color: #ede9fe; }
+:host-context(.dark) .pf-draftshelf__chip--on .pf-draftshelf__sub,
+:host-context(.dark) .pf-draftshelf__pop-item--on .pf-draftshelf__sub { color: #c4b5fd; opacity: 1; }
+:host-context(.dark) .pf-draftshelf__chip--on svg { color: #c4b5fd; }
+.pf-draftshelf__chip:focus-visible,
+.pf-draftshelf__more:focus-visible,
+.pf-draftshelf__pop-item:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
+
+/* Touch devices: 44px hit area without growing the 30px pill (the bar's
+   height is fixed) — an invisible, taller hit box around each chip. */
+@media (pointer: coarse) {
+  .pf-draftshelf__chip, .pf-draftshelf__more { position: relative; }
+  .pf-draftshelf__chip::after, .pf-draftshelf__more::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 50%;
+    height: 44px; transform: translateY(-50%);
+  }
+  .pf-draftshelf__more { min-width: 44px; }
+  .pf-draftshelf__pop-item { min-height: 44px; }
+}
+
 /* Chat entry (new design): messenger icon after the bell + unread badge. */
 .pf-chat-btn__badge {
   position: absolute;

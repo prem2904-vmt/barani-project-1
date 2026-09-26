@@ -45,7 +45,7 @@ function render(q: Array<[string, string]> = []) {
           : url.startsWith('/api/patients/') ? { patient: { id: 'p-new', displayName: 'Mr. Ravi Shankar' }, history: [] } : [])),
         post: vi.fn(() => of({})), patch: vi.fn(() => of({})), delete: vi.fn(() => of({})) } },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {}, warning() {} } },
-      { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map(), queryParamMap: new Map(q) } } },
+      { provide: ActivatedRoute, useValue: { queryParamMap: of(new Map(q)), snapshot: { paramMap: new Map(), queryParamMap: new Map(q) } } },
       { provide: Router, useValue: router },
       { provide: NavBackService, useValue: { showBack: () => true, back() {}, backTo() {} } },
       { provide: Location, useValue: {} },

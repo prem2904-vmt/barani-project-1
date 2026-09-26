@@ -4,7 +4,8 @@ import {
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withNavigationErrorHandler, withRouterConfig, withViewTransitions } from '@angular/router';
+import { RouteReuseStrategy, provideRouter, withComponentInputBinding, withNavigationErrorHandler, withRouterConfig, withViewTransitions } from '@angular/router';
+import { IdentityRouteReuseStrategy } from './core/navigation/identity-reuse.strategy';
 import { slideTransition } from './core/navigation/slide-transition';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import {
@@ -86,6 +87,9 @@ export const appConfig: ApplicationConfig = {
       // Seamless step-to-step slide (Order & Payments ⇄ Collect); every other
       // navigation skips the transition. See core/navigation/slide-transition.ts.
       withViewTransitions({ skipInitialTransition: true, onViewTransitionCreated: slideTransition })),
+    // Record screens that read their id once get a FRESH component when the
+    // record changes (draft shelf A → B); see identity-reuse.strategy.ts.
+    { provide: RouteReuseStrategy, useClass: IdentityRouteReuseStrategy },
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     { provide: APP_BASE_HREF, useValue: '/' },
     {

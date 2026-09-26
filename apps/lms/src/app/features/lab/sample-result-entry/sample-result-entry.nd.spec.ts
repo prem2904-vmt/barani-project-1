@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { vi } from 'vitest';
 import { SampleResultEntryComponent } from './sample-result-entry.component';
 import { ApiService } from '../../../core/services/api.service';
@@ -75,6 +75,20 @@ async function render(opts: { rich?: boolean; hold?: boolean } = {}) {
     }),
     post: vi.fn(() => of({})), patch: vi.fn(() => of({})), put: vi.fn(() => of({})),
   };
+  // A live route: navigating to /lab/sample/:id re-emits the param (the
+  // component is REUSED, as the real router does for a same-route hop).
+  const params$ = new BehaviorSubject(convertToParamMap({ sampleId: 'smp-1' }));
+  const query$ = new BehaviorSubject(convertToParamMap({}));
+  const route = { paramMap: params$, queryParamMap: query$,
+    snapshot: { paramMap: new Map([['sampleId', 'smp-1']]), queryParamMap: new Map() } };
+  const router = {
+    url: '/lab/sample/smp-1',
+    navigate: vi.fn((cmds: unknown[]) => {
+      if (cmds[0] === '/lab/sample' && cmds[1] !== params$.value.get('sampleId'))
+        params$.next(convertToParamMap({ sampleId: String(cmds[1]) }));
+      return Promise.resolve(true);
+    }),
+  };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
@@ -85,8 +99,8 @@ async function render(opts: { rich?: boolean; hold?: boolean } = {}) {
       { provide: AuthService, useValue: { user: () => ({ displayName: 'Admin User', registrationId: '123434', tenantName: 'Micro World' }), hasPermission: () => true } },
       { provide: DialogService, useValue: {} },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
-      { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['sampleId', 'smp-1']]), queryParamMap: new Map() } } },
-      { provide: Router, useValue: { navigate: vi.fn(() => Promise.resolve(true)), url: '/lab/sample/smp-1' } },
+      { provide: ActivatedRoute, useValue: route },
+      { provide: Router, useValue: router },
     ],
   });
   const f = TestBed.createComponent(SampleResultEntryComponent);
@@ -96,7 +110,7 @@ async function render(opts: { rich?: boolean; hold?: boolean } = {}) {
     await new Promise(r => setTimeout(r, 0));
     f.detectChanges();
   }
-  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, release };
+  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, release, api, params$, query$, router };
 }
 
 /** Component CSS with Angular's scoping attributes stripped. */
@@ -485,5 +499,72 @@ describe('Result entry (nd) — zoom from the queue tile', () => {
     expect(skel).not.toBeNull();
     expect(skel.getAttribute('data-zoom-target')).toBe('smp-1');
     release();
+  });
+});
+
+describe('Result entry — switching drafts on the SAME route (draft shelf)', () => {
+  const settle = async (f: any) => {
+    for (let i = 0; i < 3; i++) { f.detectChanges(); await f.whenStable(); await new Promise(r => setTimeout(r, 0)); }
+    f.detectChanges();
+  };
+  // An in-memory Storage (the runner's own localStorage may be missing).
+  beforeEach(() => {
+    const mem = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, String(v)),
+      removeItem: (k: string) => void mem.delete(k),
+      clear: () => mem.clear(),
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('tube A → tube B: the REUSED screen loads and shows B (reacts to the param, not a snapshot)', async () => {
+    const { f, c, api, params$ } = await render();
+    expect(c.sample().id).toBe('smp-1');
+    params$.next(convertToParamMap({ sampleId: 'smp-2' }));
+    await settle(f);
+    expect(api.get).toHaveBeenCalledWith('/api/samples/smp-2/tests');
+    expect(c.sample().id).toBe('smp-2');
+    expect(c.sample().tests[0].name).toBe('Bacterial Identification');
+    expect(c.activeTubeId()).toBe('smp-2');
+    expect(c.loading()).toBe(false);
+  });
+
+  it("A's unsaved typing is saved BEFORE B loads (local copy + server draft), and B starts clean", async () => {
+    const { f, c, api, params$ } = await render();
+    c.setValue('ot1', 'target', 'Detected');           // debounced saves pending
+    params$.next(convertToParamMap({ sampleId: 'smp-2' }));
+    // Flushed synchronously on the switch — not left to the debounce.
+    expect(JSON.parse(localStorage.getItem('pf-lms.sre-draft.smp-1')!)).toEqual({ ot1: { target: 'Detected' } });
+    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results/draft',
+      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined }] });
+    await settle(f);
+    expect(c.sample().id).toBe('smp-2');
+    expect(c._values()['ot1']).toBeUndefined();           // A's typing never bleeds into B
+    // …and coming back to A restores it.
+    params$.next(convertToParamMap({ sampleId: 'smp-1' }));
+    await settle(f);
+    expect(c.sample().id).toBe('smp-1');
+    expect(c.getValue('ot1', 'target')).toBe('Detected');
+  });
+
+  it('re-emitting the tube already on stage is a no-op: no refetch, typing kept', async () => {
+    const { f, c, api, params$ } = await render();
+    c.setValue('ot1', 'target', 'Detected');
+    const gets = api.get.mock.calls.filter((a: unknown[]) => String(a[0]).endsWith('/tests')).length;
+    params$.next(convertToParamMap({ sampleId: 'smp-1' }));
+    await settle(f);
+    expect(api.get.mock.calls.filter((a: unknown[]) => String(a[0]).endsWith('/tests')).length).toBe(gets);
+    expect(c.getValue('ot1', 'target')).toBe('Detected');
+    expect(api.post).not.toHaveBeenCalledWith('/api/samples/smp-1/results/draft', expect.anything());
+  });
+
+  it('leaving the screen (destroy) flushes pending typing too', async () => {
+    const { f, c, api } = await render();
+    c.setValue('ot1', 'adequacy', 'Adequate');
+    f.destroy();
+    expect(JSON.parse(localStorage.getItem('pf-lms.sre-draft.smp-1')!)).toEqual({ ot1: { adequacy: 'Adequate' } });
+    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results/draft', expect.anything());
   });
 });

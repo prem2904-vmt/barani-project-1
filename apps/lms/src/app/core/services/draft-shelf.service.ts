@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { NavigationEnd, Router } from '@angular/router';
+import { NavigationEnd, Params, Router, UrlTree } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -39,6 +39,9 @@ export class DraftShelfService {
 
   private readonly _byArea = signal<Partial<Record<DraftArea, DraftChip[]>>>({});
   private readonly _area = signal<DraftArea | null>(DraftShelfService.areaOf(this.router.url));
+  /** The settled URL — every NavigationEnd, however the user got there
+   *  (chip, queue row, scan, deep link, back button). */
+  private readonly _url = signal<string>(this.router.url);
 
   /** Drafts for the work area the user is currently inside. */
   readonly items = computed<DraftChip[]>(() => {
@@ -46,10 +49,65 @@ export class DraftShelfService {
     return area ? (this._byArea()[area] ?? []) : [];
   });
 
+  /** The draft whose screen is on stage right now (null = none). A chip is
+   *  active when its target's PATH equals the current path AND every query
+   *  param the chip carries matches (extra params on the URL — returnTo,
+   *  discount… — don't break the match). Recomputes on every navigation. */
+  readonly activeId = computed<string | null>(() => {
+    const url = this._url();
+    const hit = this.items().find(d => this.matches(d, url));
+    return hit ? hit.id : null;
+  });
+
   constructor() {
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd), takeUntilDestroyed())
-      .subscribe(e => this._area.set(DraftShelfService.areaOf(e.urlAfterRedirects || e.url)));
+      .subscribe(e => {
+        const url = e.urlAfterRedirects || e.url;
+        this._area.set(DraftShelfService.areaOf(url));
+        this._url.set(url);
+      });
+  }
+
+  /** Is `chip`'s screen the one showing? (Signal-backed — reactive in templates.) */
+  isActive(chip: DraftChip): boolean {
+    return this.activeId() === chip.id;
+  }
+
+  /** Router state for a chip's link: tags a draft → draft hop with the
+   *  slide direction (shelf order: later chip = forward) so the app's
+   *  step-to-step slide plays (core/navigation/slide-transition.ts).
+   *  Undefined when no draft is on stage — arriving from a list stays an
+   *  instant swap (or the list → detail zoom). */
+  swapState(chip: DraftChip): { pfDraftSwap: 'forward' | 'back' } | undefined {
+    const list = this.items();
+    const from = list.findIndex(d => d.id === this.activeId());
+    const to = list.findIndex(d => d.id === chip.id);
+    if (from < 0 || to < 0 || from === to) return undefined;
+    return { pfDraftSwap: to > from ? 'forward' : 'back' };
+  }
+
+  /** Path + identifying-query match of a chip's target against `url`. */
+  matches(chip: DraftChip, url: string): boolean {
+    let target: UrlTree, current: UrlTree;
+    try {
+      const cmds = typeof chip.link === 'string' ? [chip.link] : [...chip.link];
+      target = this.router.createUrlTree(cmds, { queryParams: chip.queryParams ?? {} });
+      current = this.router.parseUrl(url);
+    } catch {
+      return false;
+    }
+    if (DraftShelfService.pathOf(this.router.serializeUrl(target)) !== DraftShelfService.pathOf(url)) return false;
+    return DraftShelfService.subset(target.queryParams, current.queryParams);
+  }
+
+  private static pathOf(url: string): string {
+    const p = (url || '').split(/[?#]/)[0].replace(/\/+$/, '');
+    return p || '/';
+  }
+
+  private static subset(want: Params, have: Params): boolean {
+    return Object.keys(want).every(k => String(have[k] ?? '') === String(want[k] ?? ''));
   }
 
   /** Replace `area`'s draft list (last writer wins). */

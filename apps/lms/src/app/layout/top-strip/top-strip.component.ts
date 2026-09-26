@@ -46,6 +46,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Bottom-bar draft shelf (published by the active work screen). */
   protected readonly draftShelf = inject(DraftShelfService);
   readonly draftsOpen = signal(false);
+  /** The on-stage draft sits behind the "+N" button (not one of the 3 chips). */
+  readonly activeDraftInOverflow = computed(() => {
+    const id = this.draftShelf.activeId();
+    return !!id && this.draftShelf.items().findIndex(d => d.id === id) >= 3;
+  });
   protected readonly designMode = inject(DesignModeService);
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);

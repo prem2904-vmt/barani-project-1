@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnInit, QueryList, ViewChildren, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, QueryList, ViewChildren, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ScanService } from '../../../core/services/scan.service';
@@ -3221,8 +3221,12 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       },
       error: () => this.toasts.error('Could not load result entry')
     });
-    setInterval(() => this._now.set(Date.now()), 10_000);
+    // Cleared on destroy: the route recreates this screen per test
+    // (data.recreateOn), so a leaked ticker would pile up per switch.
+    const tick = setInterval(() => this._now.set(Date.now()), 10_000);
+    this.destroyRef.onDestroy(() => clearInterval(tick));
   }
+  private readonly destroyRef = inject(DestroyRef);
 
   // ── Re-scan gate ──────────────────────────────────────
   private readonly _verified = signal(false);

@@ -457,6 +457,8 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'lab/result/:id',
+        // Another test on the same route = a fresh screen (the id is read once).
+        data: { recreateOn: ['id'] },
         // A culture test opens the Culture case page instead (one route).
         canActivate: [permissionGuard(['enter_result', 'edit_result']), cultureResultRedirectGuard],
         loadComponent: () => import('./features/lab/result-entry/result-entry.component').then(m => m.ResultEntryComponent)
@@ -477,6 +479,9 @@ export const appRoutes: Route[] = [
         // Microbiology culture bench: the staged workspace for one culture case
         // (Gram → Growth → Identification → AST). Micro-tech only.
         path: 'lab/culture/:orderTestId',
+        // Another case (or focus stage) = a fresh bench: the draft shelf can
+        // hop case → case (a culture tube's draft redirects here).
+        data: { recreateOn: ['orderTestId', '?stage'] },
         // Pathologists open it too: culture sign-out lives here (owner).
         canActivate: [permissionGuard(['culture_workbench', 'validate_result']), moduleGuard('lab')],
         loadComponent: () => import('./features/lab/culture-workbench/culture-workbench.component').then(m => m.CultureWorkbenchComponent)

@@ -15,6 +15,12 @@ export function slideDirection(from: string, to: string): 'forward' | 'back' | n
   return null;
 }
 
+/** The slide a draft-shelf chip asked for (router state), if any. */
+export function draftSwapDirection(state: unknown): 'forward' | 'back' | null {
+  const d = (state as { pfDraftSwap?: unknown } | null | undefined)?.pfDraftSwap;
+  return d === 'forward' || d === 'back' ? d : null;
+}
+
 /** Router `onViewTransitionCreated` hook (runs in an injection context).
  *  Two motions, one rule (docs/ND-PATTERN.md §9):
  *   - step → step SLIDES: tags <html> with the direction for the duration of
@@ -28,7 +34,10 @@ export function slideTransition(info: ViewTransitionInfo): void {
   const nav = router.getCurrentNavigation();
   const to = nav ? router.serializeUrl(nav.finalUrl ?? nav.extractedUrl) : '';
   if (prefersReducedMotion()) { zoom.disarm(); info.transition.skipTransition(); return; }
-  const dir = slideDirection(router.url, to);
+  // Draft → draft hop from the app bar's draft shelf: the chip tags the
+  // navigation with its direction (DraftShelfService.swapState), so the
+  // screen you leave slides out and the other draft's screen slides in.
+  const dir = draftSwapDirection(nav?.extras?.state) ?? slideDirection(router.url, to);
   if (!dir) {
     if (!zoom.onRouterTransition(info, router.url, to)) info.transition.skipTransition();
     return;
