@@ -8,158 +8,21 @@
 }
 
 /* ── Empty-state tile ───────────────────────────────────────
- * Used by the three FD landing panes (Appointments / In Progress /
- * Completed) when their list is empty. A soft glass card with a tinted
- * icon disc, a clear title, a one-liner explanation and an optional CTA.
- * Each pane gets its own hue via .pf-empty-tile--{appt|ip|done}. */
+ * LAYOUT only: fills the FD landing pane and centres its content. The
+ * look is the kit's ND empty state (.nd-empty: violet icon tile, title,
+ * one-line body, secondary action) — one palette for every pane; the old
+ * per-pane amber / emerald hues are gone (owner). */
 .pf-empty-tile {
-  /* The pane itself is the card now (border + bg). The empty tile sits
+  /* The pane itself is the card (border + bg); the empty state sits
    * inside it, fills the available height and centers content. */
   flex: 1 1 auto;
   align-self: stretch;
   min-height: 200px;
   margin: 0;
   padding: 22px 18px 20px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  text-align: center;
   border-radius: 0 0 13px 13px;
   background: transparent;
   border: 0;
-  position: relative;
-  overflow: hidden;
-}
-.pf-empty-tile::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(70% 60% at 50% 0%, var(--empty-tone, rgba(168, 85, 247, 0.18)), transparent 70%);
-  opacity: 0.5;
-  pointer-events: none;
-}
-.pf-empty-tile__icon {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  background: var(--empty-icon-bg, rgba(168, 85, 247, 0.16));
-  border: 1px solid var(--empty-icon-border, rgba(168, 85, 247, 0.32));
-  color: var(--empty-icon-color, #c4b5fd);
-}
-.pf-empty-tile__title {
-  position: relative;
-  margin: 4px 0 0;
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-}
-.pf-empty-tile__sub {
-  position: relative;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-tertiary);
-  max-width: 260px;
-}
-.pf-empty-tile__cta {
-  position: relative;
-  margin-top: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  border-radius: 9999px;
-  background: var(--empty-cta-bg, rgba(168, 85, 247, 0.18));
-  border: 1px solid var(--empty-cta-border, rgba(168, 85, 247, 0.4));
-  color: var(--empty-cta-color, #ddd6fe);
-  text-decoration: none;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
-}
-.pf-empty-tile__cta:hover {
-  background: var(--empty-cta-bg-hover, rgba(168, 85, 247, 0.28));
-  border-color: var(--empty-cta-border-hover, rgba(168, 85, 247, 0.55));
-  color: #ffffff;
-}
-.pf-empty-tile__cta:active { transform: scale(0.985); }
-
-/* Per-pane tinting — appointments=violet, in-progress=amber,
- * completed=emerald. These match the count-pill tones already used
- * in the pane headers so the panes feel cohesive. */
-.pf-empty-tile--appt {
-  --empty-tone: rgba(168, 85, 247, 0.20);
-  --empty-icon-bg: rgba(168, 85, 247, 0.16);
-  --empty-icon-border: rgba(168, 85, 247, 0.34);
-  --empty-icon-color: #c4b5fd;
-  --empty-cta-bg: rgba(168, 85, 247, 0.18);
-  --empty-cta-border: rgba(168, 85, 247, 0.4);
-  --empty-cta-color: #ddd6fe;
-  --empty-cta-bg-hover: rgba(168, 85, 247, 0.3);
-  --empty-cta-border-hover: rgba(168, 85, 247, 0.6);
-}
-.pf-empty-tile--ip {
-  --empty-tone: rgba(245, 158, 11, 0.20);
-  --empty-icon-bg: rgba(245, 158, 11, 0.16);
-  --empty-icon-border: rgba(245, 158, 11, 0.34);
-  --empty-icon-color: #fcd34d;
-  --empty-cta-bg: rgba(245, 158, 11, 0.18);
-  --empty-cta-border: rgba(245, 158, 11, 0.4);
-  --empty-cta-color: #fde68a;
-  --empty-cta-bg-hover: rgba(245, 158, 11, 0.3);
-  --empty-cta-border-hover: rgba(245, 158, 11, 0.6);
-}
-.pf-empty-tile--done {
-  --empty-tone: rgba(16, 185, 129, 0.20);
-  --empty-icon-bg: rgba(16, 185, 129, 0.16);
-  --empty-icon-border: rgba(16, 185, 129, 0.34);
-  --empty-icon-color: #6ee7b7;
-}
-
-/* Light theme tints — softer pastel surfaces so the tile stays gentle
- * on a white page instead of glowing. */
-:host-context([data-theme="light"]) .pf-empty-tile {
-  background: linear-gradient(180deg, rgba(246, 244, 252, 0.7), rgba(246, 244, 252, 0.9));
-  border-color: rgba(15, 23, 42, 0.08);
-}
-:host-context([data-theme="light"]) .pf-empty-tile__icon { color: var(--empty-icon-color); }
-
-:host-context([data-theme="light"]) .pf-empty-tile--appt {
-  --empty-tone: rgba(168, 85, 247, 0.08);
-  --empty-icon-bg: rgba(124, 58, 237, 0.08);
-  --empty-icon-border: rgba(124, 58, 237, 0.2);
-  --empty-icon-color: #7c3aed;
-  --empty-cta-bg: rgba(124, 58, 237, 0.10);
-  --empty-cta-border: rgba(124, 58, 237, 0.25);
-  --empty-cta-color: #6d28d9;
-  --empty-cta-bg-hover: rgba(124, 58, 237, 0.18);
-  --empty-cta-border-hover: rgba(124, 58, 237, 0.45);
-}
-:host-context([data-theme="light"]) .pf-empty-tile--ip {
-  --empty-tone: rgba(245, 158, 11, 0.08);
-  --empty-icon-bg: rgba(217, 119, 6, 0.08);
-  --empty-icon-border: rgba(217, 119, 6, 0.2);
-  --empty-icon-color: #d97706;
-  --empty-cta-bg: rgba(217, 119, 6, 0.10);
-  --empty-cta-border: rgba(217, 119, 6, 0.25);
-  --empty-cta-color: #b45309;
-  --empty-cta-bg-hover: rgba(217, 119, 6, 0.18);
-  --empty-cta-border-hover: rgba(217, 119, 6, 0.45);
-}
-:host-context([data-theme="light"]) .pf-empty-tile--done {
-  --empty-tone: rgba(16, 185, 129, 0.08);
-  --empty-icon-bg: rgba(5, 150, 105, 0.08);
-  --empty-icon-border: rgba(5, 150, 105, 0.2);
-  --empty-icon-color: #059669;
 }
 
 .pf-cards {

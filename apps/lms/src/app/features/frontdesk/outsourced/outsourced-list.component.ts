@@ -42,7 +42,10 @@ import {
     @if (svc.loading() && svc.rows().length === 0) {
       <p class="pf-out__empty">Loading outsourced tests…</p>
     } @else if (shown().length === 0) {
-      <p class="pf-out__empty">{{ svc.rows().length ? 'No outsourced tests match this search.' : 'No outsourced tests yet.' }}</p>
+      <div class="nd-empty pf-out__none" data-empty="out">
+        <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <p class="nd-empty__title">{{ svc.rows().length ? 'No outsourced tests match this search.' : 'No outsourced tests yet.' }}</p>
+      </div>
     } @else {
       <ul class="pf-out__list" aria-label="Outsourced tests">
         @for (r of shown(); track r.sampleId) {
@@ -110,7 +113,9 @@ import {
     }
   `,
   styles: [`
-    :host { display: block; }
+    /* Flex column so the empty state can centre in the pane like its siblings. */
+    :host { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    .pf-out__none { min-height: 200px; }
     .pf-out__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
     .pf-out__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .pf-out__empty { margin: 0; padding: 24px 12px; text-align: center; font-size: 13px; color: var(--text-muted); }

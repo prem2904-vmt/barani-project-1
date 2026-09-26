@@ -31,9 +31,10 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
       @if (loading()) {
         <p class="pf-lt__msg">Loading trends…</p>
       } @else if (tests().length === 0) {
-        <div class="pf-lt__empty">
-          <p class="pf-lt__empty-title">No repeat tests yet</p>
-          <p class="pf-lt__empty-sub">Trends appear once this patient has taken the same test at least twice.</p>
+        <div class="nd-empty">
+          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>
+          <p class="nd-empty__title">No repeat tests yet</p>
+          <p class="nd-empty__body">Trends appear once this patient has taken the same test at least twice.</p>
         </div>
       } @else {
         <div class="pf-lt__grid">

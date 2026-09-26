@@ -80,9 +80,10 @@ interface TimelineItem {
       </header>
 
       @if (visits().length === 0) {
-        <div class="pf-tl__stage-empty">
-          <p class="pf-tl__empty-title">No lab reports or documents yet</p>
-          <p class="pf-tl__empty-sub">This timeline shows the patient's real lab reports and uploaded documents.</p>
+        <div class="pf-tl__stage-empty nd-empty">
+          <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span>
+          <p class="nd-empty__title">No lab reports or documents yet</p>
+          <p class="nd-empty__body">This timeline shows the patient's real lab reports and uploaded documents.</p>
         </div>
       } @else {
         <!-- Two-panel stage -->

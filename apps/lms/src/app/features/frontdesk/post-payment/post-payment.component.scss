@@ -450,36 +450,9 @@
   flex-shrink: 0;
 }
 
-.pf-pp-pay__ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  border: 2px solid rgba(16, 185, 129, 0.45);
-  animation: pf-pp-ring 2s ease-out infinite;
-}
-
-@keyframes pf-pp-ring {
-  0%   { transform: scale(0.9); opacity: 0.8; }
-  100% { transform: scale(1.4); opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pf-pp-pay__ring { animation: none; }
-}
-
-.pf-pp-pay__check {
-  position: relative;
-  z-index: 1;
-  width: 44px;
-  height: 44px;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, #10b981, #34d399);
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
-}
+/* Paid mark: the kit's violet icon tile (.nd-empty__icon) — no green
+   disc, no pulsing ring (ND palette). */
+.pf-pp-pay__check { margin-bottom: 0; width: 44px; height: 44px; }
 
 .pf-pp-pay__body { flex: 1; min-width: 0; }
 

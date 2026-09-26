@@ -136,6 +136,29 @@
 .nd-btn.nd-btn--quiet:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 @media (max-width: 640px) { .nd-btn.nd-btn--quiet { min-height: 40px; height: 40px; } }
 
+/* ── Empty state ──────────────────────────────────────────────────────
+   Violet-tinted icon tile (stroked SVG, 1.8) · title · one-line body ·
+   optional SECONDARY action. One palette, light + dark; never a status
+   hue on an empty list. `--compact` for drawers/lists. */
+.nd-empty {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 32px 16px; text-align: center;
+}
+.nd-empty__icon {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 40px; height: 40px; border-radius: 12px; margin-bottom: 4px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+  color: var(--violet-text, #7c3aed);
+}
+.nd-empty__icon > svg { width: 20px; height: 20px; }
+.nd-empty__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.nd-empty__body { margin: 0; max-width: 320px; font-size: 13px; line-height: 1.5; color: var(--text-tertiary); text-wrap: pretty; }
+.nd-empty__action { margin-top: 8px; min-height: 40px; height: 40px; text-decoration: none; }
+.nd-empty.nd-empty--compact { flex: none; padding: 20px 12px; }
+.nd-empty.nd-empty--compact .nd-empty__icon { width: 32px; height: 32px; border-radius: 10px; }
+.nd-empty.nd-empty--compact .nd-empty__icon > svg { width: 16px; height: 16px; }
+.nd-empty.nd-empty--compact .nd-empty__title { font-size: 13.5px; }
+
 /* ── Neutral selected states ────────────────────────────────────────── */
 .nd-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--nd-radius-sm); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
 .nd-seg__item { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
