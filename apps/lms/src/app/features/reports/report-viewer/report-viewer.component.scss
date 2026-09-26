@@ -205,7 +205,8 @@
 }
 .pf-rv-menu__row svg { flex: none; color: var(--text-secondary); }
 .pf-rv-menu__row:active { background: var(--nd-chip-bg); }
-.pf-rv-sheet__cancel { flex: none; align-self: stretch; width: auto; margin: 4px 12px 12px; min-height: 48px; }
+.pf-rv-sheet__foot { flex: none; display: flex; padding: 4px 12px 12px; }
+.pf-rv-sheet__cancel { flex: 1 1 auto; min-height: 48px; }
 
 /* ── ≤900px: one column; REPORT is the Details sheet ───────────────── */
 @media (max-width: 900px) {
