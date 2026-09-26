@@ -438,14 +438,13 @@ export function collectsAtBillingCounter(cfg: ProcessWorkflowConfig | null | und
 export const LAB_MENU_ID = 'lab';
 
 /**
- * True when sample collection is placed in the LAB work-area — a patient can
- * give the sample at the lab itself, where collection doubles as intake and
- * auto-receives into the work queue (backend SampleService.CollectAsync, gated by
- * ShouldAutoReceiveAsync). It does NOT switch the transport pair off (owner,
- * 2026-09-26): the front desk may still collect + dispatch, so Dispatch and Lab
- * Intake keep whatever state the admin set. NOTE: the backend's auto-receive is
- * workflow-wide today (any enabled lab copy ⇒ every collection auto-receives) —
- * see ProcessWorkflowService.dispatchStepEnabled.
+ * True when sample collection is placed in the LAB work-area. Used only to show a
+ * Collect entry point (a link to the collection page) there — it NEVER changes
+ * where the sample goes (owner, 2026-09-26). Routing after collection is decided
+ * solely by the transport pair: dispatch + lab_intake both on ⇒ collected →
+ * dispatch → lab intake → queue, wherever it was collected; either off ⇒
+ * auto-receive at collection (backend SampleService.ShouldAutoReceive, mirrored
+ * by ProcessWorkflowService.dispatchStepEnabled).
  */
 export function collectsInLab(cfg: ProcessWorkflowConfig | null | undefined): boolean {
   return collectionLocations(cfg).includes(LAB_MENU_ID);

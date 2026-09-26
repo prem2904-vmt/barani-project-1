@@ -59,24 +59,20 @@ export class ProcessWorkflowService {
    * Is "dispatch" a genuine front-desk→lab handoff step in this workflow?
    *
    * Unlike {@link isEnabled} (opt-out: silent ⇒ on), dispatch is OPT-IN and must
-   * mirror the backend `ShouldAutoReceiveAsync`: a tube auto-receives into the lab
-   * on collection — leaving no dispatch step — when the workflow collects in-lab,
-   * OR omits/disables `lab_intake`, OR omits/disables `dispatch`. Only when none of
-   * those hold is dispatch a real step. No active workflow ⇒ classic flow, which
-   * does include dispatch.
+   * mirror the backend `SampleService.ShouldAutoReceive`: a tube auto-receives into
+   * the lab on collection — leaving no dispatch step — when the workflow omits/
+   * disables `lab_intake` OR omits/disables `dispatch`. Otherwise dispatch is a
+   * real step. No active workflow ⇒ classic flow, which does include dispatch.
    *
-   * KNOWN GAP (flagged 2026-09-26): the builder no longer collapses dispatch +
-   * intake when collection is ALSO placed in the Lab, but the backend decides
-   * auto-receive workflow-wide (CollectsInLab ⇒ EVERY collection auto-receives,
-   * front-desk ones included). Until the backend decides per collection point,
-   * this keeps mirroring it so screens never offer a Dispatch that would be
-   * rejected; drop the collectsInLab clause together with that backend fix. Screens use this to hide the Dispatch button/holds when
-   * the workflow has no dispatch step (else the button rejects every attempt).
+   * Where the Sample Collection action is placed (Frontdesk, Lab, Collect, billing
+   * counter, a custom area) is deliberately NOT considered (owner, 2026-09-26):
+   * placement is only a link to the collection page and never changes where the
+   * sample goes. Screens use this to hide the Dispatch button/holds when the
+   * workflow has no dispatch step (else the button rejects every attempt).
    */
   dispatchStepEnabled(): boolean {
     const cfg = this._active();
     if (!cfg) return true;                 // classic flow — dispatch exists
-    if (collectsInLab(cfg)) return false;  // drawn at the bench ⇒ auto-received
     const on = (type: string) => !!cfg.actions?.find(x => x.type === type)?.enabled;
     return on('lab_intake') && on('dispatch');
   }
@@ -87,9 +83,10 @@ export class ProcessWorkflowService {
     return a?.categoryId ?? null;
   }
 
-  /** True when sample collection happens inside the lab (the tube is drawn at the
-   *  bench, so the lab shows a Collect step instead of Lab Intake and the sample
-   *  auto-receives into the work queue). Silent workflow ⇒ false (classic flow). */
+  /** True when a Sample Collection action is placed in the lab work-area — only
+   *  for showing a Collect entry point (link) there. It never affects transport:
+   *  routing is decided by dispatch + lab_intake alone (see dispatchStepEnabled).
+   *  Silent workflow ⇒ false (classic flow). */
   collectsInLab(): boolean {
     return collectsInLab(this._active());
   }
