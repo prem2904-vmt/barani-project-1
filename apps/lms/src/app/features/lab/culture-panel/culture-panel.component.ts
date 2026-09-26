@@ -7,6 +7,7 @@ import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 
 /** One stage inside a culture case (mirrors the backend CultureStage JSON). */
@@ -68,7 +69,7 @@ export interface CultureCaseView {
 @Component({
   selector: 'pf-culture-panel',
   standalone: true,
-  imports: [TileComponent, SkeletonComponent, TileGridDirective],
+  imports: [TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading() && cases().length === 0) {
@@ -90,7 +91,7 @@ export interface CultureCaseView {
       <ul class="flex flex-col gap-3 list-none p-0 m-0" [ndTileGrid]="theme.isNewDesign()">
         @for (c of cases(); track c.orderTestId) {
           @let inc = incubatingStage(c);
-          <li class="pf-cc" [class.pf-cc--incub]="!!inc" [class.pf-cc--nd]="theme.isNewDesign()">
+          <li class="pf-cc" [pfZoomSource]="[c.orderTestId, c.sampleId]" [class.pf-cc--incub]="!!inc" [class.pf-cc--nd]="theme.isNewDesign()">
             @if (!theme.isNewDesign()) { <span class="pf-cc__cap" aria-hidden="true"></span> }
             <!-- The whole card is the one control: tap → bench workspace. -->
             <button type="button" class="pf-cc__hdr press" (click)="open(c)" [title]="'Open ' + (c.barcode || c.sampleId || 'case')">

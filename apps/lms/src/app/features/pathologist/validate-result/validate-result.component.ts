@@ -22,6 +22,8 @@ import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { formatRange, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
 import { flagTone, rangeWithUnit, savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
 import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
+import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -66,7 +68,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, SelectComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, SelectComponent, ZoomTargetDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -95,25 +97,25 @@ interface ValueRow {
       }
 
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-32">
-        @if (loading() && !selected()) {
-          <div class="pf-empty-block flex justify-center py-12">
+        @if ((loading() && !selected()) || zoom.holding()) {
+          <div class="pf-empty-block flex justify-center py-12" [pfZoomTarget]="zoomKeys()">
             <pf-loading-logo size="xl" color="purple" [showDna]="true"
                              [showText]="true" text="Loading validation…"></pf-loading-logo>
           </div>
         }
 
-        @if (!loading() && !selected()) {
-          <div class="pf-empty-block">Order test not found in the validation queue.</div>
+        @if (!loading() && !selected() && !zoom.holding()) {
+          <div class="pf-empty-block" [pfZoomTarget]="zoomKeys()">Order test not found in the validation queue.</div>
         }
 
-        @if (selected(); as t) {
+        @if (zoom.holding() ? null : selected(); as t) {
           <div class="pf-cockpit">
 
             <!-- ══ Results column — every test on this tube, full quality ══ -->
             <main class="pf-cockpit__main">
-              @for (st of sampleTests(); track st.id) {
+              @for (st of sampleTests(); track st.id; let sti = $index) {
                 @let c = countsFor(st);
-                <section class="pf-vt" [id]="'vt-' + st.id" [attr.data-outcome]="outcomeOf(st)">
+                <section class="pf-vt" [pfZoomTarget]="sti === 0 ? zoomKeys() : null" [id]="'vt-' + st.id" [attr.data-outcome]="outcomeOf(st)">
                   <header class="pf-vt__hdr">
                     <div class="pf-vt__id">
                       <h2 class="pf-vt__name">{{ st.test?.name ?? 'Test' }}</h2>
@@ -946,6 +948,10 @@ export class ValidateResultComponent implements OnInit {
   private readonly _detailRow = signal<ValueRow | null>(null);
 
   readonly selected = this._selected.asReadonly();
+  /** List → detail zoom (core/navigation/zoom.directive): the pending row
+   *  answers to the order-test id or its tube's sample id. */
+  protected readonly zoom = inject(ZoomTransitionService);
+  readonly zoomKeys = computed(() => [this._id(), this._selected()?.id, this._selected()?.subOrder?.id]);
   readonly comment = this._comment.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly saving = this._saving.asReadonly();

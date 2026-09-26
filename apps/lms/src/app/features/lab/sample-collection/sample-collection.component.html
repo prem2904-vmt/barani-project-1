@@ -102,7 +102,7 @@
         <ul class="pf-sc__list">
           @for (g of filteredGroups(); track g.orderId) {
             <li>
-              <button type="button" class="pf-sc__card" (click)="openOrder(g.orderId)">
+              <button type="button" class="pf-sc__card" [pfZoomSource]="g.orderId" (click)="openOrder(g.orderId)">
                 <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
                 <div class="pf-sc__who">
                   <p class="pf-sc__who-name">{{ g.patientName }}</p>
@@ -184,7 +184,7 @@
     <!-- ─── Collect drawer ────────────────────────────────────────────── -->
     @if (activeGroup(); as g) {
       <div #drawerEl class="pf-drawer pf-drawer--nd nd-fullscreen" role="dialog" aria-modal="true" [attr.aria-label]="'Collect samples for ' + patientFullName(g)" (click)="close()">
-        <div class="pf-drawer__panel nd-page" (click)="$event.stopPropagation()">
+        <div class="pf-drawer__panel nd-page" [pfZoomTarget]="g.orderId" (click)="$event.stopPropagation()">
           <!-- Band: IDENTICAL to every step (back + tenant). The pill is the
                CONTEXT BAR: subject chips (patient, order, samples) + this
                step's filters + the counter. (docs/ND-PATTERN.md) -->

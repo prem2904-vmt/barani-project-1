@@ -60,6 +60,8 @@ import {
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
+import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -345,6 +347,8 @@ interface OrderGroup {
   selector: "pf-sample-collection",
   standalone: true,
   imports: [
+    ZoomSourceDirective,
+    ZoomTargetDirective,
     FormsModule,
     DatePipe,
     AvatarComponent,
@@ -527,6 +531,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  /** List → detail zoom (core/navigation/zoom-transition): the tapped
+   *  patient card morphs into the collection view, and closing reverses it. */
+  private readonly zoom = inject(ZoomTransitionService);
   // Set when the user lands here from another screen via ?orderId=… (e.g. FD's
   // "Collect Sample" button). On close, we send them back to that origin
   // instead of leaving them stranded on the queue.
@@ -1315,8 +1322,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   openOrder(id: string) {
-    this.resetSeriesOverrides();
-    this._openOrderId.set(id);
+    this.zoom.runLocal('in', () => {
+      this.resetSeriesOverrides();
+      this._openOrderId.set(id);
+    });
   }
 
   /** Open a specific order's collection drawer (e.g. from a scanned order QR).
@@ -1366,11 +1375,18 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       });
   }
   close() {
-    this.resetSeriesOverrides();
-    this.vialFilter.set('all');
-    this.samplesOpen.set(false);
-    this.actionsOpen.set(false);
-    this._openOrderId.set(null);
+    const open = this._openOrderId();
+    const shut = () => {
+      if (this._openOrderId() !== open) return;   // another order opened meanwhile
+      this.resetSeriesOverrides();
+      this.vialFilter.set('all');
+      this.samplesOpen.set(false);
+      this.actionsOpen.set(false);
+      this._openOrderId.set(null);
+    };
+    // Back to the list it was opened from: reverse the zoom. Leaving for the
+    // front desk is a step → step slide (router), so shut instantly there.
+    if (this._returnTo) shut(); else this.zoom.runLocal('out', shut);
     // Deep-linked from another screen (FD "Collect Sample") — return there
     // rather than leaving the user on an unrelated queue.
     if (this._returnTo) {

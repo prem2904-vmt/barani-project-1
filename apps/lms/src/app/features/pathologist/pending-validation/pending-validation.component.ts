@@ -19,6 +19,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -37,6 +38,7 @@ interface ResultSnapshot {
   selector: 'pf-pending-validation',
   standalone: true,
   imports: [
+    ZoomSourceDirective,
     FormsModule,
     TatIndicatorComponent,
     AvatarComponent,
@@ -142,7 +144,8 @@ interface ResultSnapshot {
 
             <div class="space-y-2.5">
               @for (g of sampleGroups(bucket.items); track g.key) {
-                <pf-tile [tone]="rowTone(bucket.level)" padding="md" class="block">
+                <pf-tile [tone]="rowTone(bucket.level)" padding="md" class="block"
+                         [pfZoomSource]="[g.key, g.items[0]?.subOrder?.id, g.items[0]?.id]">
                   <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
                           (click)="openOrder(g)"
                           [attr.aria-label]="'Validate ' + g.patientName + ' — ' + g.dept + ' sample'">

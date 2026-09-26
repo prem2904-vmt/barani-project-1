@@ -43,6 +43,8 @@ import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-stri
 import { waLink } from "../../../shared/utils/whatsapp";
 import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
 import { savedValueRows } from "../../../shared/utils/result-flag";
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
@@ -78,6 +80,7 @@ interface PrelimOrder {
   selector: "pf-report-queue",
   standalone: true,
   imports: [
+    ZoomSourceDirective,
     CommonModule,
     DatePipe,
     ChipComponent,
@@ -105,6 +108,7 @@ export class ReportQueueComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly zoom = inject(ZoomTransitionService);
   private readonly dialog = inject(DialogService);
   private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
@@ -532,6 +536,7 @@ export class ReportQueueComponent implements OnInit {
         this.api.get<{ samples?: Array<{ id: string }> }>(`/api/orders/${r.orderId}`));
       const sid = order?.samples?.[0]?.id;
       if (!sid) { this.toasts.error("No sample found for this order."); return; }
+      this.zoom.rearm(r.id);   // the order fetch can outlast the tap's arm
       void this.router.navigate(["/lab/sample", sid], { queryParams: { view: 1 } });
     } catch {
       this.toasts.error("Could not open the lab results.");

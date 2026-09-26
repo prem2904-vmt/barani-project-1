@@ -1,6 +1,8 @@
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { environment } from '../../../../environments/environment';
+import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -112,7 +114,8 @@ function coerceCellText(raw: unknown): string {
     ScreenHeaderComponent,
     TouchButtonComponent,
     LoadingLogoComponent,
-    EditResultDialogComponent
+    EditResultDialogComponent,
+    ZoomTargetDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -231,7 +234,7 @@ function coerceCellText(raw: unknown): string {
           }
         </section>
       }
-      @if (report(); as r) {
+      @if (zoom.holding() ? null : report(); as r) {
         <!-- The on-screen report IS the rendered PDF — the exact same file
              the Download button produces (jsPDF + tenant template + per-test
              layouts), painted page-by-page onto canvases so it renders
@@ -262,7 +265,7 @@ function coerceCellText(raw: unknown): string {
             <pf-touch-btn size="sm" variant="secondary" (pressed)="renderPdfView()">Try again</pf-touch-btn>
           </div>
         } @else {
-          <div class="pf-rv-pdfpages" #pdfPages aria-label="Report PDF">
+          <div class="pf-rv-pdfpages" #pdfPages aria-label="Report PDF" [pfZoomTarget]="zoomKeys()">
             @if (!pdfReady()) {
               <div class="pf-rv-loading">
                 <pf-loading-logo size="xl" color="purple" [showDna]="true"
@@ -272,7 +275,7 @@ function coerceCellText(raw: unknown): string {
           </div>
         }
       } @else {
-        <div class="pf-rv-loading">
+        <div class="pf-rv-loading" [pfZoomTarget]="zoomKeys()">
           <pf-loading-logo size="xl" color="purple" [showDna]="true"
                            [showText]="true" text="Loading report…"></pf-loading-logo>
         </div>
@@ -970,6 +973,11 @@ export class ReportViewerComponent implements OnInit {
   private readonly _report = signal<Report | null>(null);
   private readonly _tpl = signal<ReportTemplate | null>(null);
   readonly report = this._report.asReadonly();
+  /** List → detail zoom (core/navigation/zoom.directive): the report-queue
+   *  row answers to the report id or its order id. */
+  protected readonly zoom = inject(ZoomTransitionService);
+  readonly zoomKeys = computed(() => [this.zoomRouteId, this._report()?.id, this._report()?.orderId]);
+  private readonly zoomRouteId = inject(ActivatedRoute).snapshot.paramMap.get('id');
   readonly tpl = this._tpl.asReadonly();
 
   // ── Post-result edit ──────────────────────────────────

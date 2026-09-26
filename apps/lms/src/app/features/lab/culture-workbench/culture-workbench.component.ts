@@ -16,6 +16,8 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -37,7 +39,7 @@ interface StageField { name: string; title: string; type: string; options: strin
 @Component({
   selector: 'pf-culture-workbench',
   standalone: true,
-  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent, HeroBandComponent],
+  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent, HeroBandComponent, ZoomTargetDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cse">
@@ -101,10 +103,24 @@ interface StageField { name: string; title: string; type: string; options: strin
         </div>
       </pf-hero-band>
 
-      @if (loading()) {
-        <div class="pf-cse__note">Loading…</div>
+      @if (loading() || zoom.holding()) {
+        <!-- Skeleton stage card: the list tile zooms into it (held through
+             the morph so the target never swaps mid-animation). -->
+        <section class="nd-card pf-stg pf-cse-skel" aria-busy="true" [pfZoomTarget]="zoomKeys()">
+          <header class="nd-card__head pf-stg__hdr">
+            <span class="nd-card__icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="10" cy="10" r="1.6"/><circle cx="14.6" cy="13.2" r="1.1"/></svg>
+            </span>
+            <span class="nd-card__label">Culture</span>
+          </header>
+          <div class="nd-card__body pf-cse-skel__body">
+            <span class="pf-cse-skel__bar" style="width: 55%"></span>
+            <span class="pf-cse-skel__bar"></span>
+            <span class="pf-cse-skel__bar" style="width: 75%"></span>
+          </div>
+        </section>
       } @else if (!c()) {
-        <div class="pf-cse__note">Case not found.</div>
+        <div class="pf-cse__note" [pfZoomTarget]="zoomKeys()">Case not found.</div>
       } @else if (view(); as cc) {
         <div class="pf-cse__scroll">
           <!-- ONE navigation row: specimen · branch · stage tabs. -->
@@ -174,8 +190,8 @@ interface StageField { name: string; title: string; type: string; options: strin
             }
           </div>
 
-          @for (s of cc.stages; track s.key) {
-            <section class="nd-card pf-stg"
+          @for (s of cc.stages; track s.key; let si = $index) {
+            <section class="nd-card pf-stg" [pfZoomTarget]="si === 0 ? zoomKeys() : null"
                      [class.pf-stg--done]="s.state === 'done'"
                      [class.pf-stg--locked]="lockedByOther(s)"
                      [class.pf-stg--mine]="isMine(s)"
@@ -353,6 +369,9 @@ interface StageField { name: string; title: string; type: string; options: strin
     :host { display: block; height: 100%; min-height: 0; }
     .pf-cse { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
       padding: 0 20px; --pf-hb-bleed: 20px; }
+    .pf-cse-skel { margin: 16px; }
+    .pf-cse-skel__body { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
+    .pf-cse-skel__bar { display: block; height: 12px; width: 100%; border-radius: 6px; background: var(--nd-chip-bg, rgba(127,127,127,0.12)); }
     .pf-cse__note { padding: 48px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
     .pf-cse__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0 24px;
       display: flex; flex-direction: column; gap: 14px; }
@@ -554,6 +573,11 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     return id ? `${stageKey}#${id.slice(0, 8)}` : stageKey;
   }
   readonly loading = signal(true);
+  /** List → detail zoom (core/navigation/zoom.directive): the culture tile /
+   *  tube tile answers to the order-test id OR the sample id. */
+  protected readonly zoom = inject(ZoomTransitionService);
+  readonly zoomKeys = computed(() => [this.routeId, this.c()?.orderTestId, this.c()?.sampleId]);
+  private readonly routeId = inject(ActivatedRoute).snapshot.paramMap.get('orderTestId');
   readonly busy = signal(false);
   /** Per-stage draft notes (autosaved to localStorage), keyed by stage key. */
   readonly drafts = signal<Record<string, string>>({});

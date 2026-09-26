@@ -327,7 +327,7 @@
       @let patient = r.order?.patient;
       @let patientTitle = patient ? formatReportPatient(patient) : 'Report #' + r.id.slice(0, 8);
 
-      <div class="pf-rq-row" [class]="'pf-rq-row--' + r.deliveryStatus">
+      <div class="pf-rq-row" [class]="'pf-rq-row--' + r.deliveryStatus" [pfZoomSource]="[r.id, r.orderId]">
         <span class="pf-rq-row__accent" aria-hidden="true"></span>
         <div class="pf-report-icon" [class]="'pf-report-' + r.deliveryStatus">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
