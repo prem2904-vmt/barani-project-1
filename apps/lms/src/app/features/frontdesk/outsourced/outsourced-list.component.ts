@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, computed, inject, input, signal } from '@angular/core';
 import { DialogService } from '../../../core/services/dialog.service';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -9,7 +9,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import {
   OutsourcedStatusFilter, OutsourcedTube, PARTNER_REPORT_ACCEPT, STATUS_LABEL, absoluteFileUrl, actionLines,
-  partnerFileProblem, rowReport,
+  filterOutsourced, partnerFileProblem, rowReport,
 } from './outsourced-view';
 
 /**
@@ -17,8 +17,10 @@ import {
  * patient (full name), order ID, tests, partner lab, dispatched date and a
  * neutral status chip (Completed carries a violet check — never green).
  * Row actions (text on web, icon on touch): Upload report · View · Undo.
- * When `showFilters` is on (classic design — the new design puts them in the
- * band's pill) the status / partner / search controls render above the list.
+ * The search lives in the work card's header (it sets `svc.query`). Classic
+ * design (`showFilters`) keeps the status / partner filters above the list;
+ * the new design has NO filter bar (owner) — every tube is listed, still
+ * outsourced first, and the status chip on each row carries the distinction.
  */
 @Component({
   selector: 'pf-outsourced-list',
@@ -26,27 +28,24 @@ import {
   imports: [DatePipe, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-out__filters">
-      @if (showFilters()) {
+    @if (showFilters()) {
+      <div class="pf-out__filters">
         <pf-segmented [options]="statusOptions()" [value]="svc.status()" size="sm"
                       (valueChange)="setStatus($event)"></pf-segmented>
         <pf-select size="sm" [options]="partnerSelectOptions()" [value]="svc.partnerId() ?? ''"
                    placeholder="All partner labs" (valueChange)="svc.partnerId.set($event || null)"></pf-select>
-      }
-      <input class="nd-input pf-out__q" type="search" [value]="svc.query()"
-             (input)="svc.query.set($any($event.target).value)"
-             placeholder="Search patient, order, sample, test" aria-label="Search outsourced tests" />
-    </div>
+      </div>
+    }
 
     <input #file type="file" class="pf-out__file" [accept]="accept" (change)="onFile($event)" tabindex="-1" aria-hidden="true" />
 
     @if (svc.loading() && svc.rows().length === 0) {
       <p class="pf-out__empty">Loading outsourced tests…</p>
-    } @else if (svc.visible().length === 0) {
-      <p class="pf-out__empty">{{ svc.rows().length ? 'No outsourced tests match these filters.' : 'No outsourced tests yet.' }}</p>
+    } @else if (shown().length === 0) {
+      <p class="pf-out__empty">{{ svc.rows().length ? 'No outsourced tests match this search.' : 'No outsourced tests yet.' }}</p>
     } @else {
       <ul class="pf-out__list" aria-label="Outsourced tests">
-        @for (r of svc.visible(); track r.sampleId) {
+        @for (r of shown(); track r.sampleId) {
           <li class="nd-row pf-out__row" [attr.data-status]="r.status">
             <div class="pf-out__main">
               <p class="pf-out__sample nd-num">{{ r.barcode ?? '—' }}</p>
@@ -113,7 +112,6 @@ import {
   styles: [`
     :host { display: block; }
     .pf-out__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
-    .pf-out__q { flex: 1 1 200px; min-width: 0; max-width: 320px; min-height: 36px; }
     .pf-out__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .pf-out__empty { margin: 0; padding: 24px 12px; text-align: center; font-size: 13px; color: var(--text-muted); }
     .pf-out__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -131,7 +129,6 @@ import {
     .pf-out__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
     @media (max-width: 640px) {
       .pf-out__acts { margin-left: 0; width: 100%; justify-content: flex-end; }
-      .pf-out__q { max-width: none; font-size: 16px; }
     }
   `],
 })
@@ -140,8 +137,16 @@ export class OutsourcedListComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
 
-  /** Classic design renders the filters here; the new design puts them in the band pill. */
+  /** Classic design renders the status / partner filters here; the new design has none. */
   readonly showFilters = input(false);
+
+  /** Rows on screen: classic = the service's filtered set; new design = every
+   *  status (search only), open tubes before completed ones. */
+  readonly shown = computed(() => {
+    if (this.showFilters()) return this.svc.visible();
+    const rows = filterOutsourced(this.svc.rows(), { query: this.svc.query(), status: 'all', partnerId: null });
+    return [...rows.filter(r => r.status !== 'completed'), ...rows.filter(r => r.status === 'completed')];
+  });
 
   readonly web = webPointerSignal();
   readonly busy = signal<string | null>(null);

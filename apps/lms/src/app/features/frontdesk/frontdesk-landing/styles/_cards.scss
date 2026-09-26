@@ -595,7 +595,9 @@
   box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
 }
 .pf-tabs__count {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  /* Noto Sans tabular numbers — never a monospace chip (ND). */
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
   font-size: 10.5px;
   font-weight: 700;
   padding: 1px 7px;

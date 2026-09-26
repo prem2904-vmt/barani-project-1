@@ -66,44 +66,8 @@
     color: #7c3aed;
   }
 
-  /* Section tabs (APPOINTMENTS · IN PROGRESS · COMPLETED · PAYMENTS DUE):
-     quiet capitalized 12px; active = white pill w/ #ecd8ff hairline,
-     violet text; counts in JetBrains Mono chips. */
-  .pf-tabs__btn {
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 9999px;
-    padding: 5px 12px;
-    font-size: 12px; font-weight: 500; letter-spacing: 0.69px;
-    color: #6b7280;
-    text-transform: capitalize;
-  }
-  .pf-tabs__btn--on {
-    background: #ffffff;
-    border-color: #ecd8ff;
-    color: #8749ee;
-  }
-  .pf-tabs__count {
-    background: #ffffff;
-    border: 1px solid #f0f1f3;
-    border-radius: 9999px;
-    padding: 1px 7px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 10.5px; font-weight: 700; letter-spacing: 0.69px;
-    color: #6b7280;
-  }
-  .pf-tabs__btn--on .pf-tabs__count { background: #f8f2ff; border-color: transparent; color: #7c3aed; }
-
-  /* Date-range strip (Yesterday · Today · Tomorrow · Custom). */
-  .pf-hdr-date-pills { background: #ffffff; border-radius: 20px; padding: 2px; }
-  .pf-hdr-date-pill {
-    background: transparent; border: none; border-radius: 8px;
-    padding: 6px 10px; font-size: 12px; color: #4c4a63;
-  }
-  .pf-hdr-date-pill--on {
-    background: #ffffff; border-radius: 10px; color: #7c3aed; font-weight: 500;
-    box-shadow: 0 1px 1px rgba(16, 24, 40, 0.06), 0 1px 1.5px rgba(16, 24, 40, 0.1);
-  }
+  /* Section tabs + date range (APPOINTMENTS · IN PROGRESS … / Yesterday ·
+     Today …): ND segmented filters — see the shared block at the end. */
 
   /* Day strip: 73×40 white shadow tiles; active = violet text + #eee1fd ring. */
   .pf-daystrip__day {
@@ -143,11 +107,6 @@
   /* Draft cards have no select circle — [text][actions] only. Without
      this the 4-track override dumped the name into the 22px column. */
   .pf-card--draft { grid-template-columns: 1fr auto; }
-
-  /* Active date pill: the incumbent style painted its label white (it sat
-     on a violet fill) — force the designer's violet on white. */
-  .pf-hdr-date-pill--on,
-  .pf-hdr-date-pill--on * { color: #7c3aed !important; }
 
   /* Department chips → the frame's quiet outline chip (status dot kept). */
   .pf-card__dept {
@@ -255,41 +214,7 @@
     color: #c4b5fd;
   }
 
-  .pf-tabs__btn {
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 9999px;
-    padding: 5px 12px;
-    font-size: 12px; font-weight: 500; letter-spacing: 0.69px;
-    color: #9ca3af;
-  }
-  .pf-tabs__btn--on {
-    background: rgba(139, 92, 246, 0.14);
-    border-color: rgba(168, 85, 247, 0.35);
-    color: #c4b5fd;
-  }
-  .pf-tabs__count {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 9999px;
-    padding: 1px 7px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 10.5px; font-weight: 700; letter-spacing: 0.69px;
-    color: #9ca3af;
-  }
-  .pf-tabs__btn--on .pf-tabs__count { background: rgba(139, 92, 246, 0.22); border-color: transparent; color: #ddd6fe; }
-
-  .pf-hdr-date-pills { background: rgba(255, 255, 255, 0.05); border-radius: 20px; padding: 2px; }
-  .pf-hdr-date-pill {
-    background: transparent; border: none; border-radius: 8px;
-    padding: 6px 10px; font-size: 12px; color: #9ca3af;
-  }
-  .pf-hdr-date-pill--on,
-  .pf-hdr-date-pill--on * { color: #c4b5fd !important; }
-  .pf-hdr-date-pill--on {
-    background: rgba(139, 92, 246, 0.18); border-radius: 10px; font-weight: 500;
-    box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.3);
-  }
+  /* Section tabs + date range: shared ND block at the end of the file. */
 
   .pf-daystrip__day {
     background: rgba(255, 255, 255, 0.05); border: 1px solid transparent; border-radius: 12px;
@@ -388,4 +313,164 @@
   }
   :host-context(.design-new) .pf-daystrip__dow { font-size: 9.5px; letter-spacing: 0.06em; }
   :host-context(.design-new) .pf-daystrip__n { font-size: 13px; }
+}
+
+/* ══ Card-header filters, both cards, both themes (new design, ND §3) ══
+   The section tabs (APPOINTMENTS / IN PROGRESS …) and the date range
+   (Yesterday · Today …) are ND segmented controls: a neutral track,
+   the selected segment raised on the card surface with primary text —
+   never violet (violet is for real CTAs only). Both are 36px tall so
+   the two card headers line up with the work card's search field.
+   Counts are plain Noto Sans tabular numbers, never monospace chips. */
+:host-context(.light.design-new),
+:host-context(.dark.design-new) {
+  .pf-tabs,
+  .pf-hdr-date-pills {
+    height: 36px;
+    padding: 2px;
+    gap: 2px;
+    border-radius: var(--nd-radius-sm, 10px);
+    background: var(--nd-chip-bg);
+    border: 1px solid var(--nd-line);
+    box-shadow: none;
+  }
+  .pf-tabs__btn,
+  .pf-hdr-date-pill {
+    height: 30px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .pf-tabs__btn:not(.pf-tabs__btn--on):hover,
+  .pf-hdr-date-pill:not(.pf-hdr-date-pill--on):hover { background: transparent; color: var(--text-primary); }
+  .pf-tabs__btn--on,
+  .pf-tabs__btn--on:hover,
+  .pf-hdr-date-pill--on,
+  .pf-hdr-date-pill--on:hover {
+    background: var(--nd-card-bg);
+    border-color: transparent;
+    color: var(--text-primary) !important;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  }
+  .pf-hdr-date-pill--on * { color: var(--text-primary) !important; }
+  /* !important: the light-theme 'ok' tone paints a green chip with it. */
+  .pf-tabs__count,
+  .pf-tabs__count[data-tone],
+  .pf-tabs__btn--on .pf-tabs__count {
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border: 0 !important;
+    border-radius: 0;
+    background: none !important;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--text-muted) !important;
+  }
+  .pf-tabs__btn--on .pf-tabs__count { color: var(--text-secondary) !important; }
+
+  /* Header strips: identical height on both cards. */
+  .pf-appt-split__hdr--tabs { min-height: 52px; padding: 8px 12px; gap: 10px; }
+
+  /* Phone list switcher = the same neutral segmented filter (44px). The
+     global new-design `--on` rule would tint it violet, hence !important. */
+  .pf-mtabs { background: var(--nd-chip-bg); border-color: var(--nd-line); border-radius: 12px; padding: 3px; }
+  .pf-mtab { height: 44px; color: var(--text-secondary); }
+  .pf-mtab--on {
+    background: var(--nd-card-bg) !important;
+    background-image: none !important;
+    color: var(--text-primary) !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18) !important;
+  }
+  .pf-mtab__count,
+  .pf-mtab--on .pf-mtab__count,
+  .pf-mtab--on .pf-mtab__count[data-tone='warning'] {
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    background: none;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+}
+
+/* ══ Work card header: search, then the filter — ONE row (ND §1) ══
+   Compact kit search (icon + .nd-input, 36px) first, then the tab
+   filter in its own horizontal scroller so it never overflows the card.
+   The search shrinks first; the date range folds into its icon menu
+   when the card is too narrow to hold all three. */
+.pf-work-hdr { gap: 10px; }
+.pf-work-find {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 240px;
+  max-width: 320px;
+  min-width: 132px;
+  margin: 0;
+  cursor: text;
+}
+.pf-work-find__icon {
+  position: absolute;
+  left: 11px;
+  color: var(--text-tertiary, var(--text-muted));
+  pointer-events: none;
+}
+.pf-work-find .pf-work-find__input {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px 0 34px;
+  font-size: 13px;
+}
+.pf-work-hdr__filter {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pf-work-hdr__filter::-webkit-scrollbar { display: none; }
+.pf-work-find--phone { display: none; }
+.pf-work-nomatch {
+  list-style: none;
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+/* Narrow card: the tabs may scroll inside their own box instead. */
+@container (max-width: 600px) {
+  .pf-work-hdr .pf-work-hdr__filter { flex: 0 1 auto; }
+}
+@container (max-width: 1080px) {
+  .pf-work-hdr .pf-hdr-date-pills { display: none !important; }
+  .pf-work-hdr .pf-hdr-filter { display: inline-flex !important; }
+}
+
+/* Phones: pane headers are hidden; the search stacks full width above
+   the list switcher (the filter row). 44px target, 16px text (no iOS zoom). */
+@media (max-width: 640px) {
+  .pf-work-find--phone {
+    display: flex;
+    flex: none;
+    width: 100%;
+    margin: 0 0 8px;
+  }
+  .pf-work-find--phone .pf-work-find__input {
+    min-height: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
 }

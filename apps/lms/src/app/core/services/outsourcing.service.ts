@@ -11,8 +11,8 @@ import {
 /**
  * The Frontdesk outsourcing desk: the "Outsourced" tab's rows + filters, and
  * the partner-report upload → Completed flow (backend OutsourcingService).
- * Filters live here so the band's pill (new design) and the tab body share
- * one state.
+ * The query is set by the work card's header search; status / partner are
+ * the classic design's in-list filters (the new design has none).
  */
 @Injectable({ providedIn: 'root' })
 export class OutsourcingService {

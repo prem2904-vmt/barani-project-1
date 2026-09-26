@@ -192,15 +192,6 @@
         </button>
       </ng-container>
 
-      <!-- Outsourced tab filters ride in the pill (status + partner lab). -->
-      <ng-container band-tools>
-        @if (rightTab() === 'out') {
-        <pf-segmented [options]="outStatusOptions()" [value]="outsourcing.status()" size="sm"
-                      (valueChange)="setOutStatus($event)"></pf-segmented>
-        <pf-select size="sm" [options]="outPartnerOptions()" [value]="outsourcing.partnerId() ?? ''"
-                   placeholder="All partner labs" (valueChange)="setOutPartner($event)"></pf-select>
-        }
-      </ng-container>
     </pf-hero-band>
     }
   </header>
@@ -241,6 +232,20 @@
                accordion for an icon segmented control: Appointments /
                In progress / Completed. Hidden on iPad/desktop where
                all panes lay out side by side. -->
+          <!-- Phones: the pane headers are hidden, so the work card's search
+               stacks full width ABOVE the list switcher (the filter row). -->
+          @if (mobileList() !== 'appt' && mobileList() !== 'home') {
+          <label class="pf-work-find pf-work-find--phone">
+            <svg class="pf-work-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input class="nd-input pf-work-find__input" type="search" [value]="workQuery()"
+              (input)="setWorkQuery($any($event.target).value)"
+              placeholder="Search this list" aria-label="Search patient, order, sample or test in this list" />
+          </label>
+          }
           <div class="pf-mtabs" role="tablist" aria-label="List view">
             @if (showAppt()) {
             <button type="button" role="tab" class="pf-mtab press" [class.pf-mtab--on]="mobileList() === 'appt'"
@@ -627,8 +632,21 @@
               [class.pf-appt-split__pane--filtering]="workFilterOpen()"
               [class.pf-appt-split__pane--expanded]="expandedPane() === 'work'"
               [class.pf-appt-split__pane--collapsed]="expandedPane() !== 'work' && expandedPane() !== 'none'">
-              <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs" (click)="togglePane('work')" role="button"
-                tabindex="0" [attr.aria-expanded]="expandedPane() === 'work'">
+              <!-- ONE header row (ND "card header: search + filter"): compact
+                   search first, then the tab filter in its own scroller. -->
+              <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs pf-work-hdr" (click)="togglePane('work')"
+                role="button" tabindex="0" [attr.aria-expanded]="expandedPane() === 'work'">
+                <label class="pf-work-find" (click)="$event.stopPropagation()">
+                  <svg class="pf-work-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input class="nd-input pf-work-find__input" type="search" [value]="workQuery()"
+                    (input)="setWorkQuery($any($event.target).value)" (keydown)="$event.stopPropagation()"
+                    placeholder="Search this list" aria-label="Search patient, order, sample or test in this list" />
+                </label>
+                <div class="pf-work-hdr__filter">
                 <div class="pf-tabs" role="tablist" aria-label="Work pane tabs" (click)="$event.stopPropagation()">
                   <button type="button" role="tab" class="pf-tabs__btn press"
                     [class.pf-tabs__btn--on]="rightTab() === 'ip'" [attr.aria-selected]="rightTab() === 'ip'"
@@ -656,6 +674,7 @@
                     Outsourced
                     <span class="pf-tabs__count">{{ outsourcing.counts().outsourced }}</span>
                   </button>
+                </div>
                 </div>
 
                 @if (rightTab() === 'ip') {
@@ -734,9 +753,9 @@
               <!-- IN-PROGRESS TAB — saved drafts surface at the top of the same
                    list (parked carts, localStorage), then live in-progress orders. -->
               @if (rightTab() === 'ip') {
-              @if (draftOrders().length > 0) {
+              @if (shownDrafts().length > 0) {
               <ul class="pf-cards pf-cards--drafts">
-                @for (d of draftOrders(); track d.patientId) {
+                @for (d of shownDrafts(); track d.patientId) {
                 <li>
                   <div class="pf-card pf-card--ip pf-card--draft" (click)="resumeDraft(d)">
                     <pf-avatar [name]="d.patient.displayName ?? 'Patient'" [size]="40"></pf-avatar>
@@ -809,7 +828,10 @@
               </div>
               } @else {
               <ul class="pf-cards">
-                @for (o of visibleOrders(); track o.id) {
+                @if (workQuery() && shownInProgress().length === 0 && shownDrafts().length === 0) {
+                <li class="pf-work-nomatch">No matches for “{{ workQuery() }}”.</li>
+                }
+                @for (o of shownInProgress(); track o.id) {
                 <li>
                   <div class="pf-card pf-card--ip pf-card--token-layout" [attr.data-priority]="o.priority"
                     [class.pf-card--selected]="selectedIds().has(o.id)" (click)="openOrder(o)">
@@ -929,7 +951,10 @@
               </div>
               } @else {
               <ul class="pf-cards">
-                @for (o of completedOrders(); track o.id; let idx = $index) {
+                @if (workQuery() && shownCompleted().length === 0) {
+                <li class="pf-work-nomatch">No matches for “{{ workQuery() }}”.</li>
+                }
+                @for (o of shownCompleted(); track o.id; let idx = $index) {
                 <li>
                   <div class="pf-card pf-card--ip pf-card--completed" [attr.data-priority]="o.priority"
                     [class.pf-card--active-share]="activeShareMenuOrderId() === o.id"
@@ -1006,7 +1031,8 @@
 
               <!-- OUTSOURCED TAB — tests sent to partner labs; the front desk
                    uploads the partner's report to complete them. New design:
-                   the status / partner filters ride in the band's pill. -->
+                   no filter bar — each row shows its status and the card's
+                   header search narrows the list (classic keeps its filters). -->
               @if (rightTab() === 'out') {
               <pf-outsourced-list [showFilters]="!theme.isNewDesign()"></pf-outsourced-list>
               }
@@ -1028,7 +1054,10 @@
               </div>
               } @else {
               <ul class="pf-cards">
-                @for (o of paymentsDueOrders(); track o.id) {
+                @if (workQuery() && shownPaymentsDue().length === 0) {
+                <li class="pf-work-nomatch">No matches for “{{ workQuery() }}”.</li>
+                }
+                @for (o of shownPaymentsDue(); track o.id) {
                 <li>
                   <div class="pf-card pf-card--ip pf-card--completed" [attr.data-priority]="o.priority"
                     (click)="openOrder(o)">

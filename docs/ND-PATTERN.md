@@ -110,6 +110,11 @@ Which side it sits on depends on what the companion does:**
   label and the header row have no fill / pill behind them. Nothing else unless it is a real
   control for that card (toggles in slate). Counts are plain muted text on
   the right — never a pill.
+- **Card header: search + filter** = ONE row inside the card padding: a compact
+  kit search first (icon + `.nd-input`, 36px), then the neutral segmented
+  filter (tab counts = plain tabular numbers). Same height as the sibling card's
+  header; the search shrinks first, the filter scrolls in its own box. Phones:
+  search full width (44px, 16px text), then the filter row. No filters in the band.
 - **Row actions: text on web, icon on touch.** Per-row actions (Delegate,
   Print, Edit…) use the kit's `.nd-rowact`. On web (`(hover: hover) and
   (pointer: fine)`, via `webPointerSignal()` in `shared/utils/pointer-mode.ts`,

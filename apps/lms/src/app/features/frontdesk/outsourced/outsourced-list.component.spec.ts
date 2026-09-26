@@ -115,4 +115,18 @@ describe('Frontdesk Outsourced tab', () => {
     f.detectChanges();
     expect(el.querySelectorAll('.pf-out__row').length).toBe(1);
   });
+
+  it('new design: no filter bar, every status listed (open first), the header search narrows it', () => {
+    const done = row({ sampleId: 's2', barcode: 'OUT-0002', patientName: 'Mr. Arun Kumar', status: 'completed', hasReport: true });
+    const { f, el, svc } = setup([done, row()]);
+    expect(el.querySelector('pf-segmented')).toBeNull();
+    expect(el.querySelector('pf-select')).toBeNull();
+    expect(el.querySelector('input[type="search"]')).toBeNull();
+    const samples = [...el.querySelectorAll('.pf-out__sample')].map(n => n.textContent?.trim());
+    expect(samples).toEqual(['OUT-0001', 'OUT-0002']);
+    expect([...el.querySelectorAll('.pf-out__status')].map(n => n.textContent?.trim())).toEqual(['Outsourced', 'Completed']);
+    svc.query.set('arun');
+    f.detectChanges();
+    expect(el.querySelectorAll('.pf-out__row').length).toBe(1);
+  });
 });

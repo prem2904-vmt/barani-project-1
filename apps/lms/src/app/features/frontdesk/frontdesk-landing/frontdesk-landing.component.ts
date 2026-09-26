@@ -104,10 +104,8 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { savedValueRows } from '../../../shared/utils/result-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
-import { OutsourcedListComponent, outsourcedPartnerOptions, outsourcedStatusOptions } from '../outsourced/outsourced-list.component';
-import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
-import { SelectComponent } from '../../../shared/primitives/select.component';
-import { OutsourcedStatusFilter } from '../outsourced/outsourced-view';
+import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
+import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -146,7 +144,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, SegmentedComponent, SelectComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -329,11 +327,17 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // ── Outsourced tab ─────────────────────────────────────────
   // Outsourced tests never enter the lab's queues; the front desk tracks
   // them here and uploads the partner lab's report to complete them.
+  // No filter bar anywhere (owner): the tab lists every outsourced tube with
+  // its status on the row, and the work card's header search narrows it.
   readonly outsourcing = inject(OutsourcingService);
-  readonly outStatusOptions = computed(() => outsourcedStatusOptions(this.outsourcing.counts()));
-  readonly outPartnerOptions = computed(() => outsourcedPartnerOptions(this.outsourcing.partners()));
-  setOutStatus(v: string) { this.outsourcing.status.set(v as OutsourcedStatusFilter); }
-  setOutPartner(v: string) { this.outsourcing.partnerId.set(v || null); }
+
+  // ── Work card header search ────────────────────────────────
+  // ONE compact search in the right card's header row (before the tab
+  // filter) narrows whichever list is active. Tab counts stay totals.
+  readonly workQuery = signal('');
+  setWorkQuery(v: string) { this.workQuery.set(v ?? ''); }
+  /** The Outsourced tab shares the same field (its service holds the query). */
+  private readonly _workQueryToOutsourced = effect(() => this.outsourcing.query.set(this.workQuery()));
 
   setRightTab(t: 'ip' | 'done' | 'billing' | 'out') {
     this._rightTab.set(t);
@@ -782,6 +786,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     }
     return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   });
+
+  /** The active list, narrowed by the work card's header search. */
+  readonly shownDrafts = computed(() => {
+    const q = this.workQuery();
+    return this.draftOrders().filter(d => patientMatchesWorkQuery(d.patient, q));
+  });
+  readonly shownInProgress = computed(() => filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery()));
+  readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()));
+  readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()));
 
   getBillBalance(orderId: string): number {
     return this._bills().find(b => b.orderId === orderId)?.balance ?? 0;
