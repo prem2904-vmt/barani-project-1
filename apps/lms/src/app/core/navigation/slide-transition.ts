@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { Router, ViewTransitionInfo } from '@angular/router';
-import { runZoom, zoomDirection } from './zoom-transition';
+import { ZoomTransitionService, prefersReducedMotion } from './zoom-transition';
 
 /** Which step-to-step navigations slide, and in which direction. A flow
  *  moves FORWARD (current screen exits left, next enters from the right)
@@ -15,23 +15,25 @@ export function slideDirection(from: string, to: string): 'forward' | 'back' | n
   return null;
 }
 
-/** Router `onViewTransitionCreated` hook (runs in an injection context):
- *  tags <html> with the direction for the duration of the transition so the
- *  global ::view-transition CSS can slide; My Work ⇄ result entry zooms
- *  instead (zoom-transition.ts); skips everything else (and all of it under
- *  reduced motion). */
+/** Router `onViewTransitionCreated` hook (runs in an injection context).
+ *  Two motions, one rule (docs/ND-PATTERN.md §9):
+ *   - step → step SLIDES: tags <html> with the direction for the duration of
+ *     the transition so the global ::view-transition CSS can slide;
+ *   - list → detail ZOOMS: a tapped [pfZoomSource] morphs into the detail's
+ *     [pfZoomTarget], and back reverses it (zoom-transition.ts).
+ *  Everything else swaps instantly, and all of it does under reduced motion. */
 export function slideTransition(info: ViewTransitionInfo): void {
   const router = inject(Router);
+  const zoom = inject(ZoomTransitionService);
   const nav = router.getCurrentNavigation();
   const to = nav ? router.serializeUrl(nav.finalUrl ?? nav.extractedUrl) : '';
+  if (prefersReducedMotion()) { zoom.disarm(); info.transition.skipTransition(); return; }
   const dir = slideDirection(router.url, to);
-  const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduce) { info.transition.skipTransition(); return; }
   if (!dir) {
-    const zoom = zoomDirection(router.url, to);
-    if (!zoom || !runZoom(info, zoom)) info.transition.skipTransition();
+    if (!zoom.onRouterTransition(info, router.url, to)) info.transition.skipTransition();
     return;
   }
+  zoom.disarm();
   const root = document.documentElement;
   const cls = dir === 'forward' ? 'pf-vt-forward' : 'pf-vt-back';
   root.classList.add(cls);

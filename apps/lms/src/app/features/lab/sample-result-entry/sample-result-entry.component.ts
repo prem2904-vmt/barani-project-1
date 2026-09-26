@@ -55,7 +55,8 @@ import { CommentThreadComponent } from "../../../shared/components/comment-threa
 import { SelectComponent } from "../../../shared/primitives/select.component";
 import { formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
-import { sampleVtName } from "../../../core/navigation/zoom-transition";
+import { ZoomTransitionService } from "../../../core/navigation/zoom-transition";
+import { ZoomTargetDirective } from "../../../core/navigation/zoom.directive";
 import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -103,6 +104,7 @@ function calcKey(testId: string, paramName: string): string {
     CommentThreadComponent,
     SelectComponent,
     HeroBandComponent,
+    ZoomTargetDirective,
   ],
   templateUrl: "./sample-result-entry.component.html",
   styleUrl: "./sample-result-entry.component.scss",
@@ -122,10 +124,14 @@ export class SampleResultEntryComponent {
 
   // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
   /** The route's sample id, known before the tube loads — the RESULTS
-   *  skeleton carries the zoom name so the queue tile can morph into it. */
+   *  skeleton is the zoom target so the queue tile can morph into it. */
   readonly routeSampleId = signal<string | null>(null);
-  /** view-transition-name shared with the My Work tile (zoom-transition.ts). */
-  readonly vtName = computed(() => sampleVtName(this.routeSampleId() ?? this._sample()?.id));
+  /** Keys the list tile answers to (core/navigation/zoom.directive). */
+  readonly zoomKeys = computed(() => [this.routeSampleId(), this._sample()?.id]);
+  /** Keep the skeleton up while the zoom morphs into it: swapping the named
+   *  card mid-animation cuts the transition short. */
+  private readonly zoom = inject(ZoomTransitionService);
+  readonly showSkeleton = computed(() => this.loading() || this.zoom.holding());
 
   /** Full patient name — never cut in code (ND rule 5). */
   readonly patientName = computed(() => patientDisplayName(this._sample()?.order?.patient) || "Patient");

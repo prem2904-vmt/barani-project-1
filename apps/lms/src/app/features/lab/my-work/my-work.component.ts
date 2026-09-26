@@ -38,6 +38,8 @@ import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-pane
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { plural } from '../../../shared/utils/plural';
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
@@ -67,7 +69,7 @@ const COUNTERS: CounterSpec[] = [
   selector: 'pf-my-work',
   standalone: true,
   imports: [
-    TileGridDirective,
+    TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
     AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, SegmentedComponent,
     ScanIconComponent],
@@ -598,7 +600,7 @@ const COUNTERS: CounterSpec[] = [
         <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
           @for (tube of completedTubes(); track tube.sampleId) {
             <li>
-              <div class="pf-tq pf-tq--done" [attr.data-vt-sample]="tube.sampleId">
+              <div class="pf-tq pf-tq--done" [pfZoomSource]="tube.sampleId">
                 <span class="pf-tq__cap" aria-hidden="true"></span>
                 <div class="pf-tq__main pf-tq__main--link" role="link" tabindex="0"
                      [attr.aria-label]="'View results for ' + (tube.barcode || tube.sampleId)"
@@ -736,7 +738,7 @@ const COUNTERS: CounterSpec[] = [
                            tube for combined entry (Fix 6 contract). -->
                       <ul class="mt-3 space-y-2 pl-2 sm:pl-12">
                         @for (tube of tubesIn(g.items); track tube.sampleId) {
-                          <li class="rounded-lg p-2.5 pf-tube-tile pf-tube-tile--tappable" [attr.data-vt-sample]="tube.sampleId"
+                          <li class="rounded-lg p-2.5 pf-tube-tile pf-tube-tile--tappable" [pfZoomSource]="tube.sampleId"
                               [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
                               [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
                               role="button" tabindex="0"
@@ -852,7 +854,7 @@ const COUNTERS: CounterSpec[] = [
                        area. Hover and press only add FEEDBACK — never reveal
                        content — so the card is identical on a bench tablet and
                        a desktop. -->
-                  <div class="pf-tq" [attr.data-vt-sample]="tube.sampleId"
+                  <div class="pf-tq" [pfZoomSource]="tube.sampleId"
                        [class.pf-tq--urgent]="bucket.level === 'urgent'"
                        [class.pf-tq--high]="bucket.level === 'high'"
                        [class.pf-tq--rejected]="tube.rejections.length > 0"
@@ -2738,6 +2740,9 @@ export class MyWorkComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
+  /** List → detail zoom: gated opens (scan / claim / reason) re-arm the
+   *  tapped tile right before navigating (core/navigation/zoom-transition). */
+  private readonly zoom = inject(ZoomTransitionService);
   private readonly injector = inject(Injector);
   private readonly process = inject(ProcessWorkflowService);
   protected readonly labCfg = inject(BranchLabConfigService);
@@ -3228,6 +3233,7 @@ export class MyWorkComponent implements OnInit {
           // so backing out of the result screen lands on the work it joined.
           this.setTab('my_work');
           if (this.mobileTab() === 'completed') this.mobileTab.set('mywork');
+          this.zoom.rearm(tube.sampleId);
           this.router.navigate(['/lab/sample', tube.sampleId]);
         },
         error: e => {
@@ -3823,6 +3829,7 @@ export class MyWorkComponent implements OnInit {
         // straight into result entry instead of parking it in My Work and
         // demanding a second scan to open it (the claim scan already
         // verified the tube; the server remembers via scanVerifiedAt/By).
+        this.zoom.rearm(c.sampleId);
         this.router.navigate(['/lab/sample', c.sampleId], { state: { justScanned: true } });
       },
       error: e => { this._claiming.set(false); this.toasts.error(ApiError.from(e).message); }
@@ -3831,6 +3838,7 @@ export class MyWorkComponent implements OnInit {
 
   private enterJustScanned(t: OrderTest) {
     const sid = t.subOrder?.id;
+    this.zoom.rearm(sid);
     if (sid) this.router.navigate(['/lab/sample', sid], { state: { justScanned: true } });
     else this.router.navigate(['/lab/result', t.id], { state: { justScanned: true } });
   }

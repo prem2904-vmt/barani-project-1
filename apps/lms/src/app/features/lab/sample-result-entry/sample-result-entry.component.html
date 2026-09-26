@@ -156,10 +156,11 @@
   <div class="nd-body pf-sre-body">
     <!-- ─── Main column: one RESULTS card per test ─────────────────── -->
     <div class="pf-sre-main" aria-label="Results">
-      @if (loading()) {
-        <!-- Same frame as the loaded page; the first card carries the zoom
-             name so the queue tile morphs straight into it. -->
-        <section class="nd-card pf-sre-card pf-sre-card--skel" aria-busy="true" [style.view-transition-name]="vtName()">
+      @if (showSkeleton()) {
+        <!-- Same frame as the loaded page; the skeleton (then the first card)
+             is the zoom target the queue tile morphs straight into. Held
+             through the morph so the target never swaps mid-animation. -->
+        <section class="nd-card pf-sre-card pf-sre-card--skel" aria-busy="true" [pfZoomTarget]="zoomKeys()">
           <header class="nd-card__head">
             <span class="nd-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
@@ -173,7 +174,7 @@
           </div>
         </section>
       } @else if (!sample()) {
-        <section class="nd-card pf-sre-card">
+        <section class="nd-card pf-sre-card" [pfZoomTarget]="zoomKeys()">
           <div class="nd-card__body"><p class="pf-sre__msg pf-sre__msg--err">Sample not found.</p></div>
         </section>
       } @else {
@@ -259,7 +260,7 @@
           } @else {
             <!-- FLAT block: a profile (titled with its name) or a run of
                  single-value tests — one card, one table, one row each. -->
-            <section class="nd-card pf-sre-card pf-sre__test" [style.view-transition-name]="bi === 0 ? vtName() : null">
+            <section class="nd-card pf-sre-card pf-sre__test" [pfZoomTarget]="bi === 0 ? zoomKeys() : null">
               <header class="nd-card__head">
                 <span class="nd-card__icon" aria-hidden="true">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
@@ -564,7 +565,7 @@
       <ng-template #testCard let-cardTests let-first="first">
         @for (t of cardTests; track t.id; let ti = $index) {
           <section class="nd-card pf-sre-card pf-sre__test"
-                   [style.view-transition-name]="first && ti === 0 ? vtName() : null"
+                   [pfZoomTarget]="first && ti === 0 ? zoomKeys() : null"
                    [class.pf-sre__test--done]="t.status === 'entered' || t.status === 'validated'"
                    [class.pf-sre__test--rejected]="t.status === 're_entry'">
             <header class="nd-card__head">

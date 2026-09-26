@@ -2770,33 +2770,49 @@ html.pf-vt-back::view-transition-new(root)    { animation: pf-vt-in-left 300ms c
   html::view-transition-old(root), html::view-transition-new(root) { animation: none !important; }
 }
 
-/* ═══ Queue → sample ZOOM (core/navigation/zoom-transition.ts) ═══
-   The tapped My Work tile and the first RESULTS card share
-   view-transition-name sample-<id>: the browser morphs one into the other
-   (the ::view-transition-group) on the nd spring, ~400ms. The page behind
-   recedes slightly and fades; back (pf-vt-zoom-out) reverses it. Only
-   navigations zoomDirection() allows get the class; reduced motion skips. */
-@keyframes pf-vt-recede  { to   { opacity: 0; transform: scale(0.97); } }
-@keyframes pf-vt-emerge  { from { opacity: 0; transform: scale(0.97); } }
+/* ═══ List → detail ZOOM (core/navigation/zoom-transition.ts) ═══
+   The tapped [pfZoomSource] and the detail's [pfZoomTarget] share ONE name,
+   pf-zoom, only for the transition. The BOX morphs (the group: position +
+   size on the nd spring, 400ms); the CONTENT never stretches: both snapshots
+   keep their natural size, pinned top-left and clipped by the morphing box,
+   and cross-fade (tile content out early, card content in). The page behind
+   recedes; back (pf-vt-zoom-out) reverses it. Reduced motion: nothing. */
+@keyframes pf-vt-recede   { to   { opacity: 0; transform: scale(0.97); } }
+@keyframes pf-vt-emerge   { from { opacity: 0; transform: scale(0.97); } }
 @keyframes pf-vt-fade-in  { from { opacity: 0; } }
 @keyframes pf-vt-fade-out { to   { opacity: 0; } }
-html.pf-vt-zoom-in::view-transition-group(*),
-html.pf-vt-zoom-out::view-transition-group(*) {
-  animation-duration: 400ms; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+html.pf-vt-zoom-in::view-transition-group(pf-zoom),
+html.pf-vt-zoom-out::view-transition-group(pf-zoom) {
+  animation-duration: 400ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 2;
 }
-html.pf-vt-zoom-in::view-transition-old(*),
-html.pf-vt-zoom-in::view-transition-new(*),
-html.pf-vt-zoom-out::view-transition-old(*),
-html.pf-vt-zoom-out::view-transition-new(*) {
-  animation-duration: 400ms; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+html.pf-vt-zoom-in::view-transition-image-pair(pf-zoom),
+html.pf-vt-zoom-out::view-transition-image-pair(pf-zoom) {
+  overflow: clip;
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
 }
-/* The small tile's snapshot would stretch blurry — hand over to the card fast. */
-html.pf-vt-zoom-in::view-transition-old(*.pf-zoom)  { animation: pf-vt-fade-out 160ms ease-out both; }
-html.pf-vt-zoom-out::view-transition-new(*.pf-zoom) { animation: pf-vt-fade-in 240ms 160ms ease-out both; }
+html.pf-vt-zoom-in::view-transition-old(pf-zoom),
+html.pf-vt-zoom-in::view-transition-new(pf-zoom),
+html.pf-vt-zoom-out::view-transition-old(pf-zoom),
+html.pf-vt-zoom-out::view-transition-new(pf-zoom) {
+  /* Natural size, no scaling: the text stays crisp while the box morphs. */
+  inline-size: auto; block-size: auto; inset-inline-start: 0; inset-block-start: 0;
+  mix-blend-mode: normal;
+}
+html.pf-vt-zoom-in::view-transition-old(pf-zoom)  { animation: pf-vt-fade-out 140ms ease-out both; }
+html.pf-vt-zoom-in::view-transition-new(pf-zoom)  { animation: pf-vt-fade-in 260ms 60ms ease-out both; }
+html.pf-vt-zoom-out::view-transition-old(pf-zoom) { animation: pf-vt-fade-out 180ms ease-out both; }
+html.pf-vt-zoom-out::view-transition-new(pf-zoom) { animation: pf-vt-fade-in 220ms 140ms ease-out both; }
 html.pf-vt-zoom-in::view-transition-old(root)  { animation: pf-vt-recede 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
 html.pf-vt-zoom-in::view-transition-new(root)  { animation: pf-vt-fade-in 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
 html.pf-vt-zoom-out::view-transition-old(root) { animation: pf-vt-fade-out 280ms cubic-bezier(0.32, 0.72, 0, 1) both; }
 html.pf-vt-zoom-out::view-transition-new(root) { animation: pf-vt-emerge 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+/* A detail with its own entrance (Collect's drawer) lets the zoom do it. */
+html.pf-vt-zoom-in .pf-drawer, html.pf-vt-zoom-in .pf-drawer__panel { animation: none !important; }
+html.pf-vt-zoom-in::view-transition-group(root),
+html.pf-vt-zoom-out::view-transition-group(root) { animation-duration: 400ms; }
 @media (prefers-reduced-motion: reduce) {
   html::view-transition-group(*), html::view-transition-old(*), html::view-transition-new(*) { animation: none !important; }
 }

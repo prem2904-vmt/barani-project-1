@@ -471,17 +471,19 @@ describe('Result entry (nd) — phone rows + type scale', () => {
 });
 
 describe('Result entry (nd) — zoom from the queue tile', () => {
-  it('the first RESULTS card carries view-transition-name sample-<id>', async () => {
+  it('the first RESULTS card is the zoom target (keyed by the sample), unnamed at rest', async () => {
     const { el } = await render();
-    const card = el.querySelector('.pf-sre-main .pf-sre-card') as HTMLElement;
-    expect(card.style.getPropertyValue('view-transition-name')).toBe('sample-smp-1');
+    const cards = Array.from(el.querySelectorAll('.pf-sre-main .pf-sre-card')) as HTMLElement[];
+    expect(cards[0].getAttribute('data-zoom-target')).toBe('smp-1');
+    expect(cards.slice(1).every(c => !c.getAttribute('data-zoom-target'))).toBe(true);
+    expect(cards[0].style.getPropertyValue('view-transition-name')).toBe('');
   });
 
-  it('while the tube loads, the skeleton card already carries it (the tile morphs into it)', async () => {
+  it('while the tube loads, the skeleton card is already the target (the tile morphs into it)', async () => {
     const { el, release } = await render({ hold: true });
     const skel = el.querySelector('.pf-sre-card--skel') as HTMLElement;
     expect(skel).not.toBeNull();
-    expect(skel.style.getPropertyValue('view-transition-name')).toBe('sample-smp-1');
+    expect(skel.getAttribute('data-zoom-target')).toBe('smp-1');
     release();
   });
 });
