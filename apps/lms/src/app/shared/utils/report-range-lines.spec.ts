@@ -51,6 +51,32 @@ describe('report PDF — a multi-line reference prints line by line', () => {
     expect(pdf).not.toContain('\\r');
   });
 
+  it('the layout-driven results table (grid) prints each line too, {u} filled with the unit', () => {
+    const grid = {
+      testId: 'glu', testName: 'Glucose Fasting', departmentName: 'Biochemistry', configured: true,
+      columns: [
+        { id: 'c1', name: 'result', label: 'Result', order: 1, width: 40, type: 'result', locked: false },
+        { id: 'c2', name: 'unit', label: 'Unit', order: 2, width: 20, type: 'unit', locked: false },
+        { id: 'c3', name: 'range', label: 'Reference range', order: 3, width: 40, type: 'range', locked: false },
+      ],
+      sections: [{ id: 'g1', type: 'grid', order: 1, isVisible: true, rows: [{
+        parameterName: 'Glucose Fasting', isMerged: false, unit: 'mg/dL',
+        cells: { result: '92', unit: 'mg/dL', range: 'ZGNORMAL 70-99\nZGPREDIAB 100-125\nZGDIAB 126 {u}' },
+      }] }],
+    } as unknown as ResolvedReportLayout;
+    const snap = {
+      patient: { displayName: 'Test Patient', age: 40, sex: 'F' },
+      order: { id: 'o1', orderNumber: 'LAB-2609-000002', createdAt: '2026-09-26T00:00:00Z' },
+      type: 'final',
+      tests: [{ testId: 'glu', name: 'Glucose Fasting', department: 'Biochemistry', sampleType: 'Plasma',
+        result: { values: { 'Glucose Fasting': { value: '92', flag: 'N', unit: 'mg/dL' } } } }],
+    };
+    const doc = buildReportPdf({ report: { id: 'r2', createdAt: '2026-09-26T00:00:00Z', data: JSON.stringify(snap) },
+      resolvedLayouts: { glu: grid }, template: null } as never);
+    const pdf = Buffer.from(doc.output('arraybuffer')).toString('latin1');
+    expect(drawn(pdf).filter(t => t.startsWith('ZG'))).toEqual(['ZGNORMAL 70-99', 'ZGPREDIAB 100-125', 'ZGDIAB 126 mg/dL']);
+  });
+
   it('a one-line reference is unchanged', () => {
     expect(drawn(render('ZONELINE 70-99')).filter(t => t.startsWith('ZONELINE'))).toEqual(['ZONELINE 70-99']);
   });
@@ -60,5 +86,7 @@ describe('report PDF — a multi-line reference prints line by line', () => {
     expect(rangeCellText('a\rb')).toBe('a\nb');
     expect(rangeCellText('a\n\nb')).toBe('a\n\nb');
     expect(rangeCellText(null)).toBe('');
+    expect(rangeCellText('70-99 {U}', 'mg/dL')).toBe('70-99 mg/dL');
+    expect(rangeCellText('70-99 {u}', '')).toBe('70-99');
   });
 });
