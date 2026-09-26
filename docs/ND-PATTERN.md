@@ -1234,15 +1234,26 @@ the Report view (§19). The New design only; classic is unchanged.
   list has NO primary. Phones: the filter scrolls in its own row, 44px tabs.
 - **One card anatomy on every tab:** FULL patient name (wraps, never
   `formatPatientInfo`) + "29/M · MRN · Order LAB-… · time" (Noto, tabular, no
-  "|", no mono) + neutral chips. Report cards: status (Delivered = violet
-  check; Failed / Unpaid = muted red text), "Preliminary" for a partial PDF,
-  and `.nd-rowact` actions (View · Download · Share ▾ · More — text on web,
-  44px icons on touch). The card is the `[pfZoomSource]="[r.id, r.orderId]"`.
+  "|", no mono) + ONE status + actions. The card is the
+  `[pfZoomSource]="[r.id, r.orderId]"`; report actions are `.nd-rowact`
+  (View · Download · Share ▾ · More — text on web, 44px icons on touch).
+- **ONE status per card, on every tab:** a dot + coloured word, no chip,
+  border or background, in the Frontdesk rows' language and tokens (dot =
+  `--<tone>-text`, word = that token mixed 70% with `--text-primary`, AA in
+  light and dark). It sits in a fixed-width, right-aligned column (min-width
+  fits "Preliminary") so status and actions line up on every row. Words
+  (`reportStatus()`, in priority order): **Failed** (red) › **Unpaid** (red,
+  bill due and not yet delivered) › **Delivered** (green, a check instead of
+  the dot) › **Preliminary** (amber: a partial report isn't final, so it
+  REPLACES "Completed") › **Completed** (green). Never a second chip: a fact
+  the status hides ("Preliminary", "Payment due") is appended to the meta
+  line. Phones: the status sits under the name, left-aligned.
 - **Partial cards** (`report-queue.partial.ts`) are grouped by DEPARTMENT,
   not tube: a department is ready / partly ready / pending, and a test is
   "ready" exactly when its tube is fully validated (that is what
-  `generate/partial` prints). Chip: "1 of 3 departments ready" (or "partly
-  ready"). Partly-ready departments mark each test Ready / Pending with where
+  `generate/partial` prints). Status: "Preliminary" (amber); the count ("1 of
+  3 departments ready", or "partly ready") is a meta line under the name, not
+  a chip. Partly-ready departments mark each test Ready / Pending with where
   it is ("Sample not received at the lab yet", "Awaiting validation",
   "Culture in progress · 2 of 4 stages done"). Culture tests show Growth ·
   Organism · AST (n drugs · r resistant) from the snapshot's stages — never

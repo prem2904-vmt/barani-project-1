@@ -24,7 +24,7 @@ import { Report } from "../../../shared/models/report.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { Order, OrderTest } from "../../../shared/models/order.model";
 import { formatPatientInfo, formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
-import { buildPartialOrders, orderLabel, type PrelimOrder, type PrelimRow } from "./report-queue.partial";
+import { buildPartialOrders, orderLabel, reportStatus, type PrelimOrder, type PrelimRow, type ReportStatus } from "./report-queue.partial";
 import { webPointerSignal } from "../../../shared/utils/pointer-mode";
 import {
   ChipComponent,
@@ -90,7 +90,13 @@ export class ReportQueueComponent implements OnInit {
     const p = r.order?.patient;
     const o = r.order as { id: string; orderNumber?: string | null } | undefined;
     const when = this.shortWhen(r.createdAt);
-    return [p ? formatPatientMeta(p as never) : "", o?.id ? orderLabel(o) : "", when].filter(Boolean).join(" · ");
+    return [p ? formatPatientMeta(p as never) : "", o?.id ? orderLabel(o) : "", when, ...this.cardStatus(r).extra]
+      .filter(Boolean).join(" · ");
+  }
+
+  /** The card's ONE status (dot + coloured word, right column) — see reportStatus. */
+  cardStatus(r: Report): ReportStatus {
+    return reportStatus(r.deliveryStatus, r.type, this.isUnpaid(r));
   }
 
   private shortWhen(iso: string | undefined): string {

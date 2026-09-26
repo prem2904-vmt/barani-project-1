@@ -6,7 +6,7 @@ import { signal } from '@angular/core';
 import { of, EMPTY } from 'rxjs';
 import { vi } from 'vitest';
 import { ReportQueueComponent } from './report-queue.component';
-import { cultureStagesDone, cultureSummary, deptCountLabel, pendingStatus } from './report-queue.partial';
+import { cultureStagesDone, cultureSummary, deptCountLabel, pendingStatus, reportStatus } from './report-queue.partial';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -213,11 +213,7 @@ describe('Reports list (nd) — report cards (Completed / Delivered / Failed / A
     expect(meta).toContain('29/M · AA0012 · Order LAB-2609-000102');
     expect(meta).not.toContain('|');
     expect(el.textContent).not.toContain('..');
-    // Status chips are neutral kit chips; Unpaid / Failed are the red ones.
-    expect(first.querySelector('.pf-rq-status')!.classList).toContain('nd-chip');
-    expect(first.querySelector('.pf-rq-unpaid')).not.toBeNull();
-    expect(cards[1].querySelector('.pf-rq-type')!.textContent!.trim()).toBe('Preliminary');
-    expect(cards[2].querySelector('.pf-rq-status svg')).not.toBeNull();   // delivered = violet check
+    // ONE status per card (dot + coloured word, no chip) — see the status block below.
     expect(el.querySelector('pf-chip')).toBeNull();
     // Row actions: kit .nd-rowact (secondary), text on web.
     const acts = first.querySelectorAll('.nd-rowact');
@@ -253,6 +249,79 @@ describe('Reports list (nd) — report cards (Completed / Delivered / Failed / A
   });
 });
 
+describe('Reports list (nd) — ONE status per card (dot + coloured word, no chip)', () => {
+  const statuses = (card: Element) => [...card.querySelectorAll<HTMLElement>('.pf-rq-status')];
+
+  it('every card on every tab has at most one status element, never a chip', async () => {
+    const { el, tab } = await render();
+    for (const v of ['all', 'pending', 'partial', 'delivered', 'failed']) {
+      tab(v);
+      const cards = [...el.querySelectorAll<HTMLElement>('.pf-rq-card')];
+      expect(cards.length).toBeGreaterThan(0);
+      for (const card of cards) {
+        const head = card.querySelector('.pf-rq-card__head') as HTMLElement;
+        expect(statuses(head).length).toBe(1);
+        expect(head.querySelector('.nd-chip, pf-chip, .pf-rq-type, .pf-rq-unpaid, .pf-rq-chip')).toBeNull();
+        const s = statuses(head)[0];
+        expect(s.classList).not.toContain('nd-chip');
+        expect(s.querySelector('.pf-rq-status__dot, .pf-rq-status__mark')).not.toBeNull();
+      }
+    }
+  });
+
+  it('labels + tones on All: Unpaid (red), Preliminary (amber, not Completed), Delivered (check), Failed (red)', async () => {
+    const { el, tab } = await render();
+    tab('all');
+    const cards = [...el.querySelectorAll<HTMLElement>('.pf-rq-card--report')];
+    const got = cards.map(c => {
+      const s = statuses(c)[0];
+      return [s.textContent!.trim(), s.getAttribute('data-tone')];
+    });
+    // r1 is Completed but its bill is due → Unpaid; r2 is a partial report.
+    expect(got).toEqual([['Unpaid', 'red'], ['Preliminary', 'amber'], ['Delivered', 'green'], ['Failed', 'red']]);
+    expect(cards[1].textContent).not.toContain('Completed');
+    expect(cards[2].querySelector('.pf-rq-status__mark')).not.toBeNull();
+    // What the one status hides moves to the meta line, not a second chip.
+    expect(cards[0].querySelector('.pf-rq-card__meta')!.textContent).not.toContain('Payment due');
+  });
+
+  it('a delivered or unpaid preliminary keeps "Preliminary" in the meta line', async () => {
+    const q = [rep('d1', 'delivered', 'partial'), rep('r1', 'pending', 'partial')];
+    const { el, tab } = await render({ queue: q });
+    tab('all');
+    const cards = [...el.querySelectorAll<HTMLElement>('.pf-rq-card--report')];
+    expect(statuses(cards[0])[0].textContent!.trim()).toBe('Delivered');
+    expect(cards[0].querySelector('.pf-rq-card__meta')!.textContent).toMatch(/ · Preliminary$/);
+    expect(statuses(cards[1])[0].textContent!.trim()).toBe('Unpaid');   // o-r1 has a balance due
+    expect(cards[1].querySelector('.pf-rq-card__meta')!.textContent).toMatch(/ · Preliminary$/);
+  });
+
+  it('CSS: no chip background, fixed right column, app status tokens only', () => {
+    const rule = (sel: string) => {
+      const m = ndCss().match(new RegExp(sel.replace(/[.[\]'()]/g, '\\$&') + '\\s*\\{([^}]*)\\}'));
+      return m ? m[1] : '';
+    };
+    const base = rule('.pf-rq-status');
+    expect(base).toMatch(/background: none/);
+    expect(base).toMatch(/border: 0/);
+    expect(base).toMatch(/min-width: \d+px/);
+    expect(base).toMatch(/justify-content: flex-end/);
+    expect(base).toMatch(/--pf-tone: var\(--green-text\)/);
+    // (the compiler may drop or swap the attribute quotes)
+    const tone = (t: string) => ndCss().match(new RegExp(`\\.pf-rq-status\\[data-tone=["']?${t}["']?\\]\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    expect(tone('amber')).toMatch(/var\(--amber-text\)/);
+    expect(tone('red')).toMatch(/var\(--red-text\)/);
+  });
+
+  it('reportStatus priority', () => {
+    expect(reportStatus('pending', 'final', false)).toMatchObject({ label: 'Completed', tone: 'green', extra: [] });
+    expect(reportStatus('pending', 'partial', false)).toMatchObject({ label: 'Preliminary', tone: 'amber', extra: [] });
+    expect(reportStatus('pending', 'partial', true)).toMatchObject({ label: 'Unpaid', tone: 'red', extra: ['Preliminary'] });
+    expect(reportStatus('delivered', 'partial', true)).toMatchObject({ label: 'Delivered', extra: ['Preliminary', 'Payment due'] });
+    expect(reportStatus('failed', 'final', false)).toMatchObject({ label: 'Failed', tone: 'red' });
+  });
+});
+
 describe('Reports list (nd) — Partial tab, truthful per department', () => {
   async function openPartial() {
     const r = await render();
@@ -270,9 +339,14 @@ describe('Reports list (nd) — Partial tab, truthful per department', () => {
     expect(meta.startsWith('29/M · AA0012 · Order LAB-2609-000089 · ')).toBe(true);
     expect(meta).not.toMatch(/\||#7920cd24|created/);
     // 2 departments (MIC with 2 tubes, MOL): MIC is partly ready, MOL pending.
-    const chip = card.querySelector('.pf-rq-chip') as HTMLElement;
-    expect(chip.classList).toContain('nd-chip');
-    expect(chip.textContent!.trim()).toBe('1 of 2 departments partly ready');
+    // The count is a meta line under the name, not a chip; the status is ONE
+    // amber "Preliminary" word.
+    expect(card.querySelector('.pf-rq-chip, .pf-rq-card__head .nd-chip')).toBeNull();
+    expect(card.querySelector('.pf-rq-card__count')!.textContent!.trim()).toBe('1 of 2 departments partly ready');
+    const st = card.querySelectorAll('.pf-rq-card__head .pf-rq-status');
+    expect(st.length).toBe(1);
+    expect(st[0].textContent!.trim()).toBe('Preliminary');
+    expect(st[0].getAttribute('data-tone')).toBe('amber');
   });
 
   it('Microbiology is ONE section that says what prints: the culture ready, the identification pending', async () => {
@@ -321,7 +395,7 @@ describe('Reports list (nd) — Partial tab, truthful per department', () => {
     r.c.toggle(VALUES_ORDER.id); r.f.detectChanges();
     const card = r.el.querySelectorAll<HTMLElement>('.pf-rq-card--partial')[1];
     expect(card.querySelector('.pf-rq-card__meta')!.textContent).toContain('44/F · AA0007 · Order #AAAA1111');
-    expect(card.querySelector('.pf-rq-chip')!.textContent!.trim()).toBe('1 of 2 departments ready');
+    expect(card.querySelector('.pf-rq-card__count')!.textContent!.trim()).toBe('1 of 2 departments ready');
     const flags = [...card.querySelectorAll('.pf-rq-value__flag')].map(x => x.textContent!.trim());
     expect(flags).toEqual(['High', 'Critical']);
     expect(card.textContent).not.toMatch(/[⚠⚑✓]/);

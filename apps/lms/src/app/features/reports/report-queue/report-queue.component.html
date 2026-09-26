@@ -254,8 +254,12 @@
           <span class="pf-rq-card__who">
             <span class="pf-rq-card__name">{{ po.patientName }}</span>
             <span class="pf-rq-card__meta nd-num">{{ po.patientMeta }}</span>
+            <span class="pf-rq-card__meta pf-rq-card__count nd-num">{{ po.countLabel }}</span>
           </span>
-          <span class="nd-chip nd-chip--static pf-rq-chip nd-num">{{ po.countLabel }}</span>
+          <span class="pf-rq-status" data-status="preliminary" data-tone="amber">
+            <span class="pf-rq-status__dot" aria-hidden="true"></span>
+            Preliminary
+          </span>
           <svg class="pf-rq-card__chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="m6 9 6 6 6-6"/>
@@ -372,21 +376,19 @@
             <p class="pf-rq-card__name">{{ reportPatientName(r) }}</p>
             <p class="pf-rq-card__meta nd-num">{{ reportMeta(r) }}</p>
           </div>
-          <div class="pf-rq-card__chips">
-            <span class="nd-chip nd-chip--static pf-rq-status" [attr.data-status]="r.deliveryStatus">
-              @if (r.deliveryStatus === 'delivered') {
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-              }
-              {{ statusLabel(r.deliveryStatus) }}
-            </span>
-            @if (r.type === 'partial') {
-            <span class="nd-chip nd-chip--static pf-rq-type">Preliminary</span>
+          <!-- ONE status: dot + coloured word, no chip, in a fixed right column
+               so status and actions line up on every row (ND-PATTERN §20).
+               Preliminary replaces Completed; hidden facts go in the meta. -->
+          @let st = cardStatus(r);
+          <span class="pf-rq-status" [attr.data-status]="st.key" [attr.data-tone]="st.tone">
+            @if (st.key === 'delivered') {
+            <svg class="pf-rq-status__mark" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            } @else {
+            <span class="pf-rq-status__dot" aria-hidden="true"></span>
             }
-            @if (isUnpaid(r)) {
-            <span class="nd-chip nd-chip--static pf-rq-unpaid">Unpaid</span>
-            }
-          </div>
+            {{ st.label }}
+          </span>
           <div class="pf-rq-card__acts">
             <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" aria-label="View" title="View on screen" (click)="view(r)">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"

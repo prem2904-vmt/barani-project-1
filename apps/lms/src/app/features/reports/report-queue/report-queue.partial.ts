@@ -255,3 +255,29 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
   }
   return out;
 }
+
+/** The card's ONE status (docs/ND-PATTERN.md → "Reports list"): a dot +
+ *  coloured word in the right-hand status column, never a chip, never two.
+ *  Tones are the Frontdesk rows' (`--<tone>-text` tokens). Priority:
+ *    Failed (red) › Unpaid (red, only while not yet delivered) ›
+ *    Delivered (green + check) › Preliminary (amber, a partial report is not
+ *    final, so it REPLACES "Completed") › Completed (green).
+ *  Whatever the status hides is returned as `extra` for the meta line. */
+export type ReportTone = 'green' | 'amber' | 'red';
+export interface ReportStatus {
+  key: 'failed' | 'unpaid' | 'delivered' | 'preliminary' | 'completed';
+  label: string;
+  tone: ReportTone;
+  /** Facts the one status can't carry ("Preliminary", "Payment due"). */
+  extra: string[];
+}
+export function reportStatus(deliveryStatus: string, type: string | undefined, unpaid: boolean): ReportStatus {
+  const prelim = type === 'partial';
+  const extra = (hide: { prelim?: boolean; unpaid?: boolean }) =>
+    [prelim && !hide.prelim ? 'Preliminary' : '', unpaid && !hide.unpaid ? 'Payment due' : ''].filter(Boolean);
+  if (deliveryStatus === 'failed') return { key: 'failed', label: 'Failed', tone: 'red', extra: extra({}) };
+  if (deliveryStatus === 'delivered') return { key: 'delivered', label: 'Delivered', tone: 'green', extra: extra({}) };
+  if (unpaid) return { key: 'unpaid', label: 'Unpaid', tone: 'red', extra: extra({ unpaid: true }) };
+  if (prelim) return { key: 'preliminary', label: 'Preliminary', tone: 'amber', extra: [] };
+  return { key: 'completed', label: 'Completed', tone: 'green', extra: [] };
+}

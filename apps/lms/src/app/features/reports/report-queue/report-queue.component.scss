@@ -691,7 +691,8 @@
    One status filter in the band pill (neutral segmented, plain tabular
    counts), then a stack of cards with ONE anatomy on every tab:
    full name + "29/M · MRN · Order … · time" (Noto, tabular, wraps) +
-   neutral chips + secondary row actions (report) or a collapse (partial).
+   ONE status (dot + coloured word, fixed right column) + secondary row
+   actions (report) or a collapse (partial).
    Palette only; red is kept for Failed / Unpaid / Critical.
    ═════════════════════════════════════════════════════════════════════ */
 
@@ -727,11 +728,24 @@
   display: block; margin: 0; font-size: 12.5px; line-height: 1.35; color: var(--text-tertiary);
   @include nd.no-truncate;
 }
-.pf-rq-card__chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pf-rq-card .nd-chip { height: 26px; padding: 0 9px; font-size: 12px; }
-.pf-rq-status[data-status='delivered'] > svg { color: var(--violet-text, #7c3aed); }
-.pf-rq-status[data-status='failed'],
-.pf-rq-unpaid { color: var(--red-text, #b91c1c); }
+/* ONE status per card: a dot + coloured word, no chip / border / background
+   (the Frontdesk rows' language and tokens). A fixed-width, right-aligned
+   column so the status and the actions line up on every row, whatever the
+   label. The dot is the pure accent token; the word is that token pulled
+   30% toward the text colour so it's AA on the card in light AND dark. */
+.pf-rq-status {
+  --pf-tone: var(--green-text);
+  flex: none; min-width: 108px;
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px;
+  padding: 0; border: 0; background: none;
+  font-size: 13.5px; font-weight: 500; line-height: 18px; white-space: nowrap;
+  color: color-mix(in srgb, var(--pf-tone) 70%, var(--text-primary));
+}
+.pf-rq-status[data-tone='amber'] { --pf-tone: var(--amber-text); }
+.pf-rq-status[data-tone='red'] { --pf-tone: var(--red-text); }
+.pf-rq-status__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--pf-tone); }
+.pf-rq-status__mark { flex: none; display: block; color: var(--pf-tone); }
 .pf-rq-card__chev { flex: none; color: var(--text-tertiary); transition: transform var(--nd-dur) var(--nd-spring); }
 .pf-rq-card.is-open .pf-rq-card__chev { transform: rotate(180deg); }
 
@@ -833,7 +847,9 @@
     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 10px;
   }
   .pf-rq-card__toggle .pf-rq-card__who { grid-column: 1; grid-row: 1; }
-  .pf-rq-card__toggle .pf-rq-chip { grid-column: 1; grid-row: 2; justify-self: start; }
+  .pf-rq-card__toggle .pf-rq-status { grid-column: 1; grid-row: 2; justify-self: start; }
+  /* Status under the name (left), then the actions row. */
+  .pf-rq-card__head .pf-rq-status { flex-basis: 100%; min-width: 0; justify-content: flex-start; }
   .pf-rq-card__toggle .pf-rq-card__chev { grid-column: 2; grid-row: 1; margin-top: 2px; }
   .pf-rq-card__acts { width: 100%; margin-left: 0; justify-content: flex-end; }
   /* 44px targets on phones whatever the pointer (a narrow desktop window too). */
