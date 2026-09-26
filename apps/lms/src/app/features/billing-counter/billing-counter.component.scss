@@ -1,5 +1,5 @@
-/* Billing counter — ND-PATTERN "two jobs on one screen": BILLING (main,
-   left) + MONEY (summary companion, right). Band stays put, only card
+/* Billing counter — ND-PATTERN §17: QUEUE (left, patients waiting to pay)
+   + BILLING (main, the cart + payment) + MONEY (summary companion, right). Band stays put, only card
    bodies scroll: no page scroll. Palette: violet + neutrals; Noto only,
    tabular numbers, never monospace. */
 :host { display: block; height: 100%; min-height: 0; }
@@ -68,14 +68,19 @@
 .pf-bc-switch__n { font-weight: 500; color: var(--text-tertiary); }
 
 /* ── Two cards ──────────────────────────────────────────────────────── */
+/* QUEUE (left, the patients) · BILLING (main, the cart) · MONEY (right). */
 .pf-bc-panels {
   flex: 1 1 auto; min-height: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr); gap: 16px;
+  display: grid; grid-template-columns: 340px minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr); gap: 16px;
   transition: grid-template-columns var(--nd-dur, 320ms) var(--nd-spring, ease);
 }
-.pf-bc-panels--collapsed { grid-template-columns: minmax(0, 1fr) 52px; }
-.pf-bc-panels--narrow { grid-template-columns: minmax(0, 1fr); }
-.pf-bc-main, .pf-bc-side, .pf-bc-strip { min-height: 0; }
+.pf-bc-panels--collapsed { grid-template-columns: 340px minmax(0, 1fr) 52px; }
+@media (max-width: 1280px) {
+  .pf-bc-panels { grid-template-columns: 300px minmax(0, 1fr) 360px; }
+  .pf-bc-panels--collapsed { grid-template-columns: 300px minmax(0, 1fr) 52px; }
+}
+.pf-bc-panels--narrow, .pf-bc-panels--narrow.pf-bc-panels--collapsed { grid-template-columns: minmax(0, 1fr); }
+.pf-bc-queue, .pf-bc-main, .pf-bc-side, .pf-bc-strip { min-height: 0; }
 .pf-bc-side, .pf-bc-strip { animation: pf-bc-side-in var(--nd-dur, 320ms) var(--nd-spring, ease) both; }
 @keyframes pf-bc-side-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 .pf-bc-collapse { width: 32px !important; height: 32px; min-height: 32px; }
@@ -146,6 +151,44 @@
 .pf-bc-empty__title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
 .pf-bc-empty__hint { margin: 0; max-width: 320px; font-size: 13px; line-height: 1.5; color: var(--text-tertiary); }
 
+/* ── QUEUE (left): one row per patient, oldest first ───────────────── */
+.pf-bc-queue__body { gap: 0; }
+.pf-bc-qlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pf-bc-qrow {
+  width: 100%; min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid transparent; border-radius: 12px; background: transparent; font: inherit; text-align: left;
+  cursor: pointer; color: inherit;
+  transition: background var(--nd-dur-fast, 200ms) ease, border-color var(--nd-dur-fast, 200ms) ease;
+}
+.pf-bc-qrow:hover { background: var(--nd-chip-bg); }
+.pf-bc-qrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-bc-qrow[aria-pressed='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+.pf-bc-qrow__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pf-bc-qrow__name { font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
+.pf-bc-qrow__meta { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+.pf-bc-qrow__side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.pf-bc-qrow__amt { font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.pf-bc-qrow__wait { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
+.pf-bc-empty--queue { padding: 40px 12px; }
+
+/* ── Payment (inline panel) + refund + paid ──────────────────────────── */
+.pf-bc-pay { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
+.pf-bc-rmodes { align-self: flex-start; }
+.pf-bc-rmodes .nd-seg__item { min-width: 72px; }
+.pf-bc-done {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 32px 16px; text-align: center;
+}
+.pf-bc-done__mark {
+  display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px;
+  margin-bottom: 8px; border-radius: 999px; background: var(--nd-done-tint, var(--nd-sel-bg));
+  color: var(--color-violet-600, #7c3aed);
+}
+.pf-bc-done__title { margin: 0; font-size: 20px; font-weight: 600; color: var(--text-primary); }
+.pf-bc-done__name { margin: 0; font-size: 15px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
+.pf-bc-done__meta { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.pf-bc-done__hint { margin: 6px 0 0; font-size: 13px; color: var(--text-tertiary); }
+
 /* ── MONEY (side) ───────────────────────────────────────────────────── */
 .pf-bc-money { gap: 20px; }
 .pf-bc-msec { display: flex; flex-direction: column; gap: 8px; }
@@ -194,13 +237,17 @@
   .pf-bc-dayhead { flex-direction: column; align-items: stretch; }
   .pf-bc-date { width: 100%; }
   .pf-bc-clear { height: 44px; min-height: 44px; }
+  .pf-bc-rmodes { align-self: stretch; display: flex; }
+  .pf-bc-rmodes .nd-seg__item { flex: 1 1 0; height: 44px; }
+  .pf-bc-main .nd-card__foot .nd-btn { min-height: 44px; }
 }
 @media (hover: none) and (pointer: coarse) {
   .pf-bc-collapse, .pf-bc-strip__expand { width: 44px !important; height: 44px; min-height: 44px; }
-  .pf-bc-drop__row, .pf-bc-mrow { min-height: 52px; }
+  .pf-bc-drop__row, .pf-bc-mrow, .pf-bc-qrow { min-height: 56px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pf-bc-panels { transition: none; }
-  .pf-bc-side, .pf-bc-strip, .pf-bc-scrim, .pf-bc-drop { animation: none; }
+  .pf-bc-side, .pf-bc-strip, .pf-bc-scrim, .pf-bc-drop, .pf-bc-done { animation: none; }
+  .pf-bc-qrow { transition: none; }
   .pf-bc-us__spin { animation: none; }
 }

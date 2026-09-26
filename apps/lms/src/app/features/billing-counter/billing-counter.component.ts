@@ -4,20 +4,30 @@ import {
   computed, inject, signal, viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { ScanService } from '../../core/services/scan.service';
 import { ToastService } from '../../core/services/toast.service';
+import { ZoomTransitionService } from '../../core/navigation/zoom-transition';
+import { ZoomSourceDirective, ZoomTargetDirective } from '../../core/navigation/zoom.directive';
 import { ApiError } from '../../shared/models/api-response.model';
 import { Bill } from '../../shared/models/bill.model';
 import { Order } from '../../shared/models/order.model';
 import { Patient, formatPatientMeta, patientDisplayName } from '../../shared/models/patient.model';
+import { collectsAtBillingCounter } from '../../shared/models/process-workflow.model';
 import { CurrencyInrPipe } from '../../shared/pipes/currency-inr.pipe';
 import { plural } from '../../shared/utils/plural';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { ScanIconComponent } from '../../shared/components/icons/scan-icon.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
+import {
+  InlinePaymentPanelComponent, InlinePaymentResult,
+} from '../frontdesk/order-create/inline-payment-panel.component';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../frontdesk/billing/invoice-pdf';
+import { environment } from '../../../environments/environment';
 
 /** One row of GET /api/billing/outstanding — a bill with money still moving
  *  (balance > 0 → patient owes; balance < 0 → lab owes a refund). */
@@ -58,13 +68,45 @@ export interface DropRow {
   orderId?: string;
 }
 
-/** The ONE primary for the selected order (ND-PATTERN §2). */
-interface PrimaryAction { kind: 'collect' | 'refund' | 'bill'; label: string; }
+/** One patient waiting at the counter (the LEFT queue). */
+export interface QueueRow {
+  orderId: string;
+  /** Null for an order registered without a bill yet (billed on payment). */
+  billId: string | null;
+  patientId?: string;
+  name: string;
+  /** Order number (the token the patient carries), when known. */
+  orderLabel: string | null;
+  /** Tests on the order, once the order has been read. */
+  tests: number | null;
+  /** What they still owe. */
+  amount: number;
+  /** When they started waiting (order registered, else bill raised). */
+  since: string;
+  unbilled: boolean;
+  phone?: string;
+  mrn?: string;
+}
+
+/** The compact success state after a payment. */
+export interface PaidState {
+  orderId: string;
+  name: string;
+  amount: number;
+  mode: string;
+  bill: Bill | null;
+}
 
 const MODE_LABELS: Record<string, string> = {
-  cash: 'Cash', upi: 'UPI', card: 'Card', wallet: 'Wallet', vendor: 'Vendor', split: 'Split',
+  cash: 'Cash', upi: 'UPI', card: 'Card', wallet: 'Vendor', vendor: 'Vendor', split: 'Split',
   later: 'Pay later', cheque: 'Cheque', neft: 'NEFT', rtgs: 'RTGS', imps: 'IMPS', online: 'Online',
 };
+
+/** Queue refresh cadence: there is no order / billing realtime event, so the
+ *  counter polls gently (skipped while the tab is hidden). */
+export const QUEUE_POLL_MS = 20_000;
+/** At most this many older balances are read for their order details. */
+const ENRICH_CAP = 40;
 
 function mq(query: string, ref: DestroyRef, on: (m: boolean) => void): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
@@ -78,23 +120,48 @@ function readFlag(key: string): boolean {
   try { return localStorage.getItem(key) === '1'; } catch { return false; }
 }
 
+function decimal2(n: number | null | undefined): number {
+  return Math.round((n ?? 0) * 100) / 100;
+}
+
 const inrFmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
 
+/** Distinct tests on an order (a test split across tubes counts once). */
+export function orderTestCount(o: Order | null | undefined): number {
+  const seen = new Set<string>();
+  for (const s of o?.samples ?? []) for (const t of s.tests ?? []) seen.add(t.id || t.name);
+  return seen.size;
+}
+
+/** Quiet "waiting since" label: just now · 12 min · 2 h 5 min · 3 d. */
+export function waitingLabel(iso: string | null | undefined, now: number): string {
+  const t = iso ? new Date(iso).getTime() : NaN;
+  if (!isFinite(t)) return '';
+  const min = Math.max(0, Math.floor((now - t) / 60_000));
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return min % 60 ? `${h} h ${min % 60} min` : `${h} h`;
+  return `${Math.floor(h / 24)} d`;
+}
+
 /**
- * Billing counter — for branches in `billing_mode = separate_counter`.
+ * Billing counter — for branches in `billing_mode = separate_counter`
+ * (ND-PATTERN §17).
  *
- * New-design pattern (docs/ND-PATTERN.md "Two jobs on one screen"):
- *   • Band: back · tenant; the pill is the CONTEXT BAR — ONE unified search
- *     (patients AND orders / invoices, grouped type-ahead) with the scan icon
- *     inside it. Enter on an exact order / invoice ID opens it.
- *   • LEFT main card BILLING: the selected patient's orders to bill, or one
- *     order's items + dues and the ONE primary ("Collect ₹X" / "Refund ₹X").
- *     Money is taken on Order & Payments' new-design inline payment panel
- *     (the primary hands the order to it) — never re-implemented here.
- *   • RIGHT side card MONEY (a summary companion): balances due / refunds
- *     owed and the day-end summary by date. Collapsible to a strip
- *     (remembered per user); ≤900px a segmented switch in the pill picks
- *     which card shows.
+ *   • Band: back · tenant; the pill is ONE unified search (patients AND
+ *     orders / invoices, grouped type-ahead) with the scan icon inside. Typing
+ *     also filters the queue; Enter on an exact order / invoice ID opens it.
+ *   • LEFT card QUEUE: the patients waiting to pay in this branch (bills with a
+ *     balance due + today's orders not billed yet), oldest first, refreshed.
+ *   • MAIN card BILLING: the picked patient's cart — items, discount, Payable /
+ *     Paid / Balance — and the payment taken RIGHT HERE on Order & Payments'
+ *     inline payment panel. ONE primary: "Collect ₹X". After payment a compact
+ *     success state (print receipt, Next patient). "Collect sample" only when
+ *     the workflow puts collection at this counter.
+ *   • RIGHT card MONEY: balances due / refunds owed and the day-end summary,
+ *     collapsible. ≤900px: one card at a time (Billing · Money switch); the
+ *     queue is full screen and a pick zooms the cart in, back returns.
  */
 @Component({
   selector: 'pf-billing-counter',
@@ -102,6 +169,7 @@ const inrFmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'IN
   imports: [
     DatePipe, NgTemplateOutlet, CurrencyInrPipe,
     HeroBandComponent, ScanIconComponent, BarcodeScannerModalComponent, NdDateComponent,
+    InlinePaymentPanelComponent, ZoomSourceDirective, ZoomTargetDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './billing-counter.component.html',
@@ -112,6 +180,8 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService, { optional: true });
+  private readonly process = inject(ProcessWorkflowService, { optional: true });
+  private readonly zoom = inject(ZoomTransitionService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly scan = inject(ScanService);
 
@@ -140,35 +210,60 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     ? 'Patient, order or invoice ID'
     : 'Search patient, phone, MRN, order or invoice ID');
 
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  readonly now = signal(Date.now());
+
   ngOnInit() {
+    try { this.process?.loadActive(); } catch { /* nav falls back */ }
     this.loadOutstanding();
+    this.loadToday();
     this.loadReconcile();
+    this.pollTimer = setInterval(() => this.poll(), QUEUE_POLL_MS);
   }
 
   ngOnDestroy() {
     if (this.searchTimer) clearTimeout(this.searchTimer);
     if (this.blurTimer) clearTimeout(this.blurTimer);
+    if (this.pollTimer) clearInterval(this.pollTimer);
   }
+
+  /** Gentle live refresh of the queue + balances (no realtime event exists). */
+  poll() {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    this.now.set(Date.now());
+    this.loadOutstanding(true);
+    this.loadToday();
+  }
+
+  // ── Workflow: is sample collection at THIS counter? ───────────────────
+  /** True only when the active workflow places `sample_collection` in the
+   *  same menu as `billing` (Process builder). Otherwise the paid patient
+   *  goes on to the collection queue and no "Collect sample" is offered. */
+  readonly collectsHere = computed(() => collectsAtBillingCounter(this.process?.active() ?? null));
 
   // ── Outstanding balances / refunds owed ───────────────────────────────
   private readonly _due = signal<OutstandingRow[]>([]);
   private readonly _refundsOwed = signal<OutstandingRow[]>([]);
   protected readonly loadingOutstanding = signal(false);
+  private outstandingLoaded = false;
   readonly due = this._due.asReadonly();
   readonly refundsOwed = this._refundsOwed.asReadonly();
   readonly moneyCount = computed(() => this._due().length + this._refundsOwed().length);
 
-  private loadOutstanding() {
-    this.loadingOutstanding.set(true);
+  private loadOutstanding(quiet = false) {
+    if (!quiet) this.loadingOutstanding.set(true);
     this.api.get<{ due: OutstandingRow[]; refundsOwed: OutstandingRow[] }>('/api/billing/outstanding').subscribe({
       next: res => {
         this._due.set(res?.due ?? []);
         this._refundsOwed.set(res?.refundsOwed ?? []);
         this.loadingOutstanding.set(false);
+        this.outstandingLoaded = true;
+        this.prunePaid();
+        this.enrich();
       },
       error: () => {
         this.loadingOutstanding.set(false);
-        this.toasts.error('Could not load outstanding balances');
+        if (!quiet) this.toasts.error('Could not load outstanding balances');
       }
     });
   }
@@ -187,6 +282,133 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   /** Refund rows carry a negative balance — render the amount owed back. */
   refundAmount(r: OutstandingRow): number { return Math.abs(r.balance); }
   absAmount(n: number | null | undefined): number { return Math.abs(n ?? 0); }
+
+  // ── The queue: patients waiting to pay ────────────────────────────────
+  /** Today's branch orders (GET /api/orders/today, annotated with billStatus)
+   *  — the source of order number / tests for today's rows and of orders
+   *  registered without a bill yet. */
+  private readonly _today = signal<Order[]>([]);
+  /** Orders read one by one for older balances (not in today's feed). */
+  private readonly _orderInfo = signal<Record<string, Order>>({});
+  private readonly fetching = new Set<string>();
+  /** Paid at this counter this session — kept off the queue even if a poll
+   *  lands before the server's outstanding list catches up. */
+  private readonly _paidIds = signal<ReadonlySet<string>>(new Set());
+
+  private loadToday() {
+    this.api.get<Order[]>('/api/orders/today').subscribe({
+      next: list => { this._today.set(list ?? []); this.enrich(); },
+      error: () => { /* no view_order: the queue still has every bill due */ },
+    });
+  }
+
+  private orderById(id: string): Order | undefined {
+    return this._orderInfo()[id] ?? this._today().find(o => o.id === id);
+  }
+
+  /** Read the order details (number, tests) for balances not in today's feed. */
+  private enrich() {
+    if (!this.outstandingLoaded) return;
+    const today = new Set(this._today().map(o => o.id));
+    const info = this._orderInfo();
+    const missing = [...this._due()]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .filter(r => !today.has(r.orderId) && !info[r.orderId] && !this.fetching.has(r.orderId))
+      .slice(0, ENRICH_CAP);
+    for (const r of missing) {
+      this.fetching.add(r.orderId);
+      this.api.get<Order>(`/api/orders/${r.orderId}`).subscribe({
+        next: o => {
+          this.fetching.delete(r.orderId);
+          if (o) this._orderInfo.update(m => ({ ...m, [r.orderId]: o }));
+        },
+        error: () => this.fetching.delete(r.orderId),
+      });
+    }
+  }
+
+  /** Every patient waiting to pay, OLDEST first. */
+  readonly queue = computed<QueueRow[]>(() => {
+    const paid = this._paidIds();
+    const rows: QueueRow[] = [];
+    const seen = new Set<string>();
+    for (const r of this._due()) {
+      if (paid.has(r.orderId) || seen.has(r.orderId)) continue;
+      seen.add(r.orderId);
+      const o = this.orderById(r.orderId);
+      rows.push({
+        orderId: r.orderId, billId: r.billId, patientId: r.patientId,
+        name: r.patientName?.trim() || patientDisplayName(o?.patient) || 'Unnamed patient',
+        orderLabel: o?.orderNumber || null,
+        tests: o ? orderTestCount(o) : null,
+        amount: r.balance,
+        since: o?.createdAt || r.createdAt,
+        unbilled: false,
+        phone: o?.patient?.phone, mrn: o?.patient?.mrn,
+      });
+    }
+    for (const o of this._today()) {
+      if (seen.has(o.id) || paid.has(o.id) || o.billStatus !== 'unbilled') continue;
+      if (o.status === 'cancelled' || o.status === 'draft') continue;
+      seen.add(o.id);
+      rows.push({
+        orderId: o.id, billId: null, patientId: o.patientId,
+        name: patientDisplayName(o.patient) || 'Unnamed patient',
+        orderLabel: o.orderNumber || null,
+        tests: orderTestCount(o),
+        amount: o.totalAmount ?? 0,
+        since: o.createdAt,
+        unbilled: true,
+        phone: o.patient?.phone, mrn: o.patient?.mrn,
+      });
+    }
+    return rows.sort((a, b) => new Date(a.since).getTime() - new Date(b.since).getTime());
+  });
+
+  /** The pill filters the queue as you type (name, phone, MRN, order no.). */
+  readonly filteredQueue = computed<QueueRow[]>(() => {
+    const q = this.query().trim().toLowerCase();
+    const all = this.queue();
+    if (!q) return all;
+    const digits = q.replace(/\D/g, '');
+    return all.filter(r =>
+      r.name.toLowerCase().includes(q)
+      || (r.orderLabel ?? '').toLowerCase().includes(q)
+      || (r.mrn ?? '').toLowerCase().includes(q)
+      || (digits.length >= 3 && (r.phone ?? '').replace(/\D/g, '').includes(digits))
+      || r.orderId.toLowerCase().startsWith(q));
+  });
+
+  waiting(r: QueueRow): string { return waitingLabel(r.since, this.now()); }
+
+  /** Pick a patient in the queue → their cart in the main card. On narrow
+   *  widths the list is full screen, so the cart zooms in from the row. */
+  selectRow(r: QueueRow) {
+    const open = () => this.openOrder(r.orderId);
+    if (this.narrow()) this.zoom.runLocal('in', open);
+    else { this.zoom.disarm(); open(); }
+  }
+
+  /** Narrow: back from the cart / patient to the queue (reverses the zoom). */
+  backToQueue() {
+    const shut = () => this.clearSelection();
+    if (this.narrow()) this.zoom.runLocal('out', shut); else shut();
+  }
+
+  private markPaid(orderId: string) {
+    this._paidIds.update(s => new Set([...s, orderId]));
+    this._due.update(list => list.filter(r => r.orderId !== orderId));
+  }
+
+  /** Forget session-paid ids the server no longer lists as due. */
+  private prunePaid() {
+    const ids = this._paidIds();
+    if (!ids.size) return;
+    const still = new Set(this._due().map(r => r.orderId));
+    const today = new Set(this._today().filter(o => o.billStatus === 'unbilled').map(o => o.id));
+    const next = new Set([...ids].filter(id => still.has(id) || today.has(id)));
+    if (next.size !== ids.size) this._paidIds.set(next);
+  }
 
   // ── Day-end reconciliation ────────────────────────────────────────────
   protected readonly reconcileDate = signal(BillingCounterComponent.todayIso());
@@ -416,7 +638,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     this.resolveLookup(code);
   }
 
-  /** Resolve a typed / scanned code → order → open it in the BILLING card. */
+  /** Resolve a typed / scanned code → order → open its cart. */
   resolveLookup(code: string) {
     const raw = (code ?? '').trim();
     if (!raw || this.resolving()) return;
@@ -431,7 +653,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     });
   }
 
-  // ── Selection: a patient, then an order ───────────────────────────────
+  // ── Selection: a patient (from search), then an order's cart ──────────
   private readonly _selectedPatient = signal<Patient | null>(null);
   private readonly _orders = signal<Order[]>([]);
   readonly loadingOrders = signal(false);
@@ -444,6 +666,12 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   readonly loadingOrder = signal(false);
   private orderSeq = 0;
 
+  /** Narrow: something is open in the Billing pane (the cart or a patient). */
+  readonly detailOpen = computed(() => !!(this.selectedOrderId() || this.selectedPatient()));
+  /** Narrow + a cart open: the band's back returns to the queue. */
+  readonly bandBack = computed<(() => void) | null>(() =>
+    this.narrow() && this.pane() === 'bill' && this.detailOpen() ? () => this.backToQueue() : null);
+
   display(p: Patient | null | undefined): string { return patientDisplayName(p); }
   patientMeta(p: Patient): string { return formatPatientMeta(p); }
 
@@ -455,11 +683,16 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     return o.status === 'created' || o.status === 'pending';
   }
 
+  /** A patient picked in the search: straight to their cart when they are
+   *  in the queue once, else their orders still to bill. */
   selectPatient(p: Patient) {
+    const inQueue = this.queue().filter(r => r.patientId === p.id);
+    if (inQueue.length === 1) { this.openOrder(inQueue[0].orderId); return; }
     this._selectedPatient.set(p);
     this.selectedOrderId.set(null);
     this.selectedOrder.set(null);
     this.selectedBill.set(null);
+    this.paid.set(null);
     this._orders.set([]);
     this.loadingOrders.set(true);
     this.pane.set('bill');
@@ -469,25 +702,28 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Open one order's cart: the order (tests, patient) and its bill. */
   openOrder(orderId: string) {
     const seq = ++this.orderSeq;
     // Coming from somewhere other than this patient's list drops the patient.
     const p = this._selectedPatient();
     if (p && !this._orders().some(o => o.id === orderId)) this._selectedPatient.set(null);
     this.selectedOrderId.set(orderId);
-    this.selectedOrder.set(null);
+    this.selectedOrder.set(this.orderById(orderId) ?? null);
     this.selectedBill.set(null);
-    this.loadingOrder.set(true);
+    this.paid.set(null);
+    this.refundMode.set('cash');
+    this.loadingOrder.set(!this.selectedOrder());
     this.pane.set('bill');
     this.api.get<Order>(`/api/orders/${orderId}`).subscribe({
-      next: o => { if (seq === this.orderSeq) { this.selectedOrder.set(o ?? null); this.loadingOrder.set(false); } },
+      next: o => { if (seq === this.orderSeq) { if (o) this.selectedOrder.set(o); this.loadingOrder.set(false); } },
       error: () => {
         if (seq !== this.orderSeq) return;
         this.loadingOrder.set(false);
-        this.toasts.error('Could not load order details');
+        if (!this.selectedOrder()) this.toasts.error('Could not load order details');
       }
     });
-    // Items + payments from the bill when one exists (read-only GET).
+    // Items, discount + payments from the bill when one exists (read-only GET).
     const row = this.outstandingFor(orderId);
     if (row?.billId) {
       this.api.get<Bill>(`/api/billing/${row.billId}`).subscribe({
@@ -497,16 +733,23 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     }
   }
 
+  clearSelection() {
+    this.orderSeq++;
+    this.selectedOrderId.set(null);
+    this.selectedOrder.set(null);
+    this.selectedBill.set(null);
+    this.loadingOrder.set(false);
+    this.paid.set(null);
+    this._selectedPatient.set(null);
+    this._orders.set([]);
+  }
+
+  /** From an order back to the searched patient's list. */
   backToPatient() {
     this.selectedOrderId.set(null);
     this.selectedOrder.set(null);
     this.selectedBill.set(null);
-  }
-
-  clearSelection() {
-    this.backToPatient();
-    this._selectedPatient.set(null);
-    this._orders.set([]);
+    this.paid.set(null);
   }
 
   orderLabel(o: Pick<Order, 'id' | 'orderNumber'>): string {
@@ -515,9 +758,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   orderPatientName(o: Order): string {
     return patientDisplayName(o.patient) || patientDisplayName(this._selectedPatient()) || '';
   }
-  totalTests(o: Order): number {
-    return (o.samples ?? []).reduce((sum, s) => sum + (s.tests?.length ?? 0), 0);
-  }
+  totalTests(o: Order): number { return orderTestCount(o); }
   orderAmount(o: Order): number | null {
     const row = this.outstandingFor(o.id);
     if (row) return Math.abs(row.balance);
@@ -560,36 +801,212 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     refund: 'Refund owed', due: 'Balance due', unbilled: 'Not billed yet', paid: 'Paid', unknown: 'Billing',
   })[this.billState()]);
 
-  readonly dues = computed<{ payable: number | null; paid: number | null; balance: number | null }>(() => {
+  readonly dues = computed<{ payable: number | null; paid: number | null; balance: number | null; discount: number | null }>(() => {
     const bill = this.selectedBill();
-    if (bill) return { payable: bill.totalPayable, paid: bill.totalPaid, balance: bill.balance };
+    if (bill) return { payable: bill.totalPayable, paid: bill.totalPaid, balance: bill.balance, discount: bill.totalDiscount > 0 ? bill.totalDiscount : null };
     const row = this.outstandingFor(this.selectedOrderId());
-    if (row) return { payable: row.totalPayable, paid: row.totalPaid, balance: row.balance };
+    if (row) return { payable: row.totalPayable, paid: row.totalPaid, balance: row.balance, discount: null };
     const o = this.selectedOrder();
-    if (o && this.billState() === 'unbilled' && o.totalAmount) return { payable: o.totalAmount, paid: null, balance: null };
-    return { payable: null, paid: null, balance: null };
+    if (o && this.billState() === 'unbilled' && o.totalAmount) return { payable: o.totalAmount, paid: null, balance: null, discount: null };
+    return { payable: null, paid: null, balance: null, discount: null };
   });
 
-  /** ONE primary per view: Collect ₹X / Refund ₹X / Bill & collect; none
-   *  when nothing is selected or the order is settled. */
-  readonly primary = computed<PrimaryAction | null>(() => {
-    if (!this.selectedOrder()) return null;
+  /** What the counter collects now: the balance, or the order total when it
+   *  has no bill yet. 0 when nothing is owed. */
+  readonly payAmount = computed(() => {
+    const st = this.billState();
     const d = this.dues();
-    switch (this.billState()) {
-      case 'refund': return { kind: 'refund', label: 'Refund ' + inrFmt.format(Math.abs(d.balance ?? 0)) };
-      case 'due': return d.balance ? { kind: 'collect', label: 'Collect ' + inrFmt.format(d.balance) } : { kind: 'collect', label: 'Collect payment' };
-      case 'unbilled': return d.payable ? { kind: 'bill', label: 'Collect ' + inrFmt.format(d.payable) } : { kind: 'bill', label: 'Bill & collect' };
-      default: return null;
-    }
+    if (st === 'due') return Math.max(0, d.balance ?? 0);
+    if (st === 'unbilled') return Math.max(0, d.payable ?? 0);
+    return 0;
   });
 
-  /** Payments + refunds are taken on Order & Payments' inline payment panel
-   *  (the same hand-off this counter has always used). */
-  runPrimary() { this.openInOrderScreen(); }
+  // ── Payment (Order & Payments' inline panel, right here) ──────────────
+  readonly payPanel = viewChild(InlinePaymentPanelComponent);
+  readonly paying = signal(false);
+  readonly paid = signal<PaidState | null>(null);
 
-  openInOrderScreen() {
-    const id = this.selectedOrderId();
-    if (!id) return;
-    this.router.navigate(['/frontdesk/order'], { queryParams: { orderId: id } });
+  /** The cart takes money: something is owed and it isn't paid yet here. */
+  readonly canCollect = computed(() => !!this.selectedOrder() && !this.paid() && this.payAmount() > 0);
+
+  /** The ONE primary: "Collect ₹X" (vendor: "Bill ₹X to vendor"). */
+  readonly collectLabel = computed(() => {
+    if (this.paying()) return 'Collecting…';
+    const amt = inrFmt.format(this.payAmount());
+    return this.payPanel()?.mode() === 'wallet' ? `Bill ${amt} to vendor` : `Collect ${amt}`;
+  });
+  /** Until the panel is complete (e.g. cash received typed) the CTA is a
+   *  disabled secondary; it turns primary when it can go (ND-PATTERN §2). */
+  readonly collectReady = computed(() => {
+    const p = this.payPanel();
+    return !!p && !p.confirmDisabled() && !this.paying();
+  });
+
+  /** Footer CTA → the panel validates and emits (confirm) → confirmPayment. */
+  runCollect() { this.payPanel()?.emit(); }
+
+  /** Record the payment on the order's bill (raising the bill first when the
+   *  order has none), then show the success state. Never leaves the counter. */
+  async confirmPayment(d: InlinePaymentResult) {
+    const orderId = this.selectedOrderId();
+    if (!orderId || this.paying()) return;
+    if (d.mode === 'later') {
+      this.toasts.error('This balance must be cleared here — pay by cash, UPI, card or vendor.');
+      return;
+    }
+    this.paying.set(true);
+    try {
+      let bill = this.selectedBill();
+      if (!bill) {
+        const row = this.outstandingFor(orderId);
+        bill = row?.billId
+          ? await firstValueFrom(this.api.get<Bill>(`/api/billing/${row.billId}`))
+          : await firstValueFrom(this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }));
+      }
+      if (!bill) throw new Error('Could not raise the bill for this order');
+      const amount = decimal2(bill.balance);
+      if (!(amount > 0)) throw new Error('Nothing left to collect on this bill');
+      let latest: Bill = bill;
+      if (d.mode === 'wallet') {
+        if (!d.vendorId) throw new Error('Pick a vendor to bill');
+        await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
+          amount, billId: bill.id, reason: `Bill #${bill.invoiceNumber || bill.id.substring(0, 8)}`,
+        }));
+        latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+          amount, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId,
+        }));
+      } else if (d.mode === 'split' && d.splitParts?.length) {
+        for (const part of d.splitParts) {
+          if (!(part.amount > 0)) continue;
+          latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
+        }
+      } else {
+        latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
+          amount, mode: d.mode, referenceNo: d.referenceNo,
+        }));
+      }
+      const o = this.selectedOrder();
+      this.selectedBill.set(latest ?? bill);
+      this.paid.set({
+        orderId,
+        name: (o && this.orderPatientName(o)) || this.queue().find(r => r.orderId === orderId)?.name || 'Patient',
+        amount, mode: d.mode, bill: latest ?? bill,
+      });
+      this.markPaid(orderId);
+      this.toasts.success('Payment collected');
+      this.loadOutstanding(true);
+      this.loadToday();
+      this.loadReconcile();
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.paying.set(false);
+    }
+  }
+
+  /** The next patient in the queue (the paid one has already dropped off). */
+  readonly nextRow = computed<QueueRow | null>(() => {
+    const cur = this.selectedOrderId();
+    return this.filteredQueue().find(r => r.orderId !== cur) ?? null;
+  });
+
+  nextPatient() {
+    const n = this.nextRow();
+    if (n) this.openOrder(n.orderId);
+    else this.clearSelection();
+  }
+
+  /** Only when the workflow puts collection at this counter. */
+  collectSample() {
+    const p = this.paid();
+    if (!p || !this.collectsHere()) return;
+    this.router.navigate(['/sample-collection'], { queryParams: { orderId: p.orderId } });
+  }
+
+  readonly printing = signal(false);
+
+  /** Print the paid invoice / receipt (same generator as Order & Payments). */
+  async printReceipt() {
+    const orderId = this.paid()?.orderId ?? this.selectedOrderId();
+    if (!orderId || this.printing()) return;
+    this.printing.set(true);
+    try {
+      let bill = this.paid()?.bill ?? this.selectedBill();
+      if (bill?.id) {
+        try { bill = (await firstValueFrom(this.api.get<Bill>(`/api/billing/${bill.id}`))) ?? bill; } catch { /* use what we have */ }
+      }
+      if (!bill) { this.toasts.error('No bill to print yet'); return; }
+      let tpl: any = null;
+      try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); } catch { /* optional */ }
+      let qrDataUrl: string | undefined;
+      let orderQrDataUrl: string | undefined;
+      try {
+        const QRCode = (await import('qrcode')).default;
+        const res = await firstValueFrom(this.api.get<{ token: string }>(`/api/orders/${orderId}/track-token`));
+        if (res?.token) qrDataUrl = await QRCode.toDataURL(`${window.location.origin}/track/${res.token}`, { margin: 1, width: 220 });
+        orderQrDataUrl = await QRCode.toDataURL(`${window.location.origin}/o/${orderId}`, { margin: 1, width: 220 });
+      } catch { /* QR best-effort */ }
+      const docMode = tpl?.documentMode ?? 'auto';
+      const docTitle = docMode === 'bill_of_supply' ? 'BILL OF SUPPLY'
+        : docMode === 'tax_invoice' ? 'TAX INVOICE'
+        : (bill.totalTax > 0 ? 'TAX INVOICE' : 'BILL OF SUPPLY');
+      const logoDataUrl = tpl?.showLogo === false ? undefined : await loadImageDataUrl(tpl?.logoUrl, environment.apiUrl);
+      const user = this.auth?.user();
+      generateInvoicePdf({
+        bill,
+        order: (this.selectedOrder() ?? ({ patient: undefined } as unknown as Order)),
+        invoiceNumber: bill.invoiceNumber ?? '',
+        effectivePayable: bill.totalPayable,
+        tatLabel: '',
+        docTitle, qrDataUrl, orderQrDataUrl, logoDataUrl,
+        cashierName: bill.cashierName || user?.displayName || undefined,
+        cashierSignatureDataUrl: bill.cashierSignatureUrl || undefined,
+        ...invoiceTemplateFieldsFrom(tpl),
+        practice: {
+          name: (tpl?.labName || user?.tenantName) || undefined,
+          address: tpl?.address || undefined,
+          phone: tpl?.phone || undefined,
+          email: tpl?.email || undefined,
+          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+        },
+        action: 'print',
+      });
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message || 'Could not print the receipt');
+    } finally {
+      this.printing.set(false);
+    }
+  }
+
+  // ── Refund owed (balance < 0) — handled here too ──────────────────────
+  readonly refundMode = signal<'cash' | 'upi' | 'card'>('cash');
+  readonly refundModes: Array<{ id: 'cash' | 'upi' | 'card'; label: string }> = [
+    { id: 'cash', label: 'Cash' }, { id: 'upi', label: 'UPI' }, { id: 'card', label: 'Card' },
+  ];
+  readonly refunding = signal(false);
+  readonly canRefund = computed(() => {
+    try { return !!this.auth?.hasPermission('process_refund'); } catch { return false; }
+  });
+  readonly refundDue = computed(() => this.billState() === 'refund' ? Math.abs(this.dues().balance ?? 0) : 0);
+
+  refund() {
+    const orderId = this.selectedOrderId();
+    const billId = this.selectedBill()?.id ?? this.outstandingFor(orderId)?.billId;
+    const amount = decimal2(this.refundDue());
+    if (!orderId || !billId || !(amount > 0) || this.refunding() || !this.canRefund()) return;
+    this.refunding.set(true);
+    this.api.post<Bill>(`/api/billing/${billId}/refund`, {
+      amount, mode: this.refundMode(), reason: 'Refunded at the billing counter',
+    }).subscribe({
+      next: b => {
+        this.refunding.set(false);
+        if (b) this.selectedBill.set(b);
+        this._refundsOwed.update(list => list.filter(r => r.orderId !== orderId));
+        this.toasts.success(`Refunded ${inrFmt.format(amount)}`);
+        this.loadOutstanding(true);
+        this.loadReconcile();
+      },
+      error: e => { this.refunding.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
   }
 }

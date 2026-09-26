@@ -931,44 +931,92 @@ Try a value [6] for [Female ▾] aged [35] [years ▾] → Critical low
 ## 17. Billing counter
 
 `/billing-counter` (`features/billing-counter/`, branches in
-`billing_mode = separate_counter`) — the "two jobs on one screen" pattern
-with an ACTION / SUMMARY companion (owner, 2026-09-26):
+`billing_mode = separate_counter`) — the owner's counter flow (2026-09-26):
+**the patients waiting to pay stacked on the left → tap one → their cart,
+mode of payment and the payment taken right here.** Three cards: QUEUE
+(filter / navigation companion, LEFT) · BILLING (the work, main) · MONEY
+(summary companion, RIGHT).
 
 - **Band:** back · tenant. The pill is ONE unified search — "Search patient,
   phone, MRN, order or invoice ID" — with the scan icon (invoice / order
   barcodes, the shared scanner with `noun="invoice or order"`) inside the
-  field. The type-ahead is ONE dropdown, grouped **Patients** / **Orders &
-  invoices** (the exact `/api/billing/lookup` hit + open balances whose
-  patient name matches), one row per result, ↑/↓ across both groups.
-  **Enter** on an exact order / invoice ID (nothing highlighted) opens it
-  directly. No separate "Invoice / order ID + Open" row, no KPI strip.
-- **No Find & bill / Money tabs on desktop** — both cards show. ≤900px only
-  one fits: a compact neutral two-way `.nd-seg` switch (Billing · Money · n)
-  in the pill's tools row; opening an order from Money flips back to Billing.
-- **LEFT main card BILLING:** empty = "Find an order to bill" + one short
-  line. A patient → their orders still to bill (kit rows). An order → the
-  subject (full name, order number, date), a neutral status chip (violet dot;
-  violet check when paid), the items (bill lines with prices when a bill
-  exists, else the order's tests) and Payable / Paid / Balance.
-- **ONE primary per view**, in the card's sticky footer: **Collect ₹X**
-  (balance, or the order total when unbilled) · **Refund ₹X** · none when
-  nothing is selected or the order is settled ("Open order" secondary for
-  receipts). The primary hands the order to Order & Payments, whose
-  new-design inline payment panel takes the money / refund and prints the
-  receipt — the counter never re-implements payment.
-- **RIGHT side card MONEY (400px):** "Balances due / refunds owed" (calm
-  11px uppercase titles, Noto — never spaced mono; rows = patient + amount,
-  tap opens the order in Billing; refunds as −₹, no amber / red pills), then
-  "Day-end summary" with the **kit date** (`pf-nd-date`: typed dd/mm/yyyy +
-  calendar button over a hidden native picker) and a Mode / Count / Total
-  table (Cash, UPI, Card… capitalised; tabular numbers), then Collected /
-  Refunded / **Net** (600). Collapses to a strip on the RIGHT edge (›
-  hides, ‹ shows; remembered per user).
+  field. Typing **filters the queue** (name, order number, phone, MRN) AND
+  opens the grouped type-ahead (**Patients** / **Orders & invoices**: the
+  exact `/api/billing/lookup` hit + open balances whose patient name
+  matches), one row per result, ↑/↓ across both groups. **Enter** on an
+  exact order / invoice ID (nothing highlighted) and a scan open that cart
+  directly. A searched patient who is in the queue opens straight to their
+  cart; otherwise their orders still to bill. No KPI strip.
+- **LEFT card QUEUE — "Waiting to pay" (340px; 300px ≤1280):** every
+  patient waiting to pay in the active branch, **oldest first**. Source:
+  `GET /api/billing/outstanding` `due` (branch-scoped bills with balance > 0
+  — in separate-counter mode Order & Payments raises the bill at
+  registration, so this IS the "awaiting billing" list, plus pay-later
+  remainders) + today's orders with `billStatus = 'unbilled'` from
+  `GET /api/orders/today` (bill not raised yet; billed on payment). Order
+  number / tests come from today's feed, else one `GET /api/orders/{id}` per
+  older balance (capped). Row: full name (wraps, never cut), order number ·
+  N tests (· "Not billed yet"), the amount due and a quiet "waiting since"
+  (just now · 12 min · 2 h 5 min · 3 d) in tabular numbers; the picked row
+  has the neutral selected state. Refunds owed stay in MONEY. **Live
+  refresh:** there is no order / billing realtime event, so it polls every
+  20 s (skipped while the tab is hidden). Empty: **"No one waiting to
+  pay"**; a filter with no match says so and offers Enter for an exact ID.
+- **MAIN card BILLING — the cart:** empty = "Pick a patient to bill". Picked
+  = the subject (full name, order number, date), a neutral status chip, the
+  items (bill lines with prices, else the order's tests), Discount / Payable
+  / Paid / Balance, then **Payment**: Order & Payments'
+  `InlinePaymentPanelComponent` (`[externalFooter]`, `[allowLater]="false"`
+  — a due is cleared here, never re-deferred; Pay now UPI / Card / Cash /
+  Split, Bill to vendor, UPI QR, cash change), re-created per order. The
+  money is recorded here — `POST /api/billing/{id}/payment` (split = one per
+  part; vendor = `/api/vendors/{id}/charge` first; no bill yet =
+  `POST /api/billing/` first). **Never navigates to `/frontdesk/order`.**
+  Discount rules / approvals stay where the bill is raised (Order &
+  Payments); the counter shows the discount already on the bill.
+- **ONE primary per state**, in the card's sticky footer: **Collect ₹X**
+  (vendor: "Bill ₹X to vendor") — a disabled secondary until the panel is
+  complete (e.g. cash received typed), primary once it can go. **Refund ₹X**
+  for a refund owed (Cash / UPI / Card slate `.nd-seg`,
+  `POST /api/billing/{id}/refund`; without `process_refund` a note, no
+  primary). A settled order: "Print receipt" secondary only.
+- **After payment:** a compact success state (violet check, "₹X received",
+  name, mode · invoice number) with **Print receipt** (secondary, the same
+  invoice generator as Order & Payments) and **Next patient** (primary —
+  opens the oldest remaining; "Done" when the queue is empty). The paid
+  patient drops off the queue at once (kept off until the server list
+  catches up). **No "Collect sample" / label step here UNLESS the workflow
+  puts collection at this counter:** `collectsAtBillingCounter(cfg)`
+  (`shared/models/process-workflow.model.ts`) — an enabled
+  `sample_collection` in the same Process-builder menu as the enabled
+  `billing` action (not the front desk). Then **Collect sample** is the
+  primary (`/sample-collection?orderId=…`) and Next patient secondary.
+  Otherwise the success line says they can go to sample collection: paying
+  in full moves the order `created → billed` and clears `paymentHold`
+  (`BillingService.CollectPaymentAsync`), and the collection queue
+  (`/api/samples/pending-collection`) already lists the pending tubes.
+- **RIGHT side card MONEY (400px; 360px ≤1280):** unchanged — "Balances due
+  / refunds owed" (calm 11px uppercase titles, Noto — never spaced mono;
+  rows = patient + amount, tap opens the cart; refunds as −₹, no amber / red
+  pills), then "Day-end summary" with the **kit date** (`pf-nd-date`: typed
+  dd/mm/yyyy + calendar button over a hidden native picker) and a Mode /
+  Count / Total table (Cash, UPI, Card… capitalised; tabular numbers), then
+  Collected / Refunded / **Net** (600). Collapses to a strip on the RIGHT
+  edge (› hides, ‹ shows; remembered per user).
+- **≤900px / phones:** one card at a time — the compact neutral two-way
+  `.nd-seg` switch (Billing · Money · n) in the pill's tools row. Billing =
+  the queue **full screen**; tapping a patient **zooms** the cart in
+  (`[pfZoomSource]` row → `[pfZoomTarget]` card, `zoom.runLocal`) and the
+  band's back (`[backAction]`) zooms back to the list. Opening a balance
+  from Money flips to the cart. 44px targets, 16px inputs.
 - **Real-layout check:** `apps/lms-e2e/src/billing-counter-layout.rbac.spec.ts`
-  (seeded Lab Admin, read-only — writes aborted) asserts the pill, no tabs,
-  Billing left / Money ~400px right, no primary at rest, no visible native
-  date, no monospace, no page scroll, the grouped dropdown at the pill's
-  width, the strip, and the 375 switch. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
+  (seeded Lab Admin, read-only — writes aborted) asserts the pill, Queue
+  left / Billing / Money ~400px right, no primary at rest, the queue's
+  oldest-first order, a pick → the cart with the payment panel and at most
+  one primary, no navigation to `/frontdesk/order`, no visible native date,
+  no monospace, no page scroll, the grouped dropdown at the pill's width,
+  the strip, and at 375 the full-screen queue → cart → back and the switch.
+  `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
 
 ## 18. Messages
 

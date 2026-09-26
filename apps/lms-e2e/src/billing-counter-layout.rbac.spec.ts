@@ -2,15 +2,18 @@ import { test, expect, type Page } from '@playwright/test';
 import { loginAs } from './support/auth';
 
 /**
- * Billing counter — REAL layout (ND-PATTERN "two jobs on one screen"; jsdom
- * can't lay out). Seeded Micro World Lab Admin, READ-ONLY: after login every
- * non-GET API call is aborted (and asserted never sent).
- *  - 1440: the band + ONE pill search (scan icon inside), BILLING main card
- *    on the LEFT, MONEY (~400px) on the RIGHT, no tabs, no page scroll,
- *    no monospace computed, no native date control visible, no primary with
- *    nothing selected; the grouped type-ahead; collapse → a strip on the
- *    RIGHT edge and back.
- *  - 375: one card at a time via the pill's two-way switch.
+ * Billing counter — REAL layout (ND-PATTERN §17; jsdom can't lay out).
+ * Seeded Micro World Lab Admin, READ-ONLY: after login every non-GET API call
+ * is aborted (and asserted never sent), so no payment is ever taken.
+ *  - 1440: the band + ONE pill search (scan icon inside); QUEUE ("Waiting to
+ *    pay", oldest first) on the LEFT, BILLING (the cart) in the middle,
+ *    MONEY (~400px) on the RIGHT; no tabs, no page scroll, no monospace
+ *    computed, no native date control visible, no primary with nothing
+ *    picked; a queue pick → the cart with the inline payment panel and at
+ *    most one primary, never a hop to /frontdesk/order; the grouped
+ *    type-ahead; collapse → a strip on the RIGHT edge and back.
+ *  - 375: the queue full screen → tap → the cart → band back → the queue;
+ *    the pill's two-way switch shows Money.
  * Screenshots (light + dark) into $SHOTS_DIR. CORS_RELAY=1 relays backend
  * calls so it can run against a static build on a spare port.
  */
@@ -70,8 +73,8 @@ async function noPageScroll(page: Page) {
   });
 }
 
-test.describe('Billing counter — BILLING + MONEY', () => {
-  test('1440 two cards + grouped search + collapse, 375 switch', async ({ page }) => {
+test.describe('Billing counter — QUEUE + BILLING + MONEY', () => {
+  test('1440 queue → cart, grouped search, collapse; 375 list → cart → back, switch', async ({ page }) => {
     test.setTimeout(180_000);
     await relayCors(page);
     await loginAs(page, 'admin');
@@ -80,31 +83,40 @@ test.describe('Billing counter — BILLING + MONEY', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/billing-counter');
 
+    const queue = page.locator('.pf-bc-panels > section.nd-card.pf-bc-queue');
     const main = page.locator('.pf-bc-panels > section.nd-card.pf-bc-main');
-    await expect(main).toBeVisible({ timeout: 30_000 });
+    await expect(queue).toBeVisible({ timeout: 30_000 });
+    await expect(main).toBeVisible();
     if (await page.locator('.pf-bc-strip').isVisible().catch(() => false)) {
       await page.locator('.pf-bc-strip__btn').click();
     }
     const side = page.locator('.pf-bc-panels > aside.nd-card.pf-bc-side');
     await expect(side).toBeVisible();
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1500);
 
     // Band + ONE pill search, scan inside; no tabs.
     const input = page.locator('pf-hero-band .pf-hb__search input.pf-bc-us__input');
     await expect(input).toHaveAttribute('placeholder', 'Search patient, phone, MRN, order or invoice ID');
     await expect(page.locator('pf-hero-band .pf-hb__inline .pf-bc-scan')).toBeVisible();
     await expect(page.locator('.pf-bc-switch')).toHaveCount(0);
-    await expect(page.getByText('Find & bill')).toHaveCount(0);
 
-    // BILLING left, MONEY ~400px right.
+    // QUEUE left · BILLING middle · MONEY ~400px right.
+    const qb = (await queue.boundingBox())!;
     const mb = (await main.boundingBox())!;
     const sb = (await side.boundingBox())!;
+    expect(qb.x + qb.width).toBeLessThanOrEqual(mb.x + 1);
     expect(mb.x + mb.width).toBeLessThanOrEqual(sb.x + 1);
     expect(sb.width).toBeGreaterThan(380);
     expect(sb.width).toBeLessThan(420);
+    await expect(queue.locator('.nd-card__label')).toHaveText(/waiting to pay/i);
     await expect(main.locator('.nd-card__label')).toHaveText(/billing/i);
     await expect(side.locator('.nd-card__label')).toHaveText(/money/i);
-    // No primary while nothing is selected.
+    // Oldest first.
+    const since = await queue.locator('.pf-bc-qrow').evaluateAll(els =>
+      els.map(e => new Date(e.getAttribute('data-since') || '').getTime()));
+    for (let i = 1; i < since.length; i++) expect(since[i]).toBeGreaterThanOrEqual(since[i - 1]);
+    if (since.length === 0) await expect(queue.locator('.pf-bc-empty__title')).toHaveText('No one waiting to pay');
+    // No primary while nothing is picked.
     expect(await page.locator('.nd-btn--primary:visible, .pf-hb-btn--primary:visible').count()).toBe(0);
     // Kit date (typed) — no visible native date control.
     await expect(side.locator('pf-nd-date input[type="text"]')).toHaveAttribute('placeholder', 'dd/mm/yyyy');
@@ -120,7 +132,23 @@ test.describe('Billing counter — BILLING + MONEY', () => {
     expect(ps.main).toBeLessThanOrEqual(1);
     await shoot(page, '1440');
 
-    // Grouped type-ahead (read-only GETs).
+    // A queue pick → the cart + the payment panel, taken HERE.
+    const firstRow = queue.locator('.pf-bc-qrow').first();
+    if (await firstRow.count()) {
+      await firstRow.click();
+      await expect(main.locator('.pf-bc-subject__name')).toBeVisible({ timeout: 15_000 });
+      await expect(main.locator('pf-inline-payment-panel, .pf-bc-pay, .pf-bc-dues').first()).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(1200);
+      expect(await page.locator('.nd-btn--primary:visible').count()).toBeLessThanOrEqual(1);
+      expect(page.url()).not.toContain('/frontdesk/order');
+      await expect(queue.locator('.pf-bc-qrow[aria-pressed="true"]')).toHaveCount(1);
+      const noSideways = await page.evaluate(() => document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth);
+      expect(noSideways).toBeLessThanOrEqual(1);
+      await shoot(page, '1440-cart');
+      await main.locator('.pf-bc-clear').click();
+    }
+
+    // Grouped type-ahead (read-only GETs); typing also filters the queue.
     await input.click();
     await input.fill('ra');
     const drop = page.locator('#pf-bc-drop');
@@ -131,47 +159,20 @@ test.describe('Billing counter — BILLING + MONEY', () => {
     const pill = (await page.locator('pf-hero-band .pf-hb__search').boundingBox())!;
     expect(Math.abs(db.width - pill.width)).toBeLessThanOrEqual(2);
     await shoot(page, '1440-search');
+    await input.press('Escape');
+    await input.fill('');
 
-    // Pick the first patient → their orders to bill; open one → ONE primary.
-    const firstPatient = drop.locator('.pf-bc-drop__group').first().locator('[role="option"]').first();
-    if (await firstPatient.count()) {
-      await firstPatient.click();
-      await expect(main.locator('.pf-bc-subject__name')).toBeVisible({ timeout: 15_000 });
-      await page.waitForTimeout(1500);
-      await shoot(page, '1440-patient');
-      const orow = main.locator('.pf-bc-orow').first();
-      if (await orow.count()) {
-        await orow.click();
-        await expect(main.locator('.pf-bc-items')).toBeVisible({ timeout: 15_000 });
-        await page.waitForTimeout(800);
-        expect(await page.locator('.nd-btn--primary:visible, .pf-hb-btn--primary:visible').count()).toBeLessThanOrEqual(1);
-        await shoot(page, '1440-order');
-      }
-      await main.locator('.pf-bc-clear').click();
-    } else {
-      await input.press('Escape');
-    }
-
-    // A balance row (if any) opens the order in BILLING with ONE primary.
-    const mrow = side.locator('.pf-bc-mrow').first();
-    if (await mrow.count()) {
-      await mrow.click();
-      await expect(main.locator('.pf-bc-subject__name')).toBeVisible({ timeout: 15_000 });
-      await page.waitForTimeout(600);
-      expect(await page.locator('.nd-btn--primary:visible').count()).toBeLessThanOrEqual(1);
-      await shoot(page, '1440-balance');
-      await main.locator('.pf-bc-clear').click();
-    }
-
-    // Collapse → a strip on the RIGHT edge; BILLING takes the room.
+    // Collapse MONEY → a strip on the RIGHT edge; BILLING takes the room.
+    const mainBefore = (await main.boundingBox())!.width;
     await side.locator('.pf-bc-collapse').click();
     const strip = page.locator('.pf-bc-strip');
     await expect(strip).toBeVisible();
     await page.waitForTimeout(500);
     const stb = (await strip.boundingBox())!;
     expect(stb.width).toBeLessThan(64);
-    expect(stb.x).toBeGreaterThanOrEqual((await main.boundingBox())!.x + (await main.boundingBox())!.width - 1);
-    expect((await main.boundingBox())!.width).toBeGreaterThan(mb.width + 300);
+    const mAfter = (await main.boundingBox())!;
+    expect(stb.x).toBeGreaterThanOrEqual(mAfter.x + mAfter.width - 1);
+    expect(mAfter.width).toBeGreaterThan(mainBefore + 300);
     await shoot(page, '1440-collapsed');
     await strip.locator('button').click();
     await expect(side).toBeVisible();
@@ -181,15 +182,31 @@ test.describe('Billing counter — BILLING + MONEY', () => {
     await page.waitForTimeout(700);
     const sw = page.locator('pf-hero-band .pf-bc-switch');
     await expect(sw).toBeVisible();
-    await expect(main).toBeVisible();
+    await expect(queue).toBeVisible();
+    await expect(page.locator('.pf-bc-main')).toHaveCount(0);
     await expect(page.locator('.pf-bc-side')).toHaveCount(0);
-    expect((await main.boundingBox())!.width).toBeGreaterThan(300);
+    expect((await queue.boundingBox())!.width).toBeGreaterThan(300);
     const sideways = await page.evaluate(() => document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth);
     expect(sideways).toBeLessThanOrEqual(1);
-    await shoot(page, '375-billing');
+    await shoot(page, '375-queue');
+    const phoneRow = queue.locator('.pf-bc-qrow').first();
+    if (await phoneRow.count()) {
+      const h = (await phoneRow.boundingBox())!.height;
+      expect(h).toBeGreaterThanOrEqual(44);
+      await phoneRow.click();
+      await expect(main).toBeVisible({ timeout: 15_000 });
+      await expect(queue).toHaveCount(0);
+      await expect(main.locator('.pf-bc-subject__name')).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(1000);
+      expect(page.url()).not.toContain('/frontdesk/order');
+      await shoot(page, '375-cart');
+      await page.locator('pf-hero-band .pf-hb__back').click();
+      await expect(queue).toBeVisible();
+      expect(page.url()).toContain('/billing-counter');
+    }
     await sw.getByRole('radio', { name: /money/i }).click();
     await expect(page.locator('.pf-bc-side')).toBeVisible();
-    await expect(main).toHaveCount(0);
+    await expect(queue).toHaveCount(0);
     await page.waitForTimeout(400);
     await shoot(page, '375-money');
 

@@ -23,6 +23,7 @@ import {
   collectionLocations,
   collectsAtFrontdesk,
   hasDedicatedCollection,
+  collectsAtBillingCounter,
   LAB_MENU_ID,
   collectsInLab,
   enforceCollectInLab,
@@ -860,5 +861,36 @@ describe('enforceCollectInLab', () => {
     const result = enforceCollectInLab(cfg);
     expect(result.actions.find(a => a.id === 'disp')?.enabled).toBe(false);
     expect(result.actions.find(a => a.id === 'intake')?.enabled).toBe(false);
+  });
+});
+
+describe('collectsAtBillingCounter', () => {
+  const cats = [
+    { id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 },
+    { id: 'billdesk', name: 'Billing', icon: 'folder', color: '#000', order: 1 },
+    { id: 'collect', name: 'Collection', icon: 'folder', color: '#000', order: 2 },
+  ];
+  const cfg = (collIn: string[], billIn = 'billdesk', billOn = true): ProcessWorkflowConfig => ({
+    categories: cats,
+    actions: [
+      { id: 'reg', type: 'patient_registration', categoryId: 'frontdesk', order: 0, enabled: true },
+      { id: 'bill', type: 'billing', categoryId: billIn, order: 0, enabled: billOn },
+      ...collIn.map((c, i) => ({ id: 'coll' + i, type: 'sample_collection', categoryId: c, order: 1, enabled: true })),
+    ],
+  });
+
+  it('is true when collection sits in the billing counter menu', () => {
+    expect(collectsAtBillingCounter(cfg(['billdesk']))).toBe(true);
+    expect(collectsAtBillingCounter(cfg(['collect', 'billdesk']))).toBe(true);
+  });
+  it('is false when collection lives elsewhere', () => {
+    expect(collectsAtBillingCounter(cfg(['collect']))).toBe(false);
+    expect(collectsAtBillingCounter(cfg(['frontdesk']))).toBe(false);
+    expect(collectsAtBillingCounter(cfg([]))).toBe(false);
+  });
+  it('is false when billing is not a separate counter, disabled, or no workflow', () => {
+    expect(collectsAtBillingCounter(cfg(['frontdesk'], 'frontdesk'))).toBe(false);
+    expect(collectsAtBillingCounter(cfg(['billdesk'], 'billdesk', false))).toBe(false);
+    expect(collectsAtBillingCounter(null)).toBe(false);
   });
 });

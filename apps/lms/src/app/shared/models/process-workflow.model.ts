@@ -274,6 +274,19 @@ export function hasDedicatedCollection(cfg: ProcessWorkflowConfig | null | undef
   return collectionLocations(cfg).some(m => m !== fd);
 }
 
+/**
+ * True when the workflow puts sample collection AT the separate billing
+ * counter — an enabled `sample_collection` sits in the same (non-frontdesk)
+ * menu as the enabled `billing` action. The billing counter only offers
+ * "Collect sample" after payment when this holds; otherwise the paid patient
+ * simply moves on to wherever collection lives (the collection queue).
+ */
+export function collectsAtBillingCounter(cfg: ProcessWorkflowConfig | null | undefined): boolean {
+  const bill = cfg?.actions?.find(a => a.type === 'billing' && a.enabled)?.categoryId;
+  if (!bill || bill === frontdeskMenu(cfg)) return false;
+  return collectionLocations(cfg).includes(bill);
+}
+
 /** The categoryId of the built-in Lab work-area (see SYSTEM_AREA_SCREEN). */
 export const LAB_MENU_ID = 'lab';
 
