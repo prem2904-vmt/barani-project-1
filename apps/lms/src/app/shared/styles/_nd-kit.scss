@@ -169,16 +169,16 @@
 /* ── Checkbox (multi-select rows) ─────────────────────────────────────
    <button type="button" class="nd-check" role="checkbox" [attr.aria-checked]="on"
      aria-label="Select <name>"><span class="nd-check__box" aria-hidden="true"><svg…check/></span></button>
-   20px rounded square: neutral border off, violet fill + white check on.
+   20px circle: neutral ring off, violet fill + white check on.
    The button is the hit area (28px web, 44px touch); Space toggles. */
 .nd-check {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 28px; height: 28px; min-width: 28px; min-height: 28px; margin: -4px;
-  padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer;
 }
 .nd-check__box {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; border-radius: 6px;
+  width: 20px; height: 20px; border-radius: 50%;
   border: 1.5px solid var(--nd-sel-border); background: var(--nd-card-bg); color: #fff;
   transition: background var(--nd-dur-fast) ease, border-color var(--nd-dur-fast) ease;
 }
@@ -220,7 +220,7 @@
   border-radius: var(--nd-radius-sm); border: 1px solid var(--nd-line); background: var(--nd-card-bg);
   color: inherit; font: inherit; text-align: left;
 }
-.nd-row__check { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--nd-line); color: var(--nd-card-bg); }
+.nd-row__check { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--nd-line); color: var(--nd-card-bg); }
 .nd-row__code { flex: none; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--violet-text, #7c3aed); }
 .nd-row__name { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 500; line-height: 1.3; color: var(--text-primary); @include nd.no-truncate; }
 .nd-row__meta { flex: none; font-size: 11.5px; color: var(--text-muted); }

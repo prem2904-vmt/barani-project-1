@@ -288,8 +288,8 @@ Canonical: the Frontdesk work list (`frontdesk-landing`, `.pf-wrow`,
     touch) in a right-aligned slot of fixed width, so it lines up in every row.
   - The whole row opens the detail; the checkbox and actions stop propagation.
 - **Checkbox:** the kit's `.nd-check` (`button role="checkbox"`,
-  `aria-checked`, `aria-label="Select <name>"`, Space toggles), a 20px rounded
-  square that turns violet with a white check.
+  `aria-checked`, `aria-label="Select <name>"`, Space toggles), a 20px round
+  circle (neutral ring) that fills violet with a white check.
   - Show it only on lists that have bulk actions, and only on rows that can
     take them.
   - A row that can't take them keeps an empty column, so the rows stay aligned.

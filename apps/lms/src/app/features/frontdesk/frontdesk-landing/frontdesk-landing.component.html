@@ -742,8 +742,8 @@
               </header>
 
               <!-- WORK LIST ROWS (ND "List rows & multi-select") — every tab shares
-                   one anatomy: [checkbox] · FULL name + quiet meta · neutral status
-                   chip · secondary row action (text on web, icon on touch). No
+                   one anatomy: [checkbox] · FULL name + quiet meta · dot + coloured status
+                   word · secondary row action (text on web, icon on touch). No
                    department chips. The whole row opens the drawer. -->
 
               <!-- Selection bar: In progress only (the tab whose bulk actions
@@ -802,7 +802,7 @@
                         <span class="pf-wrow__mi">Saved {{ d.savedAt | date:'MMM d, h:mm a' }}</span>
                       </p>
                     </div>
-                    <span class="nd-chip nd-chip--static pf-wrow__status" data-state="idle">
+                    <span class="pf-wrow__status" data-tone="amber">
                       <span class="pf-wrow__dot" aria-hidden="true"></span>Draft
                     </span>
                     <div class="pf-wrow__acts" (click)="$event.stopPropagation()">
@@ -873,7 +873,7 @@
                         <span class="pf-wrow__mi">{{ o.createdAt | date:'shortTime' }}</span>
                       </p>
                     </div>
-                    <span class="nd-chip nd-chip--static pf-wrow__status" [attr.data-state]="orderStatusState(o)">
+                    <span class="pf-wrow__status" [attr.data-tone]="rowTone(o)">
                       <span class="pf-wrow__dot" aria-hidden="true"></span>{{ effectiveStatusLabel(o) }}
                     </span>
                     <div class="pf-wrow__acts" (click)="$event.stopPropagation()" (pointerdown)="$event.stopPropagation()">
@@ -973,7 +973,7 @@
                         <span class="pf-wrow__mi">{{ o.createdAt | date:'shortTime' }}</span>
                       </p>
                     </div>
-                    <span class="nd-chip nd-chip--static pf-wrow__status" [attr.data-state]="orderStatusState(o)">
+                    <span class="pf-wrow__status" [attr.data-tone]="rowTone(o)">
                       <span class="pf-wrow__dot" aria-hidden="true"></span>{{ effectiveStatusLabel(o) }}
                     </span>
                     <div class="pf-wrow__acts" (click)="$event.stopPropagation()">
@@ -1063,7 +1063,7 @@
                         <span class="pf-wrow__mi">Billed {{ o.createdAt | date:'MMM d, h:mm a' }}</span>
                       </p>
                     </div>
-                    <span class="nd-chip nd-chip--static pf-wrow__status nd-num" data-state="active">
+                    <span class="pf-wrow__status nd-num" data-tone="amber">
                       <span class="pf-wrow__dot" aria-hidden="true"></span>{{ getBillBalance(o.id) | inr }} due
                     </span>
                     <div class="pf-wrow__acts" (click)="$event.stopPropagation()">

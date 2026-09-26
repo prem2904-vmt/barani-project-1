@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs';
 import { signal } from '@angular/core';
 import { Order } from '../../../shared/models/order.model';
 import { FrontdeskLandingComponent } from './frontdesk-landing.component';
-import { canBulkDispatch, createWorkSelection } from './work-selection';
+import { canBulkDispatch, createWorkSelection, workRowTone } from './work-selection';
 
 /** Frontdesk WORK LIST rows + multi-select (ND "List rows & multi-select"):
- *  no department chips, no monospace, the FULL name, a neutral status chip
- *  (no amber / green words), an accessible checkbox, a selection bar whose
+ *  no department chips, no monospace, the FULL name, the status as a dot +
+ *  coloured word (no chip), an accessible ROUND checkbox, a selection bar whose
  *  count always equals the highlighted rows, at most one primary. */
 
 const DIR = 'apps/lms/src/app/features/frontdesk/frontdesk-landing';
@@ -71,17 +71,36 @@ describe('Frontdesk work rows — anatomy', () => {
     expect(rule('.pf-wrow__mi + .pf-wrow__mi::before')).toMatch(/content: '·'/);
   });
 
-  it('status is the neutral ND chip with a state dot — no amber / green words', () => {
+  it('status is a dot + coloured word — no chip, border or background (owner)', () => {
     for (const r of rows()) {
-      const chip = r.querySelector('.pf-wrow__status')!;
-      expect(chip.classList).toContain('nd-chip');
-      expect(chip.classList).toContain('nd-chip--static');
-      expect(chip.querySelector('.pf-wrow__dot')).not.toBeNull();
+      const st = r.querySelector('.pf-wrow__status')!;
+      expect(st.classList).not.toContain('nd-chip');
+      expect(st.classList).not.toContain('nd-chip--static');
+      expect(st.getAttribute('data-tone') ?? st.getAttribute('[attr.data-tone]')).toBeTruthy();
+      expect(st.querySelector('.pf-wrow__dot')).not.toBeNull();
     }
-    expect(work).not.toMatch(/pf-statusword|data-tone|orderTone\(|pf-completed-chip|text-amber/);
-    const off = /amber|green|emerald|lime|#65a30d|#d4ae05|#facc15|#a3e635|#10b981|#f59e0b/i;
-    for (const r of rules().filter(x => /pf-wrow__(status|dot)/.test(x.sel))) expect(r.body, r.sel).not.toMatch(off);
-    expect(rule(".pf-wrow__status[data-state='idle'] .pf-wrow__dot")).toMatch(/background: transparent/);
+    expect(work).not.toMatch(/pf-statusword|orderTone\(|pf-completed-chip|text-amber/);
+    const status = rule('.pf-wrow__status');
+    expect(status).toMatch(/background: none/);
+    expect(status).toMatch(/border: 0/);
+    expect(status).toMatch(/padding: 0/);
+    expect(status).toMatch(/font-weight: 500/);
+    expect(status).toMatch(/font-size: 13\.5px/);
+    const dot = rule('.pf-wrow__dot');
+    expect(dot).toMatch(/width: 7px/);
+    expect(dot).toMatch(/background: var\(--pf-tone\)/);
+  });
+
+  it('status colours are the app accent TOKENS (both themes), never hex', () => {
+    expect(rule(".pf-wrow__status[data-tone='green']")).toMatch(/var\(--green-text\)/);
+    expect(rule(".pf-wrow__status[data-tone='blue']")).toMatch(/var\(--blue-text\)/);
+    expect(rule(".pf-wrow__status[data-tone='red']")).toMatch(/var\(--red-text\)/);
+    expect(rule('.pf-wrow__status')).toMatch(/--pf-tone: var\(--amber-text\)/);
+    for (const r of rules().filter(x => /pf-wrow__(status|dot)/.test(x.sel))) expect(r.body, r.sel).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+  });
+
+  it('the order drawer keeps its own neutral chip (not the row status)', () => {
+    expect(html).toMatch(/nd-chip nd-chip--static pf-drawer__status/);
   });
 
   it('row actions are the kit secondary .nd-rowact (text on web, icon + label on touch)', () => {
@@ -110,6 +129,13 @@ describe('Frontdesk work rows — selection', () => {
     expect(cb.getAttribute('[attr.aria-label]')).toBe("'Select ' + drawerName(o.patient)");
     expect(kit).toMatch(/\.nd-check\[aria-checked='true'\] \.nd-check__box \{ background: var\(--color-violet-600/);
     expect(kit).toMatch(/\.nd-check:focus-visible \.nd-check__box \{ outline: 2px solid/);
+  });
+
+  it('the checkbox is ROUND: a 20px circle (border-radius 50%), 44px hit area on touch', () => {
+    const box = kit.match(/\.nd-check__box \{([^}]*)\}/)![1];
+    expect(box).toMatch(/width: 20px; height: 20px; border-radius: 50%;/);
+    expect(kit.match(/\.nd-check \{([^}]*)\}/)![1]).toMatch(/border-radius: 50%/);
+    expect(kit).toMatch(/pointer: coarse\) \{ \.nd-check \{ width: 44px; height: 44px;/);
   });
 
   it('highlight, checkbox and bar count all read the SAME model (the count bug)', () => {
@@ -145,6 +171,23 @@ describe('Frontdesk work rows — selection', () => {
     const count = rule('.pf-selbar__count');
     expect(count).not.toMatch(/uppercase|letter-spacing/);
     expect(css).toMatch(/prefers-reduced-motion: reduce\)[^@]*\.pf-selbar \{ animation: none/);
+  });
+});
+
+describe('work row status tone (owner mapping)', () => {
+  it('Billed / completed = green, Dispatched = blue, in-lab / collected / partial = amber, stop = red', () => {
+    expect(workRowTone('billed')).toBe('green');
+    expect(workRowTone('delivered')).toBe('green');
+    expect(workRowTone('validated')).toBe('green');
+    expect(workRowTone('collected', 'Dispatched')).toBe('blue');
+    expect(workRowTone('dispatched')).toBe('blue');
+    expect(workRowTone('collected', 'In Lab')).toBe('amber');
+    expect(workRowTone('sample_collected', 'Sample Collected')).toBe('amber');
+    expect(workRowTone('partially_validated', 'Partially Ready')).toBe('amber');
+    expect(workRowTone('created', 'Created')).toBe('amber');
+    expect(workRowTone('cancelled')).toBe('red');
+    expect(workRowTone('rejected')).toBe('red');
+    expect(workRowTone('billed', 'Series in progress', true)).toBe('violet');
   });
 });
 

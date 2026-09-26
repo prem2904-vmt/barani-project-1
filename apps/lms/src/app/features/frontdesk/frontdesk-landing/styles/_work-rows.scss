@@ -1,10 +1,9 @@
 /* ══ Work list rows + multi-select (ND "List rows & multi-select") ══════
    In progress / Completed / Payments due share ONE row:
-     [checkbox] · FULL name + quiet meta · neutral status chip · row action
-   Noto only (tabular numbers), palette only — the status chip is neutral and
-   its small dot is the one accent (same as the order drawer's chip). No
-   department chips, no monospace, no amber / green status words. Both
-   themes: every colour is a token. */
+     [round checkbox] · FULL name + quiet meta · dot + coloured status · action
+   Noto only (tabular numbers). Status is the old dot + coloured word — no
+   chip, border or background (owner) — in the app's accent tokens, so both
+   themes work. The order drawer keeps its own neutral chip. */
 
 .pf-wlist { gap: 8px; }
 
@@ -78,29 +77,41 @@
   color: var(--text-muted);
 }
 
-/* Status = the neutral ND chip with a state dot (drawer parity). */
+/* Status = a small dot + a coloured word, right-aligned; no chip. Dot and
+   word are the app's accent tokens (dark / light shades per theme), all AA
+   on the card. One exception: the frontdesk calms --green-text to a sage
+   that is only ~2.2:1 on white, so in LIGHT the word is pulled toward the
+   text colour (~5:1); the dot keeps the pure token. */
 .pf-wrow__status {
+  --pf-tone: var(--amber-text);
   grid-area: status;
   justify-self: end;
-  height: 26px;
-  gap: 6px;
-  padding: 0 9px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13.5px;
   font-weight: 500;
-  color: var(--text-primary);
+  line-height: 18px;
+  white-space: nowrap;
+  color: var(--pf-tone);
+}
+.pf-wrow__status[data-tone='green'] { --pf-tone: var(--green-text); }
+.pf-wrow__status[data-tone='blue'] { --pf-tone: var(--blue-text); }
+.pf-wrow__status[data-tone='red'] { --pf-tone: var(--red-text); }
+.pf-wrow__status[data-tone='violet'] { --pf-tone: var(--violet-text); }
+:host-context(.light) .pf-wrow__status[data-tone='green'] {
+  color: color-mix(in srgb, var(--green-text) 55%, var(--text-primary));
 }
 .pf-wrow__dot {
   flex: none;
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: var(--color-violet-600, #7c3aed);
+  background: var(--pf-tone);
 }
-.pf-wrow__status[data-state='idle'] .pf-wrow__dot {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--nd-sel-border);
-}
-.pf-wrow__status[data-state='stopped'] .pf-wrow__dot { background: var(--red-text, #dc2626); }
 
 /* Row actions: the kit's .nd-rowact, right-aligned in a fixed-width slot so
    the action lines up in every row. */
@@ -120,7 +131,7 @@
 }
 
 /* Narrow list (phones, a squeezed pane): name + meta on top, then the
-   status chip (left) and the action (right) on the second line. */
+   status (left) and the action (right) on the second line. */
 @container (max-width: 520px) {
   .pf-wrow {
     grid-template-columns: minmax(0, 1fr) auto;

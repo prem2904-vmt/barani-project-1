@@ -77,3 +77,24 @@ export function createWorkSelection(
     clear() { anchor = null; if (raw().size) raw.set(new Set()); },
   };
 }
+
+/** Work-list row status colour (owner, 2026-09-26: the old dot + coloured
+ *  word, no chip). Billed / completed = green, dispatched = blue, everything
+ *  on the way (created, collected, in lab, partially ready, a balance due) =
+ *  amber, cancelled / rejected = red, a live repeat series = violet. The
+ *  order drawer keeps its neutral chip (orderStatusState). */
+export type WorkRowTone = 'green' | 'blue' | 'amber' | 'red' | 'violet';
+export function workRowTone(status: string | null | undefined, label = '', series = false): WorkRowTone {
+  if (series) return 'violet';
+  switch (status) {
+    case 'cancelled':
+    case 'rejected': return 'red';
+    case 'billed':
+    case 'completed':
+    case 'validated':
+    case 'delivered': return 'green';
+    case 'dispatched':
+    case 'in_transit': return 'blue';
+  }
+  return /dispatched/i.test(label) ? 'blue' : 'amber';
+}

@@ -108,7 +108,7 @@ import { OutsourcedListComponent } from '../outsourced/outsourced-list.component
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { drawerAgeSex, drawerName, orderStatusState } from './order-drawer';
-import { canBulkDispatch, createWorkSelection } from './work-selection';
+import { canBulkDispatch, createWorkSelection, workRowTone } from './work-selection';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -2852,6 +2852,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   protected readonly drawerAgeSex = drawerAgeSex;
   /** Status chip dot: neutral chip, violet dot while in flight / done. */
   protected readonly orderStatusState = orderStatusState;
+  /** Work-list row status: dot + coloured word (see workRowTone). */
+  rowTone(o: Order) {
+    return workRowTone(o.status, this.effectiveStatusLabel(o), this.seriesInProgress(o));
+  }
   /** Text actions on web, icon actions on touch (ND §6 row actions). */
   readonly webPointer = webPointerSignal();
   hasOutstanding(pid?: string): boolean {
