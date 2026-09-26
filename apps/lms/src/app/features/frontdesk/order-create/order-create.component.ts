@@ -20,7 +20,6 @@ import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, 
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { CollectBandButtonComponent } from '../../../shared/components/collect-band-button/collect-band-button.component';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -48,7 +47,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, CollectBandButtonComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -1652,15 +1651,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.auth.hasPermission('collect_sample') &&
     (!this.viewOrderId() || (this.order()?.samples ?? []).some(s => s.status === 'pending'))
   );
-  /** Band "Collect" context: the current order once saved (paid here,
-   *  opened for view, or being edited); none yet → the general queue. */
-  readonly collectOrderId = computed(() => this.paidOrderId() || this.viewOrderId() || this.editOrderId() || null);
-  /** Back from collection lands on THIS order (the paid-in-session state is
-   *  not in the URL, so point at its view link); unsaved → the current URL. */
-  readonly collectFrom = computed(() => {
-    const oid = this.paidOrderId() || this.viewOrderId();
-    return oid ? `/frontdesk/order?orderId=${encodeURIComponent(oid)}` : null;
-  });
   /** Switch this (unpaid) order into edit mode to change its tests. */
   editThisOrder() {
     const id = this.viewOrderId();
