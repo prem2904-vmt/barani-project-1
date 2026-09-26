@@ -1797,7 +1797,7 @@ type CellHookArg = {
 
 function stashSuperscriptCell(store: Map<string, SupCell>, d: CellHookArg): void {
   const raw = Array.isArray(d.cell.text) ? d.cell.text.join(' ') : String(d.cell.text ?? '');
-  const safe = pdfSafeText(raw);
+  const safe = pdfSafeText(raw, { keepSymbols: true });
   if (!hasSuperscript(safe)) return;
   store.set(`${d.section}:${d.row.index}:${d.column.index}`, { text: safe, styles: d.cell.styles ?? {} });
   d.cell.text = [''];
@@ -1821,7 +1821,7 @@ function stashQualifiedRangeCell(
 ): void {
   if (d.section !== 'body' || d.column.index !== rangeColIdx) return;
   const lines = (Array.isArray(d.cell.text) ? d.cell.text : [String(d.cell.text ?? '')])
-    .map(l => pdfSafeText(l));
+    .map(l => pdfSafeText(l, { keepSymbols: true }));
   if (lines.length < 2) return;                       // plain single-band cell
   store.set(`${d.row.index}:${d.column.index}`, { lines, styles: d.cell.styles ?? {} });
   d.cell.text = [''];

@@ -34,6 +34,8 @@ const OTHER: Readonly<Record<string, string>> = {
   // HEM00010's μL was exactly this); visually identical, different codepoint.
   'μ': 'µ',
   'Α': 'Alpha', 'Β': 'Beta', 'Γ': 'Gamma', 'Δ': 'Delta',
+  // ≥ ≤ ≠ ≈ ∞ and the Greek above print NATIVELY via the Symbol font when
+  // drawn through installPdfTextSanitizer; these spellings are the fallback.
   '≥': '>=', '≤': '<=', '≠': '!=', '≈': '~', '∞': 'inf', '−': '-',
   '‐': '-', '‑': '-', '‒': '-', '⁄': '/', '′': "'", '″': '"',
   // Exotic spaces written as escapes — the literal glyphs are
@@ -45,16 +47,93 @@ const SUP_RUN_RE = new RegExp(`[${Object.keys(SUPERSCRIPTS).join('')}]+`, 'g');
 const SUB_RE = new RegExp(`[${Object.keys(SUBSCRIPTS).join('')}]`, 'g');
 const OTHER_RE = new RegExp(`[${Object.keys(OTHER).join('')}]`, 'g');
 
+// ──────────────────────────────────────────────────────────────
+// Native glyphs from the PDF-standard Symbol font
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * Characters we can print as REAL glyphs instead of transliterating: the
+ * PDF-standard Symbol font (one of the base 14 — every viewer has it, nothing
+ * is embedded) carries them in its own built-in encoding. Each entry is the
+ * Symbol-encoding byte and the glyph's advance width from Adobe's Symbol AFM
+ * (1/1000 em) — jsPDF's bundled Symbol metrics are unreliable, so widths are
+ * taken from here for measurement and positioning.
+ *
+ * Only characters cp1252 CAN'T hold belong here: ± µ × – — already print
+ * natively in Helvetica/Times/Courier and must stay in the body font.
+ */
+const SYMBOL_GLYPHS: Readonly<Record<string, readonly [string, number]>> = {
+  '≥': ['\u00b3', 549], '≤': ['\u00a3', 549], '≠': ['\u00b9', 549],
+  '≈': ['\u00bb', 549], '∞': ['\u00a5', 713],
+  'α': ['a', 631], 'β': ['b', 549], 'γ': ['g', 411], 'δ': ['d', 494],
+  'κ': ['k', 549], 'λ': ['l', 549],
+  'Α': ['A', 722], 'Β': ['B', 667], 'Γ': ['G', 603], 'Δ': ['D', 612],
+};
+const SYMBOL_CHARS = Object.keys(SYMBOL_GLYPHS).join('');
+const SYMBOL_ANY_RE = new RegExp(`[${SYMBOL_CHARS}]`);
+const SYMBOL_RUN_RE = new RegExp(`[${SYMBOL_CHARS}]+`, 'g');
+
+export interface PdfSafeTextOptions {
+  /** Leave the Symbol-font characters (≥ ≤ ≠ ≈ ∞ and Greek) in place for a
+   *  symbol-aware draw — see {@link installPdfTextSanitizer}. */
+  keepSymbols?: boolean;
+}
+
 /** Transliterate one string into something the PDF fonts can actually draw. */
-export function pdfSafeText(value: unknown): string {
+export function pdfSafeText(value: unknown, opts: PdfSafeTextOptions = {}): string {
   if (value == null) return '';
   const s = String(value);
   if (!/[^\x20-\x7e]/.test(s)) return s;   // fast path: plain ASCII
   return s
     .replace(SUP_RUN_RE, run => '^' + [...run].map(c => SUPERSCRIPTS[c] ?? c).join(''))
     .replace(SUB_RE, c => SUBSCRIPTS[c] ?? c)
-    .replace(OTHER_RE, c => OTHER[c] ?? c);
+    .replace(OTHER_RE, c => (opts.keepSymbols && SYMBOL_GLYPHS[c]) ? c : (OTHER[c] ?? c));
 }
+
+/** True when `text` holds a character drawn from the Symbol font. */
+export function hasSymbolGlyph(text: string): boolean {
+  return SYMBOL_ANY_RE.test(text);
+}
+
+/** Split "Diabetes: ≥126" into [{t:'Diabetes: '},{t:'≥',sym:true},{t:'126'}]. */
+export function splitSymbolRuns(text: string): Array<{ t: string; sym?: boolean }> {
+  const out: Array<{ t: string; sym?: boolean }> = [];
+  let last = 0;
+  SYMBOL_RUN_RE.lastIndex = 0;
+  for (const m of text.matchAll(SYMBOL_RUN_RE)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push({ t: text.slice(last, i) });
+    out.push({ t: m[0], sym: true });
+    last = i + m[0].length;
+  }
+  if (last < text.length) out.push({ t: text.slice(last) });
+  return out;
+}
+
+/** Unicode symbol run → the bytes the Symbol font's built-in encoding expects. */
+export function toSymbolEncoding(run: string): string {
+  return [...run].map(c => SYMBOL_GLYPHS[c]?.[0] ?? c).join('');
+}
+
+/** Width of a symbol run in em (Symbol AFM widths). */
+export function symbolRunUnitWidth(run: string): number {
+  return [...run].reduce((w, c) => w + (SYMBOL_GLYPHS[c]?.[1] ?? 500), 0) / 1000;
+}
+
+type TextOptions = Record<string, unknown> & {
+  align?: string; maxWidth?: number; lineHeightFactor?: number;
+};
+type WrappableDoc = {
+  text: (...a: unknown[]) => unknown;
+  getStringUnitWidth: (text: string, options?: unknown) => number;
+  splitTextToSize: (text: string, size: number, options?: unknown) => string[];
+  getFont: () => { fontName: string; fontStyle: string };
+  setFont: (name: string, style?: string) => unknown;
+  getFontSize: () => number;
+  getLineHeightFactor?: () => number;
+  internal: { scaleFactor: number };
+  __pfSanitized?: boolean;
+};
 
 /**
  * Route EVERY draw on this document through {@link pdfSafeText} by wrapping
@@ -62,13 +141,85 @@ export function pdfSafeText(value: unknown): string {
  * that build a report, and it also covers jspdf-autotable, which renders its
  * cells through this same method — so table units and test names are fixed
  * without touching the table code.
+ *
+ * Lines holding ≥ ≤ ≠ ≈ ∞ or Greek are drawn as MIXED RUNS: the body text in
+ * the current font, the symbols in the PDF-standard Symbol font, each run
+ * placed at the running advance so "Diabetes: ≥126 mg/dL" prints exactly as
+ * Test Master shows it. Alignment (left/center/right), multi-line text,
+ * maxWidth wrapping and baseline are honoured; anything exotic (rotation, a
+ * transform matrix, the legacy positional signature) falls back to the old
+ * transliteration ("≥" → ">="), which is always safe.
+ *
+ * `getStringUnitWidth` (and therefore `getTextWidth`, and autotable's column
+ * sizing and right/centre alignment) is wrapped the same way so a symbol is
+ * measured at its real Symbol-font width. Text with no symbol is passed
+ * through untouched, so every existing layout measures exactly as before.
  */
 export function installPdfTextSanitizer(doc: jsPDF): void {
-  const d = doc as unknown as { text: (...a: unknown[]) => unknown; __pfSanitized?: boolean };
+  const d = doc as unknown as WrappableDoc;
   if (d.__pfSanitized) return;          // idempotent — safe on a re-used doc
   const original = d.text.bind(doc);
-  d.text = (text: unknown, ...rest: unknown[]) =>
-    original(Array.isArray(text) ? text.map(pdfSafeText) : pdfSafeText(text), ...rest);
+  const originalUnitWidth = d.getStringUnitWidth.bind(doc);
+
+  /** em width of an already-sanitised line that may hold symbol runs. */
+  const unitWidth = (line: string, options?: unknown): number =>
+    splitSymbolRuns(line).reduce((w, r) =>
+      w + (r.sym ? symbolRunUnitWidth(r.t) : originalUnitWidth(r.t, options)), 0);
+
+  d.getStringUnitWidth = (text: string, options?: unknown) =>
+    typeof text === 'string' && hasSymbolGlyph(text)
+      ? unitWidth(pdfSafeText(text, { keepSymbols: true }), options)
+      : originalUnitWidth(text, options);
+
+  const flat = (text: unknown) =>
+    Array.isArray(text) ? text.map(t => pdfSafeText(t)) : pdfSafeText(text);
+
+  d.text = (text: unknown, x: unknown, y: unknown, options?: unknown, ...rest: unknown[]) => {
+    const opts = (options ?? {}) as TextOptions;
+    const plainCall = typeof x === 'number' && typeof y === 'number'
+      && (options == null || (typeof options === 'object' && !Array.isArray(options)))
+      && rest.every(r => r == null)
+      && opts['angle'] == null && opts['rotationDirection'] == null;
+    const rawLines: string[] = Array.isArray(text)
+      ? text.map(t => String(t ?? ''))
+      : String(text ?? '').split(/\r\n|\r|\n/);
+    if (!plainCall || !rawLines.some(hasSymbolGlyph)) {
+      return original(flat(text), x, y, options, ...rest);
+    }
+
+    const { align, maxWidth, lineHeightFactor, ...runOpts } = opts;
+    let lines = rawLines.map(l => pdfSafeText(l, { keepSymbols: true }));
+    if (typeof maxWidth === 'number' && maxWidth > 0) {
+      lines = lines.flatMap(l => d.splitTextToSize(l, maxWidth));
+    }
+    const k = d.internal.scaleFactor;
+    const fs = d.getFontSize();
+    const lh = fs * (lineHeightFactor ?? d.getLineHeightFactor?.() ?? 1.15) / k;
+
+    lines.forEach((line, i) => {
+      const ly = (y as number) + i * lh;
+      if (!hasSymbolGlyph(line)) {
+        // justify has no meaning for a single line — it draws flush left.
+        original(line, x, ly, { ...runOpts, align: align === 'justify' ? 'left' : align });
+        return;
+      }
+      const w = unitWidth(line) * fs / k;
+      let cx = (x as number) - (align === 'right' ? w : align === 'center' ? w / 2 : 0);
+      for (const run of splitSymbolRuns(line)) {
+        if (run.sym) {
+          const f = d.getFont();
+          d.setFont('symbol', 'normal');
+          original(toSymbolEncoding(run.t), cx, ly, runOpts);
+          d.setFont(f.fontName, f.fontStyle);
+          cx += symbolRunUnitWidth(run.t) * fs / k;
+        } else {
+          original(run.t, cx, ly, runOpts);
+          cx += originalUnitWidth(run.t) * fs / k;
+        }
+      }
+    });
+    return doc;
+  };
   d.__pfSanitized = true;
 }
 

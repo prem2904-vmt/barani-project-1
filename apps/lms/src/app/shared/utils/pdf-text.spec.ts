@@ -1,4 +1,10 @@
-import { pdfSafeText, splitSuperscriptRuns, hasSuperscript } from './pdf-text';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+  pdfSafeText, splitSuperscriptRuns, hasSuperscript, installPdfTextSanitizer,
+  splitSymbolRuns, hasSymbolGlyph, toSymbolEncoding, symbolRunUnitWidth,
+  drawTextWithSuperscripts,
+} from './pdf-text';
 
 describe('pdfSafeText', () => {
   it('returns empty string for null and undefined', () => {
@@ -279,15 +285,152 @@ describe('hasSuperscript', () => {
   });
 });
 
+describe('pdfSafeText keepSymbols', () => {
+  it('keeps ≥ ≤ ≠ ≈ ∞ and Greek for the symbol-aware draw', () => {
+    expect(pdfSafeText('Diabetes: ≥126 mg/dL', { keepSymbols: true })).toBe('Diabetes: ≥126 mg/dL');
+    expect(pdfSafeText('≤5 ≠ ≈ ∞ β-hCG', { keepSymbols: true })).toBe('≤5 ≠ ≈ ∞ β-hCG');
+  });
+  it('still transliterates everything else', () => {
+    expect(pdfSafeText('≥ ×10⁹/L CO₂ μL', { keepSymbols: true })).toBe('≥ ×10^9/L CO2 µL');
+  });
+});
+
+describe('symbol runs', () => {
+  it('splits a mixed line into body and symbol runs', () => {
+    expect(splitSymbolRuns('Diabetes: ≥126 mg/dL')).toEqual([
+      { t: 'Diabetes: ' }, { t: '≥', sym: true }, { t: '126 mg/dL' },
+    ]);
+    expect(splitSymbolRuns('≥≤x')).toEqual([{ t: '≥≤', sym: true }, { t: 'x' }]);
+    expect(splitSymbolRuns('plain')).toEqual([{ t: 'plain' }]);
+  });
+  it('detects symbol glyphs but not cp1252 characters', () => {
+    expect(hasSymbolGlyph('≥126')).toBe(true);
+    expect(hasSymbolGlyph('±5 µL ×10 – —')).toBe(false);
+  });
+  it('maps to Symbol-font encoding bytes', () => {
+    expect(toSymbolEncoding('≥≤≠≈∞')).toBe('\u00b3\u00a3\u00b9\u00bb\u00a5');
+    expect(toSymbolEncoding('αβγ')).toBe('abg');
+  });
+  it('measures with Symbol AFM widths', () => {
+    expect(symbolRunUnitWidth('≥')).toBeCloseTo(0.549);
+    expect(symbolRunUnitWidth('≥∞')).toBeCloseTo(0.549 + 0.713);
+  });
+});
+
 describe('installPdfTextSanitizer', () => {
-  // needs-harness: installPdfTextSanitizer
-  // Requires a real jsPDF instance and mocking/wrapping its text method.
-  // Skipped: this function mutates a jsPDF document object and verifies
-  // that its text() method is wrapped to sanitize arguments. A proper test
-  // would need to instantiate jsPDF or mock it, which is a different harness.
-  it.todo('wraps jsPDF.text() to sanitize all text arguments');
-  it.todo('handles Array<string> text argument (multi-line)');
-  it.todo('is idempotent (safe on re-used doc)');
+  type Call = { t: unknown; x: unknown; y: unknown; font: string };
+  function makeDoc() {
+    const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: false });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const calls: Call[] = [];
+    const raw = doc.text.bind(doc);
+    (doc as unknown as { text: unknown }).text = (t: unknown, x: unknown, y: unknown, ...r: unknown[]) => {
+      calls.push({ t, x, y, font: doc.getFont().fontName });
+      return (raw as (...a: unknown[]) => unknown)(t, x, y, ...r);
+    };
+    installPdfTextSanitizer(doc);
+    return { doc, calls };
+  }
+  const drawn = (calls: Call[]) => calls.map(c => Array.isArray(c.t) ? c.t.join('\n') : String(c.t)).join('|');
+
+  it('draws ≥ from the Symbol font instead of emitting ">="', () => {
+    const { doc, calls } = makeDoc();
+    doc.text('Diabetes: ≥126 mg/dL', 50, 100);
+    expect(drawn(calls)).not.toContain('>=');
+    expect(calls.map(c => [c.t, c.font])).toEqual([
+      ['Diabetes: ', 'helvetica'], ['\u00b3', 'symbol'], ['126 mg/dL', 'helvetica'],
+    ]);
+    // font restored afterwards
+    expect(doc.getFont().fontName).toBe('helvetica');
+  });
+
+  it('positions runs at the running advance on one baseline', () => {
+    const { doc, calls } = makeDoc();
+    doc.text('Diabetes: ≥126', 50, 100);
+    const wBody = doc.getTextWidth('Diabetes: ');
+    expect(calls[0].x).toBe(50);
+    expect(calls[1].x).toBeCloseTo(50 + wBody);
+    expect(calls[2].x).toBeCloseTo(50 + wBody + 0.549 * 10);
+    expect(new Set(calls.map(c => c.y))).toEqual(new Set([100]));
+  });
+
+  it('measures symbols at their real width (getTextWidth / getStringUnitWidth)', () => {
+    const { doc } = makeDoc();
+    expect(doc.getTextWidth('≥126')).toBeCloseTo(0.549 * 10 + doc.getTextWidth('126'));
+    expect(doc.getStringUnitWidth('≤')).toBeCloseTo(0.549);
+    // text without symbols measures exactly as before
+    expect(doc.getTextWidth('126 mg/dL')).toBeGreaterThan(0);
+  });
+
+  it('honours right and centre alignment for mixed lines', () => {
+    const { doc, calls } = makeDoc();
+    const w = doc.getTextWidth('≥126');
+    doc.text('≥126', 200, 50, { align: 'right' });
+    expect(calls[0].x).toBeCloseTo(200 - w);
+    calls.length = 0;
+    doc.text('≥126', 200, 50, { align: 'center' });
+    expect(calls[0].x).toBeCloseTo(200 - w / 2);
+  });
+
+  it('draws every line of multi-line report text', () => {
+    const { doc, calls } = makeDoc();
+    doc.text('Normal: 70–99 mg/dL\nPrediabetes: 100–125 mg/dL\nDiabetes: ≥126 mg/dL', 40, 60);
+    const txt = drawn(calls);
+    expect(txt).toContain('Normal: 70–99 mg/dL');
+    expect(txt).toContain('Prediabetes: 100–125 mg/dL');
+    expect(txt).toContain('Diabetes: ');
+    expect(txt).not.toContain('>=');
+    const ys = [...new Set(calls.map(c => c.y as number))].sort((a, b) => a - b);
+    expect(ys.length).toBe(3);
+    expect(ys[1] - ys[0]).toBeCloseTo(10 * doc.getLineHeightFactor());
+  });
+
+  it('handles array input (autotable multi-line cells)', () => {
+    const { doc, calls } = makeDoc();
+    doc.text(['<=5', '≤5 U/L'], 10, 10);
+    expect(drawn(calls)).toContain('<=5');   // literal ASCII untouched
+    expect(calls.some(c => c.t === '\u00a3' && c.font === 'symbol')).toBe(true);
+  });
+
+  it('still transliterates plain lines (superscripts, subscripts)', () => {
+    const { doc, calls } = makeDoc();
+    doc.text('×10⁹/L CO₂', 10, 10);
+    expect(calls[0].t).toBe('×10^9/L CO2');
+  });
+
+  it('falls back to transliteration for rotated text', () => {
+    const { doc, calls } = makeDoc();
+    doc.text('≥ WATERMARK', 10, 10, { angle: 30 });
+    expect(calls[0].t).toBe('>= WATERMARK');
+  });
+
+  it('is idempotent (safe on re-used doc)', () => {
+    const { doc, calls } = makeDoc();
+    installPdfTextSanitizer(doc);
+    doc.text('≥1', 10, 10);
+    expect(calls.length).toBe(2);
+  });
+
+  it('works through superscript runs (×10^9 next to ≥)', () => {
+    const { doc, calls } = makeDoc();
+    drawTextWithSuperscripts(doc, '≥4 ×10^9/L', 10, 10, 10);
+    expect(drawn(calls)).not.toContain('>=');
+    expect(calls.some(c => c.t === '9')).toBe(true);
+  });
+
+  it('emits Symbol-font text operators in the real PDF (incl. autotable cells)', () => {
+    const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: false });
+    installPdfTextSanitizer(doc);
+    doc.text('Diabetes: ≥126 mg/dL', 40, 40);
+    autoTable(doc, { body: [['Glucose', '≤99 mg/dL'], ['Ratio', '≥ 1.5']], startY: 60 });
+    const out = doc.output();
+    expect(out).toContain('/BaseFont /Symbol');
+    expect(out).toContain('(\u00b3) Tj');
+    expect(out).toContain('(\u00a3) Tj');
+    expect(out).not.toMatch(/\(>=/);
+    expect(out).not.toMatch(/\(<=/);
+  });
 });
 
 describe('measureWithSuperscripts', () => {
