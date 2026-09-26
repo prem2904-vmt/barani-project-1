@@ -261,106 +261,10 @@ export function collectionLocations(cfg: ProcessWorkflowConfig | null | undefine
     .map(a => a.categoryId))];
 }
 
-/** The categoryId of the built-in Lab work-area (see SYSTEM_AREA_SCREEN). */
-export const LAB_MENU_ID = 'lab';
-
-/** What kind of work area a `sample_collection` placement sits in. */
-export type CollectionHost = 'frontdesk' | 'lab' | 'billing' | 'counter' | 'area';
-
-/** One menu that holds an enabled `sample_collection` action. */
-export interface CollectionPlacementEntry {
-  menuId: string;
-  host: CollectionHost;
-  /** A SEPARATE collection work area (its only / primary action is sample
-   *  collection) — the one placement that gets its own nav page. */
-  dedicated: boolean;
-}
-
-/** Where sample collection lives in the workflow, and what that means on screen. */
-export interface CollectionPlacement {
-  menus: CollectionPlacementEntry[];
-  /** Collection placed in the front-desk menu → "Collect sample" on the front
-   *  desk work list + after payment on Order & Payments. */
-  atFrontdesk: boolean;
-  /** Collection placed in the Lab menu → "Collect sample" in Lab My Work. */
-  inLab: boolean;
-  /** Collection placed in the separate billing-counter menu → "Collect sample"
-   *  after payment at the billing counter. */
-  atBillingCounter: boolean;
-  /** Custom (non-system, non-dedicated) menus that host collection as one of
-   *  several actions → a "Collect sample" launcher on that menu's /w/:id screen. */
-  inAreas: string[];
-  /** Menus that ARE a separate collection work area / counter. */
-  dedicatedMenus: string[];
-  /** True only when collection is its own work area → the ONLY case where the
-   *  nav shows a Collect page. Integrated placements never add a nav item. */
-  ownNavPage: boolean;
-}
-
-/**
- * THE single source of truth for sample-collection placement (owner rule,
- * 2026-09-26): wherever the Process builder drops the "Sample collection"
- * action, THAT work area shows an integrated "Collect sample" action on its
- * screen. Only a menu whose only / primary action is collection (a separate
- * counter) is a page of its own in the nav. Not in the workflow ⇒ nowhere.
- * Returns null when there's no usable workflow (callers keep legacy behaviour).
- */
-export function collectionPlacement(cfg: ProcessWorkflowConfig | null | undefined): CollectionPlacement | null {
-  if (!cfg?.actions?.length) return null;
-  const fd = frontdeskMenu(cfg);
-  const bill = cfg.actions.find(a => a.type === 'billing' && a.enabled)?.categoryId;
-  const menus: CollectionPlacementEntry[] = collectionLocations(cfg).map(menuId => {
-    let host: CollectionHost;
-    if (menuId === fd) host = 'frontdesk';
-    else if (menuId === LAB_MENU_ID) host = 'lab';
-    else if (menuId === bill) host = 'billing';
-    else if (SYSTEM_AREA_SCREEN[menuId]) host = 'area';
-    else {
-      // A custom menu is a separate collection counter when collection is its
-      // first (primary) enabled action — "Collection Center" with just the
-      // collect action, or collect + its queue/dispatch helpers.
-      const first = cfg.actions
-        .filter(a => a.categoryId === menuId && a.enabled)
-        .sort((a, b) => a.order - b.order)[0];
-      host = first?.type === 'sample_collection' ? 'counter' : 'area';
-    }
-    return { menuId, host, dedicated: host === 'counter' };
-  });
-  const dedicatedMenus = menus.filter(m => m.dedicated).map(m => m.menuId);
-  return {
-    menus,
-    atFrontdesk: menus.some(m => m.host === 'frontdesk'),
-    inLab: menus.some(m => m.host === 'lab'),
-    atBillingCounter: menus.some(m => m.host === 'billing'),
-    inAreas: menus.filter(m => m.host === 'area').map(m => m.menuId),
-    dedicatedMenus,
-    ownNavPage: dedicatedMenus.length > 0,
-  };
-}
-
-/** Where the integrated "Collect sample" action renders for this workflow —
- *  one entry per screen, straight from {@link collectionPlacement}:
- *  'frontdesk-worklist' + 'order-payments' (front desk), 'lab-my-work' (lab),
- *  'billing-after-payment' (billing counter), '/w/<menuId>' (a custom menu that
- *  hosts collection among other actions) and 'counter:<menuId>' (a separate
- *  collection work area — its own nav page). Null = no workflow (legacy). */
-export function collectActionSurfaces(cfg: ProcessWorkflowConfig | null | undefined): string[] | null {
-  const p = collectionPlacement(cfg);
-  if (!p) return null;
-  const out: string[] = [];
-  if (p.atFrontdesk) out.push('frontdesk-worklist', 'order-payments');
-  if (p.inLab) out.push('lab-my-work');
-  if (p.atBillingCounter) out.push('billing-after-payment');
-  for (const m of p.menus) {
-    if (m.host === 'counter') out.push(`counter:${m.menuId}`);
-    else if (m.host === 'area' && !SYSTEM_AREA_SCREEN[m.menuId]) out.push(`/w/${m.menuId}`);
-  }
-  return out;
-}
-
 /** True when collection is placed in the frontdesk menu. */
 export function collectsAtFrontdesk(cfg: ProcessWorkflowConfig | null | undefined): boolean {
-  return !!collectionPlacement(cfg)?.atFrontdesk;
+  const fd = frontdeskMenu(cfg);
+  return !!fd && collectionLocations(cfg).includes(fd);
 }
 
 /** True when collection is placed in any non-frontdesk menu (a dedicated counter
@@ -375,18 +279,16 @@ export function hasDedicatedCollection(cfg: ProcessWorkflowConfig | null | undef
  * counter — an enabled `sample_collection` sits in the same (non-frontdesk)
  * menu as the enabled `billing` action. The billing counter only offers
  * "Collect sample" after payment when this holds; otherwise the paid patient
- * simply moves on to wherever collection lives. Delegates to
- * {@link collectionPlacement} (kept as an export for the billing counter).
+ * simply moves on to wherever collection lives (the collection queue).
  */
 export function collectsAtBillingCounter(cfg: ProcessWorkflowConfig | null | undefined): boolean {
-  return !!collectionPlacement(cfg)?.atBillingCounter;
+  const bill = cfg?.actions?.find(a => a.type === 'billing' && a.enabled)?.categoryId;
+  if (!bill || bill === frontdeskMenu(cfg)) return false;
+  return collectionLocations(cfg).includes(bill);
 }
 
-/** True when collection is its own work area — the only case where "Collect"
- *  is a nav page. */
-export function hasCollectionNavPage(cfg: ProcessWorkflowConfig | null | undefined): boolean {
-  return !!collectionPlacement(cfg)?.ownNavPage;
-}
+/** The categoryId of the built-in Lab work-area (see SYSTEM_AREA_SCREEN). */
+export const LAB_MENU_ID = 'lab';
 
 /**
  * True when sample collection is placed in the LAB work-area — the tube is drawn
@@ -396,7 +298,7 @@ export function hasCollectionNavPage(cfg: ProcessWorkflowConfig | null | undefin
  * "My Work" screen surfaces a Collect pane in place of Lab Intake for this mode.
  */
 export function collectsInLab(cfg: ProcessWorkflowConfig | null | undefined): boolean {
-  return !!collectionPlacement(cfg)?.inLab;
+  return collectionLocations(cfg).includes(LAB_MENU_ID);
 }
 
 /**

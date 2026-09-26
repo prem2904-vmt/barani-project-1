@@ -29,7 +29,7 @@ import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, withLegacyCollect } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
@@ -245,14 +245,12 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  collect_sample and no collection surface is already visible. Mirrors
    *  withInventory. */
   private withCollection(items: NavItem[]): NavItem[] {
-    // Workflow active ⇒ the Process builder decides (menusFromWorkflow emits a
-    // Collect page only for a separate collection work area). Legacy (no
-    // workflow) keeps the old "guarantee a Collect entry" behaviour.
-    return withLegacyCollect(items, {
-      fromWorkflow: !!menusFromWorkflow(this.process.active(), this.navCtx()),
-      canCollect: this.auth.hasEffectivePermission('collect_sample'),
-      collectionEnabled: this.process.isEnabled('sample_collection'),
-    });
+    if (!this.auth.hasEffectivePermission('collect_sample')) return items;
+    if (!this.process.isEnabled('sample_collection')) return items;
+    if (items.some(i => i.id === 'sample-collection' || i.id === 'queue'
+                     || i.href === '/sample-collection' || i.href === '/frontdesk/queue')) return items;
+    const collect = PRIMARY_NAV.find(i => i.id === 'sample-collection');
+    return collect ? [...items, collect] : items;
   }
 
   /** The workflow-driven nav (menusFromWorkflow) is NOT module-gated, so drop

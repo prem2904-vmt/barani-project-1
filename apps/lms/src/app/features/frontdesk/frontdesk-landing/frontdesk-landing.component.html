@@ -895,7 +895,7 @@
                         <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent"
                           (click)="goToBilling(o)">Bill</button>
                         }
-                        @if (showResumeCollectOn(o) || showCollectOn(o)) {
+                        @if (sampleStatus(o) === 'partially_collected' || showCollectOn(o)) {
                         <button type="button" class="pf-ghostbtn press" (click)="collectSample(o)">Collect</button>
                         } @else if (showDispatchOn(o)) {
                         <button type="button" class="pf-ghostbtn press pf-ghostbtn--accent" (click)="markDispatched(o)">Dispatch</button>

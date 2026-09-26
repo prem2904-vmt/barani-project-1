@@ -8,7 +8,7 @@ import { ProcessWorkflowService } from '../../core/services/process-workflow.ser
 import { catalogFor } from '../../shared/models/process-workflow.model';
 import { portablePanel } from '../../shared/workflow/portable-panels';
 
-interface HostItem { type: string; label: string; hint?: string; iconPath: string[]; route: string; query?: Record<string, string>; cmp: Type<unknown> | null; }
+interface HostItem { type: string; label: string; hint?: string; iconPath: string[]; route: string; cmp: Type<unknown> | null; }
 
 /**
  * Generic host for a CUSTOM work-area (one that has no bespoke screen). Renders
@@ -37,11 +37,11 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
               @if (it.cmp) {
                 <ng-container *ngComponentOutlet="it.cmp" />
               } @else {
-                <button type="button" class="wah-launch press" (click)="go(it.route, it.query)">
+                <button type="button" class="wah-launch press" (click)="go(it.route)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                     @for (p of it.iconPath; track $index) { <path [attr.d]="p" /> }
                   </svg>
-                  <span class="wah-launch__l">{{ it.type === 'sample_collection' ? it.label : 'Open ' + it.label }}</span>
+                  <span class="wah-launch__l">Open {{ it.label }}</span>
                   @if (it.hint) { <span class="wah-launch__h">{{ it.hint }}</span> }
                 </button>
               }
@@ -88,12 +88,7 @@ export class WorkAreaHostComponent {
       .sort((a, b) => a.order - b.order)
       .map(a => ({ a, e: catalogFor(a.type) }))
       .filter(x => !!x.e && (!x.e.permissions?.length || isSuper || this.auth.hasAnyPermission(x.e.permissions)))
-      .map(x => x.a.type === 'sample_collection'
-        // Collection placed in this menu = an integrated "Collect sample" action
-        // on this screen: open the collect page, whose back returns here.
-        ? { type: x.a.type, label: x.a.label || 'Collect sample', hint: x.e!.hint, iconPath: x.e!.iconPath,
-            route: '/lab/collect', query: { from: `/w/${menu.id}` } }
-        : { type: x.a.type, label: x.a.label || x.e!.label, hint: x.e!.hint, iconPath: x.e!.iconPath, route: x.e!.route });
+      .map(x => ({ type: x.a.type, label: x.a.label || x.e!.label, hint: x.e!.hint, iconPath: x.e!.iconPath, route: x.e!.route }));
   });
 
   constructor() {
@@ -108,5 +103,5 @@ export class WorkAreaHostComponent {
     });
   }
 
-  go(route: string, query?: Record<string, string>) { this.router.navigate([route], query ? { queryParams: query } : {}); }
+  go(route: string) { this.router.navigate([route]); }
 }

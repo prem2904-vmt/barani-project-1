@@ -13,7 +13,6 @@
            so the seam stays flush like every other band screen. -->
       @if (!deepLinkMode() && !embedded && theme.isNewDesign()) {
       <pf-hero-band
-        [back]="!!listBackTo()" [backTo]="listBackTo()"
         [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
         [value]="scanValue()"
         (valueChange)="onSearchInput($event)"
@@ -45,10 +44,7 @@
 
       @if (!deepLinkMode() && !embedded) {
       <pf-kpi-strip screen="sample_collection"></pf-kpi-strip>
-      <!-- Back: the band carries it in the new design (one chevron, not two);
-           classic has no band, so the header returns to the opening area. -->
       <pf-screen-header
-        [parentRoute]="listBackTo()" [noBack]="theme.isNewDesign() && !!listBackTo()"
         eyebrow="Lab · Collection"
         title="Sample collection"
         subtitle="Scan the barcode from reception, or tap a patient to draw vials.">
@@ -898,3 +894,4 @@
       </div>
     }
 
+  `

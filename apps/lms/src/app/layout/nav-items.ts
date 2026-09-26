@@ -227,7 +227,16 @@ export function navLabel(name: string | null | undefined): string {
 
 export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined, ctx: WorkflowNavCtx): NavItem[] | null {
   if (!cfg?.categories?.length) return null;
+  // The flask/tube "Collect" icon (matches the PRIMARY_NAV sample-collection item).
+  const COLLECT_ICON = ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'];
+  const canCollect = ctx.isSuper || ctx.hasAnyPermission(['collect_sample']);
+  // Work-areas that hold an enabled sample_collection action.
+  const collectAreas = new Set((cfg.actions ?? [])
+    .filter(a => a.type === 'sample_collection' && a.enabled)
+    .map(a => a.categoryId));
+
   const items: NavItem[] = [];
+  let collectAdded = false;
   for (const area of [...cfg.categories].sort((a, b) => a.order - b.order)) {
     // Visibility is PERMISSION-driven (not role NAME): the area shows when the
     // user can run at least one of its actions (checked below). The old
@@ -260,36 +269,19 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
       iconPath: workAreaIconPath(area.icon),
       permissions: areaPerms.length ? areaPerms : undefined,
     });
-    // NOTE (owner rule, 2026-09-26): sample collection placed INSIDE another
-    // work area (front desk / lab / billing counter / a custom menu) is an
-    // integrated "Collect sample" action on THAT area's screen — never a nav
-    // item of its own. Only a menu that IS a collection counter shows up here,
-    // as its own work-area item (see collectionPlacement). No side-car
-    // "Collect" is injected next to the area any more.
+    // Sample collection is a repeatable action that's often dropped INTO a
+    // system area (e.g. Lab), whose bespoke screen (/lab/my-work) opens directly
+    // and never exposes the collection action — leaving it unreachable. When the
+    // area a collection sits in doesn't already open the collect/queue screen,
+    // surface a dedicated "Collect" item right beside it (once, if the user can
+    // actually draw samples).
+    if (!collectAdded && canCollect && collectAreas.has(area.id)
+        && route !== '/sample-collection' && route !== '/frontdesk/queue') {
+      items.push({ id: 'sample-collection', label: 'Collect', href: '/sample-collection', iconPath: COLLECT_ICON, permissions: ['collect_sample'] });
+      collectAdded = true;
+    }
   }
   return items.length ? items : null;
-}
-
-/**
- * Legacy "guarantee a Collect entry" fallback — ONLY for tenants with no usable
- * workflow (the PRIMARY_NAV fallback path). With a workflow the Process builder
- * is the single source of truth: a Collect nav page exists only when collection
- * is its own work area, which menusFromWorkflow already emits. Appends the
- * PRIMARY_NAV Collect item (idempotent) when the user can collect and no
- * collection surface is visible yet.
- */
-export function withLegacyCollect(items: NavItem[], opts: {
-  /** True when the items came from menusFromWorkflow (a workflow is active). */
-  fromWorkflow: boolean;
-  canCollect: boolean;
-  collectionEnabled: boolean;
-}): NavItem[] {
-  if (opts.fromWorkflow) return items;
-  if (!opts.canCollect || !opts.collectionEnabled) return items;
-  if (items.some(i => i.id === 'sample-collection' || i.id === 'queue'
-                   || i.href === '/sample-collection' || i.href === '/frontdesk/queue')) return items;
-  const collect = PRIMARY_NAV.find(i => i.id === 'sample-collection');
-  return collect ? [...items, collect] : items;
 }
 
 export const MORE_NAV: NavItem[] = [

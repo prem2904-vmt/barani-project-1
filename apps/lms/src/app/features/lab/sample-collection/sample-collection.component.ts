@@ -19,7 +19,6 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { ApiService } from "../../../core/services/api.service";
-import { listBackTarget } from "./collect-back";
 import { LiveQueueService } from "../../../core/services/live-queue.service";
 import { ScanService } from "../../../core/services/scan.service";
 import { AuthService } from "../../../core/auth/auth.service";
@@ -624,13 +623,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  popup. Set once in ngOnInit and not cleared until navigation. */
   private readonly _deepLinkMode = signal<boolean>(false);
   readonly deepLinkMode = this._deepLinkMode.asReadonly();
-  /** Queue (list) mode opened FROM a work area — e.g. Lab My Work's "Collect
-   *  sample" (/lab/collect?from=/lab/my-work) or a custom menu's launcher. The
-   *  band shows a back chevron that returns there. Null on the dedicated
-   *  counter page (/sample-collection), which is a nav root of its own. */
-  readonly listBackTo = signal<string | null>(listBackTarget(
-    '/' + (this.route.snapshot?.routeConfig?.path ?? ''),
-    this.route.snapshot?.queryParamMap?.get('from') ?? null));
   protected readonly REJECT_REASONS: ReadonlyArray<{
     code: string;
     label: string;
@@ -1749,4 +1741,3 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.refresh();
   }
 }
-
