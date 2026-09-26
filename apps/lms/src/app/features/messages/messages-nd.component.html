@@ -450,7 +450,8 @@
                             </div>
                           }
                           @if (sharedRecord(m); as rec) {
-                            <a class="pf-mnd-rec" [routerLink]="sharedRecordLink(rec)" [title]="'Open ' + sharedRecordEyebrow(rec.type)">
+                            <a class="pf-mnd-rec" [routerLink]="sharedRecordLink(rec)" [title]="'Open ' + sharedRecordEyebrow(rec.type)"
+                               [pfZoomSource]="rec.type === 'report' ? [rec.id] : null">
                               <span class="nd-card__icon" aria-hidden="true">
                                 @switch (rec.type) {
                                   @case ('patient') {

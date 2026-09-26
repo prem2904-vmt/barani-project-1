@@ -1125,6 +1125,56 @@ the same code); classic keeps its page.
   immersive class, the collapse strip, and at 375 the push + composer
   above the navbar. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
 
+## 19. Report view
+
+`/reports/view/:id` (`features/reports/report-viewer/`) — one report, the
+exact PDF on screen. Visual redesign only: every action and API is unchanged.
+
+- **Band:** back (`backTo="/reports"`, pops history when you came from the
+  Results list) · tenant · actions: **Edit** (only with `edit_result`),
+  **Print**, **Share with…** (only with the Messages module) as ghosts, and
+  THE primary **Send WhatsApp** (delivery to the patient). Web: text
+  buttons. Touch: 44px icons, words kept via `aria-label`. Phones: the
+  primary + a **More** icon that opens a sheet (Print · Share with a
+  colleague · Edit results · Cancel) above the navbar.
+- **Action feedback:** Print shows "Preparing…" while the PDF builds, then a
+  brief "Printing" with an SVG check; Send shows "Sent" with the check
+  (~1.8s, a small pop), then the label returns. Errors stay on the toast.
+- **Context bar (the pill):** the patient chip (FULL name + "29/M · MRN";
+  phones: the name only, wrapping), the order number (≥1024px), a status
+  chip "Final · Completed" (violet dot; a ring for Preliminary; "Amended"
+  when the snapshot says so) and the generated date / time in tabular
+  numbers (≥1100px). ≤900px adds a quiet **Details** button.
+- **PREVIEW = the main card** (violet icon chip, "N pages" on the right).
+  Its body is the only thing that scrolls: the pdf.js-painted pages (the
+  same jsPDF file Print uses — the PDF content is never restyled) on a calm
+  desk tint, and — on a partial report — a neutral "Preliminary report"
+  notice with an SVG icon above the pages.
+- **REPORT = the right side card** (action / summary companion, 400px;
+  360px ≤1280): one status line ("Ready to deliver" / "Delivered via
+  WhatsApp", violet mark), report type, pending departments, generated,
+  patient-link expiry, delivery note, **Partner lab reports** (`.nd-rowact`
+  "Open · print") and one explanation line. Collapses to a strip on the
+  RIGHT edge (remembered per user, `pf:rv:side-collapsed:<uid>`); ≤900px it
+  is a sheet (phones: from the bottom; tablets: from the right edge).
+- **Loading / errors:** a static page-shaped skeleton (head, patient block,
+  table rows — no looping shimmer) until every page is painted; then the
+  pages fade + rise in (320ms, `--nd-spring`). Load / render failures are
+  `.nd-empty` with **Try again**.
+- **Zoom:** the Results row (`[pfZoomSource]="[r.id, r.orderId]"`) and a
+  shared report card in Messages (new design) morph into the PREVIEW card
+  (`[pfZoomTarget]` on the ONE card from skeleton to pages). While
+  `zoom.holding()` the skeleton stays and the pages' host is not mounted,
+  so the target never swaps mid-morph.
+- **Motion:** the pill chips + actions fade in once, staggered 40ms; the side
+  card collapses with the billing width + opacity motion; sheets rise, the
+  web share modal fades + scales. All off under reduced motion.
+- **Specs:** `report-viewer.nd.spec.ts` (pill, one primary, every action
+  reachable, More sheet, collapse, skeleton before pages, one zoom target,
+  `.nd-empty`, no native controls / glyphs, reduced motion, palette). Real
+  layout: `apps/lms-e2e/src/report-view-layout.rbac.spec.ts` (read only;
+  `REPORT_ID=… BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`).
+
 ## API summary
 
 ```

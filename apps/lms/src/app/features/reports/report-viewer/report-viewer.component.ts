@@ -1,5 +1,5 @@
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
-import { ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { environment } from '../../../../environments/environment';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
@@ -16,9 +16,10 @@ import { Report, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ResolvedReportLayout, ResolvedRow } from '../../../shared/models/report-layout.model';
 import { waLink } from '../../../shared/utils/whatsapp';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { NgTemplateOutlet } from '@angular/common';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 import { NavBackService } from '../../../core/services/nav-back.service';
@@ -27,9 +28,10 @@ import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { PartnerReport, absoluteFileUrl, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
 
 interface ReportData {
-  patient?: { name?: string; age?: number; sex?: string; phone?: string };
-  order?: { id?: string; createdAt?: string; priority?: string; refDoctorName?: string };
+  patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; sex?: string; phone?: string; mrn?: string };
+  order?: { id?: string; orderNumber?: string; createdAt?: string; priority?: string; refDoctorName?: string };
   type?: string;
+  amendment?: { isAmended?: boolean; reason?: string } | null;
   isPartial?: boolean;
   pendingDepts?: string[];
   tests?: Array<{
@@ -107,857 +109,30 @@ function coerceCellText(raw: unknown): string {
   return s;
 }
 
+/** matchMedia as a live boolean (same helper shape as the billing counter). */
+function mq(query: string, ref: DestroyRef, on: (m: boolean) => void): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  const m = window.matchMedia(query);
+  const fn = (e: MediaQueryListEvent) => on(e.matches);
+  try { m.addEventListener?.('change', fn); ref.onDestroy(() => m.removeEventListener?.('change', fn)); } catch { /* old engines */ }
+  return !!m.matches;
+}
+
+/** How long a button shows its success state (Printing ✓ / Sent ✓). */
+export const RV_DONE_MS = 1800;
+
 @Component({
   selector: 'pf-report-viewer',
   standalone: true,
   imports: [
-    ScreenHeaderComponent,
-    TouchButtonComponent,
-    LoadingLogoComponent,
+    NgTemplateOutlet,
+    HeroBandComponent,
     EditResultDialogComponent,
     ZoomTargetDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="pf-report-section">
-      <pf-screen-header
-        class="pf-rv-header"
-        eyebrow="Reports"
-        title="Report viewer"
-        [subtitle]="subtitle()">
-        @if (report()) {
-          <ng-container actions>
-            <!-- Post-result correction: pulls the chosen departments back into
-                 the technicians' My Work (audited, amended report on re-sign). -->
-            @if (canEditResult()) {
-              <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="openEditDialog()">
-                <span icon-left aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>
-                  </svg>
-                </span>
-                <span class="pf-rv-action-label">Edit</span>
-              </pf-touch-btn>
-            }
-            <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="print()">
-              <span icon-left aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="6 9 6 2 18 2 18 9"/>
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                  <rect x="6" y="14" width="12" height="8"/>
-                </svg>
-              </span>
-              <span class="pf-rv-action-label">Print</span>
-            </pf-touch-btn>
-            @if (entitlements.moduleEnabled('messages')) {
-              <pf-touch-btn class="pf-rv-action" size="sm" variant="secondary" (pressed)="openSharePicker()">
-                <span icon-left aria-hidden="true">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                  </svg>
-                </span>
-                <span class="pf-rv-action-label">Share with…</span>
-              </pf-touch-btn>
-            }
-            <pf-touch-btn class="pf-rv-action" size="sm" variant="primary" (pressed)="deliverWhatsApp()">
-              <span icon-left aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="m22 2-7 20-4-9-9-4Z"/>
-                  <path d="M22 2 11 13"/>
-                </svg>
-              </span>
-              <span class="pf-rv-action-label">Send WhatsApp</span>
-            </pf-touch-btn>
-          </ng-container>
-        }
-      </pf-screen-header>
-
-      @if (editDialogOpen() && report(); as r) {
-        <pf-edit-result-dialog
-          [orderId]="r.orderId"
-          title="Edit this report's results"
-          (edited)="onEdited()"
-          (closed)="editDialogOpen.set(false)">
-        </pf-edit-result-dialog>
-      }
-
-      @if (chatPickerOpen()) {
-        <div class="pf-rv-share-backdrop pf-sheet" (click)="closeSharePicker()">
-          <div class="pf-rv-share-modal pf-sheet__panel" (click)="$event.stopPropagation()">
-            <header class="pf-rv-share-head">
-              <div>
-                <h3>Share this report</h3>
-                <p>The colleague will receive a tap-to-open report card in their chat.</p>
-              </div>
-              <button type="button" class="pf-rv-share-close" (click)="closeSharePicker()" aria-label="Close">✕</button>
-            </header>
-            <div class="pf-rv-share-search">
-              <input type="text" placeholder="Search by name or email"
-                     [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
-            </div>
-            <ul class="pf-rv-share-list">
-              @for (u of chatPickerFiltered(); track u.id) {
-                <li>
-                  <button type="button" class="pf-rv-share-row" [disabled]="chatPickerSending()" (click)="shareWith(u)">
-                    <div class="pf-rv-share-avatar">{{ (u.displayName.charAt(0) + (u.displayName.split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}</div>
-                    <div class="pf-rv-share-meta">
-                      <span class="pf-rv-share-name">{{ u.displayName }}</span>
-                      <span class="pf-rv-share-email">{{ u.email }}</span>
-                    </div>
-                  </button>
-                </li>
-              } @empty {
-                <li class="pf-rv-share-empty">No colleagues match.</li>
-              }
-            </ul>
-          </div>
-        </div>
-      }
-
-      <div class="pf-rv-scroll">
-      @if (report() && partnerReports().length) {
-        <!-- Outsourced tests: the partner lab's own report is delivered
-             alongside ours (never parsed into it — our PDF says "Tested at"). -->
-        <section class="pf-rv-partner" aria-label="Partner lab reports">
-          <p class="pf-rv-partner__title">Partner lab reports</p>
-          @for (p of partnerReports(); track p.orderTestId) {
-            <div class="pf-rv-partner__row">
-              <span class="pf-rv-partner__name">{{ p.testName }}
-                @if (p.partnerLabName) { <span class="pf-rv-partner__lab">Tested at {{ p.partnerLabName }}</span> }
-              </span>
-              <button type="button" class="nd-rowact" (click)="openPartnerReport(p)"
-                      [attr.aria-label]="'Open partner report for ' + p.testName">
-                <span class="nd-rowact__t">Open · print</span>
-              </button>
-            </div>
-          }
-        </section>
-      }
-      @if (zoom.holding() ? null : report(); as r) {
-        <!-- The on-screen report IS the rendered PDF — the exact same file
-             the Download button produces (jsPDF + tenant template + per-test
-             layouts), painted page-by-page onto canvases so it renders
-             identically on desktop and inside the iOS/Android WebView (an
-             <iframe> PDF shows only page 1 in WKWebView). -->
-        @if (data()?.isPartial) {
-          <!-- Preliminary banner — non-negotiable on a partial report so a
-               clinician understands they're not looking at the final one.
-               (The PDF pages below carry the report's own chrome.) -->
-          <div class="pf-paper__prelim">
-            <span class="pf-paper__prelim-icon" aria-hidden="true">⚠</span>
-            <div>
-              <p class="pf-paper__prelim-title">PRELIMINARY REPORT</p>
-              <p class="pf-paper__prelim-sub">
-                Departments shown are signed off and final.
-                @if (data()?.pendingDepts?.length) {
-                  Other departments still pending: {{ data()?.pendingDepts?.join(', ') }}.
-                } @else {
-                  Other departments still pending.
-                }
-              </p>
-            </div>
-          </div>
-        }
-        @if (pdfError()) {
-          <div class="pf-rv-pdf-error" [pfZoomTarget]="zoomKeys()">
-            <p>{{ pdfError() }}</p>
-            <pf-touch-btn size="sm" variant="secondary" (pressed)="renderPdfView()">Try again</pf-touch-btn>
-          </div>
-        } @else {
-          <div class="pf-rv-pdfpages" #pdfPages aria-label="Report PDF" [pfZoomTarget]="zoomKeys()">
-            @if (!pdfReady()) {
-              <div class="pf-rv-loading">
-                <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                                 [showText]="true" text="Rendering report…"></pf-loading-logo>
-              </div>
-            }
-          </div>
-        }
-      } @else {
-        <div class="pf-rv-loading" [pfZoomTarget]="zoomKeys()">
-          <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                           [showText]="true" text="Loading report…"></pf-loading-logo>
-        </div>
-      }
-      </div>
-    </section>
-  `,
-  styles: [`
-    /* ── WORK page: non-scroll app layout on every size ──
-       :host fills the shell's main area; the page itself never scrolls.
-       The screen header is fixed; the report/loading content scrolls
-       inside .pf-rv-scroll. */
-    :host {
-      display: block;
-      height: 100%;
-    }
-    .pf-report-section {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-      padding: 24px 16px 0;
-      gap: 16px;
-    }
-    @media (min-width: 768px) {
-      .pf-report-section { padding: 24px 32px 0; }
-    }
-    .pf-rv-header { flex: 0 0 auto; }
-    .pf-rv-scroll {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      overflow-x: hidden;
-      /* breathing room at the bottom of the inner scroll + safe-area for
-         devices with a home indicator under our own scroll chrome. */
-      padding-bottom: calc(48px + env(safe-area-inset-bottom));
-      -webkit-overflow-scrolling: touch;
-    }
-
-    .pf-rv-loading {
-      padding: 48px;
-      text-align: center;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
-      color: var(--text-tertiary);
-      font-size: 13px;
-    }
-
-    /* The rendered PDF pages — stacked white sheets, exactly what the
-       downloaded file looks like. Canvas draws at device resolution;
-       CSS scales it to the column width. */
-    .pf-rv-pdfpages {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      max-width: 900px;
-      margin: 0 auto;
-      padding-bottom: 32px;
-    }
-    .pf-rv-pdfpages ::ng-deep canvas.pf-rv-pdfpage,
-    .pf-rv-pdfpages canvas.pf-rv-pdfpage {
-      width: 100%;
-      height: auto;
-      display: block;
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-    }
-    .pf-rv-pdf-error {
-      padding: 40px 24px;
-      text-align: center;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
-      color: var(--text-secondary);
-      font-size: 13px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-    }
-
-    /* Preliminary banner — only shown on partial reports. Drops into
-       the paper before the masthead so any clinician reading it
-       knows immediately this isn't the canonical final. */
-    .pf-paper__prelim {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px 14px;
-      margin-bottom: 18px;
-      border: 2px solid #b45309;
-      background: #fef3c7;
-      color: #78350f;
-      border-radius: 8px;
-    }
-    .pf-paper__prelim-icon {
-      flex-shrink: 0;
-      width: 28px; height: 28px;
-      border-radius: 9999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: #f59e0b;
-      color: #ffffff;
-      font-size: 16px;
-      font-weight: 700;
-    }
-    .pf-paper__prelim-title {
-      margin: 0;
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      color: #78350f;
-    }
-    .pf-paper__prelim-sub {
-      margin: 2px 0 0;
-      font-size: 12px;
-      color: #92400e;
-    }
-
-    /* The printable "paper". Kept static black-on-white so output prints cleanly. */
-    .pf-paper {
-      background: #ffffff;
-      color: #0f172a;
-      border-radius: 14px;
-      padding: 36px 40px;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      font-family: 'Noto Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    .pf-paper .pf-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-
-    .pf-paper__masthead {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding-bottom: 14px;
-      border-bottom: 2px solid #1B3A6B;
-    }
-    .pf-paper__lab {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-    .pf-paper__tagline {
-      margin: 2px 0 0;
-      font-size: 11.5px;
-      color: #64748b;
-    }
-    .pf-paper__nabl {
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 9999px;
-      background: #ecfdf5;
-      color: #047857;
-      border: 1px solid #a7f3d0;
-      white-space: nowrap;
-    }
-
-    .pf-paper__meta {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 6px 16px;
-      margin: 18px 0 0;
-      padding: 14px 0;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .pf-paper__meta > div { display: flex; flex-direction: column; }
-    .pf-paper__meta dt {
-      font-size: 10px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #94a3b8;
-    }
-    .pf-paper__meta dd {
-      margin: 2px 0 0;
-      font-size: 13px;
-      color: #0f172a;
-    }
-
-    .pf-paper__body {
-      margin-top: 22px;
-      display: flex;
-      flex-direction: column;
-      gap: 22px;
-    }
-    .pf-paper__dept {
-      margin: 0 0 10px;
-      padding-bottom: 6px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #334155;
-      border-bottom: 1px solid #1B3A6B;
-    }
-    .pf-paper__test { margin-bottom: 16px; }
-    .pf-paper__test:last-child { margin-bottom: 0; }
-    .pf-paper__test-name {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: #0f172a;
-    }
-    .pf-paper__test-meta {
-      font-size: 11px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #94a3b8;
-    }
-    .pf-paper__crit-chip {
-      padding: 1px 8px;
-      border-radius: 9999px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      background: #fee2e2;
-      color: #b91c1c;
-      border: 1px solid #fecaca;
-    }
-
-    .pf-paper__table {
-      width: 100%;
-      margin-top: 8px;
-      border-collapse: collapse;
-      font-size: 12.5px;
-    }
-    .pf-paper__table th {
-      text-align: left;
-      padding: 6px 2px;
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-weight: 500;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #94a3b8;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .pf-paper__table td {
-      padding: 6px 2px;
-      border-bottom: 1px solid #f1f5f9;
-      color: #0f172a;
-      font-variant-numeric: tabular-nums;
-    }
-    .pf-paper__table tbody tr:last-child td { border-bottom: 0; }
-    .text-right { text-align: right; }
-    .pf-paper__val--crit { color: #b91c1c; font-weight: 700; }
-
-    /* ── Continuous results table (matches the PDF download) ── */
-    .pf-paper__rtable {
-      width: 100%;
-      margin-top: 4px;
-      border-collapse: collapse;
-      font-size: 12.5px;
-    }
-    .pf-paper__rtable th {
-      text-align: left;
-      padding: 7px 8px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      color: #0f172a;
-      border-top: 1px solid #334155;
-      border-bottom: 1px solid #334155;
-    }
-    .pf-paper__rtable td {
-      padding: 5px 8px;
-      color: #0f172a;
-      font-variant-numeric: tabular-nums;
-      vertical-align: top;
-    }
-    .pf-rt-invest { width: 32%; }
-    .pf-rt-pname { font-weight: 700; }
-    .pf-rt-muted { color: #64748b; }
-    .pf-paper__rtable tr.pf-rt-panel td {
-      padding: 7px 8px 5px;
-      background: #eef2f7;
-      font-weight: 700;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-    }
-    .pf-rt-crit {
-      margin-left: 8px;
-      padding: 1px 7px;
-      border-radius: 9999px;
-      font-size: 9px;
-      font-weight: 700;
-      background: #fee2e2;
-      color: #b91c1c;
-      border: 1px solid #fecaca;
-      vertical-align: middle;
-    }
-    .pf-paper__rtable tr.pf-rt-sub td {
-      padding: 2px 8px 6px;
-      font-size: 11px;
-      font-style: italic;
-      color: #64748b;
-    }
-    .pf-rt-sub .pf-rt-dot { margin: 0 6px; }
-    .pf-paper__rtable tr.pf-rt-note td {
-      padding: 6px 8px;
-      background: #f8fafc;
-      font-style: italic;
-      font-size: 11.5px;
-      color: #475569;
-    }
-    .pf-rt-flag {
-      margin-left: 6px;
-      font-size: 10px;
-      font-weight: 700;
-      vertical-align: super;
-    }
-    .pf-paper__scope {
-      margin: 22px 0 0;
-      padding-bottom: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: #334155;
-      border-bottom: 1px solid #cbd5e1;
-    }
-
-    /* Resolved-layout sections (when admin has configured a per-test layout) */
-    .pf-paper__rs { margin: 10px 0; }
-    .pf-paper__rs-label {
-      margin: 0 0 4px; font-size: 10.5px; font-weight: 700;
-      letter-spacing: 0.14em; text-transform: uppercase;
-      color: #475569;
-    }
-    /* Override the legacy thead style so dynamic-layout headers use the
-     * configured column widths and the navy bar matches the spec. */
-    .pf-paper__rs .pf-paper__table th {
-      background: #1B3A6B;
-      color: #ffffff;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-    }
-    .pf-paper__row--merged td {
-      background: #f1f5f9;
-      font-style: italic;
-      color: #475569;
-      text-align: center;
-      padding: 8px;
-    }
-    .pf-paper__rs-para {
-      margin: 4px 0 0;
-      padding: 8px 12px;
-      background: #f8fafc;
-      border-left: 3px solid #cbd5e1;
-      border-radius: 4px;
-      font-size: 12.5px;
-      color: #1e293b;
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
-    .pf-paper__rs-images {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 8px;
-    }
-    .pf-paper__rs-images img {
-      width: 100%;
-      border-radius: 6px;
-      border: 1px solid #e2e8f0;
-    }
-    .pf-paper__rs-chart { display: flex; flex-direction: column; gap: 4px; }
-    .pf-paper__rs-chart-bar {
-      position: relative;
-      height: 14px;
-      background: #f1f5f9;
-      border-radius: 7px;
-      overflow: hidden;
-    }
-    .pf-paper__rs-chart-zone { position: absolute; top: 0; bottom: 0; }
-    .pf-paper__rs-chart-marker {
-      position: absolute;
-      top: -3px; bottom: -3px;
-      width: 3px; background: #0f172a;
-      border-radius: 2px;
-      transform: translateX(-1.5px);
-    }
-    .pf-paper__rs-chart-axis {
-      display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      color: #64748b;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
-
-    .pf-paper__note {
-      margin: 8px 0 0;
-      padding: 8px 10px;
-      background: #f8fafc;
-      border-left: 3px solid #cbd5e1;
-      border-radius: 4px;
-      font-size: 12px;
-      color: #475569;
-    }
-    .pf-paper__empty {
-      margin: 4px 0 0;
-      font-style: italic;
-      font-size: 12px;
-      color: #94a3b8;
-    }
-
-    .pf-paper__footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      gap: 24px;
-      margin-top: 36px;
-      flex-wrap: wrap;
-    }
-    .pf-paper__sig { flex: 1; min-width: 240px; }
-    .pf-paper__disclaimer {
-      margin: 0 0 14px;
-      max-width: 420px;
-      font-size: 10.5px;
-      color: #64748b;
-    }
-    .pf-paper__sig-line { text-align: right; }
-    .pf-paper__sig-rule {
-      height: 1px;
-      width: 180px;
-      margin-left: auto;
-      border-bottom: 1px solid #64748b;
-      margin-bottom: 6px;
-    }
-    .pf-paper__sig-line p {
-      margin: 0;
-      font-size: 12px;
-      color: #0f172a;
-    }
-
-    .pf-paper__qr { text-align: center; }
-    .pf-paper__qr-caption {
-      margin: 6px 0 0;
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.08em;
-      color: #64748b;
-    }
-
-    .pf-paper__powered {
-      margin: 22px 0 0;
-      text-align: center;
-      font-size: 10px;
-      color: #94a3b8;
-    }
-
-    @media print {
-      :host {
-        background: #ffffff !important;
-        display: block;
-        height: auto !important;
-      }
-      /* Undo the non-scroll viewport clamp so the full report paginates
-         across pages instead of being clipped to one screen. */
-      .pf-report-section {
-        padding: 0 !important;
-        max-width: none !important;
-        height: auto !important;
-        overflow: visible !important;
-        display: block !important;
-      }
-      .pf-rv-scroll {
-        overflow: visible !important;
-        padding-bottom: 0 !important;
-      }
-      .pf-rv-loading,
-      pf-screen-header { display: none !important; }
-      .pf-paper {
-        box-shadow: none !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        padding: 18mm 14mm !important;
-      }
-    }
-
-    /* Partner lab reports (outsourced tests) */
-    .pf-rv-partner { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--nd-line, var(--glass-border)); border-radius: 12px; background: var(--nd-card-bg, var(--glass-bg)); }
-    .pf-rv-partner__title { margin: 0 0 6px; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
-    .pf-rv-partner__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
-    .pf-rv-partner__name { font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; }
-    .pf-rv-partner__lab { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); }
-
-    /* Share-with-colleague modal */
-    .pf-rv-share-backdrop {
-      position: fixed; inset: 0; z-index: 200;
-      background: rgba(0, 0, 0, 0.55);
-      backdrop-filter: blur(6px);
-      display: flex; align-items: center; justify-content: center;
-      padding: 16px;
-    }
-    .pf-rv-share-modal {
-      background: var(--surface-elevated);
-      border: 1px solid var(--glass-border-hover);
-      border-radius: 14px;
-      width: 100%; max-width: 440px;
-      max-height: min(80dvh, 560px);
-      display: flex; flex-direction: column;
-      box-shadow: var(--glass-shadow-hover);
-      color: var(--text-primary);
-      overflow: hidden;
-    }
-    .pf-rv-share-head {
-      display: flex; align-items: flex-start; justify-content: space-between;
-      gap: 12px; padding: 14px 18px;
-      border-bottom: 1px solid var(--border-muted);
-      h3 { font-size: 14px; font-weight: 700; margin: 0; }
-      p  { font-size: 11.5px; color: var(--text-tertiary); margin: 2px 0 0; }
-    }
-    .pf-rv-share-close {
-      background: var(--glass-bg); border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      width: 28px; height: 28px; border-radius: 7px;
-      cursor: pointer; font-size: 12px;
-      &:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-    }
-    .pf-rv-share-search {
-      padding: 12px 18px; border-bottom: 1px solid var(--border-muted);
-      input {
-        width: 100%; padding: 9px 12px; border-radius: 9px;
-        border: 1px solid var(--input-border); background: var(--bg-input);
-        color: var(--input-text); font-size: 13px; outline: none;
-        &:focus { border-color: var(--input-border-focus); }
-      }
-    }
-    .pf-rv-share-list {
-      list-style: none; margin: 0; padding: 6px 0 10px;
-      overflow-y: auto; flex: 1;
-    }
-    .pf-rv-share-row {
-      display: flex; align-items: center; gap: 10px;
-      width: 100%; padding: 8px 18px;
-      background: transparent; border: none;
-      text-align: left; cursor: pointer;
-      color: inherit;
-      &:hover:not(:disabled) { background: var(--bg-hover); }
-      &:disabled { opacity: 0.55; cursor: progress; }
-    }
-    .pf-rv-share-avatar {
-      width: 34px; height: 34px; border-radius: 50%;
-      background: var(--gradient-primary); color: #fff;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 700; flex-shrink: 0;
-    }
-    .pf-rv-share-meta { display: flex; flex-direction: column; min-width: 0; }
-    .pf-rv-share-name { font-size: 13px; font-weight: 600; }
-    .pf-rv-share-email { font-size: 11px; color: var(--text-tertiary); }
-    .pf-rv-share-empty { padding: 20px 16px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
-
-    /* ───────────────────────────────────────────────────────────────
-       CROSS-PLATFORM OVERRIDES — additive only.
-       Desktop-web (>=1280) is untouched: every rule below is gated to
-       a sub-desktop width, a coarse pointer, or a platform html class.
-       ─────────────────────────────────────────────────────────────── */
-
-    /* iOS input-zoom guard: the share-search input is 13px which trips
-       Safari's auto-zoom on focus. Bump to 16px on touch devices only;
-       desktop keeps the original compact size. */
-    @media (pointer: coarse) {
-      .pf-rv-share-search input { font-size: 16px; }
-      /* Close button must be a real 44px tap target on touch. */
-      .pf-rv-share-close { width: 44px; height: 44px; }
-      .pf-rv-share-row { padding-top: 12px; padding-bottom: 12px; min-height: 44px; }
-    }
-
-    /* Touch devices: neutralize sticky :hover backgrounds that linger
-       after a tap (hover styles belong to real pointers only). */
-    @media (hover: none) {
-      .pf-rv-share-close:hover { background: var(--glass-bg); color: var(--text-secondary); }
-      .pf-rv-share-row:hover:not(:disabled) { background: transparent; }
-    }
-
-    /* Use dynamic viewport height so the share sheet isn't clipped under
-       mobile browser chrome (the static 80vh undershoots/overshoots). */
-    @supports (height: 100dvh) {
-      .pf-rv-share-modal { max-height: min(80dvh, 560px); }
-    }
-
-    /* ── Phone (<=640): single-column, no horizontal overflow ── */
-    @media (max-width: 640px) {
-      /* Header actions → compact icon-only squares so Print / Share / Send /
-         Back all fit on one row under the title and nothing overflows the
-         right edge. The text label stays in the DOM but visually-hidden, so
-         each button keeps its accessible name (svg is aria-hidden). Desktop
-         (>=641) keeps the full text buttons untouched. */
-      .pf-rv-action-label {
-        position: absolute;
-        width: 1px; height: 1px;
-        padding: 0; margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-      }
-      .pf-rv-action ::ng-deep button {
-        width: 40px;
-        min-width: 40px;
-        height: 40px;
-        padding: 0;
-        gap: 0;
-        border-radius: 12px;
-      }
-
-      /* Report preview must be contained within the viewport — never push the
-         page sideways. The paper is fluid; pin it to the available width and
-         let fixed-width children (barcode/QR card, images) scale down. Touch
-         users can pinch-zoom the report for detail. */
-      .pf-rv-scroll { touch-action: pan-x pan-y pinch-zoom; }
-      .pf-paper { max-width: 100%; box-sizing: border-box; }
-      .pf-paper img { max-width: 100%; height: auto; }
-      .pf-paper__qr ::ng-deep .pf-code-card {
-        max-width: 100%;
-        box-sizing: border-box;
-      }
-      .pf-paper__qr ::ng-deep .pf-code-card__row {
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 12px;
-      }
-      .pf-paper__qr ::ng-deep .pf-code-card__bar { max-width: 100%; }
-
-      /* This page clamps itself (:host height:100%; section overflow:hidden)
-         so .pf-rv-scroll is the real scroll container, NOT shell-main. The
-         base 48px clearance under-clears the floating bottom-nav pill, so
-         re-apply the canonical pill footprint here (88px + bottom safe-area)
-         so the last report rows aren't hidden behind the pill. */
-      .pf-rv-scroll { padding-bottom: var(--tab-nav-total-height); }
-
-      /* Tighter paper so the printable doesn't waste the narrow width. */
-      .pf-paper { padding: 20px 16px; }
-      .pf-paper__masthead { flex-wrap: wrap; }
-
-      /* Wide 5-column results tables can't shrink below their content;
-         let them scroll horizontally WITHIN the paper rather than blow
-         the whole page out. The page itself never scrolls sideways. */
-      .pf-paper__body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .pf-paper__rtable,
-      .pf-paper__test > .pf-paper__table,
-      .pf-paper__rs .pf-paper__table { min-width: 460px; }
-
-      /* Footer: signature + QR stack and left-align on a narrow page. */
-      .pf-paper__footer { flex-direction: column; align-items: stretch; gap: 20px; }
-      .pf-paper__sig { min-width: 0; }
-      .pf-paper__sig-line { text-align: left; }
-      .pf-paper__sig-rule { margin-left: 0; }
-      .pf-paper__qr { text-align: left; }
-
-      /* Share picker becomes a bottom sheet rather than a centred dialog. */
-      .pf-rv-share-backdrop { align-items: flex-end; padding: 0; }
-      .pf-rv-share-modal {
-        max-width: none;
-        width: 100%;
-        max-height: 86dvh;
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
-        /* Clear the home-indicator / device gesture area. */
-        padding-bottom: env(safe-area-inset-bottom);
-      }
-    }
-
-    /* ── iPad (641–1279): keep the spacious paper, just ensure the share
-       picker stays a comfortable centred dialog and tables never overflow
-       the paper edge. No base changes — these only widen sub-desktop. ── */
-    @media (min-width: 641px) and (max-width: 1279px) {
-      .pf-paper__body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    }
-
-    /* Capacitor native: the share sheet is full-bleed fixed chrome, so it
-       owns its own safe-area bottom inset on phone. */
-    :host-context(html.cap-native) .pf-rv-share-modal {
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-  `]
+  templateUrl: './report-viewer.component.html',
+  styleUrl: './report-viewer.component.scss',
 })
 export class ReportViewerComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -980,6 +155,105 @@ export class ReportViewerComponent implements OnInit {
   private readonly zoomRouteId = inject(ActivatedRoute).snapshot.paramMap.get('id');
   readonly tpl = this._tpl.asReadonly();
 
+  // ── nd layout state ─────────────────────────────────────
+  private readonly destroyRef = inject(DestroyRef);
+  /** Web (fine pointer + hover) = text buttons; touch = 44px icons. */
+  protected readonly web = webPointerSignal();
+  /** ≤900px: no side column — REPORT opens as a sheet from the pill. */
+  readonly narrow = signal(mq('(max-width: 900px)', this.destroyRef, m => this.narrow?.set(m)));
+  readonly detailsOpen = signal(false);
+  /** Phones: the "More" action sheet. */
+  readonly moreOpen = signal(false);
+  /** REPORT side card collapsed to a strip (remembered per user). */
+  readonly sideCollapsed = signal(this.readCollapsed());
+  toggleSide(): void {
+    const next = !this.sideCollapsed();
+    this.sideCollapsed.set(next);
+    try { localStorage.setItem(this.collapseKey(), next ? '1' : '0'); } catch { /* private mode */ }
+  }
+  private collapseKey(): string {
+    const u = this.auth.user();
+    return 'pf:rv:side-collapsed:' + (u?.id || u?.authId || 'anon');
+  }
+  private readCollapsed(): boolean {
+    try { return localStorage.getItem(this.collapseKey()) === '1'; } catch { return false; }
+  }
+
+  /** Brief success state on an action button, then back to its label. */
+  readonly done = signal<'print' | 'whatsapp' | null>(null);
+  readonly busy = signal<'print' | null>(null);
+  private doneTimer: ReturnType<typeof setTimeout> | null = null;
+  private flash(kind: 'print' | 'whatsapp'): void {
+    this.done.set(kind);
+    if (this.doneTimer) clearTimeout(this.doneTimer);
+    this.doneTimer = setTimeout(() => { this.done.set(null); this.doneTimer = null; }, RV_DONE_MS);
+  }
+
+  /** The report could not be fetched at all (the preview shows why). */
+  readonly loadError = signal(false);
+  /** Page count of the painted PDF (header note). */
+  readonly pageCount = signal(0);
+  readonly pageCountLabel = computed(() => {
+    const n = this.pageCount();
+    return n === 1 ? '1 page' : `${n} pages`;
+  });
+  /** The skeleton stays up until the pages are painted — and through a
+   *  zoom morph (`zoom.holding()`), so the zoom target never swaps. */
+  readonly showSkeleton = computed(() => !this.loadError() && !this._pdfError() && (!this._report() || this.zoom.holding() || !this._pdfReady()));
+  /** The pages' host is mounted once the report is here and no morph runs. */
+  readonly showPages = computed(() => !!this._report() && !this.zoom.holding() && !this._pdfError());
+
+  // ── Context bar ─────────────────────────────────────────
+  readonly patientName = computed(() => {
+    const p = this.data()?.patient;
+    const fromData = p ? (p.displayName || patientDisplayName(p as never) || p.name || '') : '';
+    return fromData || this._report()?.order?.patient?.displayName || 'Patient';
+  });
+  readonly patientMeta = computed(() => {
+    const p = this.data()?.patient;
+    const q = this._report()?.order?.patient;
+    const age = p?.age ?? q?.age ?? null;
+    const sex = p?.sex ?? q?.sex ?? null;
+    const mrn = p?.mrn ?? q?.mrn ?? null;
+    if (age == null && !sex && !mrn) return '';
+    return formatPatientMeta({ age: age as never, sex: sex as never, mrn: mrn as never });
+  });
+  readonly orderLabel = computed(() => {
+    const o = this.data()?.order;
+    if (o?.orderNumber) return o.orderNumber;
+    const id = o?.id ?? this._report()?.orderId ?? '';
+    return id ? id.replace(/-/g, '').slice(0, 8).toUpperCase() : '';
+  });
+  readonly isPartial = computed(() => !!this.data()?.isPartial || this._report()?.type === 'partial');
+  readonly kindLabel = computed(() =>
+    this.isPartial() ? 'Preliminary' : this.data()?.amendment?.isAmended ? 'Amended' : 'Final');
+  /** Same words as the Results list ('pending' = generated, awaiting handover). */
+  readonly deliveryLabel = computed(() => {
+    const st = this._report()?.deliveryStatus;
+    if (st === 'delivered') return 'Delivered';
+    if (st === 'failed') return 'Delivery failed';
+    return 'Completed';
+  });
+  readonly deliveryLine = computed(() => {
+    const r = this._report();
+    if (!r) return '';
+    if (r.deliveryStatus === 'delivered') {
+      const via = (r.deliveredVia ?? '').trim();
+      return via ? `Delivered via ${via === 'whatsapp' ? 'WhatsApp' : via.charAt(0).toUpperCase() + via.slice(1)}` : 'Delivered';
+    }
+    if (r.deliveryStatus === 'failed') return 'Delivery failed — send again';
+    return 'Ready to deliver';
+  });
+  readonly generatedLabel = computed(() => {
+    this._tpl();   // re-format once the template's date format arrives
+    return this.formatStamp(this._report()?.createdAt);
+  });
+
+  initials(name: string): string {
+    const parts = (name || '').trim().split(/\s+/);
+    return ((parts[0]?.charAt(0) ?? '') + (parts[1]?.charAt(0) ?? '')).toUpperCase();
+  }
+
   // ── Post-result edit ──────────────────────────────────
   // edit_result is held by Lab Technician, Pathologist and Lab Admin —
   // deliberately not the front desk.
@@ -996,7 +270,8 @@ export class ReportViewerComponent implements OnInit {
     if (!id) return;
     this._pdfBlob = null;
     this.api.get<Report>(`/api/reports/${id}`).subscribe({
-      next: r => { this._report.set(r); this.resolveLayouts(); },
+      // Re-arm the preview so the pages are rebuilt from the fresh data.
+      next: r => { this._pdfReady.set(false); this._report.set(r); this.resolveLayouts(); },
       error: () => { /* the toast from the dialog already told the story */ }
     });
   }
@@ -1070,10 +345,13 @@ export class ReportViewerComponent implements OnInit {
     try { return JSON.parse(raw) as ReportData; } catch { return null; }
   });
 
+  /** Chat share label: "<patient> · <order>" (the snapshot carries
+   *  displayName, not name — the old label always fell back). */
   readonly subtitle = computed(() => {
-    const d = this.data();
-    if (!d?.patient?.name) return 'Final report preview.';
-    return `${d.patient.name} · ${d.order?.id?.slice(0, 8) ?? ''}`;
+    if (!this._report()) return '';
+    const name = this.patientName();
+    const order = this.orderLabel();
+    return order ? `${name} · ${order}` : name;
   });
 
   readonly groupedTests = computed(() => {
@@ -1361,7 +639,8 @@ export class ReportViewerComponent implements OnInit {
       h = h % 12 || 12;
       timePart = `${String(h).padStart(2, '0')}:${min} ${ampm}`;
     }
-    return `${datePart}${t?.dateTimeSeparator ?? ', '}${timePart}`;
+    // A blank separator glued "2026" to "09:18 PM" on screen.
+    return `${datePart}${t?.dateTimeSeparator?.trim() ? t.dateTimeSeparator : ', '}${timePart}`;
   }
 
   // Chart preview math — same as the admin live preview.
@@ -1402,15 +681,24 @@ export class ReportViewerComponent implements OnInit {
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) { this.back(); return; }
+    this.load();
+    this.api.get<ReportTemplate>('/api/config/report-template').subscribe({ next: t => this._tpl.set(t) });
+    this.destroyRef.onDestroy(() => { if (this.doneTimer) clearTimeout(this.doneTimer); });
+  }
+
+  /** Fetch the report (also the error state's Try again). */
+  load() {
+    const id = this.route.snapshot.paramMap.get('id');
+    if (!id) return;
+    this.loadError.set(false);
     this.api.get<Report>(`/api/reports/${id}`).subscribe({
       next: r => {
         this._report.set(r);
         this.resolveLayouts();
         this.loadPartnerReports(r?.orderId);
       },
-      error: () => this.toasts.error('Could not load report')
+      error: () => { this.loadError.set(true); this.toasts.error('Could not load report'); }
     });
-    this.api.get<ReportTemplate>('/api/config/report-template').subscribe({ next: t => this._tpl.set(t) });
   }
 
   /** Build the report PDF (identical to Download) and paint its pages onto
@@ -1448,6 +736,7 @@ export class ReportViewerComponent implements OnInit {
         await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
         host.appendChild(canvas);
       }
+      this.pageCount.set(doc.numPages);
       this._pdfReady.set(true);
     } catch (err) {
       console.error('[report-viewer] PDF render failed', err);
@@ -1488,7 +777,8 @@ export class ReportViewerComponent implements OnInit {
    *  window.print() which would rasterize the app shell. */
   async print() {
     const r = this._report();
-    if (!r) return;
+    if (!r || this.busy() === 'print') return;
+    this.busy.set('print');
     try {
       this._pdfBlob ??= await this.buildPdfBlob(r);
       const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
@@ -1501,10 +791,13 @@ export class ReportViewerComponent implements OnInit {
         // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
         printPdfBlobUrl(URL.createObjectURL(this._pdfBlob), { revokeOnDone: true });
       }
+      this.flash('print');
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') return; // share sheet dismissed
       console.error('[report-viewer] print failed', err);
       this.toasts.error('Could not prepare the report for printing');
+    } finally {
+      this.busy.set(null);
     }
   }
 
@@ -1536,8 +829,14 @@ export class ReportViewerComponent implements OnInit {
     if (r.qrToken) this.archiveReportPdf(r);
     const url = waLink(d?.patient?.phone, lines.join('\n\n'));
     window.open(url, '_blank', 'noopener');
+    this.flash('whatsapp');
     this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'wa.me link' }).subscribe({
-      next: () => this.toasts.success('Opened WhatsApp with the report link'),
+      next: () => {
+        this.toasts.success('Opened WhatsApp with the report link');
+        // Reflect the recorded delivery in the REPORT card without a refetch.
+        const cur = this._report();
+        if (cur && cur.id === r.id) this._report.set({ ...cur, deliveryStatus: 'delivered', deliveredVia: 'whatsapp' });
+      },
       error: () => this.toasts.info('Opened WhatsApp with the report link'),
     });
   }

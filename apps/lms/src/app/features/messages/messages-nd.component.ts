@@ -1,3 +1,4 @@
+import { ZoomSourceDirective } from '../../core/navigation/zoom.directive';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import {
@@ -53,7 +54,7 @@ function readFlag(key: string): boolean {
 @Component({
   selector: 'pf-messages-nd',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, HeroBandComponent],
+  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, HeroBandComponent, ZoomSourceDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-nd.component.html',
   styleUrls: ['./messages-nd.component.scss']
