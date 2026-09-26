@@ -648,6 +648,27 @@ plus (owner reviews, 2026-09-25):
       `ast:<organism>:<drug>`); + Add antibiotic works as before; an organism
       that already has entered results is never overwritten by a plate.
     - Automatic plate changes don't count as the technician's edits.
+  - **Measure on the Identification header (owner, 2026-09-26) — the MAIN
+    path.** ORGANISM IDENTIFICATION carries a quiet neutral **Measure**
+    button (PF mark icon, neutral border, never violet-filled) left of the
+    pencil, shown only when the AST stage and Identification are open to
+    this user on an active case (`culture_workbench`). It claims both stages,
+    opens the AST editor and the same measure modal (whole antibiotic master,
+    one PF Sense call, glow only while reading). The last step is
+    **Organism** (not Review): a searchable `pf-select` of the organism master
+    (phones: a trigger that opens a search + 44px-row sheet; the modal is
+    full screen above the navbar), pre-filled from Organism isolated, then
+    the organism's CLSI panel — plate drugs ticked with zone mm and live
+    S / I / R (the subtle AST tints), the rest unticked, S ≥ / R ≤ boxes (+
+    Save to CLSI with `manage_tests`) for measured drugs outside the panel.
+    ONE primary, **OK**. OK: the reading goes on the case, the organism joins
+    Organism isolated (others kept), its AST table is (re)built, the page
+    scrolls gently to the AST stage and outlines it briefly (static under
+    reduced motion). Nothing is submitted. Replacing an organism's results
+    the technician already entered needs an inline "Replace them" tick; a
+    table the plate built untouched is re-measured without asking. Measure
+    again reopens on that organism's photo + rings, else the case plate. The
+    AST stage's own Measure plate / per-organism Measure stay.
   - **Real-plate check:** `apps/lms-e2e/src/culture-measure-read.rbac.spec.ts`
     (`PLATE_JPG=…/plate.jpg SHOTS_DIR=…`): uploads the real plate, runs
     OpenCV in the browser from the bundled asset (CDNs are blocked; exactly

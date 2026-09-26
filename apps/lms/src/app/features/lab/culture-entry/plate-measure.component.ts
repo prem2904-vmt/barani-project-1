@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, TemplateRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { PlatformService } from '../../../core/services/platform.service';
@@ -34,6 +35,9 @@ export interface DiskRow extends CodeSlot {
   zoneFound: boolean;
 }
 
+/** A coded disk as it stands in the modal (before Apply). */
+export interface LiveDisk { n: number; code: string | null; drug: string; mm: number; }
+
 type PlateState = 'idle' | 'loading' | 'finding' | 'found' | 'not-found' | 'unavailable' | 'load-failed';
 type AiState = 'idle' | 'pending' | 'done' | 'failed';
 
@@ -51,11 +55,11 @@ const NOT_A_DISK = '__not_a_disk';
 @Component({
   selector: 'pf-plate-measure',
   standalone: true,
-  imports: [SelectComponent, LogoMarkComponent],
+  imports: [SelectComponent, LogoMarkComponent, NgTemplateOutlet],
   host: { '(window:keydown)': 'onKey($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pm-backdrop" [class.pm-backdrop--full]="fullscreen()">
+    <div class="pm-backdrop" [class.pm-backdrop--full]="fullscreen()" [class.pm-backdrop--phonefull]="phoneFull">
       <div class="pm-panel nd-sheet" [class.pm-panel--full]="fullscreen()" role="dialog" aria-modal="true"
            aria-label="Measure zones from plate" (click)="$event.stopPropagation()">
         <span class="nd-sheet__handle" aria-hidden="true"></span>
@@ -289,6 +293,10 @@ const NOT_A_DISK = '__not_a_disk';
                     }
                   </div>
                 }
+                @if (mode() === 'review' && reviewTpl) {
+                  <!-- The caller's review step (e.g. organism → CLSI panel), fed the live disks. -->
+                  <ng-container *ngTemplateOutlet="reviewTpl; context: { $implicit: liveDisks() }" />
+                } @else {
                 <ul class="pm-disks">
                   @for (d of rows(); track d.id) {
                     <li class="pm-drow" [attr.aria-selected]="d.id === selectedId()" [class.pm-drow--off]="d.notDisk" [class.pm-drow--settle]="justRead().has(d.id)"
@@ -335,6 +343,7 @@ const NOT_A_DISK = '__not_a_disk';
                     <li class="pm-empty">No disks found. Tap each disk on the plate to add it.</li>
                   }
                 </ul>
+                }
                 @if (usageLine()) { <p class="pm-usage nd-num">{{ usageLine() }}</p> }
                </div>
               </aside>
@@ -381,8 +390,8 @@ const NOT_A_DISK = '__not_a_disk';
             <div class="pm-row pm-row--wrap">
               <button type="button" class="nd-btn nd-btn--secondary pm-btn" (click)="mode.set('measure')">Back</button>
               <span class="pm-grow"></span>
-              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="busy() || applyCount() === 0" (click)="apply()">
-                {{ busy() ? 'Saving…' : 'Apply to table' }}
+              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="busy() || applyCount() === 0 || applyBlocked" (click)="apply()">
+                {{ busy() ? 'Saving…' : applyLabel }}
               </button>
             </div>
           </div>
@@ -602,6 +611,12 @@ const NOT_A_DISK = '__not_a_disk';
       .pm-row--wrap > .pm-apply { flex: 1 1 100%; }
       .pm-drow { grid-template-columns: 24px minmax(0, 1fr) auto 30px; gap: 6px; padding: 6px 2px; }
       .pm-mm__u { display: none; }
+      /* When the caller asks (the culture case's Identification Measure):
+         FULL screen above the navbar — no sheet corners. */
+      .pm-backdrop--phonefull .pm-panel, .pm-backdrop--phonefull .pm-panel--full {
+        height: calc(100dvh - var(--nd-nav-h, 0px)); border-radius: 0; border-top: 0;
+        padding-top: env(safe-area-inset-top, 0px); }
+      .pm-backdrop--phonefull .nd-sheet__handle { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
       .pm-sweep, .pm-panel, .pm-busy__dot { animation: none; }
@@ -620,13 +635,31 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly diskApi = inject(DiskReadApi);
 
-  /** The organism's panel (antibiotic names) — codes map back to these rows. */
-  @Input() antibiotics: string[] = [];
+  /** The organism's panel (antibiotic names) — codes map back to these rows.
+   *  Signal-backed so the candidate codes follow a list that arrives late. */
+  private readonly _antibiotics = signal<string[]>([]);
+  @Input() set antibiotics(v: string[] | null | undefined) { this._antibiotics.set(v ?? []); }
+  get antibiotics(): string[] { return this._antibiotics(); }
   /** Drug → breakpoint short label ("AZA 30") for drugs the code table lacks. */
-  @Input() codeHints: Record<string, string> = {};
+  private readonly _codeHints = signal<Record<string, string>>({});
+  @Input() set codeHints(v: Record<string, string> | null | undefined) { this._codeHints.set(v ?? {}); }
+  get codeHints(): Record<string, string> { return this._codeHints(); }
   /** The candidate codes, given outright (the plate read BEFORE an organism:
    *  the lab's whole antibiotic master). Null = derive from `antibiotics`. */
-  @Input() candidateList: DiskCandidate[] | null = null;
+  private readonly _candidateList = signal<DiskCandidate[] | null>(null);
+  @Input() set candidateList(v: DiskCandidate[] | null | undefined) { this._candidateList.set(v ?? null); }
+  get candidateList(): DiskCandidate[] | null { return this._candidateList(); }
+  /** The caller's own Review step body (rendered in the list pane in place
+   *  of the disk list), with the live coded disks as its implicit context. */
+  @Input() reviewTpl: TemplateRef<{ $implicit: LiveDisk[] }> | null = null;
+  /** The Review step's label in the stepper (e.g. "Organism"). */
+  @Input() reviewStepLabel = 'Review';
+  /** The one primary on Review (e.g. "OK"). */
+  @Input() applyLabel = 'Apply to table';
+  /** The caller holds Apply until its review is complete (e.g. no organism yet). */
+  @Input() applyBlocked = false;
+  /** Phones: full screen instead of the tall sheet. */
+  @Input() phoneFull = false;
   /** The culture case (order test) — sent with the AI read for the audit. */
   @Input() orderTestId: string | null = null;
   /** The lab's default plate size (mm). */
@@ -634,8 +667,8 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   @Input() existingImageUrl?: string | null;
   /** A previously saved session — restores calibration + every ring. */
   @Input() existingSession?: PlateMeasureSession | null;
-  /** Live interpretation: (antibiotic, zone mm) → S/I/R (existing breakpoint logic). */
-  @Input() srI?: (antibiotic: string, zoneMm: number) => 'S' | 'I' | 'R' | '';
+  /** Live interpretation: (antibiotic, zone mm, printed code) → S/I/R (existing breakpoint logic). */
+  @Input() srI?: (antibiotic: string, zoneMm: number, code?: string | null) => 'S' | 'I' | 'R' | '';
 
   @Output() applied = new EventEmitter<{ measurements: PlateMeasurement[]; imageUrl: string | null; session: PlateMeasureSession; auditId?: string | null }>();
   @Output() cancel = new EventEmitter<void>();
@@ -743,12 +776,14 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   readonly viewBox = computed(() => { const v = this.view(); return `${v.x} ${v.y} ${v.w} ${v.h}`; });
   readonly unit = computed(() => Math.max(this.view().w, this.view().h) / 220 || 1);
 
-  readonly steps: { key: Mode; label: string }[] = [
-    { key: 'capture', label: 'Capture' },
-    { key: 'calibrate', label: 'Calibrate' },
-    { key: 'measure', label: 'Measure & read' },
-    { key: 'review', label: 'Review' },
-  ];
+  get steps(): { key: Mode; label: string }[] {
+    return [
+      { key: 'capture', label: 'Capture' },
+      { key: 'calibrate', label: 'Calibrate' },
+      { key: 'measure', label: 'Measure & read' },
+      { key: 'review', label: this.reviewStepLabel || 'Review' },
+    ];
+  }
   stepIndex(): number { return Math.max(0, this.steps.findIndex(st => st.key === this.mode())); }
   stepState(i: number): 'done' | 'active' | 'todo' {
     const cur = this.stepIndex();
@@ -759,7 +794,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
       case 'capture': return 'Capture the plate';
       case 'calibrate': return 'Check the plate rim and size';
       case 'measure': return 'Check each zone — codes fill in as they are read';
-      case 'review': return 'Check, then apply to the table';
+      case 'review': return this.reviewTpl ? 'Pick the organism — S / I / R from its CLSI breakpoints' : 'Check, then apply to the table';
     }
   }
   stageLabel(): string {
@@ -957,7 +992,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   });
 
   // ── AI: ONE background read of the printed codes ─────────────────
-  readonly candidates = computed<DiskCandidate[]>(() => this.candidateList ?? panelCandidates(this.antibiotics, this.codeHints));
+  readonly candidates = computed<DiskCandidate[]>(() => this._candidateList() ?? panelCandidates(this._antibiotics(), this._codeHints()));
   /** Each row's pick list: the panel's codes; a code already on another
    *  disk is marked "on disk n" (picking it moves it here). */
   readonly codeOptions = computed(() => {
@@ -1075,7 +1110,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   abIndexOf(d: DiskRow): number { const drug = this.drugOf(d); return drug ? this.antibiotics.indexOf(drug) : -1; }
   sirOf(d: DiskRow): 'S' | 'I' | 'R' | '' {
     const drug = this.drugOf(d);
-    return drug && this.srI ? this.srI(drug, this.mmOf(d)) : '';
+    return drug && this.srI ? this.srI(drug, this.mmOf(d), d.code) : '';
   }
   sirWord(d: DiskRow): string { return ({ S: 'susceptible', I: 'intermediate', R: 'resistant' } as Record<string, string>)[this.sirOf(d)] ?? ''; }
   ringStroke(d: DiskRow): string {
@@ -1098,6 +1133,20 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     const r = this.ringR(d, -0.785) * 0.707, x = d.cx + r, y = d.cy - r, u = this.unit() * 1.1;
     return `M${x - u} ${y - u}L${x + u} ${y + u}M${x + u} ${y - u}L${x - u} ${y + u}`;
   }
+
+  /** The coded disks as they stand now (drug · printed code · zone mm) —
+   *  the caller's review template works from these before anything applies. */
+  readonly liveDisks = computed<LiveDisk[]>(() => {
+    const seen = new Set<string>();
+    const out: LiveDisk[] = [];
+    for (const r of this.activeRows()) {
+      const drug = this.drugOf(r);
+      if (!drug || seen.has(drug)) continue;
+      seen.add(drug);
+      out.push({ n: r.n, code: r.code, drug, mm: this.mmOf(r) });
+    }
+    return out.sort((a, b) => a.n - b.n);
+  });
 
   // ── Review + Apply ───────────────────────────────────────────────
   goReview() { this.selectedId.set(-1); this.mode.set('review'); }

@@ -1,14 +1,15 @@
-import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, OnInit, Output, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, PlateMeasureSession, panelForSpecimen } from '../../../shared/models/culture.model';
-import { PlateMeasureComponent } from './plate-measure.component';
-import { MasterAntibiotic, baseDrug, drugForCode, masterCandidates, panelCandidates } from './disk-codes';
+import { LiveDisk, PlateMeasureComponent } from './plate-measure.component';
+import { DiskCandidate, MasterAntibiotic, baseDrug, drugForCode, masterCandidates, panelCandidates } from './disk-codes';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PlateReading, parsePlate, plateJsonFromCase, readingFromMeasure } from './plate-reading';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 
 interface Breakpoint {
   organismGroup: string; antibiotic: string;
@@ -26,7 +27,7 @@ interface Breakpoint {
 @Component({
   selector: 'pf-culture-entry',
   standalone: true,
-  imports: [FormsModule, PlateMeasureComponent, TouchButtonComponent, SelectComponent],
+  imports: [FormsModule, PlateMeasureComponent, TouchButtonComponent, SelectComponent, LogoMarkComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-4 pb-6" [class.ce--ro]="readonly">
@@ -406,6 +407,116 @@ interface Breakpoint {
           (applied)="onPlateMeasured($event)"
           (cancel)="measuringPlate.set(false)" />
       }
+      @if (orgMeasureOpen() && orgMeasureReady()) {
+        <!-- The culture case's MAIN path (Identification header → Measure):
+             plate → PF Sense codes → pick the organism INSIDE the measure →
+             its CLSI panel with live S / I / R → OK fills the AST table. -->
+        <pf-plate-measure
+          [antibiotics]="abxNames()"
+          [candidateList]="masterCands()"
+          [existingImageUrl]="orgMeasureStart()?.imageUrl"
+          [existingSession]="orgMeasureStart()?.session"
+          [orderTestId]="orderTestId"
+          [srI]="orgSrI"
+          [reviewTpl]="orgPanelTpl"
+          reviewStepLabel="Organism"
+          applyLabel="OK"
+          [applyBlocked]="!orgMeasureCanApply()"
+          [phoneFull]="true"
+          (applied)="onOrganismMeasured($event)"
+          (cancel)="closeOrgMeasure()" />
+      }
+      <ng-template #orgPanelTpl let-disks>
+        <div class="ce-mo">
+          <div class="ce-mo__pick">
+            <span class="ce-mo__lbl" id="ce-mo-org">Organism</span>
+            <pf-select class="ce-mo__sel" size="sm" [options]="organismOptions()" [searchable]="true"
+                       [value]="mOrg()" placeholder="Pick the organism…"
+                       aria-labelledby="ce-mo-org" (valueChange)="setMeasureOrg($any($event))"></pf-select>
+            <!-- Phones: the picker is a sheet (search + 44px rows). -->
+            <button type="button" class="ce-mo__trigger" (click)="openOrgSheet()" aria-haspopup="dialog"
+                    [attr.aria-label]="mOrg() ? 'Organism: ' + mOrg() + ' — change' : 'Pick the organism'">
+              <span class="ce-mo__trigtxt" [class.ce-mo__trigtxt--ph]="!mOrg()">{{ mOrg() || 'Pick the organism…' }}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
+          @if (!mOrg()) {
+            <p class="ce-mo__note">Pick the organism — its CLSI panel is applied and S / I / R is worked out for each measured zone.</p>
+          } @else {
+            @let rows = previewRows(disks);
+            <p class="ce-mo__note">CLSI for {{ mOrg() }}: the plate’s antibiotics are ticked with S / I / R; the rest of its panel is listed unticked.</p>
+            @if (overwriteTarget(); as ow) {
+              <label class="ce-mo__warn">
+                <input type="checkbox" class="ce-mo-chk ce-mo__warnbox" [checked]="mReplace()" (change)="mReplace.set($any($event.target).checked)" />
+                <span>{{ ow }} already has sensitivity results. Replace them with this plate.</span>
+              </label>
+            }
+            <ul class="ce-mo__rows" aria-label="CLSI panel">
+              @for (r of rows; track r.name) {
+                <li class="ce-mo__row" [class.ce-mo__row--off]="!r.ticked" [attr.data-sir]="r.sir || null">
+                  <span class="ce-mo__tick" [class.ce-mo__tick--on]="r.ticked" role="img"
+                        [attr.aria-label]="r.ticked ? 'On the report' : 'Not reported'">
+                    @if (r.ticked) {
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    }
+                  </span>
+                  <span class="ce-mo__namewrap">
+                    <span class="ce-mo__name">{{ r.name }}</span>
+                    @if (r.needsBp) {
+                      <span class="ce-mo__bp">
+                        <span class="ce-mo__bpnote">No CLSI breakpoint for {{ mOrg() }} — enter S ≥ and R ≤</span>
+                        <label class="ce-mo__bpf">S ≥
+                          <input type="text" inputmode="numeric" class="ce-mo__bpin nd-num" [value]="r.s ?? ''"
+                                 [attr.aria-label]="r.name + ' susceptible at or above (mm)'"
+                                 (change)="setMeasureBp(r.name, 's', $any($event.target).value)" /></label>
+                        <label class="ce-mo__bpf">R ≤
+                          <input type="text" inputmode="numeric" class="ce-mo__bpin nd-num" [value]="r.r ?? ''"
+                                 [attr.aria-label]="r.name + ' resistant at or below (mm)'"
+                                 (change)="setMeasureBp(r.name, 'r', $any($event.target).value)" /></label>
+                        @if (canSaveBreakpoints()) {
+                          <label class="ce-mo__save">
+                            <input type="checkbox" class="ce-mo-chk" [checked]="mSave().has(r.name)" [disabled]="r.s == null || r.r == null"
+                                   (change)="toggleMeasureSave(r.name)" />
+                            Save to CLSI for {{ mOrg() }}
+                          </label>
+                        }
+                      </span>
+                    }
+                  </span>
+                  <span class="ce-mo__mm nd-num">{{ r.mm != null ? r.mm + ' mm' : '—' }}</span>
+                  <span class="ce-mo__sir" [class.ce-sir-picked]="!!r.sir"
+                        [class.ce-sir--s]="r.sir === 'S'" [class.ce-sir--i]="r.sir === 'I'" [class.ce-sir--r]="r.sir === 'R'"
+                        [attr.aria-label]="r.sir ? 'Result ' + r.sir : 'No result'">{{ r.sir || '–' }}</span>
+                </li>
+              } @empty {
+                <li class="ce-mo__empty">No coded disks yet — go back and pick each disk’s code.</li>
+              }
+            </ul>
+          }
+        </div>
+        @if (orgSheet()) {
+          <div class="ce-mo-sheetbd" (click)="orgSheet.set(false)" aria-hidden="true"></div>
+          <!-- pf-modal-centered: opts out of the global phone dialog→sheet rules (this IS the sheet). -->
+          <div class="ce-mo-sheet pf-modal-centered" role="dialog" aria-modal="true" aria-label="Pick the organism">
+            <span class="ce-mo-sheet__handle" aria-hidden="true"></span>
+            <div class="ce-mo-sheet__head">
+              <span class="ce-mo-sheet__ttl">Organism</span>
+              <button type="button" class="ce-mo-sheet__x" (click)="orgSheet.set(false)" aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <input type="search" class="ce-mo-sheet__q" placeholder="Search organisms" aria-label="Search organisms"
+                   [value]="orgQuery()" (input)="orgQuery.set($any($event.target).value)" />
+            <ul class="ce-mo-sheet__list">
+              @for (o of orgSheetOptions(); track o) {
+                <li><button type="button" class="ce-mo-sheet__opt" [attr.aria-pressed]="o === mOrg()" (click)="setMeasureOrg(o); orgSheet.set(false)">{{ o }}</button></li>
+              } @empty {
+                <li class="ce-mo__empty">No organism matches.</li>
+              }
+            </ul>
+          </div>
+        }
+      </ng-template>
       @if (measureOrg() !== null) {
         <pf-plate-measure
           [antibiotics]="activeAbNames()"
@@ -622,6 +733,91 @@ interface Breakpoint {
     .ce-plate__assignlbl { font-size: 13px; font-weight: 500; color: var(--text-primary); }
     .ce-plate__orgsel { min-width: 240px; max-width: 340px; flex: 1 1 240px; }
     @media (hover: none), (pointer: coarse) { .ce-abx__savebp { min-height: 44px; } }
+
+    /* ── Measure → organism, INSIDE the measure view (Review step) ── */
+    .ce-mo { display: flex; flex-direction: column; gap: 10px; }
+    .ce-mo__pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ce-mo__lbl { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .ce-mo__sel { flex: 1 1 200px; min-width: 0; }
+    .ce-mo__trigger { display: none; flex: 1 1 auto; align-items: center; justify-content: space-between; gap: 8px;
+      min-height: 44px; padding: 0 12px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line);
+      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 16px; cursor: pointer; text-align: left; }
+    .ce-mo__trigger svg { color: var(--text-tertiary); flex: none; }
+    .ce-mo__trigtxt--ph { color: var(--text-tertiary); }
+    .ce-mo__note { margin: 0; font-size: 12.5px; color: var(--text-tertiary); text-wrap: pretty; }
+    .ce-mo__warn { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: var(--nd-radius-sm, 10px);
+      background: var(--nd-chip-bg); border: 1px solid var(--nd-line); font-size: 12.5px; color: var(--text-primary); cursor: pointer; }
+    .ce-mo__warnbox { margin-top: 1px; }
+    /* Kit checkbox (drawn, never the native look). */
+    .ce-mo-chk { appearance: none; -webkit-appearance: none; flex: none; margin: 0; cursor: pointer;
+      width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--nd-sel-border, #9aa4ae); background: var(--nd-card-bg);
+      display: inline-grid; place-content: center; }
+    .ce-mo-chk::after { content: ''; width: 9px; height: 5px; margin-top: -2px; border: 2px solid #fff; border-top: 0; border-right: 0;
+      transform: rotate(-45deg) scale(0); }
+    .ce-mo-chk:checked { background: var(--color-violet-600, #7c3aed); border-color: transparent; }
+    .ce-mo-chk:checked::after { transform: rotate(-45deg) scale(1); }
+    .ce-mo-chk:disabled { opacity: 0.45; cursor: not-allowed; }
+    .ce-mo-chk:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .ce-mo__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .ce-mo__row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 32px; align-items: center; gap: 8px;
+      min-height: 40px; padding: 5px 8px; border-radius: 10px; font-variant-numeric: tabular-nums; }
+    /* The measure lives on <body> (outside this host), so the theme hooks
+       are global selectors scoped by the unique ce-mo classes. */
+    ::ng-deep html.light .ce-mo__row { background: #f6f7f9; }
+    ::ng-deep html.dark .ce-mo__row { background: rgba(255,255,255,0.05); }
+    .ce-mo__row--off { opacity: 0.62; }
+    .ce-mo__tick { width: 16px; height: 16px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--nd-sel-border, #9aa4ae); color: #fff; }
+    .ce-mo__tick--on { background: var(--color-violet-600, #7c3aed); border-color: transparent; }
+    .ce-mo__namewrap { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .ce-mo__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
+    .ce-mo__bp { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: var(--text-tertiary); }
+    .ce-mo__bpnote { flex-basis: 100%; }
+    .ce-mo__bpf { display: inline-flex; align-items: center; gap: 4px; color: var(--text-secondary); }
+    .ce-mo__bpin { width: 44px; height: 30px; text-align: center; border-radius: 8px; border: 1px solid var(--nd-line);
+      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 13px; outline: none; }
+    .ce-mo__bpin:focus { border-color: var(--color-violet-600, #7c3aed); }
+    .ce-mo__save { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); cursor: pointer; }
+    .ce-mo__mm { font-size: 13px; color: var(--text-primary); white-space: nowrap; }
+    .ce-mo__sir { width: 32px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; color: var(--text-tertiary); border: 1px solid var(--nd-line); }
+    .ce-mo__sir.ce-sir-picked { border-color: transparent; }
+    ::ng-deep html.light .ce-mo__sir.ce-sir--s { background: rgba(16,185,129,0.13); color: #065f46; }
+    ::ng-deep html.light .ce-mo__sir.ce-sir--i { background: rgba(245,158,11,0.14); color: #92400e; }
+    ::ng-deep html.light .ce-mo__sir.ce-sir--r { background: rgba(239,68,68,0.12); color: #991b1b; }
+    ::ng-deep html.dark .ce-mo__sir.ce-sir--s { background: rgba(16,185,129,0.20); color: #6ee7b7; }
+    ::ng-deep html.dark .ce-mo__sir.ce-sir--i { background: rgba(245,158,11,0.20); color: #fcd34d; }
+    ::ng-deep html.dark .ce-mo__sir.ce-sir--r { background: rgba(239,68,68,0.20); color: #fca5a5; }
+    .ce-mo__empty { font-size: 13px; color: var(--text-tertiary); padding: 8px 2px; }
+    /* Phone organism sheet (inside the full-screen measure). */
+    .ce-mo-sheetbd { position: fixed; inset: 0; z-index: 1010; background: rgba(0, 0, 0, 0.45); }
+    .ce-mo-sheet { position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 1011;
+      max-height: min(80dvh, calc(100dvh - var(--nd-nav-h, 0px) - 24px)); display: flex; flex-direction: column; gap: 8px;
+      padding: 0 12px max(12px, env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0;
+      background: var(--nd-card-bg, var(--bg-card-solid)); border: 1px solid var(--nd-line); border-bottom: 0;
+      animation: ce-mo-rise var(--nd-dur-sheet, 320ms) var(--nd-spring, ease) both; }
+    @keyframes ce-mo-rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .ce-mo-sheet__handle { display: block; flex: 0 0 5px; align-self: center; width: 40px; max-width: 40px; height: 5px; min-height: 0;
+      padding: 0; margin: 8px auto 2px; border-radius: 999px; background: var(--nd-line); }
+    .ce-mo-sheet__head { display: flex; align-items: center; justify-content: space-between; }
+    .ce-mo-sheet__ttl { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .ce-mo-sheet__x { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0;
+      border-radius: 10px; background: transparent; color: var(--text-tertiary); cursor: pointer; }
+    .ce-mo-sheet__q { height: 44px; padding: 0 12px; border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-line);
+      background: var(--nd-card-bg); color: var(--text-primary); font: inherit; font-size: 16px; outline: none; }
+    .ce-mo-sheet__q:focus { border-color: var(--color-violet-600, #7c3aed); }
+    .ce-mo-sheet__list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+    .ce-mo-sheet__opt { width: 100%; min-height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent;
+      color: var(--text-primary); font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+    .ce-mo-sheet__opt:hover, .ce-mo-sheet__opt[aria-pressed='true'] { background: var(--nd-sel-bg); }
+    @media (max-width: 640px) {
+      .ce-mo__sel { display: none; }
+      .ce-mo__trigger { display: inline-flex; }
+      .ce-mo__bpin { height: 44px; width: 56px; font-size: 16px; }
+      .ce-mo__row { grid-template-columns: 18px minmax(0, 1fr) auto 32px; padding: 6px; }
+    }
+    @media (min-width: 641px) { .ce-mo-sheet, .ce-mo-sheetbd { display: none; } }
+    @media (prefers-reduced-motion: reduce) { .ce-mo-sheet { animation: none; } }
     @media (hover: none), (pointer: coarse) { .ce-plate__btn { height: 44px; } }
     @media (max-width: 640px) { .ce-plate__btn { width: 100%; justify-content: center; } }
 `]
@@ -682,6 +878,9 @@ export class CultureEntryComponent implements OnInit {
     // Re-seed from the parent (e.g. an existing result loading after first
     // render) until the user starts editing — then external updates are ignored.
     if (this.userEdited) return;
+    // Our own emission echoed back by the parent: nothing new — and its
+    // auto S / I / R must stay auto (not be re-flagged as typed by hand).
+    if (v && v === this._m()) return;
     const norm = this.normalize(v);
     this._m.set(norm);
     // Treat already-entered interpretations as manual so they aren't overwritten.
@@ -767,6 +966,8 @@ export class CultureEntryComponent implements OnInit {
         const m = new Map<string, string>();
         for (const o of rows ?? []) if (o.name) m.set(o.name.trim().toLowerCase(), o.group ?? '');
         this.orgGroups = m;
+        this.bpVer.update(v => v + 1);
+        this.rebuildPristinePlates();
         this.backfillClsiPanels();
       },
       error: () => { /* falls back to the name heuristic */ }
@@ -775,8 +976,9 @@ export class CultureEntryComponent implements OnInit {
       next: rows => {
         this.abxNames.set((rows ?? []).map(a => a.name).filter(Boolean));
         this.abxMaster.set((rows ?? []).filter(a => !!a.name).map(a => ({ name: a.name, shortName: a.shortName ?? null })));
+        this.abxLoaded.set(true);
       },
-      error: () => { /* master unavailable → picker shows an empty-state note */ }
+      error: () => { this.abxLoaded.set(true); /* master unavailable → picker shows an empty-state note */ }
     });
     this.api.get<Breakpoint[]>('/api/microbiology/breakpoints').subscribe({
       next: list => {
@@ -784,8 +986,10 @@ export class CultureEntryComponent implements OnInit {
         // are resolved PER ORGANISM: a row pinned to the isolate outranks its
         // group row, and only then does the enabled filter apply.
         this.bpList = list ?? [];
+        this.bpVer.update(v => v + 1);
         // Breakpoints just arrived → a plate organism's verdicts can be computed.
         this.quietly(() => (this._m().organisms ?? []).forEach((o, oi) => { if (o.fromPlate) o.antibiotics.forEach((_, abi) => this.autoInterpret(oi, abi)); }));
+        this.rebuildPristinePlates();
         // Organisms seeded before the breakpoints arrived have empty panels —
         // fill them now that we know which drugs CLSI covers.
         this.backfillClsiPanels();
@@ -808,19 +1012,29 @@ export class CultureEntryComponent implements OnInit {
   private caseQ(): string { return this._plateCaseId ? `?caseId=${this._plateCaseId}` : ''; }
   loadPlate() {
     this.plateLoaded = true;
-    if (!this.plateOn()) return;
+    if (!this.plateOn()) { this.plateFetched.set(true); return; }
     this.api.get<unknown>(`/api/microbiology/culture/${this.orderTestId}`).subscribe({
       next: c => {
         this.plate.set(parsePlate(plateJsonFromCase(c, this._plateCaseId)));
         if (this.plate()) this.applyPlate();
+        this.plateFetched.set(true);
       },
-      error: () => { /* no plate — the manual path is untouched */ },
+      error: () => { this.plateFetched.set(true); /* no plate — the manual path is untouched */ },
     });
   }
   /** PF Sense candidates: EVERY antibiotic in the master (code + potency). */
-  masterCands() { return masterCandidates(this.abxMaster(), this.bpList); }
+  private readonly masterCandsC = computed<DiskCandidate[]>(() => { this.bpVer(); return masterCandidates(this.abxMaster(), this.bpList); });
+  masterCands(): DiskCandidate[] { return this.masterCandsC(); }
+  /** The organism the case plate is on: the one carrying the latest plate
+   *  photo (several organisms may each have been measured), else the first. */
+  private plateOrgIndex(): number {
+    const orgs = this._m().organisms ?? [];
+    const url = this.plate()?.imageUrl;
+    const byPhoto = url ? orgs.findIndex(o => o.fromPlate && o.plateImageUrl === url) : -1;
+    return byPhoto >= 0 ? byPhoto : orgs.findIndex(o => o.fromPlate);
+  }
   plateOrgName(): string | null {
-    const o = (this._m().organisms ?? []).find(x => x.fromPlate);
+    const o = (this._m().organisms ?? [])[this.plateOrgIndex()];
     return o?.name?.trim() || null;
   }
   openPlateMeasure() { this.plateError.set(''); this.measuringPlate.set(true); }
@@ -868,16 +1082,14 @@ export class CultureEntryComponent implements OnInit {
    * Clavulanate 20"), else by drug. `prev` (an organism change) carries the
    * tech's zones, and manual breakpoints for drugs still outside the panel.
    */
-  private plateTable(orgName: string, prev?: AstRow[]): { rows: AstRow[]; unchecked: string[] } {
-    const r = this.plate();
+  private plateTable(orgName: string, prev?: AstRow[], disks?: { code: string | null; drug: string; mm: number }[]): { rows: AstRow[]; unchecked: string[] } {
     const panel = this.clsiPanelFor(orgName);
     const pc = panelCandidates(panel);
     const byName = new Map((prev ?? []).map(a => [a.name, a]));
     const used = new Set<string>();
     const plateRowsOut: AstRow[] = [];
-    for (const d of r?.disks ?? []) {
-      const name = (d.code ? drugForCode(d.code, pc) : null)
-        ?? panel.find(p => baseDrug(p) === baseDrug(d.drug)) ?? d.drug;
+    for (const d of disks ?? this.plate()?.disks ?? []) {
+      const name = this.panelName(panel, pc, d.drug, d.code);
       if (used.has(name)) continue;
       used.add(name);
       const old = byName.get(name) ?? byName.get(d.drug);
@@ -889,6 +1101,11 @@ export class CultureEntryComponent implements OnInit {
     }
     const rest = panel.filter(n => !used.has(n)).map(n => ({ name: n, zoneSize: null, interpretation: '' as const }));
     return { rows: [...plateRowsOut, ...rest], unchecked: rest.map(x => x.name) };
+  }
+  /** A plate disk → the organism panel's own row name: by its printed code
+   *  ("PIT 100/10" → "Piperacillin-Tazobactam 100"), else by drug. */
+  private panelName(panel: string[], pc: DiskCandidate[], drug: string, code: string | null | undefined): string {
+    return (code ? drugForCode(code, pc) : null) ?? panel.find(p => baseDrug(p) === baseDrug(drug)) ?? drug;
   }
   private buildFromPlate(oi: number, name: string, prev?: AstRow[]) {
     const r = this.plate();
@@ -960,13 +1177,197 @@ export class CultureEntryComponent implements OnInit {
   }
   bpSavedFor(org: CultureOrganism, ab: AstRow): boolean { return this.bpSaved().has(`${org.name}|${ab.name}`); }
 
+  // ── Measure from the Identification header (the case's main path) ──
+  /** Bumped whenever breakpoints / organism groups arrive (bpList and
+   *  orgGroups are plain fields) so computed views re-read them. */
+  private readonly bpVer = signal(0);
+  private readonly abxLoaded = signal(false);
+  private readonly plateFetched = signal(false);
+  /** The measure opened from the Identification header. */
+  readonly orgMeasureOpen = signal(false);
+  /** The organism the measure was opened for (its own photo wins). */
+  private readonly orgMeasureFor = signal('');
+  /** What it reopens on: that organism's own photo + rings, else the case
+   *  plate (still on the case), else a fresh capture. Resolved when the
+   *  modal renders — the case plate may arrive after the request. */
+  readonly orgMeasureStart = computed<{ imageUrl: string | null; session: PlateMeasureSession | null } | null>(() => {
+    const name = this.orgMeasureFor().toLowerCase();
+    const target = name ? (this._m().organisms ?? []).find(o => o.name.trim().toLowerCase() === name) : undefined;
+    if (target?.plateImageUrl && target.plateMeasure) return { imageUrl: target.plateImageUrl, session: target.plateMeasure };
+    const p = this.plate();
+    return p ? { imageUrl: p.imageUrl, session: p.session } : null;
+  });
+  /** Open once the master + the case plate are known (candidates, re-measure). */
+  readonly orgMeasureReady = computed(() => this.abxLoaded() && this.plateFetched());
+  /** The organism picked INSIDE the measure view. */
+  readonly mOrg = signal('');
+  /** Breakpoints typed in the measure view for drugs outside the organism's
+   *  CLSI panel (drug → S ≥ / R ≤, mm). */
+  readonly mBp = signal<Record<string, { s: number | null; r: number | null }>>({});
+  /** Drugs whose typed breakpoints go to the CLSI master on OK. */
+  readonly mSave = signal<Set<string>>(new Set());
+  /** The technician confirmed replacing the organism's entered results. */
+  readonly mReplace = signal(false);
+  readonly orgSheet = signal(false);
+  readonly orgQuery = signal('');
+  /** OK has written the organism + its sensitivity table. */
+  @Output() organismMeasured = new EventEmitter<string>();
+  /** The measure closed (OK or cancel) — the request is spent. */
+  @Output() measureClosed = new EventEmitter<void>();
+
+  /** The workbench asks for the measure (Identification header → Measure):
+   *  `{ org, n }` — a new `n` opens it, `org` pre-fills the organism. */
+  private lastMeasureReq = 0;
+  @Input() set measureRequest(r: { org: string | null; n: number } | null | undefined) {
+    if (!r || r.n === this.lastMeasureReq) return;
+    this.lastMeasureReq = r.n;
+    this.openOrgMeasure(r.org);
+  }
+  openOrgMeasure(org?: string | null) {
+    const name = (org ?? '').trim();
+    const target = name ? (this._m().organisms ?? []).find(o => o.name.trim().toLowerCase() === name.toLowerCase()) : undefined;
+    this.orgMeasureFor.set(target?.name ?? name);
+    this.mOrg.set(target?.name ?? name);
+    this.mBp.set({}); this.mSave.set(new Set()); this.mReplace.set(false);
+    this.orgQuery.set(''); this.orgSheet.set(false);
+    this.orgMeasureOpen.set(true);
+  }
+  closeOrgMeasure() { this.orgMeasureOpen.set(false); this.orgSheet.set(false); this.measureClosed.emit(); }
+  setMeasureOrg(name: string) {
+    const n = (name ?? '').trim();
+    if (n === this.mOrg()) return;
+    this.mOrg.set(n);
+    this.mReplace.set(false);
+    // Typed breakpoints belong to the organism they were typed for.
+    this.mBp.set({}); this.mSave.set(new Set());
+  }
+  openOrgSheet() { this.orgQuery.set(''); this.orgSheet.set(true); }
+  orgSheetOptions(): string[] {
+    const q = this.orgQuery().trim().toLowerCase();
+    return this.organismOptions().map(o => o.value).filter(n => !q || n.toLowerCase().includes(q));
+  }
+  setMeasureBp(drug: string, key: 's' | 'r', raw: string) {
+    const t = String(raw ?? '').trim();
+    const v = t === '' ? null : Number(t);
+    if (v !== null && !Number.isFinite(v)) return;
+    this.mBp.update(m => ({ ...m, [drug]: { s: m[drug]?.s ?? null, r: m[drug]?.r ?? null, [key]: v } }));
+  }
+  toggleMeasureSave(drug: string) {
+    this.mSave.update(s => { const n = new Set(s); n.has(drug) ? n.delete(drug) : n.add(drug); return n; });
+  }
+  /** The organism already on the AST table with results entered — OK would
+   *  replace them, so it asks first (inline, inside the measure). */
+  overwriteTarget(): string | null {
+    const n = this.mOrg().trim().toLowerCase();
+    if (!n) return null;
+    const orgs = this._m().organisms ?? [];
+    const oi = orgs.findIndex(x => x.name.trim().toLowerCase() === n);
+    const o = orgs[oi];
+    if (!o || !o.antibiotics.some(a => a.zoneSize != null || !!a.interpretation || !!a.micValue)) return null;
+    return this.pristinePlateBuild(oi) ? null : o.name;
+  }
+  /** The organism's table is exactly what the case plate built (no zone,
+   *  verdict or MIC typed by the technician) — nothing of theirs to lose. */
+  private pristinePlateBuild(oi: number): boolean {
+    const o = this._m().organisms?.[oi];
+    const disks = this.plate()?.disks;
+    if (!o?.fromPlate || !disks) return false;
+    if ([...this.manual].some(k => k.startsWith(`${oi}:`))) return false;
+    // Every zone on the table is a plate zone (same drug, same mm) — by the
+    // drug's base name, so it holds before AND after the panel is known.
+    return o.antibiotics.every(a => !a.micValue && (a.zoneSize == null
+      || disks.some(d => baseDrug(d.drug) === baseDrug(a.name) && d.mm === a.zoneSize)));
+  }
+  /** Breakpoints / organism groups arrived after the case plate built a
+   *  table: rebuild the untouched ones so plate drugs land on the panel's
+   *  own rows (and the rest of the panel is listed). */
+  private rebuildPristinePlates() {
+    this.quietly(() => (this._m().organisms ?? []).forEach((o, oi) => {
+      if (!o.fromPlate || !o.name.trim() || !this.pristinePlateBuild(oi)) return;
+      const want = this.plateTable(o.name).rows;
+      const same = want.length === o.antibiotics.length
+        && want.every((r, k) => r.name === o.antibiotics[k].name && (r.zoneSize ?? null) === (o.antibiotics[k].zoneSize ?? null));
+      if (!same) this.buildFromPlate(oi, o.name);                  // only when it would change
+    }));
+  }
+  orgMeasureCanApply(): boolean { return !!this.mOrg().trim() && (!this.overwriteTarget() || this.mReplace()); }
+
+  /** The organism's CLSI panel for the live disks: plate drugs first,
+   *  ticked, zone + S / I / R; the rest of the panel unticked; a measured
+   *  drug outside the panel asks for its breakpoints. */
+  previewRows(disks: LiveDisk[] | null | undefined): { name: string; mm: number | null; ticked: boolean; needsBp: boolean; s: number | null; r: number | null; sir: 'S' | 'I' | 'R' | '' }[] {
+    const org = this.mOrg().trim();
+    this.bpVer();
+    if (!org) return [];
+    const t = this.plateTable(org, undefined, disks ?? []);
+    const off = new Set(t.unchecked);
+    const typed = this.mBp();
+    return t.rows.map(row => {
+      const inPanel = this.effectiveRow(org, row.name) !== undefined;
+      const bp = inPanel ? this.bpFor(org, row.name) : undefined;
+      const s = inPanel ? bp?.s ?? null : typed[row.name]?.s ?? null;
+      const r = inPanel ? bp?.r ?? null : typed[row.name]?.r ?? null;
+      const mm = row.zoneSize ?? null;
+      return { name: row.name, mm, ticked: !off.has(row.name), needsBp: !inPanel, s, r, sir: this.sirFrom(mm, s, r) };
+    });
+  }
+  private sirFrom(mm: number | null, s: number | null, r: number | null): 'S' | 'I' | 'R' | '' {
+    if (mm == null || s == null || r == null) return '';
+    return mm >= s ? 'S' : mm <= r ? 'R' : 'I';
+  }
+  /** Live S / I / R in the measure (rings, disk list) for the picked organism. */
+  readonly orgSrI = (drug: string, mm: number, code?: string | null): 'S' | 'I' | 'R' | '' => {
+    const org = this.mOrg().trim();
+    if (!org || mm == null) return '';
+    const panel = this.clsiPanelFor(org);
+    const name = this.panelName(panel, panelCandidates(panel), drug, code);
+    const bp = this.bpFor(org, name);
+    if (bp) return this.sirFrom(mm, bp.s, bp.r);
+    const t = this.mBp()[name];
+    return this.sirFrom(mm, t?.s ?? null, t?.r ?? null);
+  };
+
+  /** OK: the reading goes on the case, the organism gets its table (full
+   *  CLSI panel, plate drugs ticked, zones + S / I / R), typed breakpoints
+   *  ride on their rows (and go to the master when asked). Nothing is
+   *  submitted — the stage's Submit / "Submit all results" stay the user's. */
+  onOrganismMeasured(e: { measurements: PlateMeasurement[]; imageUrl: string | null; session: PlateMeasureSession; auditId?: string | null }) {
+    const name = this.mOrg().trim();
+    if (!name || !this.orgMeasureCanApply()) return;
+    const reading = readingFromMeasure(e, this.abxNames());
+    this.plate.set(reading);
+    this.savePlate(reading);
+    const orgs = this._m().organisms ?? [];
+    let oi = orgs.findIndex(o => o.name.trim().toLowerCase() === name.toLowerCase());
+    if (oi < 0) {
+      this.commit({ ...this._m(), noGrowth: false, organisms: [...orgs, { name, antibiotics: [] }] });
+      oi = orgs.length;
+    } else if (this._m().noGrowth) {
+      this.patch({ noGrowth: false });
+    }
+    const orgName = this._m().organisms![oi].name;
+    this.buildFromPlate(oi, orgName);
+    const typed = this.mBp();
+    const save = this.mSave();
+    (this._m().organisms?.[oi]?.antibiotics ?? []).forEach((ab, abi) => {
+      const bp = typed[ab.name];
+      if (!bp || this.effectiveRow(orgName, ab.name) !== undefined) return;
+      this.setAb(oi, abi, { sMin: bp.s, rMax: bp.r });
+      this.autoInterpret(oi, abi);
+      if (save.has(ab.name)) this.saveBreakpointToMaster(oi, abi);
+    });
+    this.organismsOpen.set(true);
+    this.closeOrgMeasure();
+    this.organismMeasured.emit(orgName);
+  }
+
   // ── Assign the organism right under the PLATE card ───────────────
   /** The organism the plate is assigned to (picker right under the plate). */
   assignOrganism(name: string) {
     const n = (name ?? '').trim();
     if (!n || !this.plate()) return;
     const orgs = this._m().organisms ?? [];
-    const pi = orgs.findIndex(o => o.fromPlate);
+    const pi = this.plateOrgIndex();
     if (pi >= 0) { if (orgs[pi].name !== n) this.remapNow(pi, n); return; }
     let oi = orgs.findIndex(o => o.name.trim().toLowerCase() === n.toLowerCase());
     if (oi < 0) {

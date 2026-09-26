@@ -18,6 +18,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -39,7 +40,7 @@ interface StageField { name: string; title: string; type: string; options: strin
 @Component({
   selector: 'pf-culture-workbench',
   standalone: true,
-  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent, HeroBandComponent, ZoomTargetDirective],
+  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent, HeroBandComponent, ZoomTargetDirective, LogoMarkComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cse">
@@ -195,6 +196,8 @@ interface StageField { name: string; title: string; type: string; options: strin
                      [class.pf-stg--done]="s.state === 'done'"
                      [class.pf-stg--locked]="lockedByOther(s)"
                      [class.pf-stg--mine]="isMine(s)"
+                     [class.pf-stg--flash]="s.key === 'ast' && astFlash()"
+                     [attr.data-stage]="s.key"
                      [attr.aria-label]="s.label">
               <header class="nd-card__head pf-stg__hdr">
                 <span class="nd-card__icon" aria-hidden="true">
@@ -213,6 +216,15 @@ interface StageField { name: string; title: string; type: string; options: strin
                 }
                 <span class="nd-card__spacer"></span>
                 <span class="pf-stg__acts">
+                  @if (s.key === 'identification' && canMeasure()) {
+                    <!-- THE path to the AST (owner): measure the plate, pick the
+                         organism inside the measure, OK fills AST below. -->
+                    <button type="button" class="nd-btn pf-cse-measure press" [disabled]="busy()" (click)="startMeasure()"
+                            aria-label="Measure the AST plate" title="Measure the AST plate — PF Sense reads the disks, pick the organism, S / I / R fill in below">
+                      <span class="pf-cse-measure__pf" aria-hidden="true"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
+                      <span>Measure</span>
+                    </button>
+                  }
                   <button type="button" class="pf-cse-note press" [class.pf-cse-note--has]="commentsFor(sk(s.key)).length > 0"
                           (click)="toggleNote(sk(s.key))" [attr.aria-expanded]="noteOpen(sk(s.key))"
                           [attr.aria-label]="'Note on ' + s.label" [title]="'Note on ' + s.label">
@@ -263,6 +275,9 @@ interface StageField { name: string; title: string; type: string; options: strin
                         <pf-culture-entry [value]="astValue()" [organismNames]="organismNames()"
                                           [seedOrganisms]="identifiedOrganisms()" [embedded]="true" [orderTestId]="id" [plateCaseId]="selCaseId()"
                                           [reportHidden]="reportHidden()"
+                                          [measureRequest]="measureReq()"
+                                          (organismMeasured)="onOrganismMeasured($event)"
+                                          (measureClosed)="measureReq.set(null)"
                                           (reportHiddenChange)="setReportHidden($event)"
                                           (valueChange)="astValue.set($event)"></pf-culture-entry>
                       </div>
@@ -504,12 +519,30 @@ interface StageField { name: string; title: string; type: string; options: strin
     .pf-cse__astbtn { margin-top: 8px; align-self: flex-start; height: 40px; }
     .pf-cse__astwrap { margin-top: 14px; }
 
+    /* Identification header → Measure: a QUIET neutral button (not violet-
+       filled), the PF mark as its icon. */
+    .pf-cse-measure { display: inline-flex; align-items: center; gap: 6px; height: 32px; min-height: 32px; padding: 0 12px 0 8px;
+      font-size: 13px; font-weight: 500; color: var(--text-primary); background: var(--nd-card-bg);
+      border: 1px solid var(--nd-line); border-radius: var(--nd-radius-sm, 10px); box-shadow: none; }
+    .pf-cse-measure:hover:not(:disabled) { border-color: var(--nd-sel-border); background: var(--nd-chip-bg); }
+    .pf-cse-measure:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .pf-cse-measure__pf { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+      color: var(--color-violet-600, #7c3aed); }
+    :host-context(.dark) .pf-cse-measure__pf { color: #a78bfa; }
+    .pf-cse-measure__pf pf-logo-mark ::ng-deep .pill { width: 16px; height: 16px; }
+    .pf-cse-measure__pf pf-logo-mark ::ng-deep .glyph { width: 12px; height: 15px; }
+    /* OK → the AST stage is brought into view and marked briefly. */
+    .pf-stg--flash { animation: pf-stg-flash 1600ms ease-out both; }
+    @keyframes pf-stg-flash {
+      0%, 30% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent); }
+      100% { box-shadow: 0 0 0 2px transparent; } }
+
     /* ── Touch ── */
     @media (pointer: coarse) {
       .pf-cse-note { width: 44px; height: 44px; }
       .pf-cse-opt, .pf-cse-branch { height: 44px; }
       .pf-cse-incubbtn { height: 44px; min-height: 44px; }
-      .pf-stg__btn, .pf-cse-navbtn { height: 44px; min-height: 44px; }
+      .pf-stg__btn, .pf-cse-navbtn, .pf-cse-measure { height: 44px; min-height: 44px; }
     }
 
     /* ── Phones: rows stack; tabs scroll; actions become 44px icons ── */
@@ -539,6 +572,9 @@ interface StageField { name: string; title: string; type: string; options: strin
     }
     @media (prefers-reduced-motion: reduce) {
       .pf-rh::after { transition: none !important; }
+      /* No pulse: a plain outline for the highlight's duration. */
+      .pf-stg--flash { animation: none;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent); }
     }
   `],
 })
@@ -794,6 +830,59 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     return '';
   }
 
+  // ── Identification header → Measure (plate → organism → AST) ──────────
+  /** Measure is offered where the result can still be entered: the case has
+   *  a sensitivity stage, both it and Identification are open to this user,
+   *  the case is on the bench (not sign-out) and the user works the bench. */
+  canMeasure(): boolean {
+    const v = this.view();
+    if (!v || v.caseState !== 'active' || this.reviewMode()) return false;
+    if (!this.auth.hasPermission('culture_workbench')) return false;
+    const ast = this.astStage();
+    const ident = v.stages?.find(x => x.key === 'identification');
+    const workable = (s: CultureStageView | null | undefined) => !!s && s.state !== 'done' && !this.lockedByOther(s);
+    return workable(ast) && workable(ident);
+  }
+  /** A new request (n) opens the measure inside the AST editor. */
+  readonly measureReq = signal<{ org: string | null; n: number } | null>(null);
+  private measureSeq = 0;
+  /** The AST stage is highlighted briefly after OK. */
+  readonly astFlash = signal(false);
+  private flashTimer?: ReturnType<typeof setTimeout>;
+  startMeasure() {
+    const v = this.view();
+    const ident = v?.stages?.find(x => x.key === 'identification');
+    const ast = this.astStage();
+    if (!ident || !ast) return;
+    this.ensurePicked(ident);
+    this.ensurePicked(ast);
+    this.astOpen.set(true);
+    // Pre-fill: the isolated organism that has no sensitivity results yet
+    // (else the first one) — with several isolates the measure is per organism.
+    const ids = this.identifiedOrganisms();
+    const done = new Set((this.astValue().organisms ?? [])
+      .filter(o => o.antibiotics?.some(a => a.zoneSize != null || !!a.interpretation))
+      .map(o => o.name.trim().toLowerCase()));
+    const org = ids.find(n => !done.has(n.toLowerCase())) ?? ids[0] ?? null;
+    this.measureReq.set({ org, n: ++this.measureSeq });
+  }
+  /** OK in the measure: the organism joins "Organism isolated" (never
+   *  removing others), the AST stage below is already filled by the editor;
+   *  bring it into view gently. Nothing is submitted. */
+  onOrganismMeasured(name: string) {
+    const field = this.schemaFor('identification')?.find(f => f.suggest === 'organisms')?.name ?? 'organism';
+    const cur = this.orgList('identification', field);
+    if (!cur.some(n => n.toLowerCase() === name.trim().toLowerCase())) this.setOrgs('identification', field, [...cur, name.trim()]);
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(() => {
+      const el = (typeof document !== 'undefined' ? document.querySelector('[data-stage="ast"]') : null) as HTMLElement | null;
+      el?.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    });
+    if (this.flashTimer) clearTimeout(this.flashTimer);
+    this.astFlash.set(true);
+    this.flashTimer = setTimeout(() => this.astFlash.set(false), 1700);
+  }
+
   back() { this.navBack.backTo('/lab/my-work'); }
   /** The band's back chevron runs the page's own back (My Work fallback). */
   readonly backFn = () => this.back();
@@ -869,7 +958,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     this.loadStageSchema();
   }
 
-  ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
+  ngOnDestroy() { if (this.timer) clearInterval(this.timer); if (this.flashTimer) clearTimeout(this.flashTimer); }
 
   private load() {
     this.loading.set(true);
@@ -919,6 +1008,7 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     const sp = this.c()?.specimen;
     if (sp && !this.astValue().specimen) this.astValue.update(x => ({ ...x, specimen: sp }));
     this.astOpen.set(false);
+    this.measureReq.set(null);
   }
 
   // ── Specimen (order-test level; desk-picked, bench-editable) ──
