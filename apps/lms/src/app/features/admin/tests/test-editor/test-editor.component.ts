@@ -34,6 +34,8 @@ import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, Mo
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../tests/tests.component';
 import { RangeSelectEditorComponent, RangeSelectOption } from './range-select-editor.component';
+import { RangeInsightComponent } from './range-insight.component';
+import { validateRanges, type RangeIssue } from '../../../../shared/utils/range-insight';
 import { hasLegacyFields, loadEditorFields, newFieldId, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -169,6 +171,7 @@ function makeEmptyDraft(): DraftTest {
     PriceFlagComponent,
     OriginBadgeComponent,
     HeroBandComponent,
+    RangeInsightComponent,
     NgTemplateOutlet
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -634,6 +637,52 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   protected readonly numericFields = computed(() =>
     this.fields().filter(f => this.isNumericType(f.type)));
 
+  /** Range problems per field index (errors block Save; mw rejects the same
+   *  errors — ReferenceRangeValidator). One validator: range-insight.ts. */
+  readonly rangeIssues = computed<Map<number, RangeIssue[]>>(() => {
+    const out = new Map<number, RangeIssue[]>();
+    this.fields().forEach((f, i) => {
+      if (!this.isNumericType(f.type)) return;
+      out.set(i, validateRanges({ ...f, unit: f.unit || this._draft().unit || null } as never));
+    });
+    return out;
+  });
+  /** name → the value's ranges, for the report condition builders (flag
+   *  choices + "which line wins" checks read the SAME ranges). */
+  readonly paramDefMap = computed<Record<string, unknown>>(() => {
+    const out: Record<string, unknown> = {};
+    for (const f of this.fields()) {
+      const n = (f.name ?? '').trim();
+      if (n && this.isNumericType(f.type)) out[n] = { ...f, unit: f.unit || this._draft().unit || null };
+    }
+    return out;
+  });
+  /** Every range error, with the value it belongs to. */
+  private readonly allRangeErrors = computed(() => {
+    const out: Array<{ field: string; issue: RangeIssue; key: string }> = [];
+    this.rangeIssues().forEach((list, i) => {
+      const f = this.fields()[i];
+      const field = (f?.label || f?.name || 'Result').trim();
+      for (const issue of list) if (issue.severity === 'error')
+        out.push({ field, issue, key: `${f?.name ?? i}|${issue.band}|${issue.message}` });
+    });
+    return out;
+  });
+  /** Errors the test already had when it was opened (legacy catalogue data):
+   *  shown in red, but — like mw's update check — they don't block Save, so an
+   *  unrelated edit is never held hostage. Any NEW error blocks. */
+  private readonly _loadedRangeErrors = signal<Set<string>>(new Set());
+  readonly rangeErrors = computed(() =>
+    this.allRangeErrors().filter(e => !this._loadedRangeErrors().has(e.key)));
+  /** The grid cell carries an error / warning outline (cellClassRules). */
+  rangeCellIssue(i: number, ri: number, field: string): 'error' | 'warning' | null {
+    const list = this.rangeIssues().get(i) ?? [];
+    const hit = list.filter(x => x.band === ri && (x.field === field
+      || (field === 'minAge' && x.field === 'maxAge') || (field === 'sex' && x.field === 'sex')));
+    if (hit.some(x => x.severity === 'error')) return 'error';
+    return hit.length ? 'warning' : null;
+  }
+
   // ── Plain-language entry kind ─────────────────────────────────────
   // Doctors think "what will the tech enter", not "parameters". For the
   // common single-value test the ONE field is auto-managed: this control
@@ -712,6 +761,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   readonly rangeDefaultColDef: ColDef = {
     editable: true, sortable: false, resizable: true, suppressHeaderMenuButton: true,
+    // Validation lands on the exact cell: red = blocks Save, amber = a warning.
+    cellClassRules: {
+      'pf-rrgrid__cell--err': p => !!p.colDef.field && !!p.data
+        && this.rangeCellIssue(p.data.i, p.data.ri, p.colDef.field) === 'error',
+      'pf-rrgrid__cell--warn': p => !!p.colDef.field && !!p.data
+        && this.rangeCellIssue(p.data.i, p.data.ri, p.colDef.field) === 'warning',
+    },
   };
   private static readonly SEX_OPTS: RangeSelectOption[] = [
     { value: 'any', label: 'Everyone' }, { value: 'M', label: 'Men' }, { value: 'F', label: 'Women' },
@@ -1935,6 +1991,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     // must be loaded up-front rather than on a tab switch.
     if (this.onePage()) this.ensureLayoutData();
     this._baseline = this.buildSaveBody(this._draft());
+    this._loadedRangeErrors.set(new Set(this.allRangeErrors().map(e => e.key)));
     this.dirty.set(false);   // fresh load is clean
     this._previewToken.update(v => v + 1);
   }
@@ -2222,6 +2279,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
 
+    if (d.type === 'individual' && this.rangeErrors().length > 0) {
+      const first = this.rangeErrors()[0];
+      const n = this.rangeErrors().length;
+      this.jumpToSection('results');
+      this.toasts.warning(`Fix the reference range${n > 1 ? 's' : ''} first — ${first.field}${first.issue.band != null ? `, range ${first.issue.band + 1}` : ''}: ${first.issue.message}${n > 1 ? ` (+${n - 1} more)` : ''}`);
+      return;
+    }
+
     const body = this.buildSaveBody(d);
 
     this._saving.set(true);
@@ -2308,6 +2373,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     const field = err.field ?? '';
+    if (err.code === 'range_invalid' || field === 'referenceRanges') {
+      // mw's ReferenceRangeValidator refused the ranges (same rules as the
+      // editor's own check) — show them where they are edited.
+      this.jumpToSection('results');
+      this.toasts.warning(err.message);
+      return;
+    }
     if (field === 'name' || field === 'price' || field === 'testCode') {
       this._fieldErrors.update(m => ({ ...m, [field]: err.message }));
     } else {

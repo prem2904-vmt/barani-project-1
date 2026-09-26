@@ -774,6 +774,10 @@ select.pf-input--compact {
 @media (hover: hover) { .pf-rrgrid .ag-cell:not(.pf-rrgrid__del):hover { background: rgba(124,58,237,.06); } }
 .pf-rrgrid__crit { color: #f87171; }
 .pf-rrgrid__prints { color: var(--text-tertiary, #94a3b8); }
+/* Range validation on the exact cell (range-insight.ts): red blocks Save,
+   amber is a warning. Inset ring so row height never shifts. */
+:host ::ng-deep .pf-rrgrid .pf-rrgrid__cell--err { box-shadow: inset 0 0 0 1.5px #ef4444; background: rgba(239,68,68,.07); }
+:host ::ng-deep .pf-rrgrid .pf-rrgrid__cell--warn { box-shadow: inset 0 0 0 1.5px rgba(217,119,6,.65); }
 .pf-rrgrid__del { display: flex; align-items: center; justify-content: center; cursor: pointer;
   color: var(--text-tertiary, #64748b); }
 .pf-rrgrid__del:hover { color: #ef4444; }

@@ -3,6 +3,10 @@ import { FormsModule } from '@angular/forms';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
+import {
+  FLAG_CONDITIONS, FLAG_OPERATOR, analyzeLines, lineReach, reachWords, type CondIssue, type CondLine,
+} from '../../../shared/utils/flag-conditions';
+import type { InsightParam } from '../../../shared/utils/range-insight';
 
 /** One raw layout section as stored — kept as-is so fields this surface
  *  doesn't understand (grid rows, templates, complex conditions…) survive
@@ -169,13 +173,21 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                     @if (condKind(row) !== 'always') {
                       <div class="rsd__when-sel"><pf-select size="sm" [options]="paramOptions()" [value]="cond(row).parameter"
                                  (valueChange)="setCondField(row, { parameter: $any($event) })"></pf-select></div>
-                      <div class="rsd__when-sel rsd__when-sel--op"><pf-select size="sm" [options]="opOptions" [value]="cond(row).operator"
-                                 (valueChange)="setCondField(row, { operator: $any($event) })"></pf-select></div>
-                      <input class="rsd__when-val" type="text" placeholder="value"
-                             [ngModel]="cond(row).value" (ngModelChange)="setCondField(row, { value: $event })" />
+                      <div class="rsd__when-sel rsd__when-sel--op"><pf-select size="sm" [options]="opOptions" [value]="opChoice(row)"
+                                 (valueChange)="setOpChoice(row, $any($event))"></pf-select></div>
+                      @if (!isFlagOp(row)) {
+                        <input class="rsd__when-val" type="text" placeholder="value"
+                               [ngModel]="cond(row).value" (ngModelChange)="setCondField(row, { value: $event })" />
+                      }
                     }
                   }
                 </div>
+                @if (condKind(row) === 'when' || condKind(row) === 'hide_when') {
+                  @if (reachHint(row); as hint) { <p class="rsd__reach">{{ hint }}</p> }
+                  @for (m of rowIssues(row); track $index) {
+                    <p class="rsd__issue" [class.rsd__issue--err]="m.severity === 'error'">{{ m.message }}</p>
+                  }
+                }
               }
             </div>
           </section>
@@ -296,6 +308,13 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
       font-weight: 600; text-align: center; color: var(--text-primary);
       background: var(--input-bg, rgba(255,255,255,.03)); border: 1px solid var(--input-border, var(--glass-border)); }
     .rsd__when-val:focus { outline: none; border-color: rgba(168,85,247,.5); }
+    .rsd__reach { margin: -2px 0 0; font-size: 12px; color: var(--text-tertiary); }
+    .rsd__issue { margin: 0; font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+    .rsd__issue::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%;
+      background: #d97706; vertical-align: 1px; }
+    .rsd__issue--err { color: #dc2626; }
+    .rsd__issue--err::before { background: #dc2626; }
+    .rsd__when-sel--op { min-width: 210px; }
     .rsd__when-custom { font-size: 12px; color: var(--text-secondary); }
 
     .rsd__foot { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
@@ -400,6 +419,8 @@ export class ReportStructureComponent {
     { value: 'when', label: 'only when…' },
     { value: 'hide_when', label: 'except when…' },
   ];
+  /** Numeric compares, then the flag choices (stored as the engine's
+   *  `operator: 'flag'`, value = the choice — see flag-conditions.ts). */
   readonly opOptions: PfSelectOption[] = [
     { value: '>', label: 'is above' },
     { value: '<', label: 'is below' },
@@ -407,7 +428,59 @@ export class ReportStructureComponent {
     { value: '<=', label: 'is at most' },
     { value: '=', label: 'equals' },
     { value: '!=', label: 'is not' },
+    ...FLAG_CONDITIONS.map(o => ({ value: 'flag:' + o.value, label: o.label })),
   ];
+  /** Each value's ranges (name → parameter) — what the flag choices read. */
+  readonly paramDefs = input<Record<string, InsightParam>>({});
+  isFlagOp(row: StructureRow): boolean { return this.cond(row).operator === FLAG_OPERATOR; }
+  opChoice(row: StructureRow): string {
+    const c = this.cond(row);
+    return c.operator === FLAG_OPERATOR ? 'flag:' + c.value : c.operator;
+  }
+  setOpChoice(row: StructureRow, v: string) {
+    if (v.startsWith('flag:')) this.setCondField(row, { operator: FLAG_OPERATOR, value: v.slice(5) });
+    else this.setCondField(row, { operator: v, value: this.isFlagOp(row) ? '' : this.cond(row).value });
+  }
+  private lineOf(row: StructureRow): CondLine {
+    const c = this.cond(row);
+    return { operator: c.operator, value: this.coerce(c.value), negate: this.condKind(row) === 'hide_when' };
+  }
+  private defFor(name: string): InsightParam | null {
+    const defs = this.paramDefs();
+    const k = Object.keys(defs).find(x => x.trim().toLowerCase() === name.trim().toLowerCase());
+    return k ? defs[k] : null;
+  }
+  /** "Prints for High and Critical high results" — from the ranges. */
+  reachHint(row: StructureRow): string | null {
+    const def = this.defFor(this.cond(row).parameter);
+    if (!def?.referenceRanges?.length) return null;
+    const reach = lineReach(this.lineOf(row), def);
+    if (reach.size === 0) return null;
+    return `Prints for ${reachWords(reach)}.`;
+  }
+  /** Blocks print independently: problems per block (never reached, a flag
+   *  the ranges can't produce, blocks that print together). */
+  private readonly blockIssues = computed(() => {
+    const out = new Map<string, CondIssue[]>();
+    const byParam = new Map<string, StructureRow[]>();
+    for (const r of this.rows()) {
+      const k = this.condKind(r);
+      if (k !== 'when' && k !== 'hide_when') continue;
+      const name = this.cond(r).parameter.trim().toLowerCase();
+      byParam.set(name, [...(byParam.get(name) ?? []), r]);
+    }
+    byParam.forEach(rows => {
+      const issues = analyzeLines(rows.map(r => this.lineOf(r)), this.defFor(this.cond(rows[0]).parameter), 'independent');
+      for (const is of issues) {
+        const key = rows[is.line].key;
+        const blockNo = (k: number) => this.rows().findIndex(x => x.key === rows[k].key) + 1;
+        const msg = is.message.replace(/block (\d+)/, (_, n) => `block ${blockNo(Number(n) - 1)}`);
+        out.set(key, [...(out.get(key) ?? []), { ...is, message: msg }]);
+      }
+    });
+    return out;
+  });
+  rowIssues(row: StructureRow): CondIssue[] { return this.blockIssues().get(row.key) ?? []; }
   readonly paramOptions = computed<PfSelectOption[]>(() =>
     this.parameters().map(p => ({ value: p, label: this.titleFor(p) })));
 

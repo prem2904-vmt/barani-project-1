@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal, output } from '@angular/core';
 import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
+import { FLAG_CONDITIONS, FLAG_OPERATOR, analyzeLines, type CondIssue } from '../../../shared/utils/flag-conditions';
+import type { InsightParam } from '../../../shared/utils/range-insight';
 import type { TestParametersBlob } from '../../../shared/models/test.model';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
@@ -105,11 +107,13 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                 @for (r of descRules(name); track $index; let ri = $index; let last = $last) {
                   <div class="pf-tl-desc-cond">
                     <span class="pf-tl-desc-w pf-tl-desc-w--kw">When the result</span>
-                    <div class="pf-tl-desc-op"><pf-select size="sm" [options]="descOpOptions" [value]="r.operator"
-                               (valueChange)="setDescRule(name, ri, { operator: $any($event) })"></pf-select></div>
+                    <div class="pf-tl-desc-op"><pf-select size="sm" [options]="descOpOptions" [value]="descOpChoice(r)"
+                               (valueChange)="setDescOpChoice(name, ri, $any($event))"></pf-select></div>
+                    @if (r.operator !== 'flag') {
                     <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
                            [value]="r.value" [placeholder]="r.operator === 'between' ? 'from' : 'value'"
                            (input)="setDescRule(name, ri, { value: $any($event.target).value })" />
+                    }
                     @if (r.operator === 'between') {
                       <span class="pf-tl-desc-w">and</span>
                       <input type="text" inputmode="decimal" class="pf-input pf-input--compact pf-tl-desc-val"
@@ -121,13 +125,21 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
                            [value]="r.text"
                            (input)="setDescRule(name, ri, { text: $any($event.target).value })"
                            placeholder="e.g. Suggests dehydration — advise fluids and repeat" />
+                    <button type="button" class="pf-tl-desc-x press" [disabled]="ri === 0" (click)="moveDescRule(name, ri, -1)"
+                            title="Check this line earlier" aria-label="Move this line up">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="pf-tl-desc-x press" [disabled]="last" (click)="moveDescRule(name, ri, 1)"
+                            title="Check this line later" aria-label="Move this line down">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
                     <button type="button" class="pf-tl-desc-x press" (click)="removeDescRule(name, ri)"
                             title="Remove this branch" aria-label="Remove this branch">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                   </div>
-                  @if (descShadow(name)[ri]; as warn) {
-                    <p class="pf-tl-desc-warn">{{ warn }}</p>
+                  @for (m of descIssues(name)[ri]; track $index) {
+                    <p class="pf-tl-desc-warn" [class.pf-tl-desc-warn--err]="m.severity === 'error'">{{ m.message }}</p>
                   }
                 }
                 <div class="pf-tl-desc-cond pf-tl-desc-cond--else">
@@ -341,6 +353,9 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
     .pf-tl-desc-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
       border: none; border-radius: 8px; background: transparent; color: var(--text-tertiary, #64748b); cursor: pointer; }
     .pf-tl-desc-x:hover { color: #f87171; background: rgba(239,68,68,.08); }
+    .pf-tl-desc-x:disabled { opacity: .3; cursor: default; }
+    .pf-tl-desc-x:disabled:hover { color: var(--text-tertiary, #64748b); background: transparent; }
+    .pf-tl-desc-warn--err { color: #dc2626; border-left-color: #dc2626; }
     .pf-tl-desc-warn { margin: -4px 0 8px; padding: 4px 10px 4px 12px; font-size: 11.5px; color: var(--text-secondary);
       border-left: 2px solid var(--nd-sel-border); }
     .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
@@ -603,7 +618,38 @@ export class TestNotesEditorComponent implements OnInit {
     { value: '<=', label: 'is at most' },
     { value: '=', label: 'equals' },
     { value: '!=', label: 'is not' },
+    ...FLAG_CONDITIONS.map(o => ({ value: 'flag:' + o.value, label: o.label })),
   ];
+  /** Each value's ranges (name → parameter) — what the flag choices and the
+   *  line checks read. */
+  readonly paramDefs = input<Record<string, InsightParam>>({});
+  descOpChoice(r: { operator: string; value: string }): string {
+    return r.operator === FLAG_OPERATOR ? 'flag:' + r.value : r.operator;
+  }
+  setDescOpChoice(name: string, idx: number, v: string) {
+    const cur = this.descRules(name)[idx];
+    if (v.startsWith('flag:')) this.setDescRule(name, idx, { operator: FLAG_OPERATOR, value: v.slice(5), value2: '' });
+    else this.setDescRule(name, idx, { operator: v, value: cur?.operator === FLAG_OPERATOR ? '' : (cur?.value ?? '') });
+  }
+  /** Lines are checked top to bottom and the first match wins — reorder. */
+  moveDescRule(name: string, idx: number, dir: -1 | 1) {
+    if (this.descCondKind(name) !== 'ladder') return;
+    const rules = [...this.descRules(name)];
+    const to = idx + dir;
+    if (to < 0 || to >= rules.length) return;
+    [rules[idx], rules[to]] = [rules[to], rules[idx]];
+    this.writeDescRules(name, rules);
+  }
+  /** Per line: blocking problems + first-match reachability / overlap with
+   *  the winner named, against this value's ranges (flag-conditions.ts). */
+  descIssues(name: string): CondIssue[][] {
+    const rules = this.descRules(name);
+    const defs = this.paramDefs();
+    const key = Object.keys(defs).find(k => k.trim().toLowerCase() === name.trim().toLowerCase());
+    const issues = analyzeLines(rules.map(r => ({ operator: r.operator, value: r.value, value2: r.value2 })),
+      key ? defs[key] : { referenceRanges: [] }, 'first-match');
+    return rules.map((_, i) => issues.filter(x => x.line === i));
+  }
   private descRowConditions(name: string): Array<Record<string, unknown>> | undefined {
     const g = this.sections().find(sec => sec.type === 'grid') as GridSection | undefined;
     const row = (g?.rows ?? []).find(r => (r as GridRowParameter).parameter_name === name) as
@@ -681,36 +727,6 @@ export class TestNotesEditorComponent implements OnInit {
     });
   }
 
-  // ── Reachability check: lines run top to bottom, first match wins — a
-  //    line whose whole band is already covered by an earlier line can
-  //    NEVER print. Flag it so "above 70" before "above 80" is caught. ──
-  private descInterval(r: { operator: string; value: string; value2: string }): [number, number] | null {
-    const lo = parseFloat(String(r.value).replace(',', '.'));
-    const hi = parseFloat(String(r.value2).replace(',', '.'));
-    switch (r.operator) {
-      case 'between': return Number.isFinite(lo) && Number.isFinite(hi) ? [lo, hi] : null;
-      case '>': case '>=': return Number.isFinite(lo) ? [lo, Infinity] : null;
-      case '<': case '<=': return Number.isFinite(lo) ? [-Infinity, lo] : null;
-      case '=': case '==': return Number.isFinite(lo) ? [lo, lo] : null;
-      default: return null;   // '!=' and non-numeric — don't judge
-    }
-  }
-  /** Index → warning text for lines an earlier line fully covers. */
-  descShadow(name: string): Array<string | null> {
-    const rules = this.descRules(name);
-    const spans = rules.map(r => this.descInterval(r));
-    return rules.map((_, i) => {
-      const cur = spans[i];
-      if (!cur) return null;
-      for (let j = 0; j < i; j++) {
-        const prev = spans[j];
-        if (prev && prev[0] <= cur[0] && prev[1] >= cur[1]) {
-          return `Never used — line ${j + 1} already covers every such result. Put the narrower band first, or use “is between”.`;
-        }
-      }
-      return null;
-    });
-  }
   /** Find-or-create the parameter's grid row, then apply fn to a copy — one
    *  write path for row patches. A missing grid is created EMPTY: the layout
    *  stores only the rows the admin overrode (keyed by param), never a

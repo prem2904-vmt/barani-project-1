@@ -614,6 +614,10 @@
                   <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add range</button>
                 </div>
               </div>
+              @if (numericFields()[0]; as nf) {
+                <pf-range-insight [param]="$any(nf)" [unit]="nf.unit || d.unit || ''"
+                                  [testId]="d.id || ''" [paramName]="nf.name || ''"></pf-range-insight>
+              }
             }
           </div>
           }
@@ -685,6 +689,8 @@
                         <button type="button" class="pf-rb__add press" (click)="addRange(i)">+ Add range</button>
                       </div>
                     </div>
+                    <pf-range-insight [param]="$any(p)" [unit]="p.unit || ''"
+                                      [testId]="d.id || ''" [paramName]="p.name || ''"></pf-range-insight>
                     <div class="grid gap-2 grid-cols-2 md:grid-cols-4">
                       <label class="flex flex-col gap-0.5 min-w-0" title="A result below this is flagged C (Critical low) — used when the band has no critical low of its own.">
                         <span class="pf-mini-lbl">Critical low</span>
@@ -1123,12 +1129,13 @@
                 [hiddenParams]="unprintedParamNames()"
                 [columnsSummary]="testColumnsOverride() ? columnsLabel(testColumnsOverride()!) : (deptColumnsLabel() || '')"
                 [reloadToken]="structureReload()"
+                [paramDefs]="$any(paramDefMap())"
                 (changed)="refreshPreview()"
                 (customizeColumns)="startCustomizeColumns()">
                 <div descriptionEditor>
                   <pf-test-notes-editor class="block" [slim]="true" [fixedTestId]="d.id || ''" [hidePreview]="true"
                 [parameters]="parameterNames()" [parameterTitles]="parameterTitleMap()" [profileMembers]="previewProfileMembers()"
-                [columnsOverride]="liveColumnsOverride()" (saved)="refreshPreview()"></pf-test-notes-editor>
+                [columnsOverride]="liveColumnsOverride()" [paramDefs]="$any(paramDefMap())" (saved)="refreshPreview()"></pf-test-notes-editor>
                 </div>
               </pf-report-structure>
             }

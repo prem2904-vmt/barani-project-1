@@ -642,3 +642,51 @@ describe('TestEditor — reference-range comparator per band (≤ / ≥, QA 2026
   });
 });
 
+
+describe('TestEditor reference-range validation (range-insight.ts)', () => {
+  it('a range error blocks Save — no PATCH, a warning naming the value + range, Result entry opens', () => {
+    const { c, api, toasts } = make();
+    c.patchRangeAt(0, 0, { criticalHigh: 140 });           // inside 135–145
+    expect(c.rangeErrors().length).toBe(1);
+    expect(c.rangeCellIssue(0, 0, 'criticalHigh')).toBe('error');
+    c.saveTest();
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('range 1: Critical high (140) is inside the normal range'));
+    expect(c.section()).toBe('results');
+  });
+
+  it('an error the test ALREADY had when opened (legacy data) is shown but does not block an unrelated save — like mw', () => {
+    const { c, api } = make({ test: baseTest({ parameters: P([{ name: 'sodium', type: 'numeric', unit: 'mmol/L',
+      referenceRanges: [{ min: 135, max: 145, criticalHigh: 140 }] }]) }) });
+    expect(c.rangeCellIssue(0, 0, 'criticalHigh')).toBe('error');
+    expect(c.rangeErrors()).toEqual([]);
+    c.patch({ methodology: 'Indirect ISE' });
+    c.saveTest();
+    expect(api.patch).toHaveBeenCalled();
+    c.patchRangeAt(0, 0, { min: 150 });                    // a NEW error blocks
+    expect(c.rangeErrors().length).toBeGreaterThan(0);
+  });
+
+  it('warnings never block Save', () => {
+    const { c, api } = make();
+    c.patchRangeAt(0, 0, { min: 140, max: 140 });          // single-value normal = a warning
+    expect(c.rangeErrors()).toEqual([]);
+    expect(c.rangeCellIssue(0, 0, 'max')).toBe('warning');
+    c.saveTest();
+    expect(api.patch).toHaveBeenCalled();
+  });
+
+  it('mw refusing the ranges (range_invalid) is a warning that opens Result entry', () => {
+    const { c, toasts } = make({ patchErr: { error: { message: 'sodium, range 1: Normal to (1) is below Normal from (2).', field: 'referenceRanges' } } });
+    c.patch({ methodology: 'x' });
+    c.saveTest();
+    expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('Normal to (1)'));
+    expect(c.section()).toBe('results');
+  });
+
+  it('the condition builders get each numeric value with its ranges', () => {
+    const { c } = make();
+    expect(Object.keys(c.paramDefMap())).toEqual(['sodium']);
+    expect(c.paramDefMap().sodium.referenceRanges[0]).toMatchObject({ min: 135, max: 145 });
+  });
+});

@@ -814,6 +814,74 @@ canonical example is the **test editor**
   band pinned while the body scrolls. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`
   (shots `v3-*`).
 
+## 16. Reference ranges & conditions
+
+The test editor's **Result entry** tab explains the numbers under each
+range grid (`pf-range-insight`, `features/admin/tests/test-editor/`),
+and the **Printed report** tab's conditions speak in flags. Shared logic,
+byte-identical in prefrontal-admin-ui: `shared/utils/range-insight.ts`
+(zones, tester, validation) and `shared/utils/flag-conditions.ts`
+(vocabulary, engine mirror, line analysis). Nothing there decides a flag of
+its own: every verdict is `flagBand` (the body of `liveFlag` = mw
+`FlagOne`), every band choice the ONE resolver.
+
+- **Production semantics (keep them visible, never change them here):**
+  criticals are STRICT (below Critical low / above Critical high), checked
+  first, a band's own criticals beat the parameter pair; a two-sided normal
+  range is inclusive, a one-sided one strict unless ≤ / ≥. The stored flag
+  is one code — **C replaces H / L** (a critical-high result is stored C,
+  never H).
+- **Range bar, one per band** (who: "Women aged 18 years and over"): a
+  segmented bar Critical low | Low | Normal | High | Critical high — only
+  the zones the band really has, cut exactly where production switches
+  level. Functional colours only here: critical = muted red, low / high =
+  amber, normal = the violet tint; subtle tints, dark-mode variants.
+  Ticks under each edge say where the NEXT zone starts: **≥ 4** (4 is in
+  it) / **> 11** (11 is not); the tooltip says which zone owns the number.
+  Under the bar, one plain-words caption per zone with the unit after the
+  numbers: "Below 3.5 g/dL → Critical low", "3.5 to under 4 g/dL → Low",
+  "4 to 11 g/dL → Normal", "Over 11, up to 20 g/dL → High", "Above 20 g/dL
+  → Critical high"; one-sided "At or below 140 → Normal".
+- **Try a value:** a kit value box + Anyone / Man / Woman radio segment +
+  age box. It shows the flag chip, the band used (highlighted, with a pin on
+  its bar), whether it matched on sex / age, the stored code ("stored as C,
+  not H / L"), and which report conditions fire (description line N /
+  block N prints or is hidden), evaluated like mw `EvaluateConditions`.
+- **Validation, on the exact field:** red cell ring + message under the
+  band = an ERROR (blocks Save with a warning toast that opens Result
+  entry; mw `ReferenceRangeValidator` refuses the same set with
+  `range_invalid`): Normal to below Normal from; Critical low ≥ Critical
+  high; a critical inside the normal range; a one-sided band whose opposite
+  critical leaves nothing normal; Age from above Age to. Errors the test
+  ALREADY had when opened show red but don't block (mw does the same on
+  update). Amber ring = WARNING (Save allowed): single-value normal, Low /
+  High unreachable (critical meets the normal limit), empty band, bands that
+  tie for the same patients ("range 1 is used for them"), age / sex gaps
+  ("No range for women aged 12–18 years"), unit missing / looks like a range
+  / differs per band, plausible limits inside normal.
+- **Condition choices** (after the numeric compares, in "Prints only
+  when…" and "When the result…"): *is Critical high · is High (not
+  critical) · is High or critical high · is Normal · is Low or critical low
+  · is Low (not critical) · is Critical low · is Critical (high or low) · is
+  Abnormal (any flag)*. Stored as the engine's own leaf `{ parameter,
+  operator: 'flag', value: 'high_only' }`; legacy letters read as the stored
+  codes (H = High not critical, C = either critical).
+- **Order:** a row's description lines are checked top to bottom, **first
+  match wins** — each line has ↑ / ↓. Blocks are independent (each prints on
+  its own rule). Under each line: what it reaches ("Prints for High and
+  Critical high results"), and warnings — never used (an earlier line
+  catches everything / a flag these ranges never produce), overlaps with
+  the winner named, blocks that print together; contradictions
+  ("between 10 and 5", a compare with no number, an unknown flag) are
+  errors (mw `LayoutConditionValidator` rejects them on save).
+- **Phones:** the bar keeps its row (zone labels shrink), captions stack
+  one per line, the tester stacks with full-width 44px / 16px fields.
+- **Real-layout check:** `apps/lms-e2e/src/test-editor-ranges.rbac.spec.ts`
+  (seeded Lab Admin, HEM011, read-only — writes are aborted) asserts zones
+  in severity order, captions, the tester's flag + highlighted band + pin,
+  no monospace, 44px fields and no sideways scroll at 375; `SHOTS_DIR=…`
+  saves 1440 / 375 × light / dark.
+
 ## API summary
 
 ```
@@ -836,5 +904,7 @@ Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .
 Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line
          --nd-shadow-sm · --nd-chip-bg · --nd-sel-bg · --nd-sel-border · --nd-in-tint · --nd-done-tint
          --nd-toggle-on · --nd-toggle-off · --nd-toggle-urgent
+Ranges   pf-range-insight[param][unit][testId][paramName] · range-insight.ts (bandZones · zoneTicks · tryValue · validateRanges)
+         flag-conditions.ts (FLAG_CONDITIONS · operator 'flag' · evaluateRules · analyzeLines)
 Mixins   nd.card · nd.btn-primary · nd.btn-secondary · nd.neutral-selected · nd.no-truncate · nd.reduced-motion
 ```
