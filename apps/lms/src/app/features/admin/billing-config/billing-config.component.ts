@@ -17,9 +17,8 @@ import { ImageUploadComponent } from '../report-template/image-upload.component'
 import { environment } from '../../../../environments/environment';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { SettingsJumpComponent, SettingsSection } from '../../../shared/components/settings-page/settings-jump.component';
-import { SettingAnchorDirective } from '../../../shared/components/settings-page/setting-anchor.directive';
 
+type Tab = 'gst' | 'discounts' | 'invoice';
 type GstScope = 'branch' | 'region' | 'tenant';
 
 interface TenantBillingConfig {
@@ -60,23 +59,22 @@ interface GstRow {
     SelectComponent,
     TouchButtonComponent,
     ImageUploadComponent,
-    HeroBandComponent,
-    SettingsJumpComponent,
-    SettingAnchorDirective
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band (ND-PATTERN "Admin pages"): no tabs — the pill names the page;
-             Save (the whole billing config) is the ONE primary. -->
+        <!-- Band (owner): GST / Discounts / Invoice are the pill's tabs
+             (tabs-only pill); Save rides the band. -->
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
-            <h1 class="nd-band-page">Billing settings</h1>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions"
+                          [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="saveConfig()"
-                    aria-label="Save billing settings" title="Save billing settings">
+                    aria-label="Save billing config" title="Save billing config">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -89,8 +87,8 @@ interface GstRow {
       }
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
-        title="Billing settings"
-        subtitle="GST, discounts, bill number and bill look.">
+        title="Billing Config"
+        subtitle="GST, discounts, and invoice numbering.">
         <pf-touch-btn actions size="sm" variant="primary" (pressed)="saveConfig()">
           <span icon-left aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -104,368 +102,372 @@ interface GstRow {
       </pf-screen-header>
 
       <div class="pf-band-body">
-      <div class="nd-setpage nd-setpage--jump">
-        <pf-settings-jump [sections]="sections"></pf-settings-jump>
-        <div class="nd-setcol">
+      <div class="mb-5 pf-classic-only">
+        <pf-segmented
+          [options]="tabOptions"
+          [value]="tab()"
+          size="md"
+          (valueChange)="setTab($event)">
+        </pf-segmented>
+      </div>
 
-        <!-- ── GST ── -->
-        <section class="nd-card nd-setsec" id="sec-gst" aria-labelledby="bc-h-gst">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19M6.5 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM17.5 20a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg></span>
-            <h2 class="nd-card__label" id="bc-h-gst">GST</h2>
-          </header>
-          <div pfSettingAnchor="gst">
-            <div class="nd-set">
-              <div class="nd-set__text">
-                <p class="nd-set__label" id="bc-gst-on">Charge GST</p>
-                <p class="nd-set__help">Off prints bills as "Bill of Supply", with no tax.</p>
-              </div>
-              <div class="nd-set__ctl">
-                <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="!!(config().gstEnabled)" aria-labelledby="bc-gst-on"
-                  (click)="patch({ gstEnabled: !config().gstEnabled })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+      @if (tab() === 'gst') {
+        <div class="pf-bc-card mb-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="font-semibold text-[15px]" style="color: var(--text-primary);">Enable GST</p>
+              <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
+                Off → bills carry no tax and invoices print as <strong>Bill of Supply</strong> (most diagnostic
+                services are GST-exempt). On → each test's tax slab applies.
+              </p>
+            </div>
+            <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="!!(config().gstEnabled)" aria-label="Enable GST"
+              (click)="patch({ gstEnabled: !config().gstEnabled })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+          </div>
+        </div>
+
+        <div class="pf-bc-card"
+                 [style.opacity]="config().gstEnabled ? 1 : 0.5"
+                 [style.pointer-events]="config().gstEnabled ? 'auto' : 'none'">
+          <div class="space-y-5">
+            <div>
+              <label class="pf-label">GST scope</label>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                @for (s of scopes; track s.value) {
+                  <button type="button"
+                          class="pf-scope-card"
+                          [attr.aria-pressed]="config().gstScope === s.value"
+                          (click)="patch({ gstScope: s.value })">
+                    <span class="font-semibold text-[14px]">{{ s.label }}</span>
+                    <span class="text-[11px] mt-0.5" style="color: var(--text-tertiary);">{{ s.hint }}</span>
+                  </button>
+                }
               </div>
             </div>
-            <div class="nd-set nd-set--sub" [class.nd-set--off]="!config().gstEnabled" [attr.inert]="config().gstEnabled ? null : ''">
-              <div class="nd-set__text">
-                <p class="nd-set__label" id="bc-gst-scope">GST filed for</p>
-                <p class="nd-set__help">Where your GST returns are filed.</p>
-              </div>
-              <div class="nd-set__ctl">
-                <pf-segmented size="sm" [options]="scopeOptions" [value]="config().gstScope"
-                              ariaLabelledby="bc-gst-scope"
-                              (valueChange)="patch({ gstScope: $event })"></pf-segmented>
-              </div>
-            </div>
-            <div class="nd-set nd-set--sub" [class.nd-set--off]="!config().gstEnabled" [attr.inert]="config().gstEnabled ? null : ''">
-              <div class="nd-set__text">
-                <p class="nd-set__label" id="bc-gst-freq">How often you file</p>
-                <p class="nd-set__help">Monthly or every three months.</p>
-              </div>
-              <div class="nd-set__ctl pf-bc-selectw" role="group" aria-labelledby="bc-gst-freq">
-                <pf-select
-                  [options]="filingFrequencyOptions"
-                  [value]="config().filingFrequency"
-                  (valueChange)="patch({ filingFrequency: $event })">
-                </pf-select>
-              </div>
+
+            <div class="max-w-xs">
+              <label class="pf-label">Filing frequency</label>
+              <pf-select
+                [options]="filingFrequencyOptions"
+                [value]="config().filingFrequency"
+                (valueChange)="patch({ filingFrequency: $event })">
+              </pf-select>
             </div>
           </div>
 
-          <div class="nd-set" pfSettingAnchor="gstin">
-            <div class="nd-set__text">
-              <p class="nd-set__label" id="bc-gstin">GST number per branch</p>
-              <p class="nd-set__help">Each branch's GSTIN and state code. Save each row.</p>
-            </div>
-            <div class="nd-set__ctl nd-set__ctl--wide">
-              @if (branches().length === 0) {
-                <p class="nd-set__help">No branches yet.</p>
-              } @else {
-                <div class="pf-bc-gstlist" role="list" aria-labelledby="bc-gstin">
-                  @for (b of branches(); track b.id) {
-                    <div class="pf-gst-row" role="listitem">
-                      <div class="pf-gst-row__name">
-                        <p class="pf-bc-bname">{{ b.name }}</p>
-                        <p class="pf-bc-bcode nd-num">{{ b.code }}</p>
-                      </div>
-                      <label class="nd-field pf-gst-row__f">
-                        <span class="nd-field__lbl">GSTIN</span>
-                        <input type="text" class="nd-input w-full" placeholder="33ABCDE1234F1Z5" autocapitalize="characters" spellcheck="false"
-                               [ngModel]="gstinFor(b.id)" (ngModelChange)="setGstin(b.id, $event)" />
-                      </label>
-                      <label class="nd-field pf-gst-row__s">
-                        <span class="nd-field__lbl">State code</span>
-                        <input type="text" inputmode="numeric" class="nd-input w-full" placeholder="33"
-                               [ngModel]="stateCodeFor(b.id)" (ngModelChange)="setStateCode(b.id, $event)" />
-                      </label>
-                      <button type="button" class="nd-btn nd-btn--secondary pf-gst-row__save press"
-                              [disabled]="!hasGstinFor(b.id)" (click)="saveGstin(b.id)"
-                              [attr.aria-label]="'Save GST number for ' + b.name">Save</button>
+          <div class="mt-6 pt-5" style="border-top: 1px solid var(--border-muted);">
+            <h3 class="pf-bc-sub">GSTIN per branch</h3>
+
+            @if (branches().length === 0) {
+              <p class="text-[13px]" style="color: var(--text-tertiary);">No branches configured yet.</p>
+            } @else {
+              <div class="space-y-2">
+                @for (b of branches(); track b.id) {
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-stretch lg:items-center pf-gst-row">
+                    <div class="lg:col-span-4 min-w-0">
+                      <p class="pf-bc-bname">{{ b.name }}</p>
+                      <p class="text-[11px] nd-num" style="color: var(--text-muted);">{{ b.code }}</p>
                     </div>
-                  }
-                </div>
-              }
-            </div>
+                    <div class="lg:col-span-4">
+                      <input type="text" class="nd-input w-full" placeholder="GSTIN"
+                             [ngModel]="gstinFor(b.id)" (ngModelChange)="setGstin(b.id, $event)" />
+                    </div>
+                    <div class="lg:col-span-3">
+                      <input type="text" inputmode="numeric" class="nd-input w-full" placeholder="State code"
+                             [ngModel]="stateCodeFor(b.id)" (ngModelChange)="setStateCode(b.id, $event)" />
+                    </div>
+                    <div class="sm:col-span-2 lg:col-span-1 lg:text-right">
+                      <pf-touch-btn size="sm" variant="ghost"
+                                     [disabled]="!hasGstinFor(b.id)"
+                                     (pressed)="saveGstin(b.id)">Save</pf-touch-btn>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
           </div>
-        </section>
+        </div>
+      }
 
-        <!-- ── Discounts ── -->
-        <section class="nd-card nd-setsec" id="sec-discounts" aria-labelledby="bc-h-disc">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01"/></svg></span>
-            <h2 class="nd-card__label" id="bc-h-disc">Discounts</h2>
-          </header>
-          <div pfSettingAnchor="discounts">
-            <div class="nd-set">
-              <div class="nd-set__text">
-                <p class="nd-set__label" id="bc-disc-on">Allow discounts</p>
-                <p class="nd-set__help">Off stops every discount on every bill.</p>
-              </div>
-              <div class="nd-set__ctl">
-                <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="!!(config().allowDiscounts)" aria-labelledby="bc-disc-on"
-                  (click)="patch({ allowDiscounts: !config().allowDiscounts })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
-              </div>
+      @if (tab() === 'discounts') {
+        <div class="pf-bc-card">
+          <div class="flex items-center justify-between pb-4 mb-4"
+               style="border-bottom: 1px solid var(--border-muted);">
+            <div>
+              <p class="font-semibold text-[15px]" style="color: var(--text-primary);">Allow discounts</p>
+              <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
+                Turn off to block all discounts across the system.
+              </p>
             </div>
-            <div class="nd-set nd-set--sub" [class.nd-set--off]="!config().allowDiscounts">
-              <div class="nd-set__text">
-                <p class="nd-set__label" id="bc-disc-l1">Front desk can give up to</p>
-                <p class="nd-set__help">Largest discount for staff who give discounts.</p>
-              </div>
-              <div class="nd-set__ctl pf-bc-numw" role="group" aria-labelledby="bc-disc-l1">
-                <pf-number-input ariaLabelledby="bc-disc-l1" [value]="config().maxDiscountPct" [min]="0" [max]="100" [step]="1" suffix="%"
-                  [disabled]="!config().allowDiscounts" (valueChange)="patch({ maxDiscountPct: $event ?? 0 })"></pf-number-input>
-              </div>
-            </div>
-            <div class="nd-set nd-set--sub" [class.nd-set--off]="!config().allowDiscounts">
-              <div class="nd-set__text">
-                <p class="nd-set__label" id="bc-disc-l2">Senior staff can give up to</p>
-                <p class="nd-set__help">Largest discount for staff allowed to override.</p>
-              </div>
-              <div class="nd-set__ctl pf-bc-numw" role="group" aria-labelledby="bc-disc-l2">
-                <pf-number-input ariaLabelledby="bc-disc-l2" [value]="config().overrideDiscountPct" [min]="0" [max]="100" [step]="1" suffix="%"
-                  [disabled]="!config().allowDiscounts" (valueChange)="patch({ overrideDiscountPct: $event ?? 0 })"></pf-number-input>
-              </div>
-            </div>
-            <div class="nd-set nd-set--sub" [class.nd-set--off]="!config().allowDiscounts">
-              <div class="nd-set__text">
-                <p class="nd-set__label" id="bc-disc-appr">Second approval above</p>
-                <p class="nd-set__help">Bigger discounts need a second person to approve.</p>
-              </div>
-              <div class="nd-set__ctl pf-bc-numw" role="group" aria-labelledby="bc-disc-appr">
-                <pf-number-input ariaLabelledby="bc-disc-appr" [value]="config().approvalThresholdPct" [min]="0" [max]="100" [step]="1" suffix="%"
-                  [disabled]="!config().allowDiscounts" (valueChange)="patch({ approvalThresholdPct: $event ?? 0 })"></pf-number-input>
-              </div>
-            </div>
+            <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="!!(config().allowDiscounts)" aria-label="Allow discounts"
+              (click)="patch({ allowDiscounts: !config().allowDiscounts })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
           </div>
-        </section>
 
-        <!-- ── Bill: number, proforma, UPI, bank ── -->
-        <section class="nd-card nd-setsec" id="sec-bill" aria-labelledby="bc-h-bill">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16l-3-2-2 2-3-2-3 2-2-2-3 2zM8 9h8M8 13h5"/></svg></span>
-            <h2 class="nd-card__label" id="bc-h-bill">Bill</h2>
-          </header>
-          <div class="nd-set" pfSettingAnchor="invoice-number">
-            <div class="nd-set__text">
-              <p class="nd-set__label" id="bc-inv">Bill number</p>
-              <p class="nd-set__help">The start of the bill number, then the first number.</p>
-              <p class="nd-set__preview">Looks like: <strong>{{ invoicePreview() }}</strong></p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="pf-label">Level 1 · give_discount max %</label>
+              <pf-number-input
+                [value]="config().maxDiscountPct"
+                [min]="0" [max]="100" [step]="1" suffix="%"
+                [disabled]="!config().allowDiscounts"
+                (valueChange)="patch({ maxDiscountPct: $event ?? 0 })">
+              </pf-number-input>
             </div>
-            <div class="nd-set__ctl">
-              <label class="nd-field pf-bc-f">
-                <span class="nd-field__lbl">Starts with</span>
-                <input type="text" class="nd-input" id="bc-inv-prefix"
-                       [ngModel]="config().invoicePrefix"
-                       (ngModelChange)="patch({ invoicePrefix: $event })" />
-              </label>
-              <div class="nd-field pf-bc-f" role="group" aria-labelledby="bc-inv-start">
-                <span class="nd-field__lbl" id="bc-inv-start">First number</span>
-                <pf-number-input ariaLabelledby="bc-inv-start" [value]="config().invoiceStartNumber" [min]="1" [step]="1"
-                  (valueChange)="patch({ invoiceStartNumber: $event ?? 1 })"></pf-number-input>
-              </div>
+            <div>
+              <label class="pf-label">Level 2 · override max %</label>
+              <pf-number-input
+                [value]="config().overrideDiscountPct"
+                [min]="0" [max]="100" [step]="1" suffix="%"
+                [disabled]="!config().allowDiscounts"
+                (valueChange)="patch({ overrideDiscountPct: $event ?? 0 })">
+              </pf-number-input>
+            </div>
+            <div>
+              <label class="pf-label">Approval threshold %</label>
+              <pf-number-input
+                [value]="config().approvalThresholdPct"
+                [min]="0" [max]="100" [step]="1" suffix="%"
+                [disabled]="!config().allowDiscounts"
+                (valueChange)="patch({ approvalThresholdPct: $event ?? 0 })">
+              </pf-number-input>
             </div>
           </div>
 
-          <div class="nd-set" pfSettingAnchor="proforma">
-            <div class="nd-set__text">
-              <p class="nd-set__label" id="bc-proforma">Bill only when fully paid</p>
-              <p class="nd-set__help">Until paid, the patient gets an estimate, not a bill.</p>
+          <p class="text-[12px] mt-4" style="color: var(--text-tertiary);">
+            Discounts above the approval threshold require a second approver.
+          </p>
+        </div>
+      }
+
+      @if (tab() === 'invoice') {
+        <div class="grid grid-cols-1 xl:grid-cols-[1fr_minmax(380px,460px)] gap-5 items-start">
+        <div class="min-w-0">
+        <div class="pf-bc-card">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            <div>
+              <label class="pf-label">Invoice prefix</label>
+              <input type="text" class="nd-input"
+                     [ngModel]="config().invoicePrefix"
+                     (ngModelChange)="patch({ invoicePrefix: $event })" />
             </div>
-            <div class="nd-set__ctl">
-              <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="!!(config().invoiceOnFullPaymentOnly ?? false)" aria-labelledby="bc-proforma"
-                (click)="patch({ invoiceOnFullPaymentOnly: !(config().invoiceOnFullPaymentOnly ?? false) })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+            <div>
+              <label class="pf-label">Starting number</label>
+              <pf-number-input
+                [value]="config().invoiceStartNumber"
+                [min]="1" [step]="1"
+                (valueChange)="patch({ invoiceStartNumber: $event ?? 1 })">
+              </pf-number-input>
             </div>
           </div>
 
-          <div class="nd-set" pfSettingAnchor="upi">
-            <div class="nd-set__text">
-              <p class="nd-set__label">UPI payment</p>
-              <p class="nd-set__help">Patients can pay by UPI. Blank hides it.</p>
-            </div>
-            <div class="nd-set__ctl">
-              <label class="nd-field pf-bc-f">
-                <span class="nd-field__lbl">UPI ID</span>
-                <input type="text" class="nd-input" placeholder="clinic@axis" autocapitalize="none" spellcheck="false"
-                       [ngModel]="config().upiVpa || ''" (ngModelChange)="patch({ upiVpa: $event })" />
-              </label>
-              <label class="nd-field pf-bc-f">
-                <span class="nd-field__lbl">Name shown</span>
-                <input type="text" class="nd-input" placeholder="Prefrontal Lab"
-                       [ngModel]="config().upiPayeeName || ''" (ngModelChange)="patch({ upiPayeeName: $event })" />
-              </label>
-            </div>
+          <div class="pf-invoice-preview">
+            <p class="pf-bc-sub">Next invoice</p>
+            <p class="nd-num text-[16px] font-semibold" style="color: var(--text-primary);">
+              {{ invoicePreview() }}
+            </p>
           </div>
 
-          <div class="nd-set" pfSettingAnchor="bank">
-            <div class="nd-set__text">
-              <p class="nd-set__label">Bank account</p>
-              <p class="nd-set__help">Where your money goes. All optional.</p>
+          <div class="flex items-start justify-between gap-4 mt-5 pt-5" style="border-top: 1px solid var(--glass-border);">
+            <div class="min-w-0">
+              <p class="font-semibold text-[15px]" style="color: var(--text-primary);">Issue invoice only on full payment</p>
+              <p class="text-[12px] mt-0.5" style="color: var(--text-tertiary);">
+                On → a bill stays a <strong>proforma</strong> (no invoice number) until it's fully paid; the
+                invoice number is issued at settlement. Off → the invoice number is allocated when the bill is created.
+              </p>
             </div>
-            <div class="nd-set__ctl nd-set__ctl--wide pf-bc-grid">
-              <label class="nd-field">
-                <span class="nd-field__lbl">Account holder</span>
-                <input type="text" class="nd-input" placeholder="Prefrontal Diagnostics Pvt Ltd"
-                       [ngModel]="config().bankAccountName || ''" (ngModelChange)="patch({ bankAccountName: $event })" />
-              </label>
-              <label class="nd-field">
-                <span class="nd-field__lbl">Account number</span>
-                <input type="text" inputmode="numeric" class="nd-input nd-num" placeholder="0123456789" autocapitalize="none" spellcheck="false"
-                       [ngModel]="config().bankAccountNumber || ''" (ngModelChange)="patch({ bankAccountNumber: $event })" />
-              </label>
-              <label class="nd-field">
-                <span class="nd-field__lbl">IFSC</span>
-                <input type="text" class="nd-input" placeholder="HDFC0001234" autocapitalize="characters" spellcheck="false"
-                       [ngModel]="config().bankIfsc || ''" (ngModelChange)="patch({ bankIfsc: $event })" />
-              </label>
-              <label class="nd-field">
-                <span class="nd-field__lbl">Bank name</span>
-                <input type="text" class="nd-input" placeholder="HDFC Bank"
-                       [ngModel]="config().bankName || ''" (ngModelChange)="patch({ bankName: $event })" />
-              </label>
-            </div>
+            <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="!!(config().invoiceOnFullPaymentOnly ?? false)" aria-label="Issue invoice only on full payment"
+              (click)="patch({ invoiceOnFullPaymentOnly: !(config().invoiceOnFullPaymentOnly ?? false) })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
           </div>
-        </section>
+        </div>
 
-        <!-- ── Bill look: style, size, letterhead, preview ── -->
-        <section class="nd-card nd-setsec" id="sec-look" aria-labelledby="bc-h-look">
-          <header class="nd-card__head">
-            <span class="nd-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h11l5 5v11H4zM15 4v5h5M8 14h8M8 18h6"/></svg></span>
-            <h2 class="nd-card__label" id="bc-h-look">Bill look</h2>
-            <span class="nd-card__spacer"></span>
-            <!-- Secondary: the band's Save (billing settings) is the ONE primary;
-                 the letterhead is a separate record with its own save. -->
-            <button type="button" class="nd-btn nd-btn--secondary pf-save-letterhead press" [disabled]="savingTpl()" (click)="saveTpl()">{{ savingTpl() ? 'Saving…' : 'Save bill look' }}</button>
-          </header>
-          <div class="nd-set" pfSettingAnchor="bill-template">
-            <div class="nd-set__text">
-              <p class="nd-set__label" id="bc-tpl">Bill style</p>
-              <p class="nd-set__help">How the printed bill looks.</p>
+        <!-- Online payment (UPI): powers the "Pay via UPI" link + QR on the
+             public status page a patient reaches by scanning the invoice QR. -->
+        <div class="pf-bc-card mt-5">
+          <h3 class="pf-label" style="margin-bottom:2px;">Online payment (UPI)</h3>
+          <p class="text-[12px] mb-4" style="color: var(--text-tertiary);">
+            Add your UPI address so patients can pay from the status page — it opens Google&nbsp;Pay / PhonePe / any UPI app with the amount prefilled. Leave blank to hide the pay option.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">UPI address (VPA)</label>
+              <input type="text" class="nd-input" placeholder="clinic@axis" autocapitalize="none" spellcheck="false"
+                     [ngModel]="config().upiVpa || ''"
+                     (ngModelChange)="patch({ upiVpa: $event })" />
             </div>
-            <div class="nd-set__ctl">
-              <pf-segmented size="sm" [options]="templateStyleOptions" [value]="tpl().template ?? 'classic'"
-                            ariaLabelledby="bc-tpl" (valueChange)="patchTpl({ template: $event })"></pf-segmented>
+            <div>
+              <label class="pf-label">Payee name</label>
+              <input type="text" class="nd-input" placeholder="Prefrontal Lab"
+                     [ngModel]="config().upiPayeeName || ''"
+                     (ngModelChange)="patch({ upiPayeeName: $event })" />
             </div>
           </div>
+        </div>
+
+        <!-- Bank account: the tenant's settlement / reference account. Optional;
+             used for payouts and printed bank details on invoices. -->
+        <div class="pf-bc-card mt-5">
+          <h3 class="pf-label" style="margin-bottom:2px;">Bank account</h3>
+          <p class="text-[12px] mb-4" style="color: var(--text-tertiary);">
+            Link the bank account where payments settle. Shown for reference and can be printed on invoices. All fields optional.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="pf-label">Account holder name</label>
+              <input type="text" class="nd-input" placeholder="Prefrontal Diagnostics Pvt Ltd"
+                     [ngModel]="config().bankAccountName || ''"
+                     (ngModelChange)="patch({ bankAccountName: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">Account number</label>
+              <input type="text" inputmode="numeric" class="nd-input" placeholder="0123456789" autocapitalize="none" spellcheck="false"
+                     [ngModel]="config().bankAccountNumber || ''"
+                     (ngModelChange)="patch({ bankAccountNumber: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">IFSC</label>
+              <input type="text" class="nd-input" placeholder="HDFC0001234" autocapitalize="characters" spellcheck="false"
+                     [ngModel]="config().bankIfsc || ''"
+                     (ngModelChange)="patch({ bankIfsc: $event })" />
+            </div>
+            <div>
+              <label class="pf-label">Bank name</label>
+              <input type="text" class="nd-input" placeholder="HDFC Bank"
+                     [ngModel]="config().bankName || ''"
+                     (ngModelChange)="patch({ bankName: $event })" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Letterhead & document type -->
+        <div class="pf-bc-card mt-5">
+          <h3 class="text-sm font-bold mb-1" style="color: var(--text-primary);">Letterhead &amp; document</h3>
+          <p class="text-[13px] mb-4" style="color: var(--text-tertiary);">Shown on the invoice / receipt PDF. Most diagnostic services are GST-exempt — use Bill of Supply (or Auto).</p>
+
+          <label class="pf-label">Template style</label>
+          <div class="flex flex-wrap gap-2 mb-4">
+            @for (s of templateStyles; track s.value) {
+              <button type="button" class="pf-tpl-chip" [attr.aria-pressed]="(tpl().template ?? 'classic') === s.value"
+                      (click)="patchTpl({ template: s.value })">{{ s.label }}</button>
+            }
+          </div>
+
           @if ((tpl().template ?? 'classic') === 'cashbill') {
-            <div class="nd-set nd-set--sub">
-              <div class="nd-set__text">
-                <p class="nd-set__label" id="bc-paper">Paper size</p>
-                <p class="nd-set__help">A4 sheet or a receipt roll.</p>
-              </div>
-              <div class="nd-set__ctl">
-                <pf-segmented size="sm" [options]="paperSizeOptions" [value]="tpl().paperSize ?? 'a4'"
-                              ariaLabelledby="bc-paper" (valueChange)="patchTpl({ paperSize: $event })"></pf-segmented>
-              </div>
+            <label class="pf-label">Print size</label>
+            <div class="flex flex-wrap gap-2 mb-4">
+              @for (p of paperSizes; track p.value) {
+                <button type="button" class="pf-tpl-chip" [attr.aria-pressed]="(tpl().paperSize ?? 'a4') === p.value"
+                        (click)="patchTpl({ paperSize: p.value })">{{ p.label }}</button>
+              }
             </div>
           }
 
-          <div class="nd-set" pfSettingAnchor="letterhead">
-            <div class="nd-set__text">
-              <p class="nd-set__label">Bill letterhead</p>
-              <p class="nd-set__help">Name, address and notes printed on each bill.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><label class="pf-label">Lab name</label><input class="nd-input" [ngModel]="tpl().labName" (ngModelChange)="patchTpl({ labName: $event })" placeholder="Prefrontal Lab"/></div>
+            <div><label class="pf-label">GSTIN</label><input class="nd-input" [ngModel]="tpl().gstin" (ngModelChange)="patchTpl({ gstin: $event })" placeholder="Optional"/></div>
+            <div class="col-span-1 sm:col-span-2"><label class="pf-label">Address</label><input class="nd-input" [ngModel]="tpl().address" (ngModelChange)="patchTpl({ address: $event })"/></div>
+            <div><label class="pf-label">Phone</label><input type="tel" class="nd-input" [ngModel]="tpl().phone" (ngModelChange)="patchTpl({ phone: $event })"/></div>
+            <div><label class="pf-label">Email</label><input type="email" autocapitalize="none" class="nd-input" [ngModel]="tpl().email" (ngModelChange)="patchTpl({ email: $event })"/></div>
+            <div><label class="pf-label">Document type</label>
+              <pf-select [options]="documentModeOptions" [value]="tpl().documentMode ?? 'auto'"
+                         (valueChange)="patchTpl({ documentMode: $event })"></pf-select>
             </div>
-            <div class="nd-set__ctl nd-set__ctl--wide pf-bc-grid">
-              <label class="nd-field"><span class="nd-field__lbl">Lab name</span><input class="nd-input" [ngModel]="tpl().labName" (ngModelChange)="patchTpl({ labName: $event })" placeholder="Prefrontal Lab"/></label>
-              <label class="nd-field"><span class="nd-field__lbl">GSTIN on bill</span><input class="nd-input" [ngModel]="tpl().gstin" (ngModelChange)="patchTpl({ gstin: $event })" placeholder="Optional"/></label>
-              <label class="nd-field pf-bc-span"><span class="nd-field__lbl">Address</span><input class="nd-input" [ngModel]="tpl().address" (ngModelChange)="patchTpl({ address: $event })"/></label>
-              <label class="nd-field"><span class="nd-field__lbl">Phone</span><input type="tel" class="nd-input" [ngModel]="tpl().phone" (ngModelChange)="patchTpl({ phone: $event })"/></label>
-              <label class="nd-field"><span class="nd-field__lbl">Email</span><input type="email" autocapitalize="none" class="nd-input" [ngModel]="tpl().email" (ngModelChange)="patchTpl({ email: $event })"/></label>
-              <div class="nd-field" role="group" aria-labelledby="bc-doctype"><span class="nd-field__lbl" id="bc-doctype">Bill title</span>
-                <pf-select [options]="documentModeOptions" [value]="tpl().documentMode ?? 'auto'"
-                           (valueChange)="patchTpl({ documentMode: $event })"></pf-select>
-              </div>
-              <label class="nd-field"><span class="nd-field__lbl">Accent colour</span><input class="nd-input pf-bc-color" type="color" [ngModel]="tpl().accentColor || '#1B3A6B'" (ngModelChange)="patchTpl({ accentColor: $event })"/></label>
-              <label class="nd-field"><span class="nd-field__lbl">Signature line</span><input class="nd-input" [ngModel]="tpl().signatureLabel" (ngModelChange)="patchTpl({ signatureLabel: $event })" placeholder="Authorised Signatory"/></label>
-              <label class="nd-field"><span class="nd-field__lbl">Court city</span><input class="nd-input" [ngModel]="tpl().jurisdiction" (ngModelChange)="patchTpl({ jurisdiction: $event })" placeholder="e.g. Chennai"/></label>
-              <div class="nd-field pf-bc-span">
-                <span class="nd-field__lbl">Logo</span>
-                <pf-image-upload [url]="tpl().logoUrl" (urlChange)="patchTpl({ logoUrl: $event })"></pf-image-upload>
-                <input class="nd-input mt-2" aria-label="Logo web address" [ngModel]="tpl().logoUrl" (ngModelChange)="patchTpl({ logoUrl: $event })" placeholder="https://…/logo.png  (or upload above)"/>
-              </div>
-              <label class="nd-field pf-bc-span"><span class="nd-field__lbl">Bank details line</span><input class="nd-input" [ngModel]="tpl().bankDetails" (ngModelChange)="patchTpl({ bankDetails: $event })" placeholder="A/c · IFSC · Bank"/></label>
-              <label class="nd-field pf-bc-span"><span class="nd-field__lbl">Declaration</span><input class="nd-input" [ngModel]="tpl().declaration" (ngModelChange)="patchTpl({ declaration: $event })" placeholder="Certified that the particulars given above are true and correct."/></label>
-              <label class="nd-field pf-bc-span"><span class="nd-field__lbl">Footer</span><input class="nd-input" [ngModel]="tpl().footerText" (ngModelChange)="patchTpl({ footerText: $event })"/></label>
+            <div><label class="pf-label">Accent colour</label><input class="nd-input pf-bc-color" type="color" [ngModel]="tpl().accentColor || '#1B3A6B'" (ngModelChange)="patchTpl({ accentColor: $event })"/></div>
+            <div><label class="pf-label">Signatory label</label><input class="nd-input" [ngModel]="tpl().signatureLabel" (ngModelChange)="patchTpl({ signatureLabel: $event })" placeholder="Authorised Signatory"/></div>
+            <div class="col-span-1 sm:col-span-2">
+              <label class="pf-label">Logo — upload or paste a URL</label>
+              <pf-image-upload [url]="tpl().logoUrl" (urlChange)="patchTpl({ logoUrl: $event })"></pf-image-upload>
+              <input class="nd-input mt-2" [ngModel]="tpl().logoUrl" (ngModelChange)="patchTpl({ logoUrl: $event })" placeholder="https://…/logo.png  (or upload above)"/>
             </div>
+            <div><label class="pf-label">Jurisdiction</label><input class="nd-input" [ngModel]="tpl().jurisdiction" (ngModelChange)="patchTpl({ jurisdiction: $event })" placeholder="e.g. Chennai"/></div>
+            <div class="col-span-1 sm:col-span-2"><label class="pf-label">Bank details</label><input class="nd-input" [ngModel]="tpl().bankDetails" (ngModelChange)="patchTpl({ bankDetails: $event })" placeholder="A/c · IFSC · Bank"/></div>
+            <div class="col-span-1 sm:col-span-2"><label class="pf-label">Declaration</label><input class="nd-input" [ngModel]="tpl().declaration" (ngModelChange)="patchTpl({ declaration: $event })" placeholder="Certified that the particulars given above are true and correct."/></div>
+            <div class="col-span-1 sm:col-span-2"><label class="pf-label">Footer / terms</label><input class="nd-input" [ngModel]="tpl().footerText" (ngModelChange)="patchTpl({ footerText: $event })"/></div>
           </div>
-
-          <div class="nd-set">
-            <div class="nd-set__text"><p class="nd-set__label" id="bc-show-logo">Print logo</p></div>
-            <div class="nd-set__ctl">
-              <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="tpl().showLogo !== false" aria-labelledby="bc-show-logo"
-                      (click)="patchTpl({ showLogo: tpl().showLogo === false })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
-            </div>
+          <div class="flex flex-wrap gap-5 mt-3">
+            <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="tpl().showLogo !== false"
+                    (click)="patchTpl({ showLogo: tpl().showLogo === false })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Show logo</button>
+            <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="tpl().showGstin !== false"
+                    (click)="patchTpl({ showGstin: tpl().showGstin === false })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Show GSTIN</button>
+            <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="tpl().showTrackingQr !== false"
+                    (click)="patchTpl({ showTrackingQr: tpl().showTrackingQr === false })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>Show result-tracking QR</button>
           </div>
-          <div class="nd-set">
-            <div class="nd-set__text"><p class="nd-set__label" id="bc-show-gstin">Print GST number</p></div>
-            <div class="nd-set__ctl">
-              <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="tpl().showGstin !== false" aria-labelledby="bc-show-gstin"
-                      (click)="patchTpl({ showGstin: tpl().showGstin === false })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
-            </div>
-          </div>
-          <div class="nd-set">
-            <div class="nd-set__text">
-              <p class="nd-set__label" id="bc-show-qr">Print result QR code</p>
-              <p class="nd-set__help">Patients scan it to see their results.</p>
-            </div>
-            <div class="nd-set__ctl">
-              <button type="button" class="nd-toggle pf-bc-sw" role="switch" [attr.aria-checked]="tpl().showTrackingQr !== false" aria-labelledby="bc-show-qr"
-                      (click)="patchTpl({ showTrackingQr: tpl().showTrackingQr === false })"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
-            </div>
-          </div>
-
-          <!-- Live bill preview -->
-          <div class="nd-set">
-            <div class="nd-set__text">
-              <p class="nd-set__label" id="bc-prev">Preview</p>
-              <p class="nd-set__help">A sample bill with your settings.</p>
-            </div>
-            <div class="nd-set__ctl">
-              <pf-segmented size="sm" [options]="previewModeOptions" [value]="previewMode()"
-                            ariaLabelledby="bc-prev" (valueChange)="setPreviewMode($event)"></pf-segmented>
-            </div>
-            <div class="nd-set__ctl nd-set__ctl--wide">
-              @if (invoicePreviewUrl(); as src) {
-                <div class="pf-invoice-viewport" [style.--pf-inv-scale]="invoicePreviewScale()">
-                  <div class="pf-invoice-stage">
-                    <iframe [src]="src" title="Bill preview" class="pf-invoice-iframe" style="width:100%;height:62dvh;border:1px solid var(--nd-line);border-radius:12px;background:#525659"></iframe>
-                  </div>
-                </div>
-              } @else {
-                <p class="nd-set__help pf-bc-rendering">Making the preview…</p>
-              }
-            </div>
-          </div>
-        </section>
-
+          <!-- Secondary: the band's Save (billing config) is the ONE primary. -->
+          <button type="button" class="nd-btn nd-btn--secondary pf-save-letterhead mt-4 press" [disabled]="savingTpl()" (click)="saveTpl()">{{ savingTpl() ? 'Saving…' : 'Save letterhead' }}</button>
         </div>
-      </div>
+        </div>
+
+        <!-- Live invoice preview (right) -->
+        <div class="pf-bc-card xl:sticky xl:top-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 class="text-sm font-bold" style="color: var(--text-primary);">Live preview</h3>
+            <div class="flex flex-wrap gap-1">
+              <button type="button" class="pf-tpl-chip" [attr.aria-pressed]="previewMode() === 'bill_of_supply'" (click)="setPreviewMode('bill_of_supply')">Bill of Supply</button>
+              <button type="button" class="pf-tpl-chip" [attr.aria-pressed]="previewMode() === 'tax_invoice'" (click)="setPreviewMode('tax_invoice')">Tax Invoice</button>
+            </div>
+          </div>
+          @if (invoicePreviewUrl(); as src) {
+            <div class="pf-invoice-viewport" [style.--pf-inv-scale]="invoicePreviewScale()">
+              <div class="pf-invoice-stage">
+                <iframe [src]="src" title="Invoice preview" class="pf-invoice-iframe" style="width:100%;height:62dvh;border:1px solid var(--glass-border);border-radius:12px;background:#525659"></iframe>
+              </div>
+            </div>
+          } @else {
+            <div class="text-[13px] py-10 text-center" style="color: var(--text-tertiary);">Rendering preview…</div>
+          }
+        </div>
+        </div>
+      }
       </div>
     </section>
   `,
   styles: [`
-    /* One scrolling page (ND-PATTERN "Admin pages"); rows come from the kit. */
-    .pf-bc-selectw { min-width: 200px; }
-    .pf-bc-numw { width: 160px; }
-    .pf-bc-f { width: 200px; }
-    .pf-bc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .pf-bc-span { grid-column: 1 / -1; }
-    .pf-bc-gstlist { display: flex; flex-direction: column; gap: 8px; }
+    .pf-scope-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 12px 14px;
+      border-radius: var(--nd-radius, 12px);
+      background: var(--nd-card-bg);
+      border: 1px solid var(--nd-line);
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.2s ease, background 0.2s ease, transform 0.08s ease;
+    }
+    .pf-scope-card:active { transform: scale(0.98); }
+    .pf-scope-card:hover { border-color: var(--card-hover-border); }
+    .pf-scope-card[aria-pressed='true'] {
+      background: var(--nd-sel-bg);
+      border-color: var(--nd-sel-border);
+      color: var(--text-primary);
+    }
+
     .pf-gst-row {
-      display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(0, 0.8fr) auto; gap: 10px; align-items: end;
-      padding: 10px 12px; border-radius: var(--nd-radius-sm, 10px);
-      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
+      padding: 10px 12px;
+      border-radius: var(--nd-radius-sm, 10px);
+      background: var(--nd-card-bg);
+      border: 1px solid var(--nd-line);
     }
-    .pf-gst-row__name { align-self: center; min-width: 0; }
-    .pf-gst-row__save { height: 40px; }
+
+    .pf-invoice-preview {
+      padding: 14px 18px;
+      border-radius: 14px;
+      background: var(--nd-chip-bg);
+      border: 1px solid var(--nd-line);
+    }
+    /* Kit chips: the selected one is the NEUTRAL selected state (never a gradient). */
+    .pf-tpl-chip {
+      height: 34px; padding: 0 12px; border-radius: var(--nd-radius-chip, 8px); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: var(--text-secondary);
+    }
+    .pf-tpl-chip[aria-pressed='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); color: var(--text-primary); font-weight: 600; }
+
+    /* Section surfaces = the kit card (hairline, soft shadow). */
+    .pf-bc-card { display: block; padding: 18px; border-radius: var(--nd-radius-card, 16px);
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line); box-shadow: var(--nd-shadow-sm); }
+    .pf-bc-sub { margin: 0 0 8px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .pf-bc-bname { margin: 0; font-size: 14px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
-    .pf-bc-bcode { margin: 0; font-size: 12px; color: var(--text-tertiary); }
-    .pf-bc-rendering { padding: 24px 0; text-align: center; }
-    .pf-bc-sw { flex-shrink: 0; }
-    .pf-save-letterhead { height: 32px; }
-    @media (max-width: 640px) {
-      .pf-bc-grid { grid-template-columns: minmax(0, 1fr); }
-      .pf-gst-row { grid-template-columns: minmax(0, 1fr); }
-      .pf-bc-f, .pf-bc-numw, .pf-bc-selectw { width: 100%; min-width: 0; }
-    }
+    .pf-bc-sw { flex-shrink: 0; font-size: 13px; }
     .pf-bc-color { height: 40px; padding: 4px; }
 
     /* Desktop/iPad: the scale wrappers are transparent — the iframe keeps its
@@ -522,7 +524,14 @@ interface GstRow {
 
     /* Touch devices: ensure tap targets are comfortably >= 44px. */
     @media (pointer: coarse) {
-      :host .pf-gst-row__save { min-height: 44px; }
+      :host .pf-tpl-chip {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+      }
+      :host .pf-scope-card {
+        min-height: 44px;
+      }
       /* The "Save letterhead" raw button is a plain element, not a pf-touch-btn,
          so give it a comfortable touch target on coarse pointers. */
       :host .pf-save-letterhead {
@@ -538,6 +547,14 @@ interface GstRow {
       }
       :host .pf-bc-sw { min-height: 44px; }
     }
+
+    /* Touch hover guard: the scope-card hover border is harmless on touch,
+       but keep the lift transition crisp on coarse pointers. */
+    @media (hover: none) {
+      :host .pf-scope-card:hover {
+        border-color: var(--glass-border);
+      }
+    }
   `]
 })
 export class BillingConfigComponent implements OnInit, OnDestroy {
@@ -548,28 +565,32 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
 
   /** Invoice document type (was a native select). */
   readonly documentModeOptions: PfSelectOption<string>[] = [
-    { value: 'auto',           label: 'Auto (by GST)' },
+    { value: 'auto',           label: 'Auto (by tax)' },
     { value: 'tax_invoice',    label: 'Tax Invoice' },
     { value: 'bill_of_supply', label: 'Bill of Supply' },
   ];
 
-  /** Sections of the one scrolling page (desktop jump list). */
-  readonly sections: SettingsSection[] = [
-    { id: 'sec-gst', label: 'GST' },
-    { id: 'sec-discounts', label: 'Discounts' },
-    { id: 'sec-bill', label: 'Bill' },
-    { id: 'sec-look', label: 'Bill look' },
+  readonly tabOptions: SegmentedOption<Tab>[] = [
+    { value: 'gst',       label: 'GST Setup' },
+    { value: 'discounts', label: 'Discounts' },
+    { value: 'invoice',   label: 'Invoice' }
   ];
+  private readonly _tab = signal<Tab>('gst');
+  readonly tab = this._tab.asReadonly();
+  setTab(t: Tab) {
+    this._tab.set(t);
+    if (t === 'invoice' && !this.invoicePreviewUrl()) setTimeout(() => this.renderInvoicePreview(), 50);
+  }
 
-  readonly scopeOptions: SegmentedOption<GstScope>[] = [
-    { value: 'branch', label: 'Each branch' },
-    { value: 'region', label: 'Each region' },
-    { value: 'tenant', label: 'Whole lab' },
+  readonly scopes: Array<{ label: string; value: GstScope; hint: string }> = [
+    { label: 'Per branch', value: 'branch', hint: 'Each branch files separately' },
+    { label: 'Per region', value: 'region', hint: 'Branches grouped by region' },
+    { label: 'Per tenant', value: 'tenant', hint: 'One consolidated filing' }
   ];
 
   readonly filingFrequencyOptions: PfSelectOption<'monthly' | 'quarterly'>[] = [
-    { value: 'monthly',   label: 'Every month' },
-    { value: 'quarterly', label: 'Every 3 months' }
+    { value: 'monthly',   label: 'Monthly',   hint: 'Returns every calendar month' },
+    { value: 'quarterly', label: 'Quarterly', hint: 'Returns every three months' }
   ];
 
   private readonly _config = signal<TenantBillingConfig>({
@@ -615,12 +636,6 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     { value: 'thermal_3in',  label: 'Receipt 3"' },
     { value: 'thermal_25in', label: 'Receipt 2.5"' },
   ];
-  readonly templateStyleOptions: SegmentedOption<InvoiceTemplateStyle>[] = this.templateStyles.map(s => ({ value: s.value, label: s.label }));
-  readonly paperSizeOptions: SegmentedOption<string>[] = this.paperSizes.map(p => ({ value: p.value, label: p.label }));
-  readonly previewModeOptions: SegmentedOption<'tax_invoice' | 'bill_of_supply'>[] = [
-    { value: 'bill_of_supply', label: 'Bill of Supply' },
-    { value: 'tax_invoice', label: 'Tax Invoice' },
-  ];
   patchTpl(p: Record<string, unknown>) { this._tpl.set({ ...this._tpl(), ...p }); }
   saveTpl() {
     this.savingTpl.set(true);
@@ -641,6 +656,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     effect(() => {
       const t = this._tpl();
       const mode = this.previewMode();
+      if (this._tab() !== 'invoice') return;
       void t; void mode;
       if (this.renderTimer) clearTimeout(this.renderTimer);
       this.renderTimer = setTimeout(() => this.renderInvoicePreview(), 300);

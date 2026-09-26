@@ -68,14 +68,20 @@ describe('ND audit — Billing config', () => {
     getFor: (url) => url === '/api/config/billing' ? { tenantId: 't1', gstEnabled: false, invoicePrefix: 'INV', allowDiscounts: true }
       : url === '/api/config/invoice-template' ? {} : [],
   });
-  it('one primary (band Save) on the one page; Save bill look is secondary; slate switches', () => {
+  it('one primary (band Save) on every tab; Save letterhead is secondary; slate switches', () => {
     const p = make();
-    expect(primaries(p.el).map(b => b.textContent?.trim())).toEqual(['Save']);
-    hygiene(p.el);
+    for (const t of ['GST Setup', 'Discounts', 'Invoice']) {
+      tabBtn(p.el, t).click();
+      p.f.detectChanges();
+      expect(primaries(p.el).map(b => b.textContent?.trim()), t).toEqual(['Save']);
+      hygiene(p.el);
+    }
     expect(p.el.querySelector('.pf-save-letterhead')!.classList.contains('nd-btn--secondary')).toBe(true);
     expect(p.el.querySelectorAll('.nd-toggle[role="switch"]').length).toBeGreaterThanOrEqual(4);
-    expect(p.el.querySelector('[aria-labelledby="bc-tpl"] [role="radio"][aria-checked="true"]')).not.toBeNull();
-    p.el.querySelector<HTMLButtonElement>('.nd-toggle[aria-labelledby="bc-gst-on"]')!.click();
+    expect(p.el.querySelector('.pf-tpl-chip[aria-pressed="true"]')).not.toBeNull();
+    tabBtn(p.el, 'GST Setup').click();
+    p.f.detectChanges();
+    p.el.querySelector<HTMLButtonElement>('.nd-toggle[aria-label="Enable GST"]')!.click();
     expect(p.cmp.config().gstEnabled).toBe(true);
   });
 });

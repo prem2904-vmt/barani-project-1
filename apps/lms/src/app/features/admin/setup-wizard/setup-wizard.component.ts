@@ -40,11 +40,15 @@ interface BrandingDraft {
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band (ND-PATTERN "Admin pages"): the pill names the page; the
-             "What to show" choice lives on the page with the fields it
-             controls. Save rides the band. -->
+        <!-- Band (owner): "What to show" (Both / Logo only / Name only) is the
+             page's one switch and decides which fields the form shows, so it
+             owns the pill (tabs-only); Save rides the band. -->
         <pf-hero-band [back]="true" [tabsOnly]="true">
-          <ng-container band-tools><h1 class="nd-band-page">Branding</h1></ng-container>
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="brandingModeOptions"
+                          [value]="branding().brandingMode"
+                          (valueChange)="updateBranding({ brandingMode: $event })"></pf-segmented>
+          </ng-container>
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
                     [disabled]="saving() || !dirty()" (click)="save()"
@@ -76,9 +80,9 @@ interface BrandingDraft {
           </div>
           <div class="nd-card__body pf-sw-body">
 
-          <div class="mt-5 pf-sw-mode">
-            <p class="pf-label" id="sw-mode-l">What the top bar shows</p>
-            <pf-segmented size="sm" ariaLabelledby="sw-mode-l"
+          <div class="mt-5 pf-classic-only">
+            <label class="pf-label">What to show</label>
+            <pf-segmented size="md"
                            [options]="brandingModeOptions"
                            [value]="branding().brandingMode"
                            (valueChange)="updateBranding({ brandingMode: $event })">
@@ -125,20 +129,20 @@ interface BrandingDraft {
 
           @if (branding().brandingMode !== 'logo') {
             <div class="mt-5">
-              <label class="pf-label" for="sw-name">
+              <label class="pf-label">
                 Short name
                 <span class="pf-sw-count nd-num ml-2">
                   {{ branding().brandingName.length }}/{{ nameMax }}
                 </span>
               </label>
-              <input #nameIn type="text" id="sw-name"
+              <input #nameIn type="text"
                      class="nd-input"
                      [attr.value]="branding().brandingName"
                      [attr.maxlength]="nameMax"
                      placeholder="e.g. APOLLO"
                      (input)="updateBranding({ brandingName: nameIn.value.slice(0, nameMax) })" />
               <p class="pf-sw-hint">
-                Up to {{ nameMax }} letters.
+                Hard-capped at {{ nameMax }} characters so the header stays tidy.
               </p>
               @if (nameError()) {
                 <p class="brand-error">{{ nameError() }}</p>
