@@ -111,9 +111,6 @@ export class TenantEntitlementsService {
       } catch { /* fall through to legacy seed */ }
     }
     const lg = wire.legacy;
-    // A malformed payload (no legacy block) must not throw inside the
-    // subscription: fall back to the catalog defaults (fail-open).
-    if (!lg) return null;
     return {
       lab: {
         enabled: defaultModuleEnabled('lab'),

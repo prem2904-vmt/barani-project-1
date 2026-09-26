@@ -392,67 +392,6 @@ button.nd-ctx__chip:hover { border-color: var(--nd-sel-border); }
 :root { --nd-nav-h: var(--pf-botbar-h, 0px); }
 .nd-fullscreen { position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h); }
 
-/* ── Admin settings pages: ONE scrolling page, plain sections ─────────
-   (ND-PATTERN "Admin pages"). No pill tabs: every section of a settings
-   page is on the page, in order, under a plain heading. Desktop (≥1024px)
-   gets a small sticky "On this page" jump list on the left. Each setting
-   is one row — label (2–6 words) + one help line + the control on the
-   right; on phones the control drops under the text. A row a search
-   deep-links to (#fragment) is scrolled to and briefly highlighted. */
-.nd-toggle:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 3px; border-radius: 999px; }
-.nd-setpage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; width: 100%; max-width: 1080px; margin-inline: auto; padding-top: 4px; }
-.nd-setjump { display: none; }
-@media (min-width: 1024px) {
-  .nd-setpage--jump { grid-template-columns: 184px minmax(0, 1fr); }
-  .nd-setjump { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 4px; padding: 4px 0; }
-}
-.nd-setjump__t { margin: 0 0 4px; padding: 0 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
-.nd-setjump__item { display: block; width: 100%; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
-.nd-setjump__item:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
-.nd-setjump__item[aria-current='true'] { background: var(--nd-sel-bg); color: var(--text-primary); font-weight: 600; }
-.nd-setjump__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
-.nd-setcol { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.nd-setsec { overflow: visible; scroll-margin-top: 8px; }
-.nd-setsec > .nd-card__head .nd-card__label { margin: 0; }
-.nd-setsec:focus { outline: none; }
-.nd-set { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; min-height: 60px; padding: 14px 18px; border-top: 1px solid var(--nd-line); scroll-margin-top: 12px; }
-.nd-setsec > .nd-card__head + .nd-set, .nd-set:first-child { border-top: 0; }
-.nd-set:focus { outline: none; }
-.nd-set__text { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.nd-set__label { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.35; color: var(--text-primary); @include nd.no-truncate; }
-.nd-set__help { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-tertiary); text-wrap: pretty; }
-.nd-set__ctl { flex: 0 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
-.nd-set__ctl--wide { flex: 1 1 100%; }
-.nd-set__preview { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
-.nd-set__preview strong { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.nd-set--sub { padding-left: 34px; }
-.nd-set--off { opacity: 0.55; }
-/* The slate track needs a 3:1 edge on the card (WCAG 1.4.11). */
-.nd-set .nd-toggle__track { box-shadow: inset 0 0 0 1px #8a96a3; }
-:root.dark .nd-set .nd-toggle__track, :root[data-theme='dark'] .nd-set .nd-toggle__track { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5); }
-@keyframes nd-set-hit { 0%, 55% { background: var(--nd-in-tint); box-shadow: inset 3px 0 0 var(--color-violet-600, #7c3aed); } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }
-.nd-set--hit { animation: nd-set-hit 2.6s ease-out both; }
-@media (prefers-reduced-motion: reduce) {
-  .nd-set--hit { animation: none; background: var(--nd-in-tint); box-shadow: inset 3px 0 0 var(--color-violet-600, #7c3aed); }
-}
-@media (pointer: coarse) {
-  .nd-set .nd-toggle { min-width: 44px; min-height: 44px; justify-content: center; }
-  .nd-set pf-segmented .seg-item, .nd-setjump__item { min-height: 44px; }
-}
-@media (max-width: 640px) {
-  .nd-set { padding: 12px 14px; }
-  .nd-set__ctl { flex: 1 1 100%; }
-  /* A lone switch stays beside its label. */
-  .nd-set { flex-wrap: wrap; }
-  .nd-set__text { flex-basis: 180px; }
-  .nd-set__ctl:has(> .nd-toggle:only-child) { flex: 0 0 auto; margin-left: auto; }
-  .nd-set--sub { padding-left: 24px; }
-  .nd-setpage .nd-input, .nd-setpage input, .nd-setpage textarea { font-size: 16px; }
-}
-/* The page's name inside a settings page's pill (no search, no tabs): the
-   page's h1, so the band still says where you are. */
-.nd-band-page { margin: 0; padding: 0 6px; min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
 /* ── AI in progress: the rainbow glow ──────────────────────────────────
    The ONE multicolour in the kit — AI working ONLY, never decorative
    (ND-PATTERN §2). Put `.nd-ai-glow` on the element and toggle
@@ -503,4 +442,3 @@ button.nd-ctx__chip:hover { border-color: var(--nd-sel-border); }
 @media (prefers-reduced-motion: reduce) {
   .nd-ai-glow::before, .nd-ai-glow::after, .nd-ai-glow-mark[data-ai-working='true'] { animation: none !important; transition: none !important; }
 }
-

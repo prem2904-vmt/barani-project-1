@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
 
 export interface SegmentedOption<T = string> {
   value: T;
@@ -25,18 +25,10 @@ export type SegmentedSize = 'sm' | 'md';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- A11y: a real radiogroup — one Tab stop (the selected option), the
-         arrow keys move + select, Home/End jump (WAI-ARIA radio pattern). -->
-    <div [class]="rootClasses" role="radiogroup"
-         [attr.aria-label]="ariaLabel || null"
-         [attr.aria-labelledby]="ariaLabelledby || null"
-         (keydown)="onKey($event)">
+    <div [class]="rootClasses">
       @for (opt of options; track opt.value) {
         <button type="button"
-                role="radio"
                 [class]="itemClasses(opt.value)"
-                [attr.aria-checked]="opt.value === value"
-                [attr.tabindex]="tabStop(opt.value) ? 0 : -1"
                 [disabled]="opt.disabled ?? false"
                 [title]="opt.hint || opt.label"
                 [attr.aria-label]="opt.label"
@@ -90,8 +82,6 @@ export type SegmentedSize = 'sm' | 'md';
     .seg-item:active:not(:disabled) { transform: scale(0.97); }
     .seg-item:hover:not(:disabled)  { color: var(--text-primary); }
     .seg-item:disabled { opacity: 0.4; cursor: not-allowed; }
-    .seg-item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    @media (prefers-reduced-motion: reduce) { .seg-item { transition: none; } .seg-item:active:not(:disabled) { transform: none; } }
 
     .sz-md .seg-item { height: 40px; padding: 0 20px; font-size: 13px; }
     .sz-sm .seg-item { height: 32px; padding: 0 16px; font-size: 12px; }
@@ -135,42 +125,7 @@ export class SegmentedComponent<T = string> {
   @Input({ required: true }) options: SegmentedOption<T>[] = [];
   @Input() value!: T;
   @Input() size: SegmentedSize = 'md';
-  /** Accessible name of the group (use when no visible label points at it). */
-  @Input() ariaLabel = '';
-  /** Id of a visible label that names the group (preferred over ariaLabel). */
-  @Input() ariaLabelledby = '';
   @Output() valueChange = new EventEmitter<T>();
-
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-
-  /** Roving tabindex: the selected option is the one Tab stop; with nothing
-   *  selected the first enabled option takes it, so the group is reachable. */
-  tabStop(v: T): boolean {
-    const enabled = this.options.filter((o) => !o.disabled);
-    if (enabled.some((o) => o.value === this.value)) return v === this.value;
-    return enabled[0]?.value === v;
-  }
-
-  /** Arrow keys move AND select (radio semantics); Home / End jump. */
-  onKey(ev: KeyboardEvent): void {
-    const enabled = this.options.filter((o) => !o.disabled);
-    if (!enabled.length) return;
-    const at = Math.max(0, enabled.findIndex((o) => o.value === this.value));
-    let next = -1;
-    switch (ev.key) {
-      case 'ArrowRight': case 'ArrowDown': next = (at + 1) % enabled.length; break;
-      case 'ArrowLeft': case 'ArrowUp': next = (at - 1 + enabled.length) % enabled.length; break;
-      case 'Home': next = 0; break;
-      case 'End': next = enabled.length - 1; break;
-      default: return;
-    }
-    ev.preventDefault();
-    const opt = enabled[next];
-    this.select(opt.value);
-    const idx = this.options.indexOf(opt);
-    const btns = this.host.nativeElement.querySelectorAll<HTMLButtonElement>('button[role="radio"]');
-    btns[idx]?.focus();
-  }
 
   get rootClasses(): string {
     return `bar sz-${this.size}`;
