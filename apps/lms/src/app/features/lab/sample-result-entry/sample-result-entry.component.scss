@@ -162,6 +162,8 @@
 .pf-sre__gname { font-size: 14px; font-weight: 500; color: var(--text-primary); @include nd.no-truncate; }
 .pf-sre__gc-unit, .pf-sre__gc-range, .pf-sre__gc-method { color: var(--text-tertiary); font-size: 12.5px; @include nd.no-truncate; }
 .pf-sre__gc-range, .pf-sre__gc-unit { font-variant-numeric: tabular-nums; }
+/* A typed report text keeps its line breaks. */
+.pf-sre__gc-range { white-space: pre-line; }
 .pf-sre__method { display: inline-flex; align-items: center; gap: 8px; }
 /* The "i" peek cell exists for phones only (web shows the columns). */
 .pf-sre__gc-info { display: none; }

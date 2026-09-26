@@ -517,6 +517,7 @@
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 10.5px;
   color: var(--text-tertiary);
+  white-space: pre-line;   /* a typed multi-line reference keeps its lines */
 }
 
 .pf-prelim__row-flag {

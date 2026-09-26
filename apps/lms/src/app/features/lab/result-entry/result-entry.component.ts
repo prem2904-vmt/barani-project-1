@@ -13,7 +13,7 @@ import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shar
 import { ApiError } from '../../../shared/models/api-response.model';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { AuthService } from '../../../core/auth/auth.service';
-import { formatRange, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
+import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
 import { effectiveMethodology } from '../../../shared/utils/methodology';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
@@ -1368,6 +1368,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     }
     .pf-param__req { color: var(--red-text); font-weight: 700; margin-left: 2px; }
     .pf-param__ref {
+      white-space: pre-line;
       margin: 0 0 0 28px;
       font-size: 11px;
       color: var(--text-tertiary);
@@ -1917,6 +1918,8 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       color: var(--text-tertiary);
       font-size: 12px;
     }
+    /* A typed report text keeps its line breaks. */
+    .pf-rg__c-range { white-space: pre-line; }
     .pf-rg__flag {
       display: inline-block;
       margin-left: 6px;
@@ -3331,8 +3334,11 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   refLabel(p: TestParameter): string {
     if (p.normalValue) return p.normalValue;
     const r = this.rangeFor(p);
-    // The group's typed report text prints exactly as typed (simple model).
-    if (r?.reportText?.trim()) return r.reportText.trim();
+    // The group's typed report text prints exactly as typed (simple model),
+    // line breaks included (the cells are white-space: pre-line), `{u}` →
+    // the value's unit.
+    const typed = normalizeReportText(fillUnit(r?.reportText, p.unit));
+    if (typed) return typed;
     // Route through the shared formatter so one-sided bands ("< 200",
     // "≤ 140") get a label too — they used to render blank here.
     const text = formatRange(r);

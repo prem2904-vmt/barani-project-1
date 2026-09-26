@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import {
-  RangeTableComponent, ageOf, ageToYears, ageWords, blankGroup, liftParamCriticals, naturalAge, toSimpleGroup,
+  RangeTableComponent, ageOf, ageToYears, ageWords, blankGroup, liftParamCriticals, naturalAge, toSimpleGroup, unitPieces,
 } from './range-table.component';
 import type { InsightBand, InsightParam } from '../../../../shared/utils/range-insight';
 
@@ -8,7 +8,7 @@ const L = 'L — below this prints L (low)';
 const H = 'H — above this prints H (high)';
 const CL = 'CL — below this is critical';
 const CH = 'CH — above this is critical';
-const TXT = 'Report text — prints exactly as typed';
+const TXT = 'Report text — prints exactly as typed; Enter starts a new line';
 
 function make(param: InsightParam, opts: { unit?: string; phone?: boolean } = {}) {
   TestBed.configureTestingModule({});
@@ -24,7 +24,7 @@ function make(param: InsightParam, opts: { unit?: string; phone?: boolean } = {}
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
   const rowEls = () => [...el.querySelectorAll<HTMLTableRowElement>('tbody tr.rtb__row')];
-  const inp = (label: string, i = 0) => rowEls()[i].querySelector(`input[aria-label="${label}"]`) as HTMLInputElement;
+  const inp = (label: string, i = 0) => rowEls()[i].querySelector(`[aria-label="${label}"]`) as HTMLInputElement;
   /** One row as the eye reads it: age · L · H · CL · CH · report text (or its placeholder). */
   const read = (i = 0) => [rowEls()[i].querySelector('.rtb__agebtn span')!.textContent!.trim(),
     inp(L, i).value, inp(H, i).value, inp(CL, i).value, inp(CH, i).value, inp(TXT, i).value || `(${inp(TXT, i).placeholder})`];
@@ -51,7 +51,7 @@ describe('pf-range-table — Who | Age | L | H | CL | CH | Report text | ×', ()
     const { el, read, rowEls, c } = make({ unit: 'g/dL', referenceRanges: HB });
     expect(el.querySelectorAll('table.rtb__table')).toHaveLength(1);
     expect([...el.querySelectorAll('thead th')].map(t => t.textContent!.trim()))
-      .toEqual(['Who', 'Age', 'Lg/dL', 'H', 'CL', 'CH', 'Report text', 'Remove']);
+      .toEqual(['Who', 'Age', 'Lg/dL', 'H', 'CL', 'CH', 'Report texttype {u} for the unit', 'Remove']);
     expect(el.querySelectorAll('.rtb__unit')).toHaveLength(1);
     expect(rowEls()).toHaveLength(5);
     expect(read(0)).toEqual(['0–28 days', '14', '22', '7', '25', '(14–22 g/dL)']);
@@ -140,7 +140,66 @@ describe('pf-range-table — Who | Age | L | H | CL | CH | Report text | ×', ()
     expect(nums).toHaveLength(4);
     nums[1].value = '15.5'; nums[1].dispatchEvent(new Event('change')); f.detectChanges();
     expect(emitted.at(-1)![0]).toEqual({ ...HB[4], max: 15.5 });
-    expect(body.querySelector(`input[aria-label="${TXT}"]`)).not.toBeNull();
+    expect(body.querySelector(`textarea[aria-label="${TXT}"]`)).not.toBeNull();
+  });
+});
+
+const GLU = 'Normal: 70–99\nPrediabetes: 100–125\nDiabetes: ≥126 mg/dL';
+
+describe('pf-range-table — a multi-line Report text', () => {
+  it('the Report text is a one-row textarea; Enter is a new line, never a blur / save', () => {
+    const { inp, emitted } = make({ unit: 'mg/dL', referenceRanges: [{ sex: 'any', min: 70, max: 99, reportText: null }] });
+    const ta = inp(TXT) as unknown as HTMLTextAreaElement;
+    expect(ta.tagName).toBe('TEXTAREA');
+    expect(ta.rows).toBe(1);
+    expect(ta.placeholder).toBe('70–99 mg/dL');                    // the auto fallback stays
+    ta.focus();
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    ta.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);                     // the browser inserts the newline
+    expect(document.activeElement).toBe(ta);                        // …and focus stays (no blur-to-save)
+    expect(emitted).toHaveLength(0);                                // nothing saved on Enter
+  });
+
+  it('stores a plain string with \\n; CRLF → LF, trailing spaces and blank lines trimmed', () => {
+    const { type, emitted, inp, f } = make({ unit: 'mg/dL', referenceRanges: [{ sex: 'any', min: 70, max: 99, reportText: null }] });
+    type(TXT, 'Normal: 70–99  \r\nPrediabetes: 100–125\r\nDiabetes: ≥126 mg/dL\r\n\r\n  ');
+    expect(emitted.at(-1)![0].reportText).toBe(GLU);
+    f.detectChanges();
+    expect(inp(TXT).value).toBe(GLU);
+    // Re-typing the same text (a CR-only paste) is not a change.
+    const n = emitted.length;
+    type(TXT, 'Normal: 70–99\rPrediabetes: 100–125\rDiabetes: ≥126 mg/dL\n');
+    expect(emitted).toHaveLength(n);
+  });
+
+  it('auto-grows with its text up to the max height, then scrolls', () => {
+    const { inp } = make({ unit: 'mg/dL', referenceRanges: [{ sex: 'any', min: 70, max: 99, reportText: null }] });
+    const ta = inp(TXT) as unknown as HTMLTextAreaElement;
+    let sh = 20;
+    Object.defineProperty(ta, 'scrollHeight', { configurable: true, get: () => sh });
+    Object.defineProperty(ta, 'offsetHeight', { configurable: true, get: () => 2 });
+    Object.defineProperty(ta, 'clientHeight', { configurable: true, get: () => 0 });
+    ta.style.maxHeight = '116px';
+    ta.value = 'one'; ta.dispatchEvent(new Event('input'));
+    expect(ta.style.height).toBe('22px');
+    expect(ta.style.overflowY).toBe('hidden');
+    sh = 74; ta.value = 'one\ntwo\nthree'; ta.dispatchEvent(new Event('input'));
+    expect(ta.style.height).toBe('76px');                           // grew to three lines
+    sh = 300; ta.value = 'a\nb\nc\nd\ne\nf\ng\nh'; ta.dispatchEvent(new Event('input'));
+    expect(ta.style.height).toBe('116px');                          // capped (~5 rows)…
+    expect(ta.style.overflowY).toBe('auto');                        // …then it scrolls
+  });
+
+  it('the table shows the saved lines; the phone card keeps its line breaks', () => {
+    const band = { sex: 'any' as const, min: 70, max: 99, reportText: GLU };
+    const desk = make({ unit: 'mg/dL', referenceRanges: [band] });
+    expect(desk.inp(TXT).value).toBe(GLU);
+    TestBed.resetTestingModule();
+    const phone = make({ unit: 'mg/dL', referenceRanges: [band] }, { phone: true });
+    const l2 = phone.el.querySelector('.rtb__l2') as HTMLElement;
+    expect(l2.textContent).toBe(GLU);
+    expect(getComputedStyle(l2).whiteSpace).toBe('pre-line');
   });
 });
 
@@ -176,5 +235,44 @@ describe('natural-unit ages', () => {
     expect(ageWords(null, { n: 1, unit: 'years' })).toBe('up to 1 year');
     expect(ageWords({ n: 28, unit: 'days' }, { n: 1, unit: 'years' })).toBe('28 days – 1 year');
     expect(ageOf({ minAge: 0, maxAge: 28, ageUnit: 'days' })).toEqual({ from: { n: 0, unit: 'days' }, to: { n: 28, unit: 'days' } });
+  });
+});
+
+describe('pf-range-table — {u} = the value\'s unit', () => {
+  const RBC = { sex: 'M' as const, minAge: 18, min: 4.5, max: 5.9, reportText: '4.5 – 5.9 {u}' };
+
+  it('stores the token; "Prints as" shows the unit filled in as a chip', () => {
+    const { el, inp } = make({ unit: '×10¹²/L', referenceRanges: [RBC] });
+    expect(inp(TXT).value).toBe('4.5 – 5.9 {u}');                   // stored WITH the token
+    const prev = el.querySelector('.rtb__prev') as HTMLElement;
+    expect(prev.textContent!.replace(/\s+/g, ' ').trim()).toBe('Prints as 4.5 – 5.9 ×10¹²/L');
+    expect(prev.querySelector('.rtb__uchip')!.textContent).toBe('×10¹²/L');
+    expect(inp(TXT).title).toBe('4.5 – 5.9 ×10¹²/L');
+  });
+
+  it('the preview follows every keystroke (before blur) and a Unit change at once', () => {
+    const { el, inp, f, emitted } = make({ unit: 'g/dL', referenceRanges: [{ sex: 'any', min: 12, max: 16, reportText: null }] });
+    expect(el.querySelector('.rtb__prev')).toBeNull();                 // no token, no preview
+    const ta = inp(TXT);
+    ta.value = 'Normal: 12–16 {U}\nLow: <12 {u}'; ta.dispatchEvent(new Event('input')); f.detectChanges();
+    expect(emitted).toHaveLength(0);                                   // typing is not a save
+    const txt = () => (el.querySelector('.rtb__prevtxt') as HTMLElement).textContent;
+    expect(txt()).toBe('Normal: 12–16 g/dL\nLow: <12 g/dL');
+    f.componentRef.setInput('param', { ...f.componentInstance.param()!, unit: 'mmol/L' }); f.detectChanges();
+    expect(txt()).toBe('Normal: 12–16 mmol/L\nLow: <12 mmol/L');
+    ta.dispatchEvent(new Event('change')); f.detectChanges();
+    expect(emitted.at(-1)![0].reportText).toBe('Normal: 12–16 {U}\nLow: <12 {u}');
+  });
+
+  it('the phone card prints the filled text; the placeholder stays the auto fallback', () => {
+    const { el } = make({ unit: '×10¹²/L', referenceRanges: [RBC, { sex: 'F', min: 4, max: 5.2, reportText: null }] }, { phone: true });
+    expect([...el.querySelectorAll('.rtb__l2')].map(x => x.textContent)).toEqual(['4.5 – 5.9 ×10¹²/L', '4–5.2 ×10¹²/L']);
+  });
+
+  it('unitPieces: text and unit chips; no unit drops the token', () => {
+    expect(unitPieces('a {u}\nb {u}', 'g/dL')).toEqual([
+      { t: 'a ', unit: false }, { t: 'g/dL', unit: true }, { t: '\nb ', unit: false }, { t: 'g/dL', unit: true },
+    ]);
+    expect(unitPieces('70–99 {u}', '')).toEqual([{ t: '70–99', unit: false }]);
   });
 });

@@ -19,7 +19,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
-import { formatRange, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
+import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
 import { flagTone, rangeWithUnit, savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
 import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
@@ -484,7 +484,7 @@ interface ValueRow {
               <dl class="pf-drawer__meta">
                 <div>
                   <dt>Normal range</dt>
-                  <dd>{{ r.range ?? '—' }}</dd>
+                  <dd class="pf-drawer__range">{{ r.range ?? '—' }}</dd>
                 </div>
                 <div>
                   <dt>Critical low</dt>
@@ -604,7 +604,7 @@ interface ValueRow {
     .pf-prow__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
     .pf-prow__val { font-variant-numeric: tabular-nums; font-weight: 600; display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
     .pf-prow__val em { font-style: normal; color: var(--text-tertiary); font-size: 11.5px; }
-    .pf-prow__ref { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; }
+    .pf-prow__ref { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
     .pf-prow__dash { color: var(--text-muted); }
     .pf-prow__editin { width: 100%; max-width: 120px; padding: 6px 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
       font-variant-numeric: tabular-nums; background: var(--bg-card-solid); border: 1px solid rgba(168, 85, 247, 0.45); color: var(--text-primary); outline: none; }
@@ -745,6 +745,7 @@ interface ValueRow {
     .pf-drawer__meta > div { display: flex; flex-direction: column; gap: 2px; }
     .pf-drawer__meta dt { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); margin: 0; }
     .pf-drawer__meta dd { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .pf-drawer__meta dd.pf-drawer__range { white-space: pre-line; }
     .pf-drawer__sec--alert { padding: 14px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
     .pf-drawer__sec--alert[data-flag='abnormal'] { border-color: rgba(245, 158, 11, 0.4); }
     .pf-drawer__sec--alert[data-flag='critical'] { border-color: rgba(239, 68, 68, 0.45); }
@@ -1169,7 +1170,7 @@ export class ValidateResultComponent implements OnInit {
       const critHigh = r?.criticalHigh ?? p.criticalHigh ?? undefined;
       const saved = savedFlagOf(snap, p.name);
       const unit = (saved?.unit ?? p.unit) || undefined;
-      const rangeText = saved ? (saved.range ?? null) : (r?.reportText?.trim() || formatRange(r));
+      const rangeText = saved ? (saved.range ?? null) : (normalizeReportText(fillUnit(r?.reportText, unit)) || formatRange(r));
       return {
         name: p.name,
         title: p.title,

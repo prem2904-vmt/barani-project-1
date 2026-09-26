@@ -614,8 +614,9 @@ describe('TestEditor — reference ranges, the simple model (owner 2026-09-26)',
     expect(p.criticalLow).toBeUndefined();
     expect(p.referenceRanges).toEqual([{ sex: 'any', minAge: null, maxAge: null, ageUnit: 'years', min: 12, max: 16,
       criticalLow: 7, criticalHigh: null, reportText: '12 – 16 g/dL' }]);
-    // The flat column follows the typed text.
-    expect(lastPatchBody(api).adultReferenceRange).toBe('12 – 16 g/dL');
+    // The flat column carries the NUMBERS (mw re-parses it into the band),
+    // never the typed text.
+    expect(lastPatchBody(api).adultReferenceRange).toBe('12–16');
   });
 
   it('there is no Advanced grid any more', () => {

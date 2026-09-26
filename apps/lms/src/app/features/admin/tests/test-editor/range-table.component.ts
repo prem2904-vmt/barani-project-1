@@ -1,11 +1,13 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, Directive, ElementRef, afterRenderEffect, computed, inject, input, output, signal,
+} from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { PfSelectOption, SelectComponent } from '../../../../shared/primitives/select.component';
 import {
   LEVEL_LABEL, bandSex, effectiveCriticals, fmtNum, tryValue, validateRanges,
   type FlagLevel, type InsightBand, type InsightParam, type RangeField, type RangeIssue,
 } from '../../../../shared/utils/range-insight';
-import { bandReportText, resolveRangeAgeYears } from '../../../../shared/utils/reference-range';
+import { bandReportText, fillUnit, hasUnitToken, normalizeReportText, resolveRangeAgeYears } from '../../../../shared/utils/reference-range';
 
 export type AgeUnit = 'days' | 'months' | 'years';
 const PER_YEAR: Record<AgeUnit, number> = { years: 1, months: 12, days: 365.25 };
@@ -101,8 +103,9 @@ export function toSimpleGroup(b: InsightBand, param?: InsightParam | null, unit?
     if (a.hasAge) { minAge = a.minY != null ? round(a.minY, 6) : null; maxAge = a.maxY != null ? round(a.maxY, 6) : null; ageUnit = 'years'; }
   }
   const crit = effectiveCriticals(b, param);
-  const legacyLabel = !b.reportText?.trim() && !!b.label?.trim();
-  const reportText = b.reportText?.trim() || (legacyLabel ? bandReportText({ ...b, reportText: null }, unit) : null) || null;
+  const typed = normalizeReportText(b.reportText);
+  const legacyLabel = !typed && !!b.label?.trim();
+  const reportText = typed || (legacyLabel ? bandReportText({ ...b, reportText: null }, unit) : null) || null;
   const out: SimpleGroup = {
     sex, minAge, maxAge, ageUnit,
     min: b.min ?? null, max: b.max ?? null,
@@ -150,12 +153,28 @@ export interface RowView {
   age: { from: AgeSide | null; to: AgeSide | null; text: string };
   /** What prints when the Report text is blank (the input's placeholder). */
   fallback: string;
-  /** Phone line 2: the report text, else the fallback. */
+  /** Phone line 2: the report text (`{u}` filled), else the fallback. */
   prints: string;
   /** ONE plain line — the first problem with this group (blocks Save). */
   error: string | null;
   errField: RangeField | null;
   profile: string;
+}
+
+/** "Prints as" pieces of a report text: text, and the unit where `{u}` was. */
+export interface UnitPiece { t: string; unit: boolean }
+
+/** Split a report text at its `{u}` tokens — the unit shows as a chip. No
+ *  unit → the filled text alone (the token is dropped). */
+export function unitPieces(text: string, unit: string): UnitPiece[] {
+  const u = unit.trim();
+  if (!u) return [{ t: fillUnit(text, ''), unit: false }];
+  const out: UnitPiece[] = [];
+  text.split(/\{u\}/i).forEach((t, i) => {
+    if (i > 0) out.push({ t: u, unit: true });
+    if (t) out.push({ t, unit: false });
+  });
+  return out;
 }
 
 /** The four limit columns: stored field, header, accessible name. */
@@ -165,6 +184,34 @@ export const LIMITS: ReadonlyArray<{ key: LimitKey; head: string; name: string }
   { key: 'criticalLow', head: 'CL', name: 'CL — below this is critical' },
   { key: 'criticalHigh', head: 'CH', name: 'CH — above this is critical' },
 ];
+
+/**
+ * The Report text box: a textarea that grows with its text — one row (the
+ * height of every other box), up to its CSS max-height (~5 rows), then it
+ * scrolls. Enter is a new line (nothing here listens for it). Re-measured on
+ * every keystroke and whenever the bound text changes.
+ */
+@Directive({ selector: 'textarea[pfRtbGrow]', standalone: true, host: { '(input)': 'grow()' } })
+export class RtbAutoGrowDirective {
+  private readonly el = inject<ElementRef<HTMLTextAreaElement>>(ElementRef).nativeElement;
+  /** The bound text (only read to re-measure when it changes). */
+  readonly pfRtbGrow = input<string | null | undefined>('');
+
+  constructor() {
+    afterRenderEffect(() => { this.pfRtbGrow(); this.grow(); });
+  }
+
+  grow(): void {
+    const el = this.el;
+    el.style.height = 'auto';
+    const want = el.scrollHeight + Math.max(0, el.offsetHeight - el.clientHeight);
+    if (!want) { el.style.height = ''; return; }        // not laid out (hidden / test DOM)
+    const max = typeof getComputedStyle === 'function' ? parseFloat(getComputedStyle(el).maxHeight) : NaN;
+    const capped = Number.isFinite(max) && max > 0 && want > max;
+    el.style.height = `${capped ? max : want}px`;
+    el.style.overflowY = capped ? 'auto' : 'hidden';
+  }
+}
 
 let seq = 0;
 const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
@@ -177,7 +224,8 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
  *
  * value < L → L, > H → H, < CL or > CH → critical; on a limit = not flagged;
  * blank = no flag on that side. The Report text prints on the report exactly
- * as typed; blank prints "L–H unit". Every problem is one plain line under
+ * as typed — Enter for a new line, `{u}` for the value's unit (shown filled
+ * under the box as you type); blank prints "L–H unit". Every problem is one plain line under
  * its row and blocks Save (mw refuses the same set). An untouched group is
  * never re-written; an edited group is stored in the simple shape
  * ({@link toSimpleGroup}). Phones: one card per group, tap to edit.
@@ -186,7 +234,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 @Component({
   selector: 'pf-range-table',
   standalone: true,
-  imports: [SelectComponent, NgTemplateOutlet],
+  imports: [SelectComponent, NgTemplateOutlet, RtbAutoGrowDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rtb">
@@ -204,7 +252,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
               @for (l of limits; track l.key; let first = $first) {
                 <th scope="col" class="rtb__num" [title]="l.name">{{ l.head }}@if (first && unitText()) {<span class="rtb__unit">{{ unitText() }}</span>}</th>
               }
-              <th scope="col">Report text</th>
+              <th scope="col">Report text<span class="rtb__hint">type &#123;u&#125; for the unit</span></th>
               <th scope="col"><span class="rtb__sr">Remove</span></th>
             </tr>
           </thead>
@@ -284,7 +332,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
                         <ng-container *ngTemplateOutlet="limitBox; context: { $implicit: r, l: l }"></ng-container></label>
                     }
                   </div>
-                  <label class="rtb__fld"><span class="rtb__muted">Report text</span>
+                  <label class="rtb__fld"><span class="rtb__muted">Report text · type &#123;u&#125; for the unit</span>
                     <ng-container *ngTemplateOutlet="textBox; context: { $implicit: r }"></ng-container></label>
                   <button type="button" class="rtb__add rtb__add--rm" (click)="removeBand(r.index)">Remove this group</button>
                 </div>
@@ -329,9 +377,15 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     </ng-template>
 
     <ng-template #textBox let-r>
-      <input class="rtb__in rtb__in--text" type="text" autocomplete="off" aria-label="Report text — prints exactly as typed"
-             [value]="r.band.reportText || ''" [placeholder]="r.fallback" [title]="r.band.reportText || r.fallback"
-             (change)="setText(r.index, $any($event.target).value)" (keydown.enter)="$any($event.target).blur()" />
+      <textarea class="rtb__in rtb__in--text" rows="1" autocomplete="off"
+                aria-label="Report text — prints exactly as typed; Enter starts a new line"
+                [pfRtbGrow]="r.band.reportText" [value]="r.band.reportText || ''" [placeholder]="r.fallback"
+                [title]="r.prints"
+                (input)="setDraft(r.index, $any($event.target).value)"
+                (change)="setText(r.index, $any($event.target).value)"></textarea>
+      @if (preview(r); as pcs) {
+        <p class="rtb__prev" aria-live="polite"><span class="rtb__prevlbl">Prints as&#32;</span><span class="rtb__prevtxt">@for (pc of pcs; track $index) {<span [class.rtb__uchip]="pc.unit">{{ pc.t }}</span>}</span></p>
+      }
     </ng-template>
 
     <ng-template #ageEditor let-r>
@@ -361,6 +415,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .rtb__muted { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
     .rtb__unit { margin-left: 6px; font-weight: 400; color: var(--text-tertiary); }
+    .rtb__hint { margin-left: 8px; font-weight: 400; color: var(--text-tertiary); }
     .rtb__tag { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 400; color: var(--text-tertiary); }
 
     /* ── Desktop table ─────────────────────────────────────────────── */
@@ -371,6 +426,8 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__c-txt { width: auto; }
     .rtb__c-x { width: 40px; }
     .rtb__table th, .rtb__table td { padding: 6px 8px 6px 0; text-align: left; vertical-align: middle; }
+    /* A multi-line Report text grows its row: the other boxes stay on top. */
+    .rtb__row > td { vertical-align: top; }
     .rtb__table thead th { font-size: 12px; font-weight: 500; color: var(--text-secondary); padding-bottom: 8px; vertical-align: bottom; white-space: nowrap; }
     .rtb__row { border-top: 1px solid var(--rtb-line); }
     .rtb__table tfoot tr { border-top: 1px solid var(--rtb-line); }
@@ -391,7 +448,12 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
     .rtb__in--err, .rtb__in--err:hover { border-color: var(--rtb-err); }
     .rtb__in--lim { padding: 0 8px; }
-    .rtb__in--text { font-weight: 400; text-overflow: ellipsis; }
+    /* Report text: a textarea that looks like the other boxes at one row
+       (36px) and grows to ~5 rows (5 × 20px + padding + border), then scrolls. */
+    .rtb__in--text {
+      font-weight: 400; min-height: 36px; max-height: 116px; padding: 7px 10px; line-height: 20px;
+      resize: none; overflow-y: hidden; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top;
+    }
 
     .rtb__agebtn {
       display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; height: 36px; padding: 0 8px 0 10px;
@@ -446,7 +508,14 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
       border-radius: 12px; }
     .rtb__cardtxt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .rtb__l1 { font-size: 15px; font-weight: 600; line-height: 1.3; }
-    .rtb__l2 { font-size: 14px; color: var(--text-secondary); line-height: 1.35; overflow-wrap: anywhere; }
+    /* "Prints as" — the Report text with {u} filled, the unit as a chip. */
+    .rtb__prev { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); overflow-wrap: anywhere; }
+    .rtb__prevlbl { font-weight: 500; }
+    .rtb__prevtxt { white-space: pre-line; color: var(--text-secondary); }
+    .rtb__uchip { display: inline-block; padding: 0 6px; margin: 0 1px; border-radius: 6px; line-height: 18px;
+      font-size: 11.5px; font-weight: 500; color: var(--text-secondary);
+      background: var(--nd-chip-bg, rgba(127,127,127,.14)); border: 1px solid var(--rtb-line); }
+    .rtb__l2 { font-size: 14px; color: var(--text-secondary); line-height: 1.35; overflow-wrap: anywhere; white-space: pre-line; }
     .rtb__chev { flex: none; color: var(--text-tertiary); transition: transform .2s ease; }
     .rtb__card--open .rtb__chev { transform: rotate(180deg); }
     .rtb__cardbody { display: flex; flex-direction: column; gap: 12px; padding: 4px 14px 12px; }
@@ -461,6 +530,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
 
     @media (max-width: 640px) {
       .rtb__in, .rtb__agebtn, .rtb__try .rtb__in { height: 44px; font-size: 16px; }
+      .rtb__in--text { min-height: 44px; max-height: 132px; padding: 10px; line-height: 22px; }
       .rtb__rm, .rtb__add, .rtb__segi { min-height: 44px; }
       .rtb__ageed { display: grid; grid-template-columns: auto 1fr 1fr; padding: 10px; }
       .rtb__ageed > .rtb__muted:nth-of-type(2) { grid-column: 1; }
@@ -524,12 +594,13 @@ export class RangeTableComponent {
       const age = ageOf(band);
       const sex = bandSex(band) ?? 'any';
       const fallback = bandReportText({ ...band, reportText: null }, unit) ?? '';
+      const typed = normalizeReportText(fillUnit(band.reportText, unit));
       return {
         index, band, sex,
         who: SEX_WORD[sex],
         age: { ...age, text: ageWords(age.from, age.to) },
         fallback,
-        prints: band.reportText?.trim() || fallback || 'No limits set',
+        prints: typed || fallback || 'No limits set',
         error: first?.message ?? null,
         errField: first?.field ?? null,
         profile: (band.profileCode ?? '').trim(),
@@ -564,6 +635,19 @@ export class RangeTableComponent {
     return Number.isFinite(v) ? v : null;
   }
 
+  /** What is being typed in a Report text box (before it is committed on
+   *  blur) — so "Prints as" follows every keystroke. */
+  private readonly drafts = signal<Record<number, string>>({});
+  setDraft(i: number, text: string) { this.drafts.update(d => ({ ...d, [i]: String(text ?? '') })); }
+
+  /** "Prints as" pieces while the text uses `{u}`; null otherwise. Re-reads
+   *  the unit, so changing the Unit updates every preview at once. */
+  preview(r: RowView): UnitPiece[] | null {
+    const d = this.drafts();
+    const text = normalizeReportText(r.index in d ? d[r.index] : r.band.reportText);
+    return text && hasUnitToken(text) ? unitPieces(text, this.unitText()) : null;
+  }
+
   // ── Edits: each rewrites ONE group in the simple shape; others keep their object ──
   private emit(next: InsightBand[]) { this.bandsChange.emit(next); }
   private patch(i: number, patch: Partial<SimpleGroup>) {
@@ -586,7 +670,11 @@ export class RangeTableComponent {
     if (raw && v == null) { el.value = this.num((b[key] as number | null | undefined) ?? this.inherited(b, key)); return; }
     this.patch(i, { [key]: v });
   }
-  setText(i: number, text: string) { this.patch(i, { reportText: String(text ?? '').trim() || null }); }
+  /** Stored as a plain string with "\n" line breaks (normalised). */
+  setText(i: number, text: string) {
+    this.drafts.update(d => { const n = { ...d }; delete n[i]; return n; });
+    this.patch(i, { reportText: normalizeReportText(text) });
+  }
 
   setSex(i: number, v: 'M' | 'F' | 'any') {
     const b = this.bands()[i];
@@ -640,6 +728,7 @@ export class RangeTableComponent {
   }
 
   addBand() {
+    this.drafts.set({});
     const n = this.bands().length;
     this.emit([...this.bands(), blankGroup() as InsightBand]);
     if (this.phone()) this.cardOpen.set(n);
@@ -647,6 +736,7 @@ export class RangeTableComponent {
   }
 
   removeBand(i: number) {
+    this.drafts.set({});
     this.ageOpen.set(null);
     this.cardOpen.set(null);
     this.emit(this.bands().filter((_, k) => k !== i));

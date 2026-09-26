@@ -597,7 +597,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (numeric.length !== 1) return current;
     const bands = numeric[0].referenceRanges ?? [];
     if (bands.length !== 1) return '';
-    return bands[0].reportText?.trim() || formatRange(bands[0]) || '';
+    // The NUMBERS, never the typed report text: mw re-parses this flat text
+    // into the band (SyncFlatFieldsIntoSingleParameter), so a report text
+    // like "Normal: 70–99 / Diabetes: ≥126" would rewrite L / H as "≥ 70".
+    return formatRange(bands[0]) || '';
   }
 
 

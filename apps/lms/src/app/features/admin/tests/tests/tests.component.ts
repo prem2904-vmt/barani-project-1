@@ -106,12 +106,14 @@ const WRAP2: Pick<ColDef, 'wrapText' | 'autoHeight' | 'cellClass'> = {
   wrapText: true, autoHeight: true, cellClass: 'pf-tm-wrap',
 };
 
-/** Plain text cell that wraps to two lines (reference range). */
+/** Plain text cell that wraps to two lines (reference range). A typed
+ *  multi-line report text keeps its line breaks (`.pf-tm-lines`); the
+ *  tooltip shows every line. */
 function clampRenderer(p: ICellRendererParams): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'pf-tm-wrapcell';
   const t = document.createElement('span');
-  t.className = 'pf-tm-clamp2';
+  t.className = 'pf-tm-clamp2 pf-tm-lines';
   t.textContent = p.valueFormatted ?? (p.value == null ? '' : String(p.value));
   wrap.appendChild(t);
   return wrap;
@@ -972,7 +974,7 @@ export class TestsComponent implements OnInit {
       const blob = JSON.parse(t.parameters);
       const p = Array.isArray(blob?.parameters) ? blob.parameters[0] : undefined;
       if (!p) return '';
-      const bands = summarizeRanges(p.referenceRanges, p.unit);
+      const bands = summarizeRanges(p.referenceRanges, p.unit, { keepLines: true });
       if (bands) return bands;
       if (p.normalValue) return String(p.normalValue);
       return '';

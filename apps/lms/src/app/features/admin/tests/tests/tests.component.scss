@@ -252,6 +252,9 @@
   min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
   overflow: hidden; white-space: normal !important; text-overflow: clip; overflow-wrap: anywhere;
 }
+:host ::ng-deep .pf-tm-clamp2.pf-tm-lines { white-space: pre-line !important; }
+/* The range tooltip shows a typed report text line by line. */
+:host ::ng-deep .ag-tooltip { white-space: pre-line; }
 :host ::ng-deep .pf-tm-tree-cell { min-height: 42px; padding: 6px 0; box-sizing: border-box; }
 
 /* Actions column: fits its content — "Edit" (+ a quiet Revert icon). */

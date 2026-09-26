@@ -11,6 +11,7 @@ import {
 } from '../models/report-layout.model';
 import { ReportSignature, ReportTemplate } from '../models/report.model';
 import { flagCodeOf, savedFlagOf, type SavedFlag } from './result-flag';
+import { fillUnit, normalizeReportText } from './reference-range';
 
 /**
  * Render an A4 lab report PDF in the Drlogy template style — blue
@@ -2074,7 +2075,7 @@ function buildPanelGroup(
           kind: 'param',
           name: r.title || humanize(r.parameterName ?? ''),
           result: resultText,
-          range: coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''),
+          range: rangeCellText(coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''), r.unit),
           // Prefer the Unit column when present; otherwise fall back to the
           // parameter's own unit so EVERY department shows it (e.g. "11.4 g/dL")
           // — but never grow a unit onto a qualitative result ("Normal mg/dL").
@@ -2109,7 +2110,7 @@ function buildPanelGroup(
       kind: 'param',
       name: humanize(paramName),
       result: String(v?.value ?? '—'),
-      range: v?.range ?? '',
+      range: rangeCellText(v?.range, v?.unit),
       unit: v?.unit ?? '',
       flag: letter,
       isLow: flag === 'L',
@@ -3090,7 +3091,7 @@ function renderLegacyTest(
       tableRows.push([
         { content: investContent, styles: { fontStyle: 'bold', textColor: BLACK } },
         { content: flagText ? `${valueText}    ${flagText}` : valueText, styles: resultStyles },
-        { content: v?.range ?? '—' },
+        { content: rangeCellText(v?.range, v?.unit) || '—' },
         { content: v?.unit ?? '—' },
       ]);
     });
@@ -3700,6 +3701,16 @@ function coerceResultCell(raw: unknown): { value: string; flag: string; saved?: 
     } catch { /* fall through */ }
   }
   return { value: s, flag: '' };
+}
+
+/** A reference cell's text with its line breaks as authored: a typed report
+ *  text ("Normal: 70–99\nPrediabetes: 100–125\nDiabetes: ≥126") prints one
+ *  line per line — autotable splits the cell on "\n" and
+ *  drawQualifiedRangeCell paints each line. CRLF → LF; trailing blank lines
+ *  and spaces dropped so they never add empty rows. mw already fills `{u}`;
+ *  a token that still slipped through prints as the row's unit. */
+export function rangeCellText(raw: string | null | undefined, unit?: string | null): string {
+  return normalizeReportText(fillUnit(raw, unit)) ?? '';
 }
 
 /** Unwrap any cell to its .value text when it's an enriched object JSON. */

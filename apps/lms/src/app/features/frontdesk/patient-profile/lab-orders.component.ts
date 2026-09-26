@@ -163,7 +163,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
     .pf-lo__rname { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; }
     .pf-lo__rval { font-family: monospace; font-weight: 700; color: var(--text-primary); }
     .pf-lo__runit { font-weight: 500; color: var(--text-tertiary); margin-left: 4px; font-size: 11px; }
-    .pf-lo__rref { font-family: monospace; font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-lo__rref { font-family: monospace; font-size: 11.5px; color: var(--text-tertiary); white-space: pre-line; }
     .pf-lo__rrow.abn .pf-lo__rval { color: var(--amber-text); }
     .pf-lo__rrow.crit .pf-lo__rval { color: var(--rose-text); }
     .pf-lo__rflag { margin-left: 5px; font-weight: 800; }

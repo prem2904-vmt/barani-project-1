@@ -30,10 +30,51 @@ export interface RangeLike {
   ageUnit?: 'years' | 'months' | 'days' | null;
   /** Admin's override for the auto-derived friendly name (legacy). */
   label?: string | null;
-  /** What the report prints as the reference range, EXACTLY as typed
-   *  ("Normal: 70–99 · Prediabetes: 100–125"). Blank = the simple fallback
-   *  "L–H unit". Mirrors mw `RangeDef.ReportText`. */
+  /** What the report prints as the reference range, EXACTLY as typed —
+   *  line breaks included ("Normal: 70–99\nPrediabetes: 100–125"). Blank =
+   *  the simple fallback "L–H unit". Mirrors mw `RangeDef.ReportText`. */
   reportText?: string | null;
+}
+
+/**
+ * A typed report text as stored: "\r\n" / "\r" → "\n", each line's trailing
+ * spaces and any leading / trailing blank lines dropped (inner blank lines
+ * stay). Null when nothing is left. Mirrors mw `ReferenceRangeResolver.
+ * NormalizeReportText` — the editor saves through it and every reader
+ * prints through it, so a pasted Windows text never shows a stray "\r".
+ */
+export function normalizeReportText(text: string | null | undefined): string | null {
+  const s = String(text ?? '').replace(/\r\n?/g, '\n').split('\n').map(l => l.trimEnd()).join('\n').trim();
+  return s || null;
+}
+
+/** `{u}` in a report text = the parameter's CURRENT unit (case-insensitive). */
+export const UNIT_TOKEN = /\{u\}/gi;
+
+/** Does this report text use the `{u}` unit placeholder? */
+export function hasUnitToken(text: string | null | undefined): boolean {
+  return /\{u\}/i.test(text ?? '');
+}
+
+/**
+ * A report text as it PRINTS: every `{u}` / `{U}` → the parameter's unit, so
+ * changing the Unit never leaves a stale unit in the text. No unit → the
+ * token goes and so does the space it leaves ("70–99 {u}" → "70–99", "a {u}
+ * b" → "a b"). Line breaks are kept. Mirrors mw `ReferenceRangeResolver.
+ * FillUnit` — THE one substitution; every reader prints through it.
+ */
+export function fillUnit(text: string | null | undefined, unit: string | null | undefined): string {
+  const s = String(text ?? '');
+  if (!hasUnitToken(s)) return s;
+  const u = (unit ?? '').trim();
+  if (u) return s.replace(UNIT_TOKEN, () => u);
+  return s.replace(/([ \t]*)\{u\}([ \t]*)/gi, (_m, a: string, b: string) => (a && b ? ' ' : ''));
+}
+
+/** A multi-line text on ONE line ("a; b; c") for places that cannot show a
+ *  line break (a one-line summary, a flat export column). */
+export function oneLine(text: string | null | undefined, sep = '; '): string {
+  return (normalizeReportText(text) ?? '').split('\n').map(l => l.trim()).filter(Boolean).join(sep);
 }
 
 /** Normalize a free-text sex to 'M' | 'F' | 'O' or null. */
@@ -204,14 +245,15 @@ export function isLegacyGroup(r: RangeLike): boolean {
 }
 
 /**
- * What the report prints for ONE group: its `reportText` exactly as typed;
+ * What the report prints for ONE group: its `reportText` exactly as typed
+ * (line breaks kept, `{u}` → the unit);
  * else the simple fallback "13–17 g/dL" (numbers + unit, no who); a legacy
  * group keeps its legacy line ("Adult Male: 13–17 g/dL"). Null when there is
  * nothing to print. Mirrors mw `ReferenceRangeResolver.BandText`.
  */
 export function bandReportText(r: RangeLike | null | undefined, unit?: string | null): string | null {
   if (!r) return null;
-  const typed = r.reportText?.trim();
+  const typed = normalizeReportText(fillUnit(r.reportText, unit));
   if (typed) return typed;
   const text = formatRange(r);
   const u = (unit ?? '').trim();
@@ -297,12 +339,30 @@ export function describeAllRanges(ranges: readonly RangeLike[] | undefined | nul
  * Every group on ONE line — the Test Master grid, the editor's value summary
  * and the bench's no-patient hint: "Female: 12 – 16 g/dL · Male: 13 – 17
  * g/dL"; an all-legacy list keeps "Label: 13–17 · … unit".
+ *
+ * `keepLines`: a typed report text keeps its OWN line breaks (the groups
+ * still join with " · ") — for a cell that shows lines (the bench's Range
+ * column, the Test Master grid fallback).
  */
-export function summarizeRanges(ranges: readonly RangeLike[] | null | undefined, unit?: string | null): string {
+export function summarizeRanges(
+  ranges: readonly RangeLike[] | null | undefined,
+  unit?: string | null,
+  opts?: { keepLines?: boolean },
+): string {
   const list = ranges ?? [];
   const u = (unit ?? '').trim();
-  if (list.some(r => r.reportText?.trim() || !isLegacyGroup(r)))
-    return (reportRangeText(list, { range: undefined, isSpecific: false }, u) ?? '').split('\n').join(' · ');
+  if (list.some(r => r.reportText?.trim() || !isLegacyGroup(r))) {
+    if (!opts?.keepLines)
+      return (reportRangeText(list, { range: undefined, isSpecific: false }, u) ?? '').split('\n').join(' · ');
+    const groups: string[] = [];
+    for (const r of list) {
+      const line = bandReportText(r, u);
+      if (!line) continue;
+      const who = r.reportText?.trim() || !isLegacyGroup(r) ? groupWho(r) : null;
+      groups.push(who ? `${who}: ${line}` : line);
+    }
+    return groups.join(' · ');
+  }
   const lines = describeAllRanges(list);
   return lines.length ? lines.join(' · ') + (u ? ` ${u}` : '') : '';
 }

@@ -1,5 +1,9 @@
 import {
   bandReportText,
+  fillUnit,
+  hasUnitToken,
+  normalizeReportText,
+  oneLine,
   flagAgainst,
   matchReferenceRange,
   normalizeSex,
@@ -199,5 +203,44 @@ describe('report text — the simple model prints what was typed', () => {
     expect(selectReferenceRange(kids, null, 6)).toBe(kids[1]);
     expect(selectReferenceRange(kids, null, 5.5)).toBe(kids[0]);
     expect(matchReferenceRange(kids, null, 6)).toEqual({ range: kids[1], isSpecific: true });
+  });
+});
+
+describe('report text — line breaks and the {u} unit placeholder', () => {
+  const GLU = 'Normal: 70–99\nPrediabetes: 100–125\nDiabetes: ≥126 mg/dL';
+  it('normalizeReportText: CRLF / CR → LF, trailing spaces and blank lines dropped, inner lines kept', () => {
+    expect(normalizeReportText('Normal: 70–99  \r\nPrediabetes: 100–125\r\nDiabetes: ≥126 mg/dL\r\n\r\n ')).toBe(GLU);
+    expect(normalizeReportText('a\rb')).toBe('a\nb');
+    expect(normalizeReportText('a\n\nb')).toBe('a\n\nb');
+    expect(normalizeReportText('  \n ')).toBeNull();
+    expect(normalizeReportText(null)).toBeNull();
+  });
+  it('a typed multi-line text prints its lines; summaries join them with " · " unless asked to keep them', () => {
+    const g = { sex: 'any' as const, min: 70, max: 99, reportText: GLU.replace(/\n/g, '\r\n') };
+    expect(bandReportText(g, 'mg/dL')).toBe(GLU);
+    expect(reportRangeText([g], { range: g, isSpecific: true }, 'mg/dL')).toBe(GLU);
+    expect(summarizeRanges([g], 'mg/dL')).toBe('Normal: 70–99 · Prediabetes: 100–125 · Diabetes: ≥126 mg/dL');
+    expect(summarizeRanges([g], 'mg/dL', { keepLines: true })).toBe(GLU);
+    expect(oneLine(GLU)).toBe('Normal: 70–99; Prediabetes: 100–125; Diabetes: ≥126 mg/dL');
+  });
+  it('fillUnit: {u} / {U} → the unit; no unit drops the token and its space; lines kept', () => {
+    expect(hasUnitToken('4 – 6.6 {U}')).toBe(true);
+    expect(hasUnitToken('4 – 6.6')).toBe(false);
+    expect(fillUnit('4 – 6.6 {u}', '×10¹²/L')).toBe('4 – 6.6 ×10¹²/L');
+    expect(fillUnit('Normal: 70–99 {U}\nDiabetes: ≥126 {u}', 'mg/dL')).toBe('Normal: 70–99 mg/dL\nDiabetes: ≥126 mg/dL');
+    expect(fillUnit('70–99 {u}', '')).toBe('70–99');
+    expect(fillUnit('{u} 70–99', null)).toBe('70–99');
+    expect(fillUnit('a {u} b\nc {u}', '  ')).toBe('a b\nc');
+    expect(fillUnit('no token', 'g/dL')).toBe('no token');
+    expect(fillUnit('$& {u}', '$1')).toBe('$& $1');               // a unit is never a replace pattern
+  });
+  it('every reader prints the unit: the report line, the all-groups list, the summary', () => {
+    const m = { sex: 'M' as const, minAge: 18, min: 4.5, max: 5.9, reportText: '4.5 – 5.9 {u}' };
+    const f = { sex: 'F' as const, minAge: 18, min: 4, max: 5.2 };
+    expect(bandReportText(m, '×10¹²/L')).toBe('4.5 – 5.9 ×10¹²/L');
+    expect(reportRangeText([m, f], { range: undefined, isSpecific: false }, '×10¹²/L'))
+      .toBe('Adult Male: 4.5 – 5.9 ×10¹²/L\nAdult Female: 4–5.2 ×10¹²/L');
+    expect(summarizeRanges([m], 'x/L')).toBe('Adult Male: 4.5 – 5.9 x/L');
+    expect(bandReportText(m, '')).toBe('4.5 – 5.9');
   });
 });

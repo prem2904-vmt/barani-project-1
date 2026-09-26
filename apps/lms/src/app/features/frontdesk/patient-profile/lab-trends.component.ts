@@ -5,6 +5,7 @@ import {
 import { ApiService } from '../../../core/services/api.service';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { filterTestList } from '../../../shared/utils/test-search';
+import { oneLine } from '../../../shared/utils/reference-range';
 import {
   TrendPoint, TrendParam, TrendTest, buildTrendOption, buildSparklineOption, filterTrendPoints,
 } from '../../../shared/utils/trend-chart';
@@ -126,7 +127,7 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
                       <div class="pf-lt__spark" #spark></div>
                       <div class="pf-lt__cell-foot">
                         <span>×{{ pointCount(p) }}</span>
-                        @if (p.referenceRange) { <span class="pf-lt__cell-ref">{{ p.referenceRange }}</span> }
+                        @if (p.referenceRange) { <span class="pf-lt__cell-ref" [title]="p.referenceRange">{{ refLine(p.referenceRange) }}</span> }
                       </div>
                     </button>
                   }
@@ -134,7 +135,7 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
               } @else if (activeParam(); as ap) {
                 <div class="pf-lt__meta">
                   <span>{{ filteredPoints().length }} results</span>
-                  @if (ap.referenceRange) { <span>Reference: {{ ap.referenceRange }}{{ ap.unit ? ' ' + ap.unit : '' }}</span> }
+                  @if (ap.referenceRange) { <span class="pf-lt__ref">Reference: {{ ap.referenceRange }}{{ ap.unit ? ' ' + ap.unit : '' }}</span> }
                 </div>
                 <div class="pf-lt__chart" #chart></div>
               }
@@ -221,6 +222,8 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
     .pf-lt__spark { width: 100%; height: 40px; }
     .pf-lt__cell-foot { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--text-tertiary); }
     .pf-lt__cell-ref { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+    /* A typed multi-line reference keeps its lines in the detailed view. */
+    .pf-lt__ref { white-space: pre-line; }
 
     /* Phone-only test picker — the 240px sidebar collapses into this pf-select. */
     .pf-lt__mobile-pick { display: none; }
@@ -411,6 +414,9 @@ export class LabTrendsComponent implements OnDestroy {
   // --- Sparkline cell helpers (operate on the range-filtered series) ---
   private cellPoints(p: TrendParam): TrendPoint[] { return filterTrendPoints(p.points, this.range()); }
   pointCount(p: TrendParam): number { return this.cellPoints(p).length; }
+  /** The compact cell's one-line reference ("a · b"); the title keeps the lines. */
+  refLine(s: string | null | undefined): string { return oneLine(s, ' · '); }
+
   latest(p: TrendParam): string {
     const pts = this.cellPoints(p);
     const v = pts.length ? pts[pts.length - 1].value : null;

@@ -253,7 +253,7 @@ export class SampleResultEntryComponent {
       kEl.style.cssText = "color:var(--text-muted);font-size:11.5px";
       const vEl = document.createElement("span");
       vEl.textContent = val;
-      vEl.style.cssText = "font-variant-numeric:tabular-nums";
+      vEl.style.cssText = "font-variant-numeric:tabular-nums;white-space:pre-line";
       row.append(kEl, vEl);
       el.append(row);
     }
@@ -1164,8 +1164,9 @@ export class SampleResultEntryComponent {
     // no patient sex/age in scope, so naming a single band would be a guess —
     // showing them all is the honest form, and the backend still decides the
     // flag that gets persisted and printed.
+    // A typed report text keeps its own line breaks (the cell is pre-line).
     const bands = (p.referenceRanges ?? []).some(b => b.reportText?.trim() || !isLegacyGroup(b))
-      ? summarizeRanges(p.referenceRanges, p.unit)
+      ? summarizeRanges(p.referenceRanges, p.unit, { keepLines: true })
       : describeAllRanges(p.referenceRanges).join(" · ");
     if (bands) return bands;
     if (p.normalValue) return p.normalValue;
