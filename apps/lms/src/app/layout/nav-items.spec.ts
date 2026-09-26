@@ -347,7 +347,7 @@ describe('menusFromWorkflow', () => {
     }
   });
 
-  it('inserts Collect item when collect action exists in area and user can collect', () => {
+  it('does NOT inject a Collect item beside an area holding collection (role-driven instead)', () => {
     const cfg = makeCfg(
       [{ id: 'lab-area', name: 'Lab', order: 1, icon: 'default' }],
       [
@@ -363,9 +363,10 @@ describe('menusFromWorkflow', () => {
     };
     const result = menusFromWorkflow(cfg, permCtx);
     expect(result).not.toBeNull();
-    // Should include the sample-collection item
+    // The work area shows; no workflow-injected sample-collection item beside it
+    expect(result!.some((item) => item.id === 'lab-area')).toBe(true);
     const hasCollect = result!.some((item) => item.id === 'sample-collection');
-    expect(hasCollect).toBe(true);
+    expect(hasCollect).toBe(false);
   });
 
   it('does not insert Collect item when user lacks collect_sample permission', () => {
