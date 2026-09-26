@@ -490,6 +490,10 @@
   .pf-mnd-reconnect__t { display: none; }
   .pf-mnd-scroller { padding: 10px 12px 14px; }
   .pf-mnd-msg__wrap { max-width: 86%; }
+  // The action toolbar never runs off the screen: it scrolls sideways.
+  .pf-mnd-acts { max-width: calc(100vw - 48px); overflow-x: auto; scrollbar-width: none; }
+  .pf-mnd-acts::-webkit-scrollbar { display: none; }
+  .pf-mnd-act { flex: none; }
   .pf-mnd-thread__head { padding: 8px 8px 8px 12px; gap: 10px; }
   .pf-mnd-composer { padding: 8px 8px 10px; }
   .pf-mnd-rec, .pf-mnd-file { min-width: 0; }
