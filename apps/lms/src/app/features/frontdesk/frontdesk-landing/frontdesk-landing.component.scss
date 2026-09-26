@@ -4,6 +4,7 @@
 @use './styles/stat-row';
 @use './styles/filters';
 @use './styles/cards';
+@use './styles/work-rows';
 @use './styles/widgets';
 @use './styles/drawers-modals';
 @use './styles/mobile';
@@ -108,17 +109,6 @@
      this the 4-track override dumped the name into the 22px column. */
   .pf-card--draft { grid-template-columns: 1fr auto; }
 
-  /* Department chips → the frame's quiet outline chip (status dot kept). */
-  .pf-card__dept {
-    background: #faf8fd !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 20px;
-    color: #6d6b84 !important;
-    font-family: 'Inter', inherit;
-    font-weight: 400;
-    letter-spacing: 0.42px;
-  }
-
   /* Row action buttons → the frame's violet-outline "Collect →" anatomy. */
   .pf-ghostbtn {
     background: #ffffff;
@@ -130,20 +120,6 @@
   }
   .pf-ghostbtn:hover { background: #f8f2ff; }
 }
-
-/* Status as dot + colored word (Figma 452-3) — both themes. */
-.pf-statusword {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 500; line-height: 16px;
-  white-space: nowrap;
-}
-.pf-statusword__dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; flex-shrink: 0; }
-.pf-statusword[data-tone='emerald'] { color: #65a30d; }
-.pf-statusword[data-tone='amber']   { color: #d4ae05; }
-.pf-statusword[data-tone='sky'],
-.pf-statusword[data-tone='blue']    { color: #0076a5; }
-.pf-statusword[data-tone='violet']  { color: #7c3aed; }
-.pf-statusword[data-tone='rose']    { color: #dc2626; }
 
 :host-context(.light.design-new) {
   /* No air between the navbar and the band (Figma 452-3). The ops-alerts
@@ -249,15 +225,6 @@
   }
   /* Draft cards: [text][actions] — same fix as the light skin. */
   .pf-card--draft { grid-template-columns: 1fr auto; }
-  .pf-card__dept {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.09) !important;
-    border-radius: 20px;
-    color: #a5a3b8 !important;
-    font-weight: 400;
-    letter-spacing: 0.42px;
-  }
-
   .pf-ghostbtn {
     background: transparent;
     border: 1px solid rgba(167, 139, 250, 0.65);
@@ -280,14 +247,6 @@
     gap: 6px;
   }
 }
-
-/* Status words: brighter tones on dark so they read against the panes. */
-:host-context(.dark) .pf-statusword[data-tone='emerald'] { color: #a3e635; }
-:host-context(.dark) .pf-statusword[data-tone='amber']   { color: #facc15; }
-:host-context(.dark) .pf-statusword[data-tone='sky'],
-:host-context(.dark) .pf-statusword[data-tone='blue']    { color: #38bdf8; }
-:host-context(.dark) .pf-statusword[data-tone='violet']  { color: #a78bfa; }
-:host-context(.dark) .pf-statusword[data-tone='rose']    { color: #f87171; }
 
 /* ── Phone (<=640px): the weekday strip ───────────────────────────────
    The new design gives each day a 73px tile. Seven of those plus gaps is

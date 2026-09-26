@@ -108,6 +108,7 @@ import { OutsourcedListComponent } from '../outsourced/outsourced-list.component
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { drawerAgeSex, drawerName, orderStatusState } from './order-drawer';
+import { canBulkDispatch, createWorkSelection } from './work-selection';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -337,11 +338,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // ONE compact search in the right card's header row (before the tab
   // filter) narrows whichever list is active. Tab counts stay totals.
   readonly workQuery = signal('');
-  setWorkQuery(v: string) { this.workQuery.set(v ?? ''); }
+  setWorkQuery(v: string) {
+    const next = v ?? '';
+    if (next !== this.workQuery()) this.workSel.clear(); // a new search = a new list
+    this.workQuery.set(next);
+  }
   /** The Outsourced tab shares the same field (its service holds the query). */
   private readonly _workQueryToOutsourced = effect(() => this.outsourcing.query.set(this.workQuery()));
 
   setRightTab(t: 'ip' | 'done' | 'billing' | 'out') {
+    if (t !== this._rightTab()) this.workSel.clear();
     this._rightTab.set(t);
     // Drafts (localStorage) surface at the top of the In Progress list — re-scan
     // when that tab is opened to catch any saved from a prior order-create visit.
@@ -1175,6 +1181,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     if (this.pollHandle) clearInterval(this.pollHandle);
     if (this.seriesClock) { clearInterval(this.seriesClock); this.seriesClock = null; }
+    this.cancelPress();
     this.closeInvoicePreview();
   }
 
@@ -2059,14 +2066,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return (o.samples ?? []).some(s => s.repeatOffsetMin != null);
   }
 
-  /** Series tube whose schedule is still live — drives the violet pill.
-   *  'missed' (server-closed) and validated tubes keep their own colours. */
-  isSeriesLive(s: OrderSample): boolean {
-    if (s.repeatOffsetMin == null) return false;
-    return s.status === 'pending' || s.status === 'collected'
-      || s.status === 'dispatched' || s.status === 'in_transit' || s.status === 'received';
-  }
-
   /** ≥1 series time point still pending while ≥1 tube is already drawn —
    *  the "Series in progress" chip state. */
   seriesInProgress(o: Order): boolean {
@@ -2074,19 +2073,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return samples.some(s => s.repeatOffsetMin != null && s.status === 'pending')
       && samples.some(s => !!s.status && s.status !== 'pending'
         && s.status !== 'rejected' && s.status !== 'missed');
-  }
-
-  /** Compact offset suffix for the dept pill — "BIO +30m" / "BIO +2h". */
-  seriesOffsetShort(min: number): string {
-    if (min <= 0) return '1st';
-    if (min % 60 === 0) return `+${min / 60}h`;
-    return `+${min}m`;
-  }
-
-  /** Dept-pill text: code, plus the offset on series tubes. */
-  deptPillLabel(s: OrderSample): string {
-    const code = s.department?.code ?? '?';
-    return s.repeatOffsetMin != null ? `${code} ${this.seriesOffsetShort(s.repeatOffsetMin)}` : code;
   }
 
   // ── Series schedule sheet ─────────────────────────────────────────
@@ -2493,6 +2479,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._workCustomEnd.set(null);
     }
     this._workDateRange.set(d);
+    this.workSel.clear();
     this.refresh();
   }
 
@@ -2502,6 +2489,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (this._workDateRange() === 'custom') {
       this._workDateRange.set('today');
     }
+    this.workSel.clear();
     this.refresh();
   }
 
@@ -2720,31 +2708,83 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   bulkSms() { this.toasts.success(`SMS queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
   bulkWhatsapp() { this.toasts.success(`WhatsApp queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
 
-  /** Selected IDs that are also valid orders ready to dispatch — i.e.
-   *  intersection of the global selection set with the In-Progress
-   *  orders that have at least one collected (not yet dispatched)
-   *  tube. The bulk action bar uses this count to enable/disable
-   *  the dispatch buttons. */
-  readonly dispatchableSelected = computed<string[]>(() => {
-    const sel = this._selectedIds();
-    return this.visibleOrders()
-      // paymentHold orders are excluded: the backend gate would reject them —
-      // they need billing/payment first (their card shows "Bill").
-      .filter(o => sel.has(o.id) && !o.paymentHold && o.samples.some(s => s.status === 'collected'))
-      .map(o => o.id);
-  });
+  // ── Work-list multi-select (In progress) ─────────────────
+  /** ONE model drives the checkbox, the row tint AND the bar count — they
+   *  can't disagree (see work-selection.ts for the old "1 selected / 3
+   *  tinted" bug). Only rows that can take the bulk actions are selectable,
+   *  and only for staff who may dispatch. */
+  readonly workSel = createWorkSelection(this.shownInProgress,
+    o => this.auth.hasPermission('dispatch_sample') && canBulkDispatch(o));
+  /** Show the checkbox column only when at least one row can be selected. */
+  readonly workSelectable = computed(() => this.rightTab() === 'ip' && this.workSel.selectable().length > 0);
+
+  /** Checkbox click: stop the row opening; shift-click selects a range (web). */
+  onWorkCheck(ev: MouseEvent | KeyboardEvent, id: string) {
+    ev.stopPropagation();
+    this.workSel.toggle(id, ev.shiftKey && this.webPointer());
+  }
+
+  /** Phones / touch: long-press a row to select it (the next click, which
+   *  would open the drawer, is swallowed). Cancelled by a move or lift. */
+  private pressTimer: ReturnType<typeof setTimeout> | null = null;
+  private pressAt: { x: number; y: number } | null = null;
+  private swallowClick = false;
+  onRowPointerDown(ev: PointerEvent, o: Order) {
+    if (ev.pointerType === 'mouse' || !this.workSel.isSelectable(o.id)) return;
+    this.cancelPress();
+    this.pressAt = { x: ev.clientX, y: ev.clientY };
+    this.pressTimer = setTimeout(() => {
+      this.pressTimer = null;
+      this.swallowClick = true;
+      this.workSel.toggle(o.id);
+      try { navigator.vibrate?.(10); } catch { /* optional */ }
+    }, 450);
+  }
+  onRowPointerMove(ev: PointerEvent) {
+    if (!this.pressTimer || !this.pressAt) return;
+    if (Math.abs(ev.clientX - this.pressAt.x) > 8 || Math.abs(ev.clientY - this.pressAt.y) > 8) this.cancelPress();
+  }
+  cancelPress() {
+    if (this.pressTimer) clearTimeout(this.pressTimer);
+    this.pressTimer = null;
+    this.pressAt = null;
+  }
+  /** Row click: open the drawer, unless a long-press just selected it. */
+  onWorkRowClick(o: Order) {
+    if (this.swallowClick) { this.swallowClick = false; return; }
+    this.openOrder(o);
+  }
+
+  /** Esc clears the selection (when no drawer / modal is on top). */
+  @HostListener('document:keydown.escape')
+  onEscClearSelection() {
+    if (this.workSel.count() === 0) return;
+    if (this.selectedOrder() || this.activePackage() || this.selectedHc() || this.selectedBill()) return;
+    this.workSel.clear();
+  }
+
+  /** Quiet sample line: "2 samples", or "1 of 2 samples collected" while a
+   *  draw is partial (replaces the old per-department green / red dots). */
+  sampleLine(o: Order): string {
+    const samples = o.samples ?? [];
+    const n = samples.length;
+    const word = n === 1 ? 'sample' : 'samples';
+    const drawn = samples.filter(s => !!s.status && s.status !== 'pending' && s.status !== 'rejected' && s.status !== 'missed').length;
+    if (drawn > 0 && drawn < n) return `${drawn} of ${n} ${word} collected`;
+    return `${n} ${word}`;
+  }
 
   /** Plain bulk dispatch — flip every selected order's tubes to
    *  dispatched, no package wrapper. */
   bulkDispatch() {
-    const ids = this.dispatchableSelected();
+    const ids = this.workSel.ids();
     if (ids.length === 0) { this.toasts.info('Select orders that have collected tubes ready to dispatch.'); return; }
     this.api.post<{ ordersTouched: number; samplesDispatched: number }>(
       '/api/orders/bulk-dispatch', { orderIds: ids }
     ).subscribe({
       next: res => {
         this.toasts.success(`Dispatched ${res.samplesDispatched} sample${res.samplesDispatched === 1 ? '' : 's'} across ${res.ordersTouched} order${res.ordersTouched === 1 ? '' : 's'}`);
-        this.clearSelection();
+        this.workSel.clear();
         this.refresh();
       },
       error: e => this.toasts.error(ApiError.from(e).message)
@@ -2769,13 +2809,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  show the modal with QR + code so reception can hand the lab
    *  one scannable token. */
   createDispatchPackage() {
-    const ids = this.dispatchableSelected();
+    const ids = this.workSel.ids();
     if (ids.length === 0) { this.toasts.info('Pick at least one in-progress order with collected tubes.'); return; }
     this.api.post<DispatchPackage>('/api/dispatch-packages', { orderIds: ids }).subscribe({
       next: pkg => {
         this._activePackage.set(pkg);
         this.toasts.success(`Package ${pkg.code} created with ${pkg.orderCount} order${pkg.orderCount === 1 ? '' : 's'}`);
-        this.clearSelection();
+        this.workSel.clear();
         this.refresh();
       },
       error: e => this.toasts.error(ApiError.from(e).message)
@@ -2841,29 +2881,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       default: return 'default';
     }
   }
-  orderTone(o: Order): ChipTone {
-    // Matches the "Series in progress" chip label (effectiveStatusLabel).
-    if (this.seriesInProgress(o)) return 'violet';
-    switch (o.status) {
-      case 'completed':
-      case 'validated':
-      case 'delivered': return 'emerald';
-      case 'cancelled':
-      case 'rejected': return 'rose';
-      case 'in_progress':
-      case 'received':
-      case 'processing':
-      case 'resulted': return 'violet';
-      case 'collected':
-      case 'dispatched':
-      case 'in_transit': return 'teal';
-      case 'billed': return 'emerald';
-      case 'created':
-      case 'draft': return 'amber';
-      default: return 'amber';
-    }
-  }
-
   pipeline(o: Order): Array<{ label: string; state: 'done' | 'active' | 'pending' }> {
     const billDone = o.status !== 'draft' && o.status !== 'created';
     const collected = o.samples.some(s => s.status && s.status !== 'pending');

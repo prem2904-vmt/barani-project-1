@@ -347,7 +347,7 @@
   }
   .pf-appt-split__pane--expanded > .pf-cards,
   .pf-appt-split__pane--expanded > .pf-empty-tile,
-  .pf-appt-split__pane--expanded > .pf-bulk-bar {
+  .pf-appt-split__pane--expanded > .pf-selbar {
     display: flex;
   }
   .pf-appt-split__pane--expanded > .pf-cards {
@@ -364,7 +364,7 @@
     margin: 12px 14px 14px;
     flex: 1 1 auto;
   }
-  .pf-appt-split__pane--expanded > .pf-bulk-bar {
+  .pf-appt-split__pane--expanded > .pf-selbar {
     margin: 10px 14px 0;
   }
 }
@@ -444,7 +444,7 @@
   }
 
   .pf-appt-split__pane > .pf-appt-split__hdr,
-  .pf-appt-split__pane > .pf-bulk-bar,
+  .pf-appt-split__pane > .pf-selbar,
   .pf-appt-split__pane > .pf-empty {
     flex-shrink: 0;
   }

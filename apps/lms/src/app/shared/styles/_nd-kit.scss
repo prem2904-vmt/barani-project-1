@@ -166,6 +166,31 @@
 .nd-empty.nd-empty--compact .nd-empty__icon > svg { width: 16px; height: 16px; }
 .nd-empty.nd-empty--compact .nd-empty__title { font-size: 13.5px; }
 
+/* ── Checkbox (multi-select rows) ─────────────────────────────────────
+   <button type="button" class="nd-check" role="checkbox" [attr.aria-checked]="on"
+     aria-label="Select <name>"><span class="nd-check__box" aria-hidden="true"><svg…check/></span></button>
+   20px rounded square: neutral border off, violet fill + white check on.
+   The button is the hit area (28px web, 44px touch); Space toggles. */
+.nd-check {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 28px; height: 28px; min-width: 28px; min-height: 28px; margin: -4px;
+  padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+}
+.nd-check__box {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 6px;
+  border: 1.5px solid var(--nd-sel-border); background: var(--nd-card-bg); color: #fff;
+  transition: background var(--nd-dur-fast) ease, border-color var(--nd-dur-fast) ease;
+}
+.nd-check__box > svg { width: 14px; height: 14px; opacity: 0; transform: scale(0.6); transition: opacity var(--nd-dur-fast) ease, transform var(--nd-dur-fast) var(--nd-spring-bounce); }
+.nd-check:hover .nd-check__box { border-color: var(--color-violet-600, #7c3aed); }
+.nd-check[aria-checked='true'] .nd-check__box { background: var(--color-violet-600, #7c3aed); border-color: var(--color-violet-600, #7c3aed); }
+.nd-check[aria-checked='true'] .nd-check__box > svg { opacity: 1; transform: none; }
+.nd-check:focus-visible { outline: none; }
+.nd-check:focus-visible .nd-check__box { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+@media (pointer: coarse) { .nd-check { width: 44px; height: 44px; min-width: 44px; min-height: 44px; margin: -12px; } }
+@media (prefers-reduced-motion: reduce) { .nd-check__box, .nd-check__box > svg { transition: none; } }
+
 /* ── Neutral selected states ────────────────────────────────────────── */
 .nd-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--nd-radius-sm); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
 .nd-seg__item { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }

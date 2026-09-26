@@ -1,0 +1,248 @@
+/* ══ Work list rows + multi-select (ND "List rows & multi-select") ══════
+   In progress / Completed / Payments due share ONE row:
+     [checkbox] · FULL name + quiet meta · neutral status chip · row action
+   Noto only (tabular numbers), palette only — the status chip is neutral and
+   its small dot is the one accent (same as the order drawer's chip). No
+   department chips, no monospace, no amber / green status words. Both
+   themes: every colour is a token. */
+
+.pf-wlist { gap: 8px; }
+
+.pf-wrow {
+  --pf-wrow-act-w: 104px;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: 'body status acts';
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 8px;
+  min-height: 64px;
+  padding: 10px 12px 10px 14px;
+  border-radius: var(--nd-radius, 12px);
+  border: 1px solid var(--nd-line);
+  background: var(--nd-card-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
+}
+.pf-wlist--sel .pf-wrow {
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+  grid-template-areas: 'check body status acts';
+  padding-left: 12px;
+}
+.pf-wrow:hover { border-color: var(--nd-sel-border); }
+.pf-wrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+
+/* Selected: a subtle violet tint + a 1px violet border. No gradient. */
+.pf-wrow.pf-wrow--sel,
+.pf-wrow.pf-wrow--sel:hover {
+  background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 7%, var(--nd-card-bg));
+  border-color: var(--color-violet-600, #7c3aed);
+}
+
+/* Priority: a thin stripe only for STAT (red) / Urgent (amber) — ND §6. */
+.pf-wrow[data-priority='STAT'] { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--red-text, #dc2626) 75%, transparent); }
+.pf-wrow[data-priority='Urgent'] { box-shadow: inset 3px 0 0 #d97706; }
+
+.pf-wrow__check { grid-area: check; justify-self: center; }
+.pf-wrow__check--none { width: 20px; height: 20px; }
+
+.pf-wrow__body { grid-area: body; min-width: 0; }
+/* FULL name, wrapping — never an ellipsis (ND §5). */
+.pf-wrow__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+/* Quiet meta: "22/M · AA0006 · 1 sample · 9:48 PM" (tabular, no "|"). */
+.pf-wrow__meta {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 3px 0 0;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.pf-wrow__mi + .pf-wrow__mi::before {
+  content: '·';
+  margin: 0 6px;
+  color: var(--text-muted);
+}
+
+/* Status = the neutral ND chip with a state dot (drawer parity). */
+.pf-wrow__status {
+  grid-area: status;
+  justify-self: end;
+  height: 26px;
+  gap: 6px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.pf-wrow__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-violet-600, #7c3aed);
+}
+.pf-wrow__status[data-state='idle'] .pf-wrow__dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--nd-sel-border);
+}
+.pf-wrow__status[data-state='stopped'] .pf-wrow__dot { background: var(--red-text, #dc2626); }
+
+/* Row actions: the kit's .nd-rowact, right-aligned in a fixed-width slot so
+   the action lines up in every row. */
+.pf-wrow__acts {
+  grid-area: acts;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: var(--pf-wrow-act-w);
+}
+.pf-wrow__acts:empty { min-width: var(--pf-wrow-act-w); }
+
+/* Touch: long-press selects, so no callout / text selection on the row. */
+@media (pointer: coarse) {
+  .pf-wrow { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; --pf-wrow-act-w: 44px; }
+}
+
+/* Narrow list (phones, a squeezed pane): name + meta on top, then the
+   status chip (left) and the action (right) on the second line. */
+@container (max-width: 520px) {
+  .pf-wrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'body body' 'status acts';
+    --pf-wrow-act-w: 0px;
+  }
+  .pf-wlist--sel .pf-wrow {
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    grid-template-areas: 'check body body' '. status acts';
+  }
+  .pf-wrow__check { align-self: start; margin-top: 2px; }
+  .pf-wrow__status { justify-self: start; }
+}
+
+/* ── Selection bar ─────────────────────────────────────────────────────
+   Sits above the list (outside its scroller, so it stays put), neutral card
+   surface + hairline. "3 selected" in Noto · Select all / Clear · bulk
+   actions (ONE primary: Bundle as package · QR) · ×. Slides + fades in. */
+.pf-selbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  flex-shrink: 0;
+  margin: 10px 12px 0;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--nd-radius, 12px);
+  border: 1px solid var(--nd-line);
+  background: var(--nd-card-bg);
+  box-shadow: var(--nd-shadow-sm);
+  animation: pf-selbar-in var(--nd-dur, 320ms) var(--nd-spring, ease) both;
+}
+.pf-selbar__count {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pf-selbar__link {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--violet-text, #6d28d9);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pf-selbar__link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pf-selbar__link:focus-visible,
+.pf-selbar__x:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pf-selbar__gap { flex: 1 1 auto; }
+.pf-selbar__acts { display: flex; align-items: center; gap: 8px; }
+.pf-selbar .pf-selbar__btn { height: 36px; min-height: 36px; padding: 0 14px; }
+.pf-selbar__btn > svg { flex: none; }
+.pf-selbar__x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.pf-selbar__x:hover { background: var(--nd-chip-bg); color: var(--text-primary); }
+
+@keyframes pf-selbar-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Touch: 44px targets in the bar. */
+@media (pointer: coarse) {
+  .pf-selbar .pf-selbar__btn,
+  .pf-selbar__x,
+  .pf-selbar__link { height: 44px; min-height: 44px; }
+  .pf-selbar__x { width: 44px; min-width: 44px; }
+}
+
+/* Phones: the bar docks above the navbar as a sheet-like bar (sticky to the
+   viewport bottom while the list is on screen); the list leaves room for it. */
+@media (max-width: 640px) {
+  .pf-selbar {
+    order: 99;
+    position: sticky;
+    bottom: calc(var(--nd-nav-h, 64px) + 10px);
+    z-index: 30;
+    margin: 8px 0 0;
+    padding: 10px 10px 10px 14px;
+    border-radius: 16px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+    animation-name: pf-selbar-rise;
+  }
+  .pf-selbar__acts { flex: 1 1 100%; order: 5; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Two equal buttons; long labels wrap inside the 44px button, icons drop. */
+  .pf-selbar__acts .pf-selbar__btn {
+    min-width: 0; padding: 0 10px;
+    white-space: normal; line-height: 1.15; text-align: center;
+  }
+  .pf-selbar__acts .pf-selbar__btn > svg { display: none; }
+  .pf-selbar .pf-selbar__btn,
+  .pf-selbar__x,
+  .pf-selbar__link { height: 44px; min-height: 44px; }
+  .pf-selbar__x { width: 44px; min-width: 44px; }
+}
+@keyframes pf-selbar-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-selbar { animation: none; }
+  .pf-wrow { transition: none; }
+}
