@@ -510,7 +510,7 @@ const SEX_WORD = { any: 'Anyone', M: 'Male', F: 'Female' } as const;
     .rtb__l1 { font-size: 15px; font-weight: 600; line-height: 1.3; }
     /* "Prints as" — the Report text with {u} filled, the unit as a chip. */
     .rtb__prev { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); overflow-wrap: anywhere; }
-    .rtb__prevlbl { font-weight: 500; }
+    .rtb__prevlbl { display: block; font-weight: 500; }
     .rtb__prevtxt { white-space: pre-line; color: var(--text-secondary); }
     .rtb__uchip { display: inline-block; padding: 0 6px; margin: 0 1px; border-radius: 6px; line-height: 18px;
       font-size: 11.5px; font-weight: 500; color: var(--text-secondary);
