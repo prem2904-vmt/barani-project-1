@@ -281,3 +281,25 @@ describe('Work rows — status stacked above the action (owner: compact right co
     expect(css).toMatch(/:has\(\.pf-wrow__acts:empty\) \.pf-wrow__status \{ grid-row: 1 \/ span 2;/);
   });
 });
+
+describe('Work rows — tinted surface in both themes (owner: "too white")', () => {
+  it('rows use the theme glass fill + border and a soft shadow, not the plain card white', () => {
+    const css = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/styles/_work-rows.scss', 'utf8');
+    const row = css.slice(css.indexOf('.pf-wrow {'), css.indexOf('}', css.indexOf('.pf-wrow {')));
+    expect(row).toMatch(/background: var\(--glass-bg\)/);
+    expect(row).toMatch(/border: 1px solid var\(--glass-border\)/);
+    expect(row).toMatch(/box-shadow:/);
+  });
+});
+
+describe('Work rows — phone layout (owner: touch-optimised)', () => {
+  it('narrow rows never span the status over the name, and the phone search is full width', () => {
+    const css = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/styles/_work-rows.scss', 'utf8');
+    const narrow = css.slice(css.indexOf('@container (max-width: 520px)'));
+    expect(narrow).toMatch(/\.pf-wrow:has\(\.pf-wrow__acts:empty\) \.pf-wrow__status \{\s*grid-row: auto;/);
+    expect(narrow).toMatch(/min-height: 44px/);
+    const host = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/frontdesk-landing.component.scss', 'utf8');
+    const phone = host.slice(host.indexOf('.pf-work-find--phone {', host.indexOf('@media (max-width: 640px)')));
+    expect(phone).toMatch(/max-width: none/);
+  });
+});

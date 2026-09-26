@@ -21,18 +21,22 @@
   min-height: 64px;
   padding: 10px 12px 10px 14px;
   border-radius: var(--nd-radius, 12px);
-  border: 1px solid var(--nd-line);
-  background: var(--nd-card-bg);
+  /* A soft tinted fill + gentle shadow so rows read as cards against the
+     white pane (owner: "too white") — the glass tokens flip per theme, so
+     light and dark both get the classic tinted surface. */
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(124, 58, 237, 0.05);
   color: var(--text-primary);
   cursor: pointer;
-  transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
+  transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease, box-shadow var(--nd-dur-fast) ease;
 }
 .pf-wlist--sel .pf-wrow {
   grid-template-columns: 20px minmax(0, 1fr) auto;
   grid-template-areas: 'check body status' 'check body acts';
   padding-left: 12px;
 }
-.pf-wrow:hover { border-color: var(--nd-sel-border); }
+.pf-wrow:hover { background: var(--glass-bg-hover, var(--glass-bg)); border-color: var(--nd-sel-border); box-shadow: 0 8px 24px rgba(124, 58, 237, 0.08); }
 .pf-wrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
 
 /* Selected: a subtle violet tint + a 1px violet border. No gradient. */
@@ -148,7 +152,24 @@
     grid-template-areas: 'check body body' '. status acts';
   }
   .pf-wrow__check { align-self: start; margin-top: 2px; }
-  .pf-wrow__status { justify-self: start; }
+  /* Touch: status (left) and the action (right) share the second line,
+     both vertically centred — never overlapping the name/meta above. */
+  .pf-wrow__status,
+  .pf-wrow:has(.pf-wrow__acts:empty) .pf-wrow__status {
+    grid-row: auto;
+    justify-self: start;
+    align-self: center;
+    font-size: 13px;
+  }
+  .pf-wrow__acts { align-self: center; }
+  .pf-wrow__acts .nd-rowact { min-height: 44px; }
+  /* Rows that can't be selected don't reserve the checkbox column. */
+  .pf-wlist--sel .pf-wrow:has(.pf-wrow__check--none) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'body body' 'status acts';
+    padding-left: 14px;
+  }
+  .pf-wrow__check--none { display: none; }
 }
 
 /* ── Selection bar ─────────────────────────────────────────────────────
