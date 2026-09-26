@@ -1080,7 +1080,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   /** One line naming both marks, e.g. "High: H  ·  Low: L". */
   flagLegend(): string {
     if ((this.tpl().flagIndicator ?? 'letter') === 'none') return 'No marks — high and low results print as plain values.';
-    return `High: ${this.flagGlyph('high')}   ·   Low: ${this.flagGlyph('low')}   ·   Critical: C`;
+    return `High: ${this.flagGlyph('high')}   ·   Low: ${this.flagGlyph('low')}   ·   Critical values print as high / low`;
   }
   readonly patientLayoutOptions: SegmentedOption<string>[] = [
     { value: 'three-col',     label: '3-column (Classic)' },

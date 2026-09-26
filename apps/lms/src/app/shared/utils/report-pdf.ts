@@ -10,7 +10,8 @@ import {
   ResolvedSection,
 } from '../models/report-layout.model';
 import { ReportSignature, ReportTemplate } from '../models/report.model';
-import { flagCodeOf, savedFlagOf, type SavedFlag } from './result-flag';
+import { savedFlagOf, type SavedFlag } from './result-flag';
+import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
 
 /**
@@ -1903,7 +1904,7 @@ interface PanelRowData {
   result?: string;
   range?: string;
   unit?: string;
-  /** Display letter: 'H' | 'L' | 'C' | 'A' | '' */
+  /** Display letter: 'H' | 'L' | 'A' | '' — never 'C' (reportFlag). */
   flag?: string;
   isLow?: boolean;
   abnormal?: boolean;
@@ -2053,13 +2054,17 @@ function buildPanelGroup(
         // The preview has no saved result — mw puts the row's flag on the row.
         const rowFlag = r.flag != null ? r.flag : undefined;
         const hasSaved = (!!sv && typeof sv === 'object' && 'flag' in sv) || !!rc.saved || rowFlag !== undefined;
-        const savedCode = sv && typeof sv === 'object' && 'flag' in sv ? flagCodeOf(sv.flag)
-          : rc.saved ? flagCodeOf(rc.flag) : flagCodeOf(rowFlag ?? rc.flag);
-        const savedLetter = savedCode === 'N' ? '' : savedCode;
-        const label = hasSaved ? '' : flagLabel(r);
-        const letter = hasSaved ? savedLetter
-          : ((label === 'High' ? 'H' : label === 'Low' ? 'L' : '') || savedLetter);
+        const savedRaw = sv && typeof sv === 'object' && 'flag' in sv ? sv.flag
+          : rc.saved ? rc.flag : (rowFlag ?? rc.flag);
         const resultText = rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : '');
+        const rangeText = rangeCellText(coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''), r.unit);
+        // Reports never print C / Critical (owner 2026-09-26: critical is
+        // internal) — a critical maps to H / L by its direction.
+        const saved = reportFlag(savedRaw, resultText, rangeText || (sv as SavedFlag | undefined)?.range);
+        const label = hasSaved ? '' : flagLabel(r);
+        const labelLetter = label === 'High' ? 'H' : label === 'Low' ? 'L' : '';
+        const letter = hasSaved ? saved.flag : (labelLetter || saved.flag);
+        const isLow = hasSaved ? saved.isLow : (labelLetter ? labelLetter === 'L' : saved.isLow);
         // Admin colour semantics: red/orange = abnormal; green is an explicit
         // "normal" marker and must NOT trip the abnormal styling.
         const sev = colorSeverity(r.color);
@@ -2075,15 +2080,15 @@ function buildPanelGroup(
           kind: 'param',
           name: r.title || humanize(r.parameterName ?? ''),
           result: resultText,
-          range: rangeCellText(coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''), r.unit),
+          range: rangeText,
           // Prefer the Unit column when present; otherwise fall back to the
           // parameter's own unit so EVERY department shows it (e.g. "11.4 g/dL")
           // — but never grow a unit onto a qualitative result ("Normal mg/dL").
           unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : '')
             || (looksNumeric(resultText) ? (r.unit ?? '') : ''),
           flag: letter,
-          isLow: letter === 'L',
-          abnormal: hasSaved ? !!letter : (sev === 'high' || sev === 'warn' || !!letter),
+          isLow,
+          abnormal: hasSaved ? saved.abnormal : (sev === 'high' || sev === 'warn' || !!letter || saved.abnormal),
           color: r.color ?? null,
           bold: !!r.isBold,
           texts: Object.keys(texts).length ? texts : undefined,
@@ -2102,8 +2107,8 @@ function buildPanelGroup(
   // Legacy values map.
   const values = t.result?.['values'] as Record<string, { value?: unknown; flag?: string; range?: string; unit?: string; description?: string }> | undefined;
   for (const [paramName, v] of Object.entries(values ?? {})) {
-    const flag = (v?.flag ?? '').toUpperCase();
-    const letter = ['H', 'L', 'C', 'A'].includes(flag) ? flag : '';
+    // Criticals print as H / L — never C (report rule; see report-flag.ts).
+    const rf = reportFlag(v?.flag, v?.value, v?.range);
     group.rows.push({
       // Text columns (Description) read from the value payload when present.
       texts: v?.description ? { description: v.description } : undefined,
@@ -2112,9 +2117,9 @@ function buildPanelGroup(
       result: String(v?.value ?? '—'),
       range: rangeCellText(v?.range, v?.unit),
       unit: v?.unit ?? '',
-      flag: letter,
-      isLow: flag === 'L',
-      abnormal: !!letter,
+      flag: rf.flag,
+      isLow: rf.isLow,
+      abnormal: rf.abnormal,
       method: methodForValue(t, paramName),
     });
   }
@@ -2530,7 +2535,8 @@ function renderColumnarTable(
       // triangle (didDrawCell). 'none' → no glyph/arrow.
       // 'A' (qualitative abnormal — e.g. a non-normal dropdown option) gets
       // the same ▲ treatment as a numeric High: bold + up-triangle after the
-      // result text. Only 'C' keeps its letter — critical must read as text.
+      // result text. A critical already arrives as H / L (reportFlag) — the
+      // report never prints C / Critical.
       const useArrow = theme.flagIndicator === 'arrow' && (r.flag === 'H' || r.flag === 'L' || r.flag === 'A');
       const glyph = (r.flag && !useArrow && theme.flagIndicator !== 'none') ? r.flag : '';
       const isFirst = firstParam;
@@ -3077,16 +3083,16 @@ function renderLegacyTest(
 
   if (entries.length > 0) {
     entries.forEach(([paramName, v], i) => {
-      const flag = (v?.flag ?? '').toUpperCase();
-      const flagText = flag === 'H' ? 'High' : flag === 'L' ? 'Low'
-        : flag === 'C' ? 'Critical' : flag === 'A' ? 'Abnormal' : '';
+      // Criticals read High / Low — never "Critical" (report rule).
+      const rf = reportFlag(v?.flag, v?.value, v?.range);
+      const flagText = reportFlagWord(rf.flag);
       const valueText = String(v?.value ?? '—');
       const investContent = (i === 0 && sampleTypeLine)
         ? `${humanize(paramName)}\n${sampleTypeLine}`
         : humanize(paramName);
       const resultStyles: Record<string, unknown> = {
         fontStyle: 'bold',
-        textColor: flagText === 'Low' ? FLAG_BLUE : flagText ? FLAG_RED : BLACK,
+        textColor: flagText === 'Low' ? FLAG_BLUE : (flagText || rf.abnormal) ? FLAG_RED : BLACK,
       };
       tableRows.push([
         { content: investContent, styles: { fontStyle: 'bold', textColor: BLACK } },

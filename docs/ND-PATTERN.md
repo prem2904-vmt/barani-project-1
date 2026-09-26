@@ -938,6 +938,12 @@ Try a value [6] for [Female ▾] aged [35] [years ▾] → Critical low
   **critical** (stored "C", the existing critical marker, alerts and
   notifications). **On a limit = not flagged.** A blank limit = no flag on
   that side. One-sided groups are inclusive too ("≤ 200").
+- **Reports never show C / Critical; criticals print as H / L. Critical is
+  internal.** (owner 2026-09-26) One helper, `shared/utils/report-flag.ts`
+  `reportFlag()`, maps a stored "C" to H / L by the value against the row's
+  printed range (same letter / arrow / none indicator and high / low colours)
+  for every report path — PDF, previews, Test Master live preview. Internal
+  screens keep showing critical.
 - **Report text** prints on the report EXACTLY as typed — "Normal: 70–99 ·
   Prediabetes: 100–125 · Diabetes: ≥126", "12 – 16 g/dL", "Follicular
   2.9–14.6 · Luteal 1.4–8.9". Nothing is derived or templated. Blank prints

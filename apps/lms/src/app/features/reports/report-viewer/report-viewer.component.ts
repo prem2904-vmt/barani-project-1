@@ -23,7 +23,8 @@ import { formatPatientMeta, patientDisplayName } from '../../../shared/models/pa
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { flagCodeOf, savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
+import { savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
+import { reportFlag } from '../../../shared/utils/report-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { PartnerReport, absoluteFileUrl, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
 
@@ -61,7 +62,7 @@ interface ViewPanelRow {
   range?: string;
   unit?: string;
   specimen?: string;
-  /** 'H' | 'L' | 'C' | 'A' | '' */
+  /** 'H' | 'L' | 'A' | '' — never 'C' (reportFlag). */
   flag?: string;
   abnormal?: boolean;
   isLow?: boolean;
@@ -385,8 +386,8 @@ export class ReportViewerComponent implements OnInit {
     return row.isLow ? this.abnormalLowColor() : this.abnormalColor();
   }
 
-  /** The flag glyph to show beside the value: ↑/↓ in arrow mode, H/L/C/A in
-   *  letter mode. */
+  /** The flag glyph to show beside the value: ↑/↓ in arrow mode, H/L/A in
+   *  letter mode (criticals already arrive as H / L — reportFlag). */
   flagDisplay(row: ViewPanelRow): string {
     if (!row.flag || this.flagIndicator() === 'none') return '';
     if (this.flagIndicator() === 'arrow') {
@@ -458,19 +459,23 @@ export class ReportViewerComponent implements OnInit {
           // single source; the row colour only stands in when there is none.
           const sv = r.parameterName ? savedFlagOf({ flagged: savedValues }, r.parameterName) : undefined;
           const hasSaved = (!!sv && typeof sv === 'object' && 'flag' in sv) || !!rc.saved;
-          const code = sv && typeof sv === 'object' && 'flag' in sv ? flagCodeOf(sv.flag) : flagCodeOf(rc.flag);
+          const raw = sv && typeof sv === 'object' && 'flag' in sv ? sv.flag : rc.flag;
           const colorWord = hasSaved ? '' : this.hueFlag(r.color);
-          const flag = (hasSaved ? (code === 'N' ? '' : code) : rc.flag)
-            || (colorWord === 'High' ? 'H' : colorWord === 'Low' ? 'L' : '');
+          const result = rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : '');
+          const range = coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : '');
+          // Report rule: a critical prints as H / L — never C (report-flag.ts).
+          const rf = reportFlag(raw, result, range || sv?.range);
+          const colorLetter = colorWord === 'High' ? 'H' : colorWord === 'Low' ? 'L' : '';
+          const flag = rf.flag || colorLetter;
           g.rows.push({
             kind: 'param',
             name: this.humanize(r.parameterName ?? ''),
-            result: rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : ''),
-            range: coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''),
+            result,
+            range,
             unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : ''),
             flag,
-            isLow: flag === 'L',
-            abnormal: hasSaved ? !!flag : (!!r.color || r.isBold || (!!rc.flag && rc.flag !== 'N')),
+            isLow: rf.flag ? rf.isLow : flag === 'L',
+            abnormal: hasSaved ? rf.abnormal : (!!r.color || r.isBold || rf.abnormal),
           });
         }
       }
@@ -479,17 +484,16 @@ export class ReportViewerComponent implements OnInit {
       for (const [name, raw] of Object.entries(values)) {
         const v = (raw ?? {}) as { value?: unknown; flag?: string; range?: string; unit?: string };
         const isObj = v && typeof v === 'object' && !Array.isArray(v);
-        const flag = (isObj ? (v.flag ?? '') : '').toUpperCase();
-        const letter = ['H', 'L', 'C', 'A'].includes(flag) ? flag : '';
+        const rf = reportFlag(isObj ? v.flag : '', isObj ? v.value : raw, isObj ? v.range : '');
         g.rows.push({
           kind: 'param',
           name: this.humanize(name),
           result: isObj ? String(v.value ?? '—') : String(raw ?? '—'),
           range: isObj ? (v.range ?? '') : '',
           unit: isObj ? (v.unit ?? '') : '',
-          flag: letter,
-          isLow: flag === 'L',
-          abnormal: !!letter,
+          flag: rf.flag,
+          isLow: rf.isLow,
+          abnormal: rf.abnormal,
         });
       }
     }
