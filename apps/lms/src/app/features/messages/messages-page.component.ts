@@ -65,8 +65,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  connects the chat/signaling hubs. */
   protected readonly moduleOff = computed(() => !this.entitlements.moduleEnabled('messages'));
   private readonly presenceSvc = inject(PresenceService);
-  private readonly api = inject(ApiService);
-  private readonly toasts = inject(ToastService);
+  protected readonly api = inject(ApiService);
+  protected readonly toasts = inject(ToastService);
   private readonly chatNotify = inject(ChatNotifyService);
   protected readonly ringtone = inject(RingtoneService);
   /** Soft-keyboard visibility — drops the composer's nav-clearance padding so
@@ -176,6 +176,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   private recordStartedAt = 0;
   private recordTimer: ReturnType<typeof setInterval> | null = null;
   private recordStream: MediaStream | null = null;
+  /** False when the recording was cancelled — late `dataavailable` chunks
+   *  must not turn a discarded clip into a message. */
+  private keepRecording = false;
   /** Built-in emoji bank — no third-party dep. ~50 of the most common. */
   protected readonly emojiBank: string[] = [
     '👍','❤️','😂','🙏','🔥','🎉','😍','😊','👏','💯',
@@ -474,7 +477,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       const phone = typeof window !== 'undefined'
         && window.matchMedia('(max-width: 640px)').matches;
       if (typeof document !== 'undefined') {
-        document.documentElement.classList.toggle('pf-chat-immersive', open && phone);
+        // Classic only: the new design never hides the navbar (ND-PATTERN §8).
+        document.documentElement.classList.toggle('pf-chat-immersive', open && phone && this.hidesNavInThread());
       }
       // While a thread is open on phone, route edge-swipe / hardware back through
       // closeConversation() (the thread is a signal, not a route) so swiping back
@@ -501,6 +505,19 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Classic hides the bottom navbar inside an open phone thread
+   *  (html.pf-chat-immersive). The new design overrides this to false: the
+   *  navbar is always visible and the layout fits above it. */
+  protected hidesNavInThread(): boolean { return true; }
+
+  /** Classic auto-sends a voice note the moment recording stops. The new
+   *  design overrides this to true: stop gives a preview (play / discard)
+   *  and nothing leaves until Send / Enter — the chat-windows contract. */
+  protected voicePreviewBeforeSend(): boolean { return false; }
+
+  /** A stopped recording waiting for Send (new design only). */
+  protected readonly voiceDraft = signal<{ file: File; url: string; secs: number } | null>(null);
+
   /** Resize the composer textarea to fit its content (WhatsApp-style):
    *  reset to auto, grow to scrollHeight capped at a max, scroll past the cap. */
   private autoGrowComposer(): void {
@@ -514,6 +531,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.stopRecording(false);
+    this.discardVoiceDraft();
     if (typeof document !== 'undefined') {
       document.documentElement.classList.remove('pf-chat-immersive');
     }
@@ -705,6 +724,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   }
 
   protected async sendDraft(): Promise<void> {
+    if (this.voiceDraft()) { await this.sendVoiceDraft(); return; }
     const body = this.draft().trim();
     const convId = this.chat.activeConversationId();
     const att = this.pendingAttachment();
@@ -1074,6 +1094,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  send=false → discard. */
   private stopRecording(send: boolean): void {
     if (!this.recording()) return;
+    this.keepRecording = send;
     this.recording.set(false);
     if (this.recordTimer) { clearInterval(this.recordTimer); this.recordTimer = null; }
     try { this.mediaRecorder?.stop(); } catch { /* ignore */ }
@@ -1084,19 +1105,52 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   /** After MediaRecorder fires onstop, upload + queue the voice clip. */
   private async finalizeRecording(): Promise<void> {
-    if (this.recordChunks.length === 0) return;
+    if (!this.keepRecording || this.recordChunks.length === 0) { this.recordChunks = []; return; }
     const durationSec = Math.max(1, Math.round((Date.now() - this.recordStartedAt) / 1000));
     const mime = this.mediaRecorder?.mimeType?.split(';')[0] ?? 'audio/webm';
     const ext = mime === 'audio/mp4' ? 'm4a' : 'webm';
     const blob = new Blob(this.recordChunks, { type: mime });
     this.recordChunks = [];
     const file = new File([blob], `voice-${durationSec}s.${ext}`, { type: mime });
+    if (this.voicePreviewBeforeSend()) {
+      // Preview: nothing is uploaded until Send / Enter.
+      this.discardVoiceDraft();
+      this.voiceDraft.set({ file, url: URL.createObjectURL(file), secs: durationSec });
+      this.onVoiceDraftReady();
+      return;
+    }
     this.attachmentUploading.set(true);
     try {
       const uploaded = await this.chat.uploadAttachment(file);
       this.pendingAttachment.set(uploaded);
       // Auto-send: voice messages are usually meant to send immediately.
       await this.sendDraft();
+    } catch (err) {
+      this.toasts.error(ApiError.from(err).message);
+    } finally { this.attachmentUploading.set(false); }
+  }
+
+  /** Hook: the new design moves focus to Send so Enter sends the preview. */
+  protected onVoiceDraftReady(): void { /* classic: nothing */ }
+
+  protected discardVoiceDraft(): void {
+    const d = this.voiceDraft();
+    if (d) { try { URL.revokeObjectURL(d.url); } catch { /* jsdom */ } }
+    this.voiceDraft.set(null);
+  }
+
+  /** Upload + send the previewed voice note (keeps a reply if one is set). */
+  private async sendVoiceDraft(): Promise<void> {
+    const d = this.voiceDraft();
+    const convId = this.chat.activeConversationId();
+    if (!d || !convId) return;
+    const reply = this.replyingTo();
+    this.discardVoiceDraft();
+    this.replyingTo.set(null);
+    this.attachmentUploading.set(true);
+    try {
+      const uploaded = await this.chat.uploadAttachment(d.file);
+      await this.chat.sendMessage(convId, '', reply?.id ?? null, uploaded);
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
     } finally { this.attachmentUploading.set(false); }

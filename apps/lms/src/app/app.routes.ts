@@ -572,7 +572,8 @@ export const appRoutes: Route[] = [
       {
         path: 'messages',
         canActivate: [workflowGuard('messages')],
-        loadComponent: () => import('./features/messages/messages-page.component').then(m => m.MessagesPageComponent)
+        // New design → the nd-kit screen; classic → the original page.
+        loadComponent: () => import('./features/messages/messages-route.component').then(m => m.MessagesRouteComponent)
       },
 
       // Ops
