@@ -383,9 +383,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly process = inject(ProcessWorkflowService);
   protected readonly scan = inject(ScanService);
 
-  /** Rendered inside the lab "My Work" Collect pane (collect-in-lab mode): the
-   *  host supplies its own pane header, so we suppress our KPI strip + screen
-   *  header + outer page padding while keeping the queue + scan + drawer. */
+  /** Rendered embedded inside a host pane: the host supplies its own header, so
+   *  we suppress our KPI strip + screen header + outer page padding while
+   *  keeping the queue + scan + drawer. (My Work no longer embeds it — the band
+   *  "Collect" button opens the full page.) */
   @Input() embedded = false;
   readonly sampleCollected = output<void>();
 

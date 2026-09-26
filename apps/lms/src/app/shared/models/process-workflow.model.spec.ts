@@ -29,7 +29,6 @@ import {
   BILLING_COUNTER_SCREEN,
   LAB_MENU_ID,
   collectsInLab,
-  enforceCollectInLab,
   ProcessCategory,
   ProcessAction,
   ProcessWorkflowConfig,
@@ -795,77 +794,6 @@ describe('collectsInLab', () => {
 
   it('returns false when config is null', () => {
     expect(collectsInLab(null)).toBe(false);
-  });
-});
-
-describe('enforceCollectInLab', () => {
-  it('returns same object when collection not in lab', () => {
-    const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'desk', name: 'Desk', icon: 'folder', color: '#000', order: 0 }],
-      actions: [
-        { id: 'coll', type: 'sample_collection', categoryId: 'desk', order: 0, enabled: true },
-        { id: 'disp', type: 'dispatch', categoryId: 'desk', order: 1, enabled: true },
-      ],
-    };
-    const result = enforceCollectInLab(cfg);
-    expect(result).toBe(cfg);
-  });
-
-  it('returns same object when collection in lab and dispatch/intake already disabled', () => {
-    const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'lab', name: 'Lab', icon: 'flask', color: '#000', order: 0 }],
-      actions: [
-        { id: 'coll', type: 'sample_collection', categoryId: 'lab', order: 0, enabled: true },
-        { id: 'disp', type: 'dispatch', categoryId: 'lab', order: 1, enabled: false },
-        { id: 'intake', type: 'lab_intake', categoryId: 'lab', order: 2, enabled: false },
-      ],
-    };
-    const result = enforceCollectInLab(cfg);
-    expect(result).toBe(cfg);
-  });
-
-  it('disables dispatch and lab_intake when collection in lab and they are enabled', () => {
-    const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'lab', name: 'Lab', icon: 'flask', color: '#000', order: 0 }],
-      actions: [
-        { id: 'coll', type: 'sample_collection', categoryId: 'lab', order: 0, enabled: true },
-        { id: 'disp', type: 'dispatch', categoryId: 'lab', order: 1, enabled: true },
-        { id: 'intake', type: 'lab_intake', categoryId: 'lab', order: 2, enabled: true },
-      ],
-    };
-    const result = enforceCollectInLab(cfg);
-    expect(result).not.toBe(cfg);
-    expect(result.actions.find(a => a.id === 'disp')?.enabled).toBe(false);
-    expect(result.actions.find(a => a.id === 'intake')?.enabled).toBe(false);
-  });
-
-  it('returns shallow copy with only necessary action changes', () => {
-    const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'lab', name: 'Lab', icon: 'flask', color: '#000', order: 0 }],
-      actions: [
-        { id: 'coll', type: 'sample_collection', categoryId: 'lab', order: 0, enabled: true },
-        { id: 'result', type: 'result_entry', categoryId: 'lab', order: 1, enabled: true },
-        { id: 'disp', type: 'dispatch', categoryId: 'lab', order: 2, enabled: true },
-      ],
-    };
-    const result = enforceCollectInLab(cfg);
-    expect(result.categories).toBe(cfg.categories);
-    expect(result.actions).not.toBe(cfg.actions);
-    expect(result.actions.find(a => a.id === 'result')).toBe(cfg.actions[1]);
-  });
-
-  it('disables only enabled dispatch and intake actions', () => {
-    const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'lab', name: 'Lab', icon: 'flask', color: '#000', order: 0 }],
-      actions: [
-        { id: 'coll', type: 'sample_collection', categoryId: 'lab', order: 0, enabled: true },
-        { id: 'disp', type: 'dispatch', categoryId: 'lab', order: 1, enabled: false },
-        { id: 'intake', type: 'lab_intake', categoryId: 'lab', order: 2, enabled: true },
-      ],
-    };
-    const result = enforceCollectInLab(cfg);
-    expect(result.actions.find(a => a.id === 'disp')?.enabled).toBe(false);
-    expect(result.actions.find(a => a.id === 'intake')?.enabled).toBe(false);
   });
 });
 

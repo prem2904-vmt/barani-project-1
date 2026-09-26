@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, enforceCollectInLab, normalizeWorkflow } from '../../shared/models/process-workflow.model';
+import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, normalizeWorkflow } from '../../shared/models/process-workflow.model';
 
 /**
  * Loads the tenant's ACTIVE process workflow (which drives navigation) and
@@ -63,7 +63,14 @@ export class ProcessWorkflowService {
    * on collection — leaving no dispatch step — when the workflow collects in-lab,
    * OR omits/disables `lab_intake`, OR omits/disables `dispatch`. Only when none of
    * those hold is dispatch a real step. No active workflow ⇒ classic flow, which
-   * does include dispatch. Screens use this to hide the Dispatch button/holds when
+   * does include dispatch.
+   *
+   * KNOWN GAP (flagged 2026-09-26): the builder no longer collapses dispatch +
+   * intake when collection is ALSO placed in the Lab, but the backend decides
+   * auto-receive workflow-wide (CollectsInLab ⇒ EVERY collection auto-receives,
+   * front-desk ones included). Until the backend decides per collection point,
+   * this keeps mirroring it so screens never offer a Dispatch that would be
+   * rejected; drop the collectsInLab clause together with that backend fix. Screens use this to hide the Dispatch button/holds when
    * the workflow has no dispatch step (else the button rejects every attempt).
    */
   dispatchStepEnabled(): boolean {
@@ -103,12 +110,12 @@ export class ProcessWorkflowService {
   // ── Builder CRUD ─────────────────────────────────────────────────
   list(): Observable<ProcessWorkflowRecord[]> { return this.api.get<ProcessWorkflowRecord[]>('/api/process-workflows'); }
   create(name: string, config: ProcessWorkflowConfig, branchId: string | null = null): Observable<ProcessWorkflowRecord> {
-    const cfg = enforceCollectInLab(config);
-    return this.api.post<ProcessWorkflowRecord>('/api/process-workflows', { name, configJson: JSON.stringify(cfg), branchId });
+    // Saved as the admin arranged it: collection in the Lab no longer forces the
+    // transport pair (dispatch + lab intake) off.
+    return this.api.post<ProcessWorkflowRecord>('/api/process-workflows', { name, configJson: JSON.stringify(config), branchId });
   }
   update(id: string, name: string, config: ProcessWorkflowConfig, branchId: string | null = null): Observable<ProcessWorkflowRecord> {
-    const cfg = enforceCollectInLab(config);
-    return this.api.put<ProcessWorkflowRecord>(`/api/process-workflows/${id}`, { name, configJson: JSON.stringify(cfg), branchId });
+    return this.api.put<ProcessWorkflowRecord>(`/api/process-workflows/${id}`, { name, configJson: JSON.stringify(config), branchId });
   }
   activate(id: string): Observable<ProcessWorkflowRecord> { return this.api.post<ProcessWorkflowRecord>(`/api/process-workflows/${id}/activate`, {}); }
   duplicate(id: string): Observable<ProcessWorkflowRecord> { return this.api.post<ProcessWorkflowRecord>(`/api/process-workflows/${id}/duplicate`, {}); }
