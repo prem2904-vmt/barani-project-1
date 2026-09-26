@@ -357,15 +357,13 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     .pf-cw__icon:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
     .pf-cw__icon:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* Neutral avatar — the same anatomy as the Messages screen (nd-kit). */
     .pf-cw__init {
       display: inline-flex; align-items: center; justify-content: center;
       width: 26px; height: 26px; border-radius: 9999px; flex-shrink: 0;
-      background: #eee1fd; color: #7c3aed; border: 1px solid #ecd8ff;
+      background: var(--nd-chip-bg, #f3f4f6); color: var(--text-secondary);
+      border: 1px solid var(--nd-line, var(--border-muted));
       font-size: 10.5px; font-weight: 600;
-    }
-    :host-context(.dark) .pf-cw__init {
-      background: rgba(139, 92, 246, 0.18); color: #c4b5fd;
-      border-color: rgba(168, 85, 247, 0.3);
     }
 
     .pf-cw__msgs {
@@ -377,21 +375,32 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     .pf-cw__empty { margin: auto; font-size: 12px; color: var(--text-muted); }
     .pf-cw__row { display: flex; }
     .pf-cw__row--mine { justify-content: flex-end; }
+    /* Calm bubbles (Messages screen parity): theirs neutral, ours a subtle
+       violet tint; times muted in Noto tabular numbers (never monospace). */
     .pf-cw__bubble {
       max-width: 78%;
       padding: 7px 10px;
-      border-radius: 14px;
-      background: var(--bg-hover);
+      border-radius: 14px 14px 14px 5px;
+      background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card-solid, #fff));
+      border: 1px solid var(--nd-line, var(--border-muted));
       color: var(--text-primary);
       font-size: 12.5px; line-height: 1.45;
       word-break: break-word;
     }
-    .pf-cw__bubble--mine { background: rgba(124, 58, 237, 0.14); }
+    .pf-cw__bubble--mine {
+      border-radius: 14px 14px 5px 14px;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, var(--bg-card-solid, #fff));
+      border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 22%, transparent);
+    }
+    :host-context(.dark) .pf-cw__bubble--mine,
+    :host-context([data-theme='dark']) .pf-cw__bubble--mine {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 24%, var(--bg-card-solid, #14141f));
+    }
     .pf-cw__bubble--pending { opacity: 0.6; }
     .pf-cw__time {
       display: block; margin-top: 2px;
       font-size: 10px; color: var(--text-muted);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     .pf-cw__composer {
@@ -444,14 +453,14 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     .pf-cw__track-fill { display: block; height: 100%; background: #7c3aed; transition: width .2s linear; }
     .pf-cw__send:disabled { opacity: 0.4; cursor: default; }
     .pf-cw__file { display: none; }
-    .pf-cw__icon.is-fav { color: #fbbf24; }
+    .pf-cw__icon.is-fav { color: var(--violet-text, #7c3aed); }
     @keyframes pf-cw-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     @media (prefers-reduced-motion: reduce) { .pf-cw__recdot { animation: none; } }
     .pf-cw__head-fav {
       position: absolute; bottom: -1px; right: -1px;
       width: 14px; height: 14px; border-radius: 9999px;
       display: inline-flex; align-items: center; justify-content: center;
-      background: var(--bg-card-solid, #14141f); color: #fbbf24;
+      background: var(--bg-card-solid, #14141f); color: var(--violet-text, #7c3aed);
     }
 
     /* "+" menu — opens UPWARD; the composer sits at the window's floor. */
@@ -500,7 +509,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     .pf-cw__sheet-item:hover { background: var(--bg-hover); }
     .pf-cw__sheet-sub {
       font-size: 11px; color: var(--text-tertiary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-variant-numeric: tabular-nums;
     }
     .pf-cw__sheet-empty { margin: 6px 4px; font-size: 12px; color: var(--text-tertiary); }
 
@@ -520,13 +529,15 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
     }
     .pf-cw__clip:hover:not(:disabled) { background: rgba(124, 58, 237, 0.1); color: var(--text-primary); }
     .pf-cw__clip:disabled { opacity: 0.5; cursor: progress; }
+    /* Send = the window's ONE primary (the kit's violet gradient). */
     .pf-cw__send {
-      width: 32px; height: 32px; border-radius: 9999px; flex-shrink: 0;
+      width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
       display: inline-flex; align-items: center; justify-content: center;
-      background: transparent; border: 1px solid #7c3aed; color: #7c3aed;
+      background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3));
+      border: 0; color: #fff;
       cursor: pointer;
     }
-    .pf-cw__send:hover { background: rgba(124, 58, 237, 0.1); }
+    .pf-cw__send:hover:not(:disabled) { filter: brightness(1.05); }
 
     /* Minimized heads rail — a fixed vertical column hugging the right
        edge; heads stack upward, compose sits at the bottom. */
@@ -549,13 +560,19 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
       cursor: pointer;
     }
     .pf-cw__head .pf-cw__init { width: 34px; height: 34px; font-size: 12px; }
+    /* Unread: a neutral chip with a small violet dot, never a loud badge. */
     .pf-cw__head-badge {
-      position: absolute; top: -2px; right: -2px;
-      min-width: 17px; height: 17px; padding: 0 4px;
+      position: absolute; top: -3px; right: -4px;
+      display: inline-flex; align-items: center; gap: 3px;
+      min-width: 17px; height: 17px; padding: 0 5px 0 4px;
       border-radius: 9999px;
-      background: var(--gradient-primary); color: #fff;
-      font-size: 10px; font-weight: 700; line-height: 17px; text-align: center;
-      box-shadow: 0 0 0 2px var(--bg-card-solid);
+      background: var(--bg-card-solid, #fff); color: var(--text-primary);
+      border: 1px solid var(--nd-line, var(--border-muted));
+      font-size: 10px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums;
+    }
+    .pf-cw__head-badge::before {
+      content: ''; width: 5px; height: 5px; border-radius: 9999px;
+      background: var(--color-violet-600, #7c3aed);
     }
   `]
 })
