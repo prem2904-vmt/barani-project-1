@@ -5,7 +5,7 @@ import { loginAs } from './support/auth';
  * Test editor — reference ranges, EXPLAINED (ND-PATTERN "Reference ranges &
  * conditions"). Signs in as the seeded Lab Admin, opens Haemoglobin (HEM011 —
  * sex/age bands with criticals, or $TEST_CODE / $TEST_ID), goes to Result
- * entry and checks the range bars + the "try a value" tester at 1440 and 375.
+ * entry and checks the plain range table + the one-line tester at 1440 and 375.
  * READ-ONLY: edits stay in the draft and it never saves.
  * Screenshots (1440 / 375 × light / dark) into $SHOTS_DIR when set.
  * CORS_RELAY=1 relays backend calls so a static build on :4310 can run it.
@@ -62,8 +62,8 @@ async function openEditor(page: Page): Promise<boolean> {
   return true;
 }
 
-test.describe('Test editor — reference ranges explained', () => {
-  test('range bars + tester at 1440 and 375 (read-only)', async ({ page }) => {
+test.describe('Test editor — reference ranges as a plain table', () => {
+  test('plain range table + tester at 1440 and 375 (read-only)', async ({ page }) => {
     await relayCors(page);
     // Never write: fail loudly if anything tries to save.
     await page.route(/\/api\/(tests|report-layout\/test)\//, route =>
@@ -75,42 +75,56 @@ test.describe('Test editor — reference ranges explained', () => {
     test.skip(!(await openEditor(page)), `${CODE} not in this tenant's Test Master`);
     await page.locator('[role="tab"][data-sec="results"]').click();
 
-    const insight = page.locator('pf-range-insight').first();
-    await expect(insight).toBeVisible({ timeout: 20_000 });
-    const bands = insight.locator('.rin__band');
+    const table = page.locator('pf-range-table').first();
+    await expect(table).toBeVisible({ timeout: 20_000 });
+    // No range bars / zone ruler / AG-Grid in the default view.
+    await expect(page.locator('pf-range-insight, .rin__bar')).toHaveCount(0);
+    await expect(page.locator('.pf-rrgrid')).toHaveCount(0);
+    const bands = table.locator('.rtb__band');
     expect(await bands.count()).toBeGreaterThanOrEqual(1);
-    // Zones are in severity order and every bar has plain-words captions.
-    const levels = await bands.first().locator('.rin__zone').evaluateAll(z => z.map(e => e.getAttribute('data-level')));
-    const order = ['critical_low', 'low', 'normal', 'high', 'critical_high'];
-    const idx = levels.map(l => order.indexOf(l!)).filter(i => i >= 0);
+    // Rows read in severity order: Critical low → … → Critical high.
+    const order = ['Critical low', 'Low', 'Normal', 'High', 'Critical high'];
+    const labels = (await bands.first().locator('tbody th').allTextContents()).map(t => t.trim());
+    const idx = labels.map(l => order.indexOf(l)).filter(i => i >= 0);
+    expect(idx.length).toBeGreaterThanOrEqual(2);
     expect(idx).toEqual([...idx].sort((a, b) => a - b));
-    await expect(bands.first().locator('.rin__cap').first()).toContainText('→');
+    await expect(bands.first().locator('.rtb__edges')).toContainText('Exactly on a limit');
 
-    // Try a value: a woman with 6 g/dL is Critical low on the women's band.
-    await insight.locator('.rin__in--val').fill('6');
-    await insight.getByRole('radio', { name: 'Woman' }).click();
-    await insight.locator('.rin__in--age').fill('35');
-    await expect(insight.locator('.rin__flag')).toHaveText(/Critical low|Low/);
-    await expect(insight.locator('.rin__band--on')).toHaveCount(1);
-    await expect(insight.locator('.rin__pin')).toHaveCount(1);
-    // No monospace inside the insight.
-    const mono = await insight.evaluate(el => [...el.querySelectorAll('*')]
+    // Try a value — one line: a woman of 35 with 6 g/dL.
+    await table.locator('.rtb__in--try').fill('6');
+    await table.getByRole('radio', { name: 'Woman' }).click();
+    await table.locator('.rtb__in--tage').fill('35');
+    await expect(table.locator('.rtb__verdict')).toHaveText(/Critical low|Low/);
+    const mono = await table.evaluate(el => [...el.querySelectorAll('*')]
       .filter(e => /mono|courier|menlo/i.test(getComputedStyle(e).fontFamily)).length);
     expect(mono).toBe(0);
-    await insight.locator('.rin__band').first().scrollIntoViewIfNeeded();
-    await shoot(page, 'ranges-1440-bars');
-    await insight.locator('.rin__try').scrollIntoViewIfNeeded();
+
+    await bands.first().scrollIntoViewIfNeeded();
+    await shoot(page, 'ranges-1440-table');
+    await table.locator('.rtb__try').scrollIntoViewIfNeeded();
     await shoot(page, 'ranges-1440-tester');
 
-    // Phones: the bar and the tester stack, fields are 44px, no sideways scroll.
+    // "Advanced" still reaches the grid (read-only check, then back).
+    await page.getByRole('button', { name: /Advanced — edit every field/ }).first().click();
+    await expect(page.locator('.pf-rrgrid').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Back to the simple table' }).first().click();
+
+    // Phones: 44px fields, no sideways scroll.
     await page.setViewportSize({ width: 375, height: 812 });
     await page.waitForTimeout(400);
-    await insight.locator('.rin__band').first().scrollIntoViewIfNeeded();
-    await shoot(page, 'ranges-375-bars');
-    await insight.locator('.rin__try').scrollIntoViewIfNeeded();
-    const val = await insight.locator('.rin__in--val').boundingBox();
+    await bands.first().scrollIntoViewIfNeeded();
+    await shoot(page, 'ranges-375-table');
+    await table.locator('.rtb__in--try').fill('6');
+    await table.getByRole('radio', { name: 'Woman' }).click();
+    await table.locator('.rtb__in--tage').fill('35');
+    await table.locator('.rtb__try').scrollIntoViewIfNeeded();
+    const val = await table.locator('.rtb__in--try').boundingBox();
     expect(val!.height).toBeGreaterThanOrEqual(44);
-    const overflow = await insight.evaluate(el => el.scrollWidth - el.clientWidth);
+    const overflow = await table.evaluate(el => {
+      const card = (el.closest('.nd-card__body') ?? document.body).getBoundingClientRect();
+      return Math.max(0, ...[...el.querySelectorAll('.rtb__table td, .rtb__table input, .rtb__head, .rtb__try')]
+        .map(t => t.getBoundingClientRect().right - card.right));
+    });
     expect(overflow).toBeLessThanOrEqual(1);
     await shoot(page, 'ranges-375-tester');
   });

@@ -830,177 +830,82 @@ canonical example is the **test editor**
   band pinned while the body scrolls. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`
   (shots `v3-*`).
 
-## 16. Reference ranges & conditions
+## 16. Reference ranges = a plain interpretation table
 
-The test editor's **Result entry** tab explains the numbers under each
-range grid (`pf-range-insight`, `features/admin/tests/test-editor/`),
-and the **Printed report** tab's conditions speak in flags. Shared logic,
-byte-identical in prefrontal-admin-ui: `shared/utils/range-insight.ts`
-(zones, tester, validation) and `shared/utils/flag-conditions.ts`
-(vocabulary, engine mirror, line analysis). Nothing there decides a flag of
-its own: every verdict is `flagBand` (the body of `liveFlag` = mw
-`FlagOne`), every band choice the ONE resolver.
+Owner, 2026-09-26: range bars + the big grid were "too complicated, even
+for me". The **Result entry** tab shows reference ranges as ONE plain table
+per sex / age group (`pf-range-table`,
+`features/admin/tests/test-editor/range-table.component.ts`, byte-identical
+in prefrontal-admin-ui). Shared logic: `shared/utils/range-insight.ts`
+(validation, tester, production zones) and `shared/utils/flag-conditions.ts`
+(report conditions). Nothing decides a flag of its own: every verdict is
+`flagBand` (= `liveFlag` = mw `FlagOne`), every band choice the ONE resolver.
 
-- **Production semantics (keep them visible, never change them here):**
-  criticals are STRICT (below Critical low / above Critical high), checked
-  first, a band's own criticals beat the parameter pair; a two-sided normal
-  range is inclusive, a one-sided one strict unless ≤ / ≥. The stored flag
-  is one code — **C replaces H / L** (a critical-high result is stored C,
-  never H).
-- **Range bar, one per band** (who: "Women aged 18 years and over"): a
-  segmented bar Critical low | Low | Normal | High | Critical high — only
-  the zones the band really has, cut exactly where production switches
-  level. Functional colours only here: critical = muted red, low / high =
-  amber, normal = the violet tint; subtle tints, dark-mode variants.
-  Ticks under each edge say where the NEXT zone starts: **≥ 4** (4 is in
-  it) / **> 11** (11 is not); the tooltip says which zone owns the number.
-  Under the bar, one plain-words caption per zone with the unit after the
-  numbers: "Below 3.5 g/dL → Critical low", "3.5 to under 4 g/dL → Low",
-  "4 to 11 g/dL → Normal", "Over 11, up to 20 g/dL → High", "Above 20 g/dL
-  → Critical high"; one-sided "At or below 140 → Normal".
-- **Try a value:** a kit value box + Anyone / Man / Woman radio segment +
-  age box. It shows the flag chip, the band used (highlighted, with a pin on
-  its bar), whether it matched on sex / age, the stored code ("stored as C,
-  not H / L"), and which report conditions fire (description line N /
-  block N prints or is hidden), evaluated like mw `EvaluateConditions`.
-- **Validation, on the exact field:** red cell ring + message under the
-  band = an ERROR (blocks Save with a warning toast that opens Result
-  entry; mw `ReferenceRangeValidator` refuses the same set with
-  `range_invalid`): Normal to below Normal from; Critical low ≥ Critical
-  high; a critical inside the normal range; a one-sided band whose opposite
-  critical leaves nothing normal; Age from above Age to. Errors the test
-  ALREADY had when opened show red but don't block (mw does the same on
-  update). Amber ring = WARNING (Save allowed): single-value normal, Low /
-  High unreachable (critical meets the normal limit), empty band, bands that
-  tie for the same patients ("range 1 is used for them"), age / sex gaps
-  ("No range for women aged 12–18 years"), unit missing / looks like a range
-  / differs per band, plausible limits inside normal.
-- **Condition choices** (after the numeric compares, in "Prints only
-  when…" and "When the result…"): *is Critical high · is High (not
-  critical) · is High or critical high · is Normal · is Low or critical low
-  · is Low (not critical) · is Critical low · is Critical (high or low) · is
-  Abnormal (any flag)*. Stored as the engine's own leaf `{ parameter,
-  operator: 'flag', value: 'high_only' }`; legacy letters read as the stored
-  codes (H = High not critical, C = either critical).
-- **Order:** a row's description lines are checked top to bottom, **first
-  match wins** — each line has ↑ / ↓. Blocks are independent (each prints on
-  its own rule). Under each line: what it reaches ("Prints for High and
-  Critical high results"), and warnings — never used (an earlier line
-  catches everything / a flag these ranges never produce), overlaps with
-  the winner named, blocks that print together; contradictions
-  ("between 10 and 5", a compare with no number, an unknown flag) are
-  errors (mw `LayoutConditionValidator` rejects them on save).
-- **Phones:** the bar keeps its row (zone labels shrink), captions stack
-  one per line, the tester stacks with full-width 44px / 16px fields.
+```
+[Women ▾] · [18 years and over ▾]                     g/dL   Remove
+Result is          From     To
+● Critical low       —       7
+● Low                7      9.9
+● Normal            9.9    14.3
+● High             14.3     20
+● Critical high     20       —
++ Add …   Exactly on a limit: 7 is Low · 9.9 is Normal · 14.3 is Normal · 20 is High.
+```
+
+- **Header line** = who it is for, as two quiet `pf-select`s (Everyone /
+  Men / Women · age presets + "Custom ages…" → from / to / unit boxes); the
+  unit once, muted, on the right; "Remove" as a quiet text action. "+ Add a
+  range for another group" under the last table.
+- **The table:** "Result is | From | To", rows Critical low · Low · Normal
+  · High · Critical high, each with a tiny functional dot (critical red,
+  low / high amber, normal violet). Noto, tabular numbers, 1px row lines,
+  no fills, no bars, no ruler, no captions.
+- **Linked limits:** a row's "To" and the next row's "From" are the SAME
+  stored value (criticalLow · min · max · criticalHigh) — edit either, both
+  move; gaps / overlaps can't be typed.
+- **Unused rows are hidden:** no criticals → no critical rows; quiet
+  "+ Add critical limits" / "+ Add a low limit" / "+ Add a high limit"
+  bring them back (stored only once a number is typed); a quiet × removes
+  an outer limit.
+- **One-sided:** "below 140" = Normal "— to 140", High "140 to —".
+- **Edges, once, in words:** the muted footnote comes from production's own
+  zones — "Exactly on a limit: 7 is Low · 9.9 is Normal · 20 is High."
+  (criticals strict, two-sided normal inclusive, one-sided strict unless ≤ /
+  ≥). The comparator is only an "Edge rule" link on one-sided ranges
+  ("Exactly 140 counts as Normal | High" → `maxOp: 'lte'` / none).
+- **Written normals** ("Negative"): a single "Normal value [Negative]" row.
+- **Try a value:** ONE line under the tables — value · Anyone / Man / Woman
+  · age → the flag in its colour ("→ Critical low"). Nothing else.
+- **Validation in the table's words, on the row:** "Normal must end above
+  where it starts (11).", "High must end above where it starts (22) —
+  Critical high must start above Normal." (red outline on that row's
+  boxes). Errors block Save (warning toast, Result entry opens); mw
+  `ReferenceRangeValidator` refuses the same set (`range_invalid`); errors
+  the test already had when opened don't block. Warnings (amber, allowed):
+  ties between groups, age / sex gaps, unit issues, "Nothing is Low —
+  Critical low ends where Normal starts".
+- **Advanced** ("Advanced — edit every field in a grid", a quiet link) is
+  the old AG-Grid — printed label overrides, profile-scoped bands, every
+  stored field. Never the default.
+- **Stored data unchanged:** the table reads and writes the existing band
+  fields only; an untouched band is never rewritten, an edit changes only
+  its own field.
+- **Report conditions** (Printed report tab) keep the flag choices: *is
+  Critical high · is High (not critical) · is High or critical high · is
+  Normal · is Low or critical low · is Low (not critical) · is Critical low ·
+  is Critical (high or low) · is Abnormal (any flag)*, stored as `{
+  parameter, operator: 'flag', value }` (legacy letters = stored codes: H =
+  High not critical, C = either critical). Description lines: first match
+  wins, ↑ / ↓ to reorder; blocks print independently. Each line says what it
+  catches and warns on never-used / overlapping lines.
+- **Phones:** the group selects stack, the table stays three columns
+  (fixed layout, 44px / 16px boxes — it overrides the global phone
+  table-to-block rule), messages wrap, the tester wraps.
 - **Real-layout check:** `apps/lms-e2e/src/test-editor-ranges.rbac.spec.ts`
-  (seeded Lab Admin, HEM011, read-only — writes are aborted) asserts zones
-  in severity order, captions, the tester's flag + highlighted band + pin,
-  no monospace, 44px fields and no sideways scroll at 375; `SHOTS_DIR=…`
-  saves 1440 / 375 × light / dark.
-
-## 17. Billing counter
-
-`/billing-counter` (`features/billing-counter/`, branches in
-`billing_mode = separate_counter`) — the "two jobs on one screen" pattern
-with an ACTION / SUMMARY companion (owner, 2026-09-26):
-
-- **Band:** back · tenant. The pill is ONE unified search — "Search patient,
-  phone, MRN, order or invoice ID" — with the scan icon (invoice / order
-  barcodes, the shared scanner with `noun="invoice or order"`) inside the
-  field. The type-ahead is ONE dropdown, grouped **Patients** / **Orders &
-  invoices** (the exact `/api/billing/lookup` hit + open balances whose
-  patient name matches), one row per result, ↑/↓ across both groups.
-  **Enter** on an exact order / invoice ID (nothing highlighted) opens it
-  directly. No separate "Invoice / order ID + Open" row, no KPI strip.
-- **No Find & bill / Money tabs on desktop** — both cards show. ≤900px only
-  one fits: a compact neutral two-way `.nd-seg` switch (Billing · Money · n)
-  in the pill's tools row; opening an order from Money flips back to Billing.
-- **LEFT main card BILLING:** empty = "Find an order to bill" + one short
-  line. A patient → their orders still to bill (kit rows). An order → the
-  subject (full name, order number, date), a neutral status chip (violet dot;
-  violet check when paid), the items (bill lines with prices when a bill
-  exists, else the order's tests) and Payable / Paid / Balance.
-- **ONE primary per view**, in the card's sticky footer: **Collect ₹X**
-  (balance, or the order total when unbilled) · **Refund ₹X** · none when
-  nothing is selected or the order is settled ("Open order" secondary for
-  receipts). The primary hands the order to Order & Payments, whose
-  new-design inline payment panel takes the money / refund and prints the
-  receipt — the counter never re-implements payment.
-- **RIGHT side card MONEY (400px):** "Balances due / refunds owed" (calm
-  11px uppercase titles, Noto — never spaced mono; rows = patient + amount,
-  tap opens the order in Billing; refunds as −₹, no amber / red pills), then
-  "Day-end summary" with the **kit date** (`pf-nd-date`: typed dd/mm/yyyy +
-  calendar button over a hidden native picker) and a Mode / Count / Total
-  table (Cash, UPI, Card… capitalised; tabular numbers), then Collected /
-  Refunded / **Net** (600). Collapses to a strip on the RIGHT edge (›
-  hides, ‹ shows; remembered per user).
-- **Real-layout check:** `apps/lms-e2e/src/billing-counter-layout.rbac.spec.ts`
-  (seeded Lab Admin, read-only — writes aborted) asserts the pill, no tabs,
-  Billing left / Money ~400px right, no primary at rest, no visible native
-  date, no monospace, no page scroll, the grouped dropdown at the pill's
-  width, the strip, and the 375 switch. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
-
-## 18. Messages
-
-`/messages` (`features/messages/`) — team chat on the kit (owner, 2026-09-26).
-`MessagesRouteComponent` picks the screen live: the new design renders
-`MessagesNdComponent`, which EXTENDS the classic page (realtime SignalR,
-unread, typing, receipts, attachments, calls, deep links `?c=`, modals are
-the same code); classic keeps its page.
-
-- **Band:** back · tenant · actions = a neutral "Reconnecting…" chip (only
-  while a hub is down), the sounds toggle and **New chat** — both ghosts.
-  The page's ONE primary is the composer's **Send**.
-- **Pill = the context bar:** "Search conversations and people" (a
-  conversation matches on its name AND every participant; people come from
-  the directory and open a direct chat) + an `All · Unread · Groups · Calls`
-  `.nd-seg` radio group (one Tab stop, arrows move). Calls swaps the list
-  for the call log in the same card.
-- **CONVERSATIONS = LEFT card** (a navigation companion, §1 "two jobs"),
-  ~360px, BILLING header + collapse to a left strip (remembered per user,
-  `pf:msgs:list-collapsed:<uid>`). Rows (≥60px, whole-row target, neutral
-  selected state): avatar (+ presence dot: violet reachable, slate busy,
-  muted red calls-blocked, hollow offline), the FULL name (wraps), tabular
-  time, a one-row preview with an SVG kind icon (attachment / deleted /
-  sent check — never emoji; ellipsis only on that one row, never cut in
-  code), unread = a NEUTRAL chip with a violet dot (never a loud badge).
-- **THREAD = main card:** head = avatar + name (wraps) + status (presence /
-  "N members" / "typing…") + the record chip; quiet 36px icon buttons
-  (search in conversation, mute, voice call — audio only, members). Calm
-  bubbles: ours a subtle violet tint, theirs neutral; muted Noto tabular
-  times; sent = a muted check, SEEN = a violet double check; day
-  separators as a neutral chip on a hairline; voice notes a kit player
-  (play · track · time — never native `<audio controls>`), files / shared
-  records as neutral cards with the violet icon chip; hover (tap on touch)
-  toolbar with SVG actions.
-- **Composer, sticky at the card floor:** a quiet attach icon (menu:
-  Attach a file · Share a patient · Emoji), the kit field with the **mic
-  INSIDE it**, and **Send** as the one primary icon button (disabled when
-  there's nothing to send). Enter sends, Shift+Enter is a new line. Voice
-  notes = the chat-windows contract: mic → the recording row (time,
-  discard, stop) → stop gives a PREVIEW (play / discard) → Send or Enter
-  uploads + sends; nothing leaves before that.
-- **≤900px: one pane at a time.** The list is the screen; a row tap PUSHES
-  the thread (slide, §9 step → step), the band's back chevron / edge
-  swipe pops it (the list slides back). Deep links open instantly. In a
-  thread the pill becomes "Search in <name>".
-- **The navbar is never hidden** — `html.pf-chat-immersive` (classic's
-  WhatsApp mode) is never set by the new design; the page fits above the
-  bar and modals are sheets above it. Inputs 16px on phones, 44px touch
-  targets, safe areas via the shell.
-- **Motion:** only messages that arrive / are sent while the thread is
-  open fade + slide in (6px, ~260ms, `--nd-spring`); history and older
-  pages never animate. Nothing moves under reduced motion.
-- **Floating chat windows** (`shared/components/chat-windows/`) match:
-  neutral avatars, the same calm bubbles, Noto tabular times, Send as the
-  window's one primary, unread heads as a neutral chip + violet dot.
-- **Real-layout check:** `apps/lms-e2e/src/messages-layout.rbac.spec.ts`
-  (seeded Lab Admin, READ-ONLY: chat REST answered in the browser from
-  made-up fixtures, both SignalR hubs a local fake WebSocket that answers
-  every invocation and pushes one message) asserts the left card, one
-  primary, the mic inside the field, no page scroll, no monospace, no
-  immersive class, the collapse strip, and at 375 the push + composer
-  above the navbar. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
+  (seeded Lab Admin, HEM011, read-only — writes are aborted): no bars / no
+  grid by default, rows in severity order, the edge footnote, the one-line
+  tester, Advanced reaches the grid, 44px boxes and nothing past the card
+  at 375; `SHOTS_DIR=…` saves 1440 / 375 × light / dark.
 
 ## API summary
 
@@ -1025,7 +930,7 @@ Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .
 Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line
          --nd-shadow-sm · --nd-chip-bg · --nd-sel-bg · --nd-sel-border · --nd-in-tint · --nd-done-tint
          --nd-toggle-on · --nd-toggle-off · --nd-toggle-urgent
-Ranges   pf-range-insight[param][unit][testId][paramName] · range-insight.ts (bandZones · zoneTicks · tryValue · validateRanges)
+Ranges   pf-range-table[param][unit](bandsChange) · range-insight.ts (bandZones · tryValue · validateRanges)
          flag-conditions.ts (FLAG_CONDITIONS · operator 'flag' · evaluateRules · analyzeLines)
 Mixins   nd.card · nd.btn-primary · nd.btn-secondary · nd.neutral-selected · nd.no-truncate · nd.reduced-motion
 ```

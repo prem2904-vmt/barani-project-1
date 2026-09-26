@@ -1105,3 +1105,6 @@ select.pf-input--compact {
 .pf-param2__state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
 .pf-param2__state > svg { color: var(--violet-text, #7c3aed); }
 .pf-savestate__ok, .pf-savestate__pending { color: var(--text-secondary); }
+
+/* "Advanced — edit every field in a grid" under the plain range table. */
+.pf-rr-adv { align-self: flex-start; margin-top: 10px; font-size: 12.5px; }

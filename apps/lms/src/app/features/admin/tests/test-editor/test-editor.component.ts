@@ -34,7 +34,7 @@ import { AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, Mo
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../tests/tests.component';
 import { RangeSelectEditorComponent, RangeSelectOption } from './range-select-editor.component';
-import { RangeInsightComponent } from './range-insight.component';
+import { RangeTableComponent } from './range-table.component';
 import { validateRanges, type RangeIssue } from '../../../../shared/utils/range-insight';
 import { hasLegacyFields, loadEditorFields, newFieldId, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
 
@@ -169,7 +169,7 @@ function makeEmptyDraft(): DraftTest {
     ReportPdfPreviewComponent,
     OriginBadgeComponent,
     HeroBandComponent,
-    RangeInsightComponent,
+    RangeTableComponent,
     NgTemplateOutlet
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -655,6 +655,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     return out;
   });
+  /** Reference ranges: the plain table by default; the AG-Grid (every
+   *  stored field, labels, one-off comparators) only behind "Advanced". */
+  readonly rangeAdvanced = signal(false);
+  /** The table's edit — the stored band shape, written back unchanged. */
+  setBands(i: number, bands: unknown[]) {
+    if (i < 0) return;
+    this.patchField(i, { referenceRanges: bands as FormField['referenceRanges'] });
+  }
   /** Every range error, with the value it belongs to. */
   private readonly allRangeErrors = computed(() => {
     const out: Array<{ field: string; issue: RangeIssue; key: string }> = [];

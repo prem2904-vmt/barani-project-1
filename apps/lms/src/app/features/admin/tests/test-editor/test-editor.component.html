@@ -601,7 +601,14 @@
             } @else if (numericFields().length === 1) {
               <!-- The range GRID — Test Master's AG-Grid language: one band per
                    row, everything editable in place, criticals per sex/age. -->
-              <div class="pf-rrgrid-wrap">
+              <!-- The plain interpretation table (owner 2026-09-26): one per sex/age
+                   group, linked limits; the AG-Grid stays behind "Advanced". -->
+              @if (numericFields()[0]; as nf) {
+                @if (!rangeAdvanced()) {
+                  <pf-range-table [param]="$any(nf)" [unit]="nf.unit || d.unit || ''"
+                                  (bandsChange)="setBands(fields().indexOf(nf), $event)"></pf-range-table>
+                } @else {
+                <div class="pf-rrgrid-wrap">
                 <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
                   [rowData]="rangeRows()" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
                   [getRowId]="$any(rangeRowId)"
@@ -614,9 +621,8 @@
                   <button type="button" class="pf-rb__add press" (click)="addRangeToFirstNumeric()">+ Add range</button>
                 </div>
               </div>
-              @if (numericFields()[0]; as nf) {
-                <pf-range-insight [param]="$any(nf)" [unit]="nf.unit || d.unit || ''"
-                                  [testId]="d.id || ''" [paramName]="nf.name || ''"></pf-range-insight>
+                }
+                <button type="button" class="pf-linklike pf-rr-adv" (click)="rangeAdvanced.set(!rangeAdvanced())">{{ rangeAdvanced() ? 'Back to the simple table' : 'Advanced — edit every field in a grid' }}</button>
               }
             }
           </div>
@@ -676,6 +682,9 @@
 
                   @if (isNumericType(p.type)) {
                     <p class="pf-vbatch__sub">Reference ranges — prints next to the result and decides the flag: <strong>H</strong>&nbsp;=&nbsp;High (above the range), <strong>L</strong>&nbsp;=&nbsp;Low (below it), <strong>C</strong>&nbsp;=&nbsp;past a critical limit.</p>
+                    @if (!rangeAdvanced()) {
+                      <pf-range-table [param]="$any(p)" [unit]="p.unit || ''" (bandsChange)="setBands(i, $event)"></pf-range-table>
+                    } @else {
                     <div class="pf-rrgrid-wrap">
                       <ag-grid-angular class="pf-rrgrid" [theme]="rangeGridTheme()"
                         [rowData]="rangeRowsFor(i)" [columnDefs]="rangeColDefs" [defaultColDef]="rangeDefaultColDef"
@@ -689,8 +698,8 @@
                         <button type="button" class="pf-rb__add press" (click)="addRange(i)">+ Add range</button>
                       </div>
                     </div>
-                    <pf-range-insight [param]="$any(p)" [unit]="p.unit || ''"
-                                      [testId]="d.id || ''" [paramName]="p.name || ''"></pf-range-insight>
+                    }
+                    <button type="button" class="pf-linklike pf-rr-adv" (click)="rangeAdvanced.set(!rangeAdvanced())">{{ rangeAdvanced() ? 'Back to the simple table' : 'Advanced — edit every field in a grid' }}</button>
                     <div class="grid gap-2 grid-cols-2 md:grid-cols-4">
                       <label class="flex flex-col gap-0.5 min-w-0" title="A result below this is flagged C (Critical low) — used when the band has no critical low of its own.">
                         <span class="pf-mini-lbl">Critical low</span>
