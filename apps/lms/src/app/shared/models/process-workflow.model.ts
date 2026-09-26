@@ -142,11 +142,18 @@ export function workAreaIconPath(key: string | null | undefined): string[] {
  * Lock policy — the professional guardrails. A `locked` action can't be dragged
  * out of its `home` work-area; a `mandatory` action can't be switched off or
  * removed. Code-level (not stored in config) so it can't drift or be bypassed
- * by editing a saved workflow. Actions absent here (billing, sample_collection,
- * queue, dispatch, home_visits, messages) are free to move and disable.
+ * by editing a saved workflow. Actions absent here (billing, queue, dispatch,
+ * home_visits, messages) are free to move and disable.
+ *
+ * LOCKED + REPEATABLE (sample_collection): the lock pins the HOME copy — the
+ * one in the system Collect area — which can't be dragged out or removed.
+ * Extra copies placed in other areas (Frontdesk, Lab, a billing counter, a
+ * custom area) stay freely movable, removable and toggleable. Use
+ * isLockedItem() for a placed item; isLocked() only says the TYPE has a lock.
  */
 export interface ActionPolicy { home: string; locked?: boolean; mandatory?: boolean; }
 export const ACTION_POLICY: Record<string, ActionPolicy> = {
+  sample_collection:    { home: 'collect',   locked: true },
   patient_registration: { home: 'frontdesk', locked: true, mandatory: true },
   appointment:          { home: 'frontdesk', locked: true },
   walk_in_order:        { home: 'frontdesk', locked: true },
@@ -205,7 +212,7 @@ export function dependentsOf(type: string): string[] {
  * the generic host at /w/:id which renders the placed actions as panels.
  */
 export const SYSTEM_AREA_SCREEN: Record<string, string> = {
-  frontdesk: '/frontdesk', lab: '/lab/my-work', validate: '/pathologist',
+  frontdesk: '/frontdesk', collect: '/sample-collection', lab: '/lab/my-work', validate: '/pathologist',
   results: '/reports', homecoll: '/home-collections', messages: '/messages',
 };
 export const COUNTER_SCREEN: Record<string, string> = {
@@ -246,6 +253,96 @@ export function deriveModes(cfg: ProcessWorkflowConfig | null | undefined):
  *  per placement. */
 export const REPEATABLE_ACTIONS = new Set<string>(['sample_collection']);
 export function isRepeatable(type: string): boolean { return REPEATABLE_ACTIONS.has(type); }
+
+/**
+ * Is THIS placed item pinned (no drag-out, no removal)? A locked, non-repeatable
+ * action is pinned wherever it sits (it only ever sits in its home). A locked
+ * REPEATABLE action pins only its copy in the home area — the other copies are
+ * ordinary placements.
+ */
+export function isLockedItem(type: string, areaId: string | null | undefined): boolean {
+  if (!isLocked(type)) return false;
+  return !isRepeatable(type) || areaId === actionHome(type);
+}
+
+/** The system "Collect" work-area: its screen is the Collect page
+ *  (/sample-collection) and it is the locked home of `sample_collection`. */
+export const COLLECT_AREA_ID = 'collect';
+export const COLLECT_AREA_DEFAULT_ROLES = ['Sample Collector', 'Lab Admin', 'Branch Manager'];
+/** Stable id of the home `sample_collection` copy the normaliser inserts — a
+ *  fixed id keeps normalisation idempotent across reads. */
+export const COLLECT_HOME_ACTION_ID = 'collect-home';
+
+/** Area ids that are system areas in their own right — never adopted as the
+ *  Collect area even if they only hold collection. */
+const NON_COLLECT_SYSTEM_AREAS = new Set(['frontdesk', 'lab', 'validate', 'results', 'homecoll', 'messages']);
+
+/**
+ * THE shared workflow normaliser: guarantee the system Collect area and its
+ * locked home `sample_collection` copy. Saved workflows predating the Collect
+ * area (every tenant workflow + the shipped defaults) are brought forward on
+ * READ — the live nav gets Collect with no DB write; saving in the builder
+ * persists it.
+ *
+ *  • Already has `collect` → only ensures its home copy exists.
+ *  • Has a dedicated collection menu (a non-system area whose only actions are
+ *    `sample_collection`, e.g. "Collection Center") → THAT menu becomes the
+ *    Collect area (id remapped to `collect`; name, icon, roles, order and the
+ *    copy's enabled state kept) instead of adding a duplicate.
+ *  • Otherwise → inserts "Collect" right after the frontdesk area with an
+ *    ENABLED home copy and the default roles.
+ *
+ * Empty / missing configs are returned untouched (no workflow ⇒ the static
+ * fallback nav applies). Idempotent; returns the SAME object when nothing
+ * needed changing.
+ */
+export function normalizeWorkflow<T extends ProcessWorkflowConfig | null | undefined>(cfg: T): T {
+  if (!cfg || !Array.isArray(cfg.categories) || cfg.categories.length === 0) return cfg;
+  const actions = cfg.actions ?? [];
+  const hasHomeCopy = (acts: ProcessAction[]) =>
+    acts.some(a => a.type === 'sample_collection' && a.categoryId === COLLECT_AREA_ID);
+  const homeCopy = (order: number): ProcessAction => ({
+    id: COLLECT_HOME_ACTION_ID, type: 'sample_collection', categoryId: COLLECT_AREA_ID, order, enabled: true,
+  });
+
+  if (cfg.categories.some(c => c.id === COLLECT_AREA_ID)) {
+    if (hasHomeCopy(actions)) return cfg;
+    const n = actions.filter(a => a.categoryId === COLLECT_AREA_ID).length;
+    return { ...cfg, actions: [...actions, homeCopy(n)] } as T;
+  }
+
+  const sorted = [...cfg.categories].sort((a, b) => a.order - b.order);
+  // A dedicated collection menu: a non-system area whose only actions are
+  // sample_collection copies. First by order wins.
+  const dedicated = sorted.find(c => {
+    if (NON_COLLECT_SYSTEM_AREAS.has(c.id)) return false;
+    const inArea = actions.filter(a => a.categoryId === c.id);
+    return inArea.length > 0 && inArea.every(a => a.type === 'sample_collection');
+  });
+  if (dedicated) {
+    const oldId = dedicated.id;
+    return {
+      ...cfg,
+      categories: cfg.categories.map(c => c.id === oldId ? { ...c, id: COLLECT_AREA_ID } : c),
+      actions: actions.map(a => a.categoryId === oldId ? { ...a, categoryId: COLLECT_AREA_ID } : a),
+    } as T;
+  }
+
+  // Insert right after the frontdesk area (the literal system id, else the
+  // area holding registration); none → first.
+  const fdId = sorted.some(c => c.id === 'frontdesk') ? 'frontdesk' : frontdeskMenu(cfg);
+  const fdIdx = fdId ? sorted.findIndex(c => c.id === fdId) : -1;
+  const collect: ProcessCategory = {
+    id: COLLECT_AREA_ID, name: 'Collect', icon: 'tube', color: '#7c3aed', order: 0,
+    roles: [...COLLECT_AREA_DEFAULT_ROLES],
+  };
+  sorted.splice(fdIdx + 1, 0, collect);
+  return {
+    ...cfg,
+    categories: sorted.map((c, i) => ({ ...c, order: i })),
+    actions: [...actions, homeCopy(0)],
+  } as T;
+}
 
 /** The categoryId of the "frontdesk" menu (where registration/order live). */
 export function frontdeskMenu(cfg: ProcessWorkflowConfig | null | undefined): string | undefined {

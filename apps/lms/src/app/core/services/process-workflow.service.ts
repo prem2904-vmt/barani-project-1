@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, enforceCollectInLab } from '../../shared/models/process-workflow.model';
+import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, enforceCollectInLab, normalizeWorkflow } from '../../shared/models/process-workflow.model';
 
 /**
  * Loads the tenant's ACTIVE process workflow (which drives navigation) and
@@ -49,8 +49,10 @@ export class ProcessWorkflowService {
   isEnabled(type: string): boolean {
     const cfg = this._active();
     if (!cfg) return true;
-    const a = cfg.actions?.find(x => x.type === type);
-    return a ? a.enabled : true;
+    // Repeatable actions (sample_collection) may sit in several areas: the
+    // feature is on while ANY copy is on.
+    const copies = (cfg.actions ?? []).filter(x => x.type === type);
+    return copies.length ? copies.some(x => x.enabled) : true;
   }
 
   /**
@@ -89,7 +91,12 @@ export class ProcessWorkflowService {
     if (!json) return null;
     try {
       const c = JSON.parse(json) as ProcessWorkflowConfig;
-      return Array.isArray(c?.categories) ? { categories: c.categories ?? [], actions: c.actions ?? [] } : null;
+      // Normalised on READ (system Collect area + its home collection copy), so
+      // every consumer — nav, modes, band Collect — sees the same shape without
+      // a DB write. Saving in the builder persists it.
+      return Array.isArray(c?.categories)
+        ? normalizeWorkflow({ categories: c.categories ?? [], actions: c.actions ?? [] })
+        : null;
     } catch { return null; }
   }
 

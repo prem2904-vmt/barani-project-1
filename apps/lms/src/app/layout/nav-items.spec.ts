@@ -327,7 +327,9 @@ describe('menusFromWorkflow', () => {
         { id: 'cat1', name: 'First', order: 1, icon: 'default' },
       ],
       [
-        { id: 'act1', type: 'sample_collection', categoryId: 'cat1', enabled: true, order: 1 },
+        // queue (not collection alone — a collection-only menu is adopted as
+        // the system Collect area by normalizeWorkflow).
+        { id: 'act1', type: 'queue', categoryId: 'cat1', enabled: true, order: 1 },
         { id: 'act2', type: 'result_entry', categoryId: 'cat2', enabled: true, order: 1 },
       ]
     );
@@ -340,11 +342,8 @@ describe('menusFromWorkflow', () => {
     const result = menusFromWorkflow(cfg, permCtx);
     expect(result).not.toBeNull();
     // Items should be in order 1, 2 (cat1 before cat2)
-    if (result && result.length >= 2) {
-      // First item should be from cat1 (or cat1 or earlier in sort order)
-      expect(result[0].id).toBe('cat1');
-      expect(result[1].id).toBe('cat2');
-    }
+    // cat1 before cat2; the normalised-in Collect area leads (no frontdesk area).
+    expect(result!.map(i => i.id)).toEqual(['collect', 'cat1', 'cat2']);
   });
 
   it('does NOT inject a Collect item beside an area holding collection (role-driven instead)', () => {
@@ -419,8 +418,9 @@ describe('menusFromWorkflow', () => {
       hasAnyPermission: () => true,
       isSuper: false,
     };
-    // Unknown action types should be filtered out (catalogFor returns undefined)
-    expect(menusFromWorkflow(cfg, permCtx)).toBeNull();
+    // Unknown action types are filtered out (catalogFor returns undefined), so
+    // only the normalised-in system Collect area remains.
+    expect(menusFromWorkflow(cfg, permCtx)!.map(i => i.id)).toEqual(['collect']);
   });
 
   it('respects action order within a category', () => {

@@ -1,4 +1,4 @@
-import { ProcessWorkflowConfig, catalogFor, workAreaIconPath, workAreaRoute } from '../shared/models/process-workflow.model';
+import { ProcessWorkflowConfig, catalogFor, normalizeWorkflow, workAreaIconPath, workAreaRoute } from '../shared/models/process-workflow.model';
 import { ModuleKey } from '../core/services/tenant-entitlements.service';
 
 export interface NavItem {
@@ -96,6 +96,8 @@ export const FRONTDESK_PERMS = [
  *  so the permission filter matches the destination route's guard. */
 export const ROUTE_NAV_PERMS: Record<string, string[]> = {
   '/frontdesk': FRONTDESK_PERMS,
+  // The system Collect work area opens the Collect page, guarded by collect_sample.
+  '/sample-collection': ['collect_sample'],
 };
 
 export const PRIMARY_NAV: NavItem[] = [
@@ -227,9 +229,12 @@ export function navLabel(name: string | null | undefined): string {
 
 export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined, ctx: WorkflowNavCtx): NavItem[] | null {
   if (!cfg?.categories?.length) return null;
-  // No workflow-injected "Collect" item: the Collect page is role-driven
-  // (collect_sample, see the shell's withCollection()), so an admin controls it
-  // through roles and it never appears as an undisableable extra work area.
+  // The Collect page comes from the system Collect WORK AREA (normalised in if
+  // an older workflow predates it). Like every area it shows only to users who
+  // can run its enabled actions (collect_sample) — RBAC — and switching its home
+  // copy off drops it from the nav. The shells' withCollection() is only the
+  // no-workflow fallback now, so there is never a second Collect.
+  cfg = normalizeWorkflow(cfg);
   const items: NavItem[] = [];
   for (const area of [...cfg.categories].sort((a, b) => a.order - b.order)) {
     // Visibility is PERMISSION-driven (not role NAME): the area shows when the
@@ -265,6 +270,24 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
     });
   }
   return items.length ? items : null;
+}
+
+/**
+ * NO-WORKFLOW FALLBACK for the Collect page (shared by the top strip and the
+ * bottom nav). With a workflow configured, Collect is the system Collect work
+ * area (menusFromWorkflow) and the nav follows the workflow — nothing is added,
+ * so there is never a second Collect. Without one (PRIMARY_NAV), anyone who can
+ * draw samples still gets a reachable Collect unless a collection surface is
+ * already visible.
+ */
+export function withCollectionFallback(items: NavItem[], ctx: {
+  hasWorkflow: boolean; canCollect: boolean; collectionEnabled: boolean;
+}): NavItem[] {
+  if (ctx.hasWorkflow || !ctx.canCollect || !ctx.collectionEnabled) return items;
+  if (items.some(i => i.id === 'sample-collection' || i.id === 'queue'
+                   || i.href === '/sample-collection' || i.href === '/frontdesk/queue')) return items;
+  const collect = PRIMARY_NAV.find(i => i.id === 'sample-collection');
+  return collect ? [...items, collect] : items;
 }
 
 export const MORE_NAV: NavItem[] = [

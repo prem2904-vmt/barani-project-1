@@ -199,8 +199,10 @@ describe('isLocked', () => {
 
   it('returns false for unlocked actions', () => {
     expect(isLocked('billing')).toBe(false);
-    expect(isLocked('sample_collection')).toBe(false);
     expect(isLocked('queue')).toBe(false);
+    // sample_collection IS locked now — to the system Collect area (home copy
+    // only; it stays repeatable, see process-workflow.collect-area.spec).
+    expect(isLocked('sample_collection')).toBe(true);
   });
 
   it('returns false for unknown actions', () => {

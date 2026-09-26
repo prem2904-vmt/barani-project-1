@@ -29,7 +29,7 @@ import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, withCollectionFallback } from '../nav-items';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { LANDINGS } from '../../core/auth/landing.guard';
 
@@ -215,7 +215,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private navCtx(): WorkflowNavCtx {
     return {
       roles: this.auth.user()?.roles ?? [],
-      hasAnyPermission: (p) => this.auth.hasAnyPermission(p),
+      // Effective = the route guards' check (mode-aware collect_sample), so a
+      // work area never shows to someone its screen would bounce.
+      hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
       isSuper: this.auth.permissions().includes('*'),
     };
   }
@@ -237,20 +239,17 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return this.auth.isDoctor() && this.moduleScope.opdUsable() ? [...items, DOCTOR_NAV] : items;
   });
 
-  /** Guarantee a reachable "Collect" work area for anyone who can draw samples.
-   *  The Lab work area intentionally excludes collect_sample, and the
-   *  workflow-derived nav only shows Collect if an admin placed it — so lab-side
-   *  collectors were left with no way to collect (it only appeared at front-desk
-   *  or the dedicated counter). Append it (mode-independent) when the user holds
-   *  collect_sample and no collection surface is already visible. Mirrors
-   *  withInventory. */
+  /** NO-WORKFLOW FALLBACK ONLY: guarantee a reachable "Collect" for anyone who
+   *  can draw samples when the tenant has no process workflow (PRIMARY_NAV).
+   *  With a workflow active, Collect is the system Collect WORK AREA
+   *  (menusFromWorkflow, normalised in for older workflows) — the nav follows
+   *  the workflow, so this never adds a second Collect. Mirrors withInventory. */
   private withCollection(items: NavItem[]): NavItem[] {
-    if (!this.auth.hasEffectivePermission('collect_sample')) return items;
-    if (!this.process.isEnabled('sample_collection')) return items;
-    if (items.some(i => i.id === 'sample-collection' || i.id === 'queue'
-                     || i.href === '/sample-collection' || i.href === '/frontdesk/queue')) return items;
-    const collect = PRIMARY_NAV.find(i => i.id === 'sample-collection');
-    return collect ? [...items, collect] : items;
+    return withCollectionFallback(items, {
+      hasWorkflow: !!this.process.active()?.categories?.length,
+      canCollect: this.auth.hasEffectivePermission('collect_sample'),
+      collectionEnabled: this.process.isEnabled('sample_collection'),
+    });
   }
 
   /** The workflow-driven nav (menusFromWorkflow) is NOT module-gated, so drop

@@ -11,7 +11,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
-import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLocked, isMandatory, isRepeatable, actionHome, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
+import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLockedItem, isMandatory, isRepeatable, actionHome, normalizeWorkflow, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
@@ -191,7 +191,7 @@ const LANE_COLOR = '#7c3aed';
               </div>
               <div cdkDropList [id]="'lane-' + lane.cat.id" [cdkDropListData]="lane.items" (cdkDropListDropped)="dropToLane($event, li)" class="pb-lane-list">
                 @for (item of lane.items; track item.id; let ii = $index) {
-                  <div class="pb-action" [class.pb-action--off]="!item.enabled" [class.pb-action--locked]="locked(item.type)" cdkDrag [cdkDragDisabled]="locked(item.type)">
+                  <div class="pb-action" [class.pb-action--off]="!item.enabled" [class.pb-action--locked]="locked(item.type, lane.cat.id)" cdkDrag [cdkDragDisabled]="locked(item.type, lane.cat.id)">
                     <svg class="pb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                       @for (p of iconFor(item.type); track $index) { <path [attr.d]="p" /> }
                     </svg>
@@ -199,7 +199,7 @@ const LANE_COLOR = '#7c3aed';
                     <button type="button" class="nd-toggle pb-toggle" role="switch" [attr.aria-checked]="item.enabled" [disabled]="mandatory(item.type)" (click)="toggleAction(li, ii)"
                             [attr.aria-label]="labelFor(item) + (item.enabled ? ' — shown' : ' — hidden')"
                             [title]="mandatory(item.type) ? 'Required — always on' : (item.enabled ? 'Enabled' : 'Hidden')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
-                    @if (locked(item.type)) {
+                    @if (locked(item.type, lane.cat.id)) {
                       <svg class="pb-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" [attr.title]="'Locked to this area'">
                         <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
                       </svg>
@@ -587,6 +587,9 @@ export class ProcessBuilderComponent implements OnInit {
     this.name.set(name);
     let cfg: ProcessWorkflowConfig = { categories: [], actions: [] };
     try { cfg = JSON.parse(json); } catch { /* */ }
+    // Shared normaliser: older workflows gain the system Collect area (or have
+    // their dedicated collection menu adopted as it) — Save persists it.
+    cfg = normalizeWorkflow(cfg) ?? { categories: [], actions: [] };
     const cats = [...(cfg.categories ?? [])].sort((a, b) => a.order - b.order);
     const lanes: Lane[] = cats.map(cat => ({
       cat,
@@ -605,11 +608,19 @@ export class ProcessBuilderComponent implements OnInit {
 
   /** Enforce the lock policy on a loaded config: every locked action sits exactly
    *  once in its home area, and mandatory ones are enabled. Repairs older / hand-
-   *  edited workflows so the builder always shows a valid, professional layout. */
+   *  edited workflows so the builder always shows a valid, professional layout.
+   *  A locked REPEATABLE action (sample_collection) only needs its home copy:
+   *  copies in other areas are legitimate placements and stay where they are. */
   private healLocks(lanes: Lane[]) {
     for (const [type, pol] of Object.entries(ACTION_POLICY)) {
       if (!pol.locked) continue;
       const home = lanes.find(l => l.cat.id === pol.home);
+      if (isRepeatable(type)) {
+        if (home && !home.items.some(it => it.type === type)) {
+          home.items.push({ id: crypto.randomUUID(), type, enabled: true });
+        }
+        continue;
+      }
       // Pull any stray copies out of non-home areas (capture one to reuse).
       let stray: LaneItem | undefined;
       for (const ln of lanes) {
@@ -664,25 +675,36 @@ export class ProcessBuilderComponent implements OnInit {
   // ── Drag-drop ────────────────────────────────────────────────────
   dropToLane(ev: CdkDragDrop<LaneItem[]>, laneIdx: number) {
     let addedType: string | null = null;
+    let addedId: string | undefined;
     if (ev.previousContainer === ev.container) {
       moveItemInArray(ev.container.data, ev.previousIndex, ev.currentIndex);
     } else if (ev.previousContainer.id === 'palette') {
       const entry = this.palette()[ev.previousIndex];
-      ev.container.data.splice(ev.currentIndex, 0, { id: crypto.randomUUID(), type: entry.type, enabled: true });
+      if (isRepeatable(entry.type) && ev.container.data.some(it => it.type === entry.type)) {
+        this.toasts.info(`${entry.label} is already in this work-area`);
+        return;
+      }
+      const newId = crypto.randomUUID();
+      ev.container.data.splice(ev.currentIndex, 0, { id: newId, type: entry.type, enabled: true });
       // Repeatable actions remain available in the palette for another placement.
       if (!isRepeatable(entry.type)) this.palette.update(p => p.filter((_, i) => i !== ev.previousIndex));
       addedType = entry.type;
+      addedId = newId;
     } else {
       const moving = (ev.previousContainer.data as LaneItem[])[ev.previousIndex];
       const targetId = this.lanes()[laneIdx]?.cat.id;
-      if (isLocked(moving.type) && actionHome(moving.type) !== targetId) {
+      if (this.locked(moving.type, this.laneIdOf(ev.previousContainer.id)) && actionHome(moving.type) !== targetId) {
         this.toasts.info(`${this.labelFor(moving)} is locked to its area`);
+        return;
+      }
+      if (isRepeatable(moving.type) && ev.container.data.some(it => it.type === moving.type)) {
+        this.toasts.info(`${this.labelFor(moving)} is already in this work-area`);
         return;
       }
       transferArrayItem(ev.previousContainer.data as LaneItem[], ev.container.data, ev.previousIndex, ev.currentIndex);
     }
     this.lanes.update(l => [...l]);
-    if (addedType) this.applyEnabled(addedType, true);   // pull in prerequisites
+    if (addedType) this.applyEnabled(addedType, true, addedId);   // pull in prerequisites
     // Settle collect-in-lab: dropping collection into the lab collapses the
     // transport pair (dispatch + intake) so the canvas reflects it immediately.
     this.lanes.update(l => { this.healDeps(l); return [...l]; });
@@ -692,7 +714,7 @@ export class ProcessBuilderComponent implements OnInit {
     if (ev.previousContainer.id === 'palette') return;        // reorder palette — ignore
     const prev = ev.previousContainer.data as unknown as LaneItem[];
     const item = prev[ev.previousIndex];
-    if (isLocked(item.type)) { this.toasts.info(`${this.labelFor(item)} can't be removed`); return; }
+    if (this.locked(item.type, this.laneIdOf(ev.previousContainer.id))) { this.toasts.info(`${this.labelFor(item)} can't be removed`); return; }
     prev.splice(ev.previousIndex, 1);
     const entry = catalogFor(item.type);
     // Repeatable types are already kept in the palette — don't add a duplicate.
@@ -735,11 +757,15 @@ export class ProcessBuilderComponent implements OnInit {
   }
   deleteCategory(i: number) {
     const lane = this.lanes()[i];
-    if (lane.items.some(it => isLocked(it.type) && actionHome(it.type) === lane.cat.id)) {
+    // Same rule for every system area (Frontdesk, Collect, Lab, …): an area
+    // holding a pinned (home) action can't be deleted.
+    if (lane.items.some(it => isLockedItem(it.type, lane.cat.id))) {
       this.toasts.info('This work-area holds locked actions and can’t be deleted');
       return;
     }
-    const back = lane.items.map(it => catalogFor(it.type)).filter((e): e is ActionCatalogEntry => !!e);
+    // Repeatable types never leave the palette — don't add a duplicate chip.
+    const back = lane.items.filter(it => !isRepeatable(it.type))
+      .map(it => catalogFor(it.type)).filter((e): e is ActionCatalogEntry => !!e);
     this.palette.update(p => [...p, ...back]);
     this.lanes.update(l => l.filter((_, k) => k !== i));
     this.dirty.set(true);
@@ -747,19 +773,30 @@ export class ProcessBuilderComponent implements OnInit {
   toggleAction(laneIdx: number, itemIdx: number) {
     const cur = this.lanes()[laneIdx]?.items[itemIdx];
     if (!cur || isMandatory(cur.type)) return;
-    this.applyEnabled(cur.type, !cur.enabled);
+    this.applyEnabled(cur.type, !cur.enabled, cur.id);
   }
 
   /** Resolve every action-type to flip when `type` changes to `enabled`,
    *  following couplings (both ways), prerequisites (when enabling) and
    *  dependents (when disabling). Also reports prerequisites that aren't placed
-   *  anywhere so the caller can warn. */
-  private cascade(type: string, enabled: boolean): { desired: Map<string, boolean>; missing: string[] } {
+   *  anywhere so the caller can warn.
+   *  REPEATABLE types are satisfied by ANY enabled copy: `itemId` is the copy
+   *  being changed — switching it off while another copy is on cascades nothing,
+   *  and a repeatable prerequisite that already has an enabled copy is left be. */
+  private cascade(type: string, enabled: boolean, itemId?: string): { desired: Map<string, boolean>; missing: string[] } {
     const desired = new Map<string, boolean>();
     const missing: string[] = [];
     const placed = new Set(this.lanes().flatMap(l => l.items.map(i => i.type)));
+    const otherCopyOn = (t: string) => this.lanes().some(l =>
+      l.items.some(i => i.type === t && i.enabled && !(t === type && i.id === itemId)));
     const visit = (t: string, en: boolean) => {
       if (desired.get(t) === en) return;
+      if (isRepeatable(t) && otherCopyOn(t)) {
+        // Still live through another copy: flip only the originating copy (if
+        // it is this type) and don't cascade further.
+        if (t === type) desired.set(t, en);
+        return;
+      }
       desired.set(t, en);
       for (const p of coupledTypes(t)) visit(p, en);
       if (en) {
@@ -776,14 +813,28 @@ export class ProcessBuilderComponent implements OnInit {
   }
 
   /** Apply a cascade to the lanes (mandatory actions stay on); warn on any
-   *  prerequisite that isn't placed in a work-area. */
-  private applyEnabled(type: string, enabled: boolean) {
-    const { desired, missing } = this.cascade(type, enabled);
+   *  prerequisite that isn't placed in a work-area. `itemId` = the placed copy
+   *  the admin acted on: for a repeatable type ONLY that copy flips; a repeatable
+   *  pulled in as a prerequisite switches on just one copy (its home copy if
+   *  placed, else the first) rather than every placement. */
+  private applyEnabled(type: string, enabled: boolean, itemId?: string) {
+    const { desired, missing } = this.cascade(type, enabled, itemId);
+    const pick = new Map<string, string>();   // repeatable prerequisite → the one copy to enable
+    for (const [t, d] of desired) {
+      if (!d || !isRepeatable(t) || (t === type && itemId)) continue;
+      const copies = this.lanes().flatMap(l => l.items.filter(i => i.type === t).map(i => ({ i, area: l.cat.id })));
+      const chosen = copies.find(c => c.area === actionHome(t)) ?? copies[0];
+      if (chosen) pick.set(t, chosen.i.id);
+    }
     this.lanes.update(l => l.map(ln => ({
       ...ln,
       items: ln.items.map(it => {
         const d = desired.get(it.type);
         if (d === undefined) return it;
+        if (isRepeatable(it.type)) {
+          if (it.type === type && itemId) return it.id === itemId ? { ...it, enabled: d } : it;
+          if (d && pick.get(it.type) !== it.id) return it;
+        }
         return { ...it, enabled: isMandatory(it.type) ? true : d };
       }),
     })));
@@ -800,7 +851,10 @@ export class ProcessBuilderComponent implements OnInit {
   iconFor(type: string): string[] { return catalogFor(type)?.iconPath ?? ['M12 2v20M2 12h20']; }
   labelFor(it: LaneItem): string { return it.label || catalogFor(it.type)?.label || it.type; }
   enabledCount(lane: Lane): number { return lane.items.filter(i => i.enabled).length; }
-  locked(type: string): boolean { return isLocked(type); }
+  /** Is this placed item pinned? (A repeatable action pins only its home copy.) */
+  locked(type: string, areaId?: string | null): boolean { return isLockedItem(type, areaId); }
+  /** 'lane-<areaId>' drop-list id → the area id. */
+  private laneIdOf(listId: string): string | null { return listId.startsWith('lane-') ? listId.slice(5) : null; }
   mandatory(type: string): boolean { return isMandatory(type); }
 
   // ── Workflow ops ─────────────────────────────────────────────────
@@ -811,6 +865,7 @@ export class ProcessBuilderComponent implements OnInit {
     const base = this.workflows().find(w => (w.branchId ?? null) === null) ?? this.workflows()[0];
     let cfg: ProcessWorkflowConfig = { categories: [], actions: [] };
     try { cfg = JSON.parse(base?.configJson ?? '{}'); } catch { /* */ }
+    cfg = normalizeWorkflow(cfg) ?? cfg;
     this.svc.create('New workflow', cfg, this.scope()).subscribe({
       next: w => { this.reload(w.id); this.toasts.success('Workflow created'); },
       error: e => this.toasts.error(ApiError.from(e).message),
