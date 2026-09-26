@@ -544,7 +544,7 @@
             <div class="pf-rr2__head">
               <div>
                 <span class="pf-te2-h">Reference ranges — what counts as normal</span>
-                <p class="pf-rr2__sub">Prints on the report next to the result and decides the flag: <strong>H</strong>&nbsp;=&nbsp;High (above the range), <strong>L</strong>&nbsp;=&nbsp;Low (below it), <strong>C</strong>&nbsp;=&nbsp;past a critical limit.</p>
+                <p class="pf-rr2__sub">Prints on the report next to the result and decides the flag.</p>
               </div>
 
             </div>
@@ -681,7 +681,7 @@
                   </div>
 
                   @if (isNumericType(p.type)) {
-                    <p class="pf-vbatch__sub">Reference ranges — prints next to the result and decides the flag: <strong>H</strong>&nbsp;=&nbsp;High (above the range), <strong>L</strong>&nbsp;=&nbsp;Low (below it), <strong>C</strong>&nbsp;=&nbsp;past a critical limit.</p>
+                    <p class="pf-vbatch__sub">Reference ranges — prints next to the result and decides the flag.</p>
                     @if (!rangeAdvanced()) {
                       <pf-range-table [param]="$any(p)" [unit]="p.unit || ''" (bandsChange)="setBands(i, $event)"></pf-range-table>
                     } @else {

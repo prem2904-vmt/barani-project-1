@@ -2,10 +2,11 @@ import { test, expect, type Page } from '@playwright/test';
 import { loginAs } from './support/auth';
 
 /**
- * Test editor — reference ranges, EXPLAINED (ND-PATTERN "Reference ranges &
- * conditions"). Signs in as the seeded Lab Admin, opens Haemoglobin (HEM011 —
- * sex/age bands with criticals, or $TEST_CODE / $TEST_ID), goes to Result
- * entry and checks the plain range table + the one-line tester at 1440 and 375.
+ * Test editor — reference ranges (ND-PATTERN §16). Signs in as the seeded Lab
+ * Admin, opens Haemoglobin (HEM011 — sex/age bands with criticals, or
+ * $TEST_CODE / $TEST_ID), goes to Result entry and checks the ONE compact
+ * table (one row per group) + the one-line tester at 1440, and the compact
+ * group cards at 375.
  * READ-ONLY: edits stay in the draft and it never saves.
  * Screenshots (1440 / 375 × light / dark) into $SHOTS_DIR when set.
  * CORS_RELAY=1 relays backend calls so a static build on :4310 can run it.
@@ -62,8 +63,8 @@ async function openEditor(page: Page): Promise<boolean> {
   return true;
 }
 
-test.describe('Test editor — reference ranges as a plain table', () => {
-  test('plain range table + tester at 1440 and 375 (read-only)', async ({ page }) => {
+test.describe('Test editor — reference ranges as one compact table', () => {
+  test('one row per group + tester at 1440, cards at 375 (read-only)', async ({ page }) => {
     await relayCors(page);
     // Never write: fail loudly if anything tries to save.
     await page.route(/\/api\/(tests|report-layout\/test)\//, route =>
@@ -77,30 +78,44 @@ test.describe('Test editor — reference ranges as a plain table', () => {
 
     const table = page.locator('pf-range-table').first();
     await expect(table).toBeVisible({ timeout: 20_000 });
-    // No range bars / zone ruler / AG-Grid in the default view.
-    await expect(page.locator('pf-range-insight, .rin__bar')).toHaveCount(0);
-    await expect(page.locator('.pf-rrgrid')).toHaveCount(0);
-    const bands = table.locator('.rtb__band');
-    expect(await bands.count()).toBeGreaterThanOrEqual(1);
-    // Rows read in severity order: Critical low → … → Critical high.
-    const order = ['Critical low', 'Low', 'Normal', 'High', 'Critical high'];
-    const labels = (await bands.first().locator('tbody th').allTextContents()).map(t => t.trim());
-    const idx = labels.map(l => order.indexOf(l)).filter(i => i >= 0);
-    expect(idx.length).toBeGreaterThanOrEqual(2);
-    expect(idx).toEqual([...idx].sort((a, b) => a - b));
-    await expect(bands.first().locator('.rtb__edges')).toContainText('Exactly on a limit');
+    // ONE table; no bars, no AG-Grid, no per-level rows, no footnotes by default.
+    await expect(table.locator('table.rtb__table')).toHaveCount(1);
+    await expect(page.locator('pf-range-insight, .rin__bar, .pf-rrgrid')).toHaveCount(0);
+    await expect(table.locator('thead th')).toHaveText(['Who', 'Age', /Normal range/, 'Critical below', 'Critical above', /Actions/]);
+    await expect(table).not.toContainText('Exactly on a limit');
+    await expect(table).not.toContainText('Result is');
+    const rows = table.locator('tbody tr.rtb__row');
+    expect(await rows.count()).toBeGreaterThanOrEqual(2);
+    // Ages read in natural units — never fractional years.
+    const ages = (await rows.locator('.rtb__agebtn span').allTextContents()).map(t => t.trim());
+    for (const a of ages) expect(a).toMatch(/^(Any age|up to .+|[\d.]+(–[\d.]+)? (day|days|month|months|year|years)(\+)?( – [\d.]+ (day|days|month|months|year|years))?)$/);
+    expect(ages.join(' ')).not.toMatch(/0\.0\d/);
+    // Pre-existing data problems don't shout: no red line on open.
+    await expect(table.locator('.rtb__msg')).toHaveCount(0);
+    // Fits the Result entry card: no sideways scroll at 1440.
+    const over1440 = await table.evaluate(el => {
+      const card = (el.closest('.nd-card__body') ?? document.body).getBoundingClientRect();
+      return Math.max(0, ...[...el.querySelectorAll('table, input, pf-select, .rtb__agebtn')].map(t => t.getBoundingClientRect().right - card.right));
+    });
+    expect(over1440).toBeLessThanOrEqual(1);
 
     // Try a value — one line: a woman of 35 with 6 g/dL.
     await table.locator('.rtb__in--try').fill('6');
-    await table.getByRole('radio', { name: 'Woman' }).click();
+    await table.locator('.rtb__sel--try').click();
+    await page.locator('.pf-dd__option', { hasText: 'Female' }).first().click();
     await table.locator('.rtb__in--tage').fill('35');
-    await expect(table.locator('.rtb__verdict')).toHaveText(/Critical low|Low/);
+    await expect(table.locator('.rtb__vtext')).toHaveText(/Critical low|Low/);
     const mono = await table.evaluate(el => [...el.querySelectorAll('*')]
       .filter(e => /mono|courier|menlo/i.test(getComputedStyle(e).fontFamily)).length);
     expect(mono).toBe(0);
 
-    await bands.first().scrollIntoViewIfNeeded();
+    await table.scrollIntoViewIfNeeded();
     await shoot(page, 'ranges-1440-table');
+    // The age editor opens under its row (natural units + quick ages).
+    await rows.first().locator('.rtb__agebtn').click();
+    await expect(table.locator('.rtb__ageed')).toBeVisible();
+    await shoot(page, 'ranges-1440-age');
+    await rows.first().locator('.rtb__agebtn').click();
     await table.locator('.rtb__try').scrollIntoViewIfNeeded();
     await shoot(page, 'ranges-1440-tester');
 
@@ -109,20 +124,28 @@ test.describe('Test editor — reference ranges as a plain table', () => {
     await expect(page.locator('.pf-rrgrid').first()).toBeVisible();
     await page.getByRole('button', { name: 'Back to the simple table' }).first().click();
 
-    // Phones: 44px fields, no sideways scroll.
+    // Phones: one compact card per group, tap to edit; 44px / 16px; no sideways scroll.
     await page.setViewportSize({ width: 375, height: 812 });
     await page.waitForTimeout(400);
-    await bands.first().scrollIntoViewIfNeeded();
-    await shoot(page, 'ranges-375-table');
+    const cards = table.locator('.rtb__card');
+    await expect(table.locator('table.rtb__table')).toHaveCount(0);
+    expect(await cards.count()).toBeGreaterThanOrEqual(2);
+    await expect(cards.first().locator('.rtb__l1')).toContainText('·');
+    await expect(cards.first().locator('.rtb__l2')).toContainText('Normal');
+    await cards.first().scrollIntoViewIfNeeded();
+    await shoot(page, 'ranges-375-cards');
+    await cards.first().locator('.rtb__cardhead').click();
+    const box = await cards.first().locator('.rtb__grid2 input').first().boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    const fs = await cards.first().locator('.rtb__grid2 input').first().evaluate(e => parseFloat(getComputedStyle(e).fontSize));
+    expect(fs).toBeGreaterThanOrEqual(16);
+    await cards.first().scrollIntoViewIfNeeded();
+    await shoot(page, 'ranges-375-edit');
     await table.locator('.rtb__in--try').fill('6');
-    await table.getByRole('radio', { name: 'Woman' }).click();
-    await table.locator('.rtb__in--tage').fill('35');
     await table.locator('.rtb__try').scrollIntoViewIfNeeded();
-    const val = await table.locator('.rtb__in--try').boundingBox();
-    expect(val!.height).toBeGreaterThanOrEqual(44);
     const overflow = await table.evaluate(el => {
       const card = (el.closest('.nd-card__body') ?? document.body).getBoundingClientRect();
-      return Math.max(0, ...[...el.querySelectorAll('.rtb__table td, .rtb__table input, .rtb__head, .rtb__try')]
+      return Math.max(0, ...[...el.querySelectorAll('.rtb__card, input, .rtb__try')]
         .map(t => t.getBoundingClientRect().right - card.right));
     });
     expect(overflow).toBeLessThanOrEqual(1);
