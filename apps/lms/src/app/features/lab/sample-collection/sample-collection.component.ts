@@ -76,11 +76,17 @@ interface Container {
 }
 
 // Tube colour conventions for blood vacutainers, keyed by department code.
-const DEPT_VACUTAINER: Record<string, { color: string; label: string }> = {
+// Keyed by DEPARTMENT CODE. HEM / MIC are the codes going forward (owner
+// 2026-09-26: department codes follow the test codes); HAE / HAEM / MICRO stay
+// for departments that still carry the old codes.
+export const DEPT_VACUTAINER: Record<string, { color: string; label: string }> = {
   HAEM: { color: "#a855f7", label: "EDTA · Lavender" },
+  HAE: { color: "#a855f7", label: "EDTA · Lavender" },
+  HEM: { color: "#a855f7", label: "EDTA · Lavender" },
   BIO: { color: "#eab308", label: "SST · Gold" },
   SERO: { color: "#ef4444", label: "Plain · Red" },
   MICRO: { color: "#e5e7eb", label: "Sterile container" },
+  MIC: { color: "#e5e7eb", label: "Sterile container" },
   HISTO: { color: "#64748b", label: "Formalin tube" },
 };
 const BLOOD_FILL = "#b91c1c";

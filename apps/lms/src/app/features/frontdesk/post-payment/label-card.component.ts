@@ -24,8 +24,13 @@ export interface TubeSpec {
   volume: string;
 }
 
+// Keyed by DEPARTMENT CODE (or name). HEM / MIC are the codes going forward
+// (owner 2026-09-26: department codes follow the test codes); the old HAE /
+// HAEM / MICRO keys stay for departments that still carry them.
 const TUBE_MAP: Record<string, TubeSpec> = {
   HAEM:         { label: 'Lavender',  color: 'lavender',  volume: '3 mL' },
+  HAE:          { label: 'Lavender',  color: 'lavender',  volume: '3 mL' },
+  HEM:          { label: 'Lavender',  color: 'lavender',  volume: '3 mL' },
   HAEMATOLOGY:  { label: 'Lavender',  color: 'lavender',  volume: '3 mL' },
   ENDO:         { label: 'Yellow',    color: 'yellow',    volume: '5 mL' },
   ENDOCRINOLOGY:{ label: 'Yellow',    color: 'yellow',    volume: '5 mL' },
@@ -33,6 +38,7 @@ const TUBE_MAP: Record<string, TubeSpec> = {
   BIOCHEM:      { label: 'Yellow',    color: 'yellow',    volume: '5 mL' },
   BIOCHEMISTRY: { label: 'Yellow',    color: 'yellow',    volume: '5 mL' },
   MICRO:        { label: 'Red',       color: 'red',       volume: '5 mL' },
+  MIC:          { label: 'Red',       color: 'red',       volume: '5 mL' },
   MICROBIOLOGY: { label: 'Red',       color: 'red',       volume: '5 mL' },
   CPA:          { label: 'Container', color: 'container', volume: '30 mL' },
   PATHOLOGY:    { label: 'Container', color: 'container', volume: '30 mL' },
