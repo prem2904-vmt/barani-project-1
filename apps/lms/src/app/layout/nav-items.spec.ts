@@ -347,7 +347,7 @@ describe('menusFromWorkflow', () => {
     }
   });
 
-  it('inserts Collect item when collect action exists in area and user can collect', () => {
+  it('does NOT inject a Collect item when collection sits inside another area (owner rule 2026-09-26)', () => {
     const cfg = makeCfg(
       [{ id: 'lab-area', name: 'Lab', order: 1, icon: 'default' }],
       [
@@ -363,9 +363,10 @@ describe('menusFromWorkflow', () => {
     };
     const result = menusFromWorkflow(cfg, permCtx);
     expect(result).not.toBeNull();
-    // Should include the sample-collection item
+    // Integrated placement = a "Collect sample" action on that area's screen,
+    // never a separate nav item.
     const hasCollect = result!.some((item) => item.id === 'sample-collection');
-    expect(hasCollect).toBe(true);
+    expect(hasCollect).toBe(false);
   });
 
   it('does not insert Collect item when user lacks collect_sample permission', () => {

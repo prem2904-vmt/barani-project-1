@@ -1694,6 +1694,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // order status alone (often still 'billed' until every tube is drawn) is
   // not enough — re-prompting collection on a partially or fully collected
   // order would let users overwrite drawn tubes.
+  /** Resume a part-drawn order — only where the front desk owns collection in
+   *  the workflow (same placement gate as {@link showCollectOn}); elsewhere the
+   *  area that holds collection finishes it. */
+  showResumeCollectOn(o: Order): boolean {
+    return this.sampleStatus(o) === 'partially_collected'
+      && this.labCfg.collectsAtFrontdesk()
+      && this.auth.hasPermission('collect_sample');
+  }
   showCollectOn(o: Order): boolean {
     if (!this.labCfg.collectsAtFrontdesk()) return false;
     if (!this.auth.hasPermission('collect_sample')) return false;

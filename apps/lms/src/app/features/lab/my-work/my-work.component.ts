@@ -148,6 +148,19 @@ const COUNTERS: CounterSpec[] = [
         <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
         <ng-container band-actions>
+          <!-- Collection placed in the Lab work area (Process builder): the
+               lab's own "Collect sample" entry — opens the collect page, whose
+               back returns here. Never a separate nav item (owner rule). -->
+          @if (canOpenCollect()) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="openCollect()"
+                  data-testid="lab-collect-sample">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 3h6"/><path d="M10 3v14a2 2 0 0 0 4 0V3"/>
+            </svg>
+            Collect sample
+          </button>
+          }
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2826,6 +2839,14 @@ export class MyWorkComponent implements OnInit {
    *  work queue (backend SampleService). Takes priority over showIntake so a
    *  stale config (collect in lab but intake still on) still shows Collect. */
   readonly showCollect = computed(() => this.process.collectsInLab());
+  /** Band "Collect sample" — collection sits in the Lab work area and this
+   *  user can draw tubes. */
+  readonly canOpenCollect = computed(() =>
+    this.showCollect() && this.auth.hasAnyPermission(['collect_sample']));
+  /** Open the full collect page; its back chevron returns to My Work. */
+  openCollect(): void {
+    this.router.navigate(['/lab/collect'], { queryParams: { from: '/lab/my-work' } });
+  }
 
   /** Lab Intake is a placeable workflow action — hide the intake pane/tab when
    *  an admin switches `lab_intake` OFF in /admin/process, or when collection
