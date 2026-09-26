@@ -1035,6 +1035,74 @@ the same code); classic keeps its page.
   immersive class, the collapse strip, and at 375 the push + composer
   above the navbar. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
 
+## 19. Admin pages
+
+The Admin area keeps its categories, routes and pages. What changed is how
+you move through them (owner: "too many nested tabs", "a doctor and a
+technician who has not cleared 12th grade must be able to use this").
+
+**One list, one tap.** `features/admin/admin-catalog.ts` is the ONE
+description of the admin categories and their pages (route, permissions and
+module mirror the route guards). The Admin home (`/admin`), the settings hub
+(`/admin/manage`) and the Lab hub (`/lab/settings`) all render it with
+`pf-admin-directory`: one card per category, every page a row, one tap from
+the Admin home. Pages the user can't open are not listed; a category with
+nothing left is hidden. No category pill, no hub-tile-then-tab chains.
+
+**Search finds settings, not only pages.** The band pill searches the
+catalogue's pages AND `ADMIN_SETTINGS` (single settings with their anchor)
+with plain words and synonyms (`ADMIN_SYNONYMS`: "barcode" / "QR" / "scan"
+all find *How staff find a sample*). Results are one per row
+(`pf-admin-search-results`); a setting row links to
+`page#anchor`. On the page, `pfSettingAnchor="anchor"` on the row scrolls to
+it, focuses it and highlights it briefly (`.nd-set--hit`, static under
+reduced motion). Add an `ADMIN_SETTINGS` entry for every new setting row.
+
+**Back.** The band chevron on an admin page goes to the Admin home at that
+page's category (`/admin?cat=lab`, `NavBackService` via `adminParentFor`);
+the hubs go back to the Admin home. Pages don't pass their own `backTo`.
+
+**Settings pages are ONE scrolling page — no pill tabs.**
+
+```
+band:  ‹ [logo] Micro World                        [Save — only if the page had one]
+       pill: <h1 class="nd-band-page">Lab settings</h1>
+body:  .nd-setpage.nd-setpage--jump
+       ├ pf-settings-jump (desktop ≥1024 only: sticky "On this page")
+       └ .nd-setcol
+           section.nd-card.nd-setsec#sec-…   (BILLING header: icon chip + LABEL)
+             .nd-set[pfSettingAnchor]  label · one help line  |  control
+             .nd-set …
+```
+
+- Every section of the old tabs is on the page, in order, under a plain
+  heading. The page keeps its content, API calls and save model: autosave
+  pages stay autosave; pages with a Save keep ONE band Save (it saves every
+  section that changed).
+- **Row copy:** the label is 2–6 plain words, the help is one line of at
+  most 12 words. No paragraphs, no "tip" boxes. Show an example where a
+  format matters: `.nd-set__preview` "Looks like: MIC-2607-00001".
+- **Controls:** 2–4 choices = `pf-segmented` (a real `radiogroup`: one Tab
+  stop, arrows move and select; pass `ariaLabelledby` = the row label's
+  id). More choices = `pf-select`. On/off = the slate `.nd-toggle`
+  (`role=switch`, `aria-labelledby` the label). Numbers/text = `.nd-input`
+  with a `<label for>`. Never radio cards with paragraphs, never native
+  `<select>`.
+- **A11y:** visible focus ring on every control, 44px targets on touch,
+  16px inputs on phones, AA contrast in light and dark (the toggle track
+  gets a 3:1 edge inside `.nd-set`), motion off under reduced motion.
+- **Phones:** one column; the control drops under its label, a lone switch
+  stays beside it; no jump list.
+
+✅ Do: "How staff find a sample" · "Scan the code or type the number." · `[Scan code | Type number]`
+❌ Don't: a "Sample identification" card with two radio cards and a paragraph each, behind a pill tab.
+
+API: `pf-admin-directory[categories][focus][showHeads]` ·
+`pf-admin-search-results[hits][query]` · `searchAdmin()` · `visibleCategories()` ·
+`hubPages()` · `.nd-setpage(--jump)` · `pf-settings-jump[sections]` · `.nd-setjump` ·
+`.nd-setcol` · `.nd-setsec` · `.nd-set(__text|__label|__help|__ctl|__ctl--wide|__preview)` ·
+`.nd-set--sub` · `.nd-set--off` · `.nd-set--hit` · `[pfSettingAnchor]` · `.nd-band-page`.
+
 ## API summary
 
 ```
