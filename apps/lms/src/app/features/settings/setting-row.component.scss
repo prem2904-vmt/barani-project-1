@@ -16,7 +16,7 @@
 
 .pf-sr__main {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto 64px;
+  grid-template-columns: minmax(0, 1fr) auto 64px;
   align-items: center;
   gap: 8px 16px;
   min-height: 44px;
@@ -31,14 +31,7 @@
 .pf-sr__help { font-size: 12.5px; line-height: 1.45; color: var(--text-tertiary); @include nd.no-truncate; }
 .pf-sr__scope { display: inline-flex; margin-top: 3px; }
 .pf-sr__chip { height: 24px; min-height: 24px; padding: 0 8px; font-size: 11.5px; color: var(--text-secondary); }
-.pf-sr__chip--pick { gap: 2px; padding-right: 0; }
-// The branch picker reads as part of the chip: no box of its own.
-:host ::ng-deep .pf-sr__branch .pf-dd { width: auto; }
-:host ::ng-deep .pf-sr__branch .pf-dd__trigger {
-  height: 22px; min-height: 22px; width: auto; padding: 0 6px 0 2px; gap: 4px;
-  border: 0; background: transparent; box-shadow: none;
-  font-size: 11.5px; font-weight: 600; color: var(--text-primary);
-}
+.pf-sr__branch { min-width: 180px; }
 
 .pf-sr__ctl { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .pf-sr__switch { min-height: 32px; }
@@ -82,18 +75,6 @@
 .pf-sr__looks { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
 .pf-sr__looks strong { color: var(--text-primary); font-weight: 600; }
 
-// A switch's own fields (e.g. "Alert after 60 min") sit right under it.
-.pf-sr__fields--inline { background: transparent; border: 0; padding: 4px 0 0; grid-template-columns: repeat(auto-fill, minmax(180px, 220px)); }
-.pf-sr__reset { grid-column: 1 / -1; justify-self: start; height: 36px; }
-
-// OPD repeat-visit rules
-.pf-sr__tiers { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-.pf-sr__tier { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.pf-sr__tier-t { font-size: 13px; color: var(--text-secondary); }
-.pf-sr__tier-n { width: 130px; }
-.pf-sr__tier-x { height: 40px; width: 40px; }
-.pf-sr__tier-add { align-self: flex-start; height: 36px; }
-
 // Department pools
 .pf-sr__pools { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .pf-sr__pool { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr); align-items: center; gap: 12px; }
@@ -113,8 +94,6 @@
 @media (max-width: 640px) {
   :host { padding: 12px; }
   .pf-sr__main { grid-template-columns: minmax(0, 1fr) auto; }
-  .pf-sr__chip--pick { min-height: 44px; }
-  :host ::ng-deep .pf-sr__branch .pf-dd__trigger { height: 40px; min-height: 40px; font-size: 13px; }
   .pf-sr__state { position: absolute; top: 8px; right: 12px; }
   :host(.pf-sr--stack) .pf-sr__main { grid-template-columns: minmax(0, 1fr); }
   :host(.pf-sr--stack) .pf-sr__ctl { justify-content: stretch; }
@@ -130,10 +109,5 @@
   .pf-sr__link, .pf-sr__change { min-height: 44px; }
   .pf-sr__fields { grid-template-columns: minmax(0, 1fr); }
   .pf-sr__pool { grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  .pf-sr__tier-n { width: calc(50% - 40px); }
-  .pf-sr__tier-x, .pf-sr__tier-add, .pf-sr__reset { min-height: 44px; }
-  .pf-sr__tier-x { width: 44px; }
-  :host ::ng-deep pf-number-input .field { font-size: 16px; }
-  :host ::ng-deep pf-number-input .root, :host ::ng-deep pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger { min-height: 44px; }
   .pf-sr__label { padding-right: 60px; }
 }

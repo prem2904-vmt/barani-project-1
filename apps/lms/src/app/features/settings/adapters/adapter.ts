@@ -37,19 +37,17 @@ export class BranchCache<T> {
     if (!s) { s = signal<T | null>(null); this.map.set(k, s); this._tick.update((n) => n + 1); }
     return s;
   }
-  /** Reactive: the cached value (null until loaded). Never creates a slot
-   *  (reads happen inside computeds, where writing a signal is not allowed);
-   *  `_tick` re-runs readers when a new branch's slot appears. */
+  /** Reactive: the cached value (null until loaded). */
   get(b: string | null): T | null {
     this._tick();
-    return this.map.get(this.k(b))?.() ?? null;
+    return this.slot(b)();
   }
   set(b: string | null, v: T | null): void { this.slot(b).set(v); }
   isLoading(b: string | null): boolean { return this.loading.has(this.k(b)); }
   /** Start a load once; `done` stores the result. */
   load(b: string | null, src: () => Observable<T>, fallback: () => T): void {
     const k = this.k(b);
-    if (this.loading.has(k) || (this.map.get(k)?.() ?? null) !== null) return;
+    if (this.loading.has(k) || this.slot(b)() !== null) return;
     this.loading.add(k);
     src().subscribe({
       next: (v) => { this.loading.delete(k); this.slot(b).set(v ?? fallback()); },

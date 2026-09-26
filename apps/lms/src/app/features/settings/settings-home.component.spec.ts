@@ -56,9 +56,7 @@ describe('Settings home (/settings)', () => {
     expect(p.groups()).toContain('lab');
     expect(p.groups()).toContain('collection');
     expect(p.groups()).not.toContain('setup');
-    expect(p.groups()).not.toContain('money');
-    // People & access only carries this user's own rows (no staff tools).
-    expect(p.el.querySelector('#grp-people .pf-set__tool')).toBeNull();
+    expect(p.groups()).not.toContain('people');
     expect(p.labels()).not.toContain('Lab name');
     expect(p.labels()).toContain('How staff find a sample');
   });

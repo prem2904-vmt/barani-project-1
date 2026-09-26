@@ -36,11 +36,6 @@
 .pf-set__count { font-size: 12px; color: var(--text-tertiary); }
 .pf-set__rows { display: flex; flex-direction: column; }
 .pf-set__rows--more { border-top: 1px solid var(--nd-line); }
-.pf-set__sub {
-  margin: 0; padding: 14px 16px 6px; border-top: 1px solid var(--nd-line);
-  font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary);
-}
-.pf-set__sub:first-child { border-top: 0; }
 
 .pf-set__more {
   display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
@@ -71,9 +66,6 @@
 .pf-set__save svg { color: var(--color-violet-600, #7c3aed); }
 
 @media (prefers-reduced-motion: reduce) { .pf-set__more svg { transition: none; } }
-
-// Web / tablet: every chip in view (wraps); phones scroll the row sideways.
-@media (min-width: 641px) { .pf-set__chips { flex-wrap: wrap; overflow: visible; } }
 
 @media (max-width: 640px) {
   .pf-set__chip { height: 40px; }

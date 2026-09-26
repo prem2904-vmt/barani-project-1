@@ -71,9 +71,8 @@ export class SettingRowComponent implements OnDestroy {
   readonly loaded = computed(() => this.store.loaded(this.def()));
   readonly c = computed<ControlDef>(() => this.def().control);
 
-  /** Controls that drop to their own full-width line on phones (a switch
-   *  stays on the right of the label). */
-  readonly stacked = computed(() => this.c().kind !== 'switch');
+  /** Controls that drop to their own full-width line on phones. */
+  readonly stacked = computed(() => !['switch', 'readonly', 'link'].includes(this.c().kind));
 
   readKey(key: string): unknown {
     const l = this.local();
@@ -83,8 +82,6 @@ export class SettingRowComponent implements OnDestroy {
 
   // ── scope chip ────────────────────────────────────────────────────────
   readonly scopeText = computed(() => scopeLabel(this.def().scope, this.store.branchName()));
-  /** "This branch" / "Per department" before the branch picker. */
-  readonly scopePrefix = computed(() => (this.def().scope === 'dept' ? 'Per department' : 'This branch'));
   readonly branchOptions = computed<PfSelectOption<string>[]>(() =>
     this.store.branches().map((b) => ({ value: b.id, label: b.name })));
   readonly canPickBranch = computed(() =>
@@ -116,22 +113,7 @@ export class SettingRowComponent implements OnDestroy {
     return Number.isFinite(n) ? n : null;
   }
   selectOptionsFor(c: ControlDef): PfSelectOption<string>[] {
-    const opts = c.optionsKey ? (this.readKey(c.optionsKey) as ControlDef['options']) : c.options;
-    return (opts ?? []).map((o) => ({ value: String(o.value), label: o.label }));
-  }
-
-  /** The fields under the row: a composite's editor (after "Change", or
-   *  always when inline), or a switch's extra fields while it is on. */
-  readonly showFields = computed(() => {
-    const c = this.c();
-    if (!c.fields?.length) return false;
-    if (c.kind === 'composite') return !!c.inline || this.editing();
-    if (c.kind === 'switch') return this.value() === true;
-    return false;
-  });
-
-  async resetDefaults(): Promise<void> {
-    for (const [k, v] of Object.entries(this.c().reset ?? {})) await this.commit(v, k);
+    return (c.options ?? []).map((o) => ({ value: String(o.value), label: o.label }));
   }
   /** Option value back to its real type (numbers / booleans stay typed). */
   private typed(c: ControlDef, raw: string): unknown {
@@ -183,7 +165,7 @@ export class SettingRowComponent implements OnDestroy {
   pick(c: ControlDef, raw: string, key: string = this.def().key): void { void this.commit(this.typed(c, raw), key); }
 
   /** Numbers save after a short pause (the stepper repeats while held). */
-  numberChanged(v: number | null | unknown[], key: string = this.def().key): void {
+  numberChanged(v: number | null, key: string = this.def().key): void {
     this.bumpLocal(key, v);
     const t = this.numTimers.get(key);
     if (t) clearTimeout(t);
@@ -191,7 +173,7 @@ export class SettingRowComponent implements OnDestroy {
       this.numTimers.delete(key);
       const pending = this.local()[key];
       this.bumpLocal(key, undefined);
-      void this.commit(pending, key);
+      void this.commit(pending as number | null, key);
     }, 700));
   }
 
@@ -237,18 +219,6 @@ export class SettingRowComponent implements OnDestroy {
     r.readAsDataURL(f);
   }
   private fail(msg: string): void { this.status.set('error'); this.error.set(msg); }
-
-  // ── tiers (OPD repeat-visit rules) ────────────────────────────────────
-  readonly tiers = computed<Array<{ withinDays: number; discountPercent: number }>>(() => {
-    const v = this.value();
-    return Array.isArray(v) ? (v as Array<{ withinDays: number; discountPercent: number }>) : [];
-  });
-  addTier(): void { void this.commit([...this.tiers(), { withinDays: 7, discountPercent: 50 }]); }
-  removeTier(i: number): void { void this.commit(this.tiers().filter((_, x) => x !== i)); }
-  tierChanged(i: number, k: 'withinDays' | 'discountPercent', v: number | null): void {
-    const next = this.tiers().map((t, x) => (x === i ? { ...t, [k]: v ?? 0 } : t));
-    this.numberChanged(next as never, this.def().key);
-  }
 
   // ── department pools ──────────────────────────────────────────────────
   readonly departments = computed(() => this.autoAssign.departments(this.store.scopeBranch(this.def())));

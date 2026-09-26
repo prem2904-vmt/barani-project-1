@@ -29,7 +29,7 @@
           <section class="nd-card pf-set__card" aria-label="Search results">
             <header class="nd-card__head">
               <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
-              <span class="nd-card__label" role="heading" aria-level="2">Results</span>
+              <h2 class="nd-card__label">Results</h2>
               <span class="nd-card__spacer"></span>
               <span class="pf-set__count nd-num">{{ resultCount() }} for “{{ q().trim() }}”</span>
             </header>
@@ -58,18 +58,13 @@
             <section class="nd-card pf-set__card" [id]="'grp-' + v.group.id" [attr.aria-labelledby]="'grp-t-' + v.group.id">
               <header class="nd-card__head">
                 <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="v.group.icon"/></svg></span>
-                <span class="nd-card__label" role="heading" aria-level="2" [id]="'grp-t-' + v.group.id">{{ v.group.label }}</span>
+                <h2 class="nd-card__label" [id]="'grp-t-' + v.group.id">{{ v.group.label }}</h2>
                 @if (v.group.id === 'alerts') { <span class="nd-card__note">In-app alerts only.</span> }
               </header>
 
               @if (v.main.length) {
                 <div class="pf-set__rows">
-                  @for (d of v.main; track d.id; let i = $index) {
-                    @if (d.subgroup && d.subgroup !== v.main[i - 1]?.subgroup) {
-                      <p class="pf-set__sub">{{ d.subgroup }}</p>
-                    }
-                    <pf-setting-row [def]="d"></pf-setting-row>
-                  }
+                  @for (d of v.main; track d.id) { <pf-setting-row [def]="d"></pf-setting-row> }
                 </div>
               }
 
