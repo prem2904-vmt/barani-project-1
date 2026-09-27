@@ -1484,6 +1484,39 @@ band ‹ tenant                              [Edit patient] [⋮] [+ New order]
   layout: `apps/lms-e2e/src/patient-profile-layout.rbac.spec.ts` (read only).
   Backend: `CumulativeResultsBuilderTests`, `PatientCumulativeResultsTests`.
 
+## 23. Pathologist queue
+
+`/pathologist` (`features/pathologist/pending-validation/`). New design only;
+classic unchanged. Same APIs (`GET /api/validation/queue`, the validate /
+reject / reassign actions on the review screens) plus `GET /api/validation/scope`.
+
+- **Band:** search (patient · MRN · sample ID · test) + ONE neutral radiogroup
+  `All · Assigned to me` with plain tabular counts (filtered locally; the
+  queue is always fetched whole). Refresh is a quiet ghost band action.
+- **QUEUE card (main):** one tile per TUBE in `[ndTileGrid]`, grouped
+  URGENT / HIGH / ON TIME (neutral dot for on time). Sample ID leads
+  (16.5/600 tabular), FULL patient name, meta `44/F · MRN · Department ·
+  entered 9:48 PM`, the tests. ONE status: dot + coloured word — Critical ›
+  Overdue (red) › Due in N min (amber) › On time (green). "Assigned to you"
+  is quiet text with a violet dot. Row action `.nd-rowact` Review (text on
+  web, 44px eye icon on touch); the whole tile is the `pfZoomSource` and
+  opens the tube review (`/lab/sample/:id?validate=1`; culture → culture case).
+  A department radiogroup sits in the card header only when the queue holds
+  more than one department.
+- **SCOPE card (side):** the consultant's departments (static chips, or "All
+  departments" + the hint to get assigned in Users & roles), Today (pending,
+  overdue, critical, assigned to you, validated today, by you) and the ONE
+  primary **Review next** (mine › critical › most urgent). Tablet (641–1023):
+  the side column narrows to 300px. Phones: the side card is a sheet; its
+  summary + Review next ride `.nd-bottombar`.
+- **Department scope (server):** a consultant listed in a department's
+  validator pool (Users & roles → Departments, or Lab settings) only gets
+  those departments' results; unassigned consultants and admins see all.
+- **Reassign** is a DialogService choice of the validators who cover the
+  result's department (`GET /api/validation/{id}/reassign-options`), never a
+  pasted id.
+- **Specs:** `pending-validation.nd.spec.ts`, `reassign-picker.spec.ts`.
+
 ## API summary
 
 ```

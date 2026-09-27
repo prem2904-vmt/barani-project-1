@@ -25,6 +25,7 @@ import { criticalBadge, flagTone, rangeWithUnit, savedFlagOf, type CriticalCode,
 import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { pickReassignee } from '../reassign-picker';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -326,10 +327,12 @@ interface ValueRow {
 
               @if (trendEligible().length > 0) {
                 <div class="pf-rail-card">
-                  <label class="pf-trendrow">
-                    <input type="checkbox" [checked]="trendogramOn()" (change)="toggleTrendogram()" />
+                  <!-- Kit switch (violet ON), never a native checkbox. -->
+                  <button type="button" class="nd-toggle pf-trendrow" role="switch"
+                          [attr.aria-checked]="trendogramOn()" (click)="toggleTrendogram()">
+                    <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
                     <span>Trendogram in the report</span>
-                  </label>
+                  </button>
                   @if (trendogramOn()) {
                     <pf-select class="pf-trendsel" [options]="trendDurations"
                                [value]="trendogramDuration()" (valueChange)="setTrendDuration($event)"></pf-select>
@@ -388,7 +391,7 @@ interface ValueRow {
                       @if (sampleTests().length <= 1) {
                         <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); reassign()">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg>
-                          Reassign to another pathologist
+                          Reassign to another validator
                         </button>
                         @if (!isCulture()) {
                           <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); startEdit()">
@@ -687,7 +690,7 @@ interface ValueRow {
     .pf-comment__input:focus { border-color: rgba(168, 85, 247, 0.5); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18); }
 
     .pf-trendrow { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
-    .pf-trendrow input { accent-color: #a855f7; width: 15px; height: 15px; }
+    .pf-trendrow { min-height: 44px; background: transparent; border: 0; padding: 0; }
     .pf-trendsel { display: block; margin-top: 10px; }
 
     /* ── Sticky verdict bar ──────────────────────────────────── */
@@ -1410,13 +1413,8 @@ export class ValidateResultComponent implements OnInit {
   async reassign() {
     const t = this._selected();
     if (!t) return;
-    const id = await this.dialog.prompt({
-      title: 'Reassign to pathologist',
-      message: `Move "${t.test?.name}" to another pathologist's queue.`,
-      placeholder: 'Pathologist user id',
-      required: true,
-      confirmLabel: 'Reassign'
-    });
+    // A picker of the validators who cover this department (never a pasted id).
+    const id = await pickReassignee(this.api, this.dialog, this.toasts, t);
     if (!id) return;
     this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).subscribe({
       next: () => {

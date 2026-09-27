@@ -1,0 +1,307 @@
+import { TestBed } from '@angular/core/testing';
+import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
+import { signal } from '@angular/core';
+import { of, EMPTY } from 'rxjs';
+import { vi } from 'vitest';
+import { PendingValidationComponent } from './pending-validation.component';
+import { departmentsIn, enrich, groupBySample, nextTile, tileStatus } from './pending-validation.logic';
+import { ApiService } from '../../../core/services/api.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { LiveQueueService } from '../../../core/services/live-queue.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { OrderTest } from '../../../shared/models/order.model';
+
+/**
+ * /pathologist on the nd pattern (docs/ND-PATTERN.md → "Pathologist queue"):
+ * band (search + ONE neutral filter), QUEUE card (tube tiles, sample ID first,
+ * ONE status word, department filter), SCOPE side card (the consultant's
+ * departments + the ONE primary "Review next"), no native controls, no
+ * monospace, full names. And the department scope the server applies.
+ */
+const NOW = Date.parse('2026-09-27T10:00:00Z');
+const HAEM = { id: 'd-hae', name: 'Haematology', code: 'HEM' };
+const MICRO = { id: 'd-mic', name: 'Microbiology', code: 'MIC' };
+const LONG_NAME = 'Ms. Paravai Munusamy Ramalingam';
+
+function line(id: string, o: {
+  sample: string; barcode: string; dept: typeof HAEM; receivedMinAgo: number; tatHours: number;
+  critical?: boolean; mine?: boolean; patient?: string; test?: string;
+}): OrderTest {
+  return {
+    id, status: 'entered', subOrderId: o.sample, testId: 't-' + id,
+    validatorAssignedTo: o.mine ? 'me' : undefined,
+    resultedAt: new Date(NOW - 5 * 60000).toISOString(),
+    currentResult: JSON.stringify({ values: {}, flags: { critical: !!o.critical, notifications: [] } }),
+    test: { id: 't-' + id, name: o.test ?? 'CBC', tatHours: o.tatHours } as any,
+    subOrder: {
+      id: o.sample, barcode: o.barcode, departmentId: o.dept.id, department: o.dept as any,
+      receivedAtLab: new Date(NOW - o.receivedMinAgo * 60000).toISOString(),
+      order: { id: 'o-' + o.sample, patient: { displayName: o.patient ?? LONG_NAME, age: 44, sex: 'Female', mrn: 'AA0007' } },
+    } as any,
+  } as unknown as OrderTest;
+}
+
+const QUEUE: OrderTest[] = [
+  // Haematology tube, two tests, on time.
+  line('l1', { sample: 's1', barcode: '0126117', dept: HAEM, receivedMinAgo: 10, tatHours: 4 }),
+  line('l2', { sample: 's1', barcode: '0126117', dept: HAEM, receivedMinAgo: 10, tatHours: 4, test: 'ESR' }),
+  // Haematology tube, overdue.
+  line('l3', { sample: 's2', barcode: '0126118', dept: HAEM, receivedMinAgo: 300, tatHours: 2, patient: 'Mr. Arun Kumar' }),
+  // Microbiology tube, due within the hour, critical, assigned to me.
+  line('l4', { sample: 's3', barcode: '1126001', dept: MICRO, receivedMinAgo: 100, tatHours: 2, critical: true, mine: true, patient: 'Mrs. Latha Devi', test: 'Gram Stain' }),
+];
+
+const SCOPE_ALL = { scoped: false, departments: [], validatedToday: 7, validatedTodayByMe: 3 };
+const SCOPE_HAEM = { scoped: true, departments: [HAEM], validatedToday: 4, validatedTodayByMe: 2 };
+
+const realMatchMedia = (window as any).matchMedia;
+afterEach(() => {
+  TestBed.resetTestingModule();
+  (window as any).matchMedia = realMatchMedia;
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean; touch?: boolean; admin?: boolean } = {}) {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+  (window as any).matchMedia = (q: string) => ({
+    matches: q.includes('hover') ? !opts.touch : false,
+    addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+  });
+  const api = {
+    get: vi.fn((url: string) => {
+      if (url.startsWith('/api/validation/queue')) return of(opts.queue ?? QUEUE);
+      if (url === '/api/validation/scope') return of(opts.scope ?? SCOPE_ALL);
+      return of([]);
+    }),
+    post: vi.fn(() => of({})),
+  };
+  const router = { url: '/pathologist', navigate: vi.fn(() => Promise.resolve(true)), events: of() };
+  TestBed.configureTestingModule({
+    providers: [
+      { provide: ApiService, useValue: api },
+      { provide: HttpClient, useValue: {} },
+      { provide: ThemeService, useValue: { isNewDesign: signal(opts.nd !== false), isDark: signal(false) } },
+      { provide: LiveQueueService, useValue: { on: () => EMPTY } },
+      { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
+      { provide: DialogService, useValue: { prompt: vi.fn(async () => null), confirm: vi.fn(async () => false), choose: vi.fn(async () => null) } },
+      { provide: NavBackService, useValue: { showBack: () => false, back: vi.fn(), backTo: vi.fn() } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'me', tenantName: 'Micro World' }), hasPermission: (p: string) => !!opts.admin && p === 'manage_tenant', hasAnyPermission: () => false } },
+      { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
+      { provide: ZoomTransitionService, useValue: { holding: signal(false), tap: () => true, rearm() {}, attachSource() {}, detachSource() {} } },
+      { provide: Router, useValue: router },
+    ],
+  });
+  const f = TestBed.createComponent(PendingValidationComponent);
+  f.detectChanges();
+  await f.whenStable();
+  f.detectChanges();
+  const el = f.nativeElement as HTMLElement;
+  const c = f.componentInstance as any;
+  return { f, el, c, api, router };
+}
+
+/** A segment's words: label + count, space-joined. */
+const words = (e: Element) => [...e.children].map(c => c.textContent!.trim()).join(' ');
+/** Component CSS with Angular's scoping attributes stripped. */
+const css = () => ((PendingValidationComponent as any).ɵcmp.styles as string[]).join('\n')
+  .replace(/\[_ng(content|host)-%COMP%\]/g, '');
+/** Just the new-design rules. */
+const ndCss = () => css().slice(css().indexOf('.pv-nd'));
+/** Primaries on the page proper — the phone bottom bar mirrors the side
+ *  card's primary (display:none above 640px), so it's counted separately. */
+const primaries = (root: Element) =>
+  [...root.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary, pf-touch-btn[variant="primary"], .pf-btn--primary')]
+    .filter(b => !b.closest('.nd-bottombar'));
+
+describe('Pathologist queue (nd) — layout', () => {
+  it('band + QUEUE card + SCOPE side card; ONE primary (Review next), in the side card', async () => {
+    const { el } = await render();
+    expect(el.querySelector('pf-hero-band')).not.toBeNull();
+    expect(el.querySelector('.nd-body.nd-body--split')).not.toBeNull();
+    const cards = [...el.querySelectorAll('.nd-body > .nd-card')];
+    expect(cards.map(c => c.querySelector('.nd-card__label')?.textContent?.trim())).toEqual(['Pending validation', 'Your scope']);
+    const p = primaries(el);
+    expect(p.length).toBe(1);
+    expect(p[0].closest('.pv-side')).not.toBeNull();
+    expect(p[0].textContent).toContain('Review next');
+    // The bottom bar carries at most the same one action.
+    expect(el.querySelectorAll('.nd-bottombar .nd-btn--primary').length).toBeLessThanOrEqual(1);
+    // Refresh is a quiet ghost on the band.
+    expect(el.querySelector('.pv-refresh')!.classList).toContain('pf-hb-btn--ghost');
+  });
+
+  it('no native controls, no emoji; selected states are neutral radios', async () => {
+    const { el } = await render();
+    expect(el.querySelector('select, datalist, input[type=checkbox], input[type=radio]')).toBeNull();
+    expect(el.textContent ?? '').not.toMatch(/\p{Extended_Pictographic}/u);
+    const seg = el.querySelector('pf-hero-band .nd-seg') as HTMLElement;
+    expect(seg.getAttribute('role')).toBe('radiogroup');
+    const tabs = [...seg.querySelectorAll('[role=radio]')];
+    expect(tabs.map(words)).toEqual(['All 3', 'Assigned to me 1']);
+    expect(seg.querySelector('[aria-checked="true"]')?.getAttribute('data-tab')).toBe('all');
+    // No classic chrome in the new design.
+    expect(el.querySelector('pf-segmented, pf-screen-header, pf-kpi-strip, pf-avatar')).toBeNull();
+  });
+
+  it('no monospace anywhere in the new-design CSS; tokens only (no raw decoration hues)', () => {
+    expect(ndCss()).not.toMatch(/monospace|JetBrains|Courier|font-mono/i);
+    expect(ndCss()).not.toMatch(/#(a78bfa|f59e0b|38bdf8|10b981|f43f5e|a855f7)/i);
+  });
+});
+
+describe('Pathologist queue (nd) — tiles', () => {
+  it('one tile per tube: sample ID first (tabular), FULL name, meta joined with ·, one status word', async () => {
+    const { el } = await render();
+    const tiles = [...el.querySelectorAll<HTMLElement>('.pv-tile')];
+    expect(tiles.length).toBe(3);
+    const hae = tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
+    expect(hae.querySelector('.pv-tile__id')!.classList).toContain('nd-num');
+    expect(hae.querySelector('.pv-tile__who')!.textContent!.trim()).toBe(LONG_NAME);   // never cut
+    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('44/F · AA0007 · Haematology');
+    expect(hae.querySelector('.pv-tile__meta')!.textContent).not.toContain('|');
+    expect(hae.querySelector('.pv-tile__tests')!.textContent).toContain('CBC · ESR');
+    // ONE status each: dot + word, no chip.
+    for (const t of tiles) {
+      expect(t.querySelectorAll('.pv-status').length).toBe(1);
+      expect(t.querySelector('.pv-status .pv-status__dot')).not.toBeNull();
+      expect(t.querySelector('.nd-chip, pf-chip')).toBeNull();
+    }
+    const word = (id: string) => tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === id)!
+      .querySelector('.pv-status')!.textContent!.trim();
+    expect(word('0126117')).toBe('On time');
+    expect(word('0126118')).toBe('Overdue');
+    expect(word('1126001')).toBe('Critical');
+  });
+
+  it('groups: Urgent / High / On time with neutral dots except urgent (red) / high (amber)', async () => {
+    const { el } = await render();
+    const groups = [...el.querySelectorAll<HTMLElement>('.pv-group')].map(g => g.getAttribute('data-level'));
+    expect(groups).toEqual(['urgent', 'high', 'normal']);
+    expect(ndCss()).toMatch(/\.pv-group__dot\s*\{[^}]*var\(--nd-toggle-on\)/);
+  });
+
+  it('row action is text on web, a 44px icon on touch; the whole tile opens the review', async () => {
+    const web = await render();
+    const btn = web.el.querySelector('.pv-review') as HTMLElement;
+    expect(btn.classList).toContain('nd-rowact');
+    expect(btn.classList).not.toContain('nd-rowact--icon');
+    TestBed.resetTestingModule();
+    const touch = await render({ touch: true });
+    expect(touch.el.querySelector('.pv-review')!.classList).toContain('nd-rowact--icon');
+    expect(touch.el.querySelector('.pv-review')!.getAttribute('aria-label')).toMatch(/^Review /);
+    // Tap a tube → the same sample screen the tech used, in validate mode.
+    const tile = [...touch.el.querySelectorAll<HTMLElement>('.pv-tile')]
+      .find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
+    tile.click();
+    expect(touch.router.navigate).toHaveBeenCalledWith(['/lab/sample', 's1'], { queryParams: { validate: 1 } });
+  });
+
+  it('Assigned to me filters locally; Review next opens mine first', async () => {
+    const { el, c, f, router } = await render();
+    (el.querySelector('[data-tab="mine"]') as HTMLElement).click();
+    f.detectChanges();
+    expect([...el.querySelectorAll('.pv-tile__id')].map(x => x.textContent!.trim())).toEqual(['1126001']);
+    c.setTab('all'); f.detectChanges();
+    (el.querySelector('.pv-side .pv-next') as HTMLElement).click();
+    expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's3'], { queryParams: { validate: 1 } });
+  });
+
+  it('department filter appears only with more than one department and narrows the tiles', async () => {
+    const { el, f } = await render();
+    const seg = el.querySelector('.pv-depts') as HTMLElement;
+    expect([...seg.querySelectorAll('[role=radio]')].map(words))
+      .toEqual(['All', 'Haematology 2', 'Microbiology 1']);
+    ([...seg.querySelectorAll<HTMLElement>('[role=radio]')].find(r => r.textContent!.includes('Microbiology')))!.click();
+    f.detectChanges();
+    expect([...el.querySelectorAll('.pv-tile__id')].map(x => x.textContent!.trim())).toEqual(['1126001']);
+
+    TestBed.resetTestingModule();
+    const one = await render({ queue: QUEUE.filter(q => q.subOrder?.departmentId === HAEM.id), scope: SCOPE_HAEM });
+    expect(one.el.querySelector('.pv-depts')).toBeNull();
+  });
+
+  it('empty queue: the kit empty state and a disabled, non-primary Review next', async () => {
+    const { el } = await render({ queue: [] });
+    expect(el.querySelector('.nd-empty')).not.toBeNull();
+    expect(el.querySelector('.nd-empty__title')!.textContent).toContain('Nothing to validate');
+    const next = el.querySelector('.pv-side .pv-next') as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+    expect(next.classList).not.toContain('nd-btn--primary');
+    expect(primaries(el).length).toBe(0);
+  });
+});
+
+describe('Pathologist queue (nd) — department scope', () => {
+  it('a scoped consultant sees their departments on the side card, not "All departments"', async () => {
+    const { el } = await render({ queue: QUEUE.filter(q => q.subOrder?.departmentId === HAEM.id), scope: SCOPE_HAEM });
+    const depts = [...el.querySelectorAll('.pv-side .pv-dept')].map(d => d.textContent!.trim());
+    expect(depts).toEqual(['Haematology']);
+    expect(el.querySelector('.pv-side')!.textContent).toContain("only these departments' results");
+    expect(el.querySelector('.pv-side')!.textContent).toMatch(/Validated today\s*4/);
+  });
+
+  it('an unassigned consultant sees every department with a hint to get assigned', async () => {
+    const { el } = await render();
+    expect([...el.querySelectorAll('.pv-side .pv-dept')].map(d => d.textContent!.trim())).toEqual(['All departments']);
+    expect(el.querySelector('.pv-side')!.textContent).toContain('Users & roles');
+  });
+
+  it('an admin is told they see every department', async () => {
+    const { el } = await render({ admin: true });
+    expect(el.querySelector('.pv-side')!.textContent).toContain('As an admin you see every department');
+  });
+
+  it('the new design asks for the whole scoped queue (tabs filter locally) and the scope', async () => {
+    const { api, c } = await render();
+    expect(api.get).toHaveBeenCalledWith('/api/validation/queue?mine=false');
+    expect(api.get).toHaveBeenCalledWith('/api/validation/scope');
+    c.setTab('mine');
+    expect(api.get.mock.calls.filter((x: unknown[]) => String(x[0]).startsWith('/api/validation/queue')).length).toBe(1);
+  });
+});
+
+describe('Pathologist queue — classic stays classic', () => {
+  it('classic keeps the segmented tabs + KPI strip and asks the server for ?mine', async () => {
+    const { el, api, c } = await render({ nd: false });
+    expect(el.querySelector('pf-hero-band')).toBeNull();
+    expect(el.querySelector('pf-segmented')).not.toBeNull();
+    c.setTab('mine');
+    expect(api.get).toHaveBeenCalledWith('/api/validation/queue?mine=true');
+  });
+});
+
+describe('pending-validation.logic', () => {
+  const tiles = () => groupBySample(enrich(QUEUE, NOW), 'me');
+  it('groups by tube; mine first; worst level wins', () => {
+    const t = tiles();
+    expect(t.map(x => x.sampleLabel)).toEqual(['1126001', '0126118', '0126117']);
+    expect(t[2].items.length).toBe(2);
+    expect(t[0].mine).toBe(true);
+  });
+  it('status word: critical › overdue › due in N min › on time', () => {
+    expect(tileStatus({ anyCritical: true, level: 'normal', remainingMin: 500 }).label).toBe('Critical');
+    expect(tileStatus({ anyCritical: false, level: 'urgent', remainingMin: -5 })).toEqual({ key: 'overdue', label: 'Overdue', tone: 'red' });
+    expect(tileStatus({ anyCritical: false, level: 'high', remainingMin: 19.6 })).toEqual({ key: 'due', label: 'Due in 20 min', tone: 'amber' });
+    expect(tileStatus({ anyCritical: false, level: 'normal', remainingMin: 200 }).tone).toBe('green');
+  });
+  it('next = mine, then critical, then most urgent', () => {
+    const t = tiles();
+    expect(nextTile(t)!.sampleLabel).toBe('1126001');
+    expect(nextTile(t.filter(x => !x.mine))!.sampleLabel).toBe('0126118');
+    expect(nextTile([])).toBeNull();
+  });
+  it('departments in the queue, alphabetical with counts', () => {
+    expect(departmentsIn(tiles())).toEqual([
+      { id: 'd-hae', name: 'Haematology', count: 2 },
+      { id: 'd-mic', name: 'Microbiology', count: 1 },
+    ]);
+  });
+});

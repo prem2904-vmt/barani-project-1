@@ -23,17 +23,32 @@ import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { plural } from '../../../shared/utils/plural';
+import { pickReassignee } from '../reassign-picker';
+import {
+  Enriched, Level, QueueTile, ValidationScope,
+  departmentsIn, enrich, groupBySample, isCritical, matchesQuery, nextTile, tileStatus,
+} from './pending-validation.logic';
 
 type Tab = 'mine' | 'all';
-type Level = 'urgent' | 'high' | 'normal';
-type Enriched = OrderTest & { _level: Level; _remainingMin: number };
 
-interface ResultSnapshot {
-  values?: Record<string, unknown>;
-  note?: string;
-  flags?: { critical: boolean; notifications: string[] };
-}
-
+/**
+ * /pathologist — the consultant's validation queue.
+ *
+ * New design (docs/ND-PATTERN.md → "Pathologist queue"): band (search + All ·
+ * Assigned to me) → QUEUE card (one tile per tube, sample ID first, one
+ * status word, Urgent / High / On time groups, department filter) + SCOPE
+ * side card (the consultant's departments, today's numbers, the ONE primary
+ * "Review next"). Tapping a tube zooms into the review screen (the same
+ * sample screen the tech entered on, ?validate=1; culture → culture case).
+ *
+ * The queue is DEPARTMENT-SCOPED on the server: a consultant assigned to
+ * departments (Users & roles / Lab settings validator pools) only receives
+ * those departments' results; unassigned consultants and admins see all.
+ * Classic design keeps its original look.
+ */
 @Component({
   selector: 'pf-pending-validation',
   standalone: true,
@@ -49,37 +64,223 @@ interface ResultSnapshot {
     TileComponent,
     TouchButtonComponent,
     KpiStripComponent,
-    HeroBandComponent
+    HeroBandComponent,
+    TileGridDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pv-page px-4 md:px-8 pt-6">
-      <!-- Common hero search (designer band): filters the validation queue
-           by patient, sample ID, or test name. New design only. -->
-      @if (theme.isNewDesign()) {
+    @if (theme.isNewDesign()) {
+    <!-- ═══ New design (docs/ND-PATTERN.md → "Pathologist queue") ═══
+         Band: search + ONE neutral filter (All · Assigned to me) in the pill,
+         Refresh as a quiet band action. Body: the QUEUE card (tiles per tube,
+         URGENT / HIGH / ON TIME groups) + the SCOPE side card (the consultant's
+         departments, today's numbers, the ONE primary: Review next). Phones:
+         the side card is a sheet; its summary + primary ride the bottom bar. -->
+    <section class="pv-nd">
       <pf-hero-band
-        placeholder="Search patient · sample ID · test…"
+        placeholder="Search patient · MRN · sample ID · test…"
         [value]="query()"
         (valueChange)="query.set($event)">
         <ng-container band-tools>
-          <!-- Queue scope toggle rides in the search bar (owner). -->
-          <pf-segmented [options]="tabOptions" [value]="tab()" size="sm"
-                        (valueChange)="setTab($event)"></pf-segmented>
+          <div class="nd-seg pv-seg" role="radiogroup" aria-label="Show">
+            @for (o of ndTabs(); track o.value) {
+              <button type="button" class="nd-seg__item pv-seg__item" role="radio"
+                      [attr.data-tab]="o.value"
+                      [attr.aria-checked]="tab() === o.value"
+                      (click)="setTab(o.value)">
+                <span>{{ o.label }}</span>
+                <span class="pv-seg__count nd-num">{{ o.count }}</span>
+              </button>
+            }
+          </div>
         </ng-container>
-        <!-- Refresh is a quiet button on the band, not a bar icon (owner):
-             it's the least-used control on the screen. -->
         <ng-container band-actions>
-          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()">
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pv-refresh" (click)="refresh()"
+                  aria-label="Refresh" title="Refresh">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
               <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
             </svg>
-            Refresh
+            <span class="pv-refresh__t">Refresh</span>
           </button>
         </ng-container>
       </pf-hero-band>
-      }
+
+      <div class="nd-body nd-body--split pv-body">
+        <!-- ── Main card: the queue ── -->
+        <section class="nd-card pv-queue" aria-label="Pending validation">
+          <header class="nd-card__head pv-queue__head">
+            <span class="nd-card__icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </span>
+            <h2 class="nd-card__label">Pending validation</h2>
+            <span class="pv-count nd-num">{{ countLabel() }}</span>
+            <span class="nd-card__spacer"></span>
+            @if (deptFilters().length > 1) {
+              <div class="nd-seg pv-depts" role="radiogroup" aria-label="Department">
+                <button type="button" class="nd-seg__item pv-seg__item" role="radio"
+                        [attr.aria-checked]="dept() === null" (click)="dept.set(null)">
+                  <span>All</span>
+                </button>
+                @for (d of deptFilters(); track d.id) {
+                  <button type="button" class="nd-seg__item pv-seg__item" role="radio"
+                          [attr.aria-checked]="dept() === d.id" (click)="dept.set(d.id)">
+                    <span>{{ d.name }}</span>
+                    <span class="pv-seg__count nd-num">{{ d.count }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </header>
+
+          <div class="nd-card__body pv-scroll">
+            @if (loading() && rows().length === 0) {
+              <ul class="pv-grid" ndTileGrid aria-hidden="true">
+                @for (i of [0,1,2]; track i) {
+                  <li><div class="pv-tile pv-tile--skel nd-tile-fill">
+                    <pf-skeleton variant="line" width="40%" height="16px"></pf-skeleton>
+                    <pf-skeleton variant="line" width="70%"></pf-skeleton>
+                    <pf-skeleton variant="line" width="55%" height="10px"></pf-skeleton>
+                  </div></li>
+                }
+              </ul>
+            } @else if (visibleTiles().length === 0) {
+              <div class="nd-empty pv-empty">
+                <span class="nd-empty__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                </span>
+                <p class="nd-empty__title">{{ emptyTitle() }}</p>
+                <p class="nd-empty__body">{{ emptyBody() }}</p>
+              </div>
+            } @else {
+              @for (grp of ndGroups(); track grp.level) {
+                <div class="pv-group" [attr.data-level]="grp.level">
+                  <h3 class="pv-group__h">
+                    <span class="pv-group__dot" [attr.data-level]="grp.level" aria-hidden="true"></span>
+                    {{ grp.label }}
+                    <span class="pv-group__n nd-num">{{ grp.tiles.length }}</span>
+                  </h3>
+                  <ul class="pv-grid" ndTileGrid>
+                    @for (g of grp.tiles; track g.key) {
+                      @let st = status(g);
+                      <li>
+                        <div class="pv-tile nd-tile-fill" role="button" tabindex="0"
+                             [attr.data-level]="g.level" [attr.data-status]="st.key"
+                             [class.pv-tile--mine]="g.mine"
+                             [pfZoomSource]="[g.key, g.sampleId, g.items[0]?.id]"
+                             [attr.aria-label]="'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + st.label"
+                             (click)="openOrder(g)" (keydown.enter)="openOrder(g)" (keydown.space)="$event.preventDefault(); openOrder(g)">
+                          <div class="pv-tile__top">
+                            <span class="pv-tile__id nd-num">{{ g.sampleLabel }}</span>
+                            <span class="pv-status" [attr.data-tone]="st.tone">
+                              <span class="pv-status__dot" aria-hidden="true"></span>{{ st.label }}
+                            </span>
+                          </div>
+                          <p class="pv-tile__who">{{ g.patientName }}</p>
+                          <p class="pv-tile__meta nd-num">{{ tileMeta(g) }}</p>
+                          <p class="pv-tile__tests">{{ g.testNames.join(' · ') }}</p>
+                          <div class="pv-tile__foot">
+                            @if (g.mine) {
+                              <span class="pv-mine"><span class="pv-mine__dot" aria-hidden="true"></span>Assigned to you</span>
+                            }
+                            <span class="pv-tile__spacer"></span>
+                            <button type="button" class="nd-rowact pv-review" [class.nd-rowact--icon]="!web()"
+                                    [attr.aria-label]="'Review ' + g.sampleLabel" title="Review"
+                                    (click)="$event.stopPropagation(); openOrder(g)">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                              <span class="nd-rowact__t">Review</span>
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+            }
+          </div>
+        </section>
+
+        <!-- ── Side card: the consultant's scope + today + the ONE primary ── -->
+        @if (sheetOpen()) { <div class="nd-sheet-backdrop" (click)="sheetOpen.set(false)"></div> }
+        <aside class="nd-card pv-side" [class.nd-sheet]="sheetOpen()" [class.pv-side--open]="sheetOpen()"
+               aria-label="Your scope" [attr.role]="sheetOpen() ? 'dialog' : null" [attr.aria-modal]="sheetOpen() ? true : null">
+          <span class="nd-sheet__handle" aria-hidden="true"></span>
+          <header class="nd-card__head">
+            <span class="nd-card__icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7"/></svg>
+            </span>
+            <h2 class="nd-card__label">Your scope</h2>
+            <span class="nd-card__spacer"></span>
+            @if (sheetOpen()) {
+              <button type="button" class="nd-btn nd-btn--icon pv-side__x" aria-label="Close" (click)="sheetOpen.set(false)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            }
+          </header>
+          <div class="nd-card__body pv-side__body">
+            <p class="pv-side__h">Departments</p>
+            <div class="pv-side__depts">
+              @if (scope()?.scoped) {
+                @for (d of scope()!.departments; track d.id) {
+                  <span class="nd-chip nd-chip--static pv-dept">{{ d.name }}</span>
+                }
+              } @else {
+                <span class="nd-chip nd-chip--static pv-dept">All departments</span>
+              }
+            </div>
+            <p class="pv-side__note">
+              @if (scope()?.scoped) {
+                You see and sign only these departments' results.
+              } @else if (isAdmin()) {
+                As an admin you see every department.
+              } @else {
+                No departments are assigned to you yet, so you see every department. An admin can assign yours in Users &amp; roles.
+              }
+            </p>
+
+            <p class="pv-side__h">Today</p>
+            <dl class="pv-stats">
+              <div class="pv-stat"><dt>Pending</dt><dd class="nd-num">{{ stats().pending }}</dd></div>
+              <div class="pv-stat" [attr.data-warn]="stats().overdue > 0 || null"><dt>Overdue</dt><dd class="nd-num">{{ stats().overdue }}</dd></div>
+              <div class="pv-stat" [attr.data-warn]="stats().critical > 0 || null"><dt>Critical</dt><dd class="nd-num">{{ stats().critical }}</dd></div>
+              <div class="pv-stat"><dt>Assigned to you</dt><dd class="nd-num">{{ stats().mine }}</dd></div>
+              @if (scope(); as s) {
+                <div class="pv-stat"><dt>Validated today</dt><dd class="nd-num">{{ s.validatedToday }}</dd></div>
+                <div class="pv-stat"><dt>By you</dt><dd class="nd-num">{{ s.validatedTodayByMe }}</dd></div>
+              }
+            </dl>
+            <p class="pv-side__note">Open a sample to review every test on the tube, then validate, reject, reassign or send it back for correction.</p>
+          </div>
+          <footer class="nd-card__foot">
+            <button type="button" class="nd-btn nd-span pv-next"
+                    [class.nd-btn--primary]="!!next()" [class.nd-btn--secondary]="!next()"
+                    [disabled]="!next()" (click)="reviewNext()">
+              {{ next() ? 'Review next · ' + next()!.sampleLabel : 'Nothing to review' }}
+            </button>
+          </footer>
+        </aside>
+      </div>
+
+      <!-- Phones: the side card's summary + its primary, above the navbar. -->
+      <div class="nd-bottombar pv-bottombar">
+        <button type="button" class="nd-bottombar__info pv-bottombar__info" (click)="sheetOpen.set(true)"
+                aria-label="Show your scope and today's numbers">
+          <span class="nd-num">{{ stats().pending }}</span> pending
+          @if (stats().overdue) { · <span class="pv-bottombar__warn nd-num">{{ stats().overdue }} overdue</span> }
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+        </button>
+        <button type="button" class="nd-btn pv-next pv-next--bar"
+                [class.nd-btn--primary]="!!next()" [class.nd-btn--secondary]="!next()"
+                [disabled]="!next()" (click)="reviewNext()">Review next</button>
+      </div>
+    </section>
+    } @else {
+    <section class="pv-page px-4 md:px-8 pt-6">
       <div class="pv-head">
         <pf-kpi-strip screen="pathologist"></pf-kpi-strip>
         <pf-screen-header
@@ -187,7 +388,7 @@ interface ResultSnapshot {
       }
       </div>
     </section>
-
+    }
   `,
   styles: [`
     /* ===== WORK page: non-scroll app layout on all sizes =====
@@ -324,11 +525,143 @@ interface ResultSnapshot {
         min-height: 44px;
       }
     }
+  
+    /* ═══ New design ════════════════════════════════════════════════════
+       Band + QUEUE card + SCOPE side card. No page scroll: only the card
+       bodies scroll. Kit classes carry the look; the rules below place
+       them and draw the tube tile (lab work lists: sample ID primary). */
+    .pv-nd {
+      height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+      padding: 24px 32px 0;
+    }
+    .pv-nd .pv-body { padding: 0 0 16px; gap: 16px; }
+    /* Tablet: the side card stays, narrower. */
+    @media (min-width: 641px) and (max-width: 1023px) {
+      .pv-nd .pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); }
+      .pv-nd { padding: 20px 20px 0; }
+    }
+
+    /* Band filter: neutral segmented, plain tabular counts. */
+    .pv-seg { flex-shrink: 0; }
+    .pv-seg__item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .pv-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+    .pv-seg__count { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
+    .pv-seg__item[aria-checked='true'] .pv-seg__count { color: var(--text-secondary); }
+
+    /* Queue card header: count is plain muted text, never a pill. */
+    .pv-count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
+    .pv-depts { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .pv-depts::-webkit-scrollbar { display: none; }
+    .pv-scroll { gap: 18px; padding: 14px 16px 18px; }
+
+    .pv-group__h {
+      display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .pv-group__n { font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
+    /* Group dots: NORMAL neutral; red / amber only for urgent / high. */
+    .pv-group__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--nd-toggle-on); }
+    .pv-group__dot[data-level='urgent'] { background: var(--red-text, #dc2626); }
+    .pv-group__dot[data-level='high'] { background: var(--amber-text, #d97706); }
+
+    /* The tube tile. Sample ID leads (16.5 / 600, tabular), patient 13 / 500,
+       meta 12 muted. Stripe only for urgent (red) / high (amber). */
+    .pv-tile {
+      position: relative; display: flex; flex-direction: column; gap: 4px; min-height: 132px;
+      padding: 14px 14px 12px 16px; border-radius: var(--nd-radius);
+      border: 1px solid var(--nd-line); background: var(--nd-card-bg); color: inherit;
+      cursor: pointer; text-align: left; outline: none;
+      transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
+    }
+    .pv-tile::before {
+      content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0;
+      background: transparent;
+    }
+    .pv-tile[data-level='urgent']::before { background: var(--red-text, #dc2626); }
+    .pv-tile[data-level='high']::before { background: var(--amber-text, #d97706); }
+    @media (hover: hover) and (pointer: fine) {
+      .pv-tile:hover { border-color: var(--nd-sel-border); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
+    }
+    .pv-tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .pv-tile--skel { cursor: default; gap: 10px; }
+    .pv-tile__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .pv-tile__id {
+      min-width: 0; font-size: 16.5px; font-weight: 600; line-height: 1.3; color: var(--text-primary);
+      overflow-wrap: anywhere;
+    }
+    .pv-tile__who { margin: 0; font-size: 13px; font-weight: 500; line-height: 1.35; color: var(--text-secondary); overflow-wrap: anywhere; }
+    .pv-tile__meta { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-tertiary); overflow-wrap: anywhere; }
+    .pv-tile__tests { margin: 2px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pv-tile__foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; }
+    .pv-tile__spacer { flex: 1 1 auto; }
+
+    /* ONE status per tile: dot + coloured word, no chip / border / fill. */
+    .pv-status {
+      --pv-tone: var(--green-text, #15803d);
+      flex: none; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+      font-size: 13px; font-weight: 500; line-height: 20px;
+      color: color-mix(in srgb, var(--pv-tone) 70%, var(--text-primary));
+    }
+    .pv-status[data-tone='amber'] { --pv-tone: var(--amber-text, #b45309); }
+    .pv-status[data-tone='red'] { --pv-tone: var(--red-text, #b91c1c); }
+    .pv-status__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--pv-tone); }
+
+    /* "Assigned to you": quiet text with the one violet mark. */
+    .pv-mine { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+    .pv-mine__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+
+    .pv-empty { flex: 1 1 auto; justify-content: center; }
+
+    /* Side card: calm type — 11px uppercase muted titles, 12.5–13 body. */
+    .pv-side__body { gap: 10px; padding: 14px 16px; }
+    .pv-side__h { margin: 6px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pv-side__h:first-child { margin-top: 0; }
+    .pv-side__depts { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pv-dept { height: 28px; }
+    .pv-side__note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); text-wrap: pretty; }
+    .pv-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+    .pv-stat {
+      display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--nd-radius-sm);
+      border: 1px solid var(--nd-line); background: var(--nd-card-bg);
+    }
+    .pv-stat dt { font-size: 12px; color: var(--text-tertiary); }
+    .pv-stat dd { margin: 0; font-size: 18px; font-weight: 500; color: var(--text-primary); }
+    .pv-stat[data-warn] dd { color: var(--red-text, #b91c1c); }
+    .pv-next { white-space: normal; text-align: center; line-height: 1.25; }
+    .pv-side__x { width: 44px; min-width: 44px; }
+
+    /* Phones: one column; the side card becomes a sheet (above the navbar),
+       its summary + primary ride the bottom bar. */
+    @media (max-width: 640px) {
+      .pv-nd { padding: 12px 16px 0; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+      .pv-nd .pv-body { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+      .pv-side:not(.pv-side--open) { display: none; }
+      .pv-side.nd-sheet { border-radius: 20px 20px 0 0; }
+      .pv-refresh__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .pv-queue__head { row-gap: 8px; }
+      .pv-depts { flex: 1 1 100%; }
+      .pv-seg__item { min-height: 44px; height: 44px; }
+      .pv-depts .pv-seg__item { min-height: 40px; height: 40px; }
+      .pv-scroll { padding: 12px; }
+      .pv-bottombar__info {
+        display: inline-flex; align-items: center; gap: 4px; min-height: 44px;
+        border: 0; background: transparent; padding: 0; text-align: left; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 600;
+      }
+      .pv-bottombar__warn { color: var(--red-text, #b91c1c); }
+      .pv-next--bar { flex: none; }
+    }
+    @media (pointer: coarse) {
+      .pv-tile { min-height: 140px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pv-tile { transition: none; }
+    }
   `]
 })
 export class PendingValidationComponent implements OnInit {
   private readonly api = inject(ApiService);
-  /** Design version gate — 'new' renders the designer band/skin, 'classic' the pre-port look. */
+  /** Design version gate — 'new' renders the ND screen, 'classic' the pre-port look. */
   readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthService);
   private readonly liveQ = inject(LiveQueueService);
@@ -336,6 +669,8 @@ export class PendingValidationComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
+  /** Row actions: text on web, 44px icons on touch (ND §1). */
+  readonly web = webPointerSignal();
 
   readonly tabOptions: SegmentedOption<Tab>[] = [
     // Icons so the strip stays readable on a phone, where the words are
@@ -349,68 +684,26 @@ export class PendingValidationComponent implements OnInit {
   ];
   private readonly _tab = signal<Tab>('all');
   readonly tab = this._tab.asReadonly();
-  setTab(t: Tab) { this._tab.set(t); this.refresh(); }
+  setTab(t: Tab) {
+    this._tab.set(t);
+    // New design filters locally (both tabs show a count); classic asks the server.
+    if (!this.theme.isNewDesign()) this.refresh();
+  }
 
   rowTone(level: Level): TileTone {
     return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
   }
 
-  /**
-   * Group bucket items by orderId so the doctor reads "Patient X — N tests"
-   * with all results expandable inline rather than per-result floating rows.
-   * The card's TAT level is the most-urgent across all the tests in that
-   * order so a single critical test pulls the whole group up.
-   */
-  /** Group the queue by SAMPLE (one tube / department) so a sample with N tests
-   *  is one row — opening it reviews the whole tube at once. */
-  sampleGroups(items: Enriched[]): Array<{
-    key: string;
-    sampleLabel: string;
-    dept: string;
-    patientName: string;
-    displayName: string;
-    items: Enriched[];
-    testNames: string[];
-    level: Level;
-    remainingMin: number;
-    anyCritical: boolean;
-    mine: boolean;
-  }> {
-    const myId = this.auth.user()?.id;
-    const bySample = new Map<string, Enriched[]>();
-    for (const t of items) {
-      const key = t.subOrder?.id
-        ?? `${t.subOrder?.order?.id ?? t.id}|${t.test?.department?.id ?? ''}`;
-      if (!bySample.has(key)) bySample.set(key, []);
-      bySample.get(key)!.push(t);
-    }
-    const rank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
-    return Array.from(bySample.entries()).map(([key, group]) => {
-      const worst = [...group].sort((a, b) => rank[a._level] - rank[b._level])[0];
-      return {
-        key,
-        sampleLabel: worst.subOrder?.barcode ?? worst.subOrder?.id?.slice(0, 8) ?? '—',
-        dept: worst.test?.department?.name ?? '—',
-        patientName: formatPatientInfo(worst.subOrder?.order?.patient),
-        displayName: worst.subOrder?.order?.patient?.displayName || 'Patient',
-        items: group,
-        testNames: group.map(t => t.test?.name ?? 'Test').slice(0, 4),
-        level: worst._level,
-        remainingMin: Math.min(...group.map(t => t._remainingMin)),
-        anyCritical: group.some(t => this.isCritical(t)),
-        mine: !!myId && group.some(t => t.validatorAssignedTo === myId)
-      };
-      // Mine first, rest visible (owner): tubes auto-routed to ME lead each
-      // urgency band; everything else stays right below for anyone to take.
-    }).sort((a, b) => (a.mine === b.mine ? 0 : a.mine ? -1 : 1));
-  }
-
-  private readonly _expanded = signal<Set<string>>(new Set());
-  expanded(id: string): boolean { return this._expanded().has(id); }
-  toggleExpand(id: string): void {
-    const next = new Set(this._expanded());
-    if (next.has(id)) next.delete(id); else next.add(id);
-    this._expanded.set(next);
+  /** Classic: group the queue by SAMPLE (one tube / department) so a sample
+   *  with N tests is one row — opening it reviews the whole tube at once. */
+  sampleGroups(items: Enriched[]) {
+    return groupBySample(items, this.auth.user()?.id).map(g => ({
+      ...g,
+      // Classic keeps its compact "Name | 44/F | MRN" line.
+      patientName: formatPatientInfo(g.items[0]?.subOrder?.order?.patient),
+      displayName: g.items[0]?.subOrder?.order?.patient?.displayName || 'Patient',
+      testNames: g.testNames.slice(0, 4),
+    }));
   }
 
   private readonly _rows = signal<OrderTest[]>([]);
@@ -419,23 +712,12 @@ export class PendingValidationComponent implements OnInit {
   private readonly _loading = signal(false);
   readonly loading = this._loading.asReadonly();
 
-  /** Hero-band query — filters the queue by patient, sample ID, or test. */
+  /** Hero-band query — filters the queue by patient, MRN, sample ID, or test. */
   readonly query = signal('');
 
   readonly buckets = computed(() => {
     const q = this.query().trim().toLowerCase();
-    const visible = !q ? this._rows() : this._rows().filter(t =>
-      (t.subOrder?.order?.patient?.displayName ?? '').toLowerCase().includes(q) ||
-      (t.subOrder?.barcode ?? '').toLowerCase().includes(q) ||
-      (t.test?.name ?? '').toLowerCase().includes(q));
-    const enriched: Enriched[] = visible.map(t => {
-      const ral = t.subOrder?.receivedAtLab;
-      const budget = (t.test?.tatHours ?? 0) * 60;
-      const elapsed = ral ? (Date.now() - new Date(ral).getTime()) / 60000 : 0;
-      const remaining = budget - elapsed;
-      const level: Level = remaining <= 0 ? 'urgent' : remaining <= 60 ? 'high' : 'normal';
-      return { ...t, _level: level, _remainingMin: remaining };
-    });
+    const enriched = enrich(this._rows().filter(t => matchesQuery(t, q)));
     return [
       { level: 'urgent' as const, label: 'Urgent',      items: enriched.filter(e => e._level === 'urgent') },
       { level: 'high'   as const, label: 'High',        items: enriched.filter(e => e._level === 'high')   },
@@ -443,20 +725,88 @@ export class PendingValidationComponent implements OnInit {
     ];
   });
 
-  isCritical(t: OrderTest): boolean {
-    if (!t.currentResult) return false;
-    try {
-      const s = JSON.parse(t.currentResult) as ResultSnapshot;
-      return !!s.flags?.critical;
-    } catch { return false; }
+  isCritical(t: OrderTest): boolean { return isCritical(t); }
+
+  // ── New design ───────────────────────────────────────────────────────
+  /** The consultant's scope (their departments) + today's sign-outs. */
+  readonly scope = signal<ValidationScope | null>(null);
+  /** Card-header department filter (null = all of the caller's departments). */
+  readonly dept = signal<string | null>(null);
+  /** Phones: the side card as a sheet. */
+  readonly sheetOpen = signal(false);
+  readonly isAdmin = computed(() => this.auth.hasPermission('manage_tenant'));
+
+  /** Every tube in the queue after the search (before tab / department). */
+  private readonly allTiles = computed(() => {
+    const q = this.query().trim().toLowerCase();
+    return groupBySample(enrich(this._rows().filter(t => matchesQuery(t, q))), this.auth.user()?.id);
+  });
+  /** Tab (All · Assigned to me) applied — what the department filter counts. */
+  private readonly tabTiles = computed(() =>
+    this._tab() === 'mine' ? this.allTiles().filter(t => t.mine) : this.allTiles());
+  readonly deptFilters = computed(() => departmentsIn(this.tabTiles()));
+  readonly visibleTiles = computed(() => {
+    const d = this.dept();
+    const tiles = this.tabTiles();
+    // A department that left the queue drops the filter instead of hiding everything.
+    if (!d || !tiles.some(t => (t.deptId ?? t.dept) === d)) return tiles;
+    return tiles.filter(t => (t.deptId ?? t.dept) === d);
+  });
+  readonly ndGroups = computed(() => {
+    const tiles = this.visibleTiles();
+    return [
+      { level: 'urgent' as const, label: 'Urgent', tiles: tiles.filter(t => t.level === 'urgent') },
+      { level: 'high' as const, label: 'High', tiles: tiles.filter(t => t.level === 'high') },
+      { level: 'normal' as const, label: 'On time', tiles: tiles.filter(t => t.level === 'normal') },
+    ].filter(g => g.tiles.length > 0);
+  });
+  readonly ndTabs = computed(() => [
+    { value: 'all' as Tab, label: 'All', count: this.allTiles().length },
+    { value: 'mine' as Tab, label: 'Assigned to me', count: this.allTiles().filter(t => t.mine).length },
+  ]);
+  readonly countLabel = computed(() => plural(this.visibleTiles().length, 'sample'));
+  readonly stats = computed(() => {
+    const tiles = this.allTiles();
+    return {
+      pending: tiles.length,
+      overdue: tiles.filter(t => t.level === 'urgent').length,
+      critical: tiles.filter(t => t.anyCritical).length,
+      mine: tiles.filter(t => t.mine).length,
+    };
+  });
+  readonly next = computed(() => nextTile(this.visibleTiles()));
+  readonly emptyTitle = computed(() =>
+    this.query().trim() ? 'No matching samples'
+      : this._tab() === 'mine' && this._rows().length ? 'Nothing assigned to you' : 'Nothing to validate');
+  readonly emptyBody = computed(() =>
+    this.query().trim() ? 'Try a patient name, MRN, sample ID or test.'
+      : this._tab() === 'mine' && this._rows().length ? 'Switch to All to see the rest of the queue.'
+      : this.scope()?.scoped ? 'Results from your departments appear here as soon as the lab submits them.'
+      : 'Results appear here as soon as the lab submits them.');
+
+  status(g: QueueTile) { return tileStatus(g); }
+  /** "44/F · AA0007 · Haematology · entered 9:48 PM" — Noto, tabular, `·`. */
+  tileMeta(g: QueueTile): string {
+    const at = g.items.map(t => t.resultedAt).filter(Boolean).sort().pop();
+    const time = at ? new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    return [g.patientMeta, g.dept, time && `entered ${time}`].filter(Boolean).join(' · ');
+  }
+  reviewNext() {
+    const n = this.next();
+    this.sheetOpen.set(false);
+    if (n) this.openOrder(n);
   }
 
-  ngOnInit() { this.refresh();
+  ngOnInit() {
+    this.refresh();
     // Live queue: refetch when the server says this area changed (no polling).
-    this.liveQ.on('validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh()); }
+    this.liveQ.on('validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
+  }
 
   refresh() {
-    const mine = this._tab() === 'mine';
+    // New design: always the whole (department-scoped) queue — the tabs
+    // filter locally. Classic keeps the server-side ?mine switch.
+    const mine = !this.theme.isNewDesign() && this._tab() === 'mine';
     this._loading.set(true);
     this.api.get<OrderTest[]>(`/api/validation/queue?mine=${mine}`).subscribe({
       next: l => {
@@ -468,6 +818,12 @@ export class PendingValidationComponent implements OnInit {
       },
       error: () => this._loading.set(false)
     });
+    if (this.theme.isNewDesign()) {
+      this.api.get<ValidationScope>('/api/validation/scope').subscribe({
+        next: s => this.scope.set(s ?? null),
+        error: () => { /* older server: the side card says "All departments" */ },
+      });
+    }
   }
 
   openValidate(t: OrderTest) {
@@ -489,10 +845,9 @@ export class PendingValidationComponent implements OnInit {
     }
   }
 
-  /** One-click: tapping a pending order goes straight to the validation screen
+  /** One-click: tapping a pending tube goes straight to the review screen
    *  for its first pending test (no expand-then-Validate step). Reject /
-   *  reassign live on that screen. For a multi-test order the validator returns
-   *  here after each, and the next test is one tap away. */
+   *  reassign live on that screen. */
   openOrder(g: { items: OrderTest[] }) {
     const first = g.items[0];
     if (first) this.goToReview(first, g.items);
@@ -518,14 +873,10 @@ export class PendingValidationComponent implements OnInit {
     });
   }
 
+  /** Reassign to another validator who covers this result's department —
+   *  a picker (DialogService choose), never a pasted id. */
   async reassign(t: OrderTest) {
-    const id = await this.dialog.prompt({
-      title: 'Reassign to pathologist',
-      message: 'Paste the user GUID (demo — a picker will land later).',
-      placeholder: 'user id',
-      required: true,
-      confirmLabel: 'Reassign'
-    });
+    const id = await pickReassignee(this.api, this.dialog, this.toasts, t);
     if (!id) return;
     this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).subscribe({
       next: () => { this.toasts.success('Reassigned'); this._rows.update(l => l.filter(x => x.id !== t.id)); },
