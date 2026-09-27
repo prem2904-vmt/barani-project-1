@@ -51,7 +51,7 @@ const DEFAULT_TUBE: TubeSpec = { label: 'Grey', color: 'grey', volume: '5 mL' };
  *  chip is a visual aid, and a missing swatch beats a mislabelled tube. */
 const CHIP_BY_KEY: Readonly<Record<string, TubeSpec['color']>> = {
   edta: 'lavender', sst: 'yellow', urine: 'yellow', plain: 'red',
-  heparin: 'green', sterile: 'container', fluoride: 'grey',
+  heparin: 'green', sterile: 'container', blood_culture: 'container', fluoride: 'grey',
   citrate: 'grey', esr: 'grey', trace: 'grey', multiple: 'grey',
 };
 

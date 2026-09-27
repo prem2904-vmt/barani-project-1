@@ -647,9 +647,10 @@
             }
             }
           </div>
-          @if (isCultureTest(t) && specimenOpts().length) {
-          <!-- Culture tests: the desk picks WHICH specimen (urine vs pus vs
-               blood); the bench can refine it later. -->
+          @if (asksSpecimen(t) && specimenOpts().length) {
+          <!-- Tests that ask for their specimen (culture, and every micro
+               test): the desk picks WHICH specimen (urine vs pus vs blood);
+               the bench can refine it later, and it prints on the report. -->
           @if (isReadOnly() || isCollected(t.id)) {
           @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenOf(t.id) }}</p> }
           } @else {

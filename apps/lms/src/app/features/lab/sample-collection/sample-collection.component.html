@@ -293,7 +293,81 @@
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>
                   </span>
                 }
-                @if (container(s).kind !== 'vacutainer') {
+                @if (container(s).kind === 'bottle') {
+                  <!-- Blood-culture bottle: wide round-shouldered body, narrow
+                       neck, crimped collar and a coloured flip-cap. Same box
+                       and sizing as the cup; the draw rises with the SAME
+                       pf-vial__blood transition as the vacutainer. -->
+                  <svg class="pf-vial pf-vial--cup pf-vial--bottle" viewBox="0 0 140 220" aria-hidden="true" preserveAspectRatio="xMidYMax meet"
+                       [style.--tube-color]="container(s).color">
+                    <defs>
+                      <linearGradient [attr.id]="'bcap-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0"    stop-color="#000" stop-opacity="0.35"/>
+                        <stop offset="0.4"  stop-color="#fff" stop-opacity="0.25"/>
+                        <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
+                      </linearGradient>
+                      <linearGradient [attr.id]="'bglass-' + s.id" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0"    stop-color="#fff" stop-opacity="0.08"/>
+                        <stop offset="0.2"  stop-color="#fff" stop-opacity="0.3"/>
+                        <stop offset="0.5"  stop-color="#fff" stop-opacity="0.02"/>
+                        <stop offset="0.85" stop-color="#000" stop-opacity="0.2"/>
+                        <stop offset="1"    stop-color="#000" stop-opacity="0.4"/>
+                      </linearGradient>
+                      <linearGradient [attr.id]="'bblood-' + s.id" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0"    stop-color="#dc2626"/>
+                        <stop offset="0.25" stop-color="#b91c1c"/>
+                        <stop offset="1"    stop-color="#5b1010"/>
+                      </linearGradient>
+                      <clipPath [attr.id]="'bclip-' + s.id">
+                        <path d="M54 38 L86 38 L86 58 Q86 70 104 76 Q120 82 120 98 L120 198 Q120 208 110 208 L30 208 Q20 208 20 198 L20 98 Q20 82 36 76 Q54 70 54 58 Z"/>
+                      </clipPath>
+                    </defs>
+
+                    <!-- Bottle outline -->
+                    <path class="pf-vial__outline"
+                          d="M54 38 L86 38 L86 58 Q86 70 104 76 Q120 82 120 98 L120 198 Q120 208 110 208 L30 208 Q20 208 20 198 L20 98 Q20 82 36 76 Q54 70 54 58 Z"/>
+
+                    <!-- Blood fill clipped to the bottle -->
+                    <g [attr.clip-path]="'url(#bclip-' + s.id + ')'">
+                      <rect class="pf-vial__blood"
+                            x="14"
+                            [attr.y]="s.status !== 'pending' ? 132 : 220"
+                            width="112"
+                            height="100"
+                            [attr.fill]="'url(#bblood-' + s.id + ')'"/>
+                      @if (s.status !== 'pending') {
+                        <ellipse cx="70" cy="132" rx="50" ry="3.5" fill="#ef4444" opacity="0.7"/>
+                        <ellipse cx="70" cy="133" rx="46" ry="1.8" fill="#fecaca" opacity="0.35"/>
+                      }
+                    </g>
+
+                    <!-- Glass reflection -->
+                    <path d="M54 38 L86 38 L86 58 Q86 70 104 76 Q120 82 120 98 L120 198 Q120 208 110 208 L30 208 Q20 208 20 198 L20 98 Q20 82 36 76 Q54 70 54 58 Z"
+                          [attr.fill]="'url(#bglass-' + s.id + ')'"/>
+
+                    <!-- Paper label band + fill-line marks -->
+                    <rect x="26" y="150" width="88" height="36" rx="3" fill="#fff" opacity="0.14"/>
+                    <g opacity="0.4" stroke="rgba(255,255,255,0.4)" stroke-width="0.8" stroke-linecap="round">
+                      <line x1="114" y1="112" x2="120" y2="112"/>
+                      <line x1="114" y1="132" x2="120" y2="132"/>
+                    </g>
+
+                    <!-- Crimped aluminium collar, then the flip-cap on top -->
+                    <rect x="48" y="28" width="44" height="12" rx="2" fill="#cbd5e1"/>
+                    <rect x="48" y="28" width="44" height="12" rx="2" [attr.fill]="'url(#bcap-' + s.id + ')'"/>
+                    <rect x="44" y="8" width="52" height="22" rx="6" [attr.fill]="container(s).color"/>
+                    <rect x="44" y="8" width="52" height="22" rx="6" [attr.fill]="'url(#bcap-' + s.id + ')'"/>
+                    <ellipse cx="70" cy="12" rx="20" ry="2.5" fill="#fff" opacity="0.22"/>
+
+                    @if (s.status !== 'pending') {
+                      <g class="pf-vial__tick">
+                        <circle cx="118" cy="58" r="18" fill="#7c3aed"/>
+                        <circle cx="118" cy="58" r="18" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2"/>
+                        <path d="M110 58 l6 6 l12 -12" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                      </g>
+                    }
+                  </svg>
+                } @else if (container(s).kind !== 'vacutainer') {
                   <!-- Specimen cup/jar: shorter cylinder, wide rim, screw-cap
                        lid. Urine cups fill amber; sterile jars (body fluid,
                        stool, CSF …) fill a neutral grey — same silhouette, a

@@ -69,7 +69,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
  * cap/container colour so labelling matches what's on the rack; "fill" is the
  * liquid colour used when the sample's drawn.
  */
-type ContainerKind = "vacutainer" | "urine_cup" | "jar";
+type ContainerKind = "vacutainer" | "urine_cup" | "jar" | "bottle";
 interface Container {
   kind: ContainerKind;
   color: string; // cap / container accent
@@ -112,6 +112,9 @@ const TUBE_COLOR_MAP: Record<string, { color: string; label: string }> = {
   trace: { color: "#1d4ed8", label: "Trace metal · Royal blue" },
   sterile: { color: "#e5e7eb", label: "Sterile Container" },
   urine: { color: "#facc15", label: "Urine Bottle" },
+  // Microbiology blood-culture bottle — drawn as a bottle (neck + crimped
+  // flip-cap), filling with blood like the vacutainer (shared/utils/tube-colors).
+  blood_culture: { color: "#0f766e", label: "Blood culture bottle" },
   multiple: { color: "#6366f1", label: "Multiple" },
   // Legacy keys (pre-NABL) so older tests still render a colour.
   red: { color: "#ef4444", label: "Plain · Red" },
@@ -236,7 +239,7 @@ function specimenContainer(sampleType: string): Container | null {
   return null;
 }
 
-function containerFor(
+export function containerFor(
   s: OrderSample,
   deptCfg?: Record<string, { color?: string | null; label?: string | null }>,
 ): Container {
@@ -255,6 +258,13 @@ function containerFor(
         label: spec ? `Sterile · ${specimenTitle(spec)}` : tc.label,
       };
     }
+    if (s.tubeColor === "blood_culture")
+      return {
+        kind: "bottle",
+        color: tc.color,
+        fill: BLOOD_FILL,
+        label: tc.label,
+      };
     if (s.tubeColor === "urine")
       return {
         kind: "urine_cup",

@@ -33,6 +33,7 @@ import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
+import { asksSpecimen } from '../../../shared/utils/micro-specimen';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -85,11 +86,16 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _tests = signal<Test[]>([]);
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
-  // ── Specimen choice at the desk (culture tests): testId → specimen ──
+  // ── Specimen choice at the desk: testId → specimen ──
+  // Every test that asks (Culture & Sensitivity, and any test whose Test
+  // Master "Ask specimen" switch is on — all of Microbiology), or a bundle
+  // carrying one (shared/utils/micro-specimen).
   private readonly _specimens = signal<Record<string, string>>({});
   readonly specimenOpts = signal<PfSelectOption[]>([]);
-  isCultureTest(t: { parameters?: string }): boolean {
-    return (t.parameters ?? '').includes('culture_sensitivity');
+  private readonly _testById = computed(() => new Map(this._tests().map(t => [t.id, t] as const)));
+  asksSpecimen(t: { parameters?: string | null; type?: string | null }): boolean {
+    const byId = this._testById();
+    return asksSpecimen(t, id => byId.get(id));
   }
   specimenOf(id: string): string { return this._specimens()[id] ?? ''; }
   setSpecimen(id: string, v: string) { this._specimens.update(m => ({ ...m, [id]: v })); }

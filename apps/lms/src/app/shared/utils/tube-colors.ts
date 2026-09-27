@@ -34,6 +34,10 @@ export const TUBE_COLORS: readonly TubeColor[] = [
   { key: 'trace',    label: 'Trace metal · Royal blue', short: 'Royal blue', hex: '#1d4ed8' },
   { key: 'sterile',  label: 'Sterile Container',        short: 'Sterile',    hex: '#e5e7eb' },
   { key: 'urine',    label: 'Urine Bottle · Yellow',    short: 'Urine',      hex: '#facc15' },
+  // Microbiology blood-culture bottle (aerobic / anaerobic broth). A bottle,
+  // not a vacutainer: the collection screen draws it as one and gives each
+  // specimen its own bottle (server key `blood_culture`, TubeKeys.cs).
+  { key: 'blood_culture', label: 'Blood culture bottle', short: 'BC bottle', hex: '#0f766e' },
   { key: 'multiple', label: 'Multiple',                 short: 'Multiple',   hex: '#6366f1' },
 ];
 

@@ -35,6 +35,8 @@ import { hasLegacyFields, loadEditorFields, newFieldId, tidyParametersJson, writ
 
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { methodologyChoices } from '../../../../shared/utils/methodology';
+import { TUBE_COLORS } from '../../../../shared/utils/tube-colors';
+import { ownAsksSpecimen, withAskSpecimen } from '../../../../shared/utils/micro-specimen';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from '../test-layout-editor.component';
 import { ReportStructureComponent } from '../report-structure.component';
@@ -423,6 +425,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!name) { this.patch({ departmentId: '' }); return; }
     const id = this._departments().find(d => (d.name ?? '').trim() === name)?.id ?? '';
     this.patch({ departmentId: id });
+    // A NEW Microbiology test asks for its specimen by default (owner
+    // 2026-09-27: every micro test asks, like Culture & Sensitivity) and is
+    // collected into a sterile container unless one was already picked.
+    // An existing test's switches are the lab's data — never flipped here.
+    const d = this._draft();
+    if (!d.id && d.type === 'individual' && /micro/i.test(name)) {
+      this.patch({
+        parametersJson: withAskSpecimen(d.parametersJson, true),
+        ...(d.tubeColor ? {} : { tubeColor: 'sterile' }),
+      });
+    }
   }
 
   /** Culture-bench mark — the ONE marker the whole culture stack keys on:
@@ -484,6 +497,15 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         .map((f, i) => ({ ...f, order: i })));
     }
     this.persistFieldsToDraft();
+  }
+  /** "Ask for specimen at order" (micro): the order desk picks WHICH
+   *  specimen was sent for this test (Specimen master), it rides on the
+   *  ordered test and prints on the report. Stored as `askSpecimen: true`
+   *  in the Parameters wrapper; Culture & Sensitivity always asks, so the
+   *  switch reads on (locked) while the culture bench mark is on. */
+  readonly askSpecimen = computed<boolean>(() => ownAsksSpecimen(this._draft().parametersJson));
+  setAskSpecimen(on: boolean) {
+    this.patch({ parametersJson: withAskSpecimen(this._draft().parametersJson, on) });
   }
   readonly cultureBench = computed<boolean>(() => {
     try { return JSON.parse(this._draft().parametersJson || '{}')?.microFormat === 'culture_sensitivity'; }
@@ -594,19 +616,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  readonly tubeColors = [
-    { key: 'sst',      label: 'SST · Gold',              hex: '#eab308' },
-    { key: 'plain',    label: 'Plain · Red',             hex: '#ef4444' },
-    { key: 'edta',     label: 'EDTA · Lavender',         hex: '#a855f7' },
-    { key: 'fluoride', label: 'Fluoride · Grey',         hex: '#9ca3af' },
-    { key: 'heparin',  label: 'Lithium Heparin · Green', hex: '#22c55e' },
-    { key: 'citrate',  label: 'Sodium Citrate · Blue',   hex: '#38bdf8' },
-    { key: 'esr',      label: 'ESR · Black',             hex: '#1f2937' },
-    { key: 'trace',    label: 'Trace metal · Royal blue',hex: '#1d4ed8' },
-    { key: 'sterile',  label: 'Sterile Container',       hex: '#e5e7eb' },
-    { key: 'urine',    label: 'Urine Bottle · Yellow',   hex: '#facc15' },
-    { key: 'multiple', label: 'Multiple',                hex: '#6366f1' },
-  ];
+  /** The container picker — THE shared vocabulary (shared/utils/tube-colors),
+   *  so a container added there (e.g. the Blood culture bottle) is offered here. */
+  readonly tubeColors = TUBE_COLORS;
 
   private readonly _expandedParamId = signal<string | null>(null);
   readonly expandedParamId = this._expandedParamId.asReadonly();

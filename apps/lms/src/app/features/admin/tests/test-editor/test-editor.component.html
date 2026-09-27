@@ -209,6 +209,24 @@
             </div>
             @if (d.type === 'individual' && isMicroDept()) {
               <div class="pf-uf pf-uf--span">
+                <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="askSpecimen()"
+                [disabled]="cultureBench()" (click)="setAskSpecimen(!(askSpecimen()))">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Ask for specimen at order</span>
+        </button>
+                <p class="pf-hint">
+                  @if (cultureBench()) {
+                    Culture &amp; Sensitivity always asks. The front desk picks
+                    the specimen sent (from the Specimen master); it prints on
+                    the report.
+                  } @else {
+                    The front desk picks which specimen was sent (from the
+                    Specimen master) when this test is ordered; it prints on
+                    the report.
+                  }
+                </p>
+              </div>
+              <div class="pf-uf pf-uf--span">
                 <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="specimenEntry()"
                 (click)="setSpecimenEntry(!(specimenEntry()))">
           <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
