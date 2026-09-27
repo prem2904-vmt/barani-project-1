@@ -21,9 +21,9 @@ import { AuthService } from '../../../../core/auth/auth.service';
  * through the bulk price endpoint (TestPricingService), never the test row.
  */
 function make(tests: any[] = [], depts: any[] = [], opts: { proposals?: any[]; confirm?: boolean } = {}) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always install the stub (never 'only if missing'): another spec in the same
+  // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const api = {
     get: vi.fn((url: string) => of(url.startsWith('/api/tests') ? tests
       : url.startsWith('/api/catalog-proposals') ? (opts.proposals ?? []) : depts)),

@@ -24,9 +24,11 @@ const PATIENTS = [
 ];
 
 function make(tests: any[] = [], perms: string[] = []) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always a desktop viewport: these specs assert the LONG placeholders. Only
+  // installing a stub "if missing" inherited whatever matchMedia another spec
+  // in the same worker left behind (order-create.render.spec's phone() stub),
+  // so isPhone() flipped on and the short 'Find doctor' placeholder showed.
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const get = vi.fn((url: string) => {
     if (url.startsWith('/api/patients?q=')) return of(PATIENTS);
     if (url.startsWith('/api/patients/')) {

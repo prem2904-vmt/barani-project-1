@@ -13,9 +13,9 @@ import { DEPARTMENTS_FROM_MASTER } from '../../../shared/utils/test-origin';
  * `departments_master_only`).
  */
 function render() {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always install the stub (never 'only if missing'): another spec in the same
+  // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const branch = { id: 'b1', name: 'Main', code: 'MAIN', city: 'Chennai', isActive: true, subBranches: [], departments: [] };
   const api = {
     get: vi.fn((url: string) => of(

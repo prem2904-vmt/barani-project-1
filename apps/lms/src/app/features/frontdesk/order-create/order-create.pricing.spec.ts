@@ -22,9 +22,9 @@ import { AuthService } from '../../../core/auth/auth.service';
  * here never reaches the picker.
  */
 function make(tests: any[], perms: string[] = []) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always install the stub (never 'only if missing'): another spec in the same
+  // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const api = { get: vi.fn(() => of([])), post: vi.fn(() => of({})), patch: vi.fn(() => of({})) };
   const stub = {};
   TestBed.configureTestingModule({

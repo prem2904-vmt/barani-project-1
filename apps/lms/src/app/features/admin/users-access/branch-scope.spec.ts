@@ -95,9 +95,9 @@ const users = [{ id: 'u1', firstName: 'Priya', fathersName: 'Sharma', displayNam
                { id: 'u2', firstName: 'Ravi', fathersName: 'K', displayName: 'Ravi K', username: 'ravi', email: '', isActive: true }];
 
 function render<T>(cmp: new (...a: any[]) => T, userRoles: unknown[], id?: string) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always install the stub (never 'only if missing'): another spec in the same
+  // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const api = {
     get: vi.fn((url: string) => {
       if (url.startsWith('/api/roles')) return of(roles);
