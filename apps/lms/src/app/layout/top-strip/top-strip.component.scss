@@ -1280,7 +1280,13 @@ a.pf-ts-tenant:hover {
     padding: 0; gap: 0;
   }
   :host-context(.design-new.nav-bottom) .pf-topnav-link__lbl { display: none; }
-  :host-context(.design-new.nav-bottom) .pf-topnav-link svg { width: 18px; height: 18px; }
+  /* One optical scale for the docked bar on iPad + phone (owner,
+     2026-09-28: the pf logo and the avatar towered over the icons).
+     Icons 22 · logo 26 tall · avatar 30 — anchors a touch larger, in
+     proportion; every tap target stays 44px. */
+  :host-context(.design-new.nav-bottom) .pf-topnav-link svg { width: 22px; height: 22px; }
+  :host-context(.design-new.nav-bottom) .pf-brand-glyph { width: auto; height: 26px; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-circle { width: 30px; height: 30px; font-size: 11px; }
   :host-context(.design-new.nav-bottom) .pf-brand-text,
   :host-context(.design-new.nav-bottom) .pf-brand-pulse { display: none !important; }
   :host-context(.design-new.nav-bottom) .pf-ts-branch__name,
@@ -1328,7 +1334,7 @@ a.pf-ts-tenant:hover {
      the aspect ratio sets the width, and match the icon row optically.
      The 44px tap target is on the button, not the mark. */
   :host-context(.design-new.nav-bottom) .pf-avatar-glyph {
-    height: 22px; width: auto;
+    height: 26px; width: auto;
   }
 }
 
