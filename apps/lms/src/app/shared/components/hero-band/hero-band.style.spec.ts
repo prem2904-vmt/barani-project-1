@@ -30,8 +30,9 @@ describe('Hero band — dark surface', () => {
   it('runs dark at the top edge into the violet shade at the bottom — the navbar mirrored', () => {
     expect(dark).toMatch(/--pf-band-sweep:\s*linear-gradient\(180deg,\s*var\(--pf-dark-shade-base\) 0%,[\s\S]*?var\(--pf-dark-shade\) 100%\)/);
     expect(darkNavbar).toMatch(/--pf-navbar-wash:\s*linear-gradient\(180deg,\s*var\(--pf-navbar-shade\) 0%,[\s\S]*?var\(--pf-dark-shade-base\) 100%\)/);
-    // Owner: band = brand pink, navbar = its own violet.
-    expect(darkNavbar).toMatch(/--pf-navbar-shade:\s*rgba\(92, 64, 160,/);
+    // Owner: the navbar mirrors the band's pink glow with a dark body + pink edge.
+    expect(darkNavbar).toMatch(/--pf-navbar-shade:\s*rgba\(192, 38, 211, 0\.0\d\)/);
+    expect(darkNavbar).toMatch(/--pf-navbar-edge:\s*rgba\(214, 90, 232,/);
     expect(dark).toMatch(/--pf-band-bg:\s*var\(--pf-dark-surface\)/);
     expect(darkNavbar).toMatch(/--pf-navbar-bg:\s*var\(--pf-dark-surface\)/);
   });
