@@ -26,6 +26,7 @@ import { PushService } from '../../core/services/push.service';
 import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback } from '../nav-items';
 import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
+import { BranchSwitchService } from '../../core/services/branch-switch.service';
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -139,7 +140,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly activeBranchId = computed(() => this.auth.activeBranchId());
   /** Current active branch name for the row's value label. */
   protected readonly currentBranch = computed(() =>
-    this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? '');
+    this.branchSwitch.target()?.name ?? this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? '');
+  /** In-app branch switch (veil + zoom; no page reload). */
+  protected readonly branchSwitch = inject(BranchSwitchService);
   /** Whether the in-popover branch pick-list is expanded. */
   protected readonly branchListOpen = signal(false);
 
@@ -161,7 +164,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     });
     if (!ok) return;
     this.branchListOpen.set(false);
-    this.auth.setActiveBranch(b.id);
+    this.closeMore();
+    void this.branchSwitch.switchTo(b.id);
   }
 
   // ─── Presence status picker ───────────────────────────────────────

@@ -47,6 +47,11 @@ export class OutsourcingService {
     }
   }
 
+  /** Drop the cached rows (branch switch: they belong to the old branch). */
+  reset(): void {
+    this._rows.set([]);
+  }
+
   /** Upload the partner lab's report file; returns its stored URL. */
   async upload(file: File): Promise<string> {
     const fd = new FormData();

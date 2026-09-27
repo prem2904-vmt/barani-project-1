@@ -129,7 +129,7 @@
              is a true no-op: no reload, no lost typing. -->
         @for (d of draftShelf.items().slice(0, 3); track d.id) {
           @let on = draftShelf.activeId() === d.id;
-          <a class="pf-draftshelf__chip press" [class.pf-draftshelf__chip--on]="on"
+          <a class="pf-draftshelf__chip press" [class.pf-draftshelf__chip--on]="on" [pfZoomSource]="on ? null : chipZoomKeys(d)"
              [routerLink]="on ? null : d.link" [queryParams]="d.queryParams ?? null"
              [state]="draftShelf.swapState(d)"
              [attr.aria-current]="on ? 'page' : null" [attr.tabindex]="on ? 0 : null"
@@ -157,7 +157,7 @@
           <div class="pf-draftshelf__pop" role="menu">
             @for (d of draftShelf.items(); track d.id) {
               @let on = draftShelf.activeId() === d.id;
-              <a class="pf-draftshelf__pop-item press" role="menuitem" [class.pf-draftshelf__pop-item--on]="on"
+              <a class="pf-draftshelf__pop-item press" role="menuitem" [class.pf-draftshelf__pop-item--on]="on" [pfZoomSource]="on ? null : chipZoomKeys(d)"
                  [routerLink]="on ? null : d.link" [queryParams]="d.queryParams ?? null"
                  [state]="draftShelf.swapState(d)"
                  [attr.aria-current]="on ? 'page' : null" [attr.tabindex]="on ? 0 : null"
@@ -224,7 +224,8 @@
         <div class="relative hidden md:block">
           <button type="button" class="pf-ts-branch press"
                   [class.pf-ts-branch--open]="branchOpen()"
-                  [disabled]="!canSwitchBranch()"
+                  [class.pf-ts-branch--switching]="branchSwitch.busy()"
+                  [disabled]="!canSwitchBranch() || branchSwitch.busy()"
                   [attr.aria-expanded]="branchOpen()"
                   [attr.aria-label]="'Switch branch — currently ' + branch()"
                   (click)="toggleBranch()">
@@ -233,7 +234,11 @@
               <path d="M12 21s-7-4.5-7-12a7 7 0 0 1 14 0c0 7.5-7 12-7 12Z" />
               <circle cx="12" cy="9" r="2.5" />
             </svg>
-            <span class="pf-ts-branch__name">{{ branch() }}</span>
+            <!-- Keyed on the name: a switch re-renders it, so the new
+                 branch slides in (motion in top-strip.component.scss). -->
+            @for (n of [branch()]; track n) {
+              <span class="pf-ts-branch__name">{{ n }}</span>
+            }
             <svg class="pf-ts-branch__chev" width="10" height="10" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
                  aria-hidden="true">
@@ -448,6 +453,7 @@
           @for (b of branches(); track b.id) {
             <button type="button" class="pf-profile-item press"
                     [class.pf-profile-item--active]="b.id === activeBranchId()"
+                    [disabled]="branchSwitch.busy()"
                     (click)="selectBranch(b)">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

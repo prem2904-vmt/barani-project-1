@@ -6,7 +6,9 @@ import { MessagesPanelService } from '../../core/services/messages-panel.service
 import { conversationDisambiguator, conversationInitials, conversationPeerId, conversationTitle } from '../../shared/models/conversation-name';
 import { PresenceAvatarComponent } from '../../shared/components/presence-avatar/presence-avatar.component';
 import { Conversation } from '../../shared/models/chat.model';
-import { DraftShelfService } from '../../core/services/draft-shelf.service';
+import { DraftChip, DraftShelfService } from '../../core/services/draft-shelf.service';
+import { BranchSwitchService } from '../../core/services/branch-switch.service';
+import { ZoomSourceDirective } from '../../core/navigation/zoom.directive';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
@@ -39,7 +41,7 @@ import { pickLanding } from '../../core/auth/landing.guard';
 @Component({
   selector: 'pf-top-strip',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, FormsModule, NotificationBellComponent, PresenceAvatarComponent],
+  imports: [RouterLink, RouterLinkActive, FormsModule, NotificationBellComponent, PresenceAvatarComponent, ZoomSourceDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './top-strip.component.html',
   styleUrl: './top-strip.component.scss'
@@ -49,6 +51,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Bottom-bar draft shelf (published by the active work screen). */
   protected readonly draftShelf = inject(DraftShelfService);
   readonly draftsOpen = signal(false);
+  /** A draft chip zooms into the screen it resumes: it answers to its own id
+   *  ("fd:<patientId>", "lab:<sampleId>") and the bare record id the
+   *  destination's zoom target carries. */
+  chipZoomKeys(d: DraftChip): string[] {
+    const bare = d.id.includes(':') ? d.id.slice(d.id.indexOf(':') + 1) : '';
+    return bare ? [d.id, bare] : [d.id];
+  }
   /** The on-stage draft sits behind the "+N" button (not one of the 3 chips). */
   readonly activeDraftInOverflow = computed(() => {
     const id = this.draftShelf.activeId();
@@ -298,8 +307,12 @@ export class TopStripComponent implements OnInit, OnDestroy {
     !ADMIN_NAV.permissions || this.auth.hasAnyPermission(ADMIN_NAV.permissions)
   );
 
+  /** In-app branch switch (veil + zoom; no page reload). */
+  protected readonly branchSwitch = inject(BranchSwitchService);
+  /** The pill names the DESTINATION as soon as a switch starts, so the chip
+   *  itself animates to the new branch while the screen re-scopes. */
   protected readonly branch = computed(() =>
-    this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? 'Branch');
+    this.branchSwitch.target()?.name ?? this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? 'Branch');
   protected readonly activeBranchId = computed(() => this.auth.activeBranchId());
   protected readonly branchOpen = signal(false);
   protected readonly moreOpen = signal(false);
@@ -396,7 +409,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
     });
     if (!ok) return;
     this.branchOpen.set(false);
-    this.auth.setActiveBranch(b.id);
+    this.closeProfile();
+    void this.branchSwitch.switchTo(b.id);
   }
 
   toggleMore() {

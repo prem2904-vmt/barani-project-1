@@ -260,16 +260,24 @@ export class AuthService {
     return branches.find(b => b.id === id) ?? null;
   });
 
-  /** Switch the active branch. Persists, then reloads so every branch-scoped
-   *  view re-fetches cleanly under the new scope (no stale state). */
-  setActiveBranch(branchId: string): void {
+  /** Switch the active branch. Persists it; returns false when the branch is
+   *  not one of the user's (or already active).
+   *
+   *  `reload: false` is the in-app re-scope used by BranchSwitchService (the
+   *  switcher UI): it re-creates the routed screen and resets the branch-
+   *  scoped caches without a page reload — no bundle re-parse, no session
+   *  restore, no /me, no tenant/entitlement refetch. The default keeps the
+   *  old full reload for any other caller (the safest fallback). */
+  setActiveBranch(branchId: string, opts: { reload?: boolean } = {}): boolean {
     const allowed = (this._user()?.branches ?? []).some(b => b.id === branchId);
-    if (!allowed || branchId === this._activeBranchId()) return;
+    if (!allowed || branchId === this._activeBranchId()) return false;
     this._activeBranchId.set(branchId);
     try { localStorage.setItem(AuthService.ACTIVE_BRANCH_KEY, branchId); } catch { /* private mode */ }
-    // Full reload is the most robust way to re-scope the many components that
-    // cache branch-scoped data in signals; the Supabase session survives it.
+    if (opts.reload === false) return true;
+    // Full reload re-scopes every component that caches branch data in
+    // signals; the Supabase session survives it.
     try { window.location.reload(); } catch { /* SSR/native guard */ }
+    return true;
   }
 
   /** The server refused our X-Active-Branch (the user's branches changed

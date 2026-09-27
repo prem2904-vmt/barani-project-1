@@ -44,6 +44,8 @@ import { DesignModeService } from "../../core/services/design-mode.service";
 import { PatientTimelineComponent } from "../../features/frontdesk/patient-profile/patient-timeline.component";
 import { PatientTimelineService } from "../../features/frontdesk/patient-profile/patient-timeline.service";
 import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
+import { BranchSwitchService } from "../../core/services/branch-switch.service";
+import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-veil.component";
 
 @Component({
   selector: "pf-shell",
@@ -63,6 +65,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
     PatientTimelineComponent,
     SwipeBackDirective,
     DesignModeBadgeComponent,
+    BranchVeilComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -88,7 +91,9 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         <pf-top-strip></pf-top-strip>
       </div>
 
-      <main class="shell-main relative" pfSwipeBack [class.shell-main--kbd]="kbd.visible()">
+      <main class="shell-main relative" pfSwipeBack [class.shell-main--kbd]="kbd.visible()"
+            [attr.data-bs]="branchSwitch.busy() ? branchSwitch.phase() : null"
+            [attr.aria-busy]="branchSwitch.veil() ? 'true' : null">
         <!-- Auto breadcrumb — appears on every page that isn't itself
              a top-level landing (Admin/Frontdesk/Lab/Results/etc.).
              Label switches to the matching section so admin sub-pages
@@ -106,7 +111,12 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
           </a>
         } -->
         <router-outlet></router-outlet>
+        <!-- Branch switch (BranchSwitchService): the destination skeleton
+             rises over the receding screen, holds while the new branch's
+             data loads, then lifts as the new screen zooms up. -->
+        @if (branchSwitch.busy()) { <pf-branch-veil></pf-branch-veil> }
       </main>
+      <p class="sr-only" role="status" aria-live="polite">{{ branchSwitch.announcement() }}</p>
 
       <pf-bottom-nav></pf-bottom-nav>
 
@@ -362,6 +372,40 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         }
       }
 
+      /* ── Branch switch motion (BranchSwitchService) ─────────────────
+         out: the screen recedes and dims under the rising veil; loading:
+         the re-created screen waits unseen; in: it zooms up into place.
+         The routed page host is not in this component's view, hence
+         ::ng-deep (scoped to <main data-bs> only while a switch runs). */
+      .shell-main[data-bs] { overflow: hidden; }
+      .shell-main[data-bs] ::ng-deep > :not(router-outlet):not(pf-branch-veil) {
+        transform-origin: 50% var(--pf-bs-top, 0px);
+        transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 280ms cubic-bezier(0.32, 0.72, 0, 1), filter 280ms ease;
+      }
+      .shell-main[data-bs='out'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) {
+        transform: scale(0.965); opacity: 0.35; filter: saturate(0.7);
+      }
+      .shell-main[data-bs='loading'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) {
+        opacity: 0; transition: none;
+      }
+      .shell-main[data-bs='in'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) {
+        animation: pf-bs-zoom-in 420ms cubic-bezier(0.32, 0.72, 0, 1) both;
+      }
+      pf-branch-veil { top: var(--pf-bs-top, 0px); bottom: auto; height: var(--pf-bs-h, 100%); }
+      @keyframes pf-bs-zoom-in {
+        from { opacity: 0; transform: scale(0.97); }
+        to { opacity: 1; transform: none; }
+      }
+      @keyframes pf-bs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) {
+        .shell-main[data-bs] ::ng-deep > :not(router-outlet):not(pf-branch-veil) { transition: opacity 120ms linear; transform: none !important; filter: none !important; }
+        .shell-main[data-bs='in'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) { animation: pf-bs-fade-in 120ms linear both; }
+      }
+      .sr-only {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+      }
+
       .shell-main {
         flex: 1;
         min-height: 0;
@@ -578,6 +622,8 @@ export class ShellComponent {
    *  nav-clearance padding — otherwise that reserved space becomes a dead gap
    *  between the content (e.g. the chat composer) and the keyboard. */
   protected readonly kbd = inject(KeyboardService);
+  /** In-app branch switch: drives the veil + the content zoom out/in. */
+  protected readonly branchSwitch = inject(BranchSwitchService);
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);

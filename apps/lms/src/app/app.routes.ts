@@ -63,6 +63,11 @@ export const appRoutes: Route[] = [
       // to /frontdesk, not /admin (which would then 403).
       { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
 
+      // In-app branch switch hop (BranchSwitchService): an empty, never-
+      // shown stop so the current screen is re-created — and its guards re-
+      // run — under the new branch without a page reload.
+      { path: '_branch', children: [] },
+
       // Scanned order QR (`/o/:id`) → opens the order (collection drawer if the
       // user can collect, else the patient profile).
       {

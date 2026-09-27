@@ -127,6 +127,12 @@ export class DraftShelfService {
     });
   }
 
+  /** Forget every area's drafts (branch switch: the chips point at the old
+   *  branch's records). Each publisher re-publishes on its next visit. */
+  clearAll(): void {
+    this._byArea.set({});
+  }
+
   private static areaOf(url: string): DraftArea | null {
     if (url.startsWith('/frontdesk')) return 'frontdesk';
     if (url.startsWith('/lab')) return 'lab';
