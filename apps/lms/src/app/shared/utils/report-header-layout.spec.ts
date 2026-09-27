@@ -4,7 +4,7 @@ import {
   nudgeSnapX, resetItem, setItem, snapBoxX, writeHeaderLayout,
 } from './report-header-layout';
 import type { ReportTemplate } from '../models/report.model';
-import { LEGACY_SNAPSHOT, LONG_ADDRESS } from './report-header-legacy.spec';
+import { LEGACY_SNAPSHOT, silenceJsdomCanvas, LONG_ADDRESS } from './report-header-legacy.spec-helpers';
 
 /**
  * The letterhead layout model: storage, defaults-from-old-settings, and that
@@ -55,6 +55,9 @@ const runOf = (pdf: string, t: string) => runs(pdf).find(r => r.t === t);
 const item = (l: { items: Array<{ id: string }> }, id: string) => l.items.find(i => i.id === id) as never as {
   x: number; y: number; box: { x: number; y: number; w: number; h: number }; lines?: string[]; wraps?: boolean;
   hidden?: boolean; align: string; w?: number; h?: number; customized: boolean };
+
+
+silenceJsdomCanvas();
 
 describe('header layout — storage', () => {
   it('reads nothing from an old template (no metadata) → legacy', () => {

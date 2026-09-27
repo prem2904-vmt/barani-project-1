@@ -5,7 +5,7 @@ import {
   validateBackgroundFile, writeHeaderLayout,
 } from './report-header-layout';
 import type { ReportTemplate } from '../models/report.model';
-import { LEGACY_SNAPSHOT } from './report-header-legacy.spec';
+import { LEGACY_SNAPSHOT, silenceJsdomCanvas } from './report-header-legacy.spec-helpers';
 
 /**
  * Background images (owner, 2026-09-27 — "the key thing"): letterhead artwork
@@ -49,6 +49,9 @@ function imageDraws(stream: string) {
   return [...stream.matchAll(/(-?[\d.]+) 0 0 (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) cm\s*\/(I\d+) Do/g)]
     .map(m => ({ w: +m[1], h: +m[2], x: +m[3], y: +m[4], name: m[5], at: m.index! }));
 }
+
+
+silenceJsdomCanvas();
 
 describe('background images — model', () => {
   const clip = { x: 0, y: 0, w: 100, h: 100 };
