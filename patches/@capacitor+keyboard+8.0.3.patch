@@ -1,0 +1,26 @@
+diff --git a/node_modules/@capacitor/keyboard/ios/Sources/KeyboardPlugin/Keyboard.m b/node_modules/@capacitor/keyboard/ios/Sources/KeyboardPlugin/Keyboard.m
+--- a/node_modules/@capacitor/keyboard/ios/Sources/KeyboardPlugin/Keyboard.m
++++ b/node_modules/@capacitor/keyboard/ios/Sources/KeyboardPlugin/Keyboard.m
+@@ -127,7 +127,21 @@
+   CGRect rect = [[notification.userInfo valueForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
+ 
+   double height = rect.size.height;
+-    
++
++  // PREFRONTAL PATCH (patches/@capacitor+keyboard+8.0.3.patch): an
++  // accessory-only "keyboard" — the iPad shortcuts bar shown for a hardware
++  // keyboard, or for an inputmode="none" field (the result numpad) — is not a
++  // keyboard to avoid. It floats over the page, yet resize:'native' shrank the
++  // WKWebView by its ~55-70pt height and left an EMPTY BAND under the docked
++  // bottom navbar. Real software keyboards are >= ~200pt, so anything below
++  // the threshold is handled exactly like a hide: full-height WebView,
++  // keyboardWillHide to JS (so a keyboard that was up before is released), and
++  // (iPad) no cached stageManagerOffset for a real keyboard to inherit.
++  if (rect.size.height < 100) {
++    [self onKeyboardWillHide:notification];
++    return;
++  }
++
+   if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+     if (stageManagerOffset > 0) {
+       height = stageManagerOffset;

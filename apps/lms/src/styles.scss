@@ -433,15 +433,23 @@
 /* App-shell layout: lock the page height, no browser-level scroll.
  * Every feature section handles its own internal scrolling. */
 html {
+  /* border-box: the insets below come OUT of the 100dvh, never on top. */
+  box-sizing: border-box;
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
-  /* Safe-area insets — iPhone notch / Dynamic Island, gesture
-     handle on iPad, keyboard rim on Android. Horizontal sides
-     were already covered; top + bottom added for Capacitor
-     iOS so the top strip and bottom nav clear the system UI. */
+  /* Safe-area insets — iPhone notch / Dynamic Island, status bar,
+     side cut-outs. ONE source of truth per edge:
+     • top / left / right: absorbed HERE, once, for every page.
+     • bottom: NOT here. The bottom inset belongs to whatever docks at
+       the bottom edge — the navbar (.pf-chrome padding-bottom), the
+       phone pill (its bottom offset), sheets — so its background can
+       run to the physical edge with the inset INSIDE it. A root
+       padding-bottom as well was a second copy of the same inset
+       (owner's iPad: dead band under the bar). Pinned by
+       safe-area-single-source.spec.ts. */
   padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: 0;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   touch-action: manipulation;
@@ -476,11 +484,14 @@ html.cap-native {
     padding-top: max(env(safe-area-inset-top), 24px);
   }
 }
-/* Android: the app reserves the status bar natively (capacitor.service sets
-   overlay off), so the CSS floor above would double it into a dead gap below
-   the clock. Zero the top pad; env() is 0 with the bar reserved. */
+/* Android: no CSS floor — just the inset the WebView reports, once.
+   Capacitor 8's SystemBars either pads the WebView natively (older WebViews:
+   env() then reads 0, so this is 0 and nothing doubles) or, on WebView 140+
+   with viewport-fit=cover (targetSdk 35 = enforced edge-to-edge), passes the
+   real status-bar inset through to env() — which the old hard 0 ignored,
+   sliding the page under the clock. env() is right in both cases. */
 html.cap-native.cap-android {
-  padding-top: 0;
+  padding-top: env(safe-area-inset-top);
 }
 
 /* Immersive chat thread (phone, WhatsApp model): the thread header owns the
@@ -524,8 +535,12 @@ body::-webkit-scrollbar {
 
 body {
   margin: 0;
-  height: 100dvh;
-  max-height: 100dvh;
+  /* 100% of <html>'s content box (the viewport minus the top inset), NOT
+     100dvh: a 100dvh body under html's padding-top ran off the bottom of the
+     screen by the whole status-bar inset (24px iPad, 59px iPhone), so the
+     shell — and the last rows of every page — ended below the physical edge,
+     under the docked navbar. */
+  height: 100%;
   overflow: hidden;
   font-family:
     'Noto Sans',
