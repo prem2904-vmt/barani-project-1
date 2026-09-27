@@ -43,6 +43,7 @@ import {
 import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
 import { waLink } from "../../../shared/utils/whatsapp";
+import { WhatsAppService, waStatusLabel, type WaMessage } from "../../../core/services/whatsapp.service";
 import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
 import { savedValueRows } from "../../../shared/utils/result-flag";
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
@@ -90,8 +91,30 @@ export class ReportQueueComponent implements OnInit {
     const p = r.order?.patient;
     const o = r.order as { id: string; orderNumber?: string | null } | undefined;
     const when = this.shortWhen(r.createdAt);
-    return [p ? formatPatientMeta(p as never) : "", o?.id ? orderLabel(o) : "", when, ...this.cardStatus(r).extra]
+    return [p ? formatPatientMeta(p as never) : "", o?.id ? orderLabel(o) : "", when, ...this.cardStatus(r).extra, this.waMeta(r)]
       .filter(Boolean).join(" · ");
+  }
+
+  /** Latest automatic/resent WhatsApp message per report id (Meta Cloud API). */
+  private readonly _wa = signal<Record<string, WaMessage>>({});
+
+  /** "WhatsApp sent / delivered / read / queued / failed / not sent" for the
+   *  row meta — a hidden fact, so it rides in the meta line (ND §20). Meta's
+   *  "delivered" also flips the report to Delivered server-side. */
+  waMeta(r: Report): string {
+    const m = this._wa()[r.id];
+    if (!m) return "";
+    return `WhatsApp ${waStatusLabel(m.status).toLowerCase()}`;
+  }
+
+  /** One batch call for the final reports on screen. Non-fatal. */
+  private loadWaStatus(list: Report[]): void {
+    const ids = list.filter((r) => r.type === "final").map((r) => r.id);
+    if (!ids.length) { this._wa.set({}); return; }
+    this.wa.statusBatch(ids).subscribe({
+      next: (map) => this._wa.set(map && typeof map === "object" ? map : {}),
+      error: () => { /* no WhatsApp column — nothing else changes */ },
+    });
   }
 
   /** The card's ONE status (dot + coloured word, right column) — see reportStatus. */
@@ -133,6 +156,7 @@ export class ReportQueueComponent implements OnInit {
     (host?.querySelectorAll<HTMLElement>("[role=radio]")[next])?.focus();
   }
   private readonly api = inject(ApiService);
+  private readonly wa = inject(WhatsAppService);
   /** Design gate: the hero band renders in the NEW design only. */
   readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
@@ -501,6 +525,7 @@ export class ReportQueueComponent implements OnInit {
       next: (l) => {
         this._items.set(l ?? []);
         this._loading.set(false);
+        this.loadWaStatus(l ?? []);
       },
       error: () => this._loading.set(false),
     });

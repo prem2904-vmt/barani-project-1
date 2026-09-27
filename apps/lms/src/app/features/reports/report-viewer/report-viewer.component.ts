@@ -27,6 +27,7 @@ import { reportFlag } from '../../../shared/utils/report-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { PartnerReport, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
 import { UploadsService } from '../../../core/services/uploads.service';
+import { ReportWhatsAppStatusComponent } from './report-whatsapp-status.component';
 
 interface ReportData {
   patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; sex?: string; phone?: string; mrn?: string };
@@ -127,6 +128,7 @@ export const RV_DONE_MS = 1800;
   standalone: true,
   imports: [
     NgTemplateOutlet,
+    ReportWhatsAppStatusComponent,
     HeroBandComponent,
     EditResultDialogComponent,
     ZoomTargetDirective

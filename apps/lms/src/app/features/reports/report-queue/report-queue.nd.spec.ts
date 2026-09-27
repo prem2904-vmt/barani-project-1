@@ -100,7 +100,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[] } = {}) {
+async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[]; wa?: Record<string, unknown> } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover') ? !opts.touch : false,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
@@ -112,7 +112,7 @@ async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unkno
       if (url === '/api/billing/outstanding') return of({ due: [{ orderId: 'o-r1' }] });
       return of([]);
     }),
-    post: vi.fn(() => of({})),
+    post: vi.fn((url: string, _body?: unknown) => (url === '/api/whatsapp/status' ? of(opts.wa ?? {}) : of({}))),
   };
   const router = { url: '/reports', navigate: vi.fn(() => Promise.resolve(true)), events: of() };
   TestBed.configureTestingModule({
@@ -567,5 +567,31 @@ describe('Reports list — same reports for every viewer, actions by permission'
     expect(el.querySelector('.pf-rq-viewonly')).toBeNull();
     (el.querySelector('.pf-rq-more') as HTMLButtonElement).click(); f.detectChanges();
     expect([...el.querySelectorAll('.pf-rq-menu__item')].map(b => b.textContent!.trim())).toContain('Regenerate');
+  });
+});
+
+describe('Reports list (nd) — WhatsApp auto-send status', () => {
+  it('asks once for the final reports on screen and puts the WhatsApp status in the card meta', async () => {
+    const { el, api, tab } = await render({
+      wa: {
+        r1: { id: 'm1', reportId: 'r1', trigger: 'auto', kind: 'report_ready', status: 'sent', attempts: 1, createdAt: '2026-09-26T13:08:00Z' },
+        r4: { id: 'm4', reportId: 'r4', trigger: 'auto', kind: 'report_ready', status: 'failed', attempts: 1, createdAt: '2026-09-26T13:08:00Z' },
+      },
+    });
+    tab('all');
+    const calls = api.post.mock.calls.filter((c: unknown[]) => c[0] === '/api/whatsapp/status');
+    expect(calls.length).toBe(1);
+    // Partials never go on WhatsApp — only finals are asked about.
+    expect((calls[0][1] as unknown as { reportIds: string[] }).reportIds).toEqual(['r1', 'r3', 'r4']);
+    const metas = [...el.querySelectorAll<HTMLElement>('.pf-rq-card__meta')].map(m => m.textContent!.trim());
+    expect(metas.some(m => m.endsWith('WhatsApp sent'))).toBe(true);
+    expect(metas.some(m => m.endsWith('WhatsApp failed'))).toBe(true);
+  });
+
+  it('no WhatsApp data → the meta is unchanged', async () => {
+    const { el, tab } = await render();
+    tab('all');
+    const metas = [...el.querySelectorAll<HTMLElement>('.pf-rq-card__meta')].map(m => m.textContent!);
+    expect(metas.every(m => !m.includes('WhatsApp'))).toBe(true);
   });
 });

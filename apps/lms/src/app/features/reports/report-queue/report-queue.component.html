@@ -534,6 +534,7 @@
             } · {{ r.type }} ·
             generated {{ r.createdAt | date: "short" }}
             }
+            @if (waMeta(r); as w) { · {{ w }} }
           </p>
         </div>
 

@@ -18,6 +18,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { ThemeService } from '../../../core/services/theme.service';
 import { ReportTemplate } from '../../../shared/models/report.model';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
+import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/services/whatsapp.service';
 
 /** Band pill tabs — the 13 section cards grouped by what they govern. */
 export type LabSettingsTab = 'collection' | 'queues' | 'rules' | 'report';
@@ -419,6 +420,83 @@ interface AutoAssignConfig {
       </section>
       }
 
+      @if (showSec('report') && waSettings()) {
+      <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender
+           number + token are platform config on the server. -->
+      <section class="nd-card pf-ls__card" data-testid="ls-whatsapp">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Send reports on WhatsApp automatically</h3><span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.autoSendEnabled"
+                  aria-label="Send reports on WhatsApp automatically" [disabled]="waSaving() || !canManageWa()"
+                  (click)="saveWa({ autoSendEnabled: !waSettings()!.autoSendEnabled })">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
+        </div>
+        <div class="pf-ls__cardbody">
+          <p class="pf-ls__hint">
+            When a patient's <strong>final</strong> report is ready <strong>and nothing is owed</strong>, they get a
+            WhatsApp message with the secure report link (they confirm their date of birth or phone to open it).
+            If the bill is settled later, the message goes out then. Reports made before you turn this on aren't sent.
+          </p>
+          <!-- Sender: the shared Prefrontal number until the lab connects its own
+               WhatsApp Business number (Embedded Signup — coming soon). -->
+          <div class="pf-ls__wa-sender">
+            <span class="nd-chip nd-chip--static pf-ls__chipm" data-testid="ls-wa-sender">
+              Sender — <strong style="color: var(--text-primary);">{{ waSender() }}</strong>
+            </span>
+            @if (waSettings()!.sender?.source !== 'tenant') {
+              <button type="button" class="nd-btn nd-btn--secondary pf-ls__wfbtn" data-testid="ls-wa-connect"
+                      [disabled]="!waSettings()!.sender?.canConnect || waConnecting() || !canManageWa()"
+                      [attr.aria-describedby]="waSettings()!.sender?.canConnect ? null : 'pf-ls-wa-soon'"
+                      (click)="connectWa()">
+                Connect your WhatsApp number
+              </button>
+              @if (!waSettings()!.sender?.canConnect) {
+                <span class="pf-ls__wa-soon" id="pf-ls-wa-soon">Coming soon — send reports from your lab's own WhatsApp number and name.</span>
+              } @else {
+                <span class="pf-ls__wa-soon">You'll sign in with Meta and pick your WhatsApp Business number. You can keep using the WhatsApp Business app on it.</span>
+              }
+            }
+            @if (waSettings()!.sender?.error) {
+              <p class="pf-ls__warn" style="flex-basis: 100%;">{{ waSettings()!.sender?.error }}</p>
+            }
+          </div>
+          @if (waSettings()!.sender?.source !== 'tenant' && !waSettings()!.platform?.configured) {
+            <p class="pf-ls__warn">WhatsApp sending isn't set up on the server yet — messages wait in the queue until it is.</p>
+          }
+          <div class="pf-ls__wa-row">
+            <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.sendUpdatedReports"
+                    [disabled]="waSaving() || !canManageWa()"
+                    (click)="saveWa({ sendUpdatedReports: !waSettings()!.sendUpdatedReports })">
+              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              Also send corrected (amended) reports
+            </button>
+          </div>
+          <div class="mt-4 flex flex-wrap items-end gap-4">
+            <label class="block pf-ls__wa-field">
+              <span class="nd-field__lbl">Message template</span>
+              <input class="nd-input mt-1" type="text" maxlength="128" autocomplete="off"
+                     [placeholder]="waSettings()!.platform?.defaultTemplateName ?? ''"
+                     [disabled]="waSaving() || !canManageWa()"
+                     [ngModel]="waTemplateName()" (ngModelChange)="waTemplateName.set($event)"
+                     (blur)="saveWaTemplate()" />
+            </label>
+            <label class="block pf-ls__wa-lang">
+              <span class="nd-field__lbl">Language</span>
+              <input class="nd-input mt-1" type="text" maxlength="16" autocomplete="off"
+                     [placeholder]="waSettings()!.platform?.defaultTemplateLanguage ?? ''"
+                     [disabled]="waSaving() || !canManageWa()"
+                     [ngModel]="waTemplateLanguage()" (ngModelChange)="waTemplateLanguage.set($event)"
+                     (blur)="saveWaTemplate()" />
+            </label>
+          </div>
+          <p class="pf-ls__hint" style="margin-top: 8px;">
+            Leave blank to use the platform template. It must be an approved WhatsApp template.
+            The manual "Send WhatsApp" button on each report keeps working as a fallback.
+          </p>
+        </div>
+      </section>
+      }
+
       @if (showSec('queues')) {
       <!-- Auto-assign per department -->
       <section class="nd-card pf-ls__card">
@@ -545,6 +623,12 @@ interface AutoAssignConfig {
     .pf-ls__cardbody { padding: 14px 18px 18px; }
     .pf-ls__cardbody > .pf-ls__hint:first-child { margin-top: 0; }
     .pf-ls__switch { flex: none; }
+    .pf-ls__wa-row { margin-top: 12px; }
+    .pf-ls__wa-sender { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+    .pf-ls__wa-soon { flex-basis: 100%; font-size: 12px; color: var(--text-tertiary); }
+    .pf-ls__wa-row .pf-ls__switch { white-space: normal; text-align: left; }
+    .pf-ls__wa-field { flex: 1 1 220px; max-width: 320px; }
+    .pf-ls__wa-lang { flex: 0 1 120px; max-width: 140px; }
     .pf-ls__chipm { height: auto; min-height: 30px; white-space: normal; }
     .pf-ls__wfbtn { height: 32px; min-height: 32px; }
     @media (max-width: 640px) {
@@ -876,7 +960,87 @@ export class LabSettingsComponent implements OnInit {
   }
   goReportTemplate() { this.router.navigate(['/admin/reports'], { queryParams: { tab: 'table' } }); }
 
+  // ── WhatsApp auto-send (Meta Cloud API) ──
+  private readonly wa = inject(WhatsAppService);
+  protected readonly waSettings = signal<WaSettings | null>(null);
+  protected readonly waSaving = signal(false);
+  protected readonly waTemplateName = signal('');
+  protected readonly waTemplateLanguage = signal('');
+  readonly waSender = computed(() => waSenderLine(this.waSettings()?.sender));
+  protected readonly waConnecting = signal(false);
+
+  /** Embedded Signup: the server signs a short-lived state and hands back the
+   *  link (API begin hop → Meta's hosted page → back to this page). */
+  connectWa() {
+    if (this.waConnecting() || !this.waSettings()?.sender?.canConnect) return;
+    this.waConnecting.set(true);
+    this.wa.startOnboarding().subscribe({
+      next: r => { if (r?.connectUrl) window.location.assign(r.connectUrl); else this.waConnecting.set(false); },
+      error: e => { this.waConnecting.set(false); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+
+  /** Back from Meta: ?tab=report&whatsapp=connected|failed&reason=… */
+  private readWaReturn() {
+    const q = this.router.parseUrl(this.router.url).queryParams;
+    if (q['tab'] === 'report') this.tab.set('report');
+    if (q['whatsapp'] === 'connected') this.toasts.success('Your WhatsApp number is connected');
+    else if (q['whatsapp'] === 'failed') {
+      const why: Record<string, string> = {
+        cancelled: 'The WhatsApp connection was cancelled.',
+        invalid_state: 'That connection link expired — please try again.',
+        state_used: 'That connection link was already used — please start again.',
+        number_in_use: 'This WhatsApp number is already connected to another lab.',
+      };
+      this.toasts.error(why[q['reason']] ?? 'Could not connect your WhatsApp number. Please try again.');
+    }
+  }
+  readonly canManageWa = computed(() =>
+    this.auth.hasPermission('manage_lab_settings') || this.auth.hasPermission('manage_notifications'));
+
+  private applyWa(s: WaSettings) {
+    this.waSettings.set(s);
+    this.waTemplateName.set(s.templateName ?? '');
+    this.waTemplateLanguage.set(s.templateLanguage ?? '');
+  }
+
+  saveWa(patch: Partial<{ autoSendEnabled: boolean; sendUpdatedReports: boolean }>) {
+    const cur = this.waSettings();
+    if (!cur || this.waSaving()) return;
+    const next = {
+      autoSendEnabled: patch.autoSendEnabled ?? cur.autoSendEnabled,
+      sendUpdatedReports: patch.sendUpdatedReports ?? cur.sendUpdatedReports,
+      templateName: this.waTemplateName().trim() || null,
+      templateLanguage: this.waTemplateLanguage().trim() || null,
+    };
+    this.waSettings.set({ ...cur, ...next });
+    this.waSaving.set(true);
+    this.wa.saveSettings(next).subscribe({
+      next: s => {
+        this.waSaving.set(false);
+        if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s);
+        if (patch.autoSendEnabled !== undefined)
+          this.toasts.success(s.autoSendEnabled ? 'Reports will be sent on WhatsApp automatically' : 'Automatic WhatsApp sending turned off');
+        else this.toasts.success('WhatsApp settings saved');
+      },
+      error: e => { this.waSaving.set(false); this.applyWa(cur); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+
+  saveWaTemplate() {
+    const cur = this.waSettings();
+    if (!cur) return;
+    const same = (this.waTemplateName().trim() || null) === (cur.templateName ?? null)
+      && (this.waTemplateLanguage().trim() || null) === (cur.templateLanguage ?? null);
+    if (!same) this.saveWa({});
+  }
+
   ngOnInit() {
+    this.readWaReturn();
+    this.wa.settings().subscribe({
+      next: s => { if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s); },
+      error: () => this.waSettings.set(null),   // no permission / older server → card hidden
+    });
     this.api.get<ReportTemplate | null>('/api/config/report-template').subscribe({
       next: t => this.reportTpl.set(t && typeof t === 'object' && !Array.isArray(t) ? t : null),
       error: () => this.reportTpl.set(null),

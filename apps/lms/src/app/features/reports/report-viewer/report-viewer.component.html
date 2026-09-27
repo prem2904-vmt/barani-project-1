@@ -376,6 +376,13 @@
           </section>
         }
 
+        @if (!isPartial()) {
+          <!-- Meta WhatsApp Cloud API auto-send status of THIS report version
+               (+ Resend / patient opt-out). The band's wa.me button stays as
+               the manual fallback. -->
+          <pf-report-whatsapp-status [reportId]="r.id" [canDeliver]="canDeliver()" />
+        }
+
         <p class="pf-rv-explain">The preview is the exact PDF that prints and that the patient’s WhatsApp link opens.</p>
       } @else if (!loadError()) {
         <span class="pf-rv-skel__bar" style="width: 60%" aria-hidden="true"></span>
