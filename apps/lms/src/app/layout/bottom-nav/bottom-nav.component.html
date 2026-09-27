@@ -42,12 +42,16 @@
                          shrink-0 text-[11px] font-semibold leading-none transition-colors"
                   [class.pf-nav-btn--compact]="compactMode()"
                   [class.pf-nav-btn--active]="activeIdx() === i">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                 @for(path of n.iconPath; track path) {
+            @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
+              <span class="pf-collect-nav-icon w-5 h-5" aria-hidden="true"></span>
+            } @else {
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                @for(path of n.iconPath; track path) {
                   <path [attr.d]="path"/>
-                 }
-            </svg>
+                }
+              </svg>
+            }
             <span class="pf-nav-btn__lbl">{{ n.label }}</span>
           </button>
         }
@@ -126,12 +130,16 @@
                        shrink-0 text-[11px] font-semibold leading-none transition-colors"
                 [class.pf-nav-btn--compact]="compactMode()"
                 [class.pf-nav-btn--active]="activeIdx() === i">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-               @for(path of n.iconPath; track path) {
+          @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
+            <span class="pf-collect-nav-icon w-5 h-5" aria-hidden="true"></span>
+          } @else {
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              @for(path of n.iconPath; track path) {
                 <path [attr.d]="path"/>
-               }
-          </svg>
+              }
+            </svg>
+          }
           <span class="pf-nav-btn__lbl">{{ n.label }}</span>
         </button>
       }
@@ -148,7 +156,7 @@
             <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
             <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
           </svg>
-          <span class="pf-nav-btn__lbl">Admin</span>
+          <span class="pf-nav-btn__lbl">Settings</span>
         </a>
       }
 

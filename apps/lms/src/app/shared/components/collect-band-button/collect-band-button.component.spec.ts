@@ -64,7 +64,7 @@ describe('pf-collect-band-button', () => {
     expect(btn()).not.toBeNull();
     expect(btn()!.getAttribute('aria-label')).toBe('Collect');
     expect(btn()!.textContent).toContain('Collect');
-    expect(btn()!.querySelector('svg')).not.toBeNull();
+    expect(btn()!.querySelector('.pf-collect-nav-icon')).not.toBeNull();
     // Quiet secondary, never the violet primary.
     expect(btn()!.classList.contains('pf-hb-btn--primary')).toBe(false);
   });
