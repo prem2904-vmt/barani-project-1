@@ -311,3 +311,17 @@ describe('header layout — additions, footer, helpers', () => {
     expect(positionReadout(item(layout, 'phone') as never).h).toMatch(/mm in from the right margin/);
   });
 });
+
+describe('report options in template metadata', () => {
+  it('writes and reads specimenLine without touching the header layout', async () => {
+    const { readReportOption, writeReportOption } = await import('./report-header-layout');
+    const tpl = { metadata: JSON.stringify({ headerLayout: { keep: 1 } }) };
+    const on = writeReportOption(tpl, 'specimenLine', true);
+    expect(readReportOption({ metadata: on }, 'specimenLine')).toBe(true);
+    expect(JSON.parse(on).headerLayout).toEqual({ keep: 1 });
+    const off = writeReportOption({ metadata: on }, 'specimenLine', false);
+    expect(readReportOption({ metadata: off }, 'specimenLine')).toBe(false);
+    expect(JSON.parse(off).options).toBeUndefined();
+    expect(readReportOption({ metadata: 'not json' }, 'specimenLine')).toBe(false);
+  });
+});

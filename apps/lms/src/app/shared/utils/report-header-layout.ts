@@ -389,6 +389,25 @@ export function writeHeaderLayout(tpl: Pick<ReportTemplate, 'metadata'> | null |
   return JSON.stringify(meta);
 }
 
+/** Report print options kept in the template metadata (`options`), for
+ *  switches that have no column of their own — e.g. `specimenLine`. */
+export type ReportOption = 'specimenLine';
+
+export function readReportOption(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined, key: ReportOption): boolean {
+  const o = parseMeta(tpl)['options'];
+  return !!o && typeof o === 'object' && (o as Record<string, unknown>)[key] === true;
+}
+
+/** Immutable: the template metadata with one option set (other keys kept). */
+export function writeReportOption(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined, key: ReportOption, on: boolean): string {
+  const meta = parseMeta(tpl);
+  const cur = meta['options'];
+  const opts: Record<string, unknown> = cur && typeof cur === 'object' && !Array.isArray(cur) ? { ...(cur as Record<string, unknown>) } : {};
+  if (on) opts[key] = true; else delete opts[key];
+  if (Object.keys(opts).length) meta['options'] = opts; else delete meta['options'];
+  return JSON.stringify(meta);
+}
+
 const round1 = (n: number) => Math.round(n * 100) / 100;   // 0.01 mm
 
 /** Immutable: merge a patch into one element's override. `undefined` values

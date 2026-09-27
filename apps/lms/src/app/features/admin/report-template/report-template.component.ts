@@ -19,6 +19,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
+import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 
 type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
@@ -404,6 +405,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                     <span class="text-[13px]" style="color: var(--text-primary);">Show method line</span>
                     <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showMethod)"
                             aria-label="Show method line" (click)="patch({ showMethod: !(tpl().showMethod) })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
+                  </div>
+                  <div class="pf-toggle-row">
+                    <span class="text-[13px]" style="color: var(--text-primary);">Show specimen line</span>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="specimenLineOn()"
+                            aria-label="Show specimen line" (click)="toggleSpecimenLine()">
                       <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
                     </button>
                   </div>
@@ -899,6 +907,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   /** JSON of the template as last loaded / saved — "dirty" compares to it. */
   private readonly savedJson = signal<string>(JSON.stringify(this.defaultTemplate()));
   readonly dirty = computed(() => JSON.stringify(this._tpl()) !== this.savedJson());
+
+  /** "Show specimen line" lives in the template metadata (no column). */
+  specimenLineOn(): boolean { return readReportOption(this.tpl(), 'specimenLine'); }
+  toggleSpecimenLine() {
+    this.patch({ metadata: writeReportOption(this.tpl(), 'specimenLine', !this.specimenLineOn()) });
+  }
 
   patch(p: Partial<ReportTemplate>) {
     const keys = Object.keys(p).sort().join(',');

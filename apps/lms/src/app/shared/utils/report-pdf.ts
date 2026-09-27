@@ -18,8 +18,7 @@ import { fetchAssetBlob } from './upload-fetch';
 import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
-  readHeaderLayout, BG_MAX_EDGE, downscaleSize,
-} from './report-header-layout';
+  readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption } from './report-header-layout';
 
 /**
  * Render an A4 lab report PDF in the Drlogy template style — blue
@@ -887,6 +886,8 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // "Show method line" (template.showMethod) gates the "Method: …" sub-line
   // under panel bands; off (the default) → never printed.
   if (!template?.showMethod) for (const g of groups) g.hideMethodLine = true;
+  // "Show specimen line" (template metadata option) adds "Specimen: …".
+  if (readReportOption(template, 'specimenLine')) for (const g of groups) g.showSpecimenLine = true;
 
   const claimsNabl = !!template?.nablAccredited;
   const outScope = claimsNabl ? groups.filter(g => g.inScope === false) : [];
@@ -2366,6 +2367,9 @@ interface PanelGroup {
   /** The template's "Show method line" switch is off — no "Method: …"
    *  sub-line under the panel band (a configured Method column still prints). */
   hideMethodLine?: boolean;
+  /** The template's "Show specimen line" option is on — print
+   *  "Specimen: …" in the panel sub-line (next to the method). */
+  showSpecimenLine?: boolean;
   code?: string;
   shortName?: string;
   section?: string;
@@ -2886,6 +2890,8 @@ function renderColumnarTable(
       const sub: string[] = [];
       const methodText = g.hideMethodLine ? undefined : (g.methodLine ?? g.method);
       if (methodText) sub.push(`Method: ${methodText}`);
+      const specimenText = g.showSpecimenLine ? (g.specimen ?? '').trim() : '';
+      if (specimenText) sub.push(`Specimen: ${specimenText}`);
       if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
       if (sub.length > 0) {
         body.push([{

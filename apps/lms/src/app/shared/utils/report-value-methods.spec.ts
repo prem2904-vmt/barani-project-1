@@ -74,3 +74,23 @@ describe('report Method line follows the template\'s "Show method line" switch',
     expect(renderText([panel()], { showMethod: true })).toContain('Method: TESTLEVELMETHOD');
   });
 });
+
+describe('report Specimen line (template metadata option "specimenLine")', () => {
+  const withSpecimen = (over: Record<string, unknown> = {}) => panel({ sampleType: 'SPECIMENXYZ', ...over });
+
+  it('option on: "Specimen: …" prints in the panel sub-line', () => {
+    const text = renderText([withSpecimen()], { showMethod: false, metadata: JSON.stringify({ options: { specimenLine: true } }) });
+    expect(text).toContain('Specimen: SPECIMENXYZ');
+    expect(text).not.toContain('Method:');
+  });
+
+  it('with the method line on too, both print', () => {
+    const text = renderText([withSpecimen()], { showMethod: true, metadata: JSON.stringify({ options: { specimenLine: true } }) });
+    expect(text).toContain('Method: TESTLEVELMETHOD');
+    expect(text).toContain('Specimen: SPECIMENXYZ');
+  });
+
+  it('option off (default): no specimen sub-line', () => {
+    expect(renderText([withSpecimen()], { showMethod: true })).not.toContain('Specimen: SPECIMENXYZ');
+  });
+});
