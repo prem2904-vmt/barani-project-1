@@ -1143,11 +1143,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       }
       // A department scope previews ITS draft arrangement — swap the strip
       // fields on a copy so the preview shows what that department prints.
-      const effTpl = this.patientScope() === 'default' ? tpl : {
+      const scopedTpl = this.patientScope() === 'default' ? tpl : {
         ...tpl,
         patientLayout: this.deptPatientLayout(),
         patientColumnsJson: JSON.stringify(this.patientCols()),
       };
+      const effTpl = previewTemplateForTab(this.tab(), scopedTpl);
       const baseInput = {
         report: { id: 'preview-' + Date.now(), type: 'final',
                   createdAt: new Date().toISOString(), data },
@@ -1553,4 +1554,13 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); },
     });
   }
+}
+
+/** Table columns tab: the preview must open on the department table being
+ *  edited — the consolidated abnormal-results sheet (a fixed 3-column page 1)
+ *  would hide it. Preview only; the saved template and real reports keep the
+ *  lab's setting. */
+export function previewTemplateForTab<T extends Pick<ReportTemplate, 'metadata'>>(tab: string, tpl: T): T {
+  if (tab !== 'columns' || !readReportOption(tpl, 'abnormalSummary')) return tpl;
+  return { ...tpl, metadata: writeReportOption(tpl, 'abnormalSummary', false) };
 }
