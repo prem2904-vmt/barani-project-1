@@ -207,9 +207,14 @@ interface MethodDef {
             <span class="pf-ipp__title">Pay later</span>
             <label class="pf-ipp__label">
               Advance collected now (optional)
-              <input type="text" inputmode="numeric" class="pf-ipp__input" placeholder="₹0.00"
-                     [value]="advance()" (input)="setAdvance(asVal($event))" />
+              <input #advInput type="text" inputmode="numeric" class="pf-ipp__input"
+                     [class.pf-ipp__input--err]="advanceOverTotal()"
+                     placeholder="₹0.00"
+                     [value]="advance()" (input)="setAdvance(advInput.value, advInput)" />
             </label>
+            @if (advanceOverTotal()) {
+              <p class="pf-ipp__err">Advance cannot exceed order total of {{ amount() | inr }}.</p>
+            }
             @if (advanceNum() > 0) {
               <div class="pf-ipp__tenders" role="radiogroup" aria-label="Advance paid by">
                 @for (t of advanceModes; track t.id) {
@@ -327,6 +332,17 @@ interface MethodDef {
       .pf-ipp__muted strong { color: var(--text-primary); }
       .pf-ipp__muted[data-kind='ok'] { color: var(--violet-text, #6d28d9); }
       .pf-ipp__muted[data-kind='short'] { color: var(--error-text, #ef4444); }
+
+      .pf-ipp__input--err {
+        border-color: var(--error-text, #ef4444) !important;
+        background: color-mix(in srgb, var(--error-text, #ef4444) 6%, transparent);
+      }
+      .pf-ipp__err {
+        margin: 2px 0 0;
+        font-size: 11px;
+        color: var(--error-text, #ef4444);
+        line-height: 1.3;
+      }
 
       .pf-ipp__vendor {
         display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -461,14 +477,34 @@ export class InlinePaymentPanelComponent {
   readonly advanceNum = computed(() =>
     Math.min(this.amount(), parseInt(this.advance() || "0", 10) || 0),
   );
+  readonly advanceOverTotal = computed(() => {
+    const raw = (this.advance() || "").trim();
+    if (!raw) return false;
+    const n = parseInt(raw, 10);
+    return !isNaN(n) && n > this.amount();
+  });
   readonly advanceMode = signal<PayMode>("cash");
   readonly advanceModes: Array<{ id: PayMode; label: string }> = [
     { id: "cash", label: "Cash" },
     { id: "upi", label: "UPI" },
     { id: "card", label: "Card" },
   ];
-  setAdvance(v: string) {
-    this.advance.set((v || "").replace(/\D/g, ""));
+  setAdvance(v: string, inputEl?: HTMLInputElement) {
+    const digits = (v || "").replace(/\D/g, "");
+    if (!digits) {
+      this.advance.set("");
+      if (inputEl && inputEl.value !== "") inputEl.value = "";
+      return;
+    }
+    const n = parseInt(digits, 10);
+    if (!isNaN(n) && n > this.amount()) {
+      const maxStr = String(this.amount());
+      this.advance.set(maxStr);
+      if (inputEl && inputEl.value !== maxStr) inputEl.value = maxStr;
+    } else {
+      this.advance.set(digits);
+      if (inputEl && inputEl.value !== digits) inputEl.value = digits;
+    }
   }
   setAdvanceMode(m: PayMode) {
     this.advanceMode.set(m);
@@ -563,7 +599,7 @@ export class InlinePaymentPanelComponent {
       case "split":
         return this.splitOk();
       case "later":
-        return true;
+        return !this.advanceOverTotal() && this.amount() > 0;
       default:
         return this.amount() > 0;
     }

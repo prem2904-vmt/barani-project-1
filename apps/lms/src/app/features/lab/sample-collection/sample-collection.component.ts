@@ -1717,8 +1717,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       );
     if (failed.length) this.toasts.error(failed[0].message);
     this._rejectModal.set(null);
-    this._openOrderId.set(null);
-    this.refresh();
+    if (failed.length === 0) {
+      this.close();
+    } else {
+      this.refresh();
+    }
   }
 
   // Original free-text dialog kept as fallback for any other call sites.

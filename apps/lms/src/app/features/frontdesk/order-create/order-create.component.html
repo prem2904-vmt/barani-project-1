@@ -561,11 +561,11 @@
       <div class="pf-oc-bill__toggles">
       <!-- Urgent = the order priority (was the Normal/Urgent switch). -->
       <button type="button" class="pf-oc-switch pf-toggle-neutral pf-oc-switch--urgent" role="switch"
-        [attr.aria-checked]="priority() === 'Urgent'" [disabled]="isReadOnly()" (click)="toggleUrgent()">
+        [attr.aria-checked]="priority() === 'Urgent'" [disabled]="orderLocked()" (click)="toggleUrgent()">
         <span class="pf-oc-switch__track" aria-hidden="true"><span class="pf-oc-switch__knob"></span></span>
         Urgent
       </button>
-      @if (!isReadOnly()) {
+      @if (!orderLocked()) {
       <!-- Trendogram: embed serial-result trend charts in the report. Only
            patients with repeat tests are eligible. -->
       <button type="button" class="pf-oc-switch pf-toggle-neutral" role="switch" [attr.aria-checked]="trendogramOn()"
@@ -580,7 +580,7 @@
     </header>
 
     <div class="pf-oc-bill__body">
-      @if (!isReadOnly() && trendogramOn() && trendEligible().length > 0) {
+      @if (!orderLocked() && trendogramOn() && trendEligible().length > 0) {
       <div class="pf-oc-trend">
         <div class="pf-oc-trend__dur">
           <pf-select size="sm" [options]="trendDurationOpts" [value]="trendogramDuration()"
@@ -602,10 +602,10 @@
         <span class="pf-oc-urgent-tag"><span class="pf-oc-urgent-badge__dot" aria-hidden="true"></span>Urgent</span>
         }
         <span class="pf-oc-bill__spacer"></span>
-        @if (hasDraft() && !isReadOnly() && !paidOrderId()) {
+        @if (hasDraft() && !orderLocked()) {
         <button type="button" class="pf-oc-textbtn" (click)="discardDraft()">Discard draft</button>
         }
-        @if (selected().length > 0 && !paidOrderId() && !isReadOnly()) {
+        @if (selected().length > 0 && !orderLocked()) {
         <button type="button" class="pf-oc-textbtn" (click)="clearCart()">Clear</button>
         }
       </div>
@@ -627,7 +627,7 @@
             } @else {
             <span class="pf-crt__price"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
             }
-            @if (!paidOrderId() && !isReadOnly()) {
+            @if (!orderLocked()) {
             @if (isCollected(t.id)) {
             <span class="pf-cart-lock" title="Sample collected, test locked">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -650,7 +650,7 @@
           @if (isCultureTest(t) && specimenOpts().length) {
           <!-- Culture tests: the desk picks WHICH specimen (urine vs pus vs
                blood); the bench can refine it later. -->
-          @if (isReadOnly() || isCollected(t.id)) {
+          @if (orderLocked() || isCollected(t.id)) {
           @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenOf(t.id) }}</p> }
           } @else {
           <div class="pf-cart-spec" (click)="$event.stopPropagation()">
@@ -664,7 +664,7 @@
         }
       </ul>
 
-      @if (!isReadOnly() && packageSuggestions().length > 0) {
+      @if (!orderLocked() && packageSuggestions().length > 0) {
       <div class="pf-pkg-suggest">
         <header class="pf-pkg-suggest__hdr">
           <svg class="pf-pkg-suggest__icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -727,14 +727,14 @@
           <div class="pf-cart-disc__ctl">
             <div class="pf-cart-disc__kind" role="radiogroup" aria-label="Discount unit">
               <button type="button" role="radio" [attr.aria-checked]="discountKind() === 'flat'"
-                [disabled]="isReadOnly()"
-                (click)="isReadOnly() ? null : setDiscountKind('flat')" aria-label="Discount in rupees">₹</button>
+                [disabled]="orderLocked()"
+                (click)="orderLocked() ? null : setDiscountKind('flat')" aria-label="Discount in rupees">₹</button>
               <button type="button" role="radio" [attr.aria-checked]="discountKind() === 'percent'"
-                [disabled]="isReadOnly()"
-                (click)="isReadOnly() ? null : setDiscountKind('percent')" aria-label="Discount in percent">%</button>
+                [disabled]="orderLocked()"
+                (click)="orderLocked() ? null : setDiscountKind('percent')" aria-label="Discount in percent">%</button>
             </div>
             <input type="text" inputmode="decimal" aria-label="Discount amount"
-              [class.pf-cart-disc__input--err]="discountOverCap()" [value]="discountValue()" [disabled]="isReadOnly()"
+              [class.pf-cart-disc__input--err]="discountOverCap()" [value]="discountValue()" [disabled]="orderLocked()"
               (input)="setDiscountValue($any($event.target).value)" class="pf-cart-disc__input" placeholder="0" />
           </div>
         </div>

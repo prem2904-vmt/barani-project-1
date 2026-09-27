@@ -664,8 +664,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly overrideDiscountPct = signal(100);
   readonly discountValue = signal<string>('');   // raw input
   readonly discountKind = signal<'flat' | 'percent'>('flat');
-  setDiscountKind(k: 'flat' | 'percent') { this.discountKind.set(k); }
-  setDiscountValue(v: string) { this.discountValue.set(v); }
+  setDiscountKind(k: 'flat' | 'percent') {
+    if (this.orderLocked()) return;
+    this.discountKind.set(k);
+  }
+  setDiscountValue(v: string) {
+    if (this.orderLocked()) return;
+    this.discountValue.set(v);
+  }
 
   /** The discount % this user may grant, by their role's permission tier:
    *  override_discount → Level-2 cap, else give_discount → Level-1 cap, else 0. */
@@ -2427,7 +2433,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** "Urgent" switch in the billing card — the same order-priority field the
    *  old Normal/Urgent switch set. Locked on a read-only order. */
   toggleUrgent(): void {
-    if (this.isReadOnly()) return;
+    if (this.orderLocked()) return;
     this.setPriority(this._priority() === 'Urgent' ? 'Normal' : 'Urgent');
   }
 

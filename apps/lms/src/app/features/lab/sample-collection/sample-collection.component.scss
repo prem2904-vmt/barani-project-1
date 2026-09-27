@@ -738,56 +738,174 @@
       position: fixed; inset: 0; z-index: 1100;
       background: rgba(4, 6, 18, 0.78);
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       display: flex; align-items: center; justify-content: center;
       padding: 20px;
       animation: pf-drawer-fade 0.2s ease both;
     }
     .pf-rej__panel {
       width: min(540px, 100%);
+      max-height: calc(100vh - 40px);
+      max-height: calc(100dvh - 40px);
+      overflow-y: auto;
       background: var(--bg-primary, #0a0f1f);
       border: 1px solid var(--glass-border);
       border-radius: 22px;
-      padding: 22px 24px 20px;
+      padding: 24px;
       box-shadow: 0 30px 80px rgba(0,0,0,0.5);
       animation: pf-drawer-zoom 0.22s cubic-bezier(0.2, 0.85, 0.3, 1) both;
+      display: flex;
+      flex-direction: column;
     }
+    .pf-rej__body { display: flex; flex-direction: column; min-width: 0; }
+    .pf-rej__head { margin-bottom: 16px; }
     .pf-rej__title { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
-    .pf-rej__sub { margin: 4px 0 14px; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-rej__sub { margin: 6px 0 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.4; }
     .pf-rej__chips {
-      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px;
+      --pf-rej-chip-min-height: 38px;
+      width: 100%; min-height: calc(2 * var(--pf-rej-chip-min-height) + 8px);
     }
     .pf-rej__chip {
-      all: unset; cursor: pointer;
-      padding: 9px 14px; border-radius: 999px;
-      font-size: 12.5px; font-weight: 600;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      width: 100%;
+      cursor: pointer;
+      padding: 8px 16px;
+      min-height: 38px;
+      border-radius: 999px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      background: var(--glass-bg, rgba(255, 255, 255, 0.05));
+      border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
       color: var(--text-secondary);
-      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+      user-select: none;
+      -webkit-appearance: none;
+      appearance: none;
     }
-    .pf-rej__chip:hover { border-color: rgba(244, 114, 182, 0.45); }
+    @media (max-width: 520px) {
+      .pf-rej__chips {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        min-height: calc(3 * var(--pf-rej-chip-min-height) + 16px);
+      }
+      .pf-rej__chip { white-space: normal; text-align: center; }
+    }
+    @media (pointer: coarse) {
+      .pf-rej__chips { --pf-rej-chip-min-height: 44px; }
+    }
+    .pf-rej__chip:hover:not(.pf-rej__chip--on) {
+      border-color: var(--nd-sel-border, rgba(139, 92, 246, 0.45));
+      color: var(--text-primary);
+    }
     .pf-rej__chip--on {
-      background: rgba(244, 63, 94, 0.18);
-      border-color: rgba(244, 63, 94, 0.55);
-      color: var(--rose-text);
+      background: rgba(124, 58, 237, 0.1) !important;
+      border-color: #7c3aed !important;
+      color: #7c3aed !important;
+      font-weight: 600;
+      box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.26);
+    }
+    .pf-rej__chip:focus-visible {
+      outline: 2px solid #8b5cf6;
+      outline-offset: 2px;
     }
     .pf-rej__label {
-      display: block; margin: 8px 0 4px;
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.16em;
+      display: block; margin: 0 0 6px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
       text-transform: uppercase; color: var(--text-muted);
     }
-    .pf-rej__note { width: 100%; resize: vertical; min-height: 48px; }
-    .pf-rej__foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+    .pf-rej__note {
+      width: 100%;
+      resize: vertical;
+      min-height: 56px;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 13.5px;
+      background: var(--input-bg, rgba(255, 255, 255, 0.05));
+      border: 1px solid var(--input-border, var(--glass-border));
+      color: var(--text-primary);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      &:focus {
+        outline: none;
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+      }
+    }
+    .pf-rej__foot {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .pf-rej__foot .pf-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      height: 42px;
+      padding: 0 18px;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: filter 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+    }
+    .pf-rej__foot .pf-btn-ghost {
+      background: transparent;
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      &:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(139, 92, 246, 0.35);
+      }
+    }
+    .pf-rej__foot .pf-btn-danger {
+      border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 55%, transparent);
+      background: color-mix(in srgb, var(--red-text, #dc2626) 10%, transparent);
+      color: var(--red-text, #dc2626);
+      box-shadow: none;
+      &:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--red-text, #dc2626) 18%, transparent);
+        border-color: var(--red-text, #dc2626);
+      }
+      &:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+    }
 
     :host-context([data-theme="light"]) .pf-rej {
       background: rgba(15, 23, 42, 0.55);
     }
     :host-context([data-theme="light"]) .pf-rej__panel {
-      background: var(--bg-card-solid);
+      background: var(--bg-card-solid, #ffffff);
+      border-color: var(--nd-line, rgba(15, 23, 42, 0.08));
+    }
+    :host-context([data-theme="light"]) .pf-rej__chip {
+      background: var(--nd-chip-bg, #f8fafc);
+      border-color: var(--nd-line, rgba(15, 23, 42, 0.12));
+      color: var(--text-secondary);
     }
     :host-context([data-theme="light"]) .pf-rej__chip--on {
-      background: rgba(244, 63, 94, 0.1);
-      color: #be123c;
+      background: rgba(124, 58, 237, 0.1) !important;
+      border-color: #7c3aed !important;
+      color: #7c3aed !important;
+    }
+    :host-context([data-theme="light"]) .pf-rej__note {
+      background: var(--bg-card-solid, #ffffff);
+      border-color: var(--nd-line, rgba(15, 23, 42, 0.16));
+    }
+    :host-context([data-theme="light"]) .pf-rej__foot .pf-btn-ghost {
+      border-color: var(--nd-line, rgba(15, 23, 42, 0.16));
+      &:hover:not(:disabled) {
+        background: var(--nd-chip-bg, #f1f5f9);
+      }
     }
 
     @media (max-width: 640px) {
@@ -1189,7 +1307,7 @@
        unaffected. */
     @media (pointer: coarse) {
       .pf-sc__card { padding-top: 14px; padding-bottom: 14px; }
-      .pf-rej__chip { padding-top: 12px; padding-bottom: 12px; }
+      .pf-rej__chip { min-height: 44px; padding: 10px 16px; }
       /* Keep textarea at 16px so iOS Safari doesn't zoom the viewport on
          focus (the shared .pf-input may set a smaller size). */
       .pf-rej__note { font-size: 16px; }
