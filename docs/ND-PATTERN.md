@@ -366,6 +366,17 @@ group's grid. **Search results stay one per row** (section 6).
   `KeyboardService.reset()` when a view that owns an input tears down.
 - Follow the repo's mobile conventions: phone rules are additive, inside
   `@media (max-width: 640px)`, and never change desktop.
+- **Result numpad** (`shared/components/numpad`): numeric RESULT fields
+  carry `pfNumpad` (label / unit / live flag inputs) inside a
+  `pfNumpadScope="<field selector>" pfNumpadCta="<submit selector>"`. On
+  touch (`pointer: coarse`) the system keyboard is suppressed with
+  `inputmode="none"` (never `readonly`) and ONE shared pad appears: a
+  popover beside the field on iPad / wide screens, a bottom sheet on phones.
+  Keys replay through the field's own keydown validator (no new rules);
+  Next walks down the list skipping `data-numpad-skip` (calculated),
+  read-only, disabled and hidden fields, opens a dropdown in between, and
+  the last field's Done focuses the CTA. Desktop / hardware keyboards are
+  unchanged. Never hand-roll another keypad for result entry.
 
 ## 9. Motion
 
