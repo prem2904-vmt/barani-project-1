@@ -37,6 +37,13 @@ export function isSignedOut403(
   return !(opts.authed && opts.hasToken);
 }
 
+/** The server's "that branch isn't yours" 403 (X-Active-Branch outside the
+ *  user's assigned branches). */
+export function isBranchRefused(err: unknown): boolean {
+  return err instanceof HttpErrorResponse && err.status === 403
+    && (err.error as { error?: string } | null)?.error === 'branch_not_permitted';
+}
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   if (!req.url.startsWith('/api') && !req.url.includes('/api/')) {
     return next(req);
@@ -71,6 +78,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       const skip = req.url.includes('/api/auth/')
         || req.url.startsWith(environment.auth.supabaseUrl);
 
+      // Strict branch access: the active branch is no longer (or never was)
+      // one of this user's branches. Drop it and retry ONCE on the default
+      // branch — never loop, never bounce to login over it.
+      if (isBranchRefused(err) && !skip && auth.activeBranchId()) {
+        auth.dropActiveBranch();
+        return next(withAuth(req, auth));
+      }
       if (err instanceof HttpErrorResponse && isSignedOut403(err.status, {
         skip, authed: auth.isAuthenticated(), hasToken: !!auth.accessToken(),
       })) {

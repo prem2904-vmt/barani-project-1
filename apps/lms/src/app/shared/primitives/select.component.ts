@@ -60,7 +60,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
                 <span class="pf-dd__chip">
                   <span class="pf-dd__chip-lbl">{{ o.label }}</span>
                   <span class="pf-dd__chip-x" role="button" tabindex="0" aria-label="Remove"
-                        (click)="removeChip(o, $event)">✕</span>
+                        (click)="removeChip(o, $event)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
                 </span>
               }
             </span>

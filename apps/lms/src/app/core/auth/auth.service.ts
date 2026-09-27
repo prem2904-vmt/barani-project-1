@@ -249,7 +249,9 @@ export class AuthService {
 
   // Active branch for the branch switcher. The interceptor sends this as the
   // X-Active-Branch header; the backend validates it against the user's
-  // permitted branches and falls back to their default if it isn't allowed.
+  // permitted branches and REFUSES anything else (403 branch_not_permitted —
+  // strict branch access, 2026-09-27). /me still answers, so a stale id is
+  // reset here on every profile load; see also dropActiveBranch().
   private static readonly ACTIVE_BRANCH_KEY = 'pf.activeBranch';
   private readonly _activeBranchId = signal<string | null>(
     (() => { try { return localStorage.getItem(AuthService.ACTIVE_BRANCH_KEY); } catch { return null; } })()
@@ -272,6 +274,17 @@ export class AuthService {
     // Full reload is the most robust way to re-scope the many components that
     // cache branch-scoped data in signals; the Supabase session survives it.
     try { window.location.reload(); } catch { /* SSR/native guard */ }
+  }
+
+  /** The server refused our X-Active-Branch (the user's branches changed
+   *  under them, or a stale id from another account). Forget it — requests
+   *  fall back to the user's default branch — and re-pull /me so the switcher
+   *  and the header re-seed from the current permitted list. */
+  dropActiveBranch(): void {
+    if (!this._activeBranchId()) return;
+    this._activeBranchId.set(null);
+    try { localStorage.removeItem(AuthService.ACTIVE_BRANCH_KEY); } catch { /* private mode */ }
+    void this.loadProfile();
   }
 
   constructor() {

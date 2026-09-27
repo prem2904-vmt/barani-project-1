@@ -29,6 +29,7 @@ import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ROLE_INFO } from './permission-catalog';
+import { UserBranchScope, branchScopeChips } from './branch-scope';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -275,16 +276,21 @@ export class UsersAccessComponent implements OnInit {
   private readonly _users = signal<User[]>([]);
   private readonly _roles = signal<Role[]>([]);
   private readonly _search = signal('');
+  /** Each user's branch scope (the Branches column), keyed by user id. */
+  private readonly _scopes = signal<Map<string, UserBranchScope>>(new Map());
 
   readonly users = this._users.asReadonly();
   readonly roles = this._roles.asReadonly();
   readonly search = this._search.asReadonly();
 
-  readonly filteredUsers = computed(() => {
+  readonly filteredUsers = computed<(User & { branchScope?: UserBranchScope })[]>(() => {
     const s = this._search().toLowerCase();
-    return s
-      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || u.email.toLowerCase().includes(s))
+    const scopes = this._scopes();
+    const list = s
+      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || u.email.toLowerCase().includes(s)
+          || branchScopeChips(scopes.get(u.id)).some(c => c.toLowerCase().includes(s)))
       : this._users();
+    return scopes.size ? list.map(u => ({ ...u, branchScope: scopes.get(u.id) })) : list;
   });
 
   readonly filteredRoles = computed(() => {
@@ -316,6 +322,21 @@ export class UsersAccessComponent implements OnInit {
     nameSpan.textContent = name;
     wrap.appendChild(nameSpan);
 
+    return wrap;
+  };
+
+  /** Branches column: "All branches", or one chip per branch / lab. */
+  private userBranchesCellRenderer = (params: ICellRendererParams<User & { branchScope?: UserBranchScope }>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pf-ua-branches';
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:100%;padding:6px 0;';
+    for (const label of branchScopeChips(params.data?.branchScope)) {
+      const chip = document.createElement('span');
+      chip.className = 'nd-chip nd-chip--static pf-ua-branch';
+      chip.style.cssText = 'cursor:default;height:24px;white-space:nowrap;';
+      chip.textContent = label;
+      wrap.appendChild(chip);
+    }
     return wrap;
   };
 
@@ -446,6 +467,17 @@ export class UsersAccessComponent implements OnInit {
       filter: true,
     },
     {
+      headerName: 'Branches',
+      colId: 'branches',
+      valueGetter: p => branchScopeChips((p.data as { branchScope?: UserBranchScope } | undefined)?.branchScope).join(', '),
+      cellRenderer: this.userBranchesCellRenderer,
+      flex: 1.2,
+      minWidth: 200,
+      autoHeight: true,
+      sortable: true,
+      filter: true,
+    },
+    {
       headerName: 'Phone',
       colId: 'phone',
       valueGetter: p => p.data?.phone || 'no phone',
@@ -551,6 +583,10 @@ export class UsersAccessComponent implements OnInit {
       this.presence.seedFromUsers(l ?? []);
     } });
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
+    this.api.get<UserBranchScope[]>('/api/users/branch-scopes').subscribe({
+      next: l => this._scopes.set(new Map((l ?? []).map(s => [s.userId, s]))),
+      error: () => { /* older server: the column stays empty */ },
+    });
   }
 
   setTab(t: Tab) {

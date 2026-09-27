@@ -19,6 +19,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ROLE_INFO } from './permission-catalog';
 import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
+import { ALL_BRANCHES, SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, soleScope } from './branch-scope';
 
 interface CreateResult { id: string; username: string; displayName: string; }
 
@@ -31,8 +32,8 @@ interface CreateForm {
   fathersName: string;
   phone: string;
   roleIds: string[];
-  branchId: string;
-  subBranchId: string;
+  /** Branch scope: 'all' | 'b:<id>' | 'sb:<id>' (see branch-scope.ts). */
+  scope: string[];
 }
 
 @Component({
@@ -150,10 +151,12 @@ interface CreateForm {
                   <p class="nd-field__hint">Share this with the user securely — they can change it after signing in, and you can reset it anytime.</p>
                 </label>
                 <div class="nd-field">
-                  <span class="nd-field__lbl">Branch</span>
-                  <pf-select [options]="scopeOptions()" [value]="scopeValue()" placeholder="All branches"
-                             (valueChange)="onScopeChange($event)"></pf-select>
-                  <p class="nd-field__hint">Pick a sub-branch (indented →) to scope the user to that lab only.</p>
+                  <span class="nd-field__lbl">Branches <span class="pf-uf-req">*</span></span>
+                  <pf-select class="pf-uf-scope" [multiple]="true" [searchable]="true"
+                             [options]="scopeOptions()" [values]="form().scope" placeholder="Pick branches"
+                             (valuesChange)="onScopeChange($event)"></pf-select>
+                  @if (!form().scope.length) { <p class="pf-uf-err">Pick at least one branch, or All branches.</p> }
+                  <p class="nd-field__hint">{{ scopeHint }}</p>
                 </div>
               </div>
             </section>
@@ -257,7 +260,8 @@ export class UserInviteComponent implements OnInit {
   private readonly _branches = signal<Branch[]>([]);
   private readonly _form = signal<CreateForm>({
     username: '', password: '', title: '', firstName: '', fathersName: '', phone: '',
-    roleIds: [], branchId: '', subBranchId: ''
+    // All branches until the admin narrows it (the previous default).
+    roleIds: [], scope: [ALL_BRANCHES]
   });
   private readonly _saving = signal(false);
   private readonly _usernameError = signal<string | null>(null);
@@ -319,31 +323,8 @@ export class UserInviteComponent implements OnInit {
   addProc(v: string) { const t = v.trim(); if (t && !this.doctorProcs().includes(t)) this.doctorProcs.update(a => [...a, t]); this.procDraft.set(''); }
   removeProc(t: string) { this.doctorProcs.update(a => a.filter(x => x !== t)); }
 
-  readonly scopeOptions = computed<PfSelectOption<string>[]>(() => {
-    const branches = this._branches();
-    let totalCount = 0;
-    for (const b of branches) {
-      totalCount++;
-      totalCount += (b.subBranches?.length ?? 0);
-    }
-
-    const out: PfSelectOption<string>[] = [];
-    if (totalCount > 1) {
-      out.push({ value: '', label: 'All branches' });
-    }
-
-    for (const b of branches) {
-      out.push({ value: `b:${b.id}`, label: b.name });
-      for (const sb of b.subBranches ?? []) out.push({ value: `sb:${sb.id}`, label: `  → ${sb.name}` });
-    }
-    return out;
-  });
-  readonly scopeValue = computed(() => {
-    const i = this._form();
-    if (i.subBranchId) return `sb:${i.subBranchId}`;
-    if (i.branchId) return `b:${i.branchId}`;
-    return '';
-  });
+  readonly scopeOptions = computed<PfSelectOption<string>[]>(() => buildScopeOptions(this._branches()));
+  readonly scopeHint = SCOPE_HINT;
 
   // Required: a valid username, an 8+ char password, at least one role.
   readonly canCreate = computed(() => {
@@ -351,6 +332,7 @@ export class UserInviteComponent implements OnInit {
     if (!/^[a-z0-9]{3,32}$/i.test(i.username.trim())) return false;
     if (i.password.length < 8) return false;
     if (i.roleIds.length === 0) return false;
+    if (i.scope.length === 0) return false;
     return true;
   });
 
@@ -368,25 +350,9 @@ export class UserInviteComponent implements OnInit {
       next: l => {
         const branches = l ?? [];
         this._branches.set(branches);
-
-        let totalCount = 0;
-        let singleVal = '';
-        for (const b of branches) {
-          totalCount++;
-          singleVal = `b:${b.id}`;
-          for (const sb of b.subBranches ?? []) {
-            totalCount++;
-            singleVal = `sb:${sb.id}`;
-          }
-        }
-
-        if (totalCount === 1) {
-          if (singleVal.startsWith('sb:')) {
-            this.patch({ branchId: '', subBranchId: singleVal.substring(3) });
-          } else if (singleVal.startsWith('b:')) {
-            this.patch({ branchId: singleVal.substring(2), subBranchId: '' });
-          }
-        }
+        // One-branch tenant: that branch is the only possible scope.
+        const sole = soleScope(branches);
+        if (sole) this.patch({ scope: [sole] });
       }
     });
   }
@@ -437,10 +403,8 @@ export class UserInviteComponent implements OnInit {
     }
   }
 
-  onScopeChange(v: string) {
-    if (!v) { this.patch({ branchId: '', subBranchId: '' }); return; }
-    if (v.startsWith('sb:')) { this.patch({ branchId: '', subBranchId: v.substring(3) }); return; }
-    if (v.startsWith('b:')) { this.patch({ branchId: v.substring(2), subBranchId: '' }); }
+  onScopeChange(next: string[]) {
+    this.patch({ scope: applyScopePick(this._form().scope, next ?? [], this._branches()) });
   }
 
   submit() {
@@ -456,8 +420,8 @@ export class UserInviteComponent implements OnInit {
       fathersName: i.fathersName || undefined,
       phone: i.phone || undefined,
       roleIds: i.roleIds,
-      branchId: i.branchId || undefined,
-      subBranchId: i.subBranchId || undefined,
+      // Roles apply at every selected branch (one assignment per role × branch).
+      ...scopePayload(i.scope, this._branches()),
       // OPD: send the doctor profile only when a doctor role was selected.
       doctorProfile: this.isDoctorSelected() ? {
         medicalRegNo: this.doctorReg().trim() || undefined,
