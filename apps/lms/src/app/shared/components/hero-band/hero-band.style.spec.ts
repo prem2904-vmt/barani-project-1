@@ -29,7 +29,9 @@ describe('Hero band — dark surface', () => {
 
   it('runs dark at the top edge into the violet shade at the bottom — the navbar mirrored', () => {
     expect(dark).toMatch(/--pf-band-sweep:\s*linear-gradient\(180deg,\s*var\(--pf-dark-shade-base\) 0%,[\s\S]*?var\(--pf-dark-shade\) 100%\)/);
-    expect(darkNavbar).toMatch(/--pf-navbar-wash:\s*linear-gradient\(180deg,\s*var\(--pf-dark-shade\) 0%,[\s\S]*?var\(--pf-dark-shade-base\) 100%\)/);
+    expect(darkNavbar).toMatch(/--pf-navbar-wash:\s*linear-gradient\(180deg,\s*var\(--pf-navbar-shade\) 0%,[\s\S]*?var\(--pf-dark-shade-base\) 100%\)/);
+    // Owner: band = brand pink, navbar = its own violet.
+    expect(darkNavbar).toMatch(/--pf-navbar-shade:\s*rgba\(92, 64, 160,/);
     expect(dark).toMatch(/--pf-band-bg:\s*var\(--pf-dark-surface\)/);
     expect(darkNavbar).toMatch(/--pf-navbar-bg:\s*var\(--pf-dark-surface\)/);
   });
@@ -51,7 +53,7 @@ describe('Dark glow — band bottom edge, paired faintly on the navbar top edge'
   const darkNavbar = block(/:root\.dark\.design-new \{\s*--pf-navbar-bg:[\s\S]*?\n\}/);
   const shell = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/layout/shell/shell.component.ts'), 'utf8');
   const glow = (css: string, name: string) => {
-    const m = css.match(new RegExp(`--${name}:\\s*0 (-?\\d+)px (\\d+)px (-?\\d+)px rgba\\(192, 38, 211, (0\\.\\d+)\\);`));
+    const m = css.match(new RegExp(`--${name}:\\s*0 (-?\\d+)px (\\d+)px (-?\\d+)px rgba\\((?:192, 38, 211|92, 64, 160), (0\\.\\d+)\\);`));
     expect(m).not.toBeNull();
     return { y: +m![1], blur: +m![2], alpha: +m![4] };
   };

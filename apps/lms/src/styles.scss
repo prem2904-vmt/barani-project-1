@@ -2563,14 +2563,17 @@ html.pf-design-mode {
 :root.dark.design-new {
   --pf-navbar-bg: var(--pf-dark-surface);
   --pf-navbar-bg-glass: rgba(18, 14, 28, 0.84);
-  /* The brand's pinkish shade; top → bottom, darker as it falls.
-     Same stops as the hero band, reversed (--pf-dark-shade-* above). */
+  /* The navbar keeps its OWN dark VIOLET (owner, 2026-09-27: "the top is
+     awesome but the bottom sucks" in pink) — the band above is the brand
+     pink; the bar stays violet. Top → bottom, darker as it falls. */
+  --pf-navbar-shade: rgba(92, 64, 160, 0.30);
+  --pf-navbar-shade-mid: rgba(58, 40, 104, 0.16);
   --pf-navbar-wash: linear-gradient(180deg,
-    var(--pf-dark-shade) 0%, var(--pf-dark-shade-mid) 45%,
+    var(--pf-navbar-shade) 0%, var(--pf-navbar-shade-mid) 45%,
     var(--pf-dark-shade-base) 100%);
-  --pf-navbar-edge: rgba(232, 121, 249, 0.18);
-  /* The band's glow, paired and fainter, rising off the bar's top edge. */
-  --pf-navbar-glow: 0 -10px 28px -16px rgba(192, 38, 211, 0.16);
+  --pf-navbar-edge: rgba(167, 139, 250, 0.18);
+  /* A faint violet glow rising off the bar's top edge. */
+  --pf-navbar-glow: 0 -10px 28px -16px rgba(92, 64, 160, 0.16);
 }
 
 /* ══ NEW design: the frontdesk STATUS + ACTION vocabulary, app-wide
