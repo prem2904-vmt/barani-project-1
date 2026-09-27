@@ -1356,6 +1356,93 @@ styles scoped under `.pf-apc` / `.pf-bka`).
   aborted; the calendar GET gets made-up appointments for today on top of
   the real list; `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`).
 
+## 22. Patient profile
+
+`/frontdesk/patients/:id` (`features/frontdesk/patient-profile/`) is the
+patient's history, and the two jobs share one screen. It is a visual
+redesign only: the APIs (`GET /api/patients/{id}`, `/lab-trends`,
+`/api/reports/by-order/{id}`, merge, directory, ABHA) and every action are
+unchanged. The helpers are in `patient-profile.nd.ts`.
+
+- **Band:** back · tenant · actions. Back returns to where you came from
+  (history), or to `/frontdesk` after a form or a deep link. Actions are
+  **Edit patient** (ghost), **More** (ghost icon) and THE primary **New
+  order**. Web shows text buttons; touch shows 44px icons with the words
+  kept in `aria-label`.
+- **More** holds the rest: Book appointment, Send to a colleague (Messages
+  only), Link / Verify / Refresh ABHA, Print ID card, Show QR code, Copy
+  patient ID, Full timeline and Merge a duplicate (edit rights only). On web
+  it is a menu under the band; on phones it is a sheet above the navbar, and
+  Edit patient moves into it.
+- **Context bar (the pill):** the FULL name (wraps, never cut), then a quiet
+  "22/M · AA0006 · +91 98765 43210" in tabular numbers. A neutral ABHA chip
+  follows when one is linked, with a violet check when it is verified. Then
+  the patient's flags, as neutral chips with one toned dot each: Known
+  allergies (red), Minor (amber), Payment due (red, from `billStatus =
+  unpaid`) and Fall risk (amber, over 60). At ≤900px a quiet **Summary**
+  button opens the side card.
+- **HISTORY is the main card.** Its header follows the "card header: search
+  + filter" rule: the icon chip and the label, a compact search, then the
+  neutral `.nd-seg` radiogroup **Orders n · Trends · Timeline n** (one Tab
+  stop, arrow keys move). Orders adds a quiet date-range button, which opens
+  All / 30 days / 90 days plus From and To as `pf-nd-date`. Timeline adds
+  **Full timeline**, which opens the shell overlay.
+  - **Orders:** one row per order, in the Frontdesk list-row language. The
+    tests are the primary line (at most four, then "+N more"). The meta line
+    is the order number, date, test count, doctor and price. The status is a
+    dot and a coloured word, with **Repeat** (`.nd-rowact`) stacked under it.
+    A row ZOOMS (`zoom.runLocal`) into the order in the same card: its tests,
+    each result (only abnormal or critical values carry colour, with an SVG
+    flag), Repeat order and View report (the PDF rendered in place). The
+    back chevron zooms out.
+  - **Trends:** the trendogram fills the card body (`[fit]="false"`). The
+    header search feeds its test list. Selected tests use the neutral
+    selected state, Line / Bar is an `.nd-seg`, and the loading state is a
+    skeleton. The chart is skinned in the component (`ndTrendSkin`): Noto
+    Sans, theme-aware axes and tooltip, violet data, a neutral reference
+    band, and red only on flagged points. `trend-chart.ts` still owns the
+    PDF look.
+  - **Timeline:** rows with the same anatomy (the kind, Lab / OPD / IPD, is
+    shown in the meta line). A row expands in place with grid-rows on
+    `--nd-spring`, and is `inert` while closed.
+- **SUMMARY is the right companion** (400px, or 360px at ≤1280px). It
+  collapses to a strip on the RIGHT edge, remembered per user in
+  `pf:pp:side-collapsed:<uid>`. It holds:
+  - **Patient:** age · sex, date of birth, blood group, patient ID with a
+    copy button, and the registration date.
+  - **Contact:** phone (`tel:`), email, guardian, and the ABHA KYC address.
+  - **ABHA:** a status chip, the number and address, **View card** (the
+    official card in a modal) and Verify / Refresh, or **Link ABHA** when
+    none is linked.
+  - **Activity:** lab visits, tests ordered, total billed and last visit, as
+    tabular stats, plus "Payment due on N orders".
+  - **Clinical:** allergies and vitals, shown as "not recorded" where the
+    data does not exist.
+- **Empty and loading:** every empty list is an `.nd-empty` ("No orders
+  yet", "No orders match" with Clear filters, "No visits yet", "Patient not
+  found"). Loading is a static row skeleton inside the HISTORY card, which is
+  the ONE `[pfZoomTarget]` (the patient id) from skeleton to content. The
+  skeleton also shows while `zoom.holding()`.
+- **Zoom in:** `/frontdesk/patients/:id` is a zoom detail. The Front desk
+  appointment card, the order drawer's Patient profile button and the home
+  collection "View patient profile" are `[pfZoomSource]`. Search and deep
+  links open instantly.
+- **Phones (≤640px):** HISTORY is full width with its search full width
+  (44px, 16px text) above the filter row. **New order** is the full-width
+  `.nd-bottombar` above the navbar (the band has no primary there). Summary,
+  More, the date range and every picker are sheets above the navbar. Targets
+  are at least 44px.
+- **Motion:** the pill chips and actions fade in with a 40ms stagger, rows
+  stagger by 18ms, and the side card collapses on the billing width motion.
+  All of it is off under reduced motion.
+- **Specs:** `patient-profile.nd.spec.ts` covers the pill, the one primary
+  on web and phone, every action reachable, More, the card header order,
+  rows, the order zoom, search, `pf-nd-date`, Trends, Timeline, the empty,
+  skeleton and not-found states, the collapse, the Summary sheet, the ABHA
+  card, no monospace or native controls, and the chart skin. The real
+  layout is `apps/lms-e2e/src/patient-profile-layout.rbac.spec.ts`, read
+  only (`PATIENT_ID=… BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`).
+
 ## API summary
 
 ```

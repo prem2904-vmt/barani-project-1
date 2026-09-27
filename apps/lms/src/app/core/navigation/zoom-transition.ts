@@ -72,9 +72,10 @@ export function zoomPath(url: string | null | undefined): string {
   return p || '/';
 }
 
-/** The lab detail screens a list opens (the zoom's destinations). A tap on a
+/** The detail screens a list opens (the zoom's destinations). A tap on a
  *  source followed by a navigation anywhere else (sidebar, tabs) never zooms. */
 const DETAIL_ROUTES: readonly RegExp[] = [
+  /^\/frontdesk\/patients\/(?!new$)[^/]+$/,
   /^\/lab\/sample\/[^/]+$/,
   /^\/lab\/culture\/[^/]+$/,
   /^\/lab\/result\/[^/]+$/,

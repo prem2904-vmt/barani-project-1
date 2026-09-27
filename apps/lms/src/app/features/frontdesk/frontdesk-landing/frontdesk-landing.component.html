@@ -477,7 +477,7 @@
                 @for (a of visibleAppointments(); track a.id) {
                 @let patient = a.patient;
                 <li>
-                  <div class="pf-card" [attr.data-priority]="apptPriority(a)"
+                  <div class="pf-card" [attr.data-priority]="apptPriority(a)" [pfZoomSource]="[a.patientId]"
                     [class.pf-card--selected]="selectedIds().has(a.id)" (click)="openAppointment(a)">
                     <button type="button" class="pf-card__sel" (click)="$event.stopPropagation(); toggleSelect(a.id)"
                       [attr.aria-label]="selectedIds().has(a.id) ? 'Deselect' : 'Select'">
@@ -1253,7 +1253,7 @@
          buttons on touch (webPointer). No primary — none of these is THE main
          action. Cancel (danger-secondary) sits last and still confirms first. -->
     <footer class="pf-drawer__actions" [class.pf-drawer__actions--touch]="!webPointer()">
-      <button type="button" class="nd-btn nd-btn--secondary pf-drawer__act" (click)="openPatientProfile(so)" title="Open patient profile"
+      <button type="button" class="nd-btn nd-btn--secondary pf-drawer__act" [pfZoomSource]="[so.patientId]" (click)="openPatientProfile(so)" title="Open patient profile"
         aria-label="Patient profile">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1579,7 +1579,7 @@
 
       @if (hc.patient; as pat) {
       <div style="margin-top: 22px;">
-        <button type="button" class="pf-ghostbtn press" (click)="openProfile(pat)">View patient profile →</button>
+        <button type="button" class="pf-ghostbtn press" [pfZoomSource]="[pat.id]" (click)="openProfile(pat)">View patient profile →</button>
       </div>
       }
     </div>

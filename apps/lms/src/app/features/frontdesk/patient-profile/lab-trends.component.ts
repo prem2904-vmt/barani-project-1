@@ -3,6 +3,7 @@ import {
   effect, inject, input, signal, viewChild, viewChildren,
 } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
+import { ThemeService } from '../../../core/services/theme.service';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { filterTestList } from '../../../shared/utils/test-search';
 import { oneLine } from '../../../shared/utils/reference-range';
@@ -29,7 +30,15 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
   template: `
     <div class="pf-lt">
       @if (loading()) {
-        <p class="pf-lt__msg">Loading trends…</p>
+        <div class="pf-lt__skel" aria-hidden="true">
+          <div class="pf-lt__skel-side">
+            @for (i of [1, 2, 3, 4, 5]; track i) { <span class="pf-lt__skel-bar pf-lt__skel-bar--row"></span> }
+          </div>
+          <div class="pf-lt__skel-main">
+            <span class="pf-lt__skel-bar" style="width: 40%"></span>
+            <span class="pf-lt__skel-chart"></span>
+          </div>
+        </div>
       } @else if (tests().length === 0) {
         <div class="nd-empty">
           <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>
@@ -38,28 +47,29 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
         </div>
       } @else {
         <div class="pf-lt__grid">
-          <!-- Left: search + repeated tests -->
-          <aside class="pf-lt__side">
-            <div class="pf-lt__search">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-              </svg>
-              <input type="text" placeholder="Search tests…" [value]="testQuery()"
-                     (input)="testQuery.set($any($event.target).value)" />
-            </div>
-            <div class="pf-lt__list" role="tablist">
+          <!-- Left: (search) + repeated tests -->
+          <aside class="pf-lt__side" aria-label="Repeated tests">
+            @if (query() === null) {
+              <label class="pf-lt__search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+                </svg>
+                <input type="text" class="nd-input" placeholder="Search tests" aria-label="Search tests" [value]="testQuery()"
+                       (input)="testQuery.set($any($event.target).value)" />
+              </label>
+            }
+            <div class="pf-lt__list" role="listbox" aria-label="Tests with trends">
               @for (t of filteredTests(); track t.testId) {
-                <button type="button" class="pf-lt__test"
-                        [class.pf-lt__test--on]="selectedTestId() === t.testId"
+                <button type="button" class="pf-lt__test" role="option"
+                        [attr.aria-selected]="selectedTestId() === t.testId"
                         (click)="selectTest(t.testId)">
-                  <span class="pf-lt__test-name">
-                    {{ t.testName }}
-                    @if (t.parameters.length > 1) { <span class="pf-lt__pill">{{ t.parameters.length }} values</span> }
+                  <span class="pf-lt__test-name">{{ t.testName }}</span>
+                  <span class="pf-lt__test-meta nd-num">
+                    @if (t.parameters.length > 1) { {{ t.parameters.length }} values · }{{ t.count }} results
                   </span>
-                  <span class="pf-lt__test-count">×{{ t.count }}</span>
                 </button>
               } @empty {
-                <p class="pf-lt__noresult">No tests match “{{ testQuery() }}”.</p>
+                <p class="pf-lt__noresult">No tests match “{{ effectiveQuery() }}”.</p>
               }
             </div>
           </aside>
@@ -67,34 +77,26 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
           <!-- Right: controls + chart(s) -->
           <section class="pf-lt__panel">
             @if (selectedTest(); as st) {
-              <!-- Phone, drilled-in: a category breadcrumb up top (also taps back
-                   to the panel overview) so you always know which panel this
-                   value belongs to. -->
               @if (viewMode() === 'param' && st.parameters.length > 1) {
                 <button type="button" class="pf-lt__crumb" (click)="backToOverview()" title="Back to all values">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
                   {{ st.testName }}
                 </button>
               }
-              <!-- Header: (phone) panel picker + funnel on one row, or on drill-in
-                   the param picker + funnel + line/bar; desktop keeps the title/
-                   sidebar-driven layout. -->
               <div class="pf-lt__controls">
-                <!-- Phone panel picker (overall only; the funnel sits to its right).
-                     Hidden while drilled in — the breadcrumb returns to overview. -->
                 <pf-select class="pf-lt__mobile-pick"
                            [class.pf-lt__mobile-pick--hide]="viewMode() === 'param'"
                            placeholder="Select test"
                            [options]="testOptions()" [value]="selectedTestId() ?? ''"
                            (valueChange)="selectTest($any($event))"></pf-select>
                 @if (viewMode() === 'param' && st.parameters.length > 1) {
-                  <button type="button" class="pf-lt__back" (click)="backToOverview()" aria-label="All values" title="All values">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                  <button type="button" class="nd-btn nd-btn--tertiary pf-lt__back" (click)="backToOverview()" aria-label="All values" title="All values">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
                     <span class="pf-lt__back-lbl">All values</span>
                   </button>
                 }
                 @if (viewMode() === 'overall') {
-                  <span class="pf-lt__title">{{ st.testName }} <span class="pf-lt__title-sub">— all values</span></span>
+                  <span class="pf-lt__title">{{ st.testName }} <span class="pf-lt__title-sub">· all values</span></span>
                 } @else {
                   <pf-select class="pf-lt__dd pf-lt__dd--param" size="sm"
                              [options]="paramOptions()" [value]="selectedParam()"
@@ -104,37 +106,40 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
                            [options]="RANGE_OPTIONS" [value]="range()"
                            (valueChange)="range.set($any($event))"></pf-select>
                 @if (viewMode() === 'param') {
-                  <div class="pf-lt__toggle">
-                    <button type="button" [class.pf-lt__toggle--on]="chartType() === 'line'" (click)="chartType.set('line')">Line</button>
-                    <button type="button" [class.pf-lt__toggle--on]="chartType() === 'bar'" (click)="chartType.set('bar')">Bar</button>
+                  <div class="nd-seg pf-lt__toggle" role="radiogroup" aria-label="Chart type">
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="chartType() === 'line'" (click)="chartType.set('line')">Line</button>
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="chartType() === 'bar'" (click)="chartType.set('bar')">Bar</button>
                   </div>
                 }
               </div>
 
               @if (viewMode() === 'overall') {
-                <!-- Overall matrix of sparklines (one per parameter) -->
                 <div class="pf-lt__matrix">
                   @for (p of overviewParams(); track p.parameter) {
-                    <button type="button" class="pf-lt__cell" (click)="drillTo(p.parameter)">
+                    <button type="button" class="pf-lt__cell" (click)="drillTo(p.parameter)" [attr.aria-label]="p.parameter + ', latest ' + latest(p) + (p.unit ? ' ' + p.unit : '')">
                       <div class="pf-lt__cell-head">
                         <span class="pf-lt__cell-name">{{ p.parameter }}</span>
                         @if (delta(p); as d) {
-                          <span class="pf-lt__cell-delta" [class.up]="d.dir === 'up'" [class.down]="d.dir === 'down'">{{ d.text }}</span>
+                          <span class="pf-lt__cell-delta nd-num">
+                            @if (d.dir === 'up') { <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg> }
+                            @else if (d.dir === 'down') { <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> }
+                            {{ d.text }}
+                          </span>
                         }
                       </div>
-                      <div class="pf-lt__cell-val" [class.abn]="isAbnormal(p)">
+                      <div class="pf-lt__cell-val nd-num" [class.abn]="isAbnormal(p)">
                         {{ latest(p) }}<span class="pf-lt__cell-unit">{{ p.unit || '' }}</span>
                       </div>
                       <div class="pf-lt__spark" #spark></div>
-                      <div class="pf-lt__cell-foot">
-                        <span>×{{ pointCount(p) }}</span>
+                      <div class="pf-lt__cell-foot nd-num">
+                        <span>{{ pointCount(p) }} results</span>
                         @if (p.referenceRange) { <span class="pf-lt__cell-ref" [title]="p.referenceRange">{{ refLine(p.referenceRange) }}</span> }
                       </div>
                     </button>
                   }
                 </div>
               } @else if (activeParam(); as ap) {
-                <div class="pf-lt__meta">
+                <div class="pf-lt__meta nd-num">
                   <span>{{ filteredPoints().length }} results</span>
                   @if (ap.referenceRange) { <span class="pf-lt__ref">Reference: {{ ap.referenceRange }}{{ ap.unit ? ' ' + ap.unit : '' }}</span> }
                 </div>
@@ -147,144 +152,116 @@ type RangeKey = '5' | '10' | '3m' | '6m' | 'all';
     </div>
   `,
   styles: [`
-    /* Fill the host so the whole thing fits the viewport with no page scroll. */
+    /* Fill the host so the whole thing fits with no page scroll. Palette:
+       violet + neutrals; the ONLY colour beyond that is a real flag (an
+       abnormal latest value in red). Noto Sans, tabular numbers. */
     :host { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; }
     .pf-lt { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-    .pf-lt__msg, .pf-lt__empty { padding: 32px; text-align: center; color: var(--text-tertiary); }
-    .pf-lt__empty-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
-    .pf-lt__empty-sub { font-size: 12.5px; color: var(--text-tertiary); margin-top: 4px; }
     .pf-lt__grid { display: grid; grid-template-columns: 240px 1fr; gap: 16px; flex: 1 1 auto; min-height: 0; }
     @media (max-width: 700px) { .pf-lt__grid { grid-template-columns: 1fr; } }
     .pf-lt__side { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
-    .pf-lt__search {
-      display: flex; align-items: center; gap: 7px; padding: 7px 10px;
-      border-radius: 9px; background: var(--input-bg, rgba(255,255,255,0.04));
-      border: 1px solid var(--glass-border); color: var(--text-tertiary);
-    }
-    .pf-lt__search input {
-      flex: 1; min-width: 0; background: none; border: 0; outline: none;
-      color: var(--text-primary); font-size: 12.5px;
-    }
-    .pf-lt__list { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; }
+    .pf-lt__search { position: relative; display: block; flex: none; }
+    .pf-lt__search > svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
+    .pf-lt__search .nd-input { width: 100%; height: 36px; min-height: 36px; padding-left: 34px; }
+    .pf-lt__list { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; overflow-y: auto; }
     .pf-lt__test {
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
-      padding: 10px 12px; border-radius: 10px; text-align: left; cursor: pointer;
-      background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary);
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 48px;
+      padding: 8px 12px; border-radius: var(--nd-radius-sm, 10px); text-align: left; cursor: pointer;
+      background: transparent; border: 1px solid transparent; color: var(--text-primary); font: inherit;
     }
-    .pf-lt__test--on { border-color: rgba(168,85,247,0.5); background: rgba(124,58,237,0.12); color: var(--text-primary); }
+    .pf-lt__test:hover { background: var(--nd-chip-bg); }
+    .pf-lt__test[aria-selected='true'] { background: var(--nd-sel-bg, var(--nd-chip-bg)); border-color: var(--nd-sel-border); }
+    .pf-lt__test:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
     /* Names wrap onto multiple lines instead of truncating. */
-    .pf-lt__test-name { font-size: 13px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
-    .pf-lt__pill {
-      display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
-      font-size: 10px; font-weight: 600; vertical-align: middle;
-      background: rgba(168,85,247,0.16); color: var(--violet-text); border: 1px solid rgba(168,85,247,0.3);
-    }
-    .pf-lt__test-count { font-size: 11px; color: var(--text-tertiary); flex-shrink: 0; margin-top: 1px; }
-    .pf-lt__noresult { font-size: 12px; color: var(--text-tertiary); padding: 10px 4px; }
+    .pf-lt__test-name { font-size: 13px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+    .pf-lt__test-meta { font-size: 12px; color: var(--text-tertiary); }
+    .pf-lt__noresult { font-size: 12.5px; color: var(--text-tertiary); padding: 10px 4px; margin: 0; }
     .pf-lt__panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     .pf-lt__controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-    .pf-lt__title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
-    .pf-lt__title-sub { font-weight: 500; color: var(--text-tertiary); }
-    .pf-lt__back {
-      display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px;
-      font-size: 12px; font-weight: 600; cursor: pointer;
-      background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-secondary);
-    }
-    .pf-lt__back:hover { color: var(--text-primary); border-color: rgba(168,85,247,0.4); }
-    .pf-lt__toggle { display: inline-flex; border: 1px solid var(--glass-border); border-radius: 8px; overflow: hidden; margin-left: auto; }
-    .pf-lt__toggle button { padding: 7px 14px; font-size: 12px; font-weight: 600; background: none; border: 0; color: var(--text-secondary); cursor: pointer; }
-    .pf-lt__toggle--on { background: linear-gradient(135deg, #7c3aed, #a855f7); color: #fff; }
-    .pf-lt__meta { display: flex; gap: 16px; font-size: 11.5px; color: var(--text-tertiary); margin-bottom: 6px; flex-shrink: 0; }
-    /* Chart flex-fills the remaining panel height — no fixed height, no page scroll. */
+    .pf-lt__title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .pf-lt__title-sub { font-weight: 400; color: var(--text-tertiary); }
+    .pf-lt__back { gap: 4px; }
+    .pf-lt__toggle { margin-left: auto; }
+    .pf-lt__meta { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--text-tertiary); margin-bottom: 6px; flex-shrink: 0; }
     .pf-lt__chart { width: 100%; flex: 1 1 auto; min-height: 220px; }
 
-    /* Overall matrix of sparkline cards — fills the panel; scrolls internally
-       (never the page) if a wide panel has more rows than fit. */
     .pf-lt__matrix {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
-      gap: 10px; align-content: start; flex: 1 1 auto; min-height: 0; overflow-y: auto;
-      padding-right: 2px;
+      gap: 10px; align-content: start; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px;
     }
     .pf-lt__cell {
-      display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer;
-      padding: 10px 11px 8px; border-radius: 11px;
-      background: var(--glass-bg); border: 1px solid var(--glass-border);
-      transition: border-color .15s, transform .1s;
+      display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer; font: inherit;
+      padding: 10px 11px 8px; border-radius: var(--nd-radius-sm, 10px);
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line); color: var(--text-primary);
+      transition: border-color var(--nd-dur-fast) ease;
     }
-    .pf-lt__cell:hover { border-color: rgba(168,85,247,0.5); transform: translateY(-1px); }
+    .pf-lt__cell:hover { border-color: var(--nd-sel-border); }
+    .pf-lt__cell:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
     .pf-lt__cell-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
-    .pf-lt__cell-name { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); overflow-wrap: anywhere; line-height: 1.2; }
-    .pf-lt__cell-delta { font-size: 10.5px; font-weight: 700; color: var(--text-tertiary); flex-shrink: 0; }
-    .pf-lt__cell-delta.up { color: var(--rose-text); }
-    .pf-lt__cell-delta.down { color: var(--green-text); }
-    .pf-lt__cell-val { font-size: 18px; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
-    .pf-lt__cell-val.abn { color: var(--rose-text); }
-    .pf-lt__cell-unit { font-size: 10.5px; font-weight: 500; color: var(--text-tertiary); margin-left: 3px; }
+    .pf-lt__cell-name { font-size: 12px; font-weight: 500; color: var(--text-secondary); overflow-wrap: anywhere; line-height: 1.25; }
+    .pf-lt__cell-delta { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; font-size: 11px; font-weight: 500; color: var(--text-tertiary); }
+    .pf-lt__cell-val { font-size: 18px; font-weight: 600; color: var(--text-primary); line-height: 1.15; }
+    .pf-lt__cell-val.abn { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); }
+    .pf-lt__cell-unit { font-size: 11px; font-weight: 400; color: var(--text-tertiary); margin-left: 3px; }
     .pf-lt__spark { width: 100%; height: 40px; }
-    .pf-lt__cell-foot { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--text-tertiary); }
+    .pf-lt__cell-foot { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-tertiary); }
     .pf-lt__cell-ref { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
-    /* A typed multi-line reference keeps its lines in the detailed view. */
     .pf-lt__ref { white-space: pre-line; }
 
-    /* Phone-only test picker — the 240px sidebar collapses into this pf-select. */
+    /* Loading: a static skeleton in the page's shape (no shimmer loop). */
+    .pf-lt__skel { display: grid; grid-template-columns: 240px 1fr; gap: 16px; flex: 1 1 auto; min-height: 220px; }
+    .pf-lt__skel-side, .pf-lt__skel-main { display: flex; flex-direction: column; gap: 10px; }
+    .pf-lt__skel-bar { display: block; height: 12px; width: 100%; border-radius: 6px; background: var(--nd-chip-bg); }
+    .pf-lt__skel-bar--row { height: 40px; border-radius: 10px; }
+    .pf-lt__skel-chart { flex: 1 1 auto; min-height: 180px; border-radius: 12px; background: var(--nd-chip-bg); }
+    @media (max-width: 700px) { .pf-lt__skel { grid-template-columns: 1fr; } .pf-lt__skel-side { display: none; } }
+
     .pf-lt__mobile-pick { display: none; }
-    /* Phone-only category breadcrumb shown when drilled into a value. */
     .pf-lt__crumb {
       display: none; align-items: center; gap: 4px; max-width: 100%;
-      margin-bottom: 8px; padding: 2px; background: none; border: 0; cursor: pointer;
-      font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+      margin-bottom: 8px; padding: 2px; background: none; border: 0; cursor: pointer; font: inherit;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
       color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .pf-lt__crumb svg { flex-shrink: 0; }
-    .pf-lt__crumb:hover { color: var(--text-secondary); }
-    /* Classy dropdowns sit inline on desktop at a sensible width. */
     .pf-lt__dd { flex: 0 0 auto; }
     .pf-lt__dd--param { width: 210px; }
     .pf-lt__dd--range { width: 150px; }
 
-    /* ── Phone (<=640): additive, one-column, native-feeling. Desktop/iPad
-       above are untouched. ─────────────────────────────────────────────── */
+    /* ── Phone (<=640): additive, one column. ── */
     @media (max-width: 640px) {
       .pf-lt__grid { grid-template-columns: 1fr; gap: 0; }
-      .pf-lt__side { display: none; }              /* search + list → the picker */
-      .pf-lt__crumb { display: inline-flex; }      /* category breadcrumb (param) */
-      /* Panel picker joins the funnel on one row (flex fills; funnel to its right). */
+      .pf-lt__side { display: none; }
+      .pf-lt__crumb { display: inline-flex; min-height: 44px; }
       .pf-lt__mobile-pick { display: block; flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
-      .pf-lt__mobile-pick--hide { display: none; } /* hidden while drilled in */
-      /* One compact control bar instead of five stacked full-width rows, so the
-         chart is visible without scrolling. */
+      .pf-lt__mobile-pick--hide { display: none; }
       .pf-lt__controls { flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
-      /* The breadcrumb up top is the back affordance on phones. */
       .pf-lt__back { display: none; }
-      /* Parameter picker fills the row; ellipsis on long names. */
       .pf-lt__dd--param { flex: 1 1 150px; width: auto; min-width: 0; }
-      /* Range → a compact funnel-icon dropdown (label hidden; tap opens choices). */
-      .pf-lt__dd--range { flex: 0 0 auto; width: 44px; }
-      .pf-lt__dd--range ::ng-deep .pf-dd__value,
-      .pf-lt__dd--range ::ng-deep .pf-dd__chevron { display: none; }
-      .pf-lt__dd--range ::ng-deep .pf-dd__trigger {
-        justify-content: center; padding: 0; min-height: 40px;
-        background-repeat: no-repeat; background-position: center;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'/%3E%3C/svg%3E");
-      }
-      /* Line/Bar → compact, pushed to the right. */
-      .pf-lt__toggle { width: auto; margin-left: auto; }
-      .pf-lt__toggle button { min-height: 40px; padding: 6px 14px; }
-      /* The picker already names the panel — drop the redundant title row. */
+      .pf-lt__dd--range { flex: 0 0 auto; width: 150px; }
+      .pf-lt__toggle .nd-seg__item { min-height: 40px; }
       .pf-lt__title { display: none; }
-      /* Two sparklines per row on a phone. */
       .pf-lt__matrix { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
       .pf-lt__cell-val { font-size: 16px; }
-      .pf-lt__chart { min-height: 180px; }
+      .pf-lt__chart { min-height: 200px; }
     }
+    @media (prefers-reduced-motion: reduce) { .pf-lt__cell { transition: none; } }
   `],
 })
 export class LabTrendsComponent implements OnDestroy {
   private readonly api = inject(ApiService);
   private readonly host = inject(ElementRef<HTMLElement>);
 
+  private readonly theme = inject(ThemeService, { optional: true });
+
   /** Patient whose trends to load. */
   readonly patientId = input.required<string>();
+  /** The profile card's header search (ND "card header: search + filter").
+   *  null = standalone: the list shows its own search box. */
+  readonly query = input<string | null>(null);
+  /** Measure the viewport and size itself (standalone). Inside an nd-card
+   *  body the card owns the height, so the profile passes false. */
+  readonly fit = input<boolean>(true);
 
   private readonly chartEl = viewChild<ElementRef<HTMLDivElement>>('chart');
   private readonly sparkEls = viewChildren<ElementRef<HTMLDivElement>>('spark');
@@ -292,8 +269,9 @@ export class LabTrendsComponent implements OnDestroy {
   readonly tests = signal<TrendTest[]>([]);
   readonly testQuery = signal('');
   /** Left-list tests filtered by the search box using common search logic. */
+  readonly effectiveQuery = computed(() => this.query() ?? this.testQuery());
   readonly filteredTests = computed(() => {
-    return filterTestList(this.tests(), this.testQuery());
+    return filterTestList(this.tests(), this.effectiveQuery());
   });
   readonly selectedTestId = signal<string | null>(null);
   readonly selectedParam = signal<string>('');
@@ -319,7 +297,7 @@ export class LabTrendsComponent implements OnDestroy {
   readonly testOptions = computed<PfSelectOption[]>(() =>
     this.tests().map(t => ({
       value: t.testId,
-      label: `${t.testName} · ${t.parameters.length} value${t.parameters.length === 1 ? '' : 's'} · ×${t.count}`,
+      label: `${t.testName} · ${t.parameters.length} value${t.parameters.length === 1 ? '' : 's'} · ${t.count} results`,
     })));
   readonly paramOptions = computed<PfSelectOption[]>(() =>
     (this.selectedTest()?.parameters ?? []).map(p => ({
@@ -351,6 +329,7 @@ export class LabTrendsComponent implements OnDestroy {
    *  whole Trendogram fits the viewport — measured, not a guessed offset, so
    *  it's correct no matter how tall the patient bar / tab row happen to be. */
   private fitHeight() {
+    if (!this.fit()) return;
     const el = this.host.nativeElement;
     const top = el.getBoundingClientRect().top;
     // On phones the bottom-nav floats over the content; measure its real height
@@ -370,14 +349,14 @@ export class LabTrendsComponent implements OnDestroy {
       const id = this.patientId();
       if (id) this.load(id);
     });
-    // Detailed chart: re-render on selection / type / range / data change.
+    // Detailed chart: re-render on selection / type / range / data / theme change.
     effect(() => {
-      this.filteredPoints(); this.chartType(); this.activeParam(); this.chartEl(); this.viewMode();
+      this.filteredPoints(); this.chartType(); this.activeParam(); this.chartEl(); this.viewMode(); this.theme?.isDark();
       queueMicrotask(() => this.renderParam());
     });
     // Overall matrix: re-render sparklines when the panel / range / els change.
     effect(() => {
-      this.overviewParams(); this.range(); this.sparkEls(); this.viewMode();
+      this.overviewParams(); this.range(); this.sparkEls(); this.viewMode(); this.theme?.isDark();
       queueMicrotask(() => this.renderMatrix());
     });
   }
@@ -436,7 +415,7 @@ export class LabTrendsComponent implements OnDestroy {
     const d = b - a;
     if (d === 0) return { dir: 'flat', text: '±0' };
     const mag = Math.abs(d) >= 1 ? Math.abs(d).toFixed(0) : Math.abs(d).toFixed(1);
-    return { dir: d > 0 ? 'up' : 'down', text: `${d > 0 ? '▲' : '▼'} ${mag}` };
+    return { dir: d > 0 ? 'up' : 'down', text: mag };
   }
 
   private async renderParam() {
@@ -453,12 +432,18 @@ export class LabTrendsComponent implements OnDestroy {
     if (this._chart && this._chartHost !== el) { this._chart.dispose(); this._chart = null; }
     if (!this._chart) { this._chart = ec.init(el, undefined, { renderer: 'canvas' }); this._chartHost = el; }
     this.bindResize();
-    this._chart.setOption(buildTrendOption(ec, {
+    this._chart.setOption(ndTrendSkin(buildTrendOption(ec, {
       param, points: this.filteredPoints(), chartType: this.chartType(), theme: 'dark',
-    }), true);
+    }), this.isDark()), true);
     this._chart.resize();
   }
   private _chartHost: HTMLElement | null = null;
+  /** Light / dark follows the app theme (the screen chart only — the PDF
+   *  trendogram keeps trend-chart.ts's own light theme). */
+  private isDark(): boolean {
+    if (this.theme) return this.theme.isDark();
+    return typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  }
 
   private async renderMatrix() {
     if (this.viewMode() !== 'overall') return;
@@ -476,9 +461,9 @@ export class LabTrendsComponent implements OnDestroy {
       const p = params[i];
       if (!p) return;
       const chart = ec.init(ref.nativeElement, undefined, { renderer: 'canvas' });
-      chart.setOption(buildSparklineOption(ec, {
+      chart.setOption(ndSparkSkin(buildSparklineOption(ec, {
         points: this.cellPoints(p), referenceRange: p.referenceRange,
-      }), true);
+      }), this.isDark()), true);
       chart.resize();
       this._sparks.push(chart);
     });
@@ -495,5 +480,72 @@ export class LabTrendsComponent implements OnDestroy {
     if (this._boundResize) window.removeEventListener('resize', this._resize);
     this._chart?.dispose();
     for (const s of this._sparks) s?.dispose();
+  }
+}
+
+// ── ND chart skin (screen only) ─────────────────────────────────────────
+// trend-chart.ts is shared with the PDF trendogram, so the palette is
+// applied here instead: Noto Sans + tabular numbers, theme-aware axes and
+// tooltip, violet data, a NEUTRAL reference band (never green), and red
+// only on flagged points (the one meaningful colour).
+const ND_FONT = "'Noto Sans', system-ui, sans-serif";
+const VIOLET = { light: '#7c3aed', dark: '#a78bfa' };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function ndTrendSkin(opt: any, dark: boolean): any {
+  if (!opt) return opt;
+  const axis = dark ? '#94a3b8' : '#475569';
+  const grid = dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0';
+  const line = dark ? 'rgba(255,255,255,0.15)' : '#cbd5e1';
+  opt.backgroundColor = 'transparent';
+  opt.textStyle = { fontFamily: ND_FONT };
+  // Room for the last date label (it was clipped at the right edge).
+  if (opt.grid) opt.grid = { ...opt.grid, right: 32 };
+  for (const ax of [opt.xAxis, opt.yAxis]) {
+    if (!ax) continue;
+    ax.axisLabel = { ...(ax.axisLabel ?? {}), color: axis, fontFamily: ND_FONT, fontSize: 11 };
+    if (ax.axisLine) ax.axisLine = { ...ax.axisLine, lineStyle: { color: line } };
+    if (ax.splitLine) ax.splitLine = { ...ax.splitLine, lineStyle: { color: grid } };
+  }
+  if (opt.tooltip) {
+    opt.tooltip = {
+      ...opt.tooltip,
+      backgroundColor: dark ? 'rgba(20,20,28,0.94)' : '#ffffff',
+      borderColor: dark ? 'rgba(255,255,255,0.12)' : '#e2e8f0',
+      textStyle: { color: dark ? '#e2e8f0' : '#0f172a', fontSize: 12, fontFamily: ND_FONT },
+      extraCssText: 'font-variant-numeric: tabular-nums; border-radius: 10px; box-shadow: 0 8px 24px rgba(15,23,42,0.18);',
+    };
+  }
+  recolour(opt, dark);
+  return opt;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function ndSparkSkin(opt: any, dark: boolean): any {
+  if (!opt) return opt;
+  opt.textStyle = { fontFamily: ND_FONT };
+  recolour(opt, dark);
+  return opt;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function recolour(opt: any, dark: boolean): void {
+  const v = dark ? VIOLET.dark : VIOLET.light;
+  for (const s of opt.series ?? []) {
+    if (s.markArea?.itemStyle) {
+      s.markArea = { ...s.markArea, itemStyle: { color: dark ? 'rgba(148,163,184,0.10)' : 'rgba(100,116,139,0.10)' } };
+    }
+    if (s.type === 'line' && s.lineStyle) s.lineStyle = { ...s.lineStyle, color: v };
+    const itemColor = s.itemStyle?.color;
+    if (typeof itemColor === 'function') {
+      // Keep the flagged (red) points; everything else takes the theme violet.
+      s.itemStyle = {
+        ...s.itemStyle,
+        color: (p: { dataIndex: number }) => {
+          const c = itemColor(p);
+          return typeof c === 'string' && /^#(dc2626|fb7185)$/i.test(c) ? (dark ? '#fb7185' : '#dc2626') : (s.type === 'bar' ? v : v);
+        },
+      };
+    }
   }
 }

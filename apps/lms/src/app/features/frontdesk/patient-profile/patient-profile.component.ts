@@ -1,6 +1,6 @@
-import { DatePipe, Location, CommonModule } from '@angular/common';
+import { DatePipe, Location, CommonModule, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -14,17 +14,32 @@ import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { AvatarComponent } from '../../../shared/primitives/avatar.component';
-import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
-import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
-import { PatientDocumentsComponent } from './patient-documents.component';
+import { ChipTone } from '../../../shared/primitives/chip.component';
 import { PatientIdCardComponent } from './patient-id-card.component';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import {
+  PpRange, PpView, ageSexLong, isoDaysAgo, orderStatusLabel, orderTone, patientFlags, patientMetaLine,
+  testStatusLabel, testTone,
+} from './patient-profile.nd';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { LabTrendsComponent } from './lab-trends.component';
 import { PatientTimelineService } from './patient-timeline.service';
 import { LabOrdersComponent } from './lab-orders.component';
 import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
+
+/** matchMedia as a live boolean (same helper shape as the report view). */
+function mq(query: string, ref: DestroyRef, on: (m: boolean) => void): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  const m = window.matchMedia(query);
+  const fn = (e: MediaQueryListEvent) => on(e.matches);
+  try { m.addEventListener?.('change', fn); ref.onDestroy(() => m.removeEventListener?.('change', fn)); } catch { /* old engines */ }
+  return !!m.matches;
+}
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
@@ -161,7 +176,7 @@ const SYMPTOMS_DIAGNOSES = [
 @Component({
   selector: 'pf-patient-profile',
   standalone: true,
-  imports: [DatePipe, FormsModule, CurrencyInrPipe, AvatarComponent, ChipComponent, SkeletonComponent, CommonModule, PatientDocumentsComponent, PatientIdCardComponent, BarcodeDisplayComponent, LabTrendsComponent, LabOrdersComponent, AbhaWizardComponent],
+  imports: [DatePipe, FormsModule, CurrencyInrPipe, CommonModule, NgTemplateOutlet, PatientIdCardComponent, BarcodeDisplayComponent, LabTrendsComponent, LabOrdersComponent, AbhaWizardComponent, HeroBandComponent, NdDateComponent, ZoomTargetDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss']
@@ -178,6 +193,144 @@ export class PatientProfileComponent implements OnInit {
   protected readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   protected readonly navBack = inject(NavBackService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  // ── New design (docs/ND-PATTERN.md → "Patient profile") ───────────────
+  /** Web (fine pointer + hover) = text buttons; touch = 44px icons. */
+  protected readonly web = webPointerSignal();
+  /** ≤900px: no side column — the SUMMARY card opens as a sheet. */
+  readonly narrow = signal(mq('(max-width: 900px)', this.destroyRef, m => this.narrow?.set(m)));
+  /** ≤640px: New order moves to a full-width bottom bar. */
+  readonly phone = signal(mq('(max-width: 640px)', this.destroyRef, m => this.phone?.set(m)));
+  /** List → detail zoom: the tapped Front desk card / drawer button morphs
+   *  into the HISTORY card (keys = the patient id). */
+  protected readonly zoom = inject(ZoomTransitionService);
+  private readonly routeId = inject(ActivatedRoute).snapshot?.paramMap?.get('id') ?? null;
+  readonly zoomKeys = computed(() => [this.routeId, this._patient()?.id]);
+  /** Skeleton until the patient is here — and while a zoom is morphing, so
+   *  the zoom target is never swapped mid-animation. */
+  readonly showSkeleton = computed(() => (!this._patient() && !this.loadFailed()) || (this.arrivalHold() && this.zoom.holding()));
+  /** Only the ROUTE zoom that brought us here holds the skeleton; an in-card
+   *  zoom (a row → its order) also sets holding(), and must not swap the
+   *  card body out from under itself. */
+  private readonly arrivalHold = signal(true);
+  private readonly _releaseHold = effect(() => { if (!this.zoom.holding()) untracked(() => this.arrivalHold.set(false)); });
+  readonly loadFailed = signal(false);
+
+  /** HISTORY card: the neutral segmented filter + the header search. */
+  readonly view = signal<PpView>('orders');
+  readonly query = signal('');
+  readonly range = signal<PpRange>('all');
+  readonly fromDate = signal('');
+  readonly toDate = signal('');
+  readonly rangeOpen = signal(false);
+  /** An order is open (zoomed in) inside the HISTORY card. */
+  readonly orderOpen = signal<string | null>(null);
+  setView(v: PpView): void {
+    if (this.view() === v) return;
+    this.view.set(v);
+    this.rangeOpen.set(false);
+  }
+  /** ←/→/Home/End move the radiogroup (one Tab stop). */
+  onSegKey(ev: KeyboardEvent): void {
+    const order: PpView[] = ['orders', 'trends', 'timeline'];
+    const i = order.indexOf(this.view());
+    let n = i;
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') n = (i + 1) % order.length;
+    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') n = (i + order.length - 1) % order.length;
+    else if (ev.key === 'Home') n = 0;
+    else if (ev.key === 'End') n = order.length - 1;
+    else return;
+    ev.preventDefault();
+    this.setView(order[n]);
+    const btn = (ev.currentTarget as HTMLElement | null)?.querySelectorAll<HTMLElement>('[role=radio]')[n];
+    btn?.focus();
+  }
+  setRange(r: PpRange): void {
+    this.range.set(r);
+    if (r === 'all') { this.fromDate.set(''); this.toDate.set(''); }
+    else if (r === '30' || r === '90') { this.fromDate.set(isoDaysAgo(+r)); this.toDate.set(isoDaysAgo(0)); }
+  }
+  setFrom(v: string | null): void { this.fromDate.set(v ?? ''); this.range.set(this.fromDate() || this.toDate() ? 'custom' : 'all'); }
+  setTo(v: string | null): void { this.toDate.set(v ?? ''); this.range.set(this.fromDate() || this.toDate() ? 'custom' : 'all'); }
+  readonly rangeLabel = computed(() => {
+    const r = this.range();
+    if (r === '30') return 'Last 30 days';
+    if (r === '90') return 'Last 90 days';
+    if (r === 'custom') {
+      const f = (iso: string) => { const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : '…'; };
+      return `${this.fromDate() ? f(this.fromDate()) : 'Any'} – ${this.toDate() ? f(this.toDate()) : 'today'}`;
+    }
+    return 'Any date';
+  });
+  clearFilters(): void { this.query.set(''); this.setRange('all'); }
+
+  /** Timeline rows matching the header search. */
+  readonly shownTimeline = computed(() => {
+    const q = this.query().trim().toLowerCase();
+    const all = this.unifiedTimeline();
+    return q ? all.filter(e => `${e.title} ${e.subtitle} ${e.id}`.toLowerCase().includes(q)) : all;
+  });
+
+  /** SUMMARY card collapsed to a strip on the RIGHT edge (remembered per user). */
+  readonly sideCollapsed = signal(this.readCollapsed());
+  toggleSide(): void {
+    const next = !this.sideCollapsed();
+    this.sideCollapsed.set(next);
+    try { localStorage.setItem(this.collapseKey(), next ? '1' : '0'); } catch { /* private mode */ }
+  }
+  private collapseKey(): string {
+    const u = this.auth.user();
+    return 'pf:pp:side-collapsed:' + (u?.id || u?.authId || 'anon');
+  }
+  private readCollapsed(): boolean {
+    try { return localStorage.getItem(this.collapseKey()) === '1'; } catch { return false; }
+  }
+  /** ≤900px: the SUMMARY sheet. */
+  readonly summaryOpen = signal(false);
+  /** The ABHA health card (the official card look) in a modal. */
+  readonly abhaCardOpen = signal(false);
+
+  /** Band context line + flags. */
+  readonly metaLine = computed(() => patientMetaLine(this._patient()));
+  readonly flags = computed(() => patientFlags(this._patient(), this._history()));
+  readonly ageSex = computed(() => ageSexLong(this._patient()));
+  readonly unpaidOrders = computed(() => this._history().filter(o => o.billStatus === 'unpaid' && o.status !== 'cancelled').length);
+  protected readonly orderStatusLabel = orderStatusLabel;
+  protected readonly orderTone = orderTone;
+  protected readonly testStatusLabel = testStatusLabel;
+  protected readonly testTone = testTone;
+  readonly closeQr = (): void => this.qrOpen.set(false);
+  readonly closeIdCard = (): void => this.showIdCard.set(false);
+  readonly closeAbhaCard = (): void => this.abhaCardOpen.set(false);
+  kycAddress(k: { address?: string; district?: string; state?: string }): string {
+    return [k.address, k.district, k.state].filter(Boolean).join(', ');
+  }
+
+  /** Back = where you came from (history) when that was an in-app list;
+   *  otherwise up to the front desk. */
+  goBack = (): void => {
+    const last = this.router.lastSuccessfulNavigation as unknown;
+    const nav = (typeof last === 'function' ? (last as () => unknown)() : last) as
+      { previousNavigation?: { finalUrl?: unknown } | null } | null | undefined;
+    const prev = nav?.previousNavigation?.finalUrl ? String(nav.previousNavigation.finalUrl) : '';
+    const path = prev.split(/[?#]/)[0];
+    const isForm = /^\/frontdesk\/(patients\/new|order)(\/|$)/.test(path);
+    if (prev && !isForm && path !== this.router.url.split(/[?#]/)[0]) { this.locationSvc.back(); return; }
+    this.navBack.backTo('/frontdesk');
+  };
+
+  /** Esc closes the top-most layer. */
+  onEsc(): void {
+    if (this.moreOpen()) { this.closeMore(); return; }
+    if (this.rangeOpen()) { this.rangeOpen.set(false); return; }
+    if (this.summaryOpen()) { this.summaryOpen.set(false); return; }
+    if (this.abhaCardOpen()) { this.abhaCardOpen.set(false); return; }
+    if (this.qrOpen()) { this.qrOpen.set(false); return; }
+    if (this.showIdCard()) { this.showIdCard.set(false); return; }
+    if (this.chatPickerOpen()) { this.closeChatPicker(); return; }
+    if (this.mergeOpen()) { this.closeMerge(); }
+  }
 
   private readonly _patient = signal<Patient | null>(null);
   private readonly _history = signal<Order[]>([]);
@@ -364,8 +517,6 @@ export class PatientProfileComponent implements OnInit {
     }
   }
 
-  // Active Tab state
-  protected readonly activeTab = signal<string>('overview');
   // Expanded timelines state for the visits
   protected readonly expandedVisits = signal<Record<string, boolean>>({});
   // Clinical data signal
@@ -730,10 +881,12 @@ export class PatientProfileComponent implements OnInit {
   }
 
   private load(id: string) {
+    this.loadFailed.set(false);
     this._loading.set(true);
     this.api.get<ProfilePayload>(`/api/patients/${id}`).subscribe({
       next: res => {
         this._patient.set(res.patient);
+        if (!res.patient) this.loadFailed.set(true);
         this._history.set(res.history ?? []);
         if (res.patient) {
           this.clinicalData.set(this.loadClinicalData(res.patient.id));
@@ -744,6 +897,7 @@ export class PatientProfileComponent implements OnInit {
       },
       error: () => {
         this.clinicalData.set(null);
+        this.loadFailed.set(true);
         this._loading.set(false);
       }
     });
