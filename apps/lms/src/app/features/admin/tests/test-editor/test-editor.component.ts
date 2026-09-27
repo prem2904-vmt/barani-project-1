@@ -326,7 +326,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     'mmol/L', 'µmol/L', 'nmol/L', 'pmol/L', 'mEq/L', 'mOsm/kg',
     'IU/L', 'U/L', 'IU/mL', 'U/mL', 'mIU/mL', 'µIU/mL', 'mIU/L',
     '%', 'ratio', 'titre', 'index',
-    'fL', 'pg', '×10³/µL', '×10⁶/µL', '×10⁹/L', '×10¹²/L',
+    'fL', 'pg', '×10³/µL', '×10⁶/µL', 'million/µL', '×10⁹/L', '×10¹²/L',
     '/µL', 'cells/µL', '/HPF', '/LPF', 'million/mL',
     'mm/hr', 'seconds', 'minutes', 'mL/min/1.73m²',
     'g/24h', 'mg/24h', 'mL/24h', 'copies/mL', 'ng/mL/hr', 'µg/g',
