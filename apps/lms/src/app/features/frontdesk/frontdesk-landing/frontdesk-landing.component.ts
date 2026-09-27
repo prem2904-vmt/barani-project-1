@@ -2650,51 +2650,31 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         this.toasts.warning('No report yet for this order — try again in a moment.');
         return;
       }
-      const { generateReportPdf, preloadReportImages } = await import('../../../shared/utils/report-pdf');
-      const { PlatformService } = await import('../../../core/services/platform.service');
-      const platform = this.injector.get(PlatformService);
-      const [template, resolvedLayouts] = await Promise.all([
-        // Fetch the tenant's report template so colors / logo / signatures
-        // / date format flow into the PDF. Soft-fail (null) so an unconfigured
-        // tenant still gets a sensible default-themed report.
-        firstValueFrom(this.api.get<import('../../../shared/models/report.model').ReportTemplate | null>('/api/config/report-template')).catch(() => null),
-        this.fetchResolvedLayouts(report),
-      ]);
-      const baseInput = { report, resolvedLayouts, template: template ?? null };
-      const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
-      generateReportPdf({ ...baseInput, imageCache });
+      const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
+      generateReportPdf(await this.reportInput(report));
     } catch (err) {
       console.error('[fd] download report failed', err);
-      this.toasts.error('Could not download the report');
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this.toasts.error(reportRenderErrorMessage(err, 'Could not download the report'));
     } finally {
       this._downloadingReport.set(null);
     }
   }
-  /** Walk every test on the report and ask the engine to resolve its
-   *  per-test layout against the entered values. Returns a testId →
-   *  ResolvedReportLayout map that the PDF generator consumes; the map
-   *  is empty for tests without a configured layout (PDF then falls
-   *  back to the legacy parameter table for those). */
-  private async fetchResolvedLayouts(report: Report): Promise<Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout>> {
-    const out: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-    let tests: Array<{ testId?: string; packageTestId?: string | null; result?: { values?: Record<string, unknown> } }> = [];
-    let patient: { sex?: string | null; age?: number | null } | undefined;
-    try {
-      const snap = JSON.parse(report.data ?? '{}');
-      tests = snap?.tests ?? [];
-      patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
-    } catch { /* malformed — proceed with empty layouts map */ }
-    if (tests.length === 0) return out;
-
-    const { ReportLayoutService } = await import('../../../core/services/report-layout.service');
-    const { resolveReportLayouts } = await import('../../../shared/utils/report-layouts');
+  /** The full PDF input for a stored report — the ONE recipe shared by every
+   *  report entry point (template + layouts incl. PROFILE layouts + images +
+   *  trendograms). Throws rather than rendering the product-default design. */
+  private async reportInput(report: Report) {
+    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
+      import('../../../core/services/report-layout.service'),
+      import('../../../core/services/platform.service'),
+      import('../../../shared/utils/report-render-input'),
+    ]);
     const svc = this.injector.get(ReportLayoutService);
-    // The ONE resolver: SCALAR values (so "show when result > X" conditions
-    // match), snapshot images, and the ordered PROFILES' layouts (their notes
-    // print instead of the members').
-    Object.assign(out, await resolveReportLayouts<import('../../../shared/models/report-layout.model').ResolvedReportLayout>(
-      (id, values, images, p) => svc.preview(id, values, images as never, p), tests, patient));
-    return out;
+    return prepareReportPdfInput(report, {
+      api: this.api,
+      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+      apiUrl: this.injector.get(PlatformService).getApiUrl(),
+    });
   }
 
   /** Count of staff with status === 'on_duty' for the button badge. */

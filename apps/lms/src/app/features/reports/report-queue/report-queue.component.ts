@@ -184,6 +184,10 @@ export class ReportQueueComponent implements OnInit {
   // report is usually spotted, so the action belongs on the row too.
   // edit_result: Lab Technician, Pathologist, Lab Admin — not front desk.
   readonly canEditResult = computed(() => this.auth.hasPermission("edit_result"));
+  /** Share / WhatsApp / Print-delivery record a DELIVERY (deliver_report).
+   *  Everyone who can open this page sees the same reports; only the send
+   *  actions depend on the permission. */
+  readonly canDeliver = computed(() => this.auth.hasPermission("deliver_report"));
   readonly editOrderId = signal<string | null>(null);
 
   openEditDialog(r: Report) {
@@ -556,7 +560,8 @@ export class ReportQueueComponent implements OnInit {
       this.uploadReportPdf(r, blob);
     } catch (err) {
       console.error("[reports] download failed", err);
-      this.toasts.error("Could not download report");
+      const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
+      this.toasts.error(reportRenderErrorMessage(err, "Could not download report"));
     }
   }
 
@@ -600,62 +605,22 @@ export class ReportQueueComponent implements OnInit {
    *  The template carries the admin-tunable chrome (colours, logo, signatures);
    *  without it the PDF falls back to the hardcoded Drlogy defaults. */
   private async buildReportRender(r: Report) {
-    const [
-      { preloadReportImages },
-      { ReportLayoutService },
-      { PlatformService },
-    ] = await Promise.all([
-      import("../../../shared/utils/report-pdf"),
+    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
       import("../../../core/services/report-layout.service"),
       import("../../../core/services/platform.service"),
+      import("../../../shared/utils/report-render-input"),
     ]);
     const svc = this.injector.get(ReportLayoutService);
     const platform = this.injector.get(PlatformService);
-    const resolvedLayouts: Record<
-      string,
-      import("../../../shared/models/report-layout.model").ResolvedReportLayout
-    > = {};
-
-    let tests: Array<{
-      testId?: string;
-      result?: { values?: Record<string, unknown> };
-    }> = [];
-    let patient: { sex?: string | null; age?: number | null } | undefined;
-    try {
-      const snap = JSON.parse(r.data ?? "{}");
-      tests = snap?.tests ?? [];
-      patient = {
-        sex: snap?.patient?.sex ?? null,
-        age: snap?.patient?.age ?? null,
-      };
-    } catch {
-      /* malformed snapshot — render PDF without layouts */
-    }
-
-    // ONE resolver for every report entry point: posts SCALAR values (so
-    // "show when the result is above 70" conditions match), the snapshot's
-    // images, and the PROFILE layouts whose notes print for ordered profiles.
-    const { resolveReportLayouts } = await import("../../../shared/utils/report-layouts");
-    const [template, layouts] = await Promise.all([
-      this.api
-        .get<
-          import("../../../shared/models/report.model").ReportTemplate | null
-        >("/api/config/report-template")
-        .toPromise()
-        .catch(() => null),
-      resolveReportLayouts<import("../../../shared/models/report-layout.model").ResolvedReportLayout>(
-        (id, values, images, p) => svc.preview(id, values, images as never, p),
-        tests,
-        patient,
-      ),
-    ]);
-    Object.assign(resolvedLayouts, layouts);
-
-    const baseInput = { report: r, resolvedLayouts, template: template ?? null };
-    const [imageCache, trendograms] = await Promise.all([
-      preloadReportImages(baseInput, platform.getApiUrl()),
-      (await import('../../../shared/utils/trendogram-report')).prepareTrendograms(r, this.api),
-    ]);
+    // The ONE recipe for every report entry point (template + layouts incl.
+    // PROFILE layouts + images + trendograms). It throws instead of silently
+    // falling back to the default design, so a report that can't be rendered
+    // exactly as the lab designed it is never downloaded or archived.
+    const { imageCache = {}, trendograms = [], ...baseInput } = await prepareReportPdfInput(r, {
+      api: this.api,
+      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+      apiUrl: platform.getApiUrl(),
+    });
     return { baseInput, imageCache, trendograms };
   }
 
@@ -720,7 +685,8 @@ export class ReportQueueComponent implements OnInit {
             await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'), 'Print report');
           } catch (err) {
             console.error("[reports] native print share failed", err);
-            this.toasts.error("Could not open report");
+            const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
+            this.toasts.error(reportRenderErrorMessage(err, "Could not open report"));
           }
         })();
       } else {
@@ -736,7 +702,8 @@ export class ReportQueueComponent implements OnInit {
             printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
           } catch (err) {
             console.error("[reports] print failed", err);
-            this.toasts.error("Could not open print window");
+            const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
+            this.toasts.error(reportRenderErrorMessage(err, "Could not open print window"));
           }
         })();
       }

@@ -100,7 +100,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean } = {}) {
+async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[] } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover') ? !opts.touch : false,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
@@ -124,7 +124,7 @@ async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unkno
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
       { provide: DialogService, useValue: { prompt: vi.fn(async () => null), confirm: vi.fn(async () => false) } },
       { provide: NavBackService, useValue: { showBack: () => false, back: vi.fn(), backTo: vi.fn() } },
-      { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World' }), hasPermission: () => true } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World' }), hasPermission: (p: string) => !opts.perms || opts.perms.includes(p) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
       { provide: ZoomTransitionService, useValue: { holding: signal(false), tap: () => true, rearm() {}, attachSource() {}, detachSource() {} } },
       { provide: Router, useValue: router },
@@ -457,4 +457,26 @@ describe('report-queue.partial helpers', () => {
     expect(deptCountLabel(0, 1, 2)).toBe('1 of 2 departments partly ready');
     expect(deptCountLabel(1, 1, 3)).toBe('1 of 3 departments ready · 1 partly');
   });
+});
+
+describe('Reports list — same reports for every viewer, actions by permission', () => {
+  const rowNames = (el: HTMLElement) => [...el.querySelectorAll('.pf-rq-card__name, .pf-rq-row p.font-semibold')].map(n => n.textContent!.trim());
+
+  for (const nd of [true, false]) {
+    it(`view_report-only sees the SAME rows, minus the send actions (${nd ? 'new' : 'classic'} design)`, async () => {
+      const full = await render({ nd, perms: ['deliver_report', 'view_report', 'edit_result'] });
+      full.c._filter.set('all'); full.f.detectChanges();
+      const fullRows = rowNames(full.el);
+      expect(fullRows.length).toBeGreaterThan(0);
+      expect(full.el.querySelector('[title="Send via WhatsApp"]')).not.toBeNull();
+      TestBed.resetTestingModule();
+
+      const viewer = await render({ nd, perms: ['view_report'] });
+      viewer.c._filter.set('all'); viewer.f.detectChanges();
+      expect(rowNames(viewer.el)).toEqual(fullRows);                       // identical list
+      expect(viewer.el.querySelector('[title="Send via WhatsApp"]')).toBeNull();  // no delivery
+      expect(viewer.el.querySelector('[title="View on screen"]')).not.toBeNull();
+      expect(viewer.el.querySelector('[title="Download PDF"]')).not.toBeNull();
+    });
+  }
 });

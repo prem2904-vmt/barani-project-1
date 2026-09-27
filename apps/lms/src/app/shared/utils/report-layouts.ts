@@ -47,6 +47,21 @@ function scalarValues(vals: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+/** A failure that depends on WHO is asking (no permission, signed out) or on
+ *  the network — not on the test. Rendering past one of these prints a report
+ *  that looks different for this viewer than for the next one, so the caller
+ *  must stop and show an error instead. A 404 (test deleted) or a broken
+ *  layout is the same for everybody and keeps the plain-table fallback. */
+export function isAccessFailure(e: unknown): boolean {
+  const err = e as { status?: number; code?: string; message?: string; name?: string } | null;
+  if (!err) return false;
+  if (err.status === 0 || err.status === 401 || err.status === 403) return true;
+  if (err.code === 'forbidden' || err.code === 'unauthorized') return true;
+  if (err.name === 'TimeoutError') return true;
+  const msg = err.message ?? '';
+  return /timed out|: 0 Unknown Error/i.test(msg);
+}
+
 export async function resolveReportLayouts<T>(
   preview: PreviewFn,
   tests: readonly LayoutSnapshotTest[],
@@ -63,7 +78,11 @@ export async function resolveReportLayouts<T>(
         layouts[t.testId] = await preview(
           t.testId, scalarValues(t.result?.values ?? {}), t.images ?? [], patient,
         ) as T;
-      } catch { /* no layout for this test — plain table */ }
+      } catch (e) {
+        // Permission / network → abort the whole render (see isAccessFailure).
+        if (isAccessFailure(e)) throw e;
+        /* no layout for this test — plain table */
+      }
     }),
   );
 
@@ -79,7 +98,10 @@ export async function resolveReportLayouts<T>(
       if (layouts[id]) return;               // already resolved as a test
       try {
         layouts[id] = await preview(id, {}, [], patient) as T;
-      } catch { /* profile without notes — nothing extra prints */ }
+      } catch (e) {
+        if (isAccessFailure(e)) throw e;
+        /* profile without notes — nothing extra prints */
+      }
     }),
   );
 

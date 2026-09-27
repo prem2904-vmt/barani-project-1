@@ -404,6 +404,9 @@
               </svg>
               <span class="nd-rowact__t">Download</span>
             </button>
+            <!-- Sending needs deliver_report; a view_report-only viewer sees the
+                 SAME list with View / Download / More only (route-access.ts). -->
+            @if (canDeliver()) {
             <span class="pf-rq-split pf-rq-split--nd">
               <button type="button" class="nd-rowact pf-rq-split__face" [class.nd-rowact--icon]="!web()" aria-label="Share" title="Send via WhatsApp"
                       (click)="deliver(r, 'whatsapp')">
@@ -428,6 +431,7 @@
                 </div>
               }
             </span>
+            }
             <span class="pf-rq-split pf-rq-split--nd">
               <button type="button" class="nd-rowact pf-rq-more" [class.nd-rowact--icon]="!web()" (click)="toggleMore(r.id, $event)"
                       [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions" title="More actions">
@@ -542,6 +546,7 @@
           <!-- Split button: the face sends it the usual way (WhatsApp opens
                pre-filled - the send is still the user's), the caret picks a
                different channel. -->
+          @if (canDeliver()) {
           <div class="pf-rq-split">
             <button type="button" class="pf-rq-act pf-rq-act--face press" title="Send via WhatsApp"
                     (click)="deliver(r, 'whatsapp')">
@@ -567,6 +572,7 @@
               </div>
             }
           </div>
+          }
 
           <!-- Everything that changes the report rather than sends it. -->
           <div class="pf-rq-split">

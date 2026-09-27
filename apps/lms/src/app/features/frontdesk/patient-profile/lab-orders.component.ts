@@ -105,6 +105,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
                   <div class="pf-lo__report">
                     @if (reportBusy() === o.id) { <span class="pf-lo__spin"></span> }
                     @else if (reportUrl()[o.id]; as u) { <pf-pdf-canvas [src]="u"></pf-pdf-canvas> }
+                    @else if (reportFailed()[o.id]) { <p class="pf-lo__pending" role="alert">Couldn’t render this report: the lab’s report design couldn’t be loaded. Close and open it again in a moment.</p> }
                     @else { <p class="pf-lo__pending">No report has been generated for this order yet.</p> }
                   </div>
                 }
@@ -197,6 +198,8 @@ export class LabOrdersComponent implements OnDestroy {
   readonly expanded = signal<Record<string, boolean>>({});
   readonly showReport = signal<Record<string, boolean>>({});
   readonly reportUrl = signal<Record<string, string>>({});
+  /** Order ids whose report exists but could not be rendered (design did not load). */
+  readonly reportFailed = signal<Record<string, boolean>>({});
   readonly reportBusy = signal<string | null>(null);
   private readonly blobUrls = new Set<string>();
 
@@ -262,6 +265,9 @@ export class LabOrdersComponent implements OnDestroy {
         if (rep) {
           const url = await buildReportBlobUrl(rep, this.api, this.injector);
           if (url) { this.blobUrls.add(url); this.reportUrl.update(m => ({ ...m, [o.id]: url })); }
+          // Never a silent "No report yet" (or a default-design render) when
+          // the report exists but its design couldn't load.
+          this.reportFailed.update(m => ({ ...m, [o.id]: !url }));
         }
       } finally { this.reportBusy.set(null); }
     }

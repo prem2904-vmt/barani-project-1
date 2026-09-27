@@ -59,7 +59,7 @@ describe('report entry points post PLAIN values to the layout preview', () => {
     const preview = previewSpy();
     const c = Object.create(ReportQueueComponent.prototype) as any;
     c.injector = injectorWith(preview);
-    c.api = { get: () => ({ toPromise: async () => null }), post: () => of(null) };
+    c.api = api;
     await c.buildReportRender(report);
     expectPlainValues(preview);
   });
@@ -68,7 +68,8 @@ describe('report entry points post PLAIN values to the layout preview', () => {
     const preview = previewSpy();
     const c = Object.create(FrontdeskLandingComponent.prototype) as any;
     c.injector = injectorWith(preview);
-    await c.fetchResolvedLayouts(report);
+    c.api = api;
+    await c.reportInput(report);
     expectPlainValues(preview);
   });
 

@@ -744,7 +744,8 @@ export class ReportViewerComponent implements OnInit {
       this._pdfReady.set(true);
     } catch (err) {
       console.error('[report-viewer] PDF render failed', err);
-      this._pdfError.set('Could not render the report PDF.');
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this._pdfError.set(reportRenderErrorMessage(err, 'Could not render the report PDF.'));
     } finally {
       this._pdfRendering = false;
     }
@@ -767,10 +768,16 @@ export class ReportViewerComponent implements OnInit {
     // The ONE resolver: SCALAR values (the snapshot's { value, flag, … }
     // wrappers are unwrapped so "show when result > X" conditions match),
     // snapshot images, and the ordered PROFILES' layouts.
-    const next = await resolveReportLayouts<ResolvedReportLayout>(
-      (id, values, images, p) => this.layoutSvc.preview(id, values, images as never, p),
-      tests as unknown as LayoutSnapshotTest[], patient);
-    this._resolved.set(next);
+    try {
+      const next = await resolveReportLayouts<ResolvedReportLayout>(
+        (id, values, images, p) => this.layoutSvc.preview(id, values, images as never, p),
+        tests as unknown as LayoutSnapshotTest[], patient);
+      this._resolved.set(next);
+    } catch (err) {
+      // Permission / network failure: the PDF pane shows the error state; the
+      // on-screen extras simply stay unresolved (never a half-resolved mix).
+      console.error('[report-viewer] layout resolve failed', err);
+    }
   }
 
   back() { this.navBack.backTo('/reports'); }
@@ -799,7 +806,8 @@ export class ReportViewerComponent implements OnInit {
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') return; // share sheet dismissed
       console.error('[report-viewer] print failed', err);
-      this.toasts.error('Could not prepare the report for printing');
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this.toasts.error(reportRenderErrorMessage(err, 'Could not prepare the report for printing'));
     } finally {
       this.busy.set(null);
     }
@@ -849,39 +857,22 @@ export class ReportViewerComponent implements OnInit {
    *  produces (jsPDF + tenant template + per-test resolved layouts + images).
    *  Single source for the inline view, Print and the archive upload. */
   private async buildPdfBlob(r: Report): Promise<Blob> {
-    const [{ buildReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
+    const [{ buildReportPdf }, { ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
       import('../../../shared/utils/report-pdf'),
       import('../../../core/services/report-layout.service'),
       import('../../../core/services/platform.service'),
+      import('../../../shared/utils/report-render-input'),
     ]);
     const svc = this.injector.get(ReportLayoutService);
     const platform = this.injector.get(PlatformService);
-    const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-
-    let tests: LayoutSnapshotTest[] = [];
-    let patient: { sex?: string | null; age?: number | null } | undefined;
-    try {
-      const snap = JSON.parse(r.data ?? '{}');
-      tests = snap?.tests ?? [];
-      patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
-    } catch { /* malformed snapshot — render without layouts */ }
-
-    // Resolves PROFILE layouts as well as each test's own. Looping `tests` by
-    // hand here omitted the profiles, so a profile-ordered test printed NO
-    // notes on this screen while the report queue printed them correctly.
-    const [template, layouts] = await Promise.all([
-      this.api.get<ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
-      resolveReportLayouts<import('../../../shared/models/report-layout.model').ResolvedReportLayout>(
-        (id, values, conds, p) => svc.preview(id, values, conds as never, p), tests, patient),
-    ]);
-    Object.assign(resolvedLayouts, layouts);
-
-    const baseInput = { report: r, resolvedLayouts, template: template ?? null };
-    const [imageCache, trendograms] = await Promise.all([
-      preloadReportImages(baseInput, platform.getApiUrl()),
-      (await import('../../../shared/utils/trendogram-report')).prepareTrendograms(r, this.api),
-    ]);
-    return buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob');
+    // The ONE recipe (template + layouts incl. PROFILE layouts + images +
+    // trendograms). Throws instead of silently rendering the default design.
+    const input = await prepareReportPdfInput(r, {
+      api: this.api,
+      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+      apiUrl: platform.getApiUrl(),
+    });
+    return buildReportPdf(input).output('blob');
   }
 
   /** Render + archive the report PDF to storage (best-effort, no download) so

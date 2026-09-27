@@ -2,13 +2,12 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, Injector, OnDestroy, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Report } from '../../../shared/models/report.model';
 import { PdfCanvasComponent } from './pdf-canvas.component';
 import { PatientTimelineService } from './patient-timeline.service';
-import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface TimelineDoc {
   id: string; fileName: string; contentType: string; url: string; uploadedAt: string; isImage: boolean;
@@ -488,6 +487,7 @@ interface TimelineItem {
 export class PatientTimelineComponent implements OnDestroy {
   private readonly api = inject(ApiService);
   private readonly injector = inject(Injector);
+  private readonly toasts = inject(ToastService);
   private readonly svc = inject(PatientTimelineService);
 
   readonly patientId = input.required<string>();
@@ -965,43 +965,30 @@ export class PatientTimelineComponent implements OnDestroy {
     const cached = this.reportBlobs.get(rep.id);
     if (cached) return cached;
     try {
-      const [{ renderReportPdfBlobUrl, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
+      const [{ renderReportPdfBlobUrl }, { ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
         import('../../../shared/utils/report-pdf'),
         import('../../../core/services/report-layout.service'),
         import('../../../core/services/platform.service'),
+        import('../../../shared/utils/report-render-input'),
       ]);
       const svc = this.injector.get(ReportLayoutService);
-      const platform = this.injector.get(PlatformService);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resolvedLayouts: Record<string, any> = {};
-      let tests: LayoutSnapshotTest[] = [];
-      let patient: { sex?: string | null; age?: number | null } | undefined;
-      try { const snap = JSON.parse(rep.data ?? '{}'); tests = snap?.tests ?? []; patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null }; } catch { /* */ }
-      // Resolves PROFILE layouts too. Looping `tests` by hand omitted them, so
-      // a profile-ordered test printed NO notes when the report was opened from
-      // the timeline, while the report queue printed them correctly.
-      const [template, layouts] = await Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        firstValueFrom(this.api.get<any>('/api/config/report-template')).catch(() => null),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        resolveReportLayouts<any>((id, values, conds, p) => svc.preview(id, values, conds as never, p), tests, patient),
-      ]);
-      Object.assign(resolvedLayouts, layouts);
-      const baseInput = { report: rep, resolvedLayouts, template: template ?? null };
-      const [imageCache, trendograms] = await Promise.all([
-        preloadReportImages(baseInput, platform.getApiUrl()),
-        (await import('../../../shared/utils/trendogram-report')).prepareTrendograms(rep, this.api),
-      ]);
-      const url = renderReportPdfBlobUrl({ ...baseInput, imageCache, trendograms });
+      // The ONE recipe (template + layouts incl. PROFILE layouts + images +
+      // trendograms) — the same report every other screen renders.
+      const input = await prepareReportPdfInput(rep, {
+        api: this.api,
+        preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+        apiUrl: this.injector.get(PlatformService).getApiUrl(),
+      });
+      const url = renderReportPdfBlobUrl(input);
       this.reportBlobs.set(rep.id, url); this.blobUrls.add(url);
       return url;
-    } catch {
-      try {
-        const { renderReportPdfBlobUrl } = await import('../../../shared/utils/report-pdf');
-        const url = renderReportPdfBlobUrl({ report: rep });
-        this.reportBlobs.set(rep.id, url); this.blobUrls.add(url);
-        return url;
-      } catch { return ''; }
+    } catch (err) {
+      // Never fall back to a template-less render: it looks like a different
+      // lab's report. Say so instead.
+      console.error('[timeline] report render failed', err);
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this.toasts.error(reportRenderErrorMessage(err, 'Could not open the report'));
+      return '';
     }
   }
 
