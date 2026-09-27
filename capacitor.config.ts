@@ -44,8 +44,12 @@ const config: CapacitorConfig = {
       showSpinner: false
     },
     StatusBar: {
+      // Launch-only default (the dark splash is up): light text on the dark
+      // splash colour. Once the web app boots, ThemeService (system-bars.ts)
+      // restyles the status bar — and on Android the navigation bar — to the
+      // ACTIVE theme on every change, system-scheme flip and resume.
       style: 'DARK',
-      backgroundColor: '#1B3A6B'
+      backgroundColor: '#0a0a15'
     },
     Keyboard: {
       // 'native' resizes the whole WebView to the area above the keyboard, so

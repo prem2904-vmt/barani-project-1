@@ -1,5 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { NATIVE_BARS_HOST } from './system-bars.token';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type ResolvedTheme = 'dark' | 'light';
@@ -23,6 +24,10 @@ export const UI_SWITCHES_ENABLED = false;
 export class ThemeService {
   private readonly doc = inject(DOCUMENT);
   private readonly win = this.doc.defaultView;
+  /** OS chrome (status bar, Android nav bar, Electron window) — follows
+   *  every resolved-theme change from here, the ONE place themes resolve. */
+  private readonly barsHost = inject(NATIVE_BARS_HOST, { optional: true });
+  private barsSync?: Promise<((t: ResolvedTheme) => Promise<void>) | null>;
 
   private readonly _mode = signal<ThemeMode>(this.readStoredMode());
   private readonly _resolved = signal<ResolvedTheme>(this.resolve(this._mode()));
@@ -56,6 +61,21 @@ export class ThemeService {
     if (mq && typeof mq.addEventListener === 'function') {
       mq.addEventListener('change', this._mediaListener);
     }
+  }
+
+  /** Status bar / Android nav bar / Electron window → the resolved theme.
+   *  The bridge is a lazy chunk, loaded once; calls land in order, so a quick
+   *  light→dark→light ends on light. On resume it re-resolves (a 'system'
+   *  scheme may have flipped while suspended) and re-asserts. Never throws. */
+  private syncBars(theme: ResolvedTheme): void {
+    void (this.barsSync ??= import('./system-bars')
+      .then((m) => m.connectSystemBars(this.barsHost, () => {
+        const next = this.resolve(this._mode());
+        if (next !== this._resolved()) this.apply(next);
+        else this.syncBars(next);
+      }))
+      .catch(() => null))
+      .then((sync) => sync?.(theme));
   }
 
   setMode(mode: ThemeMode): void {
@@ -129,6 +149,7 @@ export class ThemeService {
 
   private apply(resolved: ResolvedTheme): void {
     this._resolved.set(resolved);
+    this.syncBars(resolved);
     const root = this.doc.documentElement;
     const useVT = typeof (this.doc as Document & { startViewTransition?: () => unknown }).startViewTransition === 'function';
 

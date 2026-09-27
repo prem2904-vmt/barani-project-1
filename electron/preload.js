@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // wire up new ipcRenderer.on channels here as they're needed.
   onMenuAction: (callback) => ipcRenderer.on('menu-action', callback),
   sendReady: () => ipcRenderer.send('app-ready'),
+  // Active theme → native title bar + window background (ThemeService).
+  theme: {
+    set: (t) => ipcRenderer.send('theme:set', { theme: t && t.theme, background: t && t.background })
+  },
   // USB label printer (Detonger/Dothantech). The renderer builds a packed
   // 1-bpp bitmap and hands it here; main encodes + streams it over USB.
   printer: {

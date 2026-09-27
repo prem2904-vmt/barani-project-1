@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeTheme } = require('electron');
 const path = require('path');
 const labelPrinter = require('./printer');
 const calls = require('./calls');
@@ -130,6 +130,20 @@ function createWindow() {
 //    Detonger/Dothantech printer over USB. ────────────────────────────────
 ipcMain.handle('printer:status', async () => labelPrinter.status());
 ipcMain.handle('printer:print', async (_e, payload) => labelPrinter.print(payload));
+
+// Theme sync (ThemeService → system-bars.ts): the native title bar follows the
+// app's ACTIVE theme (not just the OS appearance) and the window background
+// behind the page matches, so a resize / reload never flashes the other one.
+const THEME_BG = /^#[0-9a-f]{6}$/i;
+ipcMain.on('theme:set', (_e, t) => {
+  const theme = t && t.theme;
+  if (theme !== 'light' && theme !== 'dark') return;
+  nativeTheme.themeSource = theme;
+  const bg = t && typeof t.background === 'string' && THEME_BG.test(t.background)
+    ? t.background
+    : theme === 'dark' ? '#0a0a15' : '#ede8f6';
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(bg);
+});
 
 // Renderer's in-app BLE picker resolves the pending chooser callback.
 ipcMain.on('ble:choose', (_e, deviceId) => {
