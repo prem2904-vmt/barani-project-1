@@ -703,6 +703,13 @@ export function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
   };
 }
 
+function invoiceImageFormat(dataUrl: string): "PNG" | "JPEG" | "WEBP" {
+  const mime = /^data:image\/([^;,]+)/i.exec(dataUrl)?.[1]?.toLowerCase();
+  if (mime === "jpeg" || mime === "jpg") return "JPEG";
+  if (mime === "webp") return "WEBP";
+  return "PNG";
+}
+
 function drawCashBill(
   doc: jsPDF,
   input: InvoicePdfInput,
@@ -724,7 +731,7 @@ function drawCashBill(
   // ── Header — logo at left, identity centred ──
   if (logoDataUrl) {
     try {
-      doc.addImage(logoDataUrl, "PNG", MARGIN, 30, 50, 50);
+      doc.addImage(logoDataUrl, invoiceImageFormat(logoDataUrl), MARGIN, 30, 50, 50);
     } catch {
       /* ignore */
     }

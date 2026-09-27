@@ -24,6 +24,14 @@ const collectItems = (items: NavItem[] | null) =>
   (items ?? []).filter(i => i.href === '/sample-collection' || /collect/i.test(i.label));
 
 describe('menusFromWorkflow — system Collect work area', () => {
+  it('keeps the canonical Frontdesk icon when a workflow stores the Reception person-plus icon', () => {
+    const cfg = stored();
+    cfg.categories[0] = { ...cfg.categories[0], icon: 'reception' };
+    const items = menusFromWorkflow(cfg, ctxWith('register_patient', 'collect_sample', 'enter_result'))!;
+    expect(items.find(i => i.id === 'frontdesk')?.iconPath)
+      .toEqual(PRIMARY_NAV.find(i => i.id === 'frontdesk')?.iconPath);
+  });
+
   it('shows Collect (from the workflow, right after Frontdesk) for a collect_sample holder, once', () => {
     const items = menusFromWorkflow(stored(), ctxWith('register_patient', 'collect_sample', 'enter_result'))!;
     expect(items.map(i => i.id)).toEqual(['frontdesk', 'collect', 'lab']);

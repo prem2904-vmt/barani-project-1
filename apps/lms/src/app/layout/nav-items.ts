@@ -269,12 +269,16 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
     const areaPerms = routeAccess(route)
       ? routePerms(route)
       : [...new Set(accessible.flatMap(a => catalogFor(a.type)?.permissions ?? []))];
+    const iconPath = area.id === 'frontdesk'
+      ? PRIMARY_NAV.find(i => i.id === 'frontdesk')?.iconPath ?? workAreaIconPath(area.icon)
+      : workAreaIconPath(area.icon);
     items.push({
       id: area.id,
       label: navLabel(area.name),
       href: route,
-      // Render the work-area's own icon via the SAME resolver the builder uses.
-      iconPath: workAreaIconPath(area.icon),
+      // Frontdesk keeps its canonical workstation icon; other work areas use
+      // their builder-selected icon.
+      iconPath,
       permissions: areaPerms.length ? areaPerms : undefined,
     });
   }

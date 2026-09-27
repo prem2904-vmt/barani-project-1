@@ -1,5 +1,5 @@
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
-import { Order } from '../../../shared/models/order.model';
+import { Order, OrderSample } from '../../../shared/models/order.model';
 import { isDrawn, isNotCollected, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
 
 type DrawerPatient = Pick<Patient, 'firstName' | 'fathersName' | 'displayName' | 'age' | 'sex'> | null | undefined;
@@ -47,6 +47,13 @@ export function orderStatusState(o: Pick<Order, 'status'>): OrderStatusState {
 export type PipelineState = 'done' | 'active' | 'pending' | 'stopped';
 export interface PipelineStep { label: string; state: PipelineState }
 type DrawerOrder = Pick<Order, 'status' | 'samples'>;
+
+export type DrawerSampleProgress = 'collected' | 'pending' | 'not-collected';
+
+export function drawerSampleProgress(sample: Pick<OrderSample, 'status' | 'collectedAt'>): DrawerSampleProgress {
+  if (isNotCollected(sample)) return 'not-collected';
+  return isDrawn(sample) ? 'collected' : 'pending';
+}
 
 export function drawerPipeline(o: DrawerOrder): PipelineStep[] {
   const samples = o.samples ?? [];

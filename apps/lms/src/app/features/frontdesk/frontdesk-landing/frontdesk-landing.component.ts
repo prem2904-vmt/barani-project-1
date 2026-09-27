@@ -109,7 +109,7 @@ import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { drawerAgeSex, drawerName, drawerPipeline, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
+import { drawerAgeSex, drawerName, drawerPipeline, drawerSampleProgress, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
 import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
 import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
 
@@ -575,6 +575,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly selectedHc = this._selectedHc.asReadonly();
   private readonly _bills = signal<Bill[]>([]);
   private readonly _selectedOrder = signal<Order | null>(null);
+  readonly sampleIdsOpen = signal(false);
 
   readonly appointments = this._appointments.asReadonly();
   readonly orders = this._orders.asReadonly();
@@ -1690,7 +1691,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (a.address) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.address + ' ' + (a.pincode ?? ''))}`;
     return null;
   }
-  openOrder(o: Order) { this._selectedOrder.set(o); }
+  openOrder(o: Order) {
+    this.sampleIdsOpen.set(false);
+    this._selectedOrder.set(o);
+  }
+  toggleSampleIds() { this.sampleIdsOpen.update(open => !open); }
   /** Build a fresh order pre-populated with the tests from a prior order.
    *  Routes through order-create with `?fromOrderId=…` which triggers
    *  preselectFromOrder() there — the catalog auto-fills, the
@@ -2446,7 +2451,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
-  closeOrder() { this._selectedOrder.set(null); }
+  closeOrder() {
+    this.sampleIdsOpen.set(false);
+    this._selectedOrder.set(null);
+  }
   openStraggler(s: StragglerItem) {
     if (s.orderId) this.router.navigate(['/frontdesk/patients', s.patientId]);
     else if (s.patientId) this.router.navigate(['/frontdesk/patients', s.patientId]);
@@ -2923,6 +2931,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   stepCaption(o: Order, step: PipelineStep): string {
     return drawerStepCaption(o, step);
+  }
+  sampleProgress(sample: OrderSample) { return drawerSampleProgress(sample); }
+  sampleSummary(o: Order): string {
+    const collected = o.samples.filter(sample => this.sampleProgress(sample) === 'collected').length;
+    return `${collected}/${o.samples.length} collected`;
   }
   readonly patientTokens = computed(() => {
     const tokens = new Map<string, number>();

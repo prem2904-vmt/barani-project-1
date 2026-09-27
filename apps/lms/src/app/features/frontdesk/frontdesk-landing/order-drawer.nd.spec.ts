@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { drawerAgeSex, drawerName, orderStatusState } from './order-drawer';
+import { drawerAgeSex, drawerName, drawerSampleProgress, orderStatusState } from './order-drawer';
 
 /** Frontdesk ORDER drawer (ND): Noto only (no monospace), violet + neutral
  *  palette (no green / amber), the FULL name (no ellipsis), a sticky footer
@@ -126,11 +126,25 @@ describe('Frontdesk order drawer — footer actions', () => {
     }
   });
 
-  it('text on web, icons on touch', () => {
+  it('shows icons with labels on web and icons only on touch', () => {
     expect(footer.getAttribute('[class.pf-drawer__actions--touch]')).toBe('!webPointer()');
-    expect(rule('.pf-drawer__actions .pf-drawer__act > svg')).toMatch(/display: none/);
+    expect(rule('.pf-drawer__actions .pf-drawer__act > svg')).toMatch(/display: block/);
     expect(rule('.pf-drawer__actions--touch .pf-drawer__act-t')).toMatch(/clip: rect/);
     expect(rule('.pf-drawer__actions--touch .pf-drawer__act')).toMatch(/min-height: 44px/);
+  });
+
+  it('keeps the sample count visible and reveals IDs/status from an accessible accordion', () => {
+    expect(drawer).toMatch(/step\.label === 'Sample'/);
+    expect(drawer).toMatch(/class="pf-vtl__sample-toggle"/);
+    expect(drawer).toMatch(/\[attr\.aria-expanded\]="sampleIdsOpen\(\)"/);
+    expect(drawer).toMatch(/sampleSummary\(so\)/);
+    expect(drawer).toMatch(/sample\.barcode \|\| sample\.id/);
+    expect(drawer).toMatch(/sampleProgress\(sample\)/);
+    expect(rule('.pf-vtl__samples')).toMatch(/grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(rule('.pf-vtl__samples')).toMatch(/max-height: 130px/);
+    expect(rule('.pf-vtl__sample-toggle')).toMatch(/display: inline-flex/);
+    expect(rule('.pf-vtl__sample-toggle')).toMatch(/justify-content: flex-start/);
+    expect(drawer).toMatch(/toggleSampleIds\(\)/);
   });
 
   it('at most one primary; cancel is danger-secondary, not a filled red circle', () => {
@@ -163,6 +177,12 @@ describe('order-drawer helpers', () => {
     expect(orderStatusState({ status: 'validated' })).toBe('done');
     expect(orderStatusState({ status: 'created' })).toBe('idle');
     expect(orderStatusState({ status: 'cancelled' })).toBe('stopped');
+  });
+
+  it('sample progress distinguishes pending, drawn, and rejected tubes', () => {
+    expect(drawerSampleProgress({ status: 'pending' })).toBe('pending');
+    expect(drawerSampleProgress({ status: 'collected' })).toBe('collected');
+    expect(drawerSampleProgress({ status: 'rejected' })).toBe('not-collected');
   });
 });
 
