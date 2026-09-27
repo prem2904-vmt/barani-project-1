@@ -261,6 +261,12 @@ export interface ResolvedReportLayout {
    *  the renderer can fall back when a member's override must be ignored
    *  inside a profile block. */
   departmentColumns?: ReportColumn[] | null;
+  /** mw sets this ONLY for a narrative-only layout: a test with values whose
+   *  grid-less layout writes out every printing value itself (`{{Gross}}`),
+   *  so it prints no results table on purpose. The render safety net
+   *  (`results-table.ts`) adds the default table to any other grid-less
+   *  layout of a standalone test with values. */
+  valuesInNarrative?: boolean | null;
   sections: ResolvedSection[];
 }
 

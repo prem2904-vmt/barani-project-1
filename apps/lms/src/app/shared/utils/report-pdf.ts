@@ -16,6 +16,7 @@ import { fillUnit, normalizeReportText } from './reference-range';
 import { reportDisplayName } from './report-name';
 import { fetchAssetBlob } from './upload-fetch';
 import { collectAbnormalResults, renderAbnormalSummary, summaryTestValidated } from './report-abnormal-summary';
+import { withResultsTables } from './results-table';
 import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
@@ -622,7 +623,6 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
 
 /** Build the PDF and hand back the letterhead/footer layout it drew with. */
 export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; layout: ReportLayoutResult } {
-  const { resolvedLayouts = {} } = input;
   const report = input.report;
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   // Built-in PDF fonts are cp1252-only: superscripts (×10⁹/L), subscripts
@@ -630,6 +630,11 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // doc.text covers every draw here AND inside jspdf-autotable.
   installPdfTextSanitizer(doc);
   const { practice, template, snap } = prepareRender(input);
+  // Safety net (RCA 2026-09-27): a standalone test with values whose layout
+  // has no results table gets the default one — every caller (report viewer,
+  // queue, public link, test-editor live preview) prints the RESULT, never a
+  // Sentence alone. Idempotent with resolveReportLayouts (results-table.ts).
+  const resolvedLayouts = withResultsTables(input.resolvedLayouts ?? {}, snap.tests ?? []);
   // Letterhead + footer lines: one resolved layout drives the drawing below
   // AND the designer's outlines. An edited letterhead may be taller than the
   // old fixed reserve — the patient details start below it, never under it.

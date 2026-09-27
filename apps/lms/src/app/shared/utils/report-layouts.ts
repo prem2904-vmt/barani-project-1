@@ -14,6 +14,8 @@
  * printed its notes from one screen and not from another. This is the one
  * implementation; call it instead of looping `tests` by hand.
  */
+import { withResultsTable } from './results-table';
+
 export interface LayoutSnapshotTest {
   testId?: string;
   packageTestId?: string | null;
@@ -75,9 +77,12 @@ export async function resolveReportLayouts<T>(
     tests.map(async t => {
       if (!t.testId) return;
       try {
-        layouts[t.testId] = await preview(
+        // Safety net (RCA 2026-09-27): a standalone test with values whose
+        // layout came back without a results table gets the default one, so
+        // its RESULT can never drop off the report (results-table.ts).
+        layouts[t.testId] = withResultsTable(await preview(
           t.testId, scalarValues(t.result?.values ?? {}), t.images ?? [], patient,
-        ) as T;
+        ) as T, t);
       } catch (e) {
         // Permission / network → abort the whole render (see isAccessFailure).
         if (isAccessFailure(e)) throw e;

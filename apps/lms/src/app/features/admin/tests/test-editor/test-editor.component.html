@@ -1134,6 +1134,7 @@
                 [testId]="d.id || ''"
                 [culture]="cultureBench()"
                 [attachments]="attachmentsEnabled()"
+                [recordsValues]="d.type === 'individual'"
                 [parameters]="reportParamNames()"
                 [parameterTitles]="reportParamTitles()"
                 [hiddenParams]="unprintedParamNames()"

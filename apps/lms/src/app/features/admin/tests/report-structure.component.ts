@@ -8,6 +8,7 @@ import {
 } from '../../../shared/utils/flag-conditions';
 import type { InsightParam } from '../../../shared/utils/range-insight';
 import { mergeStructureOntoLatest, type LooseSection } from '../../../shared/utils/layout-section-merge';
+import { sectionsNeedResultsTable, withResultsTableFirst } from '../../../shared/utils/results-table';
 
 /** One raw layout section as stored — kept as-is so fields this surface
  *  doesn't understand (grid rows, templates, complex conditions…) survive
@@ -375,6 +376,25 @@ export class ReportStructureComponent {
   /** Raw stored sections (null = no saved layout → implicit structure). */
   private readonly rawSections = signal<RawSection[] | null>(null);
 
+  /** The test records values of its OWN (an individual test — not a
+   *  profile/package, whose members print their values). Its results table
+   *  is then part of every saved print order: it can be moved, never
+   *  deleted (patient-safety RCA 2026-09-27 — a Sentence-only save dropped
+   *  the RESULT from the report). */
+  readonly recordsValues = input<boolean>(false);
+  /** The values that print ("Prints on the report" on) — the mw rule. */
+  private readonly printingValues = computed<string[]>(() => {
+    if (!this.recordsValues() || this.culture()) return [];
+    const hidden = new Set(this.hiddenParams());
+    return this.parameters().filter(p => !hidden.has(p));
+  });
+  /** A stored print order (e.g. Sentence-only, saved before the fix) that
+   *  lacks the table this test needs → it is shown and saved FIRST. */
+  private readonly missingTable = computed(() => {
+    const raw = this.rawSections();
+    return !!raw && sectionsNeedResultsTable(raw, this.printingValues());
+  });
+
   constructor() {
     effect(() => {
       const id = this.testId();
@@ -552,6 +572,8 @@ export class ReportStructureComponent {
     };
     if (raw) {
       const out = raw.map((s, i) => this.rowFor(s, i));
+      // Mirrors materialised(): a missing results table leads the list.
+      if (this.missingTable()) out.unshift(this.implicitGridRow());
       if (this.attachments() && !raw.some(s => s.type === 'image')) out.push(implicitImage);
       return out;
     }
@@ -565,13 +587,15 @@ export class ReportStructureComponent {
       if (this.attachments()) out.push(implicitImage);
       return out;
     }
-    const out: StructureRow[] = [
-      { key: 'implicit-grid', kind: 'grid', name: 'Results table',
-        hint: '', hidden: false, canRename: false, canDelete: false, canHide: false, implicit: true },
-    ];
+    const out: StructureRow[] = [this.implicitGridRow()];
     if (this.attachments()) out.push(implicitImage);
     return out;
   });
+
+  private implicitGridRow(): StructureRow {
+    return { key: 'implicit-grid', kind: 'grid', name: 'Results table',
+      hint: '', hidden: false, canRename: false, canDelete: false, canHide: false, implicit: true };
+  }
 
   private rowFor(s: RawSection, i: number): StructureRow {
     const t = s.type ?? '';
@@ -629,6 +653,9 @@ export class ReportStructureComponent {
     this.mutate(row.key, s => { s.hidden = s.hidden === true ? undefined : true; });
   }
   removeRow(row: StructureRow) {
+    // The results table is never deleted (only moved) — canDelete hides the
+    // button; this guards every other caller too.
+    if (!row.canDelete) return;
     this.mutate(row.key, null);
   }
   setSource(row: StructureRow, v: string) {
@@ -665,7 +692,8 @@ export class ReportStructureComponent {
     const imageSec = (): RawSection => ({ id: newSecId(), type: 'image', order: 0, conditions: [] });
     const raw = this.rawSections();
     if (raw) {
-      const secs = raw.map(s => ({ ...s }));
+      let secs = raw.map(s => ({ ...s }));
+      if (this.missingTable()) secs = withResultsTableFirst(secs, newSecId());
       if (this.attachments() && !secs.some(s => s.type === 'image')) secs.push(imageSec());
       return secs;
     }
@@ -719,8 +747,11 @@ export class ReportStructureComponent {
       // copy so its descriptions are never erased by this surface's copy
       // (layout-section-merge.ts; owner bug 2026-09-27).
       const latest = ((await this.layout.getTestLayout(id))?.sections ?? []) as unknown as LooseSection[];
-      const merged = mergeStructureOntoLatest(latest, secs as LooseSection[])
-        .map((s, i) => ({ ...s, order: i + 1 }));
+      let merged = mergeStructureOntoLatest(latest, secs as LooseSection[]);
+      // Last line of defence: what is saved always carries the results
+      // table of a test with values (moved, never dropped).
+      if (sectionsNeedResultsTable(merged, this.printingValues())) merged = withResultsTableFirst(merged, newSecId());
+      merged = merged.map((s, i) => ({ ...s, order: i + 1 }));
       await this.layout.saveTestLayout(id, merged as never);
       this.savedTick.set(true);
       setTimeout(() => this.savedTick.set(false), 2200);
