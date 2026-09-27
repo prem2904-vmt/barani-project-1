@@ -40,6 +40,11 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
 import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../shared/utils/micro-specimen';
 import { byName, mergeRecent, planRepeat, sortByName, type RepeatItem } from './catalogue-order';
+import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { MIN_LOAD_MS, heldFlag } from '../../../shared/utils/min-duration';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -54,7 +59,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -89,6 +94,28 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private readonly _patient = signal<Patient | null>(null);
+
+  // ── Opening a draft / an order (owner, 2026-09-27: "when I click a draft
+  //    and open it I need an animation — no PF loading, a skeleton in that
+  //    part") ─────────────────────────────────────────────────────────────
+  /** The record this screen opens with is still loading (patient for a
+   *  ?patientId= draft, the order for ?orderId= / ?editOrderId=). */
+  private readonly _opening = signal(false);
+  private readonly zoom = inject(ZoomTransitionService);
+  /** Only hold for the zoom when this screen was opened for a record. */
+  private readonly _openingZoom = signal(false);
+  /** Skeleton on (patient tile, picks chip, cart rows) while the record
+   *  loads OR the list → order zoom is still morphing — held for at least
+   *  MIN_LOAD_MS so a fast load reads as one calm motion, never a flash. */
+  readonly opening = heldFlag(computed(() => this._opening() || (this._openingZoom() && this.zoom.holding())), MIN_LOAD_MS);
+  /** Zoom keys this order screen answers to: the draft row / shelf chip
+   *  (patient id, `fd:<patientId>`) or an order tile (order id). */
+  readonly zoomKeys = signal<string[]>([]);
+  private setOpeningKeys(pid: string | null, orderId: string | null): void {
+    const keys = [pid, pid ? 'fd:' + pid : null, orderId].filter((k): k is string => !!k);
+    this.zoomKeys.set(keys);
+    this._openingZoom.set(keys.length > 0);
+  }
   private readonly _tests = signal<Test[]>([]);
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
@@ -1019,11 +1046,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // from a patient profile), pre-attach. Otherwise the inline picker
     // handles selection in-page.
     const orderId = this.route.snapshot.queryParamMap.get('orderId');
+    this.setOpeningKeys(this.route.snapshot.queryParamMap.get('patientId'),
+      orderId ?? this.route.snapshot.queryParamMap.get('editOrderId'));
     if (orderId) {
       this.viewOrderId.set(orderId);
       this.billPhase.set('pay');
+      this._opening.set(true);
       this.api.get<Order>(`/api/orders/${orderId}`).subscribe({
         next: o => {
+          this._opening.set(false);
           this._order.set(o);
           if (o?.patient) this._patient.set(o.patient);
           this.refDoctorName.set(o.refDoctorName ?? '');
@@ -1040,7 +1071,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this._selected.set(testIds);
           this.hydrateSpecimensFrom(o);
         },
-        error: () => this.toasts.error('Could not load order details')
+        error: () => { this._opening.set(false); this.toasts.error('Could not load order details'); }
       });
       
       this.api.post<Bill>('/api/billing/', { orderId, discount: 0 }).subscribe({
@@ -1065,14 +1096,16 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const editOrderId = this.route.snapshot.queryParamMap.get('editOrderId');
     if (editOrderId) {
       this.editOrderId.set(editOrderId);
+      this._opening.set(true);
       this.api.get<Order>(`/api/orders/${editOrderId}`).subscribe({
         next: o => {
+          this._opening.set(false);
           if (o?.patient) this._patient.set(o.patient);
           if (o) this.extractCollectedTestIds(o);
           this.preselectFromOrder(o as unknown as HistoryRow, true);
           this.hydrateSpecimensFrom(o);
         },
-        error: () => this.toasts.error('Could not load order')
+        error: () => { this._opening.set(false); this.toasts.error('Could not load order'); }
       });
       return;
     }
@@ -1080,8 +1113,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // Back from registration (ND-PATTERN §15): the cart stashed before it.
     const resumed = this.route.snapshot.queryParamMap.get('resume') === 'registration' && this.adoptPendingOrder();
     if (pid) {
+      this._opening.set(true);
       this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${pid}`).subscribe({
         next: res => {
+          this._opening.set(false);
           this._patient.set(res.patient);
           if (resumed) return;
           // Preselection priority:
@@ -1096,7 +1131,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           if (restored) return;
           if (appointmentId) this.preselectFromAppointment(appointmentId);
         },
-        error: () => this.toasts.error('Could not load patient')
+        error: () => { this._opening.set(false); this.toasts.error('Could not load patient'); }
       });
     }
   }
@@ -1165,14 +1200,19 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.collectedTestIds.set(new Set());
     this.billPhase.set('cart');
     this.setQuery('');
+    // Draft → draft on the same screen: the patient tile + cart show their
+    // skeleton until the other draft has loaded (the screen slides across).
+    this.setOpeningKeys(pid, null);
+    this._opening.set(true);
     this.api.get<{ patient: Patient; history: HistoryRow[] }>(`/api/patients/${pid}`).subscribe({
       next: res => {
         if (this.stagedPid !== pid) return;          // superseded by a later switch
+        this._opening.set(false);
         this._patient.set(res.patient);
         if (fromOrderId) this.repeatFromOrder(fromOrderId);
         else this.restoreDraftFor(pid);
       },
-      error: () => { if (this.stagedPid === pid) this.toasts.error('Could not load patient'); }
+      error: () => { if (this.stagedPid === pid) { this._opening.set(false); this.toasts.error('Could not load patient'); } }
     });
   }
 

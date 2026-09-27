@@ -823,6 +823,14 @@
   overflow-y: auto;
 }
 
+/* Opening a draft / order: skeleton rows where its tests will land, then
+   the real rows rise in (owner: animation + skeleton, never the PF logo). */
+.pf-cart-skel { list-style: none; padding: 4px 0; }
+.pf-us__tile-skel { margin: 2px 0; }
+.pf-oc-body:not([aria-busy]) .pf-crt { animation: pf-oc-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes pf-oc-row-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pf-oc-body:not([aria-busy]) .pf-crt { animation: none; } }
+
 .pf-cart-empty {
   padding: 24px 0;
   text-align: center;

@@ -61,11 +61,16 @@
           <button type="button" class="pf-us__tile-btn" [disabled]="!scopeEnabled(k)" (click)="selectScope(k)"
             [attr.aria-pressed]="scope() === k" [title]="tileTitle(k)" [attr.aria-label]="tileTitle(k)">
             <ng-container *ngTemplateOutlet="scopeIcon; context: { $implicit: k }"></ng-container>
+            @if (k === 'patient' && opening() && !tilePick(k)) {
+            <!-- Opening a draft / order: the patient lands here. -->
+            <pf-skeleton class="pf-us__tile-skel" variant="line" width="84px" height="10px"></pf-skeleton>
+            } @else {
             <span class="pf-us__tile-label">{{ tileLabel(k) }}</span>
+            }
             <!-- Phones: icons only; a filled scope shows a small dot (the
                  picked name stays in the chips under the pill). -->
             @if (tilePick(k)) { <span class="pf-us__filled-dot" aria-hidden="true"></span> }
-            @if (k === 'patient' && patientMissing()) {
+            @if (k === 'patient' && patientMissing() && !opening()) {
             <span class="pf-us__req" aria-hidden="true"></span>
             <span class="sr-only">(required)</span>
             }
@@ -206,7 +211,13 @@
   <div class="pf-oc-scrim" [class.pf-oc-scrim--on]="dropOpen()" aria-hidden="true" (click)="closeScope()"></div>
 
   <!-- Phone: the picks the compact scope picker hides, as removable chips. -->
-  @if (tilePick('patient') || tilePick('doctor') || tilePick('hospital')) {
+  @if (opening() && !tilePick('patient')) {
+  <!-- Phone: the patient chip's place while the draft / order opens. -->
+  <div class="pf-oc-picks" aria-hidden="true">
+    <pf-skeleton variant="pill" width="150px" height="32px"></pf-skeleton>
+    <pf-skeleton variant="pill" width="96px" height="32px"></pf-skeleton>
+  </div>
+  } @else if (tilePick('patient') || tilePick('doctor') || tilePick('hospital')) {
   <div class="pf-oc-picks" role="group" aria-label="Order details">
     @for (k of scopes; track k) {
     @if (k !== 'tests' && tilePick(k)) {
@@ -231,7 +242,7 @@
   </div>
   }
 
-  @if (patientNudge() && !patient()) {
+  @if (patientNudge() && !patient() && !opening()) {
   <p class="pf-oc-need" role="alert">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -248,7 +259,10 @@
   </div>
   }
 
-  <div class="pf-page__body pf-oc-body" [class.pf-oc-body--split]="isLg()">
+  <!-- Zoom target: a tapped draft row / shelf chip / order tile morphs into
+       this body (core/navigation/zoom-transition.ts); back reverses it. -->
+  <div class="pf-page__body pf-oc-body" [class.pf-oc-body--split]="isLg()"
+       [pfZoomTarget]="zoomKeys()" [attr.aria-busy]="opening() ? 'true' : null">
 
     <!-- Catalogue card: Recent / Favourites / Packages / Profiles / All tests,
          department chips, test rows. Only the list scrolls. -->
@@ -619,7 +633,10 @@
       </div>
       }
       <ul class="pf-cart-list pf-cart-list--compact">
-        @if (selected().length === 0) {
+        @if (opening() && selected().length === 0) {
+        <!-- Opening a draft / order: its tests land in these rows. -->
+        <li class="pf-cart-skel"><pf-skeleton-rows [rows]="3" [avatar]="false" [dense]="true" label="Opening the order…"></pf-skeleton-rows></li>
+        } @else if (selected().length === 0) {
         <li class="pf-cart-empty">No tests selected yet. Pick them from the catalogue or the search.</li>
         }
         @for (id of selected(); track id) {

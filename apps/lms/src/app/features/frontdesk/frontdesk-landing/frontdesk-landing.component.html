@@ -789,7 +789,7 @@
               <ul class="pf-cards pf-cards--drafts pf-wlist" [class.pf-wlist--sel]="workSelectable()">
                 @for (d of shownDrafts(); track d.patientId) {
                 <li>
-                  <div class="pf-wrow pf-wrow--draft" tabindex="0" (click)="resumeDraft(d)"
+                  <div class="pf-wrow pf-wrow--draft" tabindex="0" [pfZoomSource]="[d.patientId, 'fd:' + d.patientId]" (click)="resumeDraft(d)"
                     (keydown.enter)="$event.target === $event.currentTarget && resumeDraft(d)">
                     @if (workSelectable()) {
                     <span class="pf-wrow__check pf-wrow__check--none" aria-hidden="true"></span>

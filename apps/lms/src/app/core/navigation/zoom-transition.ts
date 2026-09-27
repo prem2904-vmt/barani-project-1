@@ -76,6 +76,9 @@ export function zoomPath(url: string | null | undefined): string {
  *  source followed by a navigation anywhere else (sidebar, tabs) never zooms. */
 const DETAIL_ROUTES: readonly RegExp[] = [
   /^\/frontdesk\/patients\/(?!new$)[^/]+$/,
+  // Order & Payments opened FOR a record: a parked draft (row / shelf chip)
+  // or an order tile. Only a tapped source zooms, so "New order" stays instant.
+  /^\/frontdesk\/order$/,
   /^\/lab\/sample\/[^/]+$/,
   /^\/lab\/culture\/[^/]+$/,
   /^\/lab\/result\/[^/]+$/,
@@ -272,7 +275,7 @@ export class ZoomTransitionService {
       }
       if (a.from && a.from !== a.to && a.from.isConnected) this.unname(a.from);   // in-page: the list stays
     }).catch(() => {});
-    t.finished.finally(() => this.end(gen)).catch(() => {});
+    t.finished.finally(() => { this.settleFocus(a, gen); this.end(gen); }).catch(() => {});
   }
 
   private zoomOut(t: ZoomTransitionLike, o: Opened, card: HTMLElement): void {
@@ -306,7 +309,25 @@ export class ZoomTransitionService {
         { duration: ZOOM_MS, easing: ZOOM_EASING, fill: 'forwards', pseudoElement: `::view-transition-group(${ZOOM_NAME})` },
       );
     }).catch(() => {});
-    t.finished.finally(() => this.end(gen)).catch(() => {});
+    t.finished.finally(() => { this.settleFocus(a, gen); this.end(gen); }).catch(() => {});
+  }
+
+  /** Focus follows the zoom (a11y): opened → the detail's card; closed →
+   *  the tile it shrank back into. Only when focus was lost with the old
+   *  view (on <body> or a detached node) — never steal it from a field the
+   *  screen focused itself (e.g. the order search). */
+  private settleFocus(a: Active, gen: number): void {
+    if (gen !== this.gen) return;
+    const el = a.to;
+    if (!el || !el.isConnected) return;
+    const ae = this.doc.activeElement as HTMLElement | null;
+    if (ae && ae !== this.doc.body && ae.isConnected && ae !== a.from) return;
+    const focusable = el.matches('a[href], button, input, select, textarea, [tabindex]');
+    if (!focusable) {
+      if (a.dir === 'out') return;              // a plain tile: leave focus alone
+      el.setAttribute('tabindex', '-1');
+    }
+    try { el.focus({ preventScroll: true }); } catch { /* detached */ }
   }
 
   // ── Naming ────────────────────────────────────────────────────────────
