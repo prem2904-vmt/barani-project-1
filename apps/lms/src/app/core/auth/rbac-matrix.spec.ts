@@ -37,22 +37,15 @@ const ROLES: Record<string, string[]> = {
 };
 
 /** A user holding one OR MORE seeded roles; perms = the union (what the backend
- *  puts in the token). Roles drive the Receptionist collect_sample suppression
- *  in dedicated-counter mode. */
+ *  puts in the token). `dedicated` only sets the branch's collection MODE (which
+ *  nav items are eligible) — it no longer changes anyone's permissions. */
 interface Who { roles: string[]; perms: string[]; dedicated: boolean }
 
-/** Roles that keep collect_sample even at a dedicated collection counter
- *  (mirrors AuthService.hasEffectivePermission). */
-const OTHER_COLLECTOR_ROLES = ['Sample Collector', 'Lab Technician', 'Lab Admin'];
-
 const has = (w: Who) => (codes: readonly string[]) => w.perms.includes('*') || codes.some(c => w.perms.includes(c));
-/** Mirrors AuthService.hasEffectivePermission: a Receptionist (and no other
- *  collector role) loses collect_sample while collection runs at a dedicated
- *  counter and not also at the front desk. */
-const hasEffective = (w: Who) => (codes: readonly string[]) =>
-  w.perms.includes('*') || codes.some(c =>
-    !(c === 'collect_sample' && w.dedicated && w.roles.includes('Receptionist')
-      && !w.roles.some(r => OTHER_COLLECTOR_ROLES.includes(r))) && w.perms.includes(c));
+/** Mirrors AuthService.hasEffectivePermission, which is now plain hasPermission:
+ *  collection is purely collect_sample (owner 2026-09-27) — the old
+ *  "Receptionist loses collect_sample at a dedicated counter" rule is gone. */
+const hasEffective = has;
 
 // ── Guard evaluation straight off appRoutes ──────────────────────────────
 type Meta = { requiredPerms?: string[]; effective?: boolean; workflowActions?: string[] };
@@ -231,10 +224,10 @@ describe('RBAC matrix — workflow work areas (the owner\'s live Micro World wor
 
   it('a Lab Technician sees Lab; a Pathologist sees Validate + Results; Billing Counter sees Frontdesk', () => {
     expect(areasFor('Lab Technician')).toContain('lab');
-    expect(areasFor('Lab Technician')).not.toContain('results');   // view_report only → /reports needs deliver_report
+    expect(areasFor('Lab Technician')).toContain('results');        // view_report → view-only Results
     expect(areasFor('Pathologist')).toEqual(expect.arrayContaining(['validate', 'results']));
     expect(areasFor('Billing Counter')).toContain('frontdesk');
-    expect(areasFor('Branch Manager')).not.toContain('results');
+    expect(areasFor('Branch Manager')).toContain('results');
   });
 
   for (const role of Object.keys(ROLES)) {
@@ -348,4 +341,61 @@ describe('RBAC matrix — MULTI-role users (permission union + live Micro World 
       expect(guardAllows(landing, w)).toBe(true);
     });
   }
+});
+
+describe('RBAC matrix — owner decisions 2026-09-27', () => {
+  const areasFor = (w: Who) => (menusFromWorkflow(MICRO_WORLD, wfCtx(w)) ?? []).map(i => i.id);
+  const custom = (roles: string[], perms: string[], dedicated = false): Who => ({ roles, perms, dedicated });
+  const RECEPTION_NO_COLLECT = ROLES['Receptionist'].filter(p => p !== 'collect_sample');
+
+  describe('view-only Results (view_report without deliver_report)', () => {
+    for (const role of ['Lab Technician', 'Branch Manager', 'Quality Manager']) {
+      it(`${role} sees Results in the nav and can open the list + a report`, () => {
+        const w = who(role);
+        expect(ROLES[role]).toContain('view_report');
+        expect(ROLES[role]).not.toContain('deliver_report');
+        expect(guardAllows('/reports', w)).toBe(true);
+        expect(guardAllows('/reports/view/abc', w)).toBe(true);
+        expect(canOpenRoute('/reports', { hasAny: p => has(w)(p), isEnabled: () => true })).toBe(true);
+        expect(areasFor(w)).toContain('results');
+      });
+    }
+
+    it('no report permission at all → no Results (Sample Collector, Billing Counter)', () => {
+      for (const role of ['Sample Collector', 'Billing Counter']) {
+        expect(guardAllows('/reports', who(role))).toBe(false);
+        expect(areasFor(who(role))).not.toContain('results');
+      }
+    });
+
+    it('the Results catalog action and the route take the same permissions', () => {
+      expect([...(ROUTE_ACCESS['/reports'].perms ?? [])].sort()).toEqual(['deliver_report', 'view_report']);
+    });
+  });
+
+  describe('Receptionist collection = collect_sample (no dedicated-counter rule)', () => {
+    for (const dedicated of [false, true]) {
+      const mode = dedicated ? 'dedicated counter' : 'front desk';
+      it(`WITH collect_sample (${mode}): sees Collect and opens every collection screen`, () => {
+        const w = who('Receptionist', dedicated);
+        expect(w.perms).toContain('collect_sample');
+        for (const r of ['/sample-collection', '/lab/collect', '/home-collections']) expect(guardAllows(r, w)).toBe(true);
+        expect(areasFor(w)).toContain('collect');
+        const nav = ALL_NAV.filter(i => navItemVisible(i, navCtx(w))).map(i => i.href);
+        if (dedicated) expect(nav).toContain('/sample-collection');
+      });
+
+      it(`WITHOUT collect_sample (${mode}): no Collect area, every collection screen bounces`, () => {
+        const w = custom(['Receptionist'], RECEPTION_NO_COLLECT, dedicated);
+        for (const r of ['/sample-collection', '/lab/collect', '/home-collections']) expect(guardAllows(r, w)).toBe(false);
+        expect(areasFor(w)).not.toContain('collect');
+        const nav = ALL_NAV.filter(i => navItemVisible(i, navCtx(w))).map(i => i.href);
+        expect(nav).not.toContain('/sample-collection');
+      });
+    }
+
+    it('no route relies on a mode-aware (effective) guard any more', () => {
+      expect(Object.entries(ROUTE_ACCESS).filter(([, a]) => a.effective).map(([r]) => r)).toEqual([]);
+    });
+  });
 });

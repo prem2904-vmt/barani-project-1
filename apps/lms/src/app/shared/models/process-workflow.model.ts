@@ -86,7 +86,7 @@ export const ACTION_CATALOG: ActionCatalogEntry[] = [
     iconPath: ['M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Zm-2 9h8'], hint: 'Enter test results' },
   { type: 'validate', label: 'Validate', route: '/pathologist', permissions: ['validate_result'],
     iconPath: ['M20 6 9 17l-5-5'], hint: 'Pathologist sign-off' },
-  { type: 'results', label: 'Results', route: '/reports', permissions: ['deliver_report'],
+  { type: 'results', label: 'Results', route: '/reports', permissions: ['deliver_report', 'view_report'],
     iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'], hint: 'Deliver / view reports' },
   { type: 'lost_and_found', label: 'Lost & Found', route: '/lost-and-found',
     permissions: ['receive_sample', 'reject_sample', 'cancel_order', 'manage_users'],

@@ -32,6 +32,7 @@
           </svg>
           Refresh
         </button>
+        @if (canGenerate()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rq-generate" (click)="promptGenerate()"
                 aria-label="Generate a report" title="Generate a report for an order">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -41,6 +42,9 @@
           </svg>
           Generate
         </button>
+        } @else if (viewOnly()) {
+        <span class="nd-chip nd-chip--static pf-rq-viewonly" title="You can view and download reports. Sending them needs the Deliver reports permission.">View only</span>
+        }
       </ng-container>
     </pf-hero-band>
     }
@@ -337,12 +341,14 @@
               </p>
               }
             </div>
+            @if (canGenerate()) {
             <div class="pf-rq-card__foot">
               <button type="button" class="nd-btn nd-btn--secondary pf-rq-genpartial" [disabled]="generating() === po.id"
                       (click)="generatePartial(po)">
                 {{ generating() === po.id ? 'Generating…' : 'Generate partial PDF' }}
               </button>
             </div>
+            }
           </div>
         </div>
       </li>
@@ -432,6 +438,7 @@
               }
             </span>
             }
+            @if (hasMore(r)) {
             <span class="pf-rq-split pf-rq-split--nd">
               <button type="button" class="nd-rowact pf-rq-more" [class.nd-rowact--icon]="!web()" (click)="toggleMore(r.id, $event)"
                       [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions" title="More actions">
@@ -443,7 +450,7 @@
               @if (moreFor() === r.id) {
                 <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleMore(r.id)"></div>
                 <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                  @if (r.orderId) {
+                  @if (canOpenLabResults() && r.orderId) {
                     <button type="button" class="pf-rq-menu__item press" role="menuitem"
                             (click)="viewLabResults(r); toggleMore(r.id)">Open lab results</button>
                   }
@@ -451,13 +458,14 @@
                     <button type="button" class="pf-rq-menu__item press" role="menuitem"
                             (click)="openEditDialog(r); toggleMore(r.id)">Edit results</button>
                   }
-                  @if (r.orderId) {
+                  @if (canGenerate() && r.orderId) {
                     <button type="button" class="pf-rq-menu__item press" role="menuitem"
                             (click)="regenerate(r); toggleMore(r.id)">Regenerate</button>
                   }
                 </div>
               }
             </span>
+            }
           </div>
         </div>
       </li>
@@ -574,6 +582,7 @@
           </div>
           }
 
+          @if (hasMore(r)) {
           <!-- Everything that changes the report rather than sends it. -->
           <div class="pf-rq-split">
             <button type="button" class="pf-rq-act pf-rq-act--more press" (click)="toggleMore(r.id, $event)"
@@ -585,7 +594,7 @@
             @if (moreFor() === r.id) {
               <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleMore(r.id)"></div>
               <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                @if (r.orderId) {
+                @if (canOpenLabResults() && r.orderId) {
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
                           (click)="viewLabResults(r); toggleMore(r.id)">Open lab results</button>
                 }
@@ -593,13 +602,14 @@
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
                           (click)="openEditDialog(r); toggleMore(r.id)">Edit results</button>
                 }
-                @if (r.orderId) {
+                @if (canGenerate() && r.orderId) {
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
                           (click)="regenerate(r); toggleMore(r.id)">Regenerate</button>
                 }
               </div>
             }
           </div>
+          }
         </div>
       </div>
       }

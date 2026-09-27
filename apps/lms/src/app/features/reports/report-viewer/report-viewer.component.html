@@ -17,6 +17,7 @@
             <span class="pf-rv-act__t">Edit</span>
           </button>
         }
+        @if (canDeliver()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--print pf-rv-in" style="--i: 4"
                 [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'print'"
                 [attr.aria-label]="done() === 'print' ? 'Printing' : 'Print'" title="Print"
@@ -29,7 +30,8 @@
             <span class="pf-rv-act__t">{{ busy() === 'print' ? 'Preparing…' : 'Print' }}</span>
           }
         </button>
-        @if (entitlements.moduleEnabled('messages')) {
+        }
+        @if (canDeliver() && entitlements.moduleEnabled('messages')) {
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--share pf-rv-in" style="--i: 5"
                   [class.pf-rv-act--icon]="!web()" aria-label="Share with a colleague" title="Share with a colleague"
                   (click)="openSharePicker()">
@@ -38,13 +40,17 @@
           </button>
         }
         <!-- Phones: everything but the primary lives in the More sheet. -->
+        @if (hasMoreActions()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--icon pf-rv-act--more pf-rv-in" style="--i: 5"
                 aria-label="More actions" title="More actions" aria-haspopup="dialog"
                 [attr.aria-expanded]="moreOpen()" (click)="moreOpen.set(true)">
           <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
           <span class="pf-rv-act__t">More</span>
         </button>
-        <!-- THE primary: deliver to the patient. -->
+        }
+        <!-- THE primary: deliver to the patient (deliver_report only; a
+             view_report-only viewer gets a view-only page). -->
+        @if (canDeliver()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-rv-act pf-rv-act--send pf-rv-in" style="--i: 6"
                 [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'whatsapp'"
                 [attr.aria-label]="done() === 'whatsapp' ? 'Sent on WhatsApp' : 'Send WhatsApp'" title="Send WhatsApp"
@@ -57,6 +63,7 @@
             <span class="pf-rv-act__t">Send WhatsApp</span>
           }
         </button>
+        }
       }
     </ng-container>
 
@@ -227,13 +234,15 @@
          (keydown.escape)="moreOpen.set(false)">
       <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
       <ul class="pf-rv-menu" role="list">
+        @if (canDeliver()) {
         <li>
           <button type="button" class="pf-rv-menu__row pf-rv-menu__row--print" (click)="moreOpen.set(false); print()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             Print
           </button>
         </li>
-        @if (entitlements.moduleEnabled('messages')) {
+        }
+        @if (canDeliver() && entitlements.moduleEnabled('messages')) {
           <li>
             <button type="button" class="pf-rv-menu__row pf-rv-menu__row--share" (click)="moreOpen.set(false); openSharePicker()">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>

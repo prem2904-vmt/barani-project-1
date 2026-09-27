@@ -434,9 +434,9 @@ export const appRoutes: Route[] = [
       // separate route exists so we can gate it on `collect_sample` and show
       // it in the top-level sidebar when collection_mode is dedicated_counter.
       {
-        // Dedicated-counter route. `effective: true` honours mode-aware
-        // suppression so a Receptionist (whose seeded role still includes
-        // collect_sample) is bounced when collection_mode = dedicated_counter.
+        // Dedicated-counter route. Purely collect_sample + the workflow's
+        // sample_collection action — a Receptionist who holds collect_sample
+        // collects here too (no role-name suppression).
         path: 'sample-collection',
         canActivate: [...routeGuards('/sample-collection')],
         loadComponent: () => import('./features/lab/sample-collection/sample-collection.component').then(m => m.SampleCollectionComponent)
@@ -547,10 +547,10 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
       },
 
-      // Reports — only roles that actively deliver reports land here. Lab
-      // techs hold view_report (so they can read a finalized result) but
-      // shouldn't see the delivery queue. The viewer route stays slightly
-      // looser since pathologists / admins reasonably preview reports.
+      // Results — deliver_report runs the delivery desk; view_report alone
+      // (Lab Tech, Branch/Quality Manager) opens it view-only (see
+      // ROUTE_ACCESS['/reports']). The viewer admits the same readers plus
+      // validate_result (pathologists preview a report).
       {
         path: 'reports',
         canActivate: [...routeGuards('/reports')],
@@ -558,7 +558,7 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'reports/view/:id',
-        canActivate: [permissionGuard(['deliver_report', 'validate_result'])],
+        canActivate: [permissionGuard(['deliver_report', 'view_report', 'validate_result'])],
         loadComponent: () => import('./features/reports/report-viewer/report-viewer.component').then(m => m.ReportViewerComponent)
       },
 

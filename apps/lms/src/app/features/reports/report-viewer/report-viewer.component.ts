@@ -259,6 +259,12 @@ export class ReportViewerComponent implements OnInit {
   // edit_result is held by Lab Technician, Pathologist and Lab Admin —
   // deliberately not the front desk.
   readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+  /** Delivery desk (deliver_report): Send WhatsApp, Print, Share with a
+   *  colleague. Without it (view_report only — Lab Tech, Branch / Quality
+   *  Manager) the viewer is VIEW-ONLY; the PDF download lives on the list. */
+  readonly canDeliver = computed(() => this.auth.hasPermission('deliver_report'));
+  /** The phones' More sheet has something in it. */
+  readonly hasMoreActions = computed(() => this.canDeliver() || this.canEditResult());
   readonly editDialogOpen = signal(false);
 
   openEditDialog() { this.editDialogOpen.set(true); }
@@ -823,7 +829,7 @@ export class ReportViewerComponent implements OnInit {
   deliverWhatsApp() {
     const r = this._report();
     const d = this.data();
-    if (!r) return;
+    if (!r || !this.canDeliver()) return;
     const lab = this.tpl()?.labName || 'our lab';
     const name = d?.patient?.name ?? '';
     const link = r.qrToken ? this.verifyCode(r.qrToken) : '';

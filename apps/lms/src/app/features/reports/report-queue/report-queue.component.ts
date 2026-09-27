@@ -188,7 +188,22 @@ export class ReportQueueComponent implements OnInit {
    *  Everyone who can open this page sees the same reports; only the send
    *  actions depend on the permission. */
   readonly canDeliver = computed(() => this.auth.hasPermission("deliver_report"));
+  /** Generate / Regenerate / Partial PDF change what the patient receives:
+   *  the backend admits deliver_report | validate_result (same as Amend). */
+  readonly canGenerate = computed(() => this.auth.hasAnyPermission(["deliver_report", "validate_result"]));
+  /** VIEW-ONLY Results (view_report without deliver_report — Lab Tech, Branch
+   *  Manager, Quality Manager): the same branch-scoped list, View + Download
+   *  only. No Share / WhatsApp / Print-delivery, no Generate / Regenerate. */
+  readonly viewOnly = computed(() => !this.canDeliver());
+  /** "Open lab results" lands on /lab/sample/:id — its guard. */
+  readonly canOpenLabResults = computed(() =>
+    this.auth.hasAnyPermission(["enter_result", "edit_result", "validate_result"]));
   readonly editOrderId = signal<string | null>(null);
+
+  /** The row's More menu has at least one item (else no empty menu button). */
+  hasMore(r: Report): boolean {
+    return !!r.orderId && (this.canOpenLabResults() || this.canEditResult() || this.canGenerate());
+  }
 
   openEditDialog(r: Report) {
     if (r.orderId) this.editOrderId.set(r.orderId);
@@ -404,7 +419,7 @@ export class ReportQueueComponent implements OnInit {
   readonly generating = this._generating.asReadonly();
 
   generatePartial(po: PrelimOrder) {
-    if (this._generating()) return;
+    if (this._generating() || !this.canGenerate()) return;
     this._generating.set(po.id);
     const sampleIds = po.readySampleIds;
     this.api
@@ -648,6 +663,7 @@ export class ReportQueueComponent implements OnInit {
   }
 
   deliver(r: Report, via: string) {
+    if (!this.canDeliver()) return;
     // WhatsApp: the Meta API isn't wired up yet, so open WhatsApp Web / app
     // (wa.me) pre-filled with the patient's number + a message carrying the
     // report's QR verify link. wa.me can't auto-attach the PDF, so the link
@@ -728,6 +744,7 @@ export class ReportQueueComponent implements OnInit {
   }
 
   async promptGenerate() {
+    if (!this.canGenerate()) return;
     const oid = await this.dialog.prompt({
       title: "Generate report",
       message: "Enter the order ID to generate a final report.",
@@ -752,7 +769,7 @@ export class ReportQueueComponent implements OnInit {
    *  The backend re-snapshots and supersedes the previous final; we then
    *  re-render and re-archive the PDF so the stored/QR copy matches too. */
   async regenerate(r: Report) {
-    if (!r.orderId) return;
+    if (!r.orderId || !this.canGenerate()) return;
     const ok = await this.dialog.confirm({
       title: "Regenerate report?",
       message: "Rebuild this report using the current report template. The previous version is replaced.",

@@ -124,7 +124,7 @@ async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unkno
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
       { provide: DialogService, useValue: { prompt: vi.fn(async () => null), confirm: vi.fn(async () => false) } },
       { provide: NavBackService, useValue: { showBack: () => false, back: vi.fn(), backTo: vi.fn() } },
-      { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World' }), hasPermission: (p: string) => !opts.perms || opts.perms.includes(p) } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World' }), hasPermission: (p: string) => !opts.perms || opts.perms.includes(p), hasAnyPermission: (ps: string[]) => !opts.perms || ps.some(p => opts.perms!.includes(p)) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
       { provide: ZoomTransitionService, useValue: { holding: signal(false), tap: () => true, rearm() {}, attachSource() {}, detachSource() {} } },
       { provide: Router, useValue: router },
@@ -477,6 +477,47 @@ describe('Reports list — same reports for every viewer, actions by permission'
       expect(viewer.el.querySelector('[title="Send via WhatsApp"]')).toBeNull();  // no delivery
       expect(viewer.el.querySelector('[title="View on screen"]')).not.toBeNull();
       expect(viewer.el.querySelector('[title="Download PDF"]')).not.toBeNull();
+      // No Generate / Regenerate; branch managers (no edit_result, no bench
+      // perms) get no empty More menu either.
+      expect(viewer.el.querySelector('.pf-rq-generate')).toBeNull();
+      expect(viewer.el.querySelector('.pf-rq-more, .pf-rq-act--more')).toBeNull();
     });
   }
+
+  it('view-only: a "View only" chip replaces Generate in the band; Partial has no Generate button', async () => {
+    const { el, tab } = await render({ perms: ['view_report'] });
+    expect(el.querySelector('.pf-rq-viewonly')?.textContent?.trim()).toBe('View only');
+    expect(el.querySelector('.pf-rq-generate')).toBeNull();
+    tab('partial');
+    expect(el.querySelectorAll('.pf-rq-card').length).toBeGreaterThan(0);
+    expect(el.querySelector('.pf-rq-genpartial')).toBeNull();
+  });
+
+  it('view-only + edit_result (Lab Technician): More keeps Open lab results + Edit, never Regenerate', async () => {
+    const { el, f } = await render({ perms: ['view_report', 'edit_result', 'enter_result'] });
+    const more = el.querySelector('.pf-rq-more') as HTMLButtonElement;
+    expect(more).not.toBeNull();
+    more.click(); f.detectChanges();
+    const items = [...el.querySelectorAll('.pf-rq-menu__item')].map(b => b.textContent!.trim());
+    expect(items).toEqual(['Open lab results', 'Edit results']);
+  });
+
+  it('view-only: the send / generate handlers are inert even if called directly', async () => {
+    const { c, api } = await render({ perms: ['view_report'] });
+    const r = c.items()[0];
+    c.deliver(r, 'print');
+    await c.regenerate(r);
+    await c.promptGenerate();
+    c.generatePartial({ id: 'o1', readySampleIds: ['s1'] });
+    const posted = (api.post.mock.calls as unknown as unknown[][]).map(a => String(a[0]));
+    expect(posted.filter((u: string) => /\/deliver|\/generate/.test(u))).toEqual([]);
+  });
+
+  it('the delivery desk (deliver_report) keeps Generate and Regenerate', async () => {
+    const { el, f } = await render({ perms: ['deliver_report', 'view_report'] });
+    expect(el.querySelector('.pf-rq-generate')).not.toBeNull();
+    expect(el.querySelector('.pf-rq-viewonly')).toBeNull();
+    (el.querySelector('.pf-rq-more') as HTMLButtonElement).click(); f.detectChanges();
+    expect([...el.querySelectorAll('.pf-rq-menu__item')].map(b => b.textContent!.trim())).toContain('Regenerate');
+  });
 });

@@ -13,8 +13,11 @@
  *                 signed-in user). `*` (super-admin) passes everything.
  *  • `parent`   — a guarded PARENT route (Angular runs the parent's guard too),
  *                 so the effective requirement is parent AND child.
- *  • `effective`— the guard uses the mode-aware check (Receptionist loses
- *                 collect_sample when collection runs at a dedicated counter).
+ *  • `effective`— the guard uses AuthService.hasAnyEffectivePermission (a
+ *                 hook for mode-aware checks). No route uses it today: sample
+ *                 collection is purely permission-based (owner 2026-09-27: "if
+ *                 the receptionist is assigned [collect_sample], they can
+ *                 collect") + the workflow's Collect/Frontdesk/Lab slots.
  *  • `workflow` — the route's workflowGuard(Any): open only while ANY of these
  *                 process-workflow actions is enabled (fail-open when silent).
  *
@@ -64,7 +67,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/frontdesk/post-payment':     { parent: '/frontdesk', perms: ['collect_payment', 'create_bill'] },
 
   // ── Collection ─────────────────────────────────────────────────────────
-  '/sample-collection':  { perms: ['collect_sample'], effective: true, workflow: ['sample_collection'] },
+  '/sample-collection':  { perms: ['collect_sample'], workflow: ['sample_collection'] },
   '/lab/collect':        { perms: ['collect_sample'], workflow: ['sample_collection'] },
   '/home-collections':   { perms: ['collect_sample'], workflow: ['home_visits'], module: 'homeCollection' },
 
@@ -75,10 +78,11 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/lab/receive':        { perms: ['receive_sample'], workflow: ['lab_intake'] },
   '/lost-and-found':     { perms: ['receive_sample', 'reject_sample', 'cancel_order', 'manage_users'], workflow: ['lost_and_found'] },
   '/pathologist':        { perms: ['validate_result'], workflow: ['validate'] },
-  // Report delivery queue. Stays deliver_report: its actions (deliver/dispatch)
-  // need it. view_report-only roles (Lab Tech, Branch Manager) used to SEE
-  // "Results" (nav/catalog said deliver_report|view_report) and land on /403.
-  '/reports':            { perms: ['deliver_report'], workflow: ['results'] },
+  // Results. deliver_report = the delivery desk (Share / WhatsApp / Print /
+  // Generate). view_report alone (Lab Tech, Branch Manager, Quality Manager)
+  // opens the SAME branch-scoped list VIEW-ONLY: View + Download, no send or
+  // (re)generate — the backend gates those on deliver_report|validate_result.
+  '/reports':            { perms: ['deliver_report', 'view_report'], workflow: ['results'] },
 
   // ── Counters / other work areas ────────────────────────────────────────
   '/billing-counter':    { perms: ['create_bill', 'collect_payment'], workflow: ['billing'] },

@@ -35,7 +35,7 @@ const REPORT = {
   }),
 };
 
-type Opts = { narrow?: boolean; phone?: boolean; perms?: boolean; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean };
+type Opts = { narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean };
 
 const realMatchMedia = (window as any).matchMedia;
 beforeEach(() => {
@@ -82,7 +82,7 @@ async function render(opts: Opts = {}) {
       { provide: PlatformService, useValue: { getApiUrl: () => '' } },
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
       { provide: NavBackService, useValue: { showBack: () => true, back: vi.fn(), backTo: vi.fn() } },
-      { provide: AuthService, useValue: { user: () => ({ id: 'u1', displayName: 'Admin User', tenantName: 'Micro World' }), hasPermission: () => opts.perms !== false } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'u1', displayName: 'Admin User', tenantName: 'Micro World' }), hasPermission: (p: string) => Array.isArray(opts.perms) ? opts.perms.includes(p) : opts.perms !== false } },
       { provide: ChatService, useValue: { openConversationWithContext: vi.fn(async () => 'c1'), shareReport: vi.fn(async () => {}) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => opts.messages !== false } },
@@ -183,10 +183,33 @@ describe('Report view (nd) — actions', () => {
   });
 
   it('Edit hides without edit_result, Share without the Messages module', async () => {
-    const { el } = await render({ perms: false, messages: false });
+    const { el } = await render({ perms: ['deliver_report'], messages: false });
     expect(el.querySelector('.pf-rv-act--edit')).toBeNull();
     expect(el.querySelector('.pf-rv-act--share')).toBeNull();
     expect(primaries(el).length).toBe(1);
+  });
+
+  it('VIEW-ONLY (view_report, no deliver_report): the report shows, but no Send / Print / Share / More', async () => {
+    const { el } = await render({ perms: ['view_report'] });
+    expect(el.querySelector('.pf-rv-act--send')).toBeNull();
+    expect(el.querySelector('.pf-rv-act--print')).toBeNull();
+    expect(el.querySelector('.pf-rv-act--share')).toBeNull();
+    expect(el.querySelector('.pf-rv-act--more')).toBeNull();
+    expect(el.querySelector('.pf-rv-act--edit')).toBeNull();
+    expect(primaries(el).length).toBe(0);
+    // …a view_report + edit_result viewer (Lab Technician) keeps Edit and its sheet.
+    TestBed.resetTestingModule();
+    const lt = await render({ perms: ['view_report', 'edit_result'] });
+    expect(lt.el.querySelector('.pf-rv-act--edit')).not.toBeNull();
+    expect(lt.el.querySelector('.pf-rv-act--send')).toBeNull();
+  });
+
+  it('VIEW-ONLY: deliverWhatsApp() never records a delivery', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const { c, api } = await render({ perms: ['view_report'] });
+    c.deliverWhatsApp();
+    expect(open).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalledWith(expect.stringContaining('/deliver'), expect.anything());
   });
 
   it('Send shows a brief "Sent" success state (SVG check), then returns to its label', async () => {

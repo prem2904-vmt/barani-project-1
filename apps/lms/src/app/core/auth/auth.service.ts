@@ -1,7 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Session } from '@supabase/supabase-js';
 import { environment } from '../../../environments/environment';
-import { BranchLabConfigService } from '../services/branch-lab-config.service';
 import { AccountsService, StoredAccount } from './accounts.service';
 import { BranchRef, CurrentUser } from './mock-user';
 import { SessionScopeService } from './session-scope.service';
@@ -35,7 +34,6 @@ interface MeResponse {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly labCfg = inject(BranchLabConfigService);
   /** Gmail-style multi-account registry (shared lab machines). */
   readonly accounts = inject(AccountsService);
   /** One "session changed" event for every user-scoped service — fired
@@ -370,26 +368,16 @@ export class AuthService {
   }
 
   /**
-   * Permission check with mode-aware suppression. Same as hasPermission for
-   * everything except `collect_sample` in dedicated-counter mode: the
-   * Receptionist role keeps the seeded perm so an admin can flip the branch
-   * back to front-desk collection without a re-seed, but in dedicated mode
-   * the FD counter doesn't draw samples — only the dedicated counter does.
-   * Users who hold collect_sample via Sample Collector / Lab Tech / Lab Admin
-   * roles still pass.
+   * The permission check the nav / guards use for "can this user DO it here".
+   * Identical to hasPermission: collection is purely permission-based (owner
+   * 2026-09-27 — "if the receptionist is assigned [collect_sample], they can
+   * collect"), gated only by collect_sample + the workflow's Collect /
+   * Frontdesk / Lab slots. The old front-end-only rule that hid collection
+   * from a Receptionist when the branch collected at a dedicated counter is
+   * gone (the backend never enforced it). Kept as the single hook for any
+   * future mode-aware check.
    */
   hasEffectivePermission(code: string): boolean {
-    // Suppress FD collection only when collection runs at a dedicated counter and
-    // is NOT also placed at the front desk (multi-placement: if FD collects too,
-    // reception keeps the perm).
-    if (code === 'collect_sample' && this.labCfg.hasDedicatedCollection() && !this.labCfg.collectsAtFrontdesk()) {
-      const roles = this._user()?.roles ?? [];
-      const otherCollectorRole =
-        roles.includes('Sample Collector') ||
-        roles.includes('Lab Technician')   ||
-        roles.includes('Lab Admin');
-      if (roles.includes('Receptionist') && !otherCollectorRole) return false;
-    }
     return this.hasPermission(code);
   }
 
