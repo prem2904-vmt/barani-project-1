@@ -886,7 +886,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     if (this.paying()) return mode === 'later' ? 'Saving…' : 'Collecting…';
     const amt = inrFmt.format(this.payAmount());
     if (mode === 'later') {
-      const adv = p?.advanceNum() ?? 0;
+      const adv = p?.advanceOver() ? 0 : (p?.advanceNum() ?? 0);
       return adv > 0 ? `Collect ${inrFmt.format(adv)} — rest later` : 'Save — pay later';
     }
     return mode === 'wallet' ? `Bill ${amt} to vendor` : `Collect ${amt}`;

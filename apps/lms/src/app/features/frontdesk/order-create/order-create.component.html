@@ -716,6 +716,11 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
         </button>
+      <!-- Editable cart totals (subtotal, GST, the discount input) only while
+           the bill is still open. Once payment is recorded they give way to
+           the final summary below: the discount is shown read-only there,
+           never as an input (QA #3a). -->
+      @if (!isPaymentSettled()) {
       <div class="pf-cart-totals">
         <div class="pf-cart-line">
           <span>Subtotal</span>
@@ -733,14 +738,14 @@
           <div class="pf-cart-disc__ctl">
             <div class="pf-cart-disc__kind" role="radiogroup" aria-label="Discount unit">
               <button type="button" role="radio" [attr.aria-checked]="discountKind() === 'flat'"
-                [disabled]="isReadOnly()"
-                (click)="isReadOnly() ? null : setDiscountKind('flat')" aria-label="Discount in rupees">₹</button>
+                [disabled]="discountLocked()"
+                (click)="discountLocked() ? null : setDiscountKind('flat')" aria-label="Discount in rupees">₹</button>
               <button type="button" role="radio" [attr.aria-checked]="discountKind() === 'percent'"
-                [disabled]="isReadOnly()"
-                (click)="isReadOnly() ? null : setDiscountKind('percent')" aria-label="Discount in percent">%</button>
+                [disabled]="discountLocked()"
+                (click)="discountLocked() ? null : setDiscountKind('percent')" aria-label="Discount in percent">%</button>
             </div>
             <input type="text" inputmode="decimal" aria-label="Discount amount"
-              [class.pf-cart-disc__input--err]="discountOverCap()" [value]="discountValue()" [disabled]="isReadOnly()"
+              [class.pf-cart-disc__input--err]="discountOverCap()" [value]="discountValue()" [disabled]="discountLocked()"
               (input)="setDiscountValue($any($event.target).value)" class="pf-cart-disc__input" placeholder="0" />
           </div>
         </div>
@@ -772,6 +777,7 @@
         </div>
         }
       </div>
+      }
 
       @if (showInlinePay()) {
       @if (paidOrderId() || (isReadOnly() && currentBill() && (currentBill()?.balance ?? 0) <= 0)) {
@@ -792,6 +798,12 @@
              visible. (item 123) -->
         @if (paymentSummaryBill(); as sb) {
         <div class="pf-paid__summary">
+          @if (sb.totalDiscount > 0) {
+          <div class="pf-paid__sumline" data-testid="paid-discount">
+            <span>Discount applied</span>
+            <span class="tabular-nums">−{{ sb.totalDiscount | inr }}</span>
+          </div>
+          }
           <div class="pf-paid__sumline">
             <span>Total</span>
             <span class="tabular-nums">{{ (sb.totalPayable >= sb.totalPaid ? sb.totalPayable : sb.totalPaid) | inr }}</span>

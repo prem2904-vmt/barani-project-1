@@ -208,9 +208,18 @@ interface MethodDef {
             <label class="pf-ipp__label">
               Advance collected now (optional)
               <input type="text" inputmode="numeric" class="pf-ipp__input" placeholder="₹0.00"
+                     [class.pf-ipp__input--err]="advanceOver()"
+                     [attr.aria-invalid]="advanceOver() ? 'true' : null"
+                     [attr.aria-describedby]="advanceOver() ? 'pf-ipp-adv-err' : null"
                      [value]="advance()" (input)="setAdvance(asVal($event))" />
             </label>
-            @if (advanceNum() > 0) {
+            @if (advanceOver()) {
+              <!-- Never silently clamp: the desk must see the advance is over
+                   the bill and correct it (Confirm stays blocked). -->
+              <p class="pf-ipp__err" id="pf-ipp-adv-err" role="alert">
+                Advance can't be more than the bill, {{ amount() | inr }}. Reduce it to continue.
+              </p>
+            } @else if (advanceNum() > 0) {
               <div class="pf-ipp__tenders" role="radiogroup" aria-label="Advance paid by">
                 @for (t of advanceModes; track t.id) {
                   <button type="button" class="pf-ipp__tender" role="radio"
@@ -324,6 +333,8 @@ interface MethodDef {
       .pf-ipp__splitrow .pf-ipp__input { height: 28px; }
 
       .pf-ipp__muted { margin: 0; font-size: 12px; color: var(--text-tertiary); }
+      .pf-ipp__err { margin: 0; font-size: 12px; color: var(--error-text, #ef4444); }
+      .pf-ipp__input--err, .pf-ipp__input--err:focus { border-color: var(--error-text, #ef4444); }
       .pf-ipp__muted strong { color: var(--text-primary); }
       .pf-ipp__muted[data-kind='ok'] { color: var(--violet-text, #6d28d9); }
       .pf-ipp__muted[data-kind='short'] { color: var(--error-text, #ef4444); }
@@ -458,9 +469,11 @@ export class InlinePaymentPanelComponent {
 
   // Advance (pay-later): collect part now, leave the rest outstanding.
   readonly advance = signal("");
-  readonly advanceNum = computed(() =>
-    Math.min(this.amount(), parseInt(this.advance() || "0", 10) || 0),
-  );
+  /** The advance as typed (whole rupees). Never silently clamped: an advance
+   *  above the payable balance is an error the desk must correct. */
+  readonly advanceNum = computed(() => parseInt(this.advance() || "0", 10) || 0);
+  /** Advance exceeds what is owed → inline error + Confirm blocked. */
+  readonly advanceOver = computed(() => this.advanceNum() > this.amount() + 0.005);
   readonly advanceMode = signal<PayMode>("cash");
   readonly advanceModes: Array<{ id: PayMode; label: string }> = [
     { id: "cash", label: "Cash" },
@@ -563,7 +576,7 @@ export class InlinePaymentPanelComponent {
       case "split":
         return this.splitOk();
       case "later":
-        return true;
+        return !this.advanceOver();
       default:
         return this.amount() > 0;
     }
@@ -580,7 +593,7 @@ export class InlinePaymentPanelComponent {
       case "wallet":
         return `Bill ${amt} to vendor`;
       case "later": {
-        const adv = this.advanceNum();
+        const adv = this.advanceOver() ? 0 : this.advanceNum();
         return adv > 0
           ? `Collect ${this.inr.transform(adv)} now, ${this.inr.transform(this.amount() - adv)} due`
           : `Place order, ${amt} due`;

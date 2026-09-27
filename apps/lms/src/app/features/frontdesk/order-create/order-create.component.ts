@@ -34,6 +34,7 @@ import { printLabelOnly } from '../../../shared/utils/print-label';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
 import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../shared/utils/micro-specimen';
+import { byName, mergeRecent, planRepeat, sortByName, type RepeatItem } from './catalogue-order';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -479,7 +480,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly individualTests = computed(() => this._tests().filter(t => t.type === 'individual'));
   readonly packages = computed(() => {
     const list = this._tests().filter(t => t.type === 'package');
-    return list;   // browse view: the pill query never filters the grid
+    return sortByName(list);   // A→Z; browse view: the pill query never filters the grid
   });
   /** Profiles — orderable coded bundles, their own filter tab (kept out of
    *  "All tests", which is individuals only). */
@@ -496,7 +497,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       if (arr) arr.push(p); else groups.set(key, [p]);
     }
     return [...groups.entries()]
-      .map(([department, tests]) => ({ department, tests: tests.slice().sort(this.byCode) }))
+      .map(([department, tests]) => ({ department, tests: tests.slice().sort(byName) }))
       .sort((a, b) => a.department.localeCompare(b.department));
   });
 
@@ -530,7 +531,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (ids.size === 0) return [];
     const byId = new Map(this._tests().map(t => [t.id, t]));
     const list = Array.from(ids).map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
-    return list;   // browse view: the pill query never filters the grid
+    // No user reordering exists for favourites, so they read A→Z like the
+    // other lists (QA #4b). Browse view: the pill query never filters it.
+    return sortByName(list);
   });
 
   /** Tests this user has ordered in the past, most-recent first. */
@@ -542,6 +545,27 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return list;   // browse view: the pill query never filters the grid
   });
 
+  /** (Re)load this user's recent items from the server — the ordered
+   *  tests, profiles and packages, most recent first. */
+  private loadRecent(): void {
+    this.api.get<string[]>('/api/test-picker/recent').subscribe({
+      // Merge, don't clobber: an order placed a moment ago may not be in a
+      // response that raced it.
+      next: ids => this.recentIds.set(mergeRecent(this._justOrdered, ids ?? [])),
+      error: () => { /* silent: keep what we have */ }
+    });
+  }
+  /** Items ordered on this screen instance, newest first (the screen is
+   *  reused across patients, so Recent must update without a reload). */
+  private _justOrdered: string[] = [];
+  /** An order was just placed with these cart ids: they go to the top of
+   *  Recent right away (QA #4a), then the server list is re-read. */
+  private noteOrdered(ids: readonly string[]): void {
+    this._justOrdered = mergeRecent(ids, this._justOrdered);
+    this.recentIds.set(mergeRecent(this._justOrdered, this.recentIds()));
+    this.loadRecent();
+  }
+
   /** True when the test id is in the user's favourites. */
   isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
@@ -551,10 +575,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // pill, which stays visible above an on-screen keyboard (iPad / touch).
     return this.filterByDept(this.individualTests());
   });
-
-  /** Sort key: test code, natural/numeric-aware (BIO0002 before BIO0010). */
-  private byCode = (a: Test, b: Test) =>
-    ((a.testCode ?? a.code ?? '')).localeCompare(b.testCode ?? b.code ?? '', undefined, { numeric: true });
 
   /** Search a (sub-)list; profile aliases are derived from the FULL loaded
    *  catalogue's memberships (SGOT is found by "LFT" / "liver"). */
@@ -575,7 +595,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return Array.from(groups.entries())
       .map(([department, tests]) => ({
         department,
-        tests: tests.slice().sort(this.byCode)
+        tests: tests.slice().sort(byName)
       }))
       .sort((a, b) => a.department.localeCompare(b.department));
   });
@@ -770,8 +790,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly overrideDiscountPct = signal(100);
   readonly discountValue = signal<string>('');   // raw input
   readonly discountKind = signal<'flat' | 'percent'>('flat');
-  setDiscountKind(k: 'flat' | 'percent') { this.discountKind.set(k); }
-  setDiscountValue(v: string) { this.discountValue.set(v); }
+  /** The discount is frozen once the order is read-only or its payment is
+   *  recorded (QA #3a) — the server rejects a change on a settled bill too. */
+  readonly discountLocked = computed(() => this.orderLocked() || this.isPaymentSettled());
+  setDiscountKind(k: 'flat' | 'percent') { if (this.discountLocked()) return; this.discountKind.set(k); }
+  setDiscountValue(v: string) { if (this.discountLocked()) return; this.discountValue.set(v); }
 
   /** The discount % this user may grant, by their role's permission tier:
    *  override_discount → Level-2 cap, else give_discount → Level-1 cap, else 0. */
@@ -926,10 +949,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       next: ids => this.favouriteIds.set(new Set(ids ?? [])),
       error: () => { /* silent: empty favourites list */ }
     });
-    this.api.get<string[]>('/api/test-picker/recent').subscribe({
-      next: ids => this.recentIds.set(ids ?? []),
-      error: () => { /* silent: empty recent list */ }
-    });
+    this.loadRecent();
 
     // Draft shelf: a later ?patientId= on this SAME, reused screen (another
     // parked order tapped in the app bar) swaps the patient + cart in place.
@@ -1008,16 +1028,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this._patient.set(res.patient);
           if (resumed) return;
           // Preselection priority:
-          //   1) localStorage draft for this patient
-          //   2) ?fromOrderId=… (Repeat flow from a prior order)
+          //   1) ?fromOrderId=… (Repeat flow from a prior order) — an explicit
+          //      Repeat always wins; a leftover draft for this patient used to
+          //      win here and Repeat showed the DRAFT's tests (QA #5).
+          //   2) localStorage draft for this patient
           //   3) ?appointmentId=… → fetch the appointment's draft TestIds
           //      and pre-load them into the cart (reception just clicks Create)
+          if (fromOrderId) { this.repeatFromOrder(fromOrderId); return; }
           const restored = this.restoreDraftFor(pid);
           if (restored) return;
-          if (fromOrderId) {
-            const prior = (res.history ?? []).find(h => h.id === fromOrderId);
-            if (prior) { this.preselectFromOrder(prior); return; }
-          }
           if (appointmentId) this.preselectFromAppointment(appointmentId);
         },
         error: () => this.toasts.error('Could not load patient')
@@ -1056,14 +1075,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // switch — just remember it so a later tap on ANY draft counts.
     if (!pid || q.has('orderId') || q.has('editOrderId')) { this.stagedPid = pid; return; }
     if (pid === this.stagedPid) return;
-    this.switchToPatient(pid);
+    this.switchToPatient(pid, q.get('fromOrderId'));
   }
 
   /** Put patient `pid`'s parked order on stage: park the cart on screen
    *  first (never lose a picked test), reset every per-order field, then
    *  load the patient and restore their draft — the same path a fresh
    *  /frontdesk/order?patientId= visit takes. */
-  private switchToPatient(pid: string) {
+  private switchToPatient(pid: string, fromOrderId: string | null = null) {
     this.parkCurrentCart();
     this.stagedPid = pid;
     this._patient.set(null);
@@ -1093,7 +1112,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       next: res => {
         if (this.stagedPid !== pid) return;          // superseded by a later switch
         this._patient.set(res.patient);
-        this.restoreDraftFor(pid);
+        if (fromOrderId) this.repeatFromOrder(fromOrderId);
+        else this.restoreDraftFor(pid);
       },
       error: () => { if (this.stagedPid === pid) this.toasts.error('Could not load patient'); }
     });
@@ -1238,6 +1258,48 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
     this.collectedTestIds.set(collected);
+  }
+
+  /**
+   * Repeat (?fromOrderId=): put EXACTLY the source order's items back in the
+   * cart — the tests, profiles and packages that were picked, never a
+   * bundle's members. The server resolves each to the tenant's CURRENT row
+   * (reference mode: a master id follows a later tenant override), so the
+   * cart holds the ids the catalogue lists. Anything no longer orderable is
+   * named in a notice instead of silently dropped or swapped.
+   *
+   * QA #5 root cause: the old path read each sample line's leaf `testId`
+   * from the patient history — a profile/package came back as its members,
+   * ids that no longer matched the catalogue (overrides) were dropped, and a
+   * saved draft for the patient took precedence over the Repeat itself.
+   */
+  private repeatFromOrder(orderId: string) {
+    this.api.get<RepeatItem[]>(`/api/orders/${orderId}/repeat-items`).subscribe({
+      next: items => this.whenCatalogue(() => this.applyRepeat(items ?? [])),
+      error: e => this.toasts.error(`Could not repeat the order: ${ApiError.from(e).message}`),
+    });
+  }
+
+  /** Cart ← the repeat plan, with a notice for anything left out. */
+  applyRepeat(items: readonly RepeatItem[]) {
+    if (items.length === 0) { this.toasts.warning('Repeated order had no tests'); return; }
+    const plan = planRepeat(items, this._tests());
+    this._selected.set(plan.ids);
+    const n = plan.ids.length;
+    if (plan.unavailable.length > 0) {
+      this.toasts.warning(`Repeated ${n} item${n === 1 ? '' : 's'}. No longer available: ${plan.unavailable.join(', ')}`);
+    } else {
+      this.toasts.success(`Repeated ${n} item${n === 1 ? '' : 's'}`);
+    }
+  }
+
+  /** Run `fn` once the orderable catalogue has loaded (it arrives async). */
+  private whenCatalogue(fn: () => void) {
+    if (this._tests().length > 0) { fn(); return; }
+    const interval = setInterval(() => {
+      if (this._tests().length > 0) { clearInterval(interval); fn(); }
+    }, 150);
+    setTimeout(() => clearInterval(interval), 10000);
   }
 
   private preselectFromOrder(prior: HistoryRow, isEdit = false) {
@@ -1669,7 +1731,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         } else if (d.mode === 'later') {
           if (d.advanceAmount && d.advanceAmount > 0) {
             const updated = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-              amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
+              amount: Math.min(d.advanceAmount, bill.balance), mode: d.advanceMode ?? 'cash'
             }));
             this.currentBill.set(updated);
           }
@@ -1714,6 +1776,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         // choice from the billing card (it was dropped on this path before).
         metadataJson: this.buildOrderMetadata(appointmentId)
       }));
+      this.noteOrdered(this._selected());
       const targetAmount = this.total();
       const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', {
         orderId: order.id,
@@ -1723,6 +1786,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       // Track the latest bill state so the paid summary reflects the actual
       // amount paid / balance due (the payment endpoint returns the updated bill).
       let latest = bill;
+      // Never post more than the bill actually owes: the server rejects an
+      // overpayment (QA #3b), and the cart preview can differ from the
+      // server's figure by rounding.
+      const owed = (n: number) => (typeof bill?.balance === 'number' && bill.balance >= 0)
+        ? Math.min(n, bill.balance) : n;
       if (d.mode !== 'later') {
         if (d.mode === 'split' && d.splitParts?.length) {
           for (const part of d.splitParts) {
@@ -1732,7 +1800,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           // Credit Wallet: accrue the charge to the vendor's tab FIRST, then
           // record the bill payment.
           if (!d.vendorId) throw new Error('No vendor selected');
-          const payAmt = targetAmount;
+          const payAmt = owed(targetAmount);
           await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
             amount: payAmt, billId: bill.id, reason: `Bill #${bill.id.substring(0, 8)}`
           }));
@@ -1740,7 +1808,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
             amount: payAmt, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
           }));
         } else {
-          const payAmt = targetAmount;
+          const payAmt = owed(targetAmount);
           latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
             amount: payAmt, mode: d.mode, referenceNo: d.referenceNo
           }));
@@ -1749,7 +1817,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         // Pay-later with an advance: record the partial payment now; the rest
         // of the bill stays outstanding (due on report).
         latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-          amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
+          amount: owed(d.advanceAmount), mode: d.advanceMode ?? 'cash'
         }));
       }
 
@@ -2111,6 +2179,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }).subscribe({
       next: order => {
         this._saving.set(false);
+        this.noteOrdered(this._selected());
         // Order persisted — drop any saved draft for this patient.
         const pid = p.id;
         try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + pid); } catch { /* ignore */ }

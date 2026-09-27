@@ -383,6 +383,17 @@ describe('Billing counter — Pay later', () => {
     expect(primaries(el)[0].textContent).toMatch(/Collect ₹300(\.00)? — rest later/);
   });
 
+  it('QA #3b: an advance above the balance is an inline error and the CTA is not ready', async () => {
+    const { f, el, c } = await openO1();
+    c.payPanel().setKind('later');
+    c.payPanel().setAdvance('1500');          // o1 owes ₹1,000
+    f.detectChanges();
+    expect(el.querySelector('.pf-ipp__err')?.textContent).toContain("Advance can't be more than the bill");
+    expect(c.collectReady()).toBe(false);
+    expect(primaries(el).length).toBe(0);
+    expect(c.collectLabel()).toBe('Save — pay later');
+  });
+
   it('records the bill with its balance (no payment), stamps it pay-later, shows the saved state', async () => {
     const { f, el, c, api, router, toasts } = await openO1();
     await c.confirmPayment({ mode: 'later' });
