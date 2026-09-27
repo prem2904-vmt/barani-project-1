@@ -513,6 +513,54 @@ describe('Reports list — same reports for every viewer, actions by permission'
     expect(posted.filter((u: string) => /\/deliver|\/generate/.test(u))).toEqual([]);
   });
 
+  for (const nd of [true, false]) {
+    it(`view-only can PRINT from the list (${nd ? 'new' : 'classic'} design) — a row Print, no Share menu`, async () => {
+      const { el, c, f } = await render({ nd, perms: ['view_report'] });
+      c._filter.set('all'); f.detectChanges();
+      const print = el.querySelector('.pf-rq-print') as HTMLButtonElement;
+      expect(print).not.toBeNull();
+      expect(el.querySelector('[title="Send via WhatsApp"]')).toBeNull();
+      const spy = vi.spyOn(c, 'printReport').mockResolvedValue(undefined);
+      print.click();
+      expect(spy).toHaveBeenCalled();
+    });
+  }
+
+  it('view-only print is NOT a delivery: nothing is recorded', async () => {
+    const { c, api } = await render({ perms: ['view_report'] });
+    api.post.mockClear();   // init's /backfill
+    const job = vi.spyOn(c, 'printJob').mockResolvedValue(true);
+    await c.printReport(c.items()[0]);
+    expect(job).toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('the delivery desk\'s print still records the delivery (via print); a dismissed print records nothing', async () => {
+    const { c, api } = await render({ perms: ['deliver_report', 'view_report'] });
+    api.post.mockClear();   // init's /backfill
+    const job = vi.spyOn(c, 'printJob').mockResolvedValue(true);
+    await c.printReport(c.items()[0]);
+    expect(api.post).toHaveBeenCalledWith(`/api/reports/${c.items()[0].id}/deliver`, expect.objectContaining({ via: 'print' }));
+    api.post.mockClear();
+    job.mockResolvedValue(false);
+    await c.printReport(c.items()[0]);
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('the delivery desk keeps Print inside the Share menu, not as a row button', async () => {
+    const { el } = await render({ perms: ['deliver_report', 'view_report'] });
+    expect(el.querySelector('.pf-rq-print')).toBeNull();
+  });
+
+  it('no report permission → no print at all', async () => {
+    const { c, api } = await render({ perms: ['edit_result'] });
+    api.post.mockClear();   // init's /backfill
+    const job = vi.spyOn(c, 'printJob').mockResolvedValue(true);
+    await c.printReport(c.items()[0] ?? { id: 'x' });
+    expect(job).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   it('the delivery desk (deliver_report) keeps Generate and Regenerate', async () => {
     const { el, f } = await render({ perms: ['deliver_report', 'view_report'] });
     expect(el.querySelector('.pf-rq-generate')).not.toBeNull();

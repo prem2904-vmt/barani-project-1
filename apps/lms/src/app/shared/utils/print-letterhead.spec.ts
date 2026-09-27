@@ -141,10 +141,12 @@ describe('print entry points', () => {
   beforeEach(() => { cap = captureBlobs(); });
   afterEach(() => { cap.restore(); document.querySelectorAll('iframe').forEach(f => f.remove()); });
 
-  function queue(template: unknown, dialog: unknown) {
+  function queue(template: unknown, dialog: unknown, perms: { deliver: boolean } = { deliver: true }) {
     const c = Object.create(ReportQueueComponent.prototype) as any;
     const { api, posted } = apiWith(template);
     c.injector = injectorFor(); c.api = api; c.dialog = dialog;
+    // Field initialisers don't run under Object.create — the permission gates.
+    c.canDeliver = () => perms.deliver; c.canPrint = () => true;
     c.toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
     c.refresh = vi.fn();
     return { c, api, posted };
@@ -176,6 +178,15 @@ describe('print entry points', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
+  it('queue Print by a VIEW-ONLY user (no deliver_report): same letterpad choice, printed, NO delivery recorded', async () => {
+    const d = dialogPicking(PRINT_CHOICE_LETTERHEAD);
+    const { c, api } = queue(tplOn, d, { deliver: false });
+    await c.printReport(report);
+    expect(d.choose).toHaveBeenCalledTimes(1);
+    expect(hasHeader(await pdfText(cap.blobs.at(-1)!))).toBe(false);
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   it('queue Print, setting OFF → no prompt, full header', async () => {
     const d = dialogPicking(PRINT_CHOICE_LETTERHEAD);
     const { c } = queue(tplOff, d);
@@ -192,6 +203,7 @@ describe('print entry points', () => {
     Object.defineProperty(c, 'toasts', { value: { success: vi.fn(), error: vi.fn(), info: vi.fn() } });
     Object.defineProperty(c, '_report', { value: signal(report) });
     Object.defineProperty(c, 'busy', { value: signal(null) });
+    Object.defineProperty(c, 'canPrint', { value: () => true });
     c.flash = vi.fn();
     c._pdfBlob = null; c._pdfInput = null;
     return { c, posted };

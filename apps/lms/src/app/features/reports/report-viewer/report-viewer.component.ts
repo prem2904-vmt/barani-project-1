@@ -263,8 +263,14 @@ export class ReportViewerComponent implements OnInit {
    *  colleague. Without it (view_report only — Lab Tech, Branch / Quality
    *  Manager) the viewer is VIEW-ONLY; the PDF download lives on the list. */
   readonly canDeliver = computed(() => this.auth.hasPermission('deliver_report'));
+  /** Print is NOT a delivery here (owner, 2026-09-27): everyone who can open
+   *  the viewer (its route: deliver_report | view_report | validate_result)
+   *  may print. print() is a client-side render + the letterpad choice — it
+   *  never calls /deliver or archives, so a view-only print records nothing. */
+  readonly canPrint = computed(() =>
+    ['deliver_report', 'view_report', 'validate_result'].some(p => this.auth.hasPermission(p)));
   /** The phones' More sheet has something in it. */
-  readonly hasMoreActions = computed(() => this.canDeliver() || this.canEditResult());
+  readonly hasMoreActions = computed(() => this.canPrint() || this.canDeliver() || this.canEditResult());
   readonly editDialogOpen = signal(false);
 
   openEditDialog() { this.editDialogOpen.set(true); }
@@ -800,7 +806,7 @@ export class ReportViewerComponent implements OnInit {
    *  (letterhead paper renders with the header & footer left blank). */
   async print() {
     const r = this._report();
-    if (!r || this.busy() === 'print') return;
+    if (!r || this.busy() === 'print' || !this.canPrint()) return;
     this.busy.set('print');
     try {
       const input = await this.buildPdfInput(r);

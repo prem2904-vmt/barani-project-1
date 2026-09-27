@@ -43,7 +43,7 @@
           Generate
         </button>
         } @else if (viewOnly()) {
-        <span class="nd-chip nd-chip--static pf-rq-viewonly" title="You can view and download reports. Sending them needs the Deliver reports permission.">View only</span>
+        <span class="nd-chip nd-chip--static pf-rq-viewonly" title="You can view, download and print reports. Sending them needs the Deliver reports permission.">View only</span>
         }
       </ng-container>
     </pf-hero-band>
@@ -410,6 +410,18 @@
               </svg>
               <span class="nd-rowact__t">Download</span>
             </button>
+            <!-- View-only Results can PRINT (not a delivery: nothing recorded);
+                 the delivery desk prints from the Share menu below. -->
+            @if (!canDeliver() && canPrint()) {
+            <button type="button" class="nd-rowact pf-rq-print" [class.nd-rowact--icon]="!web()" aria-label="Print" title="Print"
+                    (click)="printReport(r)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+              </svg>
+              <span class="nd-rowact__t">Print</span>
+            </button>
+            }
             <!-- Sending needs deliver_report; a view_report-only viewer sees the
                  SAME list with View / Download / More only (route-access.ts). -->
             @if (canDeliver()) {
@@ -550,6 +562,17 @@
             </svg>
             <span class="pf-rq-act__lbl">Download</span>
           </button>
+
+          <!-- View-only Results can PRINT (not a delivery: nothing recorded). -->
+          @if (!canDeliver() && canPrint()) {
+          <button type="button" class="pf-rq-act pf-rq-print press" title="Print" (click)="printReport(r)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            <span class="pf-rq-act__lbl">Print</span>
+          </button>
+          }
 
           <!-- Split button: the face sends it the usual way (WhatsApp opens
                pre-filled - the send is still the user's), the caret picks a

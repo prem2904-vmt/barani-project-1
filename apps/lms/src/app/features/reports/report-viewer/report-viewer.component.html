@@ -17,7 +17,7 @@
             <span class="pf-rv-act__t">Edit</span>
           </button>
         }
-        @if (canDeliver()) {
+        @if (canPrint()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--print pf-rv-in" style="--i: 4"
                 [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'print'"
                 [attr.aria-label]="done() === 'print' ? 'Printing' : 'Print'" title="Print"
@@ -234,7 +234,7 @@
          (keydown.escape)="moreOpen.set(false)">
       <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
       <ul class="pf-rv-menu" role="list">
-        @if (canDeliver()) {
+        @if (canPrint()) {
         <li>
           <button type="button" class="pf-rv-menu__row pf-rv-menu__row--print" (click)="moreOpen.set(false); print()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>

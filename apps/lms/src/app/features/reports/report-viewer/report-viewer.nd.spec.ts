@@ -189,12 +189,11 @@ describe('Report view (nd) — actions', () => {
     expect(primaries(el).length).toBe(1);
   });
 
-  it('VIEW-ONLY (view_report, no deliver_report): the report shows, but no Send / Print / Share / More', async () => {
+  it('VIEW-ONLY (view_report, no deliver_report): the report shows with Print, but no Send / Share', async () => {
     const { el } = await render({ perms: ['view_report'] });
     expect(el.querySelector('.pf-rv-act--send')).toBeNull();
-    expect(el.querySelector('.pf-rv-act--print')).toBeNull();
+    expect(el.querySelector('.pf-rv-act--print')).not.toBeNull();   // owner 2026-09-27: view-only may print
     expect(el.querySelector('.pf-rv-act--share')).toBeNull();
-    expect(el.querySelector('.pf-rv-act--more')).toBeNull();
     expect(el.querySelector('.pf-rv-act--edit')).toBeNull();
     expect(primaries(el).length).toBe(0);
     // …a view_report + edit_result viewer (Lab Technician) keeps Edit and its sheet.
@@ -202,6 +201,36 @@ describe('Report view (nd) — actions', () => {
     const lt = await render({ perms: ['view_report', 'edit_result'] });
     expect(lt.el.querySelector('.pf-rv-act--edit')).not.toBeNull();
     expect(lt.el.querySelector('.pf-rv-act--send')).toBeNull();
+  });
+
+  it('VIEW-ONLY: Print prints (letterpad choice honoured) and records NO delivery', async () => {
+    const { c, api } = await render({ perms: ['view_report'] });
+    vi.spyOn(c, 'buildPdfInput').mockResolvedValue({ template: { letterpadMode: false }, report: { id: 'rep-1' } });
+    const blob = vi.spyOn(c, 'buildPdfBlob').mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
+    const had = (URL as any).createObjectURL;
+    (URL as any).createObjectURL = vi.fn(() => 'blob:print');
+    try {
+      await c.print();
+    } finally {
+      (URL as any).createObjectURL = had;
+      document.querySelectorAll('iframe[src="blob:print"]').forEach(f => f.remove());
+    }
+    expect(blob).toHaveBeenCalled();
+    expect(c.done()).toBe('print');
+    expect(api.post).not.toHaveBeenCalled();   // no /deliver, no archive upload
+  });
+
+  it('VIEW-ONLY phones: the More sheet holds Print only', async () => {
+    const { el, f } = await render({ perms: ['view_report'], phone: true });
+    (el.querySelector('.pf-rv-act--more') as HTMLButtonElement).click();
+    f.detectChanges();
+    const rows = Array.from(el.querySelectorAll('.pf-rv-sheet--more .pf-rv-menu__row')).map(b => b.textContent?.trim());
+    expect(rows).toEqual(['Print']);
+  });
+
+  it('no report permission path: without view/deliver/validate there is no Print', async () => {
+    const { el } = await render({ perms: ['edit_result'] });
+    expect(el.querySelector('.pf-rv-act--print')).toBeNull();
   });
 
   it('VIEW-ONLY: deliverWhatsApp() never records a delivery', async () => {

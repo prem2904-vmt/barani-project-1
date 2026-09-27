@@ -193,8 +193,13 @@ export class ReportQueueComponent implements OnInit {
   readonly canGenerate = computed(() => this.auth.hasAnyPermission(["deliver_report", "validate_result"]));
   /** VIEW-ONLY Results (view_report without deliver_report — Lab Tech, Branch
    *  Manager, Quality Manager): the same branch-scoped list, View + Download
-   *  only. No Share / WhatsApp / Print-delivery, no Generate / Regenerate. */
+   *  + Print (not recorded as a delivery). No Share / WhatsApp, no
+   *  Generate / Regenerate. */
   readonly viewOnly = computed(() => !this.canDeliver());
+  /** Print (owner, 2026-09-27): everyone who can open Results may print —
+   *  view-only included, via the same letterpad choice. For them it is NOT a
+   *  delivery: nothing is recorded (POST /deliver stays deliver_report). */
+  readonly canPrint = computed(() => this.canDeliver() || this.auth.hasPermission("view_report"));
   /** "Open lab results" lands on /lab/sample/:id — its guard. */
   readonly canOpenLabResults = computed(() =>
     this.auth.hasAnyPermission(["enter_result", "edit_result", "validate_result"]));
@@ -700,10 +705,18 @@ export class ReportQueueComponent implements OnInit {
     this.recordDelivery(r, via);
   }
 
-  /** Print a report from the queue (a delivery for deliver_report users).
+  /** Print a report from the queue. A delivery for deliver_report users; a
+   *  plain print (no delivery record, no send) for view-only users.
    *  Letterpad setting on → one quick choice (letterhead paper, header &
    *  footer blank — the default — or plain paper) for THIS job only. */
   async printReport(r: Report) {
+    if (!this.canPrint()) return;
+    if (await this.printJob(r) && this.canDeliver()) this.recordDelivery(r, "print");
+  }
+
+  /** Render + hand the report to the printer. True when something was
+   *  printed (false: letterpad question dismissed, or the render failed). */
+  private async printJob(r: Report): Promise<boolean> {
     try {
       const [{ buildReportPdf }, { askPrintLetterhead }] = await Promise.all([
         import('../../../shared/utils/report-pdf'),
@@ -711,7 +724,7 @@ export class ReportQueueComponent implements OnInit {
       ]);
       const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
       const job = await askPrintLetterhead(baseInput.template, this.dialog);
-      if (!job) return;   // dismissed — nothing printed, nothing recorded
+      if (!job) return false;   // dismissed — nothing printed, nothing recorded
       const doc = buildReportPdf({ ...baseInput, imageCache, trendograms, blankLetterhead: job.blankLetterhead });
       if (this.isNativePlatform()) {
         // Capacitor WKWebView: hand the PDF to the native share sheet (Print).
@@ -721,13 +734,13 @@ export class ReportQueueComponent implements OnInit {
         doc.autoPrint();
         printPdfBlobUrl(URL.createObjectURL(doc.output('blob')), { revokeOnDone: true });
       }
+      return true;
     } catch (err) {
       console.error("[reports] print failed", err);
       const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
       this.toasts.error(reportRenderErrorMessage(err, "Could not open print window"));
-      return;
+      return false;
     }
-    this.recordDelivery(r, "print");
   }
 
   private recordDelivery(r: Report, via: string) {

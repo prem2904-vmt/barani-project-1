@@ -78,10 +78,11 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/lab/receive':        { perms: ['receive_sample'], workflow: ['lab_intake'] },
   '/lost-and-found':     { perms: ['receive_sample', 'reject_sample', 'cancel_order', 'manage_users'], workflow: ['lost_and_found'] },
   '/pathologist':        { perms: ['validate_result'], workflow: ['validate'] },
-  // Results. deliver_report = the delivery desk (Share / WhatsApp / Print /
-  // Generate). view_report alone (Lab Tech, Branch Manager, Quality Manager)
-  // opens the SAME branch-scoped list VIEW-ONLY: View + Download, no send or
-  // (re)generate — the backend gates those on deliver_report|validate_result.
+  // Results. deliver_report = the delivery desk (Share / WhatsApp / Print as a
+  // recorded delivery / Generate). view_report alone (Lab Tech, Branch
+  // Manager, Quality Manager) opens the SAME branch-scoped list VIEW-ONLY:
+  // View + Download + Print (a plain print — no delivery is recorded), no send
+  // or (re)generate — the backend gates those on deliver_report|validate_result.
   '/reports':            { perms: ['deliver_report', 'view_report'], workflow: ['results'] },
 
   // ── Counters / other work areas ────────────────────────────────────────
