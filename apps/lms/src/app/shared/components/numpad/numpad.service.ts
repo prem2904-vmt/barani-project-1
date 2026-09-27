@@ -8,6 +8,7 @@ import { CapacitorService } from '../../../core/services/capacitor.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { NUMPAD_SYMBOLS, NumpadChar, backspaceText, insertText } from './numpad-keys';
 import { scrollParentOf } from './numpad-nav';
+import { isTouchCapable, readTouchEnv } from './touch-capability';
 
 /** The live flag hint a screen already shows for the field (L / H / CL…). */
 export interface NumpadFlag {
@@ -93,6 +94,8 @@ export class NumpadService {
   private panelRef: ComponentRef<unknown> | null = null;
   private panelEl: HTMLElement | null = null;
   private lastTouchAt = 0;
+  /** A real finger touch was seen: this device is touch-capable for good. */
+  private touchSeen = false;
   private chainUntil = 0;
   private tapCandidate = false;
   private tapX = 0;
@@ -110,7 +113,17 @@ export class NumpadService {
       set(!!m.matches);
       m.addEventListener?.('change', e => set(e.matches));
     };
-    mq('(pointer: coarse)', v => { this.touch.set(v); if (!v) this.hide(); });
+    // Touch-capable = native shell / touch points / ANY coarse pointer (see
+    // touch-capability.ts — an iPad with a trackpad reports pointer: fine).
+    const recheck = () => {
+      const v = isTouchCapable(readTouchEnv(view)) || this.touchSeen;
+      this.touch.set(v);
+      if (!v) this.hide();
+    };
+    recheck();
+    for (const q of ['(pointer: coarse)', '(any-pointer: coarse)']) {
+      try { view.matchMedia?.(q).addEventListener?.('change', recheck); } catch { /* old engines */ }
+    }
     mq('(prefers-reduced-motion: reduce)', v => this.reducedMotion.set(v));
 
     const onDown = (e: PointerEvent) => this.onPointerDown(e);
@@ -153,6 +166,13 @@ export class NumpadService {
     if (!this.touch()) return;
     const now = Date.now();
     if (now - this.lastTouchAt < TOUCH_FOCUS_MS || now < this.chainUntil) this.show(f);
+  }
+
+  /** A finger / pen touched the screen: decided per tap, not only at init
+   *  (so a device the environment check missed still gets the pad). */
+  markTouch(): void {
+    this.lastTouchAt = Date.now();
+    if (!this.touchSeen) { this.touchSeen = true; this.touch.set(true); }
   }
 
   /** A finger tapped an already-focused field: bring the pad back. */
@@ -338,7 +358,7 @@ export class NumpadService {
   }
 
   private onPointerDown(e: PointerEvent): void {
-    if (e.pointerType === 'touch' || e.pointerType === 'pen') this.lastTouchAt = Date.now();
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') this.markTouch();
     this.tapCandidate = false;
     if (!this.open()) return;
     const t = e.target as Element | null;

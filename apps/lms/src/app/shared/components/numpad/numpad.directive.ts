@@ -86,11 +86,24 @@ export function focusField(el: HTMLElement, openPicker = false): void {
   }
 }
 
+const NON_TYPING_KEYS = new Set([
+  'Unidentified', 'Process', 'Dead', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
+  'Fn', 'FnLock', 'Hyper', 'Super', 'OS', 'AltGraph', 'NumLock', 'ScrollLock',
+]);
+/** A real typed key (not a modifier alone or an IME placeholder). */
+export function isTypedKey(e: KeyboardEvent): boolean {
+  return !!e.key && !NON_TYPING_KEYS.has(e.key);
+}
+
 /**
  * `pfNumpad` — a numeric result field that uses the in-app numpad on touch
  * devices. Desktop / fine pointers: nothing changes (no attribute touched).
  *
- * Touch: the system keyboard is suppressed with `inputmode="none"` — the
+ * Touch-capable devices (touch-capability.ts: Capacitor native shell,
+ * maxTouchPoints, any coarse pointer — an iPad in desktop-UA mode with a
+ * trackpad included), and any field a finger touches (applied on
+ * pointerdown, before iOS focuses it): the system keyboard is suppressed
+ * with `inputmode="none"` — the
  * field stays a real, editable text box (caret, selection, screen-reader
  * semantics, hardware keyboards and Scribble all still work); `readonly` is
  * never used. A `type="number"` field becomes `type="text"` on touch so
@@ -185,14 +198,22 @@ export class NumpadDirective implements NumpadField {
   }
 
   onPointerDown(e: PointerEvent): void {
-    if (!this.active()) return;
-    if (e.pointerType === 'touch' || e.pointerType === 'pen') this.svc.tapped(this);
+    if (!this.pfNumpad()) return;
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    // A finger on the field: iOS reads inputmode when focus lands (right
+    // after this event), so suppress the system keyboard NOW, synchronously
+    // — not on the next change-detection pass.
+    this.svc.markTouch();
+    this.applyMode(true);
+    this.svc.tapped(this);
   }
 
   onKeydown(e: KeyboardEvent): void {
     if ((e as unknown as Record<string, unknown>)[NUMPAD_EVENT]) return;
-    // A hardware keyboard on a touch device: real typing, pad steps aside.
-    if (this.active() && e.key && e.key !== 'Unidentified' && e.key !== 'Process') this.svc.hardwareKey(this);
+    // A key actually TYPED on a hardware keyboard: real typing, the pad
+    // steps aside (tapping the field brings it back). An attached-but-idle
+    // keyboard — or a lone modifier / IME placeholder event — changes nothing.
+    if (this.active() && isTypedKey(e)) this.svc.hardwareKey(this);
   }
 
   onInput(): void {

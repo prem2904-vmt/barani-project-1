@@ -122,10 +122,13 @@ afterEach(() => {
 
 describe('Sample result entry — touch numpad', () => {
   it('desktop: numeric results stay plain decimal fields (no pad)', async () => {
-    const { field, pad, tap } = await render({ touch: false });
+    const { field, pad } = await render({ touch: false });
     const chol = field('ot1');
     expect(chol.getAttribute('inputmode')).toBe('decimal');
-    tap(chol);
+    // A mouse click (desktop): nothing switches, no pad.
+    chol.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }));
+    chol.focus();
+    expect(chol.getAttribute('inputmode')).toBe('decimal');
     expect(pad()).toBeNull();
   });
 

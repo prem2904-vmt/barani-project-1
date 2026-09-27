@@ -83,11 +83,14 @@ afterEach(() => {
 
 describe('Result entry — touch numpad', () => {
   it('desktop: the grid numeric field is unchanged (type=number, decimal keyboard, rail keypad kept)', async () => {
-    const { el, field, pad, tap } = await render({ touch: false });
+    const { el, field, pad } = await render({ touch: false });
     const hb = field('hb');
     expect(hb.type).toBe('number');
     expect(hb.getAttribute('inputmode')).toBe('decimal');
-    tap(hb);
+    // A mouse click (desktop): nothing switches, no pad.
+    hb.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }));
+    hb.focus();
+    expect(hb.getAttribute('inputmode')).toBe('decimal');
     expect(pad()).toBeNull();
     expect(el.querySelector('.pf-rail__padhint')).toBeNull();
   });

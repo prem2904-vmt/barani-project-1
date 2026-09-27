@@ -111,12 +111,17 @@ describe('numpad keys (pure edits)', () => {
 
 describe('pfNumpad — desktop / fine pointer', () => {
   it('changes nothing: inputmode, type and focus behave as before', async () => {
-    const { q, pad, tapField } = await setup({ touch: false });
+    const { q, pad, tick } = await setup({ touch: false });
     const free = q('.free');
     expect(free.getAttribute('inputmode')).toBe('decimal');
     expect(q('.mic').type).toBe('number');
     expect(q('.a').hasAttribute('inputmode')).toBe(false);
-    tapField(q('.a'));
+    // A mouse click: nothing switches, no pad.
+    const a = q('.a');
+    a.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }));
+    a.focus();
+    tick();
+    expect(a.hasAttribute('inputmode')).toBe(false);
     expect(pad()).toBeNull();
   });
 });
