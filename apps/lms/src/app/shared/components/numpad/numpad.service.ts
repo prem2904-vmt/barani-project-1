@@ -446,6 +446,11 @@ export class NumpadService {
   private reveal(el: HTMLElement, sheetH: number, limitY: number): void {
     if (!sheetH) return;
     const scroller = scrollParentOf(el);
+    if (!scroller) {
+      // No page scroller to pad: just bring the field into view.
+      el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      return;
+    }
     if (!this.padded || this.padded.el !== scroller) {
       this.unpad();
       this.padded = { el: scroller, prev: scroller.style.paddingBottom };
@@ -458,9 +463,7 @@ export class NumpadService {
     else if (r.top < 12) dy = r.top - 12;
     if (dy) {
       const smooth = !this.reducedMotion();
-      if (scroller === this.doc.scrollingElement || scroller === this.doc.documentElement) {
-        this.doc.defaultView?.scrollBy?.({ top: dy, behavior: smooth ? 'smooth' : 'auto' });
-      } else if (typeof scroller.scrollBy === 'function') {
+      if (typeof scroller.scrollBy === 'function') {
         scroller.scrollBy({ top: dy, behavior: smooth ? 'smooth' : 'auto' });
       } else {
         scroller.scrollTop += dy;

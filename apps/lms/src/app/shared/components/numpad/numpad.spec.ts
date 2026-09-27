@@ -466,10 +466,27 @@ describe('lifting the field never clips the results (iPad, 2026-09-28)', () => {
     expect(scrollParentOf(input)).toBe(page);
   });
 
-  it('with no page-sized scroller, the document scrolls (never a small inner box)', () => {
+  it('with no page-sized scroller: nothing is padded — NEVER <html>/<body> (that shrank the whole fixed-height app and cut it off)', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1024 });
     const { page, input } = build();
     Object.defineProperty(page, 'clientHeight', { configurable: true, value: 200 });
-    expect(scrollParentOf(input)).toBe(document.scrollingElement ?? document.documentElement);
+    expect(scrollParentOf(input)).toBeNull();
+  });
+
+  it('a page scroller that does not overflow yet (short list) is still the one padded', () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1024 });
+    const { page, input } = build();
+    Object.defineProperty(page, 'scrollHeight', { configurable: true, value: 700 });
+    expect(scrollParentOf(input)).toBe(page);
+  });
+
+  it('opening the pad never touches the document root padding', async () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1366 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    const { q, svc, tapField } = await setup();
+    tapField(q('.a'));
+    svc.layoutNow();
+    expect(document.documentElement.style.paddingBottom).toBe('');
+    expect(document.body.style.paddingBottom).toBe('');
   });
 });

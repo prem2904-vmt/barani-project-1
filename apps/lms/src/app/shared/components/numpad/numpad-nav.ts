@@ -71,13 +71,18 @@ export function nextField(fields: readonly HTMLElement[], from: HTMLElement): HT
  * candidate must really scroll vertically AND be page-sized (at least 40% of
  * the viewport); otherwise the document scroller is used.
  */
-export function scrollParentOf(el: HTMLElement): HTMLElement {
+export function scrollParentOf(el: HTMLElement): HTMLElement | null {
   const doc = el.ownerDocument;
   const view = doc.defaultView;
   const minH = (view?.innerHeight ?? 0) * 0.4;
-  for (let n = el.parentElement; n && n !== doc.body; n = n.parentElement) {
+  for (let n = el.parentElement; n && n !== doc.body && n !== doc.documentElement; n = n.parentElement) {
     const oy = view?.getComputedStyle(n).overflowY ?? '';
-    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1 && n.clientHeight >= minH) return n;
+    // Page-sized vertical scroller; it may not overflow YET (a short list) —
+    // the padding we add is what gives the last rows room to rise.
+    if ((oy === 'auto' || oy === 'scroll') && n.clientHeight >= minH) return n;
   }
-  return (doc.scrollingElement as HTMLElement) ?? doc.documentElement;
+  // NEVER the document root: the app shell is a fixed 100%-height layout, so
+  // padding <html> shrank the whole app by the pad's height and cut the page
+  // off above the pad (iPad, 2026-09-28).
+  return null;
 }
