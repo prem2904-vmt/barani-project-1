@@ -16,9 +16,10 @@ import { ProcessWorkflowConfig } from '../../models/process-workflow.model';
 @Component({
   standalone: true,
   imports: [CollectBandButtonComponent],
-  template: `<pf-collect-band-button [area]="area()" [orderId]="orderId()" [from]="from()" />`,
+  template: `<pf-collect-band-button [area]="area()" [orderId]="orderId()" [from]="from()" [inPlace]="inPlace()" />`,
 })
 class HostComponent {
+  inPlace = signal<(() => void) | null>(null);
   area = signal('frontdesk');
   orderId = signal<string | null>(null);
   from = signal<string | null>(null);
@@ -124,5 +125,20 @@ describe('pf-collect-band-button', () => {
     f.detectChanges();
     btn()!.click();
     expect(nav).toHaveBeenCalledWith(['/lab/collect'], { queryParams: { from: '/' } });
+  });
+
+  it('in place: with collection already on the screen it runs the host action, never navigates', () => {
+    const { f, host, btn, nav } = make();
+    const local = vi.fn();
+    host.inPlace.set(local);
+    f.detectChanges();
+    expect(btn()!.getAttribute('title')).toBe('Go to Collection');
+    btn()!.click();
+    expect(local).toHaveBeenCalledTimes(1);
+    expect(nav).not.toHaveBeenCalled();
+    host.inPlace.set(null);             // companion gone → back to navigating
+    f.detectChanges();
+    btn()!.click();
+    expect(nav).toHaveBeenCalled();
   });
 });

@@ -16,6 +16,8 @@ import { areasWithCollection, screenWorkArea } from '../../models/process-workfl
  *                 same deep link FD's row "Collect" and the after-payment
  *                 "Collect sample" use). Unset → the unfiltered collect queue.
  *   • `from`    — where Back returns; defaults to the current URL.
+ *   • `inPlace` — the screen already shows collection (My Work's Collection
+ *                 companion): the button runs this instead of navigating.
  *
  * Renders only when the area holds an ENABLED `sample_collection` AND the
  * user has `collect_sample`. No workflow configured → nothing.
@@ -77,6 +79,8 @@ export class CollectBandButtonComponent {
   readonly orderId = input<string | null | undefined>(null);
   /** Back target; defaults to the current URL. */
   readonly from = input<string | null | undefined>(null);
+  /** Set → collection is already on this screen; open/focus it in place. */
+  readonly inPlace = input<(() => void) | null | undefined>(null);
 
   constructor() { try { this.process?.loadActive?.(); } catch { /* no workflow → hidden */ } }
 
@@ -87,7 +91,8 @@ export class CollectBandButtonComponent {
     return !!this.auth.hasPermission?.('collect_sample');
   });
 
-  readonly title = computed(() => this.orderId() ? 'Collect samples for this order' : 'Open sample collection');
+  readonly title = computed(() => this.inPlace() ? 'Go to Collection'
+    : this.orderId() ? 'Collect samples for this order' : 'Open sample collection');
 
   /** The navigation this button performs — exposed for tests. */
   target(): { commands: string[]; queryParams: Record<string, string> } {
@@ -98,6 +103,8 @@ export class CollectBandButtonComponent {
   }
 
   go(): void {
+    const local = this.inPlace();
+    if (local) { local(); return; }
     const t = this.target();
     this.router.navigate(t.commands, { queryParams: t.queryParams });
   }

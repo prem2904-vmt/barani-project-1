@@ -22,6 +22,7 @@ import { DelegateModalComponent } from './delegate-modal.component';
 import { CulturePanelComponent } from '../culture-panel/culture-panel.component';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ReceiveSamplesComponent } from '../receive-samples/receive-samples.component';
+import { SampleCollectionComponent } from '../sample-collection/sample-collection.component';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
@@ -45,6 +46,8 @@ import { plural } from '../../../shared/utils/plural';
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 /** Sticky "keep Lab Intake open" choice (new design only). */
 const INTAKE_PIN_KEY = 'pf-lms.my-work.intake-pinned';
+/** Collection companion collapsed to its strip (remembered per user). */
+const COLLECT_COLLAPSED_KEY = 'pf-lms.my-work.collect-collapsed';
 
 type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed' | 'culture';
 type Level = 'urgent' | 'high' | 'normal';
@@ -71,7 +74,7 @@ const COUNTERS: CounterSpec[] = [
   imports: [
     TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
-    AvatarComponent, ReceiveSamplesComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
+    AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
     ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -156,8 +159,10 @@ const COUNTERS: CounterSpec[] = [
             </svg>
             Refresh
           </button>
-          <!-- Band "Collect" (ND §1): only when the Lab area holds collection. -->
-          <pf-collect-band-button area="lab" />
+          <!-- Band "Collect" (ND §1): only when the Lab area holds collection.
+               With the embedded Collection companion on screen it opens THAT
+               (focuses its search) instead of leaving My Work. -->
+          <pf-collect-band-button area="lab" [inPlace]="showCollect() ? focusCollectFn : null" />
         </ng-container>
       </pf-hero-band>
       }
@@ -298,7 +303,22 @@ const COUNTERS: CounterSpec[] = [
            count stays — that is the part you actually read. Classic keeps
            its words (CSS swaps which of the two shows). -->
       <div class="pf-mtabs" role="tablist" aria-label="Sections">
-        @if (showIntake()) {
+        @if (showCollect()) {
+        <!-- Collection companion (collect in the Lab, no dispatch/intake):
+             takes the first tab exactly like Lab Intake does. -->
+        <button type="button" role="tab" class="pf-mtab press"
+                [class.pf-mtab--on]="mobileTab() === 'intake'"
+                [attr.aria-selected]="mobileTab() === 'intake'"
+                aria-label="Collection" title="Collection"
+                (click)="setMobileTab('intake')">
+          <svg class="pf-mtab__ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/>
+            <path d="M3 2h7M14 2h7M9 16H4M20 16h-5"/>
+          </svg>
+          <span class="pf-mtab__label">Collect</span>
+        </button>
+        } @else if (showIntake()) {
         <button type="button" role="tab" class="pf-mtab press"
                 [class.pf-mtab--on]="mobileTab() === 'intake'"
                 [attr.aria-selected]="mobileTab() === 'intake'"
@@ -368,10 +388,47 @@ const COUNTERS: CounterSpec[] = [
       <div class="pf-mw-split" #mwSplit
            [class.pf-mw-split--dragging]="mwDragging()">
 
-        <!-- LEFT: Lab Intake, when the workflow has lab_intake on; on phones
-             this pane shows under the first tab. Collection is NOT embedded
-             here — the band "Collect" button is the entry point (owner). -->
-        @if (showIntake()) {
+        <!-- LEFT companion slot — depends on the workflow (owner 2026-09-27):
+               • collection placed in the Lab AND no dispatch/intake step
+                 (tubes auto-receive at collection) → the COLLECTION card:
+                 find patient / scan → pending list → collect in place;
+               • dispatch + Lab Intake on → the Lab Intake card (below);
+               • neither → nothing; the work pane runs full width.
+             On phones the card shows under the first tab. -->
+        @if (showCollect()) {
+        @if (!collectOpen()) {
+        <button type="button" class="pf-mw-rail press" (click)="expandCollect()"
+                title="Open Collection" aria-label="Open Collection">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+          <span class="pf-mw-rail__label">Collection</span>
+        </button>
+        } @else {
+        <section #collectPane class="pf-mw-pane pf-mw-collect" [style.flex-basis.%]="mwSplitPct()"
+                 [class.pf-mobile-hide]="mobileTab() !== 'intake'">
+          <header class="pf-mw-pane__hdr pf-mw-pane__hdr--intake">
+            @if (theme.isNewDesign()) { <span class="nd-card__icon pf-mw-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7M9 16H4M20 16h-5"/></svg></span> }
+            <span class="pf-mw-pane__title">Collection</span>
+            @if (theme.isNewDesign() && !isPhone()) {
+            <button type="button" class="pf-mw-pin pf-mw-collect__hide press" (click)="collapseCollect()"
+                    title="Hide Collection" aria-label="Hide Collection">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m14 6-6 6 6 6"/>
+              </svg>
+            </button>
+            }
+          </header>
+          <div class="pf-mw-pane__body pf-mw-collect__body">
+            <!-- Collected tubes auto-receive (no dispatch/intake), so every
+                 collect refreshes the queue + counts straight away. -->
+            <pf-sample-collection [embedded]="true" (sampleCollected)="onSampleReceived()"></pf-sample-collection>
+          </div>
+        </section>
+        }
+        } @else if (showIntake()) {
 
         <!-- Lab Intake — header hosts an inline scan bar: barcode icon,
              manual-typing input, camera shortcut, and a Receive button.
@@ -455,11 +512,12 @@ const COUNTERS: CounterSpec[] = [
           </div>
         </section>
         }
+        }
 
         <!-- Drag handle — only when the left column actually holds a pane. -->
         @if (leftPaneOpen()) {
         <div class="pf-mw-handle" role="separator" aria-orientation="vertical"
-             aria-label="Resize Lab Intake / Workbench"
+             [attr.aria-label]="showCollect() ? 'Resize Collection / Workbench' : 'Resize Lab Intake / Workbench'"
              [attr.aria-valuenow]="mwSplitPct()" aria-valuemin="20" aria-valuemax="80" tabindex="0"
              (pointerdown)="onMwSplitPointerDown($event)"
              (pointermove)="onMwSplitPointerMove($event)"
@@ -468,7 +526,6 @@ const COUNTERS: CounterSpec[] = [
              (lostpointercapture)="onMwSplitPointerUp($event)">
           <span class="pf-mw-handle__grip" aria-hidden="true"></span>
         </div>
-        }
         }
 
         <!-- RIGHT: tabbed My Work + Queue. On phones this pane shows under
@@ -1265,6 +1322,11 @@ const COUNTERS: CounterSpec[] = [
       overflow-y: auto;
       padding: 14px 16px 16px;
     }
+    /* Collection companion: the embedded collect screen owns its own scroll
+       (find field fixed, pending list scrolls), so the body doesn't. */
+    .pf-mw-collect__body { display: flex; flex-direction: column; overflow: hidden; padding: 12px 14px 14px; }
+    .pf-mw-collect__body > pf-sample-collection { flex: 1 1 auto; min-height: 0; }
+    .pf-mw-collect__hide { margin-left: auto; }
 
     /* Tab cluster (right pane header) */
     .pf-mw-tabs {
@@ -2772,8 +2834,10 @@ export class MyWorkComponent implements OnInit {
   private readonly _intakeExpanded = signal<boolean>(this.readIntakePin());
   readonly intakeOpen = computed(() =>
     !this.theme.isNewDesign() || this.isPhone() || this._intakeExpanded());
-  /** The left column takes space only when Lab Intake is shown AND open. */
-  readonly leftPaneOpen = computed(() => this.showIntake() && this.intakeOpen());
+  /** The left column takes space only when its companion (Collection or Lab
+   *  Intake) is shown AND open. */
+  readonly leftPaneOpen = computed(() =>
+    this.showCollect() ? this.collectOpen() : this.showIntake() && this.intakeOpen());
 
   private readIntakePin(): boolean {
     try { return localStorage.getItem(INTAKE_PIN_KEY) === '1'; } catch { return false; }
@@ -2793,10 +2857,51 @@ export class MyWorkComponent implements OnInit {
     } catch { /* ignore */ }
   }
 
+  // ── Left companion slot: decided by the workflow (owner 2026-09-27) ──
+  /** Collection companion: sample collection is placed (enabled) in the Lab
+   *  work-area AND the workflow has no dispatch/intake step — tubes are
+   *  auto-received the moment they are drawn, so Lab Intake has nothing to do
+   *  and the tech collects right here. */
+  readonly showCollect = computed(() =>
+    !!this.process.collectsInLab?.() && !this.process.dispatchStepEnabled());
   /** Lab Intake is a placeable workflow action — hide the intake pane/tab when
-   *  an admin switches `lab_intake` OFF in /admin/process. Collection in the
-   *  lab no longer takes this slot: it opens from the band "Collect" button. */
-  readonly showIntake = computed(() => this.process.isEnabled('lab_intake'));
+   *  an admin switches `lab_intake` OFF in /admin/process, or when the
+   *  Collection companion owns the slot. */
+  readonly showIntake = computed(() => !this.showCollect() && this.process.isEnabled('lab_intake'));
+  /** Either companion occupies the left slot (else the work pane is full width). */
+  readonly showLeftPane = computed(() => this.showCollect() || this.showIntake());
+
+  // Collection companion: open by default (collecting is the point of it);
+  // collapses to the same labelled strip as Lab Intake, remembered per user.
+  private readonly _collectCollapsed = signal<boolean>(this.readCollectCollapsed());
+  readonly collectOpen = computed(() =>
+    !this.theme.isNewDesign() || this.isPhone() || !this._collectCollapsed());
+  private readCollectCollapsed(): boolean {
+    try { return localStorage.getItem(COLLECT_COLLAPSED_KEY) === '1'; } catch { return false; }
+  }
+  private setCollectCollapsed(v: boolean): void {
+    this._collectCollapsed.set(v);
+    try {
+      if (v) localStorage.setItem(COLLECT_COLLAPSED_KEY, '1');
+      else localStorage.removeItem(COLLECT_COLLAPSED_KEY);
+    } catch { /* ignore */ }
+  }
+  expandCollect(): void { this.setCollectCollapsed(false); }
+  collapseCollect(): void { this.setCollectCollapsed(true); }
+
+  private readonly collectPane = viewChild<ElementRef<HTMLElement>>('collectPane');
+  /** Band "Collect" while the companion is on screen: open it (desktop strip
+   *  or the phone tab) and put the cursor in its find-patient / scan field,
+   *  instead of navigating away from My Work. */
+  focusCollect(): void {
+    this.expandCollect();
+    if (this.isPhone() && this.mobileTab() !== 'intake') this.setMobileTab('intake');
+    setTimeout(() => {
+      this.collectPane()?.nativeElement
+        .querySelector<HTMLInputElement>('.pf-scan__input')?.focus();
+    }, 0);
+  }
+  readonly focusCollectFn = () => this.focusCollect();
 
   // Rejected tab dropped — re-entry rows now show inline in My Work
   // with their rejection reason in the tube tile, so the tech sees WHY
@@ -2968,10 +3073,10 @@ export class MyWorkComponent implements OnInit {
     }
     this.kpiTeleported = null;
   }
-  /** When Lab Intake is switched off, don't strand the phone view on the
-   *  now-hidden first tab. */
+  /** When the left companion (Collection or Lab Intake) is switched off,
+   *  don't strand the phone view on the now-hidden first tab. */
   private readonly _intakeTabGuard = effect(() => {
-    if (!this.showIntake() && this.mobileTab() === 'intake') this.setMobileTab('mywork');
+    if (!this.showLeftPane() && this.mobileTab() === 'intake') this.setMobileTab('mywork');
   });
   setMobileTab(t: 'intake' | 'mywork' | 'queue' | 'completed' | 'culture') {
     this.mobileTab.set(t);

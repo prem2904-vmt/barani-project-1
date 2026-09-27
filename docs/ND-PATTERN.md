@@ -50,6 +50,8 @@ The band always shows the **back chevron**, the **tenant logo and name** and
 the **band actions**. It **never** becomes a page or patient title.
 Every screen of a work-area where the Process builder places Sample collection gets `pf-collect-band-button` as the RIGHTMOST band action (quiet slate secondary, tube icon, icon-only 44px on phones): with an order selected it opens `/lab/collect?orderId=…&from=…`, otherwise the general queue, and Back returns to the calling screen.
 
+Lab → My Work's LEFT companion follows the workflow: collection placed in the Lab with no dispatch/intake step (tubes auto-receive) → a COLLECTION card (embedded `pf-sample-collection`: find/scan, pending list, collect in place; band Collect focuses it instead of navigating); dispatch + Lab Intake on → the LAB INTAKE card; neither → the work pane runs full width.
+
 The band's pill is the **CONTEXT BAR** for the step:
 
 - **Search screens:** the pill *is* the search (Order & Payments: scope tiles

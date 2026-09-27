@@ -1,5 +1,6 @@
     <section [class.px-4]="!embedded" [class.md:px-8]="!embedded" [class.lg:px-10]="!embedded"
-             [class.pt-6]="!embedded" [class.pb-10]="!embedded" [class.pf-sc-page]="!embedded">
+             [class.pt-6]="!embedded" [class.pb-10]="!embedded" [class.pf-sc-page]="!embedded"
+             [class.pf-sc-embed]="embedded">
       <!-- Deep-link mode (?orderId=…): hide the queue + header + scan
            row entirely. The user clicked Collect on a specific order
            — show them THAT order's drawer immediately as if it's a
@@ -69,7 +70,7 @@
       <!-- Embedded pane keeps a plain filter box (My Work's band is above).
            Classic design lands here too — with its original camera button. -->
       <div class="pf-scan">
-        @if (!scan.manualEntry() && !theme.isNewDesign()) {
+        @if (!scan.manualEntry() && (!theme.isNewDesign() || embedded)) {
         <button type="button" class="pf-scan__icon-btn" (click)="openScanner()"
                 title="Scan with camera" aria-label="Open camera scanner">
           <pf-scan-icon [size]="24" />
@@ -107,8 +108,15 @@
               <button type="button" class="pf-sc__card" [pfZoomSource]="g.orderId" (click)="openOrder(g.orderId)">
                 <pf-avatar [name]="g.patientName" [size]="44"></pf-avatar>
                 <div class="pf-sc__who">
+                  @if (embedded) {
+                  <!-- My Work's Collection card: the FULL name (never the
+                       15-char cut), age/sex · MRN underneath. -->
+                  <p class="pf-sc__who-name">{{ patientFullName(g) }}</p>
+                  <p class="pf-sc__who-meta">{{ patientSub(g.patientName) }}</p>
+                  } @else {
                   <p class="pf-sc__who-name">{{ g.patientName }}</p>
                   <p class="pf-sc__who-meta">{{ g.patientMeta }}</p>
+                  }
                 </div>
                 <div class="pf-sc__card-tail">
                   @if (g.paymentHold) {
@@ -969,5 +977,3 @@
         </div>
       </div>
     }
-
-  `
