@@ -15,11 +15,28 @@
    edge-to-edge like the design; the search pill stays inset. */
 /* padding-top stays Tailwind's pt-4 here — CLASSIC needs that air under
    the floating pill bar; the new design zeroes it in its own gated block. */
-.pf-page__header {
+/* The bleed lives on .pf-page (not just the header) so the header AND the
+   body share ONE gutter — the shared .pf-band-page contract: side padding
+   == --pf-hb-bleed at every breakpoint (Tailwind px-4/md:px-8/lg:px-10 on
+   the header + body are exactly 1rem/2rem/2.5rem). */
+.pf-page {
   --pf-hb-bleed: 1rem;
 }
-@media (min-width: 768px) { .pf-page__header { --pf-hb-bleed: 2rem; } }
-@media (min-width: 1024px) { .pf-page__header { --pf-hb-bleed: 2.5rem; } }
+@media (min-width: 768px) { .pf-page { --pf-hb-bleed: 2rem; } }
+@media (min-width: 1024px) { .pf-page { --pf-hb-bleed: 2.5rem; } }
+/* Phones: the global styles.scss "PAGE PADDING" rule gives every .pf-page
+   a max(12px, safe-area) side gutter. On Frontdesk that stacked UNDER the
+   header's own padding, so the band's 1rem bleed fell 10px short of the
+   screen edge (12 + 14 − 16) — the dark top-corner gap, FD-only. Zero the
+   section's gutter here; the header/body carry it (see _mobile.scss) and
+   it honours the landscape notch like the global rule did. */
+@media (max-width: 640px) {
+  .pf-page {
+    --pf-hb-bleed: max(1rem, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
 
 /* ══ Designer light skin — exact card & row anatomy (Figma 446-113) ══
    Values pulled from the frame's design context, applied to the live
