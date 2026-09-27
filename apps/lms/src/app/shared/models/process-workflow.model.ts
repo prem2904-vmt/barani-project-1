@@ -76,7 +76,9 @@ export const ACTION_CATALOG: ActionCatalogEntry[] = [
     iconPath: ['M3 7h11v8H3zM14 10h4l3 3v2h-7zM7 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z'], hint: 'Dispatch samples to the lab' },
   { type: 'sample_collection', label: 'Sample Collection', route: '/sample-collection', permissions: ['collect_sample'],
     iconPath: ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'], hint: 'Draw / scan tubes' },
-  { type: 'home_visits', label: 'Home Visits', route: '/home-collections', permissions: ['collect_sample', 'manage_home_collection'],
+  // Permissions of each entry = its route's guard (core/auth/route-access.ts);
+  // a wider list would surface a work area / launcher whose screen 403s.
+  { type: 'home_visits', label: 'Home Visits', route: '/home-collections', permissions: ['collect_sample'],
     iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'], hint: 'Home-collection visits' },
   { type: 'lab_intake', label: 'Lab Intake', route: '/lab/receive', permissions: ['receive_sample'],
     iconPath: ['M3 12h5l2 3h4l2-3h5', 'M5 12 8 4h8l3 8v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6Z'], hint: 'Receive samples at the lab' },
@@ -84,7 +86,7 @@ export const ACTION_CATALOG: ActionCatalogEntry[] = [
     iconPath: ['M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Zm-2 9h8'], hint: 'Enter test results' },
   { type: 'validate', label: 'Validate', route: '/pathologist', permissions: ['validate_result'],
     iconPath: ['M20 6 9 17l-5-5'], hint: 'Pathologist sign-off' },
-  { type: 'results', label: 'Results', route: '/reports', permissions: ['deliver_report', 'view_report'],
+  { type: 'results', label: 'Results', route: '/reports', permissions: ['deliver_report'],
     iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'], hint: 'Deliver / view reports' },
   { type: 'lost_and_found', label: 'Lost & Found', route: '/lost-and-found',
     permissions: ['receive_sample', 'reject_sample', 'cancel_order', 'manage_users'],

@@ -493,6 +493,9 @@ export class ReportQueueComponent implements OnInit {
     // (balance > 0). We only need the order IDs to flag "Unpaid" rows —
     // no per-row bill lookups. Non-fatal: if the user lacks billing
     // permission (403) or the call fails, we simply show no Unpaid tags.
+    // Skip the call entirely for users the endpoint would 403 (e.g. a
+    // Pathologist: no collect_payment | create_bill | view_bill).
+    if (!["collect_payment", "create_bill", "view_bill"].some((c) => this.auth.hasPermission(c))) return;
     this.api
       .get<{ due?: { orderId: string }[] }>("/api/billing/outstanding")
       .subscribe({

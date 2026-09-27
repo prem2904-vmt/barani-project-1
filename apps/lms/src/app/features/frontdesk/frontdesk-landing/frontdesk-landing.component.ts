@@ -1249,8 +1249,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     });
 
     // Test catalogue (once) — used to show requested-test names in the
-    // home-collection detail.
-    if (this._tests().length === 0) {
+    // home-collection detail. Only for users the /api/tests read admits
+    // (view_test | manage_tests | create_order): a Billing Counter lacks all
+    // three, got a 403, and — the list staying empty — re-sent it every poll.
+    if (this._tests().length === 0 && ['view_test', 'manage_tests', 'create_order'].some(c => this.auth.hasPermission(c))) {
       this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
     }
   }

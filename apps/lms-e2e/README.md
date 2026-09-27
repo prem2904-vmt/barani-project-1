@@ -39,6 +39,14 @@ export E2E_PASSWORD='...'
 Without creds, the `*.authed.spec.ts` specs **skip** (via `requireCreds()`),
 they do not fail.
 
+### Specs that WRITE shared data are opt-in
+
+`users-roles.rbac.spec.ts` creates users and roles, which cannot be deleted
+through the API. Its create/edit tests skip unless `E2E_ALLOW_WRITES=1` —
+set it **only** against a local backend + local DB. `lms:serve` points at the
+shared dev backend by default, and earlier runs left `E2E Throwaway Role …` /
+`e2euser…` rows in the Micro World Users & Roles screen.
+
 ## Layout
 
 ```

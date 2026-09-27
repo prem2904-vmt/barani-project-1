@@ -335,8 +335,11 @@ describe('menusFromWorkflow', () => {
     );
     const permCtx: WorkflowNavCtx = {
       roles: ['tech'],
+      // register_patient: the queue-only area opens /frontdesk/queue, whose
+      // /frontdesk parent guard needs a front-desk perm (collect_sample alone
+      // would be bounced — so that area is correctly hidden without it).
       hasAnyPermission: (perms) =>
-        perms.includes('collect_sample') || perms.includes('enter_result'),
+        perms.includes('collect_sample') || perms.includes('enter_result') || perms.includes('register_patient'),
       isSuper: false,
     };
     const result = menusFromWorkflow(cfg, permCtx);

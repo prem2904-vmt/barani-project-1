@@ -29,9 +29,10 @@ import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, withCollectionFallback } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback } from '../nav-items';
+import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
-import { LANDINGS } from '../../core/auth/landing.guard';
+import { pickLanding } from '../../core/auth/landing.guard';
 
 @Component({
   selector: 'pf-top-strip',
@@ -194,23 +195,26 @@ export class TopStripComponent implements OnInit, OnDestroy {
   readonly branches = computed(() => this.auth.user()?.branches ?? []);
   /** Whether to show the switcher at all (more than one branch available). */
   readonly canSwitchBranch = computed(() => this.branches().length > 1);
+  /** The route-guard context (same rule the guards + landing use). */
+  private routeCtx(): RouteAccessCtx {
+    return {
+      hasAny: p => this.auth.hasAnyPermission(p),
+      hasAnyEffective: p => this.auth.hasAnyEffectivePermission(p),
+      isEnabled: a => this.process.isEnabled(a),
+      isSuper: this.auth.permissions().includes('*'),
+    };
+  }
+  /** Shared nav rule (nav-items.navItemVisible): an item shows only when its
+   *  destination route's guard admits the user, plus its mode/module/action gates. */
   private readonly visible = (items: NavItem[]): NavItem[] => {
-    const cMode = this.labCfg.collectionMode();
-    const bMode = this.labCfg.billingMode();
-    return items.filter(i => {
-      if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
-      if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
-      if (i.billingModes && !i.billingModes.includes(bMode)) return false;
-      // Inventory work area only appears when the branch has it enabled.
-      if (i.requiresInventory && !this.labCfg.inventoryEnabled()) return false;
-      // Product-module entitlement: hide a whole work area the tenant's plan
-      // doesn't include (inventory / messages / home collection / reports).
-      if (i.module && !this.entitlements.moduleEnabled(i.module)) return false;
-      // Workflow source-of-truth: hide a nav item whose action the admin
-      // switched off in /admin/process (the screen itself is unchanged).
-      if (i.action && !this.process.isEnabled(i.action)) return false;
-      return true;
-    });
+    const ctx: NavVisibilityCtx = {
+      ...this.routeCtx(),
+      collectionMode: this.labCfg.collectionMode(),
+      billingMode: this.labCfg.billingMode(),
+      inventoryEnabled: this.labCfg.inventoryEnabled(),
+      moduleEnabled: m => this.entitlements.moduleEnabled(m),
+    };
+    return items.filter(i => navItemVisible(i, ctx));
   };
   private navCtx(): WorkflowNavCtx {
     return {
@@ -218,6 +222,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
       // Effective = the route guards' check (mode-aware collect_sample), so a
       // work area never shows to someone its screen would bounce.
       hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
+      hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
       isSuper: this.auth.permissions().includes('*'),
     };
   }
@@ -509,13 +514,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   }
 
   pickLanding() {
-    const landingPages = LANDINGS;
-    for (const { perm, path } of landingPages) {
-      if (this.auth.hasPermission(perm)) {
-        return path;
-      }
-    }
-    return '/403';
+    return pickLanding({ ...this.routeCtx(), moduleEnabled: m => this.entitlements.moduleEnabled(m) });
   }
 
   @HostListener('document:click', ['$event'])

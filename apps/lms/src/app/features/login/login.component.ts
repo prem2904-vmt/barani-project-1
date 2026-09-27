@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { canOpenRoute } from '../../core/auth/route-access';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
@@ -8,28 +9,10 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
 import { PlatformService } from '../../core/services/platform.service';
 import { environment } from '../../../environments/environment';
 
-/**
- * Route-based landing by permission. Ordered from most specific to most generic
- * so that a multi-role user lands on the screen that matches their heaviest role.
- */
-const ROLE_LANDINGS: Array<{ perm: string; path: string }> = [
-  { perm: 'manage_tests',       path: '/admin' },
-  { perm: 'register_patient',   path: '/frontdesk' },
-  { perm: 'enter_result',       path: '/lab/my-work' },
-  { perm: 'validate_result',    path: '/pathologist' },
-  { perm: 'collect_sample',     path: '/sample-collection' },
-  { perm: 'inventory_receive',  path: '/stores' },
-  { perm: 'inventory_issue',    path: '/stores' },
-  { perm: 'inventory_count',    path: '/stores' },
-  { perm: 'view_tat_dashboard', path: '/dashboard' },
-  { perm: 'view_dashboard',     path: '/dashboard' }
-];
+// Post-login routing is owned by the landing guard ('/' → pickLanding), which
+// reads the same ROUTE_ACCESS table as the route guards and the nav — so a role
+// never lands on a screen that bounces it (Billing Counter used to hit /403).
 
-// Any of these perms lets a user into /admin/*. Must stay in sync with
-// ADMIN_PERMS in app.routes.ts. Excludes manage_branch(es) — branch browsing
-// is not admin-config access (a Branch Manager reaches /admin/branches via its
-// own route guard, not the admin shell).
-const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows'];
 
 @Component({
   selector: 'pf-login',
@@ -102,10 +85,11 @@ export class LoginComponent {
   }
 
   private canVisit(url: string): boolean {
-    if (url.startsWith('/admin') || url.startsWith('/setup')) {
-      return this.auth.hasAnyPermission(ADMIN_PERMS);
-    }
-    return true;
+    return canOpenRoute(url, {
+      hasAny: p => this.auth.hasAnyPermission(p),
+      hasAnyEffective: p => this.auth.hasAnyEffectivePermission(p),
+      isSuper: this.auth.permissions().includes('*'),
+    });
   }
 
   async submit(ev?: Event) {
@@ -152,19 +136,13 @@ export class LoginComponent {
       }
 
       // Route by permission — first match wins. Honor returnUrl only if the
-      // user can actually enter it; otherwise fall through to ROLE_LANDINGS.
+      // user can actually enter it; otherwise let the landing guard pick.
       const returnUrl = new URLSearchParams(window.location.search).get('returnUrl');
       if (returnUrl && returnUrl !== '/login' && returnUrl !== '/' && this.canVisit(returnUrl)) {
         await this.router.navigateByUrl(returnUrl);
         return;
       }
-      for (const { perm, path } of ROLE_LANDINGS) {
-        if (this.auth.hasPermission(perm)) {
-          await this.router.navigateByUrl(path);
-          return;
-        }
-      }
-      await this.router.navigateByUrl('/dashboard');
+      await this.router.navigateByUrl('/');
     } catch (e: any) {
       this.error.set(this.humaniseError(e));
     } finally {

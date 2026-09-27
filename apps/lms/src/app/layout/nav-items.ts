@@ -1,5 +1,8 @@
 import { ProcessWorkflowConfig, catalogFor, normalizeWorkflow, workAreaIconPath, workAreaRoute } from '../shared/models/process-workflow.model';
 import { ModuleKey } from '../core/services/tenant-entitlements.service';
+import { ADMIN_PERMS, ROUTE_ACCESS, RouteAccessCtx, canOpenRoute, routeAccess, routePerms } from '../core/auth/route-access';
+
+export { FRONTDESK_PERMS } from '../core/auth/route-access';
 
 export interface NavItem {
   id: string;
@@ -69,38 +72,27 @@ export const ADMIN_NAV: NavItem = {
   href: '/admin',
   iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
              'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z'],
-  permissions: ['manage_tests', 'manage_users', 'manage_workflows']
+  permissions: ADMIN_PERMS
 };
 
-/** Canonical permissions that grant the /frontdesk work area (landing +
- *  patient/order creation). ONE source of truth — shared by the route guard,
- *  the static nav item, and the workflow work-area gate — so "can see Front Desk
- *  in the nav" always equals "can open the Front Desk route". Deliberately does
- *  NOT include `view_patient` (a read capability lab techs hold) or
- *  `collect_sample` (which gets its own "Collect" nav entry). */
-export const FRONTDESK_PERMS = [
-  'register_patient', 'create_order',
-  // Front desk is also where billing happens, so admit the billing counter
-  // (create_bill / collect_payment) too (OPS-10). Deliberately NOT gated on
-  // manage_branch: a Branch Manager holds only read-tier branch perms and has
-  // no front-desk create actions, so the front-desk landing (with its
-  // New-patient / Create-order buttons) would only surface controls that 403
-  // for them — an affordance leak. They oversee via dashboards/queues instead.
-  'create_bill', 'collect_payment',
-];
+/** Route → the permissions its own guard checks, derived from ROUTE_ACCESS
+ *  (core/auth/route-access.ts) — THE single route-access table shared by the
+ *  route guards (app.routes.ts routeGuards), every nav surface and the landing
+ *  redirect. Kept as a flat map for existing callers. */
+export const ROUTE_NAV_PERMS: Record<string, string[]> = Object.fromEntries(
+  Object.entries(ROUTE_ACCESS).map(([route, acc]) => [route, acc.perms ?? []]));
 
-/** Landing routes whose real guard is NARROWER than the union of the actions an
- *  admin may drop into their work area — e.g. a lab tech's `collect_sample`
- *  action nested in the front-desk area must NOT surface the front-desk landing
- *  they can't open. menusFromWorkflow stamps the work-area nav item with these
- *  so the permission filter matches the destination route's guard. */
-export const ROUTE_NAV_PERMS: Record<string, string[]> = {
-  '/frontdesk': FRONTDESK_PERMS,
-  // The system Collect work area opens the Collect page, guarded by collect_sample.
-  '/sample-collection': ['collect_sample'],
-};
+/** Stamp every nav item with its destination route's OWN guard permissions
+ *  (ROUTE_ACCESS) — nav items never carry a hand-written permission list, so they
+ *  can't drift from the guard. Routes absent from the table stay ungated here. */
+function withRoutePerms(items: NavItem[]): NavItem[] {
+  return items.map(i => {
+    const perms = routePerms(i.href);
+    return perms.length ? { ...i, permissions: perms } : { ...i, permissions: undefined };
+  });
+}
 
-export const PRIMARY_NAV: NavItem[] = [
+export const PRIMARY_NAV: NavItem[] = withRoutePerms([
   // ── Core workflow pipeline — always the first 5 visible tabs ──────────
   // Order mirrors the actual lab flow: register → collect → analyse →
   // validate → deliver. Secondary / role-specific items follow and are
@@ -115,7 +107,6 @@ export const PRIMARY_NAV: NavItem[] = [
     'M7 22H17',
     'M8 14C9.83846 11.4046 14.1188 11.263 16 14M14 8C14 9.10457 13.1046 10 12 10C10.8954 10 10 9.10457 10 8C10 6.89543 10.8954 6 12 6C13.1046 6 14 6.89543 14 8Z'
   ],
-    permissions: FRONTDESK_PERMS
   },
   {
     id: 'sample-collection',
@@ -123,7 +114,6 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Collect',
     href: '/sample-collection',
     iconPath: ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'],
-    permissions: ['collect_sample'],
     collectionModes: ['dedicated_counter']
   },
   {
@@ -132,9 +122,8 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Lab',
     href: '/lab/my-work',
     iconPath: ['M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Zm-2 9h8'],
-    // Only the distinctly lab-tech permissions — `collect_sample` is shared
-    // with the Sample Collector role and can't be used here.
-    permissions: ['enter_result', 'receive_sample']
+    // Perms = ROUTE_ACCESS['/lab/my-work'] (enter_result | receive_sample) —
+    // never collect_sample, which Receptionists and Sample Collectors hold.
   },
   {
     id: 'validate',
@@ -142,7 +131,6 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Validate',
     href: '/pathologist',
     iconPath: ['M20 6 9 17l-5-5'],
-    permissions: ['validate_result']
   },
   {
     id: 'results',
@@ -150,7 +138,6 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Results',
     href: '/reports',
     iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
-    permissions: ['deliver_report', 'view_report']
     // Report queue is core lab operations (delivery/dispatch) — NOT gated by the
     // reports module, which covers only the TAT/analytics dashboard.
   },
@@ -162,7 +149,6 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Queue',
     href: '/frontdesk/queue',
     iconPath: ['M3 6h18M3 12h18M3 18h18', 'M7 6v0M7 12v0M7 18v0'],
-    permissions: ['register_patient', 'create_order', 'collect_sample']
   },
   {
     // Home-collection agent's assigned visits.
@@ -171,7 +157,6 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Home Visits',
     href: '/home-collections',
     iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
-    permissions: ['collect_sample'],
     module: 'homeCollection'
   },
   {
@@ -180,7 +165,6 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Billing',
     href: '/billing-counter',
     iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
-    permissions: ['create_bill', 'collect_payment'],
     billingModes: ['separate_counter']
   },
   {
@@ -188,12 +172,11 @@ export const PRIMARY_NAV: NavItem[] = [
     label: 'Inventory',
     href: '/stores',
     iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
-    permissions: ['inventory_receive', 'inventory_issue', 'inventory_count', 'manage_inventory'],
     requiresInventory: true,
     module: 'inventory'
   },
   {
-    // Teams-style chat + group calling. No permissions = open to every
+    // Teams-style chat + group calling. No route permissions = open to every
     // authenticated user (matches the sidebar Workspace entry).
     id: 'messages',
     action: 'messages',
@@ -202,22 +185,42 @@ export const PRIMARY_NAV: NavItem[] = [
     iconPath: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
     module: 'messages'
   }
-];
+]);
 
 export interface WorkflowNavCtx {
   roles: string[];
+  /** OR-check used for action gating — the shells pass the EFFECTIVE check
+   *  (mode-aware collect_sample), matching the guard of /sample-collection. */
   hasAnyPermission: (perms: string[]) => boolean;
+  /** Raw OR-check for routes whose guard is NOT mode-aware; defaults to
+   *  hasAnyPermission. */
+  hasAnyRawPermission?: (perms: string[]) => boolean;
   isSuper: boolean;
+}
+
+/** The workflow's own "is this action on" (fail-open when the workflow doesn't
+ *  mention it) — identical to ProcessWorkflowService.isEnabled. */
+export function workflowActionEnabled(cfg: ProcessWorkflowConfig | null | undefined, type: string): boolean {
+  if (!cfg) return true;
+  const copies = (cfg.actions ?? []).filter(a => a.type === type);
+  return copies.length ? copies.some(a => a.enabled) : true;
 }
 
 /**
  * Build the primary nav from the active workflow: one item per WORK-AREA the
  * user can access. The admin's chosen area NAME is the nav label, ordered by the
- * area's order, role-gated by area.roles, and shown only when the user can run
- * at least one of its actions. Each area links to its REAL screen (bespoke for
- * system areas, the dedicated counter screen for single-purpose areas, else the
- * generic /w/:id host) — never a tile grid. Returns null when there's no usable
- * workflow so callers fall back to the original PRIMARY_NAV (never lock out).
+ * area's order. An area shows only when BOTH hold:
+ *   1. the user can run at least one of its enabled actions, and
+ *   2. the user can OPEN the screen the area links to — the destination route's
+ *      guard (ROUTE_ACCESS: perms, guarded parents, mode-aware collect_sample,
+ *      workflow action). Holding one action's permission is NOT enough when the
+ *      area opens a screen that needs more: a Receptionist whose only Lab-area
+ *      action is a Sample-collection copy (collect_sample) must not see "Lab",
+ *      because /lab/my-work needs enter_result/receive_sample (it used to 403).
+ * Each area links to its REAL screen (bespoke for system areas, the dedicated
+ * counter screen for single-purpose areas, else the generic /w/:id host).
+ * Returns null when there's no usable workflow so callers fall back to the
+ * original PRIMARY_NAV (never lock out).
  */
 /** A work area's name as a nav label: trimmed, first letter capitalised
  *  ("billing" → "Billing"). The tenant types the name in the workflow
@@ -235,11 +238,17 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
   // copy off drops it from the nav. The shells' withCollection() is only the
   // no-workflow fallback now, so there is never a second Collect.
   cfg = normalizeWorkflow(cfg);
+  const wf = cfg;
+  const routeCtx: RouteAccessCtx = {
+    hasAny: ctx.hasAnyRawPermission ?? ctx.hasAnyPermission,
+    hasAnyEffective: ctx.hasAnyPermission,
+    isEnabled: t => workflowActionEnabled(wf, t),
+    isSuper: ctx.isSuper,
+  };
   const items: NavItem[] = [];
   for (const area of [...cfg.categories].sort((a, b) => a.order - b.order)) {
-    // Visibility is PERMISSION-driven (not role NAME): the area shows when the
-    // user can run at least one of its actions (checked below). The old
-    // area.roles name-match gate hid areas from custom roles that held the right
+    // Visibility is PERMISSION-driven (not role NAME). The old area.roles
+    // name-match gate hid areas from custom roles that held the right
     // permissions — the exact "works by role name" bug we want gone.
     const accessible = (cfg.actions ?? [])
       .filter(a => a.categoryId === area.id && a.enabled)
@@ -249,27 +258,55 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
         return e && (!e.permissions?.length || ctx.isSuper || ctx.hasAnyPermission(e.permissions));
       });
     if (!accessible.length) continue;
-    // Render the work-area's own icon (the one picked in the builder), via the
-    // SAME resolver the builder uses — so the top-strip / sidebar match the
-    // builder exactly. Unknown/empty falls back to the folder default.
     const route = workAreaRoute(area, cfg);
-    // Stamp the item with the permissions that gate its DESTINATION route, so
-    // the downstream visible() filter hides it from anyone who can't actually
-    // open it. For system routes with a narrower guard (e.g. /frontdesk) use the
-    // canonical set; otherwise the union of the area's action permissions (which
-    // equals the `accessible` gate — a no-op for users who already passed it,
-    // but present so the filter is applied uniformly).
-    const areaPerms = ROUTE_NAV_PERMS[route]
-      ?? [...new Set(accessible.flatMap(a => catalogFor(a.type)?.permissions ?? []))];
+    // The destination screen's own guard must admit the user (see above).
+    if (routeAccess(route) && !canOpenRoute(route, routeCtx)) continue;
+    // Stamp the item with the permissions that gate its DESTINATION route (so
+    // the shells' visible() filter re-applies the same rule); for the generic
+    // /w/:id host (no route guard) the union of the accessible actions' perms.
+    const areaPerms = routeAccess(route)
+      ? routePerms(route)
+      : [...new Set(accessible.flatMap(a => catalogFor(a.type)?.permissions ?? []))];
     items.push({
       id: area.id,
       label: navLabel(area.name),
       href: route,
+      // Render the work-area's own icon via the SAME resolver the builder uses.
       iconPath: workAreaIconPath(area.icon),
       permissions: areaPerms.length ? areaPerms : undefined,
     });
   }
   return items.length ? items : null;
+}
+
+/** Everything the shells know when deciding whether to render a nav item. */
+export interface NavVisibilityCtx extends RouteAccessCtx {
+  collectionMode: 'front_desk' | 'dedicated_counter';
+  billingMode: 'front_desk' | 'separate_counter';
+  inventoryEnabled: boolean;
+  moduleEnabled: (m: ModuleKey) => boolean;
+}
+
+/**
+ * THE nav-item visibility rule, shared by the top strip, the bottom nav and the
+ * More menu (and the admin hubs via canOpenRoute): the item shows only when the
+ * user can open its destination (route guard + guarded parents + workflow
+ * action), plus the item's own mode / inventory / module / action gates.
+ */
+export function navItemVisible(i: NavItem, ctx: NavVisibilityCtx): boolean {
+  if (i.permissions?.length && !ctx.isSuper && !ctx.hasAny(i.permissions)) return false;
+  if (!canOpenRoute(i.href, ctx)) return false;
+  if (i.collectionModes && !i.collectionModes.includes(ctx.collectionMode)) return false;
+  if (i.billingModes && !i.billingModes.includes(ctx.billingMode)) return false;
+  // Inventory work area only appears when the branch has it enabled.
+  if (i.requiresInventory && !ctx.inventoryEnabled) return false;
+  // Product-module entitlement: hide a whole work area the tenant's plan
+  // doesn't include (inventory / messages / home collection / reports).
+  if (i.module && !ctx.moduleEnabled(i.module)) return false;
+  // Workflow source-of-truth: hide a nav item whose action the admin switched
+  // off in /admin/process (the screen itself is unchanged).
+  if (i.action && ctx.isEnabled && !ctx.isEnabled(i.action)) return false;
+  return true;
 }
 
 /**
@@ -290,7 +327,7 @@ export function withCollectionFallback(items: NavItem[], ctx: {
   return collect ? [...items, collect] : items;
 }
 
-export const MORE_NAV: NavItem[] = [
+export const MORE_NAV: NavItem[] = withRoutePerms([
   // À-la-carte clinical / ops modules. Hidden until enabled in Admin → Modules;
   // the module toggle IS the gate (no per-module roles yet). Shown here in More
   // until each ships as a first-class workflow work-area. Icons mirror the catalog.
@@ -317,86 +354,69 @@ export const MORE_NAV: NavItem[] = [
   {
     id: 'admin-overview', label: 'Admin overview', href: '/admin', exact: true,
     iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
-    permissions: ['manage_tests', 'manage_users', 'manage_workflows']
   },
   {
     // Lab module's own settings hub — lab-specific config lives in the Lab world.
     id: 'lab-settings', label: 'Lab settings', href: '/lab/settings',
     iconPath: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'],
-    permissions: ['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments'],
     module: 'lab'
   },
   {
     id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
     iconPath: ['M4 6h16M4 12h16M4 18h16'],
-    permissions: ['manage_tests', 'manage_users', 'manage_workflows']
   },
   {
     id: 'tat', label: 'TAT Board', href: '/dashboard', iconPath: ['M3 20V10l9-7 9 7v10M9 20v-6h6v6'],
-    permissions: ['view_tat_dashboard', 'view_dashboard'], module: 'reports'
+    module: 'reports'
   },
   {
     id: 'users', label: 'Users', href: '/admin/users', iconPath: ['M9 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0'],
-    permissions: ['manage_users']
   },
   {
     id: 'tests', label: 'Tests', href: '/admin/tests', iconPath: ['M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9M6 21h14M9 17h8'],
-    permissions: ['manage_tests']
   },
   {
     id: 'branches', label: 'Branches', href: '/admin/branches', iconPath: ['M4 21V7l8-4 8 4v14M9 21v-5h6v5'],
-    permissions: ['manage_branches']
   },
   {
     id: 'lab-cfg', label: 'Lab settings', href: '/admin/lab-settings', iconPath: ['M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Zm-2 9h8'],
-    permissions: ['manage_lab_settings', 'manage_departments']
   },
   {
     id: 'billing', label: 'Billing cfg', href: '/admin/billing', iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
-    permissions: ['manage_billing_config']
   },
   {
     // Finance — day-end cash reconciliation + closure.
     id: 'daily-statement', label: 'Daily statement', href: '/finance/daily',
     iconPath: ['M4 4h16v16H4z', 'M8 9h8M8 13h8M8 17h5'],
-    permissions: ['collect_payment', 'manage_tenant']
   },
   {
     id: 'inventory', label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
-    permissions: ['manage_inventory'], module: 'inventory'
+    module: 'inventory'
   },
   {
     id: 'reports-t', label: 'Report Template', href: '/admin/reports', iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
-    permissions: ['manage_report_template']
   },
   {
     id: 'notifs', label: 'Notifications', href: '/admin/notifications', iconPath: ['M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Zm5 4a1 1 0 0 0 2 0'],
-    permissions: ['manage_notifications']
   },
   {
     id: 'process', label: 'Process builder', href: '/admin/process', iconPath: ['M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z'],
-    permissions: ['manage_workflows']
   },
   {
     id: 'workflows', label: 'Form Flows', href: '/admin/workflows', iconPath: ['M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10'],
-    permissions: ['manage_workflows']
   },
   {
     id: 'kpis', label: 'KPI cards', href: '/admin/kpis', iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
-    permissions: ['manage_tenant']
   },
   {
     id: 'vendors', label: 'Vendor Credit Wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
-    permissions: ['manage_tenant']
   },
   {
     id: 'referral-labs', label: 'Referral labs', href: '/admin/referral-labs', iconPath: ['M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9'],
-    permissions: ['manage_tests']
   },
   {
     id: 'appts', label: 'Appointments', href: '/admin/appointments',
     iconPath: ['M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'],
-    permissions: ['manage_tenant']
   },
   {
     // Front-desk home-collection assignment — tied to the home_visits action:
@@ -404,17 +424,15 @@ export const MORE_NAV: NavItem[] = [
     // front desk too (they're the two ends of the same capability).
     id: 'hc-assign', label: 'Home assignments', href: '/frontdesk/home-collection', action: 'home_visits',
     iconPath: ['M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10', 'M9 21v-6h6v6'],
-    permissions: ['manage_home_collection', 'register_patient', 'create_order'], module: 'homeCollection'
+    module: 'homeCollection'
   },
   {
     id: 'audit', label: 'Audit trail', href: '/admin/audit',
     iconPath: ['M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2',
                'M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2Z',
                'M9 12h6M9 16h6'],
-    permissions: ['view_audit_log']
   },
   {
     id: 'setup', label: 'Branding', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
-    permissions: ['manage_users']
   }
-];
+]);

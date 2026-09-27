@@ -26,11 +26,17 @@ import { loginAs } from './support/auth';
  *
  * Roles created by this spec are NEW throwaway roles (unique per-run name) —
  * we never touch a seeded role's permissions, since other RBAC specs depend
- * on the seeded role→permission matrix (RoleSeeder.cs). There is no role
- * delete endpoint (RolesController.cs), so throwaway roles accumulate in the
- * Micro World tenant across runs — harmless (isPreSeeded: false, unused by
- * any other spec) but noted here rather than silently left unexplained.
+ * on the seeded role→permission matrix (RoleSeeder.cs).
+ *
+ * WRITES ARE OPT-IN (E2E_ALLOW_WRITES=1, LOCAL backend + DB only). The two
+ * functional tests create a user and a role and there is no role delete
+ * endpoint (RolesController.cs), so every run against the shared dev backend
+ * (the default `lms:serve` apiUrl) left an "E2E Throwaway Role <ts>" and an
+ * "e2euser<ts>" in the Micro World tenant — they showed up in Users & Roles
+ * (4 of each on dev, 2026-08-21; cleanup SQL in the RBAC audit). The read-only
+ * permission-gate tests below always run.
  */
+const ALLOW_WRITES = process.env['E2E_ALLOW_WRITES'] === '1';
 
 const FORBIDDEN_HEADING = /forbidden/i;
 
@@ -48,6 +54,7 @@ function permRow(page: Page, code: string) {
 }
 
 test.describe('Users & Roles admin — functional (as admin)', () => {
+  test.skip(!ALLOW_WRITES, 'Creates users/roles that cannot be deleted — run only against a LOCAL backend+DB with E2E_ALLOW_WRITES=1.');
   test('creates a new user (username + password + role) — POST succeeds and it appears in the user list', async ({ page }) => {
     await loginAs(page, 'admin');
 

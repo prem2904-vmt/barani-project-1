@@ -22,7 +22,8 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
 import { PushService } from '../../core/services/push.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, withCollectionFallback } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback } from '../nav-items';
+import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 
 const DRAG_THRESHOLD_PX = 4;
@@ -475,22 +476,26 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   /** People (contacts + chat + calls) is part of the Messages capability —
    *  hide its rail/menu button when the Messages work-area is disabled. */
   readonly canMessages = computed(() => this.process.isEnabled('messages') && this.entitlements.moduleEnabled('messages'));
+  /** The route-guard context (same rule the guards + landing use). */
+  private routeCtx(): RouteAccessCtx {
+    return {
+      hasAny: p => this.auth.hasAnyPermission(p),
+      hasAnyEffective: p => this.auth.hasAnyEffectivePermission(p),
+      isEnabled: a => this.process.isEnabled(a),
+      isSuper: this.auth.permissions().includes('*'),
+    };
+  }
+  /** Shared nav rule (nav-items.navItemVisible): an item shows only when its
+   *  destination route's guard admits the user, plus its mode/module/action gates. */
   private readonly visible = (items: NavItem[]): NavItem[] => {
-    const cMode = this.labCfg.collectionMode();
-    const bMode = this.labCfg.billingMode();
-    return items.filter(i => {
-      if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
-      if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
-      if (i.billingModes && !i.billingModes.includes(bMode)) return false;
-      // Inventory work area only appears when the branch has it enabled.
-      if (i.requiresInventory && !this.labCfg.inventoryEnabled()) return false;
-      // Product-module entitlement: hide a whole work area the tenant's plan
-      // doesn't include (inventory / messages / home collection / reports).
-      if (i.module && !this.entitlements.moduleEnabled(i.module)) return false;
-      // Hide a nav item whose action is switched off in /admin/process.
-      if (i.action && !this.process.isEnabled(i.action)) return false;
-      return true;
-    });
+    const ctx: NavVisibilityCtx = {
+      ...this.routeCtx(),
+      collectionMode: this.labCfg.collectionMode(),
+      billingMode: this.labCfg.billingMode(),
+      inventoryEnabled: this.labCfg.inventoryEnabled(),
+      moduleEnabled: m => this.entitlements.moduleEnabled(m),
+    };
+    return items.filter(i => navItemVisible(i, ctx));
   };
 
   private navCtx(): WorkflowNavCtx {
@@ -499,6 +504,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       // Effective = the route guards' check (mode-aware collect_sample), so a
       // work area never shows to someone its screen would bounce.
       hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
+      hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
       isSuper: this.auth.permissions().includes('*'),
     };
   }
