@@ -73,6 +73,14 @@ describe('InlinePaymentPanel (designer panel)', () => {
     expect(emitted[0]).toEqual({ mode: 'wallet', vendorId: 'v1' });
   });
 
+  it('Bill to vendor on a ₹0 order is not confirmable (never posts a ₹0 charge)', () => {
+    const vendors = [{ id: 'v1', name: 'Apollo ERD', balance: 0, outstanding: 0, isActive: true }];
+    const { c } = make(0, vendors);
+    c.setKind('vendor');
+    c.vendorId.set('v1');
+    expect(c.canConfirm()).toBe(false);
+  });
+
   it('Pay later: "Place order, ₹X due"; an advance is collected with its tender', () => {
     const { c, emitted } = make(500);
     c.setKind('later');

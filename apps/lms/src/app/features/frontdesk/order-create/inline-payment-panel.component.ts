@@ -572,7 +572,8 @@ export class InlinePaymentPanelComponent {
       case "cash":
         return this.cashNum() >= this.amount() && this.amount() > 0;
       case "wallet":
-        return !!this.vendorId();
+        // Nothing to bill on a ₹0 order — never post a ₹0 vendor charge.
+        return !!this.vendorId() && this.amount() > 0;
       case "split":
         return this.splitOk();
       case "later":
