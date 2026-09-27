@@ -39,16 +39,22 @@ describe('Process builder — collection in the Lab keeps dispatch + intake', ()
     expect(item(p, 'lab', 'lab_intake').enabled).toBe(true);
   });
 
-  it('dropping a collection copy into the Lab leaves dispatch + intake alone', () => {
-    const noLabCopy = { ...cfg, actions: cfg.actions.filter(a => a.id !== 'b2') };
-    const p = make(noLabCopy);
+  it('switching the Lab copy on (the fixed slot) leaves dispatch + intake alone', () => {
+    const labOff = { ...cfg, actions: cfg.actions.map(a => a.id === 'b2' ? { ...a, enabled: false } : a) };
+    const p = make(labOff);
     const c = p.cmp as any;
-    const at = c.palette().findIndex((e: any) => e.type === 'sample_collection');
-    c.dropToLane({ previousContainer: { id: 'palette', data: c.palette() }, container: { id: 'lane-lab', data: lane(p, 'lab').items },
-                   previousIndex: at, currentIndex: 0 }, idx(p, 'lab'));
+    expect(item(p, 'lab', 'sample_collection').enabled).toBe(false);
+    c.toggleAction(idx(p, 'lab'), lane(p, 'lab').items.findIndex(i => i.type === 'sample_collection'));
     expect(item(p, 'lab', 'sample_collection').enabled).toBe(true);
     expect(item(p, 'frontdesk', 'dispatch').enabled).toBe(true);
     expect(item(p, 'lab', 'lab_intake').enabled).toBe(true);
+  });
+
+  it('a workflow without a Lab copy gets one, added OFF (no palette drop needed)', () => {
+    const noLabCopy = { ...cfg, actions: cfg.actions.filter(a => a.id !== 'b2') };
+    const p = make(noLabCopy);
+    expect(item(p, 'lab', 'sample_collection').enabled).toBe(false);
+    expect((p.cmp as any).palette().some((e: any) => e.type === 'sample_collection')).toBe(false);
   });
 
   it('dispatch + intake toggle freely (still coupled to each other)', () => {

@@ -47,7 +47,9 @@ const RECON = {
 const BILL1 = { id: 'b1', orderId: 'o1', totalPayable: 1200, totalPaid: 200, balance: 1000, totalDiscount: 100, totalTax: 0, invoiceNumber: 'INV-000123',
   items: [{ id: 'i1', testName: 'Haemoglobin', price: 200, total: 200 }, { id: 'i2', testName: 'Lipid profile', price: 1100, total: 1000 }] };
 
-/** Collection placed in the billing counter's own menu (Process builder). */
+/** A (stray, pre-fixed-slot) collection copy in the billing counter's own menu.
+ *  Sample Collection now sits only in Collect / Frontdesk / Lab, so this is
+ *  NOT a placement: the counter never offers "Collect sample". */
 const WF_COLLECT_AT_BILLING: ProcessWorkflowConfig = {
   categories: [
     { id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 },
@@ -492,13 +494,12 @@ describe('Billing counter — Pay later', () => {
     expect(report.el.querySelector('.pf-bc-done__hint')?.textContent).toContain('report');
   });
 
-  it('collection at the billing counter: "Collect sample" stays the primary after Pay later', async () => {
+  it('a stray collection copy at the billing counter: no "Collect sample" after Pay later (fixed slots)', async () => {
     const { f, el, c } = await openO1({ workflow: WF_COLLECT_AT_BILLING });
     await c.confirmPayment({ mode: 'later' });
     f.detectChanges();
-    const ps = primaries(el);
-    expect(ps.length).toBe(1);
-    expect(ps[0].textContent?.trim()).toBe('Collect sample');
+    expect(c.collectsHere()).toBe(false);
+    expect(Array.from(primaries(el)).some(p => p.textContent?.trim() === 'Collect sample')).toBe(false);
   });
 });
 
@@ -529,15 +530,10 @@ describe('Billing counter — collect sample only when the workflow says so', ()
     expect(hasCollect(el)).toBe(false);
   });
 
-  it('collection AT the billing counter → "Collect sample" is the primary, opening that order\'s collection', async () => {
-    const { el, c, router } = await payFirst({ workflow: WF_COLLECT_AT_BILLING });
-    expect(c.collectsHere()).toBe(true);
-    const ps = primaries(el);
-    expect(ps.length).toBe(1);
-    expect(ps[0].textContent?.trim()).toBe('Collect sample');
-    (ps[0] as HTMLButtonElement).click();
-    expect(router.navigate).toHaveBeenCalledWith(['/sample-collection'], { queryParams: { orderId: 'o1' } });
-    neverToOrderScreen(router);
+  it('a stray collection copy AT the billing counter → still no "Collect sample" (fixed slots)', async () => {
+    const { el, c } = await payFirst({ workflow: WF_COLLECT_AT_BILLING });
+    expect(c.collectsHere()).toBe(false);
+    expect(hasCollect(el)).toBe(false);
   });
 });
 

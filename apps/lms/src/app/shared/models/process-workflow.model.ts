@@ -147,16 +147,17 @@ export function workAreaIconPath(key: string | null | undefined): string[] {
  * by editing a saved workflow. Actions absent here (billing, queue, dispatch,
  * home_visits, messages) are free to move and disable.
  *
- * LOCKED + REPEATABLE (sample_collection): the lock pins the HOME copy — the
- * one in the system Collect area — which can't be dragged out or removed.
- * Extra copies placed in other areas (Frontdesk, Lab, a billing counter, a
- * custom area) stay freely movable, removable and toggleable. Use
- * isLockedItem() for a placed item; isLocked() only says the TYPE has a lock.
+ * FIXED SLOTS (sample_collection — owner's final rule, 2026-09-27): it lives in
+ * exactly three places and nowhere else — see COLLECTION_SLOTS. Every copy is
+ * locked (no drag, no removal); the Collect home copy is always on, the
+ * Frontdesk + Lab copies are switched on/off only. It is NOT in the builder's
+ * palette. Use isLockedItem() for a placed item; isLocked() only says the TYPE
+ * has a lock.
  */
 export interface ActionPolicy { home: string; locked?: boolean; mandatory?: boolean; homeMandatory?: boolean; }
 export const ACTION_POLICY: Record<string, ActionPolicy> = {
   // homeMandatory: the Collect area's home copy is always on (only its roles
-  // change — owner 2026-09-26); copies placed in other areas stay toggleable.
+  // change — owner 2026-09-26); the fixed Frontdesk + Lab copies toggle.
   sample_collection:    { home: 'collect',   locked: true, homeMandatory: true },
   patient_registration: { home: 'frontdesk', locked: true, mandatory: true },
   appointment:          { home: 'frontdesk', locked: true },
@@ -251,27 +252,40 @@ export function deriveModes(cfg: ProcessWorkflowConfig | null | undefined):
   };
 }
 
-/** Actions that may be placed in MORE THAN ONE menu at once (e.g. sample
- *  collection at the front desk AND a dedicated counter AND the lab). The
- *  builder keeps these in the palette after a drop and mints a fresh instance
- *  per placement. */
-export const REPEATABLE_ACTIONS = new Set<string>(['sample_collection']);
-export function isRepeatable(type: string): boolean { return REPEATABLE_ACTIONS.has(type); }
+/**
+ * Sample Collection's FIXED SLOTS (owner's final rule, 2026-09-27): "Sample
+ * collection is a separate page (the Collect area). Front desk can enable and
+ * disable it, and in Lab they can enable and disable it. That's the only thing.
+ * They cannot drag it or put it anywhere else."
+ *   • 'collect'   — the home copy: always on, locked (homeMandatory).
+ *   • 'frontdesk' — a fixed copy, locked in place, toggleable.
+ *   • 'lab'       — a fixed copy, locked in place, toggleable.
+ * normalizeWorkflow() guarantees exactly one copy per present slot area and
+ * drops copies anywhere else (billing counter, custom areas, Validate, …).
+ */
+export const SAMPLE_COLLECTION = 'sample_collection';
+export const COLLECTION_SLOTS: readonly string[] = ['collect', 'frontdesk', 'lab'];
+/** The slots whose copy the admin can switch on/off (Collect's is always on). */
+export const COLLECTION_TOGGLE_SLOTS: readonly string[] = ['frontdesk', 'lab'];
+/** Is `type` a fixed-slot action (placed by the normaliser, never by drag)? */
+export function isFixedSlotAction(type: string): boolean { return type === SAMPLE_COLLECTION; }
+/** Is `areaId` a legal slot for `type`? Non-slot types: any area. */
+export function isAllowedPlacement(type: string, areaId: string | null | undefined): boolean {
+  return !isFixedSlotAction(type) || COLLECTION_SLOTS.includes(areaId ?? '');
+}
 
 /**
- * Is THIS placed item pinned (no drag-out, no removal)? A locked, non-repeatable
- * action is pinned wherever it sits (it only ever sits in its home). A locked
- * REPEATABLE action pins only its copy in the home area — the other copies are
- * ordinary placements.
+ * Is THIS placed item pinned (no drag-out, no removal)? Every locked action is
+ * pinned wherever it sits: a locked action only ever sits in its home, and a
+ * fixed-slot action (sample_collection) only ever sits in its slots.
  */
-export function isLockedItem(type: string, areaId: string | null | undefined): boolean {
-  if (!isLocked(type)) return false;
-  return !isRepeatable(type) || areaId === actionHome(type);
+export function isLockedItem(type: string, _areaId?: string | null): boolean {
+  return isLocked(type);
 }
 
 /** Can THIS placed item never be switched off? Mandatory types everywhere, plus
  *  a `homeMandatory` type's copy in its home area (the Collect area's Sample
- *  collection) — its other copies stay toggleable. */
+ *  collection) — its fixed Frontdesk + Lab copies stay toggleable. */
 export function isMandatoryItem(type: string, areaId: string | null | undefined): boolean {
   if (isMandatory(type)) return true;
   const pol = ACTION_POLICY[type];
@@ -305,12 +319,61 @@ const NON_COLLECT_SYSTEM_AREAS = new Set(['frontdesk', 'lab', 'validate', 'resul
  *  • Otherwise → inserts "Collect" right after the frontdesk area with an
  *    ENABLED home copy and the default roles.
  *
+ * Then the FIXED-SLOT pass (COLLECTION_SLOTS, owner's final rule): copies of
+ * `sample_collection` outside Collect / Frontdesk / Lab are DROPPED, and a
+ * present Frontdesk / Lab area without a copy gains one, DISABLED (an existing
+ * copy keeps its on/off state).
+ *
  * Empty / missing configs are returned untouched (no workflow ⇒ the static
  * fallback nav applies). Idempotent; returns the SAME object when nothing
  * needed changing.
  */
 export function normalizeWorkflow<T extends ProcessWorkflowConfig | null | undefined>(cfg: T): T {
   if (!cfg || !Array.isArray(cfg.categories) || cfg.categories.length === 0) return cfg;
+  const withCollect = ensureCollectArea(cfg as ProcessWorkflowConfig);
+  const out = ensureCollectionSlots(withCollect);
+  return (out === cfg ? cfg : out) as T;
+}
+
+/** Stable id of the fixed Frontdesk / Lab `sample_collection` copy the
+ *  normaliser inserts (`collect-frontdesk`, `collect-lab`). */
+export const collectSlotActionId = (slot: string): string => `collect-${slot}`;
+
+/**
+ * The fixed-slot pass (see COLLECTION_SLOTS): drop `sample_collection` copies
+ * outside the slots, keep ONE copy per slot (on if any duplicate was on), and
+ * add a DISABLED copy to a present Frontdesk / Lab area that lacks one (an
+ * existing copy keeps its enabled state). A workflow without a Frontdesk or Lab
+ * area simply has no copy for that slot. Returns the SAME object when nothing
+ * changed.
+ */
+function ensureCollectionSlots(cfg: ProcessWorkflowConfig): ProcessWorkflowConfig {
+  const actions = cfg.actions ?? [];
+  const areaIds = new Set(cfg.categories.map(c => c.id));
+  const kept: ProcessAction[] = [];
+  const seen = new Map<string, number>();   // slot → index in kept
+  let changed = false;
+  for (const a of actions) {
+    if (a.type !== SAMPLE_COLLECTION) { kept.push(a); continue; }
+    if (!COLLECTION_SLOTS.includes(a.categoryId) || !areaIds.has(a.categoryId)) { changed = true; continue; }
+    const at = seen.get(a.categoryId);
+    if (at === undefined) { seen.set(a.categoryId, kept.length); kept.push(a); continue; }
+    changed = true;                          // duplicate in the same slot → merge
+    if (a.enabled && !kept[at].enabled) kept[at] = { ...kept[at], enabled: true };
+  }
+  for (const slot of COLLECTION_TOGGLE_SLOTS) {
+    if (!areaIds.has(slot) || seen.has(slot)) continue;
+    changed = true;
+    kept.push({
+      id: collectSlotActionId(slot), type: SAMPLE_COLLECTION, categoryId: slot,
+      order: kept.filter(a => a.categoryId === slot).length, enabled: false,
+    });
+  }
+  return changed ? { ...cfg, actions: kept } : cfg;
+}
+
+/** The Collect-area pass of normalizeWorkflow (see its doc). */
+function ensureCollectArea<T extends ProcessWorkflowConfig>(cfg: T): T {
   const actions = cfg.actions ?? [];
   const hasHomeCopy = (acts: ProcessAction[]) =>
     acts.some(a => a.type === 'sample_collection' && a.categoryId === COLLECT_AREA_ID);
@@ -321,7 +384,7 @@ export function normalizeWorkflow<T extends ProcessWorkflowConfig | null | undef
   // The home copy is always on (homeMandatory) — heal a saved "off".
   const homeOff = actions.some(a => a.type === 'sample_collection' && a.categoryId === COLLECT_AREA_ID && !a.enabled);
   if (homeOff) {
-    return normalizeWorkflow({
+    return ensureCollectArea({
       ...cfg,
       actions: actions.map(a => a.type === 'sample_collection' && a.categoryId === COLLECT_AREA_ID ? { ...a, enabled: true } : a),
     } as T);
@@ -372,22 +435,24 @@ export function frontdeskMenu(cfg: ProcessWorkflowConfig | null | undefined): st
   return menuOf('patient_registration') ?? menuOf('walk_in_order') ?? menuOf('appointment');
 }
 
-/** All menus (categoryIds) where an ENABLED `sample_collection` instance sits —
- *  supports the action being placed in several menus at once. */
+/** The fixed slots (COLLECTION_SLOTS) whose `sample_collection` copy is ENABLED.
+ *  A copy anywhere else is not a placement (the normaliser drops it) and is
+ *  ignored even on an un-normalised config. */
 export function collectionLocations(cfg: ProcessWorkflowConfig | null | undefined): string[] {
   return [...new Set((cfg?.actions ?? [])
-    .filter(a => a.type === 'sample_collection' && a.enabled)
+    .filter(a => a.type === SAMPLE_COLLECTION && a.enabled && COLLECTION_SLOTS.includes(a.categoryId))
     .map(a => a.categoryId))];
 }
 
 /**
- * The work-areas (category ids) that hold an ENABLED `sample_collection` in the
- * active workflow — the Process builder's placements. Drives the band "Collect"
- * entry point (pf-collect-band-button): every screen of such an area gets it.
- * No workflow configured → [] (no band button; screens keep their own flows).
+ * The work-areas whose screens get the band "Collect" entry point
+ * (pf-collect-band-button): the Frontdesk / Lab slots whose copy is switched
+ * ON. The Collect area itself is the collection page (no button), and the
+ * billing counter / custom areas never collect. No workflow configured → []
+ * (no band button; screens keep their own flows).
  */
 export function areasWithCollection(cfg: ProcessWorkflowConfig | null | undefined): string[] {
-  return collectionLocations(cfg);
+  return collectionLocations(cfg).filter(a => COLLECTION_TOGGLE_SLOTS.includes(a));
 }
 
 /** Screen key for the separate billing counter (/billing-counter). It has no
@@ -424,16 +489,14 @@ export function hasDedicatedCollection(cfg: ProcessWorkflowConfig | null | undef
 }
 
 /**
- * True when the workflow puts sample collection AT the separate billing
- * counter — an enabled `sample_collection` sits in the same (non-frontdesk)
- * menu as the enabled `billing` action. The billing counter only offers
- * "Collect sample" after payment when this holds; otherwise the paid patient
- * simply moves on to wherever collection lives (the collection queue).
+ * Collection at the separate billing counter — RETIRED by the fixed-slot rule
+ * (owner, 2026-09-27): Sample Collection can only sit in Collect / Frontdesk /
+ * Lab, so the billing counter never offers "Collect sample" after payment; the
+ * paid patient moves on to wherever collection lives. Always false; kept so the
+ * billing counter's `collectsHere` stays a single, explicit switch.
  */
-export function collectsAtBillingCounter(cfg: ProcessWorkflowConfig | null | undefined): boolean {
-  const bill = cfg?.actions?.find(a => a.type === 'billing' && a.enabled)?.categoryId;
-  if (!bill || bill === frontdeskMenu(cfg)) return false;
-  return areasWithCollection(cfg).includes(bill);
+export function collectsAtBillingCounter(_cfg?: ProcessWorkflowConfig | null): boolean {
+  return false;
 }
 
 /** The categoryId of the built-in Lab work-area (see SYSTEM_AREA_SCREEN). */

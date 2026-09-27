@@ -11,7 +11,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
-import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isLockedItem, isMandatoryItem, isRepeatable, actionHome, normalizeWorkflow, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
+import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isAllowedPlacement, isFixedSlotAction, isLockedItem, isMandatoryItem, actionHome, normalizeWorkflow, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
@@ -198,9 +198,9 @@ const LANE_COLOR = '#7c3aed';
                     <span class="pb-label">{{ labelFor(item) }}</span>
                     <button type="button" class="nd-toggle pb-toggle" role="switch" [attr.aria-checked]="item.enabled" [disabled]="mandatory(item.type, lane.cat.id)" (click)="toggleAction(li, ii)"
                             [attr.aria-label]="labelFor(item) + (item.enabled ? ' — shown' : ' — hidden')"
-                            [title]="mandatory(item.type, lane.cat.id) ? 'Required — always on' : (item.enabled ? 'Enabled' : 'Hidden')"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
+                            [title]="toggleTip(item, lane.cat.id)"><span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span></button>
                     @if (locked(item.type, lane.cat.id)) {
-                      <svg class="pb-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" [attr.title]="'Locked to this area'">
+                      <svg class="pb-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" [attr.title]="lockTip(item.type)">
                         <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
                       </svg>
                     } @else {
@@ -599,9 +599,9 @@ export class ProcessBuilderComponent implements OnInit {
     this.healLocks(lanes);
     this.healDeps(lanes);
     const placed = new Set(lanes.flatMap(l => l.items.map(i => i.type)));
-    // Repeatable actions stay in the palette even once placed, so they can be
-    // dropped into several work-areas.
-    this.palette.set(ACTION_CATALOG.filter(a => isRepeatable(a.type) || !placed.has(a.type)));
+    // Fixed-slot actions (Sample Collection) are never in the palette: they sit
+    // only in Collect / Frontdesk / Lab, placed by normalizeWorkflow.
+    this.palette.set(ACTION_CATALOG.filter(a => !isFixedSlotAction(a.type) && !placed.has(a.type)));
     this.lanes.set(lanes);
     this.dirty.set(dirty);
   }
@@ -609,19 +609,12 @@ export class ProcessBuilderComponent implements OnInit {
   /** Enforce the lock policy on a loaded config: every locked action sits exactly
    *  once in its home area, and mandatory ones are enabled. Repairs older / hand-
    *  edited workflows so the builder always shows a valid, professional layout.
-   *  A locked REPEATABLE action (sample_collection) only needs its home copy:
-   *  copies in other areas are legitimate placements and stay where they are. */
+   *  Fixed-slot actions (sample_collection) are owned by normalizeWorkflow
+   *  (run just before): one copy per Collect / Frontdesk / Lab, none elsewhere. */
   private healLocks(lanes: Lane[]) {
     for (const [type, pol] of Object.entries(ACTION_POLICY)) {
-      if (!pol.locked) continue;
+      if (!pol.locked || isFixedSlotAction(type)) continue;
       const home = lanes.find(l => l.cat.id === pol.home);
-      if (isRepeatable(type)) {
-        if (home && !home.items.some(it => it.type === type)) {
-          home.items.push({ id: crypto.randomUUID(), type, enabled: true });
-        }
-        if (home && pol.homeMandatory) for (const it of home.items) if (it.type === type) it.enabled = true;
-        continue;
-      }
       // Pull any stray copies out of non-home areas (capture one to reuse).
       let stray: LaneItem | undefined;
       for (const ln of lanes) {
@@ -677,25 +670,26 @@ export class ProcessBuilderComponent implements OnInit {
       moveItemInArray(ev.container.data, ev.previousIndex, ev.currentIndex);
     } else if (ev.previousContainer.id === 'palette') {
       const entry = this.palette()[ev.previousIndex];
-      if (isRepeatable(entry.type) && ev.container.data.some(it => it.type === entry.type)) {
-        this.toasts.info(`${entry.label} is already in this work-area`);
+      if (!entry) return;
+      // Defensive: a fixed-slot action is never in the palette, and can't be
+      // dropped into any area by drag (its copies are placed by the normaliser).
+      if (isFixedSlotAction(entry.type) || !isAllowedPlacement(entry.type, this.lanes()[laneIdx]?.cat.id)) {
+        this.toasts.info(`${entry.label} is fixed to Collect, Frontdesk and Lab`);
         return;
       }
       const newId = crypto.randomUUID();
       ev.container.data.splice(ev.currentIndex, 0, { id: newId, type: entry.type, enabled: true });
-      // Repeatable actions remain available in the palette for another placement.
-      if (!isRepeatable(entry.type)) this.palette.update(p => p.filter((_, i) => i !== ev.previousIndex));
+      this.palette.update(p => p.filter((_, i) => i !== ev.previousIndex));
       addedType = entry.type;
       addedId = newId;
     } else {
       const moving = (ev.previousContainer.data as LaneItem[])[ev.previousIndex];
-      const targetId = this.lanes()[laneIdx]?.cat.id;
-      if (this.locked(moving.type, this.laneIdOf(ev.previousContainer.id)) && actionHome(moving.type) !== targetId) {
-        this.toasts.info(`${this.labelFor(moving)} is locked to its area`);
-        return;
-      }
-      if (isRepeatable(moving.type) && ev.container.data.some(it => it.type === moving.type)) {
-        this.toasts.info(`${this.labelFor(moving)} is already in this work-area`);
+      // A locked item never changes area: a locked action only sits in its home,
+      // and a fixed-slot action's copies sit only in their slots.
+      if (!moving || this.locked(moving.type, this.laneIdOf(ev.previousContainer.id))) {
+        if (moving) this.toasts.info(isFixedSlotAction(moving.type)
+          ? `${this.labelFor(moving)} is fixed here — switch it on or off instead`
+          : `${this.labelFor(moving)} is locked to its area`);
         return;
       }
       transferArrayItem(ev.previousContainer.data as LaneItem[], ev.container.data, ev.previousIndex, ev.currentIndex);
@@ -713,13 +707,10 @@ export class ProcessBuilderComponent implements OnInit {
     if (this.locked(item.type, this.laneIdOf(ev.previousContainer.id))) { this.toasts.info(`${this.labelFor(item)} can't be removed`); return; }
     prev.splice(ev.previousIndex, 1);
     const entry = catalogFor(item.type);
-    // Repeatable types are already kept in the palette — don't add a duplicate.
-    if (entry && !isRepeatable(item.type)) this.palette.update(p => [...p, entry]);
+    if (entry && !isFixedSlotAction(item.type)) this.palette.update(p => [...p, entry]);
     // Removing an action cascades off its dependents + coupled partner (e.g. drop
-    // dispatch → lab intake off; drop collection → dispatch/results off).
-    // Repeatable actions (sample_collection) can be placed in several work-areas:
-    // dropping ONE copy must NOT cascade while another enabled copy still
-    // satisfies the dependency — only removing the LAST enabled copy does.
+    // dispatch → lab intake off). Only removing the LAST enabled copy of a type
+    // cascades.
     const stillSatisfied = this.lanes().some(ln =>
       ln.items.some(it => it.type === item.type && it.enabled && it.id !== item.id));
     if (!stillSatisfied) {
@@ -759,8 +750,8 @@ export class ProcessBuilderComponent implements OnInit {
       this.toasts.info('This work-area holds locked actions and can’t be deleted');
       return;
     }
-    // Repeatable types never leave the palette — don't add a duplicate chip.
-    const back = lane.items.filter(it => !isRepeatable(it.type))
+    // Fixed-slot actions never return to the palette.
+    const back = lane.items.filter(it => !isFixedSlotAction(it.type))
       .map(it => catalogFor(it.type)).filter((e): e is ActionCatalogEntry => !!e);
     this.palette.update(p => [...p, ...back]);
     this.lanes.update(l => l.filter((_, k) => k !== i));
@@ -777,9 +768,10 @@ export class ProcessBuilderComponent implements OnInit {
    *  following couplings (both ways), prerequisites (when enabling) and
    *  dependents (when disabling). Also reports prerequisites that aren't placed
    *  anywhere so the caller can warn.
-   *  REPEATABLE types are satisfied by ANY enabled copy: `itemId` is the copy
-   *  being changed — switching it off while another copy is on cascades nothing,
-   *  and a repeatable prerequisite that already has an enabled copy is left be. */
+   *  FIXED-SLOT types (sample_collection, one copy per slot) are satisfied by ANY
+   *  enabled copy: `itemId` is the copy being changed — switching it off while
+   *  another copy is on (the Collect copy always is) cascades nothing, and such a
+   *  prerequisite that already has an enabled copy is left be. */
   private cascade(type: string, enabled: boolean, itemId?: string): { desired: Map<string, boolean>; missing: string[] } {
     const desired = new Map<string, boolean>();
     const missing: string[] = [];
@@ -788,7 +780,7 @@ export class ProcessBuilderComponent implements OnInit {
       l.items.some(i => i.type === t && i.enabled && !(t === type && i.id === itemId)));
     const visit = (t: string, en: boolean) => {
       if (desired.get(t) === en) return;
-      if (isRepeatable(t) && otherCopyOn(t)) {
+      if (isFixedSlotAction(t) && otherCopyOn(t)) {
         // Still live through another copy: flip only the originating copy (if
         // it is this type) and don't cascade further.
         if (t === type) desired.set(t, en);
@@ -811,14 +803,14 @@ export class ProcessBuilderComponent implements OnInit {
 
   /** Apply a cascade to the lanes (mandatory actions stay on); warn on any
    *  prerequisite that isn't placed in a work-area. `itemId` = the placed copy
-   *  the admin acted on: for a repeatable type ONLY that copy flips; a repeatable
-   *  pulled in as a prerequisite switches on just one copy (its home copy if
-   *  placed, else the first) rather than every placement. */
+   *  the admin acted on: for a fixed-slot type ONLY that copy flips; one pulled
+   *  in as a prerequisite switches on just one copy (its home copy if placed,
+   *  else the first) rather than every slot. */
   private applyEnabled(type: string, enabled: boolean, itemId?: string) {
     const { desired, missing } = this.cascade(type, enabled, itemId);
-    const pick = new Map<string, string>();   // repeatable prerequisite → the one copy to enable
+    const pick = new Map<string, string>();   // fixed-slot prerequisite → the one copy to enable
     for (const [t, d] of desired) {
-      if (!d || !isRepeatable(t) || (t === type && itemId)) continue;
+      if (!d || !isFixedSlotAction(t) || (t === type && itemId)) continue;
       const copies = this.lanes().flatMap(l => l.items.filter(i => i.type === t).map(i => ({ i, area: l.cat.id })));
       const chosen = copies.find(c => c.area === actionHome(t)) ?? copies[0];
       if (chosen) pick.set(t, chosen.i.id);
@@ -828,7 +820,7 @@ export class ProcessBuilderComponent implements OnInit {
       items: ln.items.map(it => {
         const d = desired.get(it.type);
         if (d === undefined) return it;
-        if (isRepeatable(it.type)) {
+        if (isFixedSlotAction(it.type)) {
           if (it.type === type && itemId) return it.id === itemId ? { ...it, enabled: d } : it;
           if (d && pick.get(it.type) !== it.id) return it;
         }
@@ -847,8 +839,20 @@ export class ProcessBuilderComponent implements OnInit {
   iconFor(type: string): string[] { return catalogFor(type)?.iconPath ?? ['M12 2v20M2 12h20']; }
   labelFor(it: LaneItem): string { return it.label || catalogFor(it.type)?.label || it.type; }
   enabledCount(lane: Lane): number { return lane.items.filter(i => i.enabled).length; }
-  /** Is this placed item pinned? (A repeatable action pins only its home copy.) */
+  /** Is this placed item pinned (no drag, no removal)? */
   locked(type: string, areaId?: string | null): boolean { return isLockedItem(type, areaId); }
+  /** Is this a fixed-slot action (Sample Collection: Collect / Frontdesk / Lab)? */
+  fixedSlot(type: string): boolean { return isFixedSlotAction(type); }
+  /** The lock icon's tooltip. */
+  lockTip(type: string): string {
+    return this.fixedSlot(type) ? 'Fixed here — can’t be moved or removed' : 'Locked to this area';
+  }
+  /** The on/off switch's tooltip. */
+  toggleTip(item: LaneItem, areaId: string): string {
+    if (this.mandatory(item.type, areaId)) return 'Required — always on';
+    if (this.fixedSlot(item.type)) return 'Fixed here — switch on or off';
+    return item.enabled ? 'Enabled' : 'Hidden';
+  }
   /** 'lane-<areaId>' drop-list id → the area id. */
   private laneIdOf(listId: string): string | null { return listId.startsWith('lane-') ? listId.slice(5) : null; }
   mandatory(type: string, areaId?: string | null): boolean { return isMandatoryItem(type, areaId); }

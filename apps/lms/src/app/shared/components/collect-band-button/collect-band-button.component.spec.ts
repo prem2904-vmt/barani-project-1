@@ -8,8 +8,8 @@ import { ProcessWorkflowService } from '../../../core/services/process-workflow.
 import { ProcessWorkflowConfig } from '../../models/process-workflow.model';
 
 /**
- * Band "Collect" entry point: shows only on screens whose work-area holds an
- * ENABLED sample_collection (Process builder) for users with collect_sample;
+ * Band "Collect" entry point: shows only on the Frontdesk / Lab screens whose
+ * fixed Sample Collection copy is ON (Process builder) for users with collect_sample;
  * opens collection for the selected order, else the general queue, and
  * carries the back target.
  */
@@ -75,25 +75,39 @@ describe('pf-collect-band-button', () => {
     expect(btn()).toBeNull();
   });
 
-  it('hidden when the area has no collection, or only a DISABLED one', () => {
+  it('hidden when the slot copy is OFF, and in any non-slot area (fixed slots)', () => {
     const { f, host, btn } = make();
     host.area.set('billing-counter');   // billdesk holds billing, not collection
     f.detectChanges();
     expect(btn()).toBeNull();
-    host.area.set('lab');               // lab's collection is disabled
+    host.area.set('lab');               // lab's copy is switched off
     f.detectChanges();
     expect(btn()).toBeNull();
-    host.area.set('custom1');           // /w/custom1 holds it
+    host.area.set('custom1');           // a stray copy in /w/custom1 is not a placement
+    f.detectChanges();
+    expect(btn()).toBeNull();
+  });
+
+  it('Lab shows when its fixed copy is ON', () => {
+    const cfg = { ...CFG, actions: CFG.actions.map(a => a.id === 'c2' ? { ...a, enabled: true } : a) };
+    const { f, host, btn } = make({ cfg });
+    host.area.set('lab');
     f.detectChanges();
     expect(btn()).not.toBeNull();
   });
 
-  it('billing counter shows when collection sits in the billing area', () => {
-    const cfg = { ...CFG, actions: [...CFG.actions, act('c4', 'sample_collection', 'billdesk')] };
-    const { f, host, btn } = make({ cfg });
-    host.area.set('billing-counter');
-    f.detectChanges();
-    expect(btn()).not.toBeNull();
+  it('the billing counter never shows it — not even with a (stray) copy there or billing in Frontdesk', () => {
+    const stray = { ...CFG, actions: [...CFG.actions, act('c4', 'sample_collection', 'billdesk')] };
+    const a = make({ cfg: stray });
+    a.host.area.set('billing-counter');
+    a.f.detectChanges();
+    expect(a.btn()).toBeNull();
+    TestBed.resetTestingModule();
+    const inFd = { ...CFG, actions: CFG.actions.map(x => x.type === 'billing' ? { ...x, categoryId: 'frontdesk' } : x) };
+    const b = make({ cfg: inFd });
+    b.host.area.set('billing-counter');
+    b.f.detectChanges();
+    expect(b.btn()).toBeNull();
   });
 
   it('no workflow configured → nothing (current behaviour kept)', () => {

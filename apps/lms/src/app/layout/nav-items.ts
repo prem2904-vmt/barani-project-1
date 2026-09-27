@@ -234,8 +234,10 @@ export function menusFromWorkflow(cfg: ProcessWorkflowConfig | null | undefined,
   if (!cfg?.categories?.length) return null;
   // The Collect page comes from the system Collect WORK AREA (normalised in if
   // an older workflow predates it). Like every area it shows only to users who
-  // can run its enabled actions (collect_sample) — RBAC — and switching its home
-  // copy off drops it from the nav. The shells' withCollection() is only the
+  // can run its enabled actions (collect_sample) — RBAC; its home copy is always
+  // on. Sample Collection sits only in its fixed slots (Collect / Frontdesk /
+  // Lab); the normaliser drops copies anywhere else, so a custom area never
+  // turns into a collection counter. The shells' withCollection() is only the
   // no-workflow fallback now, so there is never a second Collect.
   cfg = normalizeWorkflow(cfg);
   const wf = cfg;
