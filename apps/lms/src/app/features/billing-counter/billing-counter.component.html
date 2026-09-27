@@ -255,6 +255,9 @@
                 @if (dues().discount != null) {
                   <div><dt>Discount</dt><dd class="nd-num">−{{ dues().discount | inr }}</dd></div>
                 }
+                @if (dues().roundOff != null) {
+                  <div><dt>Round off</dt><dd class="nd-num">{{ signedInr(dues().roundOff) }}</dd></div>
+                }
                 @if (dues().payable != null) {
                   <div><dt>Payable</dt><dd class="nd-num">{{ dues().payable | inr }}</dd></div>
                 }

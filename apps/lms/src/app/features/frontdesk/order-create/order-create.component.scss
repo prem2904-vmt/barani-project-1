@@ -1354,6 +1354,22 @@
   color: var(--red-text);
 }
 
+/* A bundle beside its own member (old draft / repeat) — flagged, not dropped. */
+.pf-cart-dup {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--red-text) 8%, transparent);
+}
+.pf-cart-dup__msg {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--red-text);
+}
+.pf-cart-dup__msg + .pf-cart-dup__msg { margin-top: 4px; }
+
 /* ════════════════════════════════════════════════════════════════════
    CROSS-PLATFORM OVERRIDES (additive only — desktop-web ≥1280 untouched)
    Every rule below is scoped under :host and gated to sub-desktop widths,

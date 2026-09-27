@@ -611,6 +611,13 @@
       </div>
 
       <!-- Compact single-line rows (>=44px): name · code · price · x. -->
+      @if (cartOverlapMessages().length > 0) {
+      <div class="pf-cart-dup" role="alert">
+        @for (m of cartOverlapMessages(); track m) {
+        <p class="pf-cart-dup__msg">{{ m }}</p>
+        }
+      </div>
+      }
       <ul class="pf-cart-list pf-cart-list--compact">
         @if (selected().length === 0) {
         <li class="pf-cart-empty">No tests selected yet. Pick them from the catalogue or the search.</li>
@@ -759,6 +766,12 @@
           <span class="tabular-nums pf-cart-line__save">−{{ discountApplied() | inr }}</span>
         </div>
         }
+        }
+        @if (roundOff() !== 0) {
+        <div class="pf-cart-line">
+          <span>Round off</span>
+          <span class="tabular-nums">{{ roundOff() > 0 ? '+' : '−' }}{{ (roundOff() < 0 ? -roundOff() : roundOff()) | inr }}</span>
+        </div>
         }
         <div class="pf-cart-line pf-cart-line--total">
           <span>Total</span>

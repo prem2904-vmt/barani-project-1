@@ -18,6 +18,7 @@ import { ZoomTransitionService } from '../../core/navigation/zoom-transition';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../core/navigation/zoom.directive';
 import { ApiError } from '../../shared/models/api-response.model';
 import { Bill } from '../../shared/models/bill.model';
+import { billRoundOff } from '../../shared/utils/bill-math';
 import { Order } from '../../shared/models/order.model';
 import { Patient, formatPatientMeta, patientDisplayName } from '../../shared/models/patient.model';
 import { collectsAtBillingCounter } from '../../shared/models/process-workflow.model';
@@ -856,15 +857,23 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     refund: 'Refund owed', due: 'Balance due', unbilled: 'Not billed yet', paid: 'Paid', unknown: 'Billing',
   })[this.billState()]);
 
-  readonly dues = computed<{ payable: number | null; paid: number | null; balance: number | null; discount: number | null }>(() => {
+  readonly dues = computed<{ payable: number | null; paid: number | null; balance: number | null; discount: number | null; roundOff: number | null }>(() => {
     const bill = this.selectedBill();
-    if (bill) return { payable: bill.totalPayable, paid: bill.totalPaid, balance: bill.balance, discount: bill.totalDiscount > 0 ? bill.totalDiscount : null };
+    if (bill) {
+      const ro = billRoundOff(bill);
+      return { payable: bill.totalPayable, paid: bill.totalPaid, balance: bill.balance, discount: bill.totalDiscount > 0 ? bill.totalDiscount : null, roundOff: ro !== 0 ? ro : null };
+    }
     const row = this.outstandingFor(this.selectedOrderId());
-    if (row) return { payable: row.totalPayable, paid: row.totalPaid, balance: row.balance, discount: null };
+    if (row) return { payable: row.totalPayable, paid: row.totalPaid, balance: row.balance, discount: null, roundOff: null };
     const o = this.selectedOrder();
-    if (o && this.billState() === 'unbilled' && o.totalAmount) return { payable: o.totalAmount, paid: null, balance: null, discount: null };
-    return { payable: null, paid: null, balance: null, discount: null };
+    if (o && this.billState() === 'unbilled' && o.totalAmount) return { payable: o.totalAmount, paid: null, balance: null, discount: null, roundOff: null };
+    return { payable: null, paid: null, balance: null, discount: null, roundOff: null };
   });
+  /** "+₹0.10" / "−₹0.40" for the Round off row. */
+  signedInr(n: number | null): string {
+    const v = n ?? 0;
+    return (v > 0 ? '+' : '−') + new CurrencyInrPipe().transform(Math.abs(v));
+  }
 
   /** What the counter collects now: the balance, or the order total when it
    *  has no bill yet. 0 when nothing is owed. */

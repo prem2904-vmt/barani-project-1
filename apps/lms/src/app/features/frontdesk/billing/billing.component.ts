@@ -24,7 +24,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
-import { previewBillForDiscount } from '../../../shared/utils/bill-math';
+import { billRoundOff, maxDiscountWithinPaid, previewBillForDiscount } from '../../../shared/utils/bill-math';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -1731,8 +1731,29 @@ export class BillingComponent implements OnInit, OnChanges {
   });
   /** GST as the bill will carry it (post-discount when a discount is typed). */
   readonly shownTax = computed(() => this.discountPreview()?.tax ?? this._bill()?.totalTax ?? 0);
+  /** Round-off (±0.xx to the whole-rupee total) as the bill will carry it. */
+  readonly shownRoundOff = computed(() => this.discountPreview()?.roundOff ?? billRoundOff(this._bill()));
   /** Amount already collected (payments − refunds), from the loaded bill. */
   readonly alreadyPaid = computed(() => this._bill()?.totalPaid ?? 0);
+  /** Part-paid bill: the most discount that keeps the payable ≥ what is paid
+   *  (null when nothing is paid — only the role cap applies). */
+  readonly maxDiscountAllowed = computed(() =>
+    this.alreadyPaid() > 0 ? maxDiscountWithinPaid(this._bill(), this.alreadyPaid()) : null);
+  /** The typed discount would take the payable below what is already paid —
+   *  the server refuses it (400 discount_exceeds_balance); block confirm. */
+  readonly discountExceedsPaid = computed(() => {
+    const p = this.discountPreview();
+    return !!p && this.alreadyPaid() > 0 && p.payable < this.alreadyPaid();
+  });
+  /** The refusal, worded as the server words it, plus the most allowed. */
+  readonly discountExceedsPaidMessage = computed(() => {
+    const b = this._bill();
+    if (!this.discountExceedsPaid() || !b) return '';
+    const unpaid = Math.max(0, b.totalPayable - this.alreadyPaid());
+    const max = this.maxDiscountAllowed() ?? 0;
+    const inr = (n: number) => new CurrencyInrPipe().transform(n);
+    return `This discount is more than the unpaid balance of ${inr(unpaid)} — reduce it (at most ${inr(max)}), or record a refund instead.`;
+  });
   /** Outstanding to collect — the difference after prior payments. */
   readonly effectivePayable = computed(() => Math.max(0, this.fullTotal() - this.alreadyPaid()));
   /** Overpayment to refund (e.g. a test was removed after the bill was paid). */
@@ -1864,6 +1885,7 @@ export class BillingComponent implements OnInit, OnChanges {
   readonly canConfirm = computed(() => {
     if (this._paid()) return false; // already paid — never let it re-fire
     if (this.discountOverCap()) return false; // discount above this user's limit
+    if (this.discountExceedsPaid()) return false; // below what's already paid
     const m = this._mode();
     if (m === 'cash') return this.cashAmountNum() >= this.effectivePayable();
     if (m === 'wallet') {
@@ -2102,6 +2124,7 @@ export class BillingComponent implements OnInit, OnChanges {
   confirm() {
     const b = this._bill();
     if (!b || this._saving()) return;
+    if (this.discountExceedsPaid()) { this.toasts.error(this.discountExceedsPaidMessage()); return; }
     if (!this.canConfirm()) {
       this.toasts.warning('Enter an amount at least equal to the total due.');
       return;

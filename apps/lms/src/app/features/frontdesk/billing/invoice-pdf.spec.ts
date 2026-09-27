@@ -183,11 +183,12 @@ describe('staff order QR on invoices (owner 2026-09-26: disabled for now)', () =
 });
 
 describe('buildCashBillModel — the receipt shows the invoice\'s own numbers', () => {
-  // The server bill for ₹1000 @18% with ₹295 off: taxable 705, GST 126.90, payable 831.90.
+  // The server bill for ₹1000 @18% with ₹295 off: taxable 705, GST 126.90,
+  // exact 831.90 → payable ₹832 with a +0.10 round-off (owner rule).
   const bill = (over: Partial<Bill> = {}): Bill => ({
     id: 'b', orderId: 'o', patientId: 'p', branchId: 'x', type: 'tax_invoice', isInterstate: false,
     subTotal: 1000, overrideDiscount: 0, totalDiscount: 295, totalTaxable: 705, totalCgst: 63.45, totalSgst: 63.45, totalIgst: 0,
-    totalTax: 126.9, totalPayable: 831.9, totalPaid: 0, balance: 831.9, status: 'pending', createdAt: new Date().toISOString(),
+    totalTax: 126.9, totalPayable: 832, roundOff: 0.1, totalPaid: 0, balance: 832, status: 'pending', createdAt: new Date().toISOString(),
     items: [{ id: 'i', billId: 'b', testId: 't', testName: 'CBC', price: 1000, discount: 295, taxableAmount: 705, taxSlab: 18,
       cgstRate: 9, sgstRate: 9, igstRate: 0, cgstAmount: 63.45, sgstAmount: 63.45, igstAmount: 0, total: 831.9 }],
     payments: [],
@@ -195,19 +196,30 @@ describe('buildCashBillModel — the receipt shows the invoice\'s own numbers', 
   } as Bill);
   const input = (b: Bill) => ({ bill: b, order: null, invoiceNumber: 'INV-1', effectivePayable: b.totalPayable } as never);
 
-  it('GST bill: Total 1000 − Discount 295 + GST 126.90 = Net Payable 831.90 (discount is the bill\'s, not gross − payable = 168.10)', () => {
+  it('GST bill: Total 1000 − Discount 295 + GST 126.90 + Round off 0.10 = Net Payable 832 (discount is the bill\'s, not gross − payable)', () => {
     const m = buildCashBillModel(input(bill()));
     expect(m.grossTotal).toBe('1,000');
     expect(m.discount).toBe('295');
     expect(m.hasTax).toBe(true);
     expect(m.tax).toBe('126.90');
-    expect(m.netPayable).toBe('831.90');
+    expect(m.hasRoundOff).toBe(true);
+    expect(m.roundOff).toBe('+ 0.10');
+    expect(m.netPayable).toBe('832');
+    expect(m.amountWords).toMatch(/Eight Hundred Thirty[- ]Two/i);
+  });
+
+  it('a round-DOWN reads negative; a bill with none (or raised before round-off) has no row', () => {
+    const down = buildCashBillModel(input(bill({ totalTax: 0, totalCgst: 0, totalSgst: 0, totalTaxable: 705.4, totalPayable: 705, roundOff: -0.4, balance: 705 })));
+    expect(down.roundOff).toBe('- 0.40');
+    const legacy = buildCashBillModel(input(bill({ totalPayable: 831.9, roundOff: undefined, balance: 831.9 })));
+    expect(legacy.hasRoundOff).toBe(false);
   });
 
   it('GST-off bill is unchanged: Total − Discount = Net Payable, no GST row', () => {
-    const m = buildCashBillModel(input(bill({ totalTax: 0, totalCgst: 0, totalSgst: 0, totalTaxable: 705, totalPayable: 705, balance: 705 })));
+    const m = buildCashBillModel(input(bill({ totalTax: 0, totalCgst: 0, totalSgst: 0, totalTaxable: 705, totalPayable: 705, roundOff: 0, balance: 705 })));
     expect(m.discount).toBe('295');
     expect(m.hasTax).toBe(false);
+    expect(m.hasRoundOff).toBe(false);
     expect(m.netPayable).toBe('705');
   });
 });

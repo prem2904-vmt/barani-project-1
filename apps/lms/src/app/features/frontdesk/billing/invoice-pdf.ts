@@ -4,6 +4,7 @@ import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { fetchAssetBlob } from '../../../shared/utils/upload-fetch';
 import autoTable from 'jspdf-autotable';
 import { Bill } from '../../../shared/models/bill.model';
+import { billRoundOff } from '../../../shared/utils/bill-math';
 import { Order } from '../../../shared/models/order.model';
 
 /**
@@ -305,6 +306,9 @@ function drawTotals(doc: jsPDF, bill: Bill, payable: number, isTaxInvoice: boole
       line('SGST', formatMoney(bill.totalSgst));
     }
   }
+  // Owner round-off rule: taxable + GST + round-off = the whole-rupee Total.
+  const roundOff = billRoundOff(bill);
+  if (roundOff !== 0) line('Round off', `${roundOff > 0 ? '+' : '−'}Rs. ${Math.abs(roundOff).toFixed(2)}`);
   ty += 2;
   doc.setDrawColor(accent); doc.setLineWidth(0.8);
   doc.line(labelX, ty, valueX, ty);
@@ -387,6 +391,8 @@ export interface CashBillModel {
   /** GST on the discounted taxable value (the bill's), so the stack adds up:
    *  Total − Discount + GST = Net Payable. */
   tax: string; hasTax: boolean;
+  /** "+0.10" / "-0.40": taking the exact figure to the whole-rupee Net Payable. */
+  roundOff: string; hasRoundOff: boolean;
   netPayable: string; collected: string; isCredit: boolean;
   isPaid: boolean; paidOrDueLabel: string; paidOrDueAmount: string;
   amountWords: string;
@@ -408,6 +414,7 @@ export function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
   const grossTotalNum = bill.items.reduce((s, it) => s + (it.price ?? 0), 0) || bill.subTotal || 0;
   const discountNum = Math.max(0, Number(bill.totalDiscount) || 0);
   const taxNum = Math.max(0, Number(bill.totalTax) || 0);
+  const roundOffNum = billRoundOff(bill);
 
   const payments = (bill.payments ?? []).map(p => ({
     // A wallet payment is drawn from the patient's prepaid credit — label it "Credit".
@@ -441,6 +448,8 @@ export function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
     hasDiscount: discountNum > 0,
     tax: plain(taxNum),
     hasTax: taxNum > 0,
+    roundOff: `${roundOffNum > 0 ? '+' : '-'} ${Math.abs(roundOffNum).toFixed(2)}`,
+    hasRoundOff: roundOffNum !== 0,
     netPayable: plain(effectivePayable),
     collected: plain(bill.totalPaid),
     isCredit,
@@ -577,6 +586,7 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   tot('Total', m.grossTotal);
   if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
   if (m.hasTax) tot('GST', m.tax);
+  if (m.hasRoundOff) tot('Round off', m.roundOff);
   if (!m.isCredit) {
     tot('Net Payable', m.netPayable, true);
     tot('Collected Amount', m.collected);
@@ -786,6 +796,7 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
   tot('Total', m.grossTotal);
   if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
   if (m.hasTax) tot('GST', m.tax);
+  if (m.hasRoundOff) tot('Round off', m.roundOff);
   if (!m.isCredit) {
     tot('Net Payable', m.netPayable, true);
     tot('Collected Amount', m.collected);

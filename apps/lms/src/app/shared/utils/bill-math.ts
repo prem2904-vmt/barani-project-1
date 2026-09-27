@@ -9,7 +9,11 @@
  * first (price desc, then slab desc — so line order never matters). A unit is
  * never discounted below zero: its excess is re-spread over the others.
  * Rounding: banker's (C# `decimal.Round`) to the paisa at every step the
- * server rounds. Keep both specs pinned to the same numbers.
+ * server rounds. Round-off (owner rule, BillMath.RoundRupee): the bill TOTAL
+ * is whole rupees — paise < 50 round DOWN, ≥ 50 round UP — and the ±0.xx is
+ * shown as its own "Round off" row; lines stay exact to the paisa and the
+ * gross (the discount-cap base) is not rounded. Keep both specs pinned to the
+ * same numbers.
  */
 import type { Bill } from '../models/bill.model';
 import { roundPaiseHalfEven } from './test-pricing';
@@ -28,13 +32,40 @@ export interface BillTotals {
   /** Discount actually applied (Σ shares; never more than the subtotal). */
   discount: number;
   taxable: number; cgst: number; sgst: number; igst: number; tax: number;
+  /** Whole-rupee bill total (taxable + tax + roundOff). */
   payable: number;
   /** Pre-discount gross (price + GST at full price) — the base for every % and cap. */
   gross: number;
+  /** ±0.xx taking the exact taxable + tax to the whole-rupee payable. */
+  roundOff: number;
 }
 
 const toPaise = (n: number) => Math.round(roundPaiseHalfEven(n) * 100);
 const fromPaise = (p: number) => p / 100;
+
+/** BillMath.RoundRupee: whole rupees, paise < 50 → down, ≥ 50 → up
+ *  (831.49 → 831, 831.50 → 832). */
+export function roundRupee(n: number): number {
+  const p = toPaise(n);
+  const sign = p < 0 ? -1 : 1;
+  const a = Math.abs(p);
+  const rupees = Math.floor(a / 100) + (a % 100 >= 50 ? 1 : 0);
+  return sign * rupees || 0;
+}
+
+/** Split an exact paise total into (whole-rupee payable, round-off), in rupees. */
+function withRoundOff(exactPaise: number): { payable: number; roundOff: number } {
+  const payable = roundRupee(fromPaise(exactPaise));
+  return { payable, roundOff: fromPaise(payable * 100 - exactPaise) };
+}
+
+/** The round-off a bill carries: the server's `roundOff`, else derived
+ *  (payable − taxable − tax). Bills raised before round-off read 0. */
+export function billRoundOff(bill: Pick<Bill, 'totalPayable' | 'totalTaxable' | 'totalTax'> & { roundOff?: number | null } | null | undefined): number {
+  if (!bill) return 0;
+  if (typeof bill.roundOff === 'number') return bill.roundOff;
+  return fromPaise(toPaise(bill.totalPayable) - toPaise(bill.totalTaxable) - toPaise(bill.totalTax));
+}
 
 /** BillingCalculator.Compute for one line. */
 function computeLine(price: number, slab: number, discount: number, interstate: boolean) {
@@ -101,7 +132,7 @@ export function computeBill(units: BillUnit[], discount: number, interstate = fa
     lines,
     subTotal: fromPaise(sub), discount: fromPaise(disc), taxable: fromPaise(taxable),
     cgst: fromPaise(cgst), sgst: fromPaise(sgst), igst: fromPaise(igst), tax: fromPaise(tax),
-    payable: fromPaise(taxable + tax), gross: fromPaise(gross),
+    ...withRoundOff(taxable + tax), gross: fromPaise(gross),
   };
 }
 
@@ -112,11 +143,11 @@ export function previewBillForDiscount(bill: Bill | null | undefined, discount: 
   if (!bill) return null;
   const items = bill.items ?? [];
   if (items.length === 0) {
-    const payable = Math.max(0, fromPaise(toPaise(bill.totalPayable) - toPaise(Math.max(0, discount))));
+    const exact = Math.max(0, toPaise(bill.totalPayable) - toPaise(Math.max(0, discount)));
     return {
       lines: [], subTotal: bill.subTotal, discount: Math.max(0, discount), taxable: bill.totalTaxable,
       cgst: bill.totalCgst, sgst: bill.totalSgst, igst: bill.totalIgst, tax: bill.totalTax,
-      payable, gross: fromPaise(toPaise(bill.subTotal) + toPaise(bill.totalTax)),
+      ...withRoundOff(exact), gross: fromPaise(toPaise(bill.subTotal) + toPaise(bill.totalTax)),
     };
   }
   const units = items.map(i => ({
@@ -124,4 +155,23 @@ export function previewBillForDiscount(bill: Bill | null | undefined, discount: 
     slab: (Number(i.cgstRate) || 0) + (Number(i.sgstRate) || 0) + (Number(i.igstRate) || 0),
   }));
   return computeBill(units, discount, !!bill.isInterstate);
+}
+
+/** The largest counter discount (₹, to the paisa) that keeps the recomputed,
+ *  rounded payable at or above what is already paid — the server refuses more
+ *  with 400 `discount_exceeds_balance`. Nothing paid → the whole subtotal.
+ *  The payable only falls as the discount grows, so a paise binary search. */
+export function maxDiscountWithinPaid(bill: Bill | null | undefined, paid: number): number {
+  if (!bill) return 0;
+  const cap = toPaise(bill.subTotal);
+  const paidP = toPaise(paid);
+  if (paidP <= 0) return fromPaise(cap);
+  const ok = (p: number) => toPaise(previewBillForDiscount(bill, fromPaise(p))!.payable) >= paidP;
+  if (!ok(0)) return 0;
+  let lo = 0, hi = cap;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (ok(mid)) lo = mid; else hi = mid - 1;
+  }
+  return fromPaise(lo);
 }

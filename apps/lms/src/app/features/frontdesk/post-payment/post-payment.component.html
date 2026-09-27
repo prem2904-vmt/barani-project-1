@@ -288,6 +288,12 @@
               <span>−{{ b.totalDiscount | inr }}</span>
             </div>
             }
+            @if (roundOffOf(b); as ro) {
+            <div class="pf-sb-amt-row">
+              <span>Round off</span>
+              <span>{{ ro > 0 ? '+' : '−' }}{{ (ro < 0 ? -ro : ro) | inr }}</span>
+            </div>
+            }
             <div class="pf-sb-amt-row pf-sb-amt-row--total">
               <span>Total</span>
               <span>{{ b.totalPayable | inr }}</span>

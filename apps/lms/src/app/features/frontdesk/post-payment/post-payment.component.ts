@@ -9,6 +9,7 @@ import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Bill } from '../../../shared/models/bill.model';
+import { billRoundOff } from '../../../shared/utils/bill-math';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
@@ -39,6 +40,8 @@ export class PostPaymentComponent implements OnInit {
   private readonly api    = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route  = inject(ActivatedRoute);
+  /** Round-off (±0.xx to the whole-rupee total) — 0 hides the row. */
+  roundOffOf(b: Bill): number { return billRoundOff(b); }
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
   private readonly labCfg  = inject(BranchLabConfigService);

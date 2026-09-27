@@ -18,6 +18,7 @@ import { filterTestList as sharedFilterTestList, filterTestListStrict } from '..
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, taxSlabOf } from '../../../shared/utils/test-pricing';
 import { computeBill } from '../../../shared/utils/bill-math';
+import { cartOverlaps, overlapMessage, overlapOnAdd } from './cart-duplicates';
 import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
 import { buildOrderDraft, parseOrderDraft } from './order-draft';
 import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
@@ -729,6 +730,23 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return covered;
   });
 
+  /** Items in the cart that sit inside another bundle in the cart (owner rule:
+   *  never orderable). Adds are refused up front (overlapOnAdd); this flags a
+   *  cart that ARRIVED with one — a restored draft, a repeat, an appointment
+   *  prefill — and blocks placing it until one side is removed. */
+  readonly cartOverlapList = computed(() => cartOverlaps(this._tests(), this._selected()));
+  readonly cartOverlapMessages = computed(() => this.cartOverlapList().map(overlapMessage));
+
+  /** Refuse an ADD that would put the same test in the order twice (a bundle
+   *  beside its own member, either way round). Removing is never refused. */
+  private refuseDuplicateAdd(id: string): boolean {
+    if (this.isSelected(id)) return false;
+    const o = overlapOnAdd(this._tests(), this._selected(), id);
+    if (!o) return false;
+    this.toasts.error(overlapMessage(o));
+    return true;
+  }
+
   /** True when an individual test in the cart is included in a package/profile
    *  that's also in the cart — it renders as "Included" and is not re-billed. */
   isCoveredMember(id: string): boolean {
@@ -840,6 +858,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Total = the server bill's payable to the paisa (never gross − discount:
    *  ₹1000 @18% − ₹295 is 705 + 126.90 = ₹831.90, not 1180 − 295 = ₹885). */
   readonly total = computed(() => this.billPreview().payable);
+  /** ±0.xx taking the exact taxable + GST to the whole-rupee Total (owner
+   *  round-off rule) — shown as its own row when non-zero. */
+  readonly roundOff = computed(() => this.billPreview().roundOff);
   /** Server-side discount rejection (e.g. cap) shown under the discount input;
    *  cleared on edit. */
   readonly discountServerError = signal<string | null>(null);
@@ -1230,6 +1251,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       this.discountValue.set(parsed.discount?.value ?? '');
       this._hasDraft.set(true);
       this.toasts.info('Draft restored');
+      // An old draft may hold a bundle beside its own member — flag it (the
+      // cart shows it too), never crash or silently drop a line.
+      const overlap = this.cartOverlapMessages();
+      if (overlap.length > 0) this.toasts.warning(overlap[0]);
       return true;
     } catch {
       return false;
@@ -1557,6 +1582,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       this.toasts.warning(`Cannot remove ${t.name} — sample has already been collected`);
       return;
     }
+    if (this.refuseDuplicateAdd(t.id)) return;
     this._selected.update(cur => cur.includes(t.id) ? cur.filter(id => id !== t.id) : [...cur, t.id]);
     this.showCart();
   }
@@ -1597,6 +1623,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       this.toasts.warning(`Cannot remove ${pkg.name} — sample has already been collected`);
       return;
     }
+    if (this.refuseDuplicateAdd(pkg.id)) return;
     this._selected.update(cur =>
       cur.includes(pkg.id) ? cur.filter(id => id !== pkg.id) : [...cur, pkg.id]
     );
@@ -2177,6 +2204,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const p = this._patient();
     if (!p || this._saving() || this._selected().length === 0) return;
     if (this.requireSpecimens()) return;
+    // A cart that arrived with a bundle beside its own member (old draft,
+    // repeat, prefill) is flagged in the cart; a NEW order can't be placed
+    // until one side is removed (the server refuses it: duplicate_item).
+    const overlap = this.cartOverlapMessages();
+    if (overlap.length > 0 && !this.editOrderId()) { this.toasts.error(overlap[0]); return; }
 
     // EDIT mode → PATCH the existing order's tests; the bill recomputes server-
     // side and we route to billing to collect-the-difference / refund.
