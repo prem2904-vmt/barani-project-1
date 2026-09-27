@@ -67,7 +67,11 @@ export class ChatService implements OnDestroy {
   private lifecycleWired = false;
   /** Reports this device's foreground thread(s) to the hub so the server
    *  skips pushing a device that is showing the thread (lazy chunk). */
-  private foreground: { poke(): void; resend(): void; stop(): void } | null = null;
+  private foreground: { poke(): void; resend(): void; stop(): void; hide(): void } | null = null;
+  /** Native shell (Capacitor) is active. A WKWebView kept alive in the
+   *  background (audio / VoIP modes) may still say document "visible", so the
+   *  native app state is authoritative for "this device shows the thread". */
+  private appActive = true;
   /** Bumped when a viewer registers / leaves, so effects re-track its ids(). */
   private readonly viewersVersion = signal(0);
   private foregroundFor: signalR.HubConnection | null = null;
@@ -354,6 +358,22 @@ export class ChatService implements OnDestroy {
     });
     window.addEventListener('online', wake);
     window.addEventListener('pageshow', wake);
+    // Native: the app going inactive (minimised, app switcher, lock) must reach
+    // the hub before iOS / Android freeze the web view — otherwise the server
+    // keeps treating this device as "viewing" and skips its chat push.
+    if (this.platform.isCapacitor()) {
+      void import('@capacitor/app')
+        .then(({ App }) => App.addListener('appStateChange', ({ isActive }) => this.appActiveChanged(isActive)))
+        .catch(() => undefined);
+    }
+  }
+
+  /** Native app became active / inactive (Capacitor appStateChange). Inactive
+   *  → report "not viewing" to the hub at once (synchronously). */
+  appActiveChanged(active: boolean): void {
+    this.appActive = active;
+    if (!active) this.foreground?.hide();
+    else this.foreground?.poke();
   }
 
   /**
@@ -434,7 +454,7 @@ export class ChatService implements OnDestroy {
     const out = new Set<string>();
     for (const v of this.viewers.values()) for (const id of v.ids()) if (id) out.add(id);
     if (!this.windows.isPhone()) for (const id of this.windows.open()) out.add(id);
-    return ChatService.docVisible() ? [...out] : [];
+    return ChatService.docVisible() && this.appActive ? [...out] : [];
   }
 
   private attachForeground(conn: signalR.HubConnection): void {
@@ -447,7 +467,7 @@ export class ChatService implements OnDestroy {
       this.foreground = new m.ForegroundReporter({
         send: (visible, ids, handle) => conn.invoke('ReportForeground', visible, ids, handle),
         viewed: () => this.viewedConversationIds(),
-        visible: () => ChatService.docVisible(),
+        visible: () => ChatService.docVisible() && this.appActive,
         handle: () => this.pushHandle(),
         onViewed: ids => this.onThreadsOnScreen(ids),
       }).start();

@@ -11,6 +11,12 @@
  * of on-screen threads changing (debounced), and a heartbeat while visible —
  * the server treats a report older than 70 s as "not viewing" (fail-open: a
  * suspended app that couldn't say goodbye still gets its pushes).
+ *
+ * Going to the background is reported SYNCHRONOUSLY ({@link hide}) with the
+ * last known handle (stage 2026-09-28: a minimised iPad got no chat push — iOS
+ * froze the app between the visibility event and the debounced, awaited send,
+ * so the server still believed it was viewing). The server additionally
+ * requires the device to ack the message before it skips it.
  */
 
 export interface ForegroundDeps {
@@ -43,8 +49,10 @@ export class ForegroundReporter {
   private beat: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
   private prevViewed = new Set<string>();
-  private readonly onVis = () => this.poke(0);
-  private readonly onHide = () => void this.flush(true);
+  /** The handle of the last report — lets {@link hide} send without awaiting. */
+  private lastHandle: string | null = null;
+  private readonly onVis = () => { if (this.deps.visible()) this.poke(0); else this.hide(); };
+  private readonly onHide = () => this.hide();
 
   constructor(private readonly deps: ForegroundDeps, private readonly opts: ForegroundOptions = {}) {
     this.heartbeatMs = opts.heartbeatMs ?? 25_000;
@@ -69,6 +77,24 @@ export class ForegroundReporter {
     this.timer = setTimeout(() => { this.timer = null; void this.flush(false); }, delayMs);
   }
 
+  /** Going to the background (hidden tab, pagehide, native app pause): tell
+   *  the hub NOW, in this very tick — no debounce, no await before the send —
+   *  because the OS may freeze the app right after this event returns. */
+  hide(): void {
+    if (this.stopped) return;
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    const handle = this.lastHandle;
+    if (!handle) { void this.flush(true); return; } // never reported yet — nothing on the server to clear
+    const key = `0||${handle}`;
+    if (key === this.last) return;
+    this.prevViewed = new Set();
+    this.last = key;
+    this.lastSentAt = Date.now();
+    try {
+      void Promise.resolve(this.deps.send(false, [], handle)).catch(() => { this.last = ''; });
+    } catch { this.last = ''; }
+  }
+
   /** Reconnected: the server forgot this socket's state — resend. */
   resend(): void { this.last = ''; this.poke(0); }
 
@@ -89,6 +115,7 @@ export class ForegroundReporter {
     if (this.stopped) return;
     const handle = await this.deps.handle().catch(() => null);
     if (!handle) return;
+    this.lastHandle = handle;
     const visible = !forceHidden && this.deps.visible();
     const ids = visible ? [...new Set(this.deps.viewed().filter(Boolean))].sort().slice(0, 8) : [];
     const key = `${visible ? 1 : 0}|${ids.join(',')}|${handle}`;
