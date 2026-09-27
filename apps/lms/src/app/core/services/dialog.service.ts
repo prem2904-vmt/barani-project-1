@@ -1,6 +1,13 @@
 import { Injectable, signal } from '@angular/core';
 
-export type DialogKind = 'prompt' | 'confirm';
+export type DialogKind = 'prompt' | 'confirm' | 'choice';
+
+/** One option of a `choose()` dialog — rendered as a selectable card. */
+export interface DialogChoice {
+  value: string;
+  label: string;
+  hint?: string;
+}
 export type DialogTone = 'primary' | 'danger';
 
 export interface DialogRequest {
@@ -22,6 +29,11 @@ export interface DialogRequest {
   multiline?: boolean;
   inputType?: 'text' | 'number' | 'email' | 'tel';
   required?: boolean;
+
+  // choice-only
+  choices?: DialogChoice[];
+  /** Pre-selected choice (the sensible default). */
+  initialChoice?: string;
 }
 
 interface PendingDialog extends DialogRequest {
@@ -71,6 +83,23 @@ export class DialogService {
         tone: 'primary',
         ...req,
         resolve: (result) => resolve(!!result)
+      });
+    });
+  }
+
+  /** One quick pick between a few options (cards, one pre-selected). Resolves
+   *  to the chosen `value`, or null when dismissed (Cancel / Esc / backdrop). */
+  choose(req: Omit<DialogRequest, 'kind'> & { choices: DialogChoice[] }): Promise<string | null> {
+    return new Promise<string | null>(resolve => {
+      this._active.set({
+        id: this.mkId(),
+        kind: 'choice',
+        confirmLabel: 'Continue',
+        cancelLabel: 'Cancel',
+        tone: 'primary',
+        initialChoice: req.choices[0]?.value,
+        ...req,
+        resolve: (result) => resolve(typeof result === 'string' ? result : null)
       });
     });
   }

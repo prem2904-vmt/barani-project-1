@@ -4,7 +4,8 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { DestroyRef, ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { buildReportBlobUrl } from '../../../shared/utils/report-blob';
+import { buildReportPrintBlobUrl } from '../../../shared/utils/report-blob';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -3186,32 +3187,15 @@ export class MyWorkComponent implements OnInit {
       next: async rep => {
         try {
           if (!rep) { this.toasts.info('Report is not generated yet for this order.'); return; }
-          const url = await buildReportBlobUrl(rep, this.api, this.injector);
-          if (url) this.printBlobUrl(url);
+          // Letterpad setting on → asks letterhead vs plain paper for this job.
+          const url = await buildReportPrintBlobUrl(rep, this.api, this.injector, this.dialog);
+          if (url === null) return;   // dismissed
+          if (url) printPdfBlobUrl(url, { revokeOnDone: true });
           else this.toasts.error('Could not build the report to print.');
         } finally { this._printingTubeId.set(null); }
       },
       error: e => { this._printingTubeId.set(null); this.toasts.error(ApiError.from(e).message); },
     });
-  }
-
-  /** Load a PDF blob into a hidden iframe and fire the print dialog on it. Falls
-   *  back to opening the PDF in a new tab if the frame can't be printed. */
-  private printBlobUrl(url: string): void {
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
-    iframe.onload = () => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch {
-        window.open(url, '_blank');
-      }
-      // Give the print job time to read the blob before cleanup.
-      setTimeout(() => { try { URL.revokeObjectURL(url); iframe.remove(); } catch { /* */ } }, 60_000);
-    };
-    iframe.src = url;
-    document.body.appendChild(iframe);
   }
 
   /** edit_result — Lab Technician, Pathologist and Lab Admin hold it; the

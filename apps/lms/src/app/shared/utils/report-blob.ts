@@ -1,4 +1,5 @@
 import { Injector } from '@angular/core';
+import type { PrintChoiceDialog } from './print-letterhead';
 
 /**
  * Build a patient lab REPORT into a blob object-URL, client-side, using the ONE
@@ -28,6 +29,39 @@ export async function buildReportBlobUrl(rep: any, api: any, injector: Injector)
     return renderReportPdfBlobUrl(input);
   } catch (err) {
     console.error('[report-blob] report render failed', err);
+    return '';
+  }
+}
+
+/**
+ * The PRINT variant of `buildReportBlobUrl`: same recipe, but when the lab's
+ * letterpad setting is on it first asks letterhead paper (header & footer left
+ * blank) vs plain paper — for this print job only (`askPrintLetterhead`).
+ * Returns the blob URL, '' on a render failure, or null when the user
+ * dismissed the question (print nothing).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function buildReportPrintBlobUrl(rep: any, api: any, injector: Injector, dialog: PrintChoiceDialog): Promise<string | null> {
+  try {
+    const [{ renderReportPdfBlobUrl }, { ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }, { askPrintLetterhead }] = await Promise.all([
+      import('./report-pdf'),
+      import('../../core/services/report-layout.service'),
+      import('../../core/services/platform.service'),
+      import('./report-render-input'),
+      import('./print-letterhead'),
+    ]);
+    const svc = injector.get(ReportLayoutService);
+    const platform = injector.get(PlatformService);
+    const input = await prepareReportPdfInput(rep, {
+      api,
+      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+      apiUrl: platform.getApiUrl(),
+    });
+    const job = await askPrintLetterhead(input.template, dialog);
+    if (!job) return null;
+    return renderReportPdfBlobUrl({ ...input, blankLetterhead: job.blankLetterhead });
+  } catch (err) {
+    console.error('[report-blob] report print render failed', err);
     return '';
   }
 }

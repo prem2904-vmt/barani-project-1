@@ -276,6 +276,7 @@ export class ReportViewerComponent implements OnInit {
     const id = this._report()?.id;
     if (!id) return;
     this._pdfBlob = null;
+    this._pdfInput = null;
     this.api.get<Report>(`/api/reports/${id}`).subscribe({
       // Re-arm the preview so the pages are rebuilt from the fresh data.
       next: r => { this._pdfReady.set(false); this._report.set(r); this.resolveLayouts(); },
@@ -293,6 +294,9 @@ export class ReportViewerComponent implements OnInit {
   readonly pdfReady = this._pdfReady.asReadonly();
   readonly pdfError = this._pdfError.asReadonly();
   private _pdfBlob: Blob | null = null;
+  /** The prepared render input (template + layouts + images), cached so a
+   *  letterpad print job can re-render without refetching. */
+  private _pdfInput: import('../../../shared/utils/report-pdf').ReportPdfInput | null = null;
   private _pdfRendering = false;
   // Kick the render only once BOTH the report data and the #pdfPages host
   // exist (the host is inside the @if(report()) branch, so it appears a
@@ -791,22 +795,35 @@ export class ReportViewerComponent implements OnInit {
   /** Print the SAME PDF the viewer shows / Download produces. Native shell:
    *  hand the file to the share sheet (it has Print). Web: open the PDF in a
    *  new tab — the browser's PDF viewer prints it verbatim, unlike
-   *  window.print() which would rasterize the app shell. */
+   *  window.print() which would rasterize the app shell.
+   *  Letterpad setting on → ask letterhead vs plain paper for THIS job only
+   *  (letterhead paper renders with the header & footer left blank). */
   async print() {
     const r = this._report();
     if (!r || this.busy() === 'print') return;
     this.busy.set('print');
     try {
-      this._pdfBlob ??= await this.buildPdfBlob(r);
+      const input = await this.buildPdfInput(r);
+      const { askPrintLetterhead } = await import('../../../shared/utils/print-letterhead');
+      const { DialogService } = await import('../../../core/services/dialog.service');
+      const job = await askPrintLetterhead(input.template, this.injector.get(DialogService));
+      if (!job) return;   // dismissed — print nothing
+      let blob: Blob;
+      if (job.blankLetterhead) {
+        const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+        blob = buildReportPdf({ ...input, blankLetterhead: true }).output('blob');
+      } else {
+        blob = this._pdfBlob ??= await this.buildPdfBlob(r);
+      }
       const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
         .Capacitor?.isNativePlatform?.();
-      const file = new File([this._pdfBlob], `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`,
+      const file = new File([blob], `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`,
         { type: 'application/pdf' });
       if (isNative && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Print report' });
       } else {
         // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
-        printPdfBlobUrl(URL.createObjectURL(this._pdfBlob), { revokeOnDone: true });
+        printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
       }
       this.flash('print');
     } catch (err) {
@@ -861,10 +878,17 @@ export class ReportViewerComponent implements OnInit {
 
   /** Render the report to the SAME PDF the Download button in the queue
    *  produces (jsPDF + tenant template + per-test resolved layouts + images).
-   *  Single source for the inline view, Print and the archive upload. */
+   *  Single source for the inline view, Print and the archive upload. Always
+   *  WITH the letterhead — only a letterpad print job leaves it blank. */
   private async buildPdfBlob(r: Report): Promise<Blob> {
-    const [{ buildReportPdf }, { ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-      import('../../../shared/utils/report-pdf'),
+    const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+    return buildReportPdf(await this.buildPdfInput(r)).output('blob');
+  }
+
+  /** The prepared render input, cached per loaded report. */
+  private async buildPdfInput(r: Report): Promise<import('../../../shared/utils/report-pdf').ReportPdfInput> {
+    if (this._pdfInput && this._pdfInput.report.id === r.id) return this._pdfInput;
+    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
       import('../../../core/services/report-layout.service'),
       import('../../../core/services/platform.service'),
       import('../../../shared/utils/report-render-input'),
@@ -878,7 +902,8 @@ export class ReportViewerComponent implements OnInit {
       preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
       apiUrl: platform.getApiUrl(),
     });
-    return buildReportPdf(input).output('blob');
+    this._pdfInput = input;
+    return input;
   }
 
   /** Render + archive the report PDF to storage (best-effort, no download) so

@@ -81,6 +81,14 @@ export interface ReportPdfInput {
    *  (half-page each), up to 6 per page. Prepared by the caller via
    *  renderTrendogramPng() before the sync build. */
   trendograms?: Array<{ title: string; dataUrl: string }>;
+  /** PRINT ONLY — leave the header & footer areas blank (same margins as the
+   *  template's letterpad reserves) so the body lands on the lab's pre-printed
+   *  stationery. Set solely by a print entry point, after asking the user
+   *  (`askPrintLetterhead`, when the template's `letterpadMode` is on). Every
+   *  other render — preview, download, share, WhatsApp, the archived PDF, the
+   *  public link — leaves it unset, so a digital report ALWAYS carries the
+   *  lab's letterhead regardless of the letterpad setting. */
+  blankLetterhead?: boolean;
 }
 
 /** Effective theme + chrome values fed to every drawing function.
@@ -572,11 +580,13 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // data URLs, so no prefetch is required.
   if (snap.signatures && snap.signatures.length > 0) theme.signatures = snap.signatures;
 
-  // Pre-printed letterpad mode: skip the rendered header + footer and reserve
+  // Blank-letterhead PRINT: skip the rendered header + footer and reserve
   // blank top/bottom space on every page (the lab's stationery occupies it),
-  // printing only the results body. Reset to the normal defaults otherwise
-  // (module-level margins persist across renders).
-  LETTERPAD = !!template?.letterpadMode;
+  // printing only the results body. Driven ONLY by the per-print-job
+  // `blankLetterhead` option — never by the template flag on its own, so no
+  // digital output loses its letterhead. Reset to the normal defaults
+  // otherwise (module-level margins persist across renders).
+  LETTERPAD = !!input.blankLetterhead;
   PREVIEW_KEEP_EMPTY_COLS = !!input.previewKeepEmptyColumns;
   if (LETTERPAD) {
     MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;

@@ -692,38 +692,45 @@ export class ReportQueueComponent implements OnInit {
       );
     }
     if (via === "print") {
-      if (this.isNativePlatform()) {
-        // Capacitor WKWebView: render PDF and hand it to native share sheet
-        (async () => {
-          try {
-            const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-            const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-            await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'), 'Print report');
-          } catch (err) {
-            console.error("[reports] native print share failed", err);
-            const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
-            this.toasts.error(reportRenderErrorMessage(err, "Could not open report"));
-          }
-        })();
-      } else {
-        // Web: render PDF and open browser print window
-        (async () => {
-          try {
-            const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-            const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-            const doc = buildReportPdf({ ...baseInput, imageCache, trendograms });
-            doc.autoPrint();
-            const blob = doc.output('blob');
-            // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
-            printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
-          } catch (err) {
-            console.error("[reports] print failed", err);
-            const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
-            this.toasts.error(reportRenderErrorMessage(err, "Could not open print window"));
-          }
-        })();
-      }
+      // Print is its own flow: it may ask letterhead vs plain paper first, and
+      // the delivery is recorded only once something was actually printed.
+      void this.printReport(r);
+      return;
     }
+    this.recordDelivery(r, via);
+  }
+
+  /** Print a report from the queue (a delivery for deliver_report users).
+   *  Letterpad setting on → one quick choice (letterhead paper, header &
+   *  footer blank — the default — or plain paper) for THIS job only. */
+  async printReport(r: Report) {
+    try {
+      const [{ buildReportPdf }, { askPrintLetterhead }] = await Promise.all([
+        import('../../../shared/utils/report-pdf'),
+        import('../../../shared/utils/print-letterhead'),
+      ]);
+      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+      const job = await askPrintLetterhead(baseInput.template, this.dialog);
+      if (!job) return;   // dismissed — nothing printed, nothing recorded
+      const doc = buildReportPdf({ ...baseInput, imageCache, trendograms, blankLetterhead: job.blankLetterhead });
+      if (this.isNativePlatform()) {
+        // Capacitor WKWebView: hand the PDF to the native share sheet (Print).
+        await this.sharePdfNative(r, doc.output('blob'), 'Print report');
+      } else {
+        // Web: off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
+        doc.autoPrint();
+        printPdfBlobUrl(URL.createObjectURL(doc.output('blob')), { revokeOnDone: true });
+      }
+    } catch (err) {
+      console.error("[reports] print failed", err);
+      const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
+      this.toasts.error(reportRenderErrorMessage(err, "Could not open print window"));
+      return;
+    }
+    this.recordDelivery(r, "print");
+  }
+
+  private recordDelivery(r: Report, via: string) {
     this.api
       .post(`/api/reports/${r.id}/deliver`, {
         via,

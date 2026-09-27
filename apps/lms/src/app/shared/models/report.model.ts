@@ -59,10 +59,12 @@ export interface ReportTemplate {
   topAccentBar?: boolean;
 
   // ── Pre-printed letterpad mode ───────────────────────────
-  /** When true, the PDF draws NO header/footer/logo and instead leaves blank
-   *  space at the top (letterpadHeaderMm) and bottom (letterpadFooterMm) of
-   *  every page, printing only the results body — for labs that print onto
-   *  their own pre-printed letterhead stationery. */
+  /** When true, PRINTING asks letterhead paper vs plain paper for each job;
+   *  letterhead paper renders with NO header/footer/logo, leaving blank space
+   *  at the top (letterpadHeaderMm) and bottom (letterpadFooterMm) of every
+   *  page. It never affects digital outputs (preview, download, share,
+   *  WhatsApp, archived PDF, public link) — those always carry the letterhead.
+   *  See shared/utils/print-letterhead.ts. */
   letterpadMode?: boolean;
   letterpadHeaderMm?: number;
   letterpadFooterMm?: number;
