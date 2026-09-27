@@ -220,6 +220,16 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                               </pf-select>
                             }
                           </div>
+                          @if (deptsForSubBranch(sb.id).length > 0) {
+                            <!-- Routing explainer (Vignesh 2026-09-27): assigning a
+                                 department here sends its tubes to this sub-branch's
+                                 staff only; with nobody assigned, the branch lab
+                                 works them (they are never dropped from the queue). -->
+                            <p class="pf-sub-hint">
+                              Tubes of these departments go to the work queue of staff assigned to {{ sb.name }}.
+                              Until someone is assigned there, the {{ b.name }} lab works them.
+                            </p>
+                          }
                         </div>
                       }
                     </div>
@@ -437,6 +447,12 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+    }
+    .pf-sub-hint {
+      margin: 8px 0 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-tertiary);
     }
     .pf-dept-pill {
       display: inline-flex;
