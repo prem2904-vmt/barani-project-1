@@ -1112,7 +1112,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       const v = this._twoPaneSplit();
       const el = this.apptSplitEl()?.nativeElement;
       if (!el) return;
-      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
       if (firstPane) firstPane.style.flexBasis = v + '%';
     });
 
@@ -1444,7 +1444,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const clamped = Math.max(minPct, Math.min(maxPct, this._twoPaneSplit()));
     if (clamped !== this._twoPaneSplit()) {
       this._twoPaneSplit.set(clamped);
-      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
       if (firstPane) firstPane.style.flexBasis = clamped + '%';
     }
   }
@@ -1491,7 +1491,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const maxPct = Math.min(85, ((rect.width - minPx - handlePx) / rect.width) * 100);
     const clamped = Math.max(minPct, Math.min(maxPct, raw));
     this._twoPaneSplit.set(clamped);
-    const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+    const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
     if (firstPane) firstPane.style.flexBasis = clamped + '%';
   }
 
