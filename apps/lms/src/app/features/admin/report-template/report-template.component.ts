@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ActivatedRoute } from '@angular/router';
@@ -12,12 +12,13 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
-import { ImageUploadComponent } from './image-upload.component';
 import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ReportHeaderEditorComponent } from './report-header-editor.component';
+import { DialogService } from '../../../core/services/dialog.service';
 
 type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
@@ -36,8 +37,8 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     SelectComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
-    ImageUploadComponent,
     HeroBandComponent,
+    ReportHeaderEditorComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -51,6 +52,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                           [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
+            <span class="nd-savestate pf-rt-savestate" role="status" aria-live="polite">
+              @if (dirty()) {
+                <span class="nd-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Unsaved changes</span>
+              } @else {
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-rt-savestate__t">All changes saved</span>
+              }
+            </span>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
                     [disabled]="saving()" (click)="save()" aria-label="Save template" title="Save template">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -68,13 +76,17 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
           <h1 class="pf-rt-title">Report designer</h1>
           <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
         </div>
+        <span class="nd-savestate pf-rt-savestate" role="status" aria-live="polite">
+          @if (dirty()) { <span class="nd-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
+        </span>
         <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </header>
 
       <div class="pf-band-body pf-band-body--fill">
-      <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()">
+      <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()"
+           [class.pf-rt-grid--designer]="designerTab()">
         <!-- ── Section rail (CLASSIC only): the new design puts the
              sections in the band pill, so the rail is gone and the editor +
              preview get the full width. ── -->
@@ -97,6 +109,14 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
         </nav>
         }
 
+        @if (designerTab()) {
+          <!-- ── Letterhead / Footer: the page IS the editor (WYSIWYG). ── -->
+          <pf-report-header-editor class="pf-rt-designer"
+            [template]="tpl()" [region]="tab() === 'footer' ? 'footer' : 'header'"
+            [pdfUrl]="rawPreviewUrl()" [imageCache]="imageCache()" [rendering]="rendering()"
+            [canUndo]="canUndo()" [canRedo]="canRedo()"
+            (patch)="patch($event)" (undo)="undo()" (redo)="redo()"></pf-report-header-editor>
+        } @else {
         <!-- ── Focused section panel. ── -->
         <div class="pf-rt-work">
           @if (!theme.isNewDesign()) {
@@ -115,202 +135,6 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
             }
           }
           @switch (tab()) {
-
-            <!-- ══ LETTERHEAD — everything printed at the top of the page ══ -->
-            @case ('letterhead') {
-              <div class="pf-rt-flat">
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Branding</h4>
-                  <p class="pf-rtb-s">The name and tagline printed at the top of every report — live below.</p>
-                  <div class="pf-wys-paper pf-wys-masthead">
-                    <span class="pf-wys-masthead__name" [style.color]="colorOf('primaryColor') || '#1B3A6B'">
-                      {{ tpl().labName || 'Your Lab Name' }}
-                    </span>
-                    <span class="pf-wys-masthead__tag">{{ tpl().tagline || 'Tagline appears here' }}</span>
-                    <span class="pf-wys-masthead__bar" [style.background]="colorOf('accentColor') || '#0066CC'"></span>
-                  </div>
-                  <div class="space-y-3">
-                    <div><label class="pf-label">Lab name</label>
-                      <input type="text" class="nd-input"
-                             [ngModel]="tpl().labName"
-                             (ngModelChange)="patch({ labName: $event })" /></div>
-                    <div><label class="pf-label">Tagline</label>
-                      <input type="text" class="nd-input"
-                             placeholder="e.g. Accurate | Caring | Instant"
-                             [ngModel]="tpl().tagline"
-                             (ngModelChange)="patch({ tagline: $event })" /></div>
-                  </div>
-                </div>
-
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Contact</h4>
-                  <p class="pf-rtb-s">Shown in the letterhead's right column.</p>
-                  <div class="space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div><label class="pf-label">Phone</label>
-                        <input type="tel" class="nd-input"
-                               [ngModel]="tpl().phone"
-                               (ngModelChange)="patch({ phone: $event })" /></div>
-                      <div><label class="pf-label">Email</label>
-                        <input type="email" autocapitalize="none" class="nd-input"
-                               [ngModel]="tpl().email"
-                               (ngModelChange)="patch({ email: $event })" /></div>
-                    </div>
-                    <div><label class="pf-label">Website</label>
-                      <input type="text" class="nd-input"
-                             [ngModel]="tpl().website"
-                             (ngModelChange)="patch({ website: $event })" /></div>
-                    <div><label class="pf-label">Address</label>
-                      <input type="text" class="nd-input"
-                             [ngModel]="tpl().address"
-                             (ngModelChange)="patch({ address: $event })" /></div>
-                  </div>
-                </div>
-
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Accreditation</h4>
-                  <div class="space-y-3">
-                  <div class="pf-toggle-row">
-                    <div>
-                      <p class="font-semibold text-[13px]" style="color: var(--text-primary);">NABL accredited</p>
-                      <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Display NABL badge on the report header.</p>
-                    </div>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().nablAccredited)"
-                            aria-label="NABL accredited" (click)="patch({ nablAccredited: !(tpl().nablAccredited) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                    </button>
-                  </div>
-
-                  @if (tpl().nablAccredited) {
-                    <div class="grid grid-cols-2 gap-3 pf-nabl-grid">
-                      <div><label class="pf-label">NABL number</label>
-                        <input type="text" class="nd-input"
-                               [ngModel]="tpl().nablNumber"
-                               (ngModelChange)="patch({ nablNumber: $event })" /></div>
-                      <div>
-                        <label class="pf-label">NABL badge image</label>
-                        <pf-image-upload [url]="tpl().nablLogoUrl"
-                                         (urlChange)="patch({ nablLogoUrl: $event })">
-                        </pf-image-upload>
-                      </div>
-                    </div>
-                  }
-                  </div>
-                </div>
-              </div>
-
-              <div class="pf-rt-flat">
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Logo</h4>
-                  <p class="pf-rtb-s">Upload once — position and size control where it sits in the letterhead.</p>
-                  <div class="space-y-3">
-                  <div>
-                    <pf-image-upload [url]="tpl().logoUrl"
-                                     (urlChange)="patch({ logoUrl: $event })">
-                    </pf-image-upload>
-                  </div>
-
-                  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div class="md:col-span-3">
-                      <label class="pf-label">Header style</label>
-                      <div class="pf-wys-thumbs">
-                        @for (o of headerPresetOptions; track o.value) {
-                          <button type="button" class="pf-wys-thumb press"
-                                  [attr.aria-pressed]="(tpl().headerPreset ?? 'drlogy') === o.value"
-                                  (click)="patch({ headerPreset: $any(o.value) })">
-                            <span class="pf-wys-thumb__paper" [class]="'pf-wys-thumb__paper--' + o.value">
-                              <span class="pf-wys-thumb__logo"></span>
-                              <span class="pf-wys-thumb__lines"><i></i><i></i></span>
-                              <span class="pf-wys-thumb__accent"></span>
-                            </span>
-                            <span class="pf-wys-thumb__name">{{ o.label }}</span>
-                          </button>
-                        }
-                      </div>
-                    </div>
-                    <div>
-                      <label class="pf-label">Logo position</label>
-                      <pf-segmented
-                        [options]="logoPositionOptions"
-                        [value]="tpl().logoPosition ?? 'left'"
-                        size="sm"
-                        (valueChange)="patch({ logoPosition: $event })">
-                      </pf-segmented>
-                    </div>
-                    <div>
-                      <label class="pf-label">Logo size</label>
-                      <pf-segmented
-                        [options]="sizeOptions"
-                        [value]="tpl().logoSize ?? 'md'"
-                        size="sm"
-                        (valueChange)="patch({ logoSize: $event })">
-                      </pf-segmented>
-                    </div>
-                  </div>
-                  </div>
-                </div>
-
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Header extras</h4>
-                  <div class="space-y-3">
-                  <div class="pf-toggle-row">
-                    <div>
-                      <p class="font-semibold text-[13px]" style="color: var(--text-primary);">Top accent bar</p>
-                      <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Thin colored strip beneath the letterhead.</p>
-                    </div>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().topAccentBar ?? true)"
-                            aria-label="Top accent bar" (click)="patch({ topAccentBar: !(tpl().topAccentBar ?? true) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                    </button>
-                  </div>
-
-                  <!-- ── Pre-printed letterpad mode ── -->
-                  <div class="pf-toggle-row">
-                    <div>
-                      <p class="font-semibold text-[13px]" style="color: var(--text-primary);">Pre-printed letterpad</p>
-                      <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">When printing, you’ll be asked whether to print on your letterhead paper (header &amp; footer left blank). Shared and downloaded reports always include the header &amp; footer.</p>
-                    </div>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().letterpadMode ?? false)"
-                            aria-label="Pre-printed letterpad" (click)="patch({ letterpadMode: !(tpl().letterpadMode ?? false) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                    </button>
-                  </div>
-                  @if (tpl().letterpadMode) {
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div><label class="pf-label">Header blank space (mm)</label>
-                        <input type="number" min="0" max="120" class="nd-input"
-                               [ngModel]="tpl().letterpadHeaderMm ?? 45"
-                               (ngModelChange)="patch({ letterpadHeaderMm: +$event })" /></div>
-                      <div><label class="pf-label">Footer blank space (mm)</label>
-                        <input type="number" min="0" max="120" class="nd-input"
-                               [ngModel]="tpl().letterpadFooterMm ?? 30"
-                               (ngModelChange)="patch({ letterpadFooterMm: +$event })" /></div>
-                    </div>
-                  }
-                  </div>
-                </div>
-              </div>
-
-              <div class="pf-rt-flat">
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Brand colours</h4>
-                  <p class="pf-rtb-s">The lab name and accent bar pick these up — live in the masthead above.</p>
-                  <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    @for (c of brandColorFields; track c.key) {
-                      <div>
-                        <label class="pf-label">{{ c.label }}</label>
-                        <label class="pf-color-field">
-                          <input type="color"
-                                 [ngModel]="colorOf(c.key) || c.fallback"
-                                 (ngModelChange)="patchKey(c.key, $event)" />
-                          <span class="pf-color-field__hex">{{ colorOf(c.key) || c.fallback }}</span>
-                        </label>
-                      </div>
-                    }
-                  </div>
-                </div>
-              </div>
-            }
 
             <!-- ══ PATIENT STRIP ══ -->
             @case ('patient') {
@@ -594,94 +418,6 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
               </pf-report-columns-editor>
             }
 
-            <!-- ══ FOOTER ══ -->
-            @case ('footer') {
-              <div class="pf-rt-flat">
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Footer</h4>
-                  <p class="pf-rtb-s">
-                    Signatures are configured per department (Report columns → Signatories) and print at
-                    the end of each department's section — nothing signs in the footer. The texts below
-                    close the page.
-                  </p>
-
-                <div class="space-y-3">
-                  <div>
-                    <label class="pf-label">Disclaimer (small print)</label>
-                    <textarea class="nd-input min-h-[64px]"
-                              [ngModel]="tpl().disclaimer"
-                              (ngModelChange)="patch({ disclaimer: $event })"></textarea>
-                  </div>
-                  <div>
-                    <label class="pf-label">Footer text (legal / contact line)</label>
-                    <input class="nd-input"
-                           [ngModel]="tpl().footerText"
-                           (ngModelChange)="patch({ footerText: $event })" />
-                  </div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label class="pf-label">"End of Report" marker text</label>
-                      <input class="nd-input"
-                             placeholder="****End of Report****"
-                             [ngModel]="tpl().endOfReportText"
-                             (ngModelChange)="patch({ endOfReportText: $event })" />
-                    </div>
-                    <div>
-                      <label class="pf-label">Watermark text (page 1)</label>
-                      <input class="nd-input"
-                             placeholder="e.g. DRAFT, COPY"
-                             [ngModel]="tpl().watermarkText"
-                             (ngModelChange)="patch({ watermarkText: $event })" />
-                    </div>
-                  </div>
-                  @if (tpl().watermarkText) {
-                    <div>
-                      <label class="pf-label">Watermark opacity ({{ ((tpl().watermarkOpacity ?? 0.08) * 100).toFixed(0) }}%)</label>
-                      <input type="range" min="0.02" max="0.4" step="0.02"
-                             [ngModel]="tpl().watermarkOpacity ?? 0.08"
-                             (ngModelChange)="patch({ watermarkOpacity: +$event })" />
-                    </div>
-                  }
-                </div>
-
-                </div>
-
-                <div class="pf-rtb">
-                  <h4 class="pf-rtb-h">Page extras</h4>
-                  <p class="pf-rtb-s">Optional bands and marks around the report body.</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div class="pf-toggle-row">
-                    <span class="text-[13px]" style="color: var(--text-primary);">Sample Collection band</span>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showSampleCollectionBand ?? true)"
-                            aria-label="Sample Collection band" (click)="patch({ showSampleCollectionBand: !(tpl().showSampleCollectionBand ?? true) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                    </button>
-                  </div>
-                  <div class="pf-toggle-row">
-                    <span class="text-[13px]" style="color: var(--text-primary);">"Powered by Prefrontal" line</span>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showPoweredBy)"
-                            aria-label="&quot;Powered by Prefrontal&quot; line" (click)="patch({ showPoweredBy: !(tpl().showPoweredBy) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                    </button>
-                  </div>
-                  <div class="pf-toggle-row">
-                    <span class="text-[13px]" style="color: var(--text-primary);">QR code (verify online)</span>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showQrCode)"
-                            aria-label="QR code (verify online)" (click)="patch({ showQrCode: !(tpl().showQrCode) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                    </button>
-                  </div>
-                  <div class="pf-toggle-row">
-                    <span class="text-[13px]" style="color: var(--text-primary);">Show pathologist name (legacy)</span>
-                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().showPathologistName)"
-                            aria-label="Show pathologist name (legacy)" (click)="patch({ showPathologistName: !(tpl().showPathologistName) })">
-                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              </div>
-            }
           }
         </div>
 
@@ -708,6 +444,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
           </div>
           <p class="pf-rt-aside__hint">Preview uses a sample order. Save to apply this template to real reports.</p>
         </aside>
+        }
       </div>
       </div>
     </section>
@@ -983,6 +720,17 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
       .pf-pdf-iframe { height: 70dvh; min-height: 360px; max-height: 560px; }
       .pf-add-btn { padding: 12px; }
     }
+
+    /* ── Letterhead / Footer designer: the page card + its side card take
+       the whole body (after the classic rail, when it shows). ── */
+    .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: 188px minmax(0, 1fr); }
+    .pf-rt-grid.pf-rt-grid--designer.pf-rt-grid--norail { grid-template-columns: minmax(0, 1fr); }
+    @media (max-width: 1180px) { .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: minmax(0, 1fr); } }
+    .pf-rt-designer { min-width: 0; min-height: 0; }
+    @media (min-width: 901px) and (min-height: 560px) { .pf-rt-designer { height: 100%; } }
+    .pf-rt-savestate { margin-right: 4px; }
+    .pf-classic-only .pf-rt-savestate, .pf-rt-head .pf-rt-savestate { align-self: center; }
+    @media (max-width: 640px) { .pf-rt-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
   `],
 })
 export class ReportTemplateComponent implements OnInit, OnDestroy {
@@ -991,6 +739,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly platform = inject(PlatformService);
+  private readonly dialog = inject(DialogService);
   protected readonly theme = inject(ThemeService);
 
   /** Section cards for the left nav — a plain-words label + what it changes,
@@ -1135,7 +884,77 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   // ── Template state ──────────────────────────────────────────
   private readonly _tpl = signal<ReportTemplate>(this.defaultTemplate());
   readonly tpl = this._tpl.asReadonly();
-  patch(p: Partial<ReportTemplate>) { this._tpl.update(v => ({ ...v, ...p })); }
+  /** Letterhead + Footer are edited ON the page (report-header-editor). */
+  readonly designerTab = computed(() => this._tab() === 'letterhead' || this._tab() === 'footer');
+
+  // ── Undo / redo + unsaved changes ───────────────────────────
+  // Every edit is a patch of the one template object, so history is a stack
+  // of template snapshots. Typing into one field (same keys, < 700 ms apart)
+  // coalesces into a single step.
+  private readonly past = signal<ReportTemplate[]>([]);
+  private readonly future = signal<ReportTemplate[]>([]);
+  readonly canUndo = computed(() => this.past().length > 0);
+  readonly canRedo = computed(() => this.future().length > 0);
+  private lastPatch = { at: 0, keys: '' };
+  /** JSON of the template as last loaded / saved — "dirty" compares to it. */
+  private readonly savedJson = signal<string>(JSON.stringify(this.defaultTemplate()));
+  readonly dirty = computed(() => JSON.stringify(this._tpl()) !== this.savedJson());
+
+  patch(p: Partial<ReportTemplate>) {
+    const keys = Object.keys(p).sort().join(',');
+    const now = Date.now();
+    const coalesce = keys === this.lastPatch.keys && now - this.lastPatch.at < 700 && this.past().length > 0;
+    this.lastPatch = { at: now, keys };
+    if (!coalesce) {
+      const cur = this._tpl();
+      this.past.update(h => [...h.slice(-99), cur]);
+    }
+    this.future.set([]);
+    this._tpl.update(v => ({ ...v, ...p }));
+  }
+  undo() {
+    const h = this.past();
+    if (!h.length) return;
+    this.future.update(f => [this._tpl(), ...f]);
+    this.past.set(h.slice(0, -1));
+    this._tpl.set(h[h.length - 1]);
+    this.lastPatch = { at: 0, keys: '' };
+    this.initPatientCols();
+  }
+  redo() {
+    const f = this.future();
+    if (!f.length) return;
+    this.past.update(h => [...h, this._tpl()]);
+    this.future.set(f.slice(1));
+    this._tpl.set(f[0]);
+    this.lastPatch = { at: 0, keys: '' };
+    this.initPatientCols();
+  }
+  /** Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z (or Ctrl+Y) — but never while typing in a
+   *  field, where the browser's own text undo belongs. */
+  @HostListener('document:keydown', ['$event'])
+  onUndoKey(ev: KeyboardEvent) {
+    if (!(ev.metaKey || ev.ctrlKey)) return;
+    const k = ev.key.toLowerCase();
+    if (k !== 'z' && k !== 'y') return;
+    const el = ev.target as HTMLElement | null;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+    ev.preventDefault();
+    if (k === 'y' || ev.shiftKey) this.redo(); else this.undo();
+  }
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(ev: BeforeUnloadEvent) {
+    if (this.dirty() || this.deptPatientDirty()) { ev.preventDefault(); ev.returnValue = ''; }
+  }
+  /** Route guard: leaving with unsaved changes asks first. */
+  async canLeave(): Promise<boolean> {
+    if (!this.dirty() && !this.deptPatientDirty()) return true;
+    return this.dialog.confirm({
+      title: 'Leave without saving?',
+      message: 'Your report design changes are not saved yet. Save first to keep them.',
+      confirmLabel: 'Leave without saving', cancelLabel: 'Stay', tone: 'danger',
+    });
+  }
 
   /** Browser stand-ins for the PDF font families, so the picker cards render
    *  IN the face they select. */
@@ -1207,6 +1026,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   // ── Live preview ─────────────────────────────────────────────
   private readonly _previewUrl = signal<string | null>(null);
   readonly previewUrl = this._previewUrl.asReadonly();
+  /** The same preview's blob URL without viewer hints — the designer draws page 1. */
+  readonly rawPreviewUrl = signal<string | null>(null);
+  /** Uploaded images (logo, NABL…) as data URLs — the designer measures with them. */
+  readonly imageCache = signal<Record<string, string>>({});
   /** Sanitised version of the blob URL — Angular blocks raw blob: URIs
    *  in `[src]` bindings otherwise. */
   readonly previewSafe = computed<SafeResourceUrl | null>(() => {
@@ -1309,6 +1132,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       const prev = this._previewUrl();
       if (prev) URL.revokeObjectURL(prev);
       const url = renderReportPdfBlobUrl({ ...baseInput, imageCache });
+      this.imageCache.set(imageCache);
+      this.rawPreviewUrl.set(url);
       // #view=FitH&toolbar=0 gives a clean top-fit preview in Chrome/FF.
       this._previewUrl.set(url + '#view=FitH&toolbar=0');
     } catch (e) {
@@ -1366,7 +1191,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       this._tab.set(initial);
     }
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
-      next: t => { if (t) this._tpl.set({ ...this._tpl(), ...t }); this.initPatientCols(); }
+      next: t => {
+        if (t) this._tpl.set({ ...this._tpl(), ...t });
+        this.savedJson.set(JSON.stringify(this._tpl()));
+        this.past.set([]); this.future.set([]);
+        this.initPatientCols();
+      }
     });
     this.loadCustomPatientFields();
     this.initPatientCols();
@@ -1687,8 +1517,9 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     if (this.saving()) return;
     this.saving.set(true);
     // Send every field — the server merges with defaults and writes one row.
-    this.api.post('/api/config/report-template', this._tpl()).subscribe({
-      next: () => { this.toasts.success('Template saved'); this.saving.set(false); },
+    const sent = this._tpl();
+    this.api.post('/api/config/report-template', sent).subscribe({
+      next: () => { this.savedJson.set(JSON.stringify(sent)); this.toasts.success('Template saved'); this.saving.set(false); },
       error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); },
     });
   }

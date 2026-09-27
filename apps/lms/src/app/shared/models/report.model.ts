@@ -151,4 +151,10 @@ export interface ReportTemplate {
   showSampleCollectionBand?: boolean;
   endOfReportText?: string;
   showPoweredBy: boolean;
+
+  /** Free-form JSON (server column `metadata`, jsonb). The report designer
+   *  keeps the letterhead layout under `headerLayout` — see
+   *  shared/utils/report-header-layout.ts. Absent = print as the header
+   *  style always did. */
+  metadata?: string | null;
 }

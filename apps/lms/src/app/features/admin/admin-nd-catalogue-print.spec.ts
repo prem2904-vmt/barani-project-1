@@ -56,7 +56,10 @@ describe('ND audit — Report designer', () => {
     expect(sw.getAttribute('aria-checked')).toBe('false');
     sw.click(); p.f.detectChanges();
     expect(p.cmp.tpl().nablAccredited).toBe(true);
-    expect(p.el.querySelector('.pf-wys-thumb[aria-pressed="true"]')).not.toBeNull();
+    // Header styles: neutral selected tile in the designer's side card.
+    expect(p.el.querySelector('.pf-rhe-preset.nd-tile-sel[aria-checked="true"]')).not.toBeNull();
+    tabBtn(p.el, 'Patient strip').click();
+    p.f.detectChanges();
     const aside = p.el.querySelector('.pf-rt-aside')!;
     expect(aside.classList.contains('nd-card')).toBe(true);
     expect(aside.querySelector('.nd-card__label')!.textContent).toContain('Live preview');

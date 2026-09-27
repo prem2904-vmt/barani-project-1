@@ -246,6 +246,8 @@ export const appRoutes: Route[] = [
       {
         path: 'admin/reports',
         canActivate: [...routeGuards('/admin/reports')],
+        // Unsaved report-design changes ask before leaving (DialogService).
+        canDeactivate: [(c: { canLeave?: () => Promise<boolean> }) => c?.canLeave ? c.canLeave() : true],
         loadComponent: () => import('./features/admin/report-template/report-template.component').then(m => m.ReportTemplateComponent)
       },
       {

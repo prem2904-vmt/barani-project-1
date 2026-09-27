@@ -15,6 +15,10 @@ import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
 import { reportDisplayName } from './report-name';
 import { fetchAssetBlob } from './upload-fetch';
+import {
+  Align, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
+  BODY_GAP, anchorX, boxLeft, readHeaderLayout,
+} from './report-header-layout';
 
 /**
  * Render an A4 lab report PDF in the Drlogy template style — blue
@@ -334,6 +338,8 @@ let CANON_COLS: { type: 'result' | 'range' | 'unit'; label: string }[] = [];
 let IMG_CACHE: Record<string, string> = {};
 /** Template logo URL for the page-1 watermark combination (set per build). */
 let WM_LOGO_URL: string | null = null;
+/** Letterhead + footer layout of the current render (set in buildReportPdfWithLayout). */
+let LAYOUT: ReportLayoutResult | null = null;
 
 /** Per-render theme — frozen once at the start of buildReportPdf.
  *  Functions read from these closure-captured vars at draw time. */
@@ -548,15 +554,25 @@ function applyTheme(t: ResolvedTheme) {
 /** Build the PDF document without saving — used by both the download
  *  flow and the live admin preview (which wraps the doc as a blob URL). */
 export function buildReportPdf(input: ReportPdfInput): jsPDF {
-  const { report, practice: rawPractice = {}, resolvedLayouts = {}, template = null, imageCache = {} } = input;
+  return buildReportPdfWithLayout(input).doc;
+}
+
+/** The page chrome (letterhead + footer lines) exactly as `buildReportPdf`
+ *  would place it — the report designer outlines these boxes over the
+ *  rendered page. Same theme resolution, same seeds, same overrides. */
+export function computeReportPageLayout(input: ReportPdfInput): ReportLayoutResult {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  installPdfTextSanitizer(doc);   // it also widens symbol glyphs — measure like the real render
+  const { practice, template } = prepareRender({ ...input, blankLetterhead: false });
+  return computeReportLayout(doc, practice, template?.logoUrl ?? null, template);
+}
+
+/** Theme + images + practice merge + margins for one render (module state). */
+function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdfInput['practice']>; template: ReportTemplate | null; snap: ReportSnapshot } {
+  const { report, practice: rawPractice = {}, template = null, imageCache = {} } = input;
   // Calculated values print like any other value — no "(Calculated)"
   // marker on a test / profile name (see report-name.ts).
   const snap = cleanSnapshotNames(parseSnapshot(report.data));
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  // Built-in PDF fonts are cp1252-only: superscripts (×10⁹/L), subscripts
-  // (CO₂) and Greek (β-hCG) would otherwise print as garbage. One wrapper on
-  // doc.text covers every draw here AND inside jspdf-autotable.
-  installPdfTextSanitizer(doc);
   IMG_CACHE = imageCache;
 
   // Merge template identity fields into the practice shape. The drawing
@@ -597,6 +613,25 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
     MARGIN_BOTTOM = 150;
     HEADER_RESERVE = 70;
   }
+  return { practice, template, snap };
+}
+
+/** Build the PDF and hand back the letterhead/footer layout it drew with. */
+export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; layout: ReportLayoutResult } {
+  const { resolvedLayouts = {} } = input;
+  const report = input.report;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  // Built-in PDF fonts are cp1252-only: superscripts (×10⁹/L), subscripts
+  // (CO₂) and Greek (β-hCG) would otherwise print as garbage. One wrapper on
+  // doc.text covers every draw here AND inside jspdf-autotable.
+  installPdfTextSanitizer(doc);
+  const { practice, template, snap } = prepareRender(input);
+  // Letterhead + footer lines: one resolved layout drives the drawing below
+  // AND the designer's outlines. An edited letterhead may be taller than the
+  // old fixed reserve — the patient details start below it, never under it.
+  const layout = computeReportLayout(doc, practice, template?.logoUrl ?? null, template);
+  LAYOUT = layout;
+  if (!LETTERPAD) HEADER_RESERVE = layout.bodyTop - MARGIN_TOP;
 
   // ── Department-specific patient strip (owner's model, 2026-09-19) ──
   // Each department may carry its own patient-block arrangement on its
@@ -617,7 +652,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   }
 
   WM_LOGO_URL = template?.logoUrl ?? null;
-  drawLetterhead(doc, practice, template?.logoUrl ?? null);
+  drawLetterhead(doc);
   const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
 
   // No amended-report banner on the printed page (owner's call, 2026-08-16):
@@ -955,7 +990,7 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // Skipped in letterpad mode — the blank MARGIN_BOTTOM reserve is where the
   // lab's own pre-printed footer/signatures sit.
   if (!LETTERPAD) drawSignatureFooter(doc, practice, snap);
-  return doc;
+  return { doc, layout };
 }
 
 /** Build + trigger a file download. Filename is derived from the
@@ -1060,9 +1095,9 @@ export async function preloadReportImages(
 /** Renders the tagline by splitting on '|' and colouring each separator
  *  pipe with the accent colour (Drlogy style). For taglines without
  *  pipes ("Accurate. On time.") it just renders as a single black line. */
-function drawTagline(doc: jsPDF, tagline: string, x: number, y: number) {
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(9);
+function drawTagline(doc: jsPDF, tagline: string, x: number, y: number, size = 9, style: 'normal' | 'bold' | 'italic' = 'bold') {
+  doc.setFont(PDF_FONT, style);
+  doc.setFontSize(size);
   const parts = tagline.split('|');
   let cx = x;
   parts.forEach((seg, i) => {
@@ -1089,161 +1124,450 @@ function drawSigScribble(doc: jsPDF, px: number, baseY: number) {
   doc.line(px + 6,  baseY - 4, px + 18, baseY + 2);
 }
 
-/** Placeholder blue disc + white plus, drawn when no logo upload exists
- *  (or the bytes failed to decode). Scales with the requested size. */
-function drawLogoPlaceholder(doc: jsPDF, sizePx: number) {
-  const r = sizePx / 2;
-  const cx = MARGIN_X + r;
-  const cy = MARGIN_TOP + r;
-  doc.setFillColor(BLUE);
-  doc.circle(cx, cy, r, 'F');
-  const arm = sizePx * 0.45;
-  const thick = Math.max(1.5, sizePx * 0.08);
-  doc.setFillColor('#ffffff');
-  doc.rect(cx - thick / 2, cy - arm / 2, thick, arm, 'F');
-  doc.rect(cx - arm / 2, cy - thick / 2, arm, thick, 'F');
+// ──────────────────────────────────────────────────────────────
+// Letterhead + footer lines — ONE layout model
+// ──────────────────────────────────────────────────────────────
+// Each header style ("preset") SEEDS its elements at the exact positions it
+// always used; the lab's overrides (report-header-layout.ts, stored in the
+// template's metadata) are applied on top; the resolved items are then DRAWN
+// here and OUTLINED by the report designer. A template with no layout saved
+// draws byte-identically to the old per-preset functions
+// (report-header-legacy.spec.ts). Measuring only sets the font (never a
+// colour), so computing a layout writes nothing to the page.
+
+/** Top of the letterhead (pt) — the normal, non-letterpad page margin. */
+const LH_TOP = 28;
+const FIELD_LABEL: Record<HeaderField, string> = { address: 'Address', phone: 'Phone', email: 'Email', website: 'Website' };
+
+interface Seed {
+  id: string;
+  kind: LayoutItem['kind'];
+  label: string;
+  region?: LayoutRegion;
+  x: number;
+  y: number;
+  align: Align;
+  /** Box items: default left x for a given width (keeps a preset's centring). */
+  defX?: (w: number) => number;
+  /** Box items: default top y for a given height. */
+  defY?: (h: number) => number;
+  text?: string;
+  fields?: HeaderField[];
+  style?: 'normal' | 'bold' | 'italic';
+  size?: number;
+  color?: string;
+  tone?: LayoutItem['tone'];
+  lineH?: number;
+  reverse?: boolean;
+  /** Legacy wrap width (the disclaimer always wrapped at the page width). */
+  wrapDefault?: number;
+  /** y is the LAST line's baseline (footer lines stack upward). */
+  anchorBottom?: boolean;
+  /** Legacy measuring quirks (centred tagline / website pill measured at another size). */
+  measure?: { style: 'normal' | 'bold' | 'italic'; size: number };
+  /** Wrapping is the design (disclaimer) — not worth a note. */
+  expectWrap?: boolean;
+  w?: number;
+  h?: number;
+  url?: string | null;
+  sub?: string;
 }
 
-function drawLetterhead(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
-  // Pre-printed letterpad: draw nothing — the blank MARGIN_TOP reserve is the
-  // space the lab's own printed letterhead occupies.
-  if (LETTERPAD) return;
-  switch (theme.headerPreset) {
-    case 'centered':  drawLetterheadCentered(doc, practice, logoUrl); break;
-    case 'banner':    drawLetterheadBanner  (doc, practice, logoUrl); break;
-    case 'minimal':   drawLetterheadMinimal (doc, practice);          break;
-    case 'drlogy':
-    default:          drawLetterheadDrlogy  (doc, practice, logoUrl);
+type Resolved = LayoutItem & { defBox: LayoutItem['box'] };
+
+function imageAspect(doc: jsPDF, url: string | null | undefined): number | null {
+  const data = url ? IMG_CACHE[url] : null;
+  if (!data) return null;
+  try {
+    const p = doc.getImageProperties(data);
+    return p.width > 0 && p.height > 0 ? p.width / p.height : null;
+  } catch { return null; }
+}
+
+function alignedLeft(align: Align, w: number): number {
+  return align === 'center' ? (A4.w - w) / 2 : align === 'right' ? A4.w - MARGIN_X - w : MARGIN_X;
+}
+
+function finalizeBox(doc: jsPDF, s: Seed, o: ItemOverride, customized: boolean): Resolved {
+  let w = s.w ?? 0, h = s.h ?? 0;
+  let sizeValue = h / MM;
+  const align = o.align ?? s.align;
+  let fit: 'square' | 'natural' | undefined;
+  if (s.kind === 'logo' || s.kind === 'nabl') {
+    if (o.size) h = o.size * MM;
+    w = h;
+    if (s.kind === 'logo') {
+      fit = o.fit ?? 'square';
+      if (fit === 'natural') { const a = imageAspect(doc, s.url); if (a) w = Math.min(h * a, A4.w - 2 * MARGIN_X); }
+    }
+    sizeValue = h / MM;
+  } else if (s.kind === 'bar' || s.kind === 'banner') {
+    if (o.size) h = o.size * MM;
+    sizeValue = h / MM;
+  }
+  const defLeft = s.defX ? s.defX(w) : s.x;
+  const defTop = s.defY ? s.defY(h) : s.y;
+  const movable = s.kind !== 'bar' && s.kind !== 'banner';
+  const x = !movable ? s.x
+    : o.x != null ? o.x * MM
+    : (o.align && o.align !== s.align) ? alignedLeft(align, w) : defLeft;
+  const y = s.kind === 'banner' ? 0 : o.y != null ? o.y * MM : defTop;
+  const subH = s.kind === 'nabl' && s.sub ? 8 : 0;
+  return {
+    id: s.id, region: s.region ?? 'header', kind: s.kind, label: s.label,
+    x, y, align, w, h, url: s.url, fit, sub: s.sub,
+    box: { x, y, w, h: h + subH },
+    defBox: { x: movable ? defLeft : s.x, y: defTop, w, h: h + subH },
+    customized, sizeValue, sizeUnit: 'mm',
+  };
+}
+
+function finalizeText(doc: jsPDF, s: Seed, o: ItemOverride, active: boolean, customized: boolean): Resolved {
+  const align = o.align ?? s.align;
+  const size = o.size ?? s.size ?? 9;
+  const baseStyle = s.style ?? 'normal';
+  const style = o.bold === undefined ? baseStyle : o.bold ? 'bold' : (baseStyle === 'bold' ? 'normal' : baseStyle);
+  const quirk = o.size === undefined && o.bold === undefined && o.align === undefined && o.x === undefined ? s.measure : undefined;
+  const x = o.x != null ? o.x * MM : (o.align && o.align !== s.align) ? anchorX(align) : s.x;
+  const raw = s.text ?? '';
+  const gw = (t: string) => doc.getTextWidth(t);
+  doc.setFont(PDF_FONT, style);
+  doc.setFontSize(size);
+
+  let lines: string[];
+  let splitLines = false;
+  let wraps = false;
+  let wrapW: number | null = null;
+  let lineYs: number[] | undefined;
+  const lineH = s.lineH ?? size * (active ? 1.2 : 1.15);
+  if (s.tone === 'plain') {
+    if (active) {
+      const paras = raw.split(/\r?\n/).map(p => p.replace(/\s+$/, ''));
+      const avail = align === 'center' ? 2 * Math.min(x - MARGIN_X, A4.w - MARGIN_X - x)
+        : align === 'right' ? x - MARGIN_X : A4.w - MARGIN_X - x;
+      wrapW = o.wrap !== undefined ? (o.wrap > 0 ? o.wrap * MM : null)
+        : (s.wrapDefault ?? (avail > 24 ? avail : null));
+      lines = [];
+      for (const p of paras) {
+        if (wrapW && gw(p) > wrapW + 0.01) lines.push(...(doc.splitTextToSize(p, wrapW) as string[]));
+        else lines.push(p);
+      }
+      wraps = !s.expectWrap && lines.length > paras.length;
+      splitLines = true;
+    } else if (s.wrapDefault != null) {
+      wrapW = s.wrapDefault;
+      lines = doc.splitTextToSize(raw, s.wrapDefault) as string[];
+      splitLines = true;
+    } else {
+      lines = [raw];
+    }
+  } else {
+    lines = [raw];
+  }
+
+  // First baseline. Footer lines are seeded by their LAST baseline and stack up.
+  let y: number;
+  if (o.y != null) y = o.y * MM;
+  else if (s.anchorBottom) {
+    y = s.y - (lines.length - 1) * lineH;
+    if (s.reverse && !active) {
+      // Exactly the old loop's arithmetic (decrement from the bottom line).
+      lineYs = new Array(lines.length);
+      let e = s.y;
+      for (let i = lines.length - 1; i >= 0; i--) { lineYs[i] = e; e -= lineH; }
+    }
+  } else y = s.y;
+
+  // Width + where drawing starts.
+  let w: number;
+  let startX: number | undefined;
+  let pillW: number | undefined;
+  let box: LayoutItem['box'];
+  if (s.tone === 'twoTone') {
+    const t = raw.split(' ');
+    w = gw(t[0] + ' ') + gw(t.slice(1).join(' '));
+    startX = align === 'left' ? x : boxLeft(x, align, w);
+  } else if (s.tone === 'pipes') {
+    w = gw(raw.replace(/\|/g, ' | '));
+    if (quirk && align === 'center') {
+      doc.setFont(PDF_FONT, quirk.style); doc.setFontSize(quirk.size);
+      startX = x - gw(raw.replace(/\|/g, ' | ')) / 2;
+      doc.setFont(PDF_FONT, style); doc.setFontSize(size);
+    } else startX = align === 'left' ? x : boxLeft(x, align, w);
+  } else if (s.tone === 'pill') {
+    w = gw(raw);
+    let tw = w;
+    if (quirk) { doc.setFont(PDF_FONT, quirk.style); doc.setFontSize(quirk.size); tw = gw(raw); }
+    pillW = tw + 12;
+    const k = size / 8;
+    // Untouched: the old expression, so the rectangle lands on the same point.
+    const rx = quirk && align === 'right' ? A4.w - MARGIN_X - pillW : boxLeft(x, align, tw) - 6;
+    box = { x: rx, y: y - 8.5 * k, w: pillW, h: 12 * k };
+  } else {
+    w = Math.max(0, ...lines.flatMap(l => l.split('\n')).map(gw));
+  }
+  const nLines = s.tone === 'plain' && !splitLines ? raw.split('\n').length : lines.length;
+  const left = startX ?? boxLeft(x, align, w);
+  const top = y - size * 0.78;
+  box ??= { x: left, y: top, w, h: (nLines - 1) * lineH + size * 1.02 };
+  const defLeft = boxLeft(s.x, s.align, w);
+  const defFirst = s.anchorBottom ? s.y - (lines.length - 1) * lineH : s.y;
+  return {
+    id: s.id, region: s.region ?? 'header', kind: 'text', label: s.label,
+    x, y, align, text: raw, lines, fields: s.fields, style, size, color: s.color, tone: s.tone ?? 'plain',
+    lineH, reverse: s.reverse, wrapW, wraps, splitLines, startX, pillW, lineYs,
+    box, defBox: { x: defLeft, y: defFirst - size * 0.78, w, h: box.h },
+    customized, sizeValue: size, sizeUnit: 'pt',
+  };
+}
+
+/** Resolve the whole page chrome (letterhead + footer lines) for the current
+ *  theme. Pure w.r.t. the page: only measures. */
+function computeReportLayout(
+  doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null,
+  tpl: ReportTemplate | null | undefined,
+): ReportLayoutResult {
+  const cfg = readHeaderLayout(tpl);
+  const active = !!cfg;
+  const ov = (id: string): ItemOverride => cfg?.items[id] ?? {};
+  const items: Resolved[] = [];
+  const add = (s: Seed): Resolved => {
+    const o = ov(s.id);
+    const customized = Object.keys(o).length > 0;
+    const r = s.kind === 'text' ? finalizeText(doc, s, o, active, customized) : finalizeBox(doc, s, o, customized);
+    if (o.hidden) r.hidden = true;
+    items.push(r);
+    return r;
+  };
+  const fs = theme.fontScale;
+  const preset = theme.headerPreset;
+  const fullName = (practice.name ?? 'Prefrontal Pathology Lab').toUpperCase();
+  const rightX = A4.w - MARGIN_X;
+  const val = (f: HeaderField) => practice[f] ?? '';
+  const nablSeed = (): Seed | null => theme.nablAccredited ? {
+    id: 'nabl', kind: 'nabl', label: 'NABL badge', x: rightX - 30, y: LH_TOP - 2, align: 'right',
+    defX: w => rightX - w, w: 30, h: 30, url: theme.nablLogoUrl || null, sub: theme.nablNumber || undefined,
+  } : null;
+  const joined = (id: string, def: HeaderField[], x: number, y: number, align: Align, size = 8 * fs): void => {
+    const fields = ov(id).fields ?? def;
+    const text = fields.map(val).filter(Boolean).join('  ·  ');
+    if (!text) return;
+    const label = fields.filter(f => val(f)).map(f => FIELD_LABEL[f]).join(' · ');
+    add({ id, kind: 'text', label, text, fields, x, y, align, style: 'normal', size, color: TEXT_DIM, tone: 'plain' });
+  };
+  const bar = (): Resolved | null => {
+    if (!theme.topAccentBar) return null;
+    // Edited layouts: the bar sits UNDER the style's own text (a multi-line
+    // address, Centered's contact lines) instead of striking through it.
+    // Text the lab placed BELOW the bar's spot stays below it (dragging a
+    // line under the bar is allowed); text above it pushes the bar down.
+    let y = LH_TOP + 54;
+    if (active) {
+      const texts = items
+        .filter(i => i.kind === 'text' && !i.hidden)
+        .map(i => (ov(i.id).x !== undefined || ov(i.id).y !== undefined ? { b: i.box, moved: true } : { b: i.defBox, moved: false }))
+        .filter(t => !t.moved || t.b.y < LH_TOP + 54)
+        .map(t => t.b.y + t.b.h + 4);
+      y = Math.max(y, ...texts);
+    }
+    return add({ id: 'accentBar', kind: 'bar', label: 'Accent bar', x: MARGIN_X, y, w: A4.w - 2 * MARGIN_X, h: 4, align: 'left' });
+  };
+  const pill = (b: Resolved | null) => {
+    if (!b || !practice.website) return;
+    add({ id: 'website', kind: 'text', label: 'Website', text: practice.website, x: A4.w - MARGIN_X - 6, y: b.y + 5.5,
+          align: 'right', style: 'bold', size: 8, color: BLUE, tone: 'pill', measure: { style: 'normal', size: 8 * fs } });
+  };
+
+  if (preset === 'centered') {
+    const n = nablSeed(); if (n) add(n);
+    const size = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
+    const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: (A4.w - size) / 2, y: LH_TOP, align: 'center',
+                       defX: w => (A4.w - w) / 2, w: size, h: size, url: logoUrl });
+    const lh = logo.defBox.h;
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: A4.w / 2, y: LH_TOP + lh + 14, align: 'center',
+          style: 'bold', size: 18 * fs, color: BLACK, tone: 'plain' });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: A4.w / 2, y: LH_TOP + lh + 28, align: 'center',
+          style: 'bold', size: 9, color: BLACK, tone: 'pipes', measure: { style: 'bold', size: 9 * fs } });
+    joined('contact', ['phone', 'email', 'website'], A4.w / 2, LH_TOP + lh + 40, 'center');
+    if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: A4.w / 2,
+          y: LH_TOP + lh + 50, align: 'center', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
+    pill(bar());
+  } else if (preset === 'banner') {
+    const n = nablSeed();
+    // The old banner painted the NABL badge BEFORE the blue band, so the band
+    // hid it. Untouched templates keep that; an edited layout draws it on top.
+    if (n && !active) add(n);
+    const band = add({ id: 'banner', kind: 'banner', label: 'Banner', x: 0, y: 0, w: A4.w, h: 54, align: 'left' });
+    const bh = band.h ?? 54;
+    const size = theme.logoSize === 'sm' ? 22 : theme.logoSize === 'lg' ? 36 : 28;
+    const lp = theme.logoPosition;
+    const lx = (w: number) => lp === 'right' ? A4.w - MARGIN_X - w : lp === 'center' ? (A4.w - w) / 2 : MARGIN_X;
+    const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: lx(size), y: (bh - size) / 2, align: lp,
+                       defX: lx, defY: h => (bh - h) / 2, w: size, h: size, url: logoUrl });
+    const wmX = lp === 'center' ? (A4.w / 2) : (logo.defBox.x + logo.defBox.w + 10);
+    const wmAlign: Align = lp === 'center' ? 'center' : 'left';
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wmX, y: 24, align: wmAlign,
+          style: 'bold', size: 18 * fs, color: '#ffffff', tone: 'plain' });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wmX, y: 40, align: wmAlign,
+          style: 'normal', size: 9 * fs, color: '#ffffff', tone: 'plain' });
+    joined('contact', ['address', 'phone', 'email'], MARGIN_X, bh + 10, 'left');
+    if (n && active) add(n);
+  } else if (preset === 'minimal') {
+    const n = nablSeed(); if (n) add(n);
+    const align: Align = theme.logoPosition === 'center' ? 'center' : theme.logoPosition === 'right' ? 'right' : 'left';
+    const x = align === 'center' ? A4.w / 2 : align === 'right' ? A4.w - MARGIN_X : MARGIN_X;
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x, y: LH_TOP + 14, align,
+          style: 'bold', size: 16 * fs, color: BLACK, tone: 'plain' });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x, y: LH_TOP + 26, align,
+          style: 'normal', size: 9 * fs, color: TEXT_DIM, tone: 'plain' });
+    // (Minimal's contact line inherits the tagline's 9pt — as it always did.)
+    joined('contact', ['address', 'phone', 'email', 'website'], x, LH_TOP + 38, align, 9 * fs);
+  } else {
+    // Classic ("drlogy"): logo + two-tone wordmark left, phone/email right,
+    // the address on its own line under the logo row, the accent bar.
+    const size = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
+    const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: logoXFor(size), y: LH_TOP, align: theme.logoPosition,
+                       defX: w => logoXFor(w), w: size, h: size, url: logoUrl });
+    const wx = logo.hidden ? logo.defBox.x : logo.defBox.x + logo.defBox.w + 6;
+    const wy = LH_TOP + 18;
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wx, y: wy, align: 'left',
+          style: 'bold', size: 18 * fs, color: BLACK, tone: 'twoTone' });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wx, y: wy + 14, align: 'left',
+          style: 'bold', size: 9, color: BLACK, tone: 'pipes' });
+    const n = nablSeed();
+    const nabl = n ? add(n) : null;
+    const nablHolds = !!nabl && !nabl.hidden && ov('nabl').x === undefined && ov('nabl').align === undefined;
+    const contactX = nablHolds ? rightX - (nabl!.defBox.w + 8) : rightX;
+    if (practice.phone) add({ id: 'phone', kind: 'text', label: 'Phone', text: practice.phone, x: contactX, y: LH_TOP + 14,
+          align: 'right', style: 'normal', size: 9 * fs, color: BLACK, tone: 'plain' });
+    if (practice.email) add({ id: 'email', kind: 'text', label: 'Email', text: practice.email, x: contactX, y: LH_TOP + 28,
+          align: 'right', style: 'normal', size: 9 * fs, color: BLACK, tone: 'plain' });
+    if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: MARGIN_X,
+          y: LH_TOP + 46, align: 'left', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
+    pill(bar());
+  }
+
+  // ── Lab additions (edited layouts only): fields the style doesn't print on
+  // their own, and free text lines (registration no., GSTIN…). They stack
+  // under the letterhead until the lab drags them somewhere.
+  if (active) {
+    const placed = new Set<string>();
+    for (const it of items) { it.fields?.forEach(f => placed.add(f)); if (it.id in FIELD_LABEL) placed.add(it.id); }
+    let bottom = Math.max(LH_TOP, ...items.filter(i => i.kind !== 'banner').map(i => i.defBox.y + i.defBox.h));
+    const stack = (id: string, label: string, text: string) => {
+      const base = bottom + 10;
+      add({ id, kind: 'text', label, text, x: MARGIN_X, y: base, align: 'left', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
+      bottom = base + Math.max(3, (text.split('\n').length - 1) * 8 * fs * 1.2 + 3);
+    };
+    for (const f of Object.keys(FIELD_LABEL) as HeaderField[]) {
+      if (ov(f).added && !placed.has(f) && val(f)) stack(f, FIELD_LABEL[f], val(f));
+    }
+    (cfg!.lines ?? []).forEach((l, i) => { if (l.text.trim()) stack('line:' + l.id, l.text.split('\n')[0].trim() || `Text line ${i + 1}`, l.text); });
+  }
+
+  // ── Footer lines (last page), stacked up from just above the date strip.
+  let extraY = A4.h - 40;
+  if (theme.disclaimer) {
+    const d = add({ id: 'disclaimer', region: 'footer', kind: 'text', label: 'Disclaimer', text: theme.disclaimer, x: MARGIN_X,
+                    y: extraY, align: 'left', style: 'italic', size: 7, color: TEXT_DIM, tone: 'plain', lineH: 8.5,
+                    reverse: true, wrapDefault: A4.w - 2 * MARGIN_X, anchorBottom: true, expectWrap: true });
+    if (!d.hidden) {
+      for (let i = 0; i < (d.lines?.length ?? 1); i++) extraY -= 8.5;
+      extraY -= 2;
+    }
+  }
+  if (theme.footerText) {
+    add({ id: 'footerText', region: 'footer', kind: 'text', label: 'Footer text', text: theme.footerText, x: MARGIN_X,
+          y: extraY, align: 'left', style: 'normal', size: 7.5, color: TEXT_DIM, tone: 'plain', anchorBottom: true });
+  }
+
+  const header = items.filter(i => i.region === 'header' && !i.hidden);
+  const headerBottom = Math.max(LH_TOP, ...header.map(i => i.box.y + i.box.h));
+  const legacyTop = LH_TOP + 70;
+  const bodyTopAuto = !active || cfg!.bodyTop == null;
+  const bodyTop = !active ? legacyTop
+    : cfg!.bodyTop != null ? cfg!.bodyTop * MM
+    : Math.max(legacyTop, headerBottom + BODY_GAP);
+  const lp = tpl?.letterpadMode
+    ? { top: Math.max(0, tpl.letterpadHeaderMm ?? 45) * MM, bottom: A4.h - Math.max(20, Math.max(0, tpl.letterpadFooterMm ?? 30) * MM) }
+    : null;
+  // defBox is internal — the published items are plain LayoutItems.
+  const out: LayoutItem[] = items.map(({ defBox: _d, ...rest }) => rest);
+  return { preset, active, items: out, headerBottom, bodyTop, bodyTopAuto, letterpad: lp };
+}
+
+/** Draw one resolved element. Hidden ones are skipped. */
+function drawLayoutItem(doc: jsPDF, it: LayoutItem) {
+  if (it.hidden) return;
+  switch (it.kind) {
+    case 'banner':
+      doc.setFillColor(BLUE);
+      doc.rect(0, 0, A4.w, it.h ?? 54, 'F');
+      return;
+    case 'bar':
+      doc.setFillColor(BLUE);
+      doc.rect(it.x, it.y, it.w ?? 0, it.h ?? 4, 'F');
+      return;
+    case 'logo':
+      drawLogo(doc, it.url ?? null, it.x, it.y, it.w ?? 0, it.h ?? 0);
+      return;
+    case 'nabl':
+      drawNablBadge(doc, it.x, it.y, it.h ?? 30, it.url ?? null, it.sub ?? '');
+      return;
+    case 'text':
+      drawTextItem(doc, it);
   }
 }
 
-/** Drlogy preset — logo + wordmark left, phone/email right, address
- *  below, optional blue accent band. */
-function drawLetterheadDrlogy(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
-  const sizePx = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
-  const logoX = logoXFor(sizePx);
-  drawLogo(doc, logoUrl, logoX, MARGIN_TOP, sizePx);
-
-  const fullName = (practice.name ?? 'Prefrontal Pathology Lab').toUpperCase();
-  const tokens = fullName.split(' ');
-  const firstWord = tokens[0];
-  const rest = tokens.slice(1).join(' ');
-
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(18 * theme.fontScale);
-  doc.setTextColor(BLACK);
-  const wordmarkX = logoX + sizePx + 6;
-  const wordmarkY = MARGIN_TOP + 18;
-  doc.text(firstWord, wordmarkX, wordmarkY);
-  const firstW = doc.getTextWidth(firstWord + ' ');
-  doc.setTextColor(BLUE);
-  doc.text(rest, wordmarkX + firstW, wordmarkY);
-
-  drawTagline(doc, theme.tagline, wordmarkX, wordmarkY + 14);
-
-  const rightX = A4.w - MARGIN_X;
-  // NABL badge at the top-right corner; contact info right-aligns to its left.
-  const contactX = rightX - drawNablBadge(doc, rightX, MARGIN_TOP - 2);
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9 * theme.fontScale);
-  doc.setTextColor(BLACK);
-  if (practice.phone) doc.text(practice.phone, contactX, MARGIN_TOP + 14, { align: 'right' });
-  if (practice.email) doc.text(practice.email, contactX, MARGIN_TOP + 28, { align: 'right' });
-
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8 * theme.fontScale);
-  doc.setTextColor(TEXT_DIM);
-  if (practice.address) doc.text(practice.address, MARGIN_X, MARGIN_TOP + 46);
-
-  drawTopAccentBar(doc, practice);
+function drawTextItem(doc: jsPDF, it: LayoutItem) {
+  const size = it.size ?? 9, style = it.style ?? 'normal', text = it.text ?? '';
+  if (it.tone === 'pipes') { drawTagline(doc, text, it.startX ?? it.x, it.y, size, style); return; }
+  if (it.tone === 'pill') {
+    doc.setFillColor('#ffffff');
+    doc.rect(it.box.x, it.box.y, it.pillW ?? it.box.w, it.box.h, 'F');
+  }
+  doc.setFont(PDF_FONT, style);
+  doc.setFontSize(size);
+  doc.setTextColor(it.color ?? BLACK);
+  if (it.tone === 'twoTone') {
+    const t = text.split(' ');
+    const first = t[0];
+    const rest = t.slice(1).join(' ');
+    const x = it.startX ?? it.x;
+    doc.text(first, x, it.y);
+    const firstW = doc.getTextWidth(first + ' ');
+    doc.setTextColor(BLUE);
+    doc.text(rest, x + firstW, it.y);
+    return;
+  }
+  const opts = it.align !== 'left' ? { align: it.align } : undefined;
+  if (!it.splitLines) {
+    if (opts) doc.text(text, it.x, it.y, opts); else doc.text(text, it.x, it.y);
+    return;
+  }
+  const lines = it.lines ?? [text];
+  const lh = it.lineH ?? size * 1.2;
+  const yAt = (i: number) => it.lineYs?.[i] ?? it.y + i * lh;
+  if (it.reverse) {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (opts) doc.text(lines[i], it.x, yAt(i), opts); else doc.text(lines[i], it.x, yAt(i));
+    }
+  } else {
+    for (let i = 0; i < lines.length; i++) {
+      if (opts) doc.text(lines[i], it.x, yAt(i), opts); else doc.text(lines[i], it.x, yAt(i));
+    }
+  }
 }
 
-/** Centered preset — logo, wordmark, tagline, address all stacked
- *  and centered. Phone + email on a single centered line below. */
-function drawLetterheadCentered(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
-  drawNablBadge(doc, A4.w - MARGIN_X, MARGIN_TOP - 2);
-  const sizePx = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
-  drawLogo(doc, logoUrl, (A4.w - sizePx) / 2, MARGIN_TOP, sizePx);
-
-  const fullName = (practice.name ?? 'Prefrontal Pathology Lab').toUpperCase();
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(18 * theme.fontScale);
-  doc.setTextColor(BLACK);
-  doc.text(fullName, A4.w / 2, MARGIN_TOP + sizePx + 14, { align: 'center' });
-
-  // Centered tagline — split + recolour the pipes.
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(9 * theme.fontScale);
-  const taglineW = doc.getTextWidth(theme.tagline.replace(/\|/g, ' | '));
-  drawTagline(doc, theme.tagline, A4.w / 2 - taglineW / 2, MARGIN_TOP + sizePx + 28);
-
-  // Contact line: phone · email · website
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8 * theme.fontScale);
-  doc.setTextColor(TEXT_DIM);
-  const contact = [practice.phone, practice.email, practice.website].filter(Boolean).join('  ·  ');
-  if (contact) doc.text(contact, A4.w / 2, MARGIN_TOP + sizePx + 40, { align: 'center' });
-  if (practice.address) doc.text(practice.address, A4.w / 2, MARGIN_TOP + sizePx + 50, { align: 'center' });
-
-  drawTopAccentBar(doc, practice);
+function drawLetterhead(doc: jsPDF) {
+  // Pre-printed letterpad: draw nothing — the blank MARGIN_TOP reserve is the
+  // space the lab's own printed letterhead occupies.
+  if (LETTERPAD || !LAYOUT) return;
+  for (const it of LAYOUT.items) if (it.region === 'header') drawLayoutItem(doc, it);
 }
 
-/** Banner preset — solid coloured band across the top with white text
- *  inside. Eye-catching, less "lab-formal". */
-function drawLetterheadBanner(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>, logoUrl: string | null) {
-  drawNablBadge(doc, A4.w - MARGIN_X, MARGIN_TOP - 2);
-  const bannerH = 54;
-  doc.setFillColor(BLUE);
-  doc.rect(0, 0, A4.w, bannerH, 'F');
-
-  const sizePx = theme.logoSize === 'sm' ? 22 : theme.logoSize === 'lg' ? 36 : 28;
-  const lx = theme.logoPosition === 'right' ? A4.w - MARGIN_X - sizePx
-           : theme.logoPosition === 'center' ? (A4.w - sizePx) / 2
-           : MARGIN_X;
-  // White-on-blue logo placeholder swap: if we have a real upload, use it;
-  // else draw the placeholder over a thin white circle for contrast.
-  drawLogo(doc, logoUrl, lx, (bannerH - sizePx) / 2, sizePx);
-
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(18 * theme.fontScale);
-  doc.setTextColor('#ffffff');
-  const wmX = theme.logoPosition === 'center' ? (A4.w / 2) : (lx + sizePx + 10);
-  const wmAlign: 'left' | 'center' = theme.logoPosition === 'center' ? 'center' : 'left';
-  doc.text((practice.name ?? 'Prefrontal Pathology Lab').toUpperCase(),
-    wmX, 24, { align: wmAlign });
-
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9 * theme.fontScale);
-  doc.text(theme.tagline, wmX, 40, { align: wmAlign });
-
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8 * theme.fontScale);
-  doc.setTextColor(TEXT_DIM);
-  const sub = [practice.address, practice.phone, practice.email].filter(Boolean).join('  ·  ');
-  if (sub) doc.text(sub, MARGIN_X, bannerH + 10);
-}
-
-/** Minimal preset — text-only. No logo, no accent bar. */
-function drawLetterheadMinimal(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>) {
-  drawNablBadge(doc, A4.w - MARGIN_X, MARGIN_TOP - 2);
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(16 * theme.fontScale);
-  doc.setTextColor(BLACK);
-  const align: 'left' | 'center' | 'right' = theme.logoPosition === 'center' ? 'center'
-                                            : theme.logoPosition === 'right'  ? 'right' : 'left';
-  const x = align === 'center' ? A4.w / 2 : align === 'right' ? A4.w - MARGIN_X : MARGIN_X;
-  doc.text((practice.name ?? 'Prefrontal Pathology Lab').toUpperCase(), x, MARGIN_TOP + 14, { align });
-
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9 * theme.fontScale);
-  doc.setTextColor(TEXT_DIM);
-  doc.text(theme.tagline, x, MARGIN_TOP + 26, { align });
-  const sub = [practice.address, practice.phone, practice.email, practice.website].filter(Boolean).join('  ·  ');
-  if (sub) doc.text(sub, x, MARGIN_TOP + 38, { align });
-}
-
-/** Compute the left-X coordinate for the logo group based on the
- *  template's logoPosition. */
+/** Left x of the Classic logo for its logoPosition (the old rule, kept:
+ *  right/centre reserve ~200pt for the wordmark beside it). */
 function logoXFor(sizePx: number): number {
   if (theme.logoPosition === 'right') {
     // Reserve room for the wordmark roughly proportional to the page.
@@ -1257,50 +1581,44 @@ function logoXFor(sizePx: number): number {
 
 /** Embed an uploaded logo (when available in IMG_CACHE) or fall back
  *  to the parametric placeholder. Shared by all letterhead presets. */
-function drawLogo(doc: jsPDF, logoUrl: string | null, x: number, y: number, sizePx: number) {
+function drawLogo(doc: jsPDF, logoUrl: string | null, x: number, y: number, w: number, h: number) {
   const cached = logoUrl && IMG_CACHE[logoUrl];
   if (cached) {
     try {
-      doc.addImage(cached, 'PNG', x, y, sizePx, sizePx, undefined, 'FAST');
+      doc.addImage(cached, 'PNG', x, y, w, h, undefined, 'FAST');
       return;
     } catch { /* fall through to placeholder */ }
   }
-  drawLogoPlaceholderAt(doc, x, y, sizePx);
+  drawLogoPlaceholderAt(doc, x, y, h);
 }
 
 /** Draw the NABL accreditation badge (the uploaded badge image, else a green
- *  "NABL" text chip) at the top-right corner, with the accreditation number
- *  beneath it. Returns the horizontal space it consumed so the caller can shift
- *  adjacent content (phone/email) left of it. No-op unless the lab is
- *  NABL-accredited (theme.nablAccredited). */
-function drawNablBadge(doc: jsPDF, rightX: number, topY: number): number {
-  if (!theme.nablAccredited) return 0;
-  const size = 30;
-  const x = rightX - size;
-  const cached = theme.nablLogoUrl && IMG_CACHE[theme.nablLogoUrl];
+ *  "NABL" text chip) with the accreditation number beneath it. */
+function drawNablBadge(doc: jsPDF, x: number, topY: number, size: number, url: string | null, number: string) {
+  const k = size / 30;
+  const cached = url && IMG_CACHE[url];
   if (cached) {
     try { doc.addImage(cached, 'PNG', x, topY, size, size, undefined, 'FAST'); }
     catch { /* fall through to the text chip */ }
   } else {
     doc.setDrawColor('#10b981');
     doc.setFillColor('#ecfdf5');
-    doc.roundedRect(x, topY + 5, size, 15, 3, 3, 'FD');
+    doc.roundedRect(x, topY + 5 * k, size, 15 * k, 3 * k, 3 * k, 'FD');
     doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(8 * k);
     doc.setTextColor('#059669');
-    doc.text('NABL', x + size / 2, topY + 15.5, { align: 'center' });
+    doc.text('NABL', x + size / 2, topY + 15.5 * k, { align: 'center' });
   }
-  if (theme.nablNumber) {
+  if (number) {
     doc.setFont(PDF_FONT, 'normal');
     doc.setFontSize(6.5);
     doc.setTextColor(TEXT_DIM);
-    doc.text(theme.nablNumber, x + size / 2, topY + size + 6, { align: 'center' });
+    doc.text(number, x + size / 2, topY + size + 6, { align: 'center' });
   }
-  return size + 8; // badge width + gap
 }
 
-/** Same as drawLogoPlaceholder but at an explicit (x, y) — needed for
- *  centered / right-aligned presets. */
+/** Placeholder disc + plus at an explicit (x, y), drawn when no logo upload
+ *  exists (or the bytes failed to decode). */
 function drawLogoPlaceholderAt(doc: jsPDF, x: number, y: number, sizePx: number) {
   const r = sizePx / 2;
   const cx = x + r;
@@ -1312,25 +1630,6 @@ function drawLogoPlaceholderAt(doc: jsPDF, x: number, y: number, sizePx: number)
   doc.setFillColor('#ffffff');
   doc.rect(cx - thick / 2, cy - arm / 2, thick, arm, 'F');
   doc.rect(cx - arm / 2, cy - thick / 2, arm, thick, 'F');
-}
-
-/** Optional thin accent band beneath the letterhead with a "website"
- *  pill on the right. Shared by drlogy + centered presets. */
-function drawTopAccentBar(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>) {
-  const bandY = MARGIN_TOP + 54;
-  if (!theme.topAccentBar) return;
-  doc.setFillColor(BLUE);
-  doc.rect(MARGIN_X, bandY, A4.w - 2 * MARGIN_X, 4, 'F');
-
-  if (practice.website) {
-    const w = doc.getTextWidth(practice.website) + 12;
-    doc.setFillColor('#ffffff');
-    doc.rect(A4.w - MARGIN_X - w, bandY - 3, w, 12, 'F');
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(BLUE);
-    doc.text(practice.website, A4.w - MARGIN_X - 6, bandY + 5.5, { align: 'right' });
-  }
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -3520,26 +3819,9 @@ function drawSigFooterPage(
   // and the date strip. Only on the last page so it doesn't repeat ad nauseam
   // on multi-page reports.
   if (pageNo === pageTotal) {
-    // Baseline of the lowest disclaimer line sits just above the date strip
-    // (drawn at A4.h - 30); lines stack upward from there.
-    let extraY = A4.h - 40;
-    if (theme.disclaimer) {
-      doc.setFont(PDF_FONT, 'italic');
-      doc.setFontSize(7);
-      doc.setTextColor(TEXT_DIM);
-      const lines: string[] = doc.splitTextToSize(theme.disclaimer, A4.w - 2 * MARGIN_X);
-      for (let i = lines.length - 1; i >= 0; i--) {
-        doc.text(lines[i], MARGIN_X, extraY);
-        extraY -= 8.5;
-      }
-      extraY -= 2; // small gap above the disclaimer for the footer line
-    }
-    if (theme.footerText) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(theme.footerText, MARGIN_X, extraY);
-    }
+    // Disclaimer + footer text: resolved by the layout model (stacked up
+    // from just above the date strip; movable in the report designer).
+    for (const it of LAYOUT?.items ?? []) if (it.region === 'footer') drawLayoutItem(doc, it);
   }
 
   // Bottom strip: "Generated on : <date>" on the left, "Page N of M" on the right

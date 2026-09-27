@@ -36,6 +36,11 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(p.el.querySelector('.pf-rt-work__title')).toBeNull();
     expect(p.el.querySelector('.pf-rt-head')?.classList.contains('pf-classic-only')).toBe(true);
     expect(p.body()?.classList.contains('pf-band-body--fill')).toBe(true);
+    // Letterhead is edited ON the page (the WYSIWYG designer) …
+    expect(p.body()?.querySelector('pf-report-header-editor')).not.toBeNull();
+    // … the other sections keep the form + live preview.
+    p.cmp.setTab('patient');
+    p.f.detectChanges();
     expect(p.body()?.querySelector('.pf-rt-work')).not.toBeNull();
     expect(p.body()?.querySelector('.pf-rt-aside')).not.toBeNull();
   });
