@@ -1,48 +1,88 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { PeopleDrawerService } from '../../core/services/people-drawer.service';
-import { ChatWindowsService } from '../../core/services/chat-windows.service';
-import { DirectoryService, DirectoryUser } from '../../core/services/directory.service';
-import { MessagesPanelService } from '../../core/services/messages-panel.service';
-import { conversationDisambiguator, conversationInitials, conversationPeerId, conversationTitle } from '../../shared/models/conversation-name';
-import { PresenceAvatarComponent } from '../../shared/components/presence-avatar/presence-avatar.component';
-import { Conversation } from '../../shared/models/chat.model';
-import { DraftShelfService } from '../../core/services/draft-shelf.service';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { FormsModule } from '@angular/forms';
-import { AuthService } from '../../core/auth/auth.service';
-import { ModuleScopeService } from '../../core/services/module-scope.service';
-import { StoredAccount } from '../../core/auth/accounts.service';
-import { LockService } from '../../core/auth/lock.service';
-import { BranchRef } from '../../core/auth/mock-user';
-import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
-import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
-import { CapacitorService } from '../../core/services/capacitor.service';
-import { TenantStateService } from '../../core/services/tenant-state.service';
-import { brandingSrc } from '../../core/services/uploads.service';
-import { ThemeService } from '../../core/services/theme.service';
-import { DesignModeService } from '../../core/services/design-mode.service';
-import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
-import { DialogService } from '../../core/services/dialog.service';
-import { ChatService } from '../../core/services/chat.service';
-import { SignalingService } from '../../core/services/signaling.service';
-import { PresenceService } from '../../core/services/presence.service';
-import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
-import { PushService } from '../../core/services/push.service';
-import { WebrtcService } from '../../core/services/webrtc.service';
-import { PatientProfileService } from '../../core/services/patient-profile.service';
-import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback } from '../nav-items';
-import { RouteAccessCtx } from '../../core/auth/route-access';
-import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
-import { pickLanding } from '../../core/auth/landing.guard';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  HostListener,
+  Injector,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from "@angular/core";
+import { PeopleDrawerService } from "../../core/services/people-drawer.service";
+import { ChatWindowsService } from "../../core/services/chat-windows.service";
+import {
+  DirectoryService,
+  DirectoryUser,
+} from "../../core/services/directory.service";
+import { MessagesPanelService } from "../../core/services/messages-panel.service";
+import {
+  conversationDisambiguator,
+  conversationInitials,
+  conversationPeerId,
+  conversationTitle,
+} from "../../shared/models/conversation-name";
+import { PresenceAvatarComponent } from "../../shared/components/presence-avatar/presence-avatar.component";
+import { Conversation } from "../../shared/models/chat.model";
+import { DraftShelfService } from "../../core/services/draft-shelf.service";
+import { Router, RouterLink, RouterLinkActive } from "@angular/router";
+import { FormsModule } from "@angular/forms";
+import { AuthService } from "../../core/auth/auth.service";
+import { ModuleScopeService } from "../../core/services/module-scope.service";
+import { StoredAccount } from "../../core/auth/accounts.service";
+import { LockService } from "../../core/auth/lock.service";
+import { BranchRef } from "../../core/auth/mock-user";
+import { BranchLabConfigService } from "../../core/services/branch-lab-config.service";
+import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
+import { CapacitorService } from "../../core/services/capacitor.service";
+import { TenantStateService } from "../../core/services/tenant-state.service";
+import { brandingSrc } from "../../core/services/uploads.service";
+import { ThemeService } from "../../core/services/theme.service";
+import { DesignModeService } from "../../core/services/design-mode.service";
+import { NotificationBellComponent } from "../../shared/components/notification-bell/notification-bell.component";
+import { DialogService } from "../../core/services/dialog.service";
+import { ChatService } from "../../core/services/chat.service";
+import { SignalingService } from "../../core/services/signaling.service";
+import { PresenceService } from "../../core/services/presence.service";
+import {
+  PRESENCE_OPTIONS,
+  PresenceOption,
+  presenceLabel,
+} from "../../shared/models/presence.model";
+import { PushService } from "../../core/services/push.service";
+import { WebrtcService } from "../../core/services/webrtc.service";
+import { PatientProfileService } from "../../core/services/patient-profile.service";
+import { AppointmentBookingService } from "../../core/services/appointment-booking.service";
+import {
+  DOCTOR_NAV,
+  ADMIN_NAV,
+  MORE_NAV,
+  NavItem,
+  PRIMARY_NAV,
+  WorkflowNavCtx,
+  menusFromWorkflow,
+  NavVisibilityCtx,
+  navItemVisible,
+  withCollectionFallback,
+} from "../nav-items";
+import { RouteAccessCtx } from "../../core/auth/route-access";
+import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
+import { pickLanding } from "../../core/auth/landing.guard";
 
 @Component({
-  selector: 'pf-top-strip',
+  selector: "pf-top-strip",
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, FormsModule, NotificationBellComponent, PresenceAvatarComponent],
+  imports: [
+    RouterLink,
+    RouterLinkActive,
+    FormsModule,
+    NotificationBellComponent,
+    PresenceAvatarComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './top-strip.component.html',
-  styleUrl: './top-strip.component.scss'
+  templateUrl: "./top-strip.component.html",
+  styleUrl: "./top-strip.component.scss",
 })
 export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
@@ -52,7 +92,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** The on-stage draft sits behind the "+N" button (not one of the 3 chips). */
   readonly activeDraftInOverflow = computed(() => {
     const id = this.draftShelf.activeId();
-    return !!id && this.draftShelf.items().findIndex(d => d.id === id) >= 3;
+    return !!id && this.draftShelf.items().findIndex((d) => d.id === id) >= 3;
   });
   protected readonly designMode = inject(DesignModeService);
   // Public so the template can read isOnline / initialised signals.
@@ -71,7 +111,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  can raise the same list. */
   protected readonly msgsPanel = inject(MessagesPanelService);
   /** Free-text filter across conversations + tenant people. */
-  readonly msgQuery = signal('');
+  readonly msgQuery = signal("");
 
   /** Everyone in the tenant I can start a chat with, minus the people I
    *  already have a 1:1 thread with (those show under Recent). */
@@ -80,28 +120,43 @@ export class TopStripComponent implements OnInit, OnDestroy {
     // By id, not display name: two colleagues can share a name ("Front
     // Desk"), and a name match hid the second one from People.
     const me = this.meId();
-    const inThreads = new Set(this.chat.conversations()
-      .filter(c => !c.isGroup)
-      .flatMap(c => c.participants?.map(p => p.userId).filter(id => id !== me) ?? []));
-    return this.directory.others()
-      .filter(u => !inThreads.has(u.id))
-      .filter(u => !q || u.displayName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+    const inThreads = new Set(
+      this.chat
+        .conversations()
+        .filter((c) => !c.isGroup)
+        .flatMap(
+          (c) =>
+            c.participants?.map((p) => p.userId).filter((id) => id !== me) ??
+            [],
+        ),
+    );
+    return this.directory
+      .others()
+      .filter((u) => !inThreads.has(u.id))
+      .filter(
+        (u) =>
+          !q ||
+          u.displayName.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q),
+      );
   });
 
   /** Existing conversations, filtered by the same query. */
   readonly msgConversations = computed(() => {
     const q = this.msgQuery().trim().toLowerCase();
     const list = this.chat.conversations();
-    return q ? list.filter(c => this.convoTitle(c).toLowerCase().includes(q)) : list;
+    return q
+      ? list.filter((c) => this.convoTitle(c).toLowerCase().includes(q))
+      : list;
   });
 
   /** Initials for a directory person — same rule as conversations. */
   personInitials(u: DirectoryUser): string {
-    const words = (u.displayName || '?').trim().split(/\s+/).filter(Boolean);
-    if (!words.length) return '?';
-    const first = words[0][0] ?? '';
-    const last = words.length > 1 ? (words[words.length - 1][0] ?? '') : '';
-    return (first + last).toUpperCase() || '?';
+    const words = (u.displayName || "?").trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return "?";
+    const first = words[0][0] ?? "";
+    const last = words.length > 1 ? (words[words.length - 1][0] ?? "") : "";
+    return (first + last).toUpperCase() || "?";
   }
 
   /** Start (or reopen) a 1:1 thread with a tenant person. */
@@ -115,7 +170,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
       } else {
         this.peopleDrawer.openIt();
       }
-    } catch { /* toast already surfaced by the API layer */ }
+    } catch {
+      /* toast already surfaced by the API layer */
+    }
   }
 
   /** Open the Messages panel and make sure the people list is loaded. */
@@ -127,7 +184,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     // search and the threads.
     if (this.themeService.isNewDesign() && this.chatWindows.isPhone()) {
       this.msgsPanel.close();
-      void this.router.navigate(['/messages']);
+      void this.router.navigate(["/messages"]);
       return;
     }
     this.msgsPanel.toggle();
@@ -135,13 +192,24 @@ export class TopStripComponent implements OnInit, OnDestroy {
   }
 
   private readonly chatWindows = inject(ChatWindowsService);
-  private meId(): string { return this.auth.user()?.authId ?? this.auth.user()?.id ?? ''; }
+  readonly chatSurfaceActive = computed(
+    () => this.msgsPanel.open() || this.chatWindows.open().length > 0,
+  );
+  private meId(): string {
+    return this.auth.user()?.authId ?? this.auth.user()?.id ?? "";
+  }
 
   /** Shared with the floating windows so both label a thread identically. */
-  convoTitle(c: Conversation): string { return conversationTitle(c, this.meId()); }
-  convoInitials(c: Conversation): string { return conversationInitials(c, this.meId()); }
+  convoTitle(c: Conversation): string {
+    return conversationTitle(c, this.meId());
+  }
+  convoInitials(c: Conversation): string {
+    return conversationInitials(c, this.meId());
+  }
   /** 1:1 peer (AuthId) for the presence dot; null for groups. */
-  convoPeerId(c: Conversation): string | null { return conversationPeerId(c, this.meId()); }
+  convoPeerId(c: Conversation): string | null {
+    return conversationPeerId(c, this.meId());
+  }
   /** Second label when two rows would read the same (context thread,
    *  same-name colleague, group vs person). */
   convoDisambiguator(c: Conversation): string | null {
@@ -162,7 +230,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
       // 330px window docked over a 390px screen was never the right shape,
       // and the page already has the full composer (attachments, voice).
       if (this.chatWindows.isPhone()) {
-        void this.router.navigate(['/messages'], { queryParams: { c: c.id } });
+        void this.router.navigate(["/messages"], { queryParams: { c: c.id } });
         return;
       }
       // iPad + web keep the docked floating windows.
@@ -179,8 +247,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
    * areas decide, not merely whether the tenant is licensed for it. The
    * nav pipeline already applies the module entitlement via gateModules.
    */
-  readonly messagesModuleOn = computed(() =>
-    this.navAll().some(i => TopStripComponent.isMessagesItem(i)) && this.process.isEnabled('messages'));
+  readonly messagesModuleOn = computed(
+    () =>
+      this.navAll().some((i) => TopStripComponent.isMessagesItem(i)) &&
+      this.process.isEnabled("messages"),
+  );
 
   /**
    * Is this nav entry the Messages work area? Workflow-built items are
@@ -188,7 +259,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
    * route is the only reliable discriminator.
    */
   private static isMessagesItem(i: NavItem): boolean {
-    return i.id === 'messages' || i.href === '/messages' || i.href.startsWith('/messages/');
+    return (
+      i.id === "messages" ||
+      i.href === "/messages" ||
+      i.href.startsWith("/messages/")
+    );
   }
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -202,7 +277,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly process = inject(ProcessWorkflowService);
   private readonly dialog = inject(DialogService);
 
-  readonly moduleLabel = 'LMS';
+  readonly moduleLabel = "LMS";
   /** Real branches this user may switch between (from /api/auth/me). */
   readonly branches = computed(() => this.auth.user()?.branches ?? []);
   /** Whether to show the switcher at all (more than one branch available). */
@@ -210,10 +285,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** The route-guard context (same rule the guards + landing use). */
   private routeCtx(): RouteAccessCtx {
     return {
-      hasAny: p => this.auth.hasAnyPermission(p),
-      hasAnyEffective: p => this.auth.hasAnyEffectivePermission(p),
-      isEnabled: a => this.process.isEnabled(a),
-      isSuper: this.auth.permissions().includes('*'),
+      hasAny: (p) => this.auth.hasAnyPermission(p),
+      hasAnyEffective: (p) => this.auth.hasAnyEffectivePermission(p),
+      isEnabled: (a) => this.process.isEnabled(a),
+      isSuper: this.auth.permissions().includes("*"),
     };
   }
   /** Shared nav rule (nav-items.navItemVisible): an item shows only when its
@@ -224,9 +299,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
       collectionMode: this.labCfg.collectionMode(),
       billingMode: this.labCfg.billingMode(),
       inventoryEnabled: this.labCfg.inventoryEnabled(),
-      moduleEnabled: m => this.entitlements.moduleEnabled(m),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
     };
-    return items.filter(i => navItemVisible(i, ctx));
+    return items.filter((i) => navItemVisible(i, ctx));
   };
   private navCtx(): WorkflowNavCtx {
     return {
@@ -235,25 +310,38 @@ export class TopStripComponent implements OnInit, OnDestroy {
       // work area never shows to someone its screen would bounce.
       hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
       hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
-      isSuper: this.auth.permissions().includes('*'),
+      isSuper: this.auth.permissions().includes("*"),
     };
   }
   // The live nav is built from the active workflow's WORK-AREAS (the admin's
   // names + order, role-gated), each opening its REAL screen. Falls back to the
   // original PRIMARY_NAV when there's no usable workflow so nobody is locked out.
   /** Work areas the admin's workflow grants me, before design tweaks. */
-  private readonly navAll = computed(() => this.gateModules(this.withCollection(
-    this.withInventory(this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV)))));
+  private readonly navAll = computed(() =>
+    this.gateModules(
+      this.withCollection(
+        this.withInventory(
+          this.visible(
+            menusFromWorkflow(this.process.active(), this.navCtx()) ??
+              PRIMARY_NAV,
+          ),
+        ),
+      ),
+    ),
+  );
 
   readonly primary = computed(() => {
     let items = this.navAll();
     // NEW design: Messages is a chat surface (bar icon → panel + floating
     // windows), never a page — drop its work area from the nav.
-    if (this.themeService.isNewDesign()) items = items.filter(i => !TopStripComponent.isMessagesItem(i));
+    if (this.themeService.isNewDesign())
+      items = items.filter((i) => !TopStripComponent.isMessagesItem(i));
     // OPD: doctors get their Consult Room — but only once the OPD module is
     // actually usable (tenant entitlement, or the dev preview flag). Keeps the
     // in-progress consult build invisible on shared environments.
-    return this.auth.isDoctor() && this.moduleScope.opdUsable() ? [...items, DOCTOR_NAV] : items;
+    return this.auth.isDoctor() && this.moduleScope.opdUsable()
+      ? [...items, DOCTOR_NAV]
+      : items;
   });
 
   /** NO-WORKFLOW FALLBACK ONLY: guarantee a reachable "Collect" for anyone who
@@ -264,8 +352,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private withCollection(items: NavItem[]): NavItem[] {
     return withCollectionFallback(items, {
       hasWorkflow: !!this.process.active()?.categories?.length,
-      canCollect: this.auth.hasEffectivePermission('collect_sample'),
-      collectionEnabled: this.process.isEnabled('sample_collection'),
+      canCollect: this.auth.hasEffectivePermission("collect_sample"),
+      collectionEnabled: this.process.isEnabled("sample_collection"),
     });
   }
 
@@ -273,8 +361,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  work areas the tenant's plan doesn't include. Messages specifically must
    *  leave no nav trace when its module is off. */
   private gateModules(items: NavItem[]): NavItem[] {
-    if (this.entitlements.moduleEnabled('messages')) return items;
-    return items.filter(i => i.href !== '/messages' && i.id !== 'messages');
+    if (this.entitlements.moduleEnabled("messages")) return items;
+    return items.filter((i) => i.href !== "/messages" && i.id !== "messages");
   }
 
   /** The workflow-derived nav is built from process categories and so never
@@ -282,10 +370,16 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  enabled and the user holds an inventory permission (idempotent — the
    *  PRIMARY_NAV fallback already includes it). */
   private withInventory(items: NavItem[]): NavItem[] {
-    if (!this.entitlements.moduleEnabled('inventory') || !this.labCfg.inventoryEnabled()) return items;
-    if (items.some(i => i.id === 'stores' || i.href === '/stores')) return items;
-    const inv = PRIMARY_NAV.find(i => i.id === 'stores');
-    if (!inv || !this.auth.hasAnyPermission(inv.permissions ?? [])) return items;
+    if (
+      !this.entitlements.moduleEnabled("inventory") ||
+      !this.labCfg.inventoryEnabled()
+    )
+      return items;
+    if (items.some((i) => i.id === "stores" || i.href === "/stores"))
+      return items;
+    const inv = PRIMARY_NAV.find((i) => i.id === "stores");
+    if (!inv || !this.auth.hasAnyPermission(inv.permissions ?? []))
+      return items;
     return [...items, inv];
   }
   readonly more = computed(() => this.visible(MORE_NAV));
@@ -294,13 +388,21 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  current user holds at least one manage_* permission. Mirrors the
    *  permission gate from ADMIN_NAV so admins still get one click to
    *  Admin, non-admins get a cleaner top-strip. */
-  readonly showAdmin = computed(() =>
-    !ADMIN_NAV.permissions || this.auth.hasAnyPermission(ADMIN_NAV.permissions)
+  readonly showAdmin = computed(
+    () =>
+      !ADMIN_NAV.permissions ||
+      this.auth.hasAnyPermission(ADMIN_NAV.permissions),
   );
 
-  protected readonly branch = computed(() =>
-    this.auth.activeBranch()?.name ?? this.auth.user()?.branchName ?? 'Branch');
-  protected readonly activeBranchId = computed(() => this.auth.activeBranchId());
+  protected readonly branch = computed(
+    () =>
+      this.auth.activeBranch()?.name ??
+      this.auth.user()?.branchName ??
+      "Branch",
+  );
+  protected readonly activeBranchId = computed(() =>
+    this.auth.activeBranchId(),
+  );
   protected readonly branchOpen = signal(false);
   protected readonly moreOpen = signal(false);
   protected readonly profileOpen = signal(false);
@@ -308,27 +410,38 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly _tenant = this.tenantState.tenant;
   // Gate the brand pill on this so the "YOUR LOGO" placeholder doesn't
   // flash before the first /api/tenants/current resolves.
-  readonly tenantLoaded = computed(() => this.tenantState.status() === 'loaded');
+  readonly tenantLoaded = computed(
+    () => this.tenantState.status() === "loaded",
+  );
 
   readonly isDark = computed(() => this.themeService.isDark());
-  readonly userName = () => this.auth.user()?.displayName || 'User';
+  readonly userName = () => this.auth.user()?.displayName || "User";
   /** The user's REAL role(s) for the profile header (was a hardcoded mock). */
   readonly userRoleLabel = () => {
     const u = this.auth.user();
-    if (!u) return '';
-    return u.roles?.length ? u.roles.join(' · ') : (u.tenantName ?? '');
+    if (!u) return "";
+    return u.roles?.length ? u.roles.join(" · ") : (u.tenantName ?? "");
   };
   // The stored logo may be a private "/uploads/…" file: shown through the
   // session (blob: URL) — a bare <img src> is refused by the API now.
   private readonly injector = inject(Injector);
-  readonly tenantLogo = computed(() => brandingSrc(this.injector, this._tenant()?.logoUrl));
-  readonly tenantName = computed(() => this._tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
+  readonly tenantLogo = computed(() =>
+    brandingSrc(this.injector, this._tenant()?.logoUrl),
+  );
+  readonly tenantName = computed(
+    () =>
+      this._tenant()?.name ||
+      this.auth.user()?.tenantName ||
+      "Your organization",
+  );
 
   // Branding mode resolution. Default 'both' when unset so existing tenants
   // keep rendering what they already had. The name falls back to a
   // 10-char slice of the official name when the admin hasn't set an
   // explicit brandingName.
-  private readonly _brandingMode = computed(() => this._tenant()?.brandingMode ?? 'both');
+  private readonly _brandingMode = computed(
+    () => this._tenant()?.brandingMode ?? "both",
+  );
   readonly brandingName = computed(() => {
     const t = this._tenant();
     const explicit = t?.brandingName?.trim();
@@ -338,11 +451,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
   });
   readonly showLogo = computed(() => {
     const m = this._brandingMode();
-    return m === 'logo' || m === 'both';
+    return m === "logo" || m === "both";
   });
   readonly showName = computed(() => {
     const m = this._brandingMode();
-    return m === 'name' || m === 'both';
+    return m === "name" || m === "both";
   });
   readonly hasBrand = computed(() => {
     const logoOk = this.showLogo() && !!this._tenant()?.logoUrl;
@@ -350,22 +463,30 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return logoOk || nameOk;
   });
   readonly brandAriaLabel = computed(() => {
-    if (!this.hasBrand()) return 'Add your organization logo or name';
+    if (!this.hasBrand()) return "Add your organization logo or name";
     return `${this.tenantName()} — branding`;
   });
   readonly tenantInitial = computed(() => {
     const name = this.brandingName() || this.tenantName();
-    return name ? name[0].toUpperCase() : '?';
+    return name ? name[0].toUpperCase() : "?";
   });
   readonly initials = () => {
     const u = this.auth.user();
-    const first = (u?.firstName || '').trim();
-    const fathers = (u?.fathersName || '').trim();
+    const first = (u?.firstName || "").trim();
+    const fathers = (u?.fathersName || "").trim();
     if (first || fathers) {
-      return ((first[0] || '') + (fathers[0] || '')).toUpperCase() || 'U';
+      return ((first[0] || "") + (fathers[0] || "")).toUpperCase() || "U";
     }
-    const n = (u?.displayName || '').trim();
-    return n.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase() || 'U';
+    const n = (u?.displayName || "").trim();
+    return (
+      n
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((p) => p[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "U"
+    );
   };
 
   ngOnInit() {
@@ -374,7 +495,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.entitlements.ensureLoaded();
     this.process.loadActive();
   }
-  ngOnDestroy() { /* no-op */ }
+  ngOnDestroy() {
+    /* no-op */
+  }
 
   toggleBranch() {
     if (!this.canSwitchBranch()) return;
@@ -388,11 +511,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
       return;
     }
     const ok = await this.dialog.confirm({
-      title: 'Switch active branch?',
+      title: "Switch active branch?",
       message: `Are you sure you want to switch the active branch to "${b.name}"?`,
-      confirmLabel: 'Yes, switch branch',
-      cancelLabel: 'Cancel',
-      tone: 'primary'
+      confirmLabel: "Yes, switch branch",
+      cancelLabel: "Cancel",
+      tone: "primary",
     });
     if (!ok) return;
     this.branchOpen.set(false);
@@ -404,31 +527,51 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.closeAll();
     this.moreOpen.set(next);
   }
-  closeMore() { this.moreOpen.set(false); }
+  closeMore() {
+    this.moreOpen.set(false);
+  }
 
   toggleProfile() {
     const next = !this.profileOpen();
     this.closeAll();
     this.profileOpen.set(next);
   }
-  closeProfile() { this.profileOpen.set(false); this.statusListOpen.set(false); }
+  closeProfile() {
+    this.profileOpen.set(false);
+    this.statusListOpen.set(false);
+  }
 
   /** Show the per-station Print settings entry only to people who actually
    *  print things — front desk (invoices), collection/lab (labels), reports. */
   canPrint(): boolean {
     return this.auth.hasAnyPermission([
-      'create_order', 'register_patient', 'collect_sample',
-      'enter_result', 'deliver_report', 'view_report', 'manage_lab_settings',
+      "create_order",
+      "register_patient",
+      "collect_sample",
+      "enter_result",
+      "deliver_report",
+      "view_report",
+      "manage_lab_settings",
     ]);
   }
-  goPrinting() { this.closeProfile(); this.router.navigate(['/printing']); }
-  goSignature() { this.closeProfile(); this.router.navigate(['/signature']); }
+  goPrinting() {
+    this.closeProfile();
+    this.router.navigate(["/printing"]);
+  }
+  goSignature() {
+    this.closeProfile();
+    this.router.navigate(["/signature"]);
+  }
 
   // ── Presence status picker (Teams-style presets) ───────────────────
   protected readonly statusOptions = PRESENCE_OPTIONS;
   protected readonly statusListOpen = signal(false);
-  protected readonly myStatusLabel = computed(() => presenceLabel(this.presence.myStatus()));
-  toggleStatusList() { this.statusListOpen.update(v => !v); }
+  protected readonly myStatusLabel = computed(() =>
+    presenceLabel(this.presence.myStatus()),
+  );
+  toggleStatusList() {
+    this.statusListOpen.update((v) => !v);
+  }
   pickStatus(o: PresenceOption) {
     this.statusListOpen.set(false);
     void this.presence.setStatus(o.key);
@@ -436,7 +579,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   async logout() {
     this.profileOpen.set(false);
-    
+
     // ── (1) Unregister push notifications ──────────────────────────
     await this.push.unregister().catch(() => undefined);
 
@@ -458,22 +601,27 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
     // ── (6) Final auth sign-out + redirect ─────────────────────────
     await this.auth.signOut();
-    this.router.navigateByUrl('/login');
+    this.router.navigateByUrl("/login");
   }
 
   // ── Multi-account switching + PIN (shared lab machines) ───────────
   protected readonly otherAccounts = computed(() =>
-    this.auth.accounts.accounts().filter(a => a.userId !== this.auth.user()?.id));
+    this.auth.accounts
+      .accounts()
+      .filter((a) => a.userId !== this.auth.user()?.id),
+  );
   protected readonly hasPin = computed(() => !!this.auth.user()?.hasPin);
 
   protected readonly pinFormOpen = signal(false);
-  protected pinCurrent = '';
-  protected pinNew = '';
+  protected pinCurrent = "";
+  protected pinNew = "";
   protected readonly pinBusy = signal(false);
   protected readonly pinError = signal<string | null>(null);
   protected readonly pinSaved = signal(false);
 
-  accountInitials(a: StoredAccount): string { return this.auth.accounts.initials(a); }
+  accountInitials(a: StoredAccount): string {
+    return this.auth.accounts.initials(a);
+  }
 
   /** Hand off to the full-screen switch screen (Windows-style): leave this
    *  account's UI and meet the TARGET's PIN gate there. */
@@ -491,31 +639,43 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Gmail-style "Add account": keep every session, sign in one more. */
   addAccount() {
     this.closeProfile();
-    this.router.navigateByUrl('/login?add=1');
+    this.router.navigateByUrl("/login?add=1");
   }
 
   openPinForm() {
     this.pinFormOpen.set(true);
-    this.pinCurrent = '';
-    this.pinNew = '';
+    this.pinCurrent = "";
+    this.pinNew = "";
     this.pinError.set(null);
     this.pinSaved.set(false);
   }
-  closePinForm() { this.pinFormOpen.set(false); }
+  closePinForm() {
+    this.pinFormOpen.set(false);
+  }
 
   /** PIN fields accept digits only, capped at 4 (iPhone-style). */
-  sanitizePin(v: string): string { return (v ?? '').replace(/\D/g, '').slice(0, 4); }
+  sanitizePin(v: string): string {
+    return (v ?? "").replace(/\D/g, "").slice(0, 4);
+  }
 
   async savePin() {
-    if (this.pinBusy() || !/^\d{4}$/.test(this.pinNew)) { this.pinError.set('PIN must be exactly 4 digits.'); return; }
+    if (this.pinBusy() || !/^\d{4}$/.test(this.pinNew)) {
+      this.pinError.set("PIN must be exactly 4 digits.");
+      return;
+    }
     this.pinBusy.set(true);
     this.pinError.set(null);
     try {
-      await this.auth.setPin(this.pinNew, this.hasPin() ? this.pinCurrent : undefined);
+      await this.auth.setPin(
+        this.pinNew,
+        this.hasPin() ? this.pinCurrent : undefined,
+      );
       this.pinSaved.set(true);
-      setTimeout(() => { this.closePinForm(); }, 900);
+      setTimeout(() => {
+        this.closePinForm();
+      }, 900);
     } catch (e) {
-      this.pinError.set((e as Error).message || 'Could not update the PIN.');
+      this.pinError.set((e as Error).message || "Could not update the PIN.");
     } finally {
       this.pinBusy.set(false);
     }
@@ -529,16 +689,21 @@ export class TopStripComponent implements OnInit, OnDestroy {
   }
 
   pickLanding() {
-    return pickLanding({ ...this.routeCtx(), moduleEnabled: m => this.entitlements.moduleEnabled(m) });
+    return pickLanding({
+      ...this.routeCtx(),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
+    });
   }
 
-  @HostListener('document:click', ['$event'])
+  @HostListener("document:click", ["$event"])
   onDocClick(ev: MouseEvent) {
     if (!this.branchOpen() && !this.moreOpen() && !this.profileOpen()) return;
     const inside = this.host.nativeElement.contains(ev.target as Node);
     if (!inside) this.closeAll();
   }
 
-  @HostListener('document:keydown.escape')
-  onEscape() { this.closeAll(); }
+  @HostListener("document:keydown.escape")
+  onEscape() {
+    this.closeAll();
+  }
 }
