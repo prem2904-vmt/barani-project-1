@@ -632,35 +632,74 @@ export class PatientRegisterComponent implements OnInit {
   private static readonly TITLE_SEX: Record<string, string> = {
     'Mr.': 'Male', 'Master': 'Male', 'Mrs.': 'Female', 'Ms.': 'Female'
   };
+  /** Default title to suggest for each sex. Other has no sensible default. */
+  private static readonly SEX_TITLE: Record<string, string> = {
+    'Male': 'Mr.', 'Female': 'Ms.'
+  };
+  /** Titles that belong to a single gender — swapping sex should replace these. */
+  private static readonly GENDERED_TITLES = new Set(['Mr.', 'Master', 'Mrs.', 'Ms.']);
+
   /** The sex value WE auto-filled last — a manual pick must never be stomped. */
   private _autoSex: string | null = null;
+  /** The title value WE auto-filled last — a manual pick must never be stomped. */
+  private _autoTitle: string | null = null;
 
-  /** Picking a gendered title auto-fills Sex (one less tap for the frontdesk).
-   *  Only fills when Sex is empty or still holding our previous auto value —
-   *  an explicit manual choice always wins. */
+  /** Bidirectional Title ↔ Sex sync (one less tap for the frontdesk).
+   *  Title → Sex: picking Mr./Master fills Male; Mrs./Ms. fills Female.
+   *  Sex  → Title: picking Female replaces Mr./Master with Ms.;
+   *                picking Male  replaces Mrs./Ms. with Mr.
+   *  In both directions we only update the other field when it is empty or
+   *  still holds the value WE last auto-filled — explicit manual choices win. */
   protected onValuesChange(v: WorkflowFormValues) {
     const prev = this.values();
     this.values.set(v);
 
     const titleKey = Object.keys(v).find(k => k.endsWith('::title'));
     if (!titleKey) return;
-    const title = String(v[titleKey] ?? '');
-    if (title === String(prev[titleKey] ?? '')) return;   // something else changed
-
-    const inferred = PatientRegisterComponent.TITLE_SEX[title];
-    if (!inferred) return;
     const sexKey = titleKey.replace(/::title$/, '::sex');
-    const current = v[sexKey];
-    if (current === inferred) return;
-    if (current != null && current !== '' && current !== this._autoSex) return;
 
-    this._autoSex = inferred;
-    const next = { ...v, [sexKey]: inferred };
-    this.values.set(next);
-    // The renderer owns the form state — push the filled value back through
-    // initialValues (its ngOnChanges re-applies the whole bag).
-    this.initialValues.set(next);
+    const title = String(v[titleKey] ?? '');
+    const sex   = String(v[sexKey]   ?? '');
+    const prevTitle = String(prev[titleKey] ?? '');
+    const prevSex   = String(prev[sexKey]   ?? '');
+
+    const titleChanged = title !== prevTitle;
+    const sexChanged   = sex   !== prevSex;
+
+    // ── Title → Sex ────────────────────────────────────────────────────────
+    if (titleChanged) {
+      const inferred = PatientRegisterComponent.TITLE_SEX[title];
+      if (inferred) {
+        const current = v[sexKey];
+        if (current == null || current === '' || current === this._autoSex) {
+          this._autoSex = inferred;
+          const next = { ...v, [sexKey]: inferred };
+          this.values.set(next);
+          this.initialValues.set(next);
+        }
+      }
+      return;
+    }
+
+    // ── Sex → Title ────────────────────────────────────────────────────────
+    if (sexChanged) {
+      const suggested = PatientRegisterComponent.SEX_TITLE[sex];
+      if (!suggested) return;   // 'Other' → no default title
+      const currentTitle = v[titleKey];
+      // Only update if title is empty, was auto-filled by us, or is a
+      // gendered title that now conflicts with the newly chosen sex.
+      const isAutoFilled = currentTitle === this._autoTitle;
+      const isConflicting = PatientRegisterComponent.GENDERED_TITLES.has(String(currentTitle))
+                         && PatientRegisterComponent.TITLE_SEX[String(currentTitle)] !== sex;
+      if (currentTitle == null || currentTitle === '' || isAutoFilled || isConflicting) {
+        this._autoTitle = suggested;
+        const next = { ...v, [titleKey]: suggested };
+        this.values.set(next);
+        this.initialValues.set(next);
+      }
+    }
   }
+
 
   onComplete(values: WorkflowFormValues) {
     this.savePatient(values, 'profile');

@@ -7,6 +7,14 @@
  * the calendar component's `isDark` flag. */
 @import url('@schedule-x/theme-default/dist/index.css');
 
+.pf-collect-nav-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask: url('/assets/collect-icon.svg') center / contain no-repeat;
+  mask: url('/assets/collect-icon.svg') center / contain no-repeat;
+}
+
 /* Class-based dark/light mode (Tailwind v4). */
 @variant dark (&:where(.dark, .dark *));
 

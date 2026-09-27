@@ -30,11 +30,7 @@ import { areasWithCollection, screenWorkArea } from '../../models/process-workfl
     @if (visible()) {
       <button type="button" class="pf-hb-btn pf-cbb press" (click)="go()"
               aria-label="Collect" [title]="title()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/>
-          <path d="M3 2h7M14 2h7M9 16H4M20 16h-5"/>
-        </svg>
+        <span class="pf-collect-nav-icon pf-cbb__icon" aria-hidden="true"></span>
         <span class="pf-cbb__label">Collect</span>
       </button>
     }
@@ -50,6 +46,7 @@ import { areasWithCollection, screenWorkArea } from '../../models/process-workfl
     }
     .pf-cbb:hover { background: #ffffff; color: #0f172a; }
     .pf-cbb:focus-visible { outline: 2px solid #64748b; outline-offset: 2px; }
+    .pf-cbb__icon { width: 16px; height: 16px; }
     :host-context(.dark) .pf-cbb,
     :host-context([data-theme='dark']) .pf-cbb {
       background: rgba(255, 255, 255, 0.08); color: var(--text-primary, #e5e7eb);
@@ -61,7 +58,7 @@ import { areasWithCollection, screenWorkArea } from '../../models/process-workfl
        via aria-label. */
     @media (max-width: 640px) {
       .pf-cbb { width: 44px; height: 44px; padding: 0; justify-content: center; border-radius: 12px; }
-      .pf-cbb svg { width: 18px; height: 18px; }
+      .pf-cbb__icon { width: 18px; height: 18px; }
       .pf-cbb__label { display: none; }
     }
   `],
