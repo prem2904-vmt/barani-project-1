@@ -5,7 +5,6 @@ import { environment } from '../../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 import { ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiService } from './api.service';
-import { LiveQueueService } from './live-queue.service';
 import { RingtoneService } from './ringtone.service';
 import { ChatNotifyService } from './chat-notify.service';
 import { PlatformService } from './platform.service';
@@ -39,7 +38,6 @@ export type ChatViewerKind = 'reader' | 'window';
 @Injectable({ providedIn: 'root' })
 export class ChatService implements OnDestroy {
   private readonly auth = inject(AuthService);
-  private readonly liveQueues = inject(LiveQueueService);
   private readonly api = inject(ApiService);
   private readonly ringtone = inject(RingtoneService);
   private readonly notify = inject(ChatNotifyService);
@@ -145,8 +143,8 @@ export class ChatService implements OnDestroy {
         conn.on(name, (...a: unknown[]) => { if (this.connection === conn) fn(...(a as A)); });
 
       on('MessageReceived', (m: ChatMessage) => this.onMessageReceived(m));
-      // Work-queue invalidations ride this same pipe (see LiveQueueService).
-      on('QueueChanged', (e: { area?: string }) => this.liveQueues.push(e?.area ?? ''));
+      // Work-queue invalidations moved to their own branch-scoped socket
+      // (/hubs/work — see WorkEventsService).
       // Business (bell-catalog) events ride the chat connection — see
       // onBusinessNotification for why this lives here and how each platform
       // surfaces it.

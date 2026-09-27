@@ -12,6 +12,7 @@ import { TenantStateService } from '../../core/services/tenant-state.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { ProcessWorkflowConfig } from '../../shared/models/process-workflow.model';
+import { WorkEventsService } from '../../core/services/work-events.service';
 
 /**
  * Billing counter (ND-PATTERN §17): the band + ONE pill search, a LEFT queue
@@ -237,6 +238,32 @@ describe('Billing counter — the queue (LEFT)', () => {
     const urls = api.get.mock.calls.map((x: any[]) => x[0]);
     expect(urls).toContain('/api/billing/outstanding');
     expect(urls).toContain('/api/orders/today');
+  });
+
+  it('live: a bill / order work event refreshes the lists (debounced, once) — no 20 s network poll', () => {
+    const { c, api } = render();
+    const work = TestBed.inject(WorkEventsService);
+    vi.useFakeTimers();
+    try {
+      api.get.mockClear();
+      vi.advanceTimersByTime(30_000);                 // old cadence: nothing on the wire now
+      expect(api.get).not.toHaveBeenCalled();
+
+      work.push({ type: 'bill.paid', id: 'b9' });
+      work.push({ type: 'order.created' });
+      vi.advanceTimersByTime(500);
+      const urls = api.get.mock.calls.map((x: any[]) => x[0]);
+      expect(urls.filter((u: string) => u === '/api/billing/outstanding').length).toBe(1);
+      expect(urls).toContain('/api/orders/today');
+
+      api.get.mockClear();
+      work.push({ type: 'result.draft' });            // not a billing list event
+      vi.advanceTimersByTime(500);
+      expect(api.get).not.toHaveBeenCalled();
+      expect(c).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('waitingLabel / orderTestCount helpers', () => {

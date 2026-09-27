@@ -15,6 +15,7 @@ import { AppointmentBookingService } from '../../../core/services/appointment-bo
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
+import { WorkEventsService } from '../../../core/services/work-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
@@ -182,6 +183,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly booking = inject(AppointmentBookingService);
   private readonly billingEvents = inject(BillingEventsService);
+  private readonly work = inject(WorkEventsService);
   // Cached ETag from /api/orders/today; sent as If-None-Match next poll.
   private _ordersEtag: string | null = null;
   // Local content signature used as a belt-and-braces no-op detector when an
@@ -1081,10 +1083,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
 
 
-  // Live polling: 30s tick keeps Today's Orders fresh so reception sees
-  // status changes (collected → dispatched → received → validated) without
-  // a manual refresh. Stopped on destroy + when the tab is hidden so we
-  // don't burn requests on a backgrounded laptop.
+  // Live: Today's Orders follow the branch's work events (see ngOnInit), so
+  // reception sees collected → dispatched → received → validated without a
+  // manual refresh. (The 30 s poll handle is retired; kept null-safe.)
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   protected readonly lastUpdated = signal<number>(Date.now());
   protected isAdmin = false;
@@ -1163,12 +1164,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Drafts are local-only — load them once on init so the tab badge is
     // correct even before the Draft tab is opened.
     this.refreshDrafts();
-    this.pollHandle = setInterval(() => {
-      // Skip polls while the tab is hidden — saves bandwidth on inactive
-      // tabs without changing perceived freshness once focus returns.
-      if (typeof document !== 'undefined' && document.hidden) return;
-      this.refresh();
-    }, 30_000);
+    // Live: refetch the lists (never an open drawer / form) when a work event
+    // lands for this branch — order created, sample collected / not collected,
+    // received, result validated, report ready, bill paid / pay later,
+    // appointment booked … Debounced by the service; its slow poll covers a
+    // dropped socket, and a tab coming back into view re-syncs. Replaces the
+    // old 30 s network poll.
+    this.work.on('frontdesk', 'collection', 'billing', 'appointments', 'reports', 'receive')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.refresh());
 
     const perms = this.auth.user()?.permissions ?? [];
     this.isAdmin = perms.includes('*');

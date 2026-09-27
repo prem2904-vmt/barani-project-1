@@ -5,6 +5,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
@@ -12,6 +13,7 @@ import { BranchLabConfigService } from '../../core/services/branch-lab-config.se
 import { BillingEventsService } from '../../core/services/billing-events.service';
 import { ScanService } from '../../core/services/scan.service';
 import { ToastService } from '../../core/services/toast.service';
+import { WorkEventsService } from '../../core/services/work-events.service';
 import { ZoomTransitionService } from '../../core/navigation/zoom-transition';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../core/navigation/zoom.directive';
 import { ApiError } from '../../shared/models/api-response.model';
@@ -114,9 +116,11 @@ const MODE_LABELS: Record<string, string> = {
   later: 'Pay later', cheque: 'Cheque', neft: 'NEFT', rtgs: 'RTGS', imps: 'IMPS', online: 'Online',
 };
 
-/** Queue refresh cadence: there is no order / billing realtime event, so the
- *  counter polls gently (skipped while the tab is hidden). */
-export const QUEUE_POLL_MS = 20_000;
+/** Wait-time clock tick ("12 min"). Local only — no request. The queue itself
+ *  refreshes on live work events (WorkEventsService: bill paid / pay later /
+ *  order created …), with the service's slow poll as the fallback while the
+ *  socket is down. Replaces the old 20 s network poll. */
+export const QUEUE_POLL_MS = 30_000;
 /** At most this many older balances are read for their order details. */
 const ENRICH_CAP = 40;
 
@@ -197,6 +201,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly billingEvents = inject(BillingEventsService, { optional: true });
   private readonly zoom = inject(ZoomTransitionService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly work = inject(WorkEventsService);
   protected readonly scan = inject(ScanService);
 
   protected readonly plural = plural;
@@ -233,7 +238,10 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     this.loadOutstanding();
     this.loadToday();
     this.loadReconcile();
-    this.pollTimer = setInterval(() => this.poll(), QUEUE_POLL_MS);
+    this.pollTimer = setInterval(() => this.now.set(Date.now()), QUEUE_POLL_MS);
+    this.work.on('billing', 'frontdesk')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.poll());
   }
 
   ngOnDestroy() {
@@ -242,7 +250,8 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     if (this.pollTimer) clearInterval(this.pollTimer);
   }
 
-  /** Gentle live refresh of the queue + balances (no realtime event exists). */
+  /** Live refresh of the queue + balances — lists only; the bill being
+   *  settled in the BILLING card is never reloaded from here. */
   poll() {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     this.now.set(Date.now());

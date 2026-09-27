@@ -24,6 +24,7 @@ import { PeopleDrawerComponent } from "../../shared/components/people-drawer/peo
 import { ChatWindowsComponent } from "../../shared/components/chat-windows/chat-windows.component";
 import { ChatPopupsComponent } from "../../shared/components/chat-popups/chat-popups.component";
 import { SignalingService } from "../../core/services/signaling.service";
+import { WorkEventsService } from '../../core/services/work-events.service';
 import { ChatService } from "../../core/services/chat.service";
 import { ChatNotifyService } from "../../core/services/chat-notify.service";
 import { PlatformService } from "../../core/services/platform.service";
@@ -600,6 +601,9 @@ export class ShellComponent {
   }
   private readonly signaling = inject(SignalingService);
   private readonly chat = inject(ChatService);
+  /** Live work screens: one branch-scoped socket (/hubs/work) for every
+   *  signed-in user — independent of the Messages module. */
+  private readonly workEvents = inject(WorkEventsService);
   private readonly chatNotify = inject(ChatNotifyService);
   private readonly platform = inject(PlatformService);
   protected readonly entitlements = inject(TenantEntitlementsService);
@@ -637,6 +641,8 @@ export class ShellComponent {
           if (this.entitlements.moduleEnabled('messages')) {
             await this.signaling.connect();
           }
+          // Work events first: queues go live even if chat is slow to come up.
+          void this.workEvents.start().catch(() => undefined);
           // Chat connects independently — its own hub, own reconnection.
           await this.chat.connect().catch(() => undefined);
         }

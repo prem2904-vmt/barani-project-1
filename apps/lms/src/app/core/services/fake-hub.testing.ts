@@ -57,6 +57,11 @@ export class FakeHub {
   emit(name: string, ...args: unknown[]): void {
     for (const fn of this.handlers.get(name) ?? []) fn(...args);
   }
+  /** Simulate the socket dropping into auto-reconnect. */
+  drop(): void {
+    this.state = signalR.HubConnectionState.Reconnecting;
+    for (const cb of this.reconnectingCbs) cb();
+  }
   /** Simulate an auto-reconnect completing. */
   async reconnect(): Promise<void> {
     this.state = signalR.HubConnectionState.Connected;
