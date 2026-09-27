@@ -98,6 +98,11 @@
 .pf-sre-tab { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; flex: none; height: 30px; padding: 0 12px; }
 .pf-sre-tab__id { font-weight: 600; color: var(--text-primary); }
 .pf-sre-tab__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-500, #8b5cf6); }
+/* Tab marks (Submit all): the dot = the tube holds unsaved or draft values;
+   the check = every field on it has a value (ready for Submit all). */
+.pf-sre-tab__ok, .pf-sre-chip--switch svg.pf-sre-tab__ok { flex: none; color: var(--green-text, #15803d); }
+/* Submit all's per-tab outcome: a tube that went through reads calm. */
+.pf-sre-report .pf-sre-report--ok { border-left-color: var(--green-text, #15803d); }
 
 /* Band actions (projected into the band's top-right slot). */
 .pf-sre-band .pf-sre__autosave { margin-right: 4px; }

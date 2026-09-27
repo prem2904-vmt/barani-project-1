@@ -1,9 +1,10 @@
 import {
-  ChangeDetectionStrategy,
   Component,
   DestroyRef,
   ElementRef,
   HostListener,
+  Injector,
+  afterNextRender,
   afterRenderEffect,
   computed,
   effect,
@@ -64,6 +65,21 @@ import { ZoomTransitionService } from "../../../core/navigation/zoom-transition"
 import { ZoomTargetDirective } from "../../../core/navigation/zoom.directive";
 import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
 import { chosenSpecimen } from "../../../shared/utils/micro-specimen";
+import { DraftShelfService } from "../../../core/services/draft-shelf.service";
+import {
+  MissingEntry,
+  TabSnapshot,
+  ValuesMap,
+  invalidNumbers,
+  isFilled,
+  isWritableTest,
+  missingEntries,
+  missingLine,
+  overlayDraft,
+  prefillFromTests,
+  tabMark,
+  tabPayload,
+} from "./submit-all";
 
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -129,6 +145,8 @@ export class SampleResultEntryComponent {
   private readonly dialog = inject(DialogService);
   private readonly tenantState = inject(TenantStateService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly draftShelf = inject(DraftShelfService);
 
   // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
   /** The route's sample id, known before the tube loads — the RESULTS
@@ -1102,9 +1120,13 @@ export class SampleResultEntryComponent {
     if (this.autosaveTimer !== null) clearTimeout(this.autosaveTimer);
     this.autosaveTimer = setTimeout(() => {
       this.autosaveTimer = null;
-      void this.autoSaveDraft();
+      this.autosaveRun = this.autoSaveDraft();
     }, 2500);
   }
+
+  /** The last background draft POST (awaited by Submit all, so a draft can
+   *  never land on the server AFTER the submit). */
+  private autosaveRun: Promise<void> | null = null;
 
   private async autoSaveDraft() {
     const s = this._sample();
@@ -1569,7 +1591,10 @@ export class SampleResultEntryComponent {
     if (key === this.loadedKey) return;
     const first = this.loadedKey === null;
     this.loadedKey = key;
-    if (!first) this.flushPending();
+    if (!first) {
+      this.flushPending();
+      this.parkLiveSnapshot();
+    }
     this.validateMode.set(validate);
     this.viewOnly.set(view);
     this.routeSampleId.set(id);          // the tab indicator moves now
@@ -1590,7 +1615,7 @@ export class SampleResultEntryComponent {
     if (this.autosaveTimer !== null) {
       clearTimeout(this.autosaveTimer);
       this.autosaveTimer = null;
-      void this.autoSaveDraft();         // snapshots sample + values synchronously
+      this.autosaveRun = this.autoSaveDraft();   // snapshots sample + values synchronously
     }
   }
 
@@ -1610,6 +1635,8 @@ export class SampleResultEntryComponent {
     if (!this._tubeTabs().some((t) => t.id === nextId)) {
       // A different ORDER, not a sibling tube: order-level UI resets too.
       this._tubeTabs.set([]);
+      this._siblingSnaps.set({});
+      this.submitReport.set([]);
       this.trendogramOn.set(false);
       this.trendogramDuration.set("5");
     }
@@ -1647,6 +1674,12 @@ export class SampleResultEntryComponent {
       // ones that differ were overridden. Needs the tenant for ISI/MNPT.
       this.tenantState.ensureLoaded();
       this.seedCalcState();
+      if (this.multiTube()) void this.fetchSiblingSnaps();
+      const focusTest = this.pendingFocusTest;
+      if (focusTest && (this._sample()?.tests ?? []).some((t) => t.id === focusTest)) {
+        this.pendingFocusTest = null;
+        this.focusFirstEmpty(focusTest);
+      }
       await this.loadComments();
     } catch (e) {
       if (seq === this.loadSeq) this.toasts.error("Could not load sample");
@@ -1787,6 +1820,7 @@ export class SampleResultEntryComponent {
       this._sample.set(this.normalizeSample(resp?.sample ?? s));
       // Values reached the server — the local crash-recovery draft is done.
       this.clearDraft();
+      this.draftShelf.drop("lab", ["lab:" + s.id]);
       // Backend auto-resolves correction threads on submit (see
       // ResultService.EnterAsync). Reload to reflect the new
       // resolution state in the UI.
@@ -1849,6 +1883,272 @@ export class SampleResultEntryComponent {
       this.toasts.error(ApiError.from(e).message);
     } finally {
       this._savingDraft.set(false);
+    }
+  }
+
+  // ── Submit all (owner 2026-09-27) ────────────────────────────────────
+  // Two or more tube tabs of one order: the band's ONE primary becomes
+  // "Submit all" (every tab, the per-tab submit path, tab by tab), and the
+  // per-tab submit stays as the secondary "Submit this sample". Every field
+  // filled → straight through; any empty field → one confirmation listing
+  // them (Submit anyway / Go back → the first empty field). Rules:
+  // ./submit-all.ts.
+
+  /** Other tabs' tube + values: the server's saved drafts (currentResult)
+   *  overlaid with the local unsaved copy — what that tab shows on open. */
+  private readonly _siblingSnaps = signal<Record<string, TabSnapshot>>({});
+  private siblingSeq = 0;
+  /** A test to focus once its tube has loaded (Go back → first empty field). */
+  private pendingFocusTest: string | null = null;
+  private submitAllRunning = false;
+  readonly missingLine = missingLine;
+
+  /** Per-tab outcome of the last Submit all that did not fully succeed. */
+  readonly submitReport = signal<Array<{ sampleId: string; barcode: string; ok: boolean; message?: string }>>([]);
+
+  /** Submit all is offered when the pill shows more than one tube tab. */
+  readonly multiTube = computed(() =>
+    this._tubeTabs().length > 1 && !this.validateMode() && !this.viewOnly());
+
+  private readonly liveSnap = computed<TabSnapshot | null>(() => {
+    const s = this._sample();
+    return s ? { sampleId: s.id, barcode: s.barcode || "", tests: s.tests ?? [], values: this._values() } : null;
+  });
+
+  /** One snapshot per tab, in tab order (null = that tube not fetched yet). */
+  readonly tabSnaps = computed<Array<TabSnapshot | null>>(() => {
+    const live = this.liveSnap();
+    const others = this._siblingSnaps();
+    return this._tubeTabs().map((tab) => (live && tab.id === live.sampleId ? live : others[tab.id] ?? null));
+  });
+
+  /** Tab indicator per tube: ✓ every field has a value / dot some value. */
+  readonly tabMarks = computed<Record<string, "complete" | "draft" | null>>(() => {
+    const out: Record<string, "complete" | "draft" | null> = {};
+    for (const snap of this.tabSnaps()) if (snap) out[snap.sampleId] = tabMark(snap);
+    return out;
+  });
+
+  /** Anything left to submit on any tab (unknown tabs count as "maybe"). */
+  readonly anyWritableAcrossTabs = computed(() =>
+    this.tabSnaps().some((snap) => !snap || snap.tests.some(isWritableTest)));
+
+  private readLocalDraft(sampleId: string): ValuesMap | null {
+    try {
+      const raw = localStorage.getItem(`pf-lms.sre-draft.${sampleId}`);
+      return raw ? (JSON.parse(raw) as ValuesMap) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private removeLocalDraft(sampleId: string) {
+    try { localStorage.removeItem(`pf-lms.sre-draft.${sampleId}`); } catch { /* private mode */ }
+  }
+
+  private snapshotOf(s: OrderSample): TabSnapshot {
+    const tests = this.normalizeSampleTests(s);
+    return {
+      sampleId: s.id,
+      barcode: s.barcode || "",
+      tests,
+      values: overlayDraft(prefillFromTests(tests), this.readLocalDraft(s.id)),
+    };
+  }
+
+  /** In-house tests in display order (the same split the screen uses). */
+  private normalizeSampleTests(s: OrderSample): OrderTest[] {
+    const { inHouse } = splitOutsourced(s.tests ?? [], s.outsourcedVendorId);
+    return sortTestsForDisplay(inHouse);
+  }
+
+  /** Leaving a tab: its live values become its snapshot at once, so the
+   *  tab marks never blink while the next tube loads. */
+  private parkLiveSnapshot() {
+    const live = this.liveSnap();
+    if (live && this._tubeTabs().some((t) => t.id === live.sampleId))
+      this._siblingSnaps.update((m) => ({ ...m, [live.sampleId]: live }));
+  }
+
+  /** Fetch every OTHER tab's tube (read-only GET) and rebuild its snapshot.
+   *  Returns the barcodes that could not be loaded. */
+  private async fetchSiblingSnaps(): Promise<{ failed: string[] }> {
+    const cur = this._sample();
+    if (!cur) return { failed: [] };
+    const others = this._tubeTabs().filter((t) => t.id !== cur.id);
+    if (!others.length) return { failed: [] };
+    const seq = ++this.siblingSeq;
+    const got = await Promise.all(others.map(async (tab) => {
+      try {
+        const s = await firstValueFrom(this.api.get<OrderSample>(`/api/samples/${tab.id}/tests`));
+        return s ? this.snapshotOf(s) : null;
+      } catch {
+        return null;
+      }
+    }));
+    const failed = others.filter((_, i) => !got[i]).map((t) => t.barcode || "Tube");
+    if (seq === this.siblingSeq) {
+      this._siblingSnaps.update((m) => {
+        const next: Record<string, TabSnapshot> = {};
+        for (const tab of others) {
+          const fresh = got.find((g) => g?.sampleId === tab.id);
+          if (fresh) next[tab.id] = fresh;
+          else if (m[tab.id]) next[tab.id] = m[tab.id];
+        }
+        return next;
+      });
+    }
+    return { failed };
+  }
+
+  /** Save the unsaved typing now and WAIT for it: the local copy, a pending
+   *  background draft, and one already on the wire. */
+  private async flushPendingNow() {
+    this.flushLocalDraft();
+    if (this.autosaveTimer !== null) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+      this.autosaveRun = this.autoSaveDraft();
+    }
+    if (this.autosaveRun) await this.autosaveRun;
+  }
+
+  /** Focus the first empty field of a test on the tube on stage (the first
+   *  field when none is empty); retried briefly while the cards render. */
+  private focusFirstEmpty(testId: string, attempt = 0) {
+    const t = (this._sample()?.tests ?? []).find((x) => x.id === testId);
+    if (!t) return;
+    const params = this.parametersFor(t);
+    const target =
+      params.find((p) => this.inputKindFor(p) !== "checkbox" && !isFilled(this.getValue(t.id, p.name))) ?? params[0];
+    if (!target) return;
+    const key = `${t.id}::${target.name}`.replace(/["\\]/g, "\\$&");
+    const tryFocus = () => {
+      const root = this.host.nativeElement as HTMLElement;
+      const el =
+        root.querySelector<HTMLElement>(`[data-sre-field="${key}"]`) ??
+        root.querySelector<HTMLElement>(`[data-sre-param="${key}"] .pf-dd__trigger`);
+      if (!el) return false;
+      el.focus();
+      el.scrollIntoView?.({ block: "center" });
+      return true;
+    };
+    afterNextRender(() => {
+      if (!tryFocus() && attempt < 20) setTimeout(() => this.focusFirstEmpty(testId, attempt + 1), 60);
+    }, { injector: this.injector });
+  }
+
+  /** Move to an empty field: switch tab first when it is on another tube. */
+  async goToMissing(m: MissingEntry) {
+    if (m.sampleId !== this._sample()?.id) {
+      this.pendingFocusTest = m.testId;
+      await this.openSibling(m.sampleId);
+    } else {
+      this.focusFirstEmpty(m.testId);
+    }
+  }
+
+  /** Submit every tab of this order, tab by tab, through the per-tab path. */
+  async submitAllTabs() {
+    const cur = this._sample();
+    if (!cur || this.submitAllRunning || this._submitting() || this._savingDraft()) return;
+    this.submitAllRunning = true;
+    try {
+      // 1. The unsaved typing first (local copy + server draft, awaited).
+      await this.flushPendingNow();
+      this._submitting.set(true);
+      this.submitReport.set([]);
+      // 2. Every tab's latest state.
+      const { failed } = await this.fetchSiblingSnaps();
+      if (failed.length) {
+        this.toasts.error(`Could not load ${failed.join(", ")} — try again`);
+        return;
+      }
+      const snaps = this.tabSnaps().filter((x): x is TabSnapshot => !!x);
+      const targets = snaps.filter((snap) => snap.tests.some(isWritableTest));
+      if (!targets.length) {
+        this.toasts.warning("Every test on these tubes is already submitted or validated.");
+        return;
+      }
+      // 3. The per-tab submit's own check: a number field must hold a number.
+      for (const snap of targets) {
+        const bad = invalidNumbers(snap);
+        if (bad.length) {
+          this.toasts.warning(`${snap.barcode || "Tube"} · Not a valid number: ${bad.join(", ")} — fix before submitting`);
+          if (snap.sampleId !== this._sample()?.id) await this.openSibling(snap.sampleId);
+          return;
+        }
+      }
+      // 4. Empty fields → ONE confirmation; Go back → the first empty field.
+      const missing = missingEntries(targets);
+      if (missing.length) {
+        this._submitting.set(false);
+        const go = await this.dialog.confirm({
+          title: "Some fields are empty",
+          message: "These fields have no value:",
+          items: missing.map(missingLine),
+          question: "Do you still want to submit?",
+          cancelLabel: "Go back",
+          confirmLabel: "Submit anyway",
+        });
+        if (!go) {
+          await this.goToMissing(missing[0]);
+          return;
+        }
+        this._submitting.set(true);
+      }
+      // 5. Tab by tab, the per-tab endpoint. One tab failing never stops
+      //    the others; its data stays (local copy kept, not cleared).
+      const report: Array<{ sampleId: string; barcode: string; ok: boolean; message?: string }> = [];
+      const flags: Array<{ label: string; note?: string; critical: boolean }> = [];
+      for (const snap of targets) {
+        try {
+          const resp = await firstValueFrom(
+            this.api.post<BulkSubmitResponse>(`/api/samples/${snap.sampleId}/results`, tabPayload(snap)),
+          );
+          for (const r of resp?.results ?? []) {
+            const name = r.orderTest?.test?.name ?? "Test";
+            if (r.flags?.critical) flags.push({ label: `${snap.barcode} · ${name}: critical`, critical: true });
+            for (const n of r.flags?.notifications ?? []) flags.push({ label: `${snap.barcode} · ${name}`, note: n, critical: false });
+          }
+          if (snap.sampleId === this._sample()?.id) {
+            if (resp?.sample) this._sample.set(this.normalizeSample(resp.sample));
+            this.clearDraft();
+          } else {
+            this.removeLocalDraft(snap.sampleId);
+            this._siblingSnaps.update((m) => {
+              const { [snap.sampleId]: _gone, ...rest } = m;
+              return rest;
+            });
+          }
+          report.push({ sampleId: snap.sampleId, barcode: snap.barcode || "Tube", ok: true });
+        } catch (e) {
+          report.push({ sampleId: snap.sampleId, barcode: snap.barcode || "Tube", ok: false, message: ApiError.from(e).message });
+        }
+      }
+      this._flags.set(flags);
+      const ok = report.filter((r) => r.ok);
+      // Submitted tubes leave the draft shelf now.
+      this.draftShelf.drop("lab", ok.map((r) => "lab:" + r.sampleId));
+      const bad = report.filter((r) => !r.ok);
+      if (!bad.length) {
+        this.toasts.success(`${ok.length} sample${ok.length === 1 ? "" : "s"} submitted — back to your queue`);
+        setTimeout(() => this.router.navigate(["/lab/my-work"]), 700);
+        return;
+      }
+      // Partial (or full) failure: say which tab did what, stay on the
+      // first failed tab with its data.
+      this.submitReport.set(report);
+      this.toasts.error(report.map((r) => (r.ok ? `${r.barcode} submitted` : `${r.barcode} failed: ${r.message}`)).join(" · "));
+      if (bad[0].sampleId !== this._sample()?.id) {
+        this._submitting.set(false);
+        await this.openSibling(bad[0].sampleId);
+      } else {
+        void this.fetchSiblingSnaps();
+      }
+    } finally {
+      this._submitting.set(false);
+      this.submitAllRunning = false;
     }
   }
 

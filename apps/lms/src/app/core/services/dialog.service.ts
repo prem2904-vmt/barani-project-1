@@ -10,6 +10,11 @@ export interface DialogRequest {
   confirmLabel?: string;
   cancelLabel?: string;
   tone?: DialogTone;
+  /** Optional list under the message (scrolls when long) — e.g. the empty
+   *  fields a "Submit all" would leave blank. */
+  items?: string[];
+  /** Optional closing question under the list ("Do you still want to submit?"). */
+  question?: string;
 
   // prompt-only
   placeholder?: string;

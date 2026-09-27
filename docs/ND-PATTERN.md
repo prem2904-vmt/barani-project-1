@@ -462,6 +462,12 @@ unit of work. It follows the band rules above with these specifics
   open-work dot; tests in its tooltip / aria-label), in a **fixed order**
   (series offset, then sample ID). Switching moves only the selected
   indicator, which slides on `--nd-spring` (off under reduced motion).
+- **Submit all** (2+ tube tabs): the ONE primary becomes **Submit all**
+  (per-tab submit = secondary "Submit this sample"; phones: both as icons).
+  Every field filled → submits every tab straight away; any empty field →
+  ONE `DialogService` confirm ("Some fields are empty", the fields listed
+  by tab · test, Go back → first empty field / Submit anyway). Tab marks:
+  violet dot = unsaved or draft values, green check = every field filled.
 - **Phones: the patient chip shows the FULL name** — the "29/M · AA0012"
   meta moves to its tooltip, and a long name wraps to two lines; never an
   ellipsis.

@@ -47,6 +47,15 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
             </div>
           </header>
 
+          @if (d.items?.length) {
+            <ul class="pf-dh-items">
+              @for (it of d.items; track $index) { <li class="pf-dh-item">{{ it }}</li> }
+            </ul>
+          }
+          @if (d.question) {
+            <p class="pf-dh-question">{{ d.question }}</p>
+          }
+
           @if (d.kind === 'prompt') {
             <div class="pf-dh-input-wrap">
               @if (d.multiline) {
@@ -195,6 +204,36 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
       font-size: 13.5px;
       line-height: 1.55;
       color: var(--text-secondary);
+    }
+
+    /* ── Optional list + closing question ───────────────────── */
+    .pf-dh-items {
+      position: relative;
+      margin: 14px 0 0;
+      padding: 8px 12px;
+      list-style: none;
+      max-height: 40vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-radius: 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pf-dh-item {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-primary);
+      overflow-wrap: anywhere;
+    }
+    .pf-dh-question {
+      position: relative;
+      margin: 14px 0 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
     }
 
     /* ── Input field ───────────────────────────────────────── */
