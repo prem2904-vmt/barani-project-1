@@ -11,8 +11,10 @@
            suppress our own KPI strip + screen header (the pane supplies its
            own header) but keep the queue + scan so the tech can draw tubes. -->
       <!-- Common hero search (designer band): first thing under the navbar
-           so the seam stays flush like every other band screen. -->
-      @if (!deepLinkMode() && !embedded && theme.isNewDesign()) {
+           so the seam stays flush like every other band screen. ONE band per
+           screen (ND-PATTERN): while a patient's drawer is open the drawer's
+           band (back + context pills) is THE band, so the queue's steps out. -->
+      @if (!deepLinkMode() && !embedded && theme.isNewDesign() && !activeGroup()) {
       <pf-hero-band
         [back]="!!queueFrom()" [backAction]="queueFrom() ? queueBackFn : null"
         [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"

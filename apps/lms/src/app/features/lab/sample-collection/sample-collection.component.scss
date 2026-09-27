@@ -1343,8 +1343,13 @@
        position:fixed with its own top offset (var(--navbar-height)). The
        global top safe-area is absorbed on body, but this page's own fixed
        chrome still needs the notch inset so the close button / patient name
-       don't sit under the status bar. Add it only on native. */
-    :host-context(html.cap-native) .pf-drawer {
+       don't sit under the status bar. Add it only on native.
+       CLASSIC drawer only: the new-design drawer (.pf-drawer--nd) is an
+       .nd-fullscreen view from top:0 — there is no top navbar on native to
+       clear. Offsetting it by --navbar-height (64px) left the QUEUE's own
+       band (tenant + Refresh, its search row hidden = the "empty strip")
+       showing above the drawer's band: two bands on the owner's iPad. */
+    :host-context(html.cap-native) .pf-drawer:not(.pf-drawer--nd) {
       top: calc(var(--navbar-height, 4rem) + env(safe-area-inset-top));
     }
     :host-context(html.cap-native) .pf-drawer__head {
@@ -1981,10 +1986,13 @@
     }
 
     /* Adaptive size by vial count — the tube (and its fill) is the hero. */
-    .pf-sc-grid--xl { grid-template-columns: repeat(auto-fit, minmax(280px, 340px)); justify-content: center; gap: 20px; }
-    .pf-sc-grid--lg { grid-template-columns: repeat(auto-fit, minmax(220px, 280px)); justify-content: center; gap: 16px; }
-    .pf-sc-grid--md { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
-    .pf-sc-grid--sm { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+    /* ONE column rule for every count (owner: "in some cases it's centred, in
+       some cases it's left"): a left-aligned auto-FILL grid, so empty tracks
+       are kept and a lone vial is exactly as wide as one card of a full row.
+       The size class only scales the tube illustration, never the card width. */
+    .pf-sc-grid--xl, .pf-sc-grid--lg, .pf-sc-grid--md, .pf-sc-grid--sm {
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); justify-content: start; gap: 12px;
+    }
     .pf-drawer--nd .pf-sc-grid--xl .pf-sc-tile .pf-vial      { height: clamp(160px, 34dvh, 250px); }
     .pf-drawer--nd .pf-sc-grid--xl .pf-sc-tile .pf-vial--cup { height: clamp(140px, 28dvh, 210px); }
     .pf-drawer--nd .pf-sc-grid--lg .pf-sc-tile .pf-vial      { height: clamp(130px, 24dvh, 175px); }
@@ -1997,9 +2005,8 @@
 
     @media (max-width: 640px) {
       .pf-sc-grid--xl, .pf-sc-grid--lg, .pf-sc-grid--md, .pf-sc-grid--sm {
-        grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; gap: 8px;
+        grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: start; gap: 8px;
       }
-      .pf-sc-grid--xl:has(> :only-child) { grid-template-columns: minmax(0, 260px); justify-content: center; }
       .pf-drawer--nd .pf-sc-grid--xl .pf-sc-tile .pf-vial { height: 150px; }
       .pf-drawer--nd .pf-sc-grid--lg .pf-sc-tile .pf-vial,
       .pf-drawer--nd .pf-sc-grid--md .pf-sc-tile .pf-vial,
@@ -2147,7 +2154,7 @@
     .pf-sc-skel .nd-card__body { gap: 12px; }
     .pf-sc-skel__bar { height: 12px; border-radius: 6px; background: var(--nd-chip-bg); animation: pf-sc-shimmer 1.2s ease-in-out infinite; }
     .pf-sc-skel__tile { height: 220px; border-radius: var(--nd-radius, 12px); background: var(--nd-chip-bg); animation: pf-sc-shimmer 1.2s ease-in-out infinite; }
-    .pf-sc-skel__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 300px)); justify-content: center; gap: 16px; }
+    .pf-sc-skel__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); justify-content: start; gap: 12px; }
     @keyframes pf-sc-shimmer { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
     @media (prefers-reduced-motion: reduce) { .pf-sc-skel__bar, .pf-sc-skel__tile { animation: none; } }
 
