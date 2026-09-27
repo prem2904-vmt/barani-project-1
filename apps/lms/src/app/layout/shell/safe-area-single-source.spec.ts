@@ -154,3 +154,11 @@ describe('Safe area — the bar reserves a reduced home-indicator inset (owner 2
     expect(reserve(0)).toBe(0);
   });
 });
+
+describe('Docked bar steps aside for the soft keyboard (owner 2026-09-28, iPad test search)', () => {
+  it('the bar gets pf-chrome--kbd from KeyboardService.visible and is hidden while it is set', () => {
+    expect(sh).toMatch(/<div class="pf-chrome" \[class\.pf-chrome--kbd\]="kbd\.visible\(\)">/);
+    expect(sh).toMatch(/:host-context\(\.design-new\.nav-bottom\) \.pf-chrome\.pf-chrome--kbd \{ display: none !important; \}/);
+    expect(sh).toMatch(/:host-context\(\.design-new\.nav-bottom\) \.shell-main\.shell-main--kbd \{ padding-bottom: 12px !important; \}/);
+  });
+});

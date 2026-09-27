@@ -87,7 +87,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
 
       <!-- Unified chrome card: single navbar row. Tenant + branch
            moved into the top-strip's right cluster; second row removed. -->
-      <div class="pf-chrome">
+      <div class="pf-chrome" [class.pf-chrome--kbd]="kbd.visible()">
         <pf-top-strip></pf-top-strip>
       </div>
 
@@ -596,6 +596,11 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         /* Faint violet glow off the top edge, paired with the band's. */
         box-shadow: var(--pf-navbar-glow, none);
       }
+      /* Soft keyboard up (iPad / phones): the docked bar would ride on top
+         of the keyboard and squeeze the page to a sliver (owner: test search
+         on the iPad). Hide it while typing and give the page its space. */
+      :host-context(.design-new.nav-bottom) .pf-chrome.pf-chrome--kbd { display: none !important; }
+      :host-context(.design-new.nav-bottom) .shell-main.shell-main--kbd { padding-bottom: 12px !important; }
       /* One bottom surface only: the phone pill / iPad rail steps aside. */
       :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }
       :host-context(.design-new.nav-bottom) .shell-main {
