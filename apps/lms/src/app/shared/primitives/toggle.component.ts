@@ -38,9 +38,9 @@ export type ToggleSize = 'sm' | 'md';
       border-color: transparent;
       box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
     }
-    /* New design: toggles are SLATE (ND-PATTERN §4) — never violet. */
+    /* New design: ON is the flat brand violet (ND-PATTERN §4). */
     :host-context(.design-new) button { background: var(--nd-toggle-off); border-color: transparent; }
-    :host-context(.design-new) button.on { background: var(--nd-toggle-on); box-shadow: none; }
+    :host-context(.design-new) button.on { background: var(--nd-switch-on); box-shadow: none; }
     @media (prefers-reduced-motion: reduce) { button, .knob { transition: none; } }
 
     .knob {

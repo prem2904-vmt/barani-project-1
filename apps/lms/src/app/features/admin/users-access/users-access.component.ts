@@ -355,7 +355,7 @@ export class UsersAccessComponent implements OnInit {
     if (!params.data) return wrap;
 
     const u = params.data;
-    // Kit slate switch (.nd-toggle[role=switch]) — ON = slate, never violet / green.
+    // Kit switch (.nd-toggle[role=switch]) — ON = brand violet, never green.
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'nd-toggle pf-ua-status';

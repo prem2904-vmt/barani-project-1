@@ -135,7 +135,7 @@
   border: 1px solid var(--glass-border, rgba(148,163,184,0.3)); background: rgba(148,163,184,0.22);
   position: relative; cursor: pointer; transition: background .15s, border-color .15s; }
 .pf-tm-status-switch:hover { border-color: var(--nd-sel-border); }
-.pf-tm-status-switch--on { background: var(--nd-toggle-on); border-color: var(--nd-toggle-on); }  /* slate, never violet/green */
+.pf-tm-status-switch--on { background: var(--nd-switch-on); border-color: var(--nd-switch-on); }  /* violet switch (ND-PATTERN §4), never green */
 .pf-tm-status-switch-knob { position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%;
   background: #94a3b8; box-shadow: 0 1px 2px rgba(0,0,0,0.3); transition: transform .15s, background .15s; }
 .pf-tm-status-switch--on .pf-tm-status-switch-knob { transform: translateX(16px); background: #ffffff; }

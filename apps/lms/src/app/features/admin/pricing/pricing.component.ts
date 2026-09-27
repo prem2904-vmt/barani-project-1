@@ -135,7 +135,7 @@ export interface PriceRow {
                   </p>
                 </div>
                 <div class="pf-pricing__offer">
-                  <!-- Kit slate switch (never violet). -->
+                  <!-- Kit switch (violet ON). -->
                   <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="offeredNow(r.id)"
                           (click)="setOffered(r.id, !offeredNow(r.id))" [attr.aria-label]="'Offered here: ' + r.name">
                     <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>

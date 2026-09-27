@@ -20,8 +20,10 @@
   --nd-in-tint: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--nd-card-bg));
   /* Palette only: 'done' is a light violet tint, never green. */
   --nd-done-tint: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--nd-card-bg));
-  /* Designer toggle (Figma): slate track, white knob. */
+  /* Slate neutral (status dots, sliders). */
   --nd-toggle-on: #aeb8c2;
+  /* Switch ON track: brand violet (owner, 2026-09-27), white knob. */
+  --nd-switch-on: var(--color-primary, #7c3aed);
   --nd-toggle-off: #e3e7eb;
   --nd-toggle-urgent: #d0706f;
   /* Motion. */
@@ -39,6 +41,7 @@
   --nd-sel-bg: rgba(255, 255, 255, 0.12);
   --nd-sel-border: rgba(255, 255, 255, 0.4);
   --nd-toggle-on: #6b7784;
+  --nd-switch-on: #8b5cf6;
   --nd-toggle-off: rgba(255, 255, 255, 0.16);
   --nd-toggle-urgent: #a9524f;
 }
@@ -205,11 +208,11 @@
 .nd-chip--static { cursor: default; background: var(--nd-chip-bg); }
 .nd-chip[aria-pressed='true'], .nd-tile-sel[aria-checked='true'], .nd-tile-sel[aria-pressed='true'] { @include nd.neutral-selected; }
 
-/* ── Slate toggle ───────────────────────────────────────────────────── */
+/* ── Toggle (violet ON, white knob) ─────────────────────────────────── */
 .nd-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; }
 .nd-toggle__track { position: relative; display: inline-block; flex: none; width: 32px; height: 18px; border-radius: 999px; background: var(--nd-toggle-off); transition: background var(--nd-dur-fast) ease; }
 .nd-toggle__knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25); transition: left var(--nd-dur-fast) ease; }
-.nd-toggle[aria-checked='true'] .nd-toggle__track { background: var(--nd-toggle-on); }
+.nd-toggle[aria-checked='true'] .nd-toggle__track { background: var(--nd-switch-on); }
 .nd-toggle--urgent[aria-checked='true'] .nd-toggle__track { background: var(--nd-toggle-urgent); }
 .nd-toggle[aria-checked='true'] .nd-toggle__knob { left: 16px; }
 .nd-toggle:disabled { opacity: 0.5; cursor: not-allowed; }

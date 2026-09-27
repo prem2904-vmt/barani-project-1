@@ -227,12 +227,14 @@ pill. Functional exceptions — these are data or warnings, not decoration:
 - Drive state with ARIA attributes, not `…--on` classes. A global new-design
   rule turns any `button[class*="--on"]` violet.
 
-## 4. Toggles are slate
+## 4. Toggles are violet
 
 `.nd-toggle[role=switch][aria-checked]` > `.nd-toggle__track` > `.nd-toggle__knob`.
 
-- ON is a slate track (`--nd-toggle-on`: #AEB8C2 in light, a darker slate in
-  dark), with a white knob and a small shadow.
+- ON is a flat brand-violet track (`--nd-switch-on`: the primary #7C3AED in
+  light, #8B5CF6 in dark), with a white knob and a small shadow (owner,
+  2026-09-27: switches were slate; now violet). `--nd-toggle-on` stays slate
+  for the non-switch neutrals that share it (status dots, sliders).
 - OFF is a lighter neutral.
 - `.nd-toggle--urgent` makes ON a muted red, never violet.
 - Examples: Urgent and Include Trendogram in the BILLING header.

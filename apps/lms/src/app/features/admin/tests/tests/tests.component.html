@@ -321,7 +321,7 @@
             <span class="pf-tm-dept-count nd-num">{{ d.count }}</span>
           </button>
           @if (d.id) {
-            <!-- Kit slate switch (never violet) — its own target. -->
+            <!-- Kit switch (violet ON) — its own target. -->
             <button type="button" class="nd-toggle pf-tm-dept-switch" role="switch" [attr.aria-checked]="d.isActive"
                     (click)="toggleDept(d)"
                     [title]="d.isActive ? 'Turn department off' : 'Turn department on'"
