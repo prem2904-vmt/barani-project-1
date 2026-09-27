@@ -19,6 +19,8 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ROLE_INFO } from './permission-catalog';
 import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
 import { UserAccountActionsService } from './user-account-actions.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { rolePickerRows } from './role-assignability';
 import { SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, scopeValuesFromRoles, soleScope } from './branch-scope';
 
 interface EditForm {
@@ -185,15 +187,19 @@ interface EditForm {
               <div class="pf-uf-roles">
                 @for (r of roleOptions(); track r.value) {
                   <button type="button" class="nd-toggle pf-uf-sw press" role="switch" [attr.aria-checked]="hasRole(r.value)"
+                          [class.pf-uf-sw--locked]="r.locked" [attr.aria-disabled]="r.locked || null"
+                          [title]="r.locked ? lockedHint : ''"
                           (click)="toggleRole(r.value)">
                     <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
                     <span class="pf-uf-sw__txt">
                       <span class="pf-uf-sw__name">{{ r.label }}</span>
                       @if (r.hint) { <span class="pf-uf-sw__what">{{ r.hint }}</span> }
+                      @if (r.locked) { <span class="pf-uf-sw__lock">Kept — you can't assign or remove this role</span> }
                     </span>
                   </button>
                 }
               </div>
+              @if (hasLocked()) { <p class="nd-field__hint pf-uf-lock-note">{{ lockedHint }}</p> }
             </div>
           </section>
         </div>
@@ -262,8 +268,19 @@ export class UserEditComponent implements OnInit {
   readonly loadedName = this._loadedName.asReadonly();
   readonly fieldError = this._fieldError.asReadonly();
 
-  readonly roleOptions = computed<PfSelectOption<string>[]>(() =>
-    this._roles().map(r => ({ value: r.id, label: r.name, hint: ROLE_INFO[r.name] ?? undefined })));
+  /** The roles the user held when the page loaded (the locked ones stay). */
+  private readonly _heldIds = signal<string[]>([]);
+  private readonly auth = inject(AuthService);
+  /** Editing your own account: the server holds self-assignment to the subset
+   *  rule even with manage_tenant, so the picker uses assignableToSelf. */
+  private readonly isSelf = computed(() => this.auth.user()?.id === this.id);
+  /** Only roles THIS caller may assign (server flags, role-assignability.ts),
+   *  plus the user's held roles they can't — shown ON and read-only. */
+  readonly roleOptions = computed<(PfSelectOption<string> & { locked: boolean })[]>(() =>
+    rolePickerRows(this._roles(), this._heldIds(), this.isSelf())
+      .map(r => ({ ...r, hint: ROLE_INFO[r.label] ?? undefined })));
+  readonly hasLocked = computed(() => this.roleOptions().some(r => r.locked));
+  readonly lockedHint = 'Roles you can\'t assign stay as they are. Widening this user\'s branches with them needs someone who can assign them.';
   readonly titleOptions: PfSelectOption<string>[] = TITLE_OPTIONS;
   /** Country codes as pf-select options (code + country; no flag emoji). */
   readonly countryOptions: PfSelectOption<string>[] = COUNTRY_CODES.map(c => ({ value: c.code, label: c.code, hint: c.country }));
@@ -314,7 +331,9 @@ export class UserEditComponent implements OnInit {
         const sole = soleScope(this._branches());
         if (!scope.length && sole) scope = [sole];
         this.rolesLoaded.set(true);
-        this._form.update(v => ({ ...v, roleIds: [...new Set(rs.map(r => r.roleId))], scope }));
+        const held = [...new Set(rs.map(r => r.roleId))];
+        this._heldIds.set(held);
+        this._form.update(v => ({ ...v, roleIds: held, scope }));
       },
     });
   }
@@ -353,6 +372,7 @@ export class UserEditComponent implements OnInit {
   back() { this.navBack.backTo('/admin/users?tab=users'); }
   hasRole(id: string) { return this._form().roleIds.includes(id); }
   toggleRole(id: string) {
+    if (this.roleOptions().find(r => r.value === id)?.locked) return;
     this._form.update(v => ({ ...v, roleIds: v.roleIds.includes(id) ? v.roleIds.filter(r => r !== id) : [...v.roleIds, id] }));
   }
   onScopeChange(next: string[]) {

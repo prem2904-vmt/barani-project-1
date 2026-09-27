@@ -18,6 +18,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ROLE_INFO } from './permission-catalog';
+import { rolePickerRows } from './role-assignability';
 import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
 import { ALL_BRANCHES, SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, soleScope } from './branch-scope';
 
@@ -277,8 +278,10 @@ export class UserInviteComponent implements OnInit {
   readonly usernameError = this._usernameError.asReadonly();
   readonly passwordError = this._passwordError.asReadonly();
 
+  /** Only roles THIS caller may assign to a new user — the server's flag
+   *  (role-assignability.ts); POST /api/users refuses the rest. */
   readonly roleOptions = computed<PfSelectOption<string>[]>(() =>
-    this._roles().map(r => ({ value: r.id, label: r.name, hint: ROLE_INFO[r.name] ?? undefined }))
+    rolePickerRows(this._roles(), [], false).map(r => ({ value: r.value, label: r.label, hint: ROLE_INFO[r.label] ?? undefined }))
   );
   readonly titleOptions: PfSelectOption<string>[] = TITLE_OPTIONS;
   /** Country codes as pf-select options (code + country; no flag emoji). */

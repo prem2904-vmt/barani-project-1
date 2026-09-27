@@ -35,6 +35,10 @@ export const USER_FORM_STYLES = `
   .pf-uf-sw__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
   .pf-uf-sw__what { font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
   .pf-uf-sw__code { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
+  /* Held role the caller can't assign: stays ON, read-only (role-assignability.ts). */
+  .pf-uf-sw--locked { cursor: not-allowed; opacity: .72; }
+  .pf-uf-sw--locked:hover { border-color: var(--nd-sel-border); }
+  .pf-uf-sw__lock { font-size: 11.5px; color: var(--text-muted); }
 
   .pf-uf-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
   .pf-uf-tag { gap: 4px; padding-right: 4px; cursor: default; }

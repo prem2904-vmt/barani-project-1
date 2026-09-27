@@ -44,6 +44,11 @@ export interface Role {
   module?: string | null;
   /** Role type (OPD build): 'doctor' marks a clinician role; else null/general. */
   kind?: string | null;
+  /** GET /api/roles only: may the CALLER assign this role to another user /
+   *  to themselves? Computed server-side by the same rule POST /api/users and
+   *  PUT /api/users/{id}/roles enforce (see role-assignability.ts). */
+  assignable?: boolean;
+  assignableToSelf?: boolean;
 }
 
 export interface Permission {
