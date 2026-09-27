@@ -108,3 +108,13 @@ describe('Docked bottom navbar — the pf mark lines up with the icons (owner 20
     expect(scss).toMatch(/\.pf-topstrip-bar \{\s*justify-content: flex-start;\s*gap: 6px;/);
   });
 });
+
+describe('Docked bottom navbar — right cluster + end-of-pages divider (owner 2026-09-28)', () => {
+  it('chat and bell icons use the same 22px as the work-area icons', () => {
+    expect(scss).toMatch(/\.pf-chat-btn svg \{ width: 22px; height: 22px; \}/);
+    expect(scss).toMatch(/pf-notification-bell ::ng-deep \.pf-bell-btn > svg \{ width: 22px; height: 22px; \}/);
+  });
+  it('a hairline closes the work-area icons, at every width', () => {
+    expect(scss).toMatch(/:host-context\(\.design-new\.nav-bottom\) \.pf-topnav-center \{\s*padding-right: 8px;\s*border-right: 1px solid var\(--nd-line/);
+  });
+});

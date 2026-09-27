@@ -1246,6 +1246,12 @@ a.pf-ts-tenant:hover {
     max-width: min(300px, calc(100vw - 16px));
   }
 }
+/* End-of-work-areas divider (owner, all widths): one hairline after the
+   last page icon so the pages read as their own group. */
+:host-context(.design-new.nav-bottom) .pf-topnav-center {
+  padding-right: 8px;
+  border-right: 1px solid var(--nd-line, rgba(148, 163, 184, 0.35));
+}
 /* ── Bottom-bar layout (all widths): a plain self-aligning flex row —
    [pf glyph][pages, LEFT-aligned][spacer][branch][bell][avatar]. The
    absolute centering is a TOP-bar trick; docked at the bottom the nav
@@ -1294,6 +1300,9 @@ a.pf-ts-tenant:hover {
   }
   :host-context(.design-new.nav-bottom) .pf-brand-chev { display: none; }
   :host-context(.design-new.nav-bottom) .pf-topnav-center { margin-left: 0; gap: 6px; }
+  /* Right cluster on the same scale as the work-area icons (owner). */
+  :host-context(.design-new.nav-bottom) .pf-chat-btn svg { width: 22px; height: 22px; }
+  :host-context(.design-new.nav-bottom) pf-notification-bell ::ng-deep .pf-bell-btn > svg { width: 22px; height: 22px; }
   :host-context(.design-new.nav-bottom) .pf-avatar-circle { width: 30px; height: 30px; font-size: 11px; }
   :host-context(.design-new.nav-bottom) .pf-brand-text,
   :host-context(.design-new.nav-bottom) .pf-brand-pulse { display: none !important; }
