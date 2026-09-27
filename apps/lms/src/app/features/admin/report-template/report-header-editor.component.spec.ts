@@ -2,8 +2,10 @@ import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
+import { HttpClient } from '@angular/common/http';
+import { PlatformService } from '../../../core/services/platform.service';
 import { ReportTemplate } from '../../../shared/models/report.model';
-import { MARGIN_X, MM, PAGE, readHeaderLayout, setItem, writeHeaderLayout } from '../../../shared/utils/report-header-layout';
+import { MARGIN_X, MM, PAGE, addBackground, readHeaderLayout, setItem, writeHeaderLayout } from '../../../shared/utils/report-header-layout';
 
 /**
  * Report designer — letterhead editor interactions: the outlines come from
@@ -24,7 +26,11 @@ const BASE: ReportTemplate = {
 
 function make(t: Partial<ReportTemplate> = {}, region: 'header' | 'footer' = 'header') {
   const dialog = { confirm: vi.fn(async () => true), choose: vi.fn(async () => 'fresh') };
-  TestBed.configureTestingModule({ providers: [{ provide: DialogService, useValue: dialog }] });
+  TestBed.configureTestingModule({ providers: [
+    { provide: DialogService, useValue: dialog },
+    { provide: HttpClient, useValue: {} },
+    { provide: PlatformService, useValue: { getApiUrl: () => '' } },
+  ] });
   const f = TestBed.createComponent(ReportHeaderEditorComponent);
   let tpl: ReportTemplate = { ...BASE, ...t };
   const patches: Array<Partial<ReportTemplate>> = [];
@@ -186,5 +192,66 @@ describe('Report designer — letterhead editor', () => {
     expect(id.startsWith('line:')).toBe(true);
     p.c.setLineText(id, 'GSTIN 33ABCDE1234F1Z5');
     expect(p.item(id).text).toBe('GSTIN 33ABCDE1234F1Z5');
+  });
+
+  // ── background images ──
+  const BGURL = '/uploads/00000000-0000-0000-0000-000000000001/bg.jpg';
+  const pick = (file: File) => ({ target: { files: [file], value: 'x' } } as unknown as Event);
+
+  it('background upload: refuses SVG / GIF / oversized files with a clear message, uploads nothing', async () => {
+    const p = make();
+    const up = vi.spyOn(p.c as never as { uploadBlob: () => Promise<string> }, 'uploadBlob');
+    await p.c.onBgPick(pick(new File(['<svg/>'], 'art.svg', { type: 'image/svg+xml' })));
+    expect(p.c.bgError()).toMatch(/SVG/);
+    await p.c.onBgPick(pick(new File(['x'], 'a.gif', { type: 'image/gif' })));
+    expect(p.c.bgError()).toMatch(/PNG, JPG or WebP/);
+    const big = new File(['x'], 'huge.png', { type: 'image/png' });
+    Object.defineProperty(big, 'size', { value: 20 * 1048576 });
+    await p.c.onBgPick(pick(big));
+    expect(p.c.bgError()).toMatch(/20\.0 MB — pick one under 15 MB/);
+    expect(up).not.toHaveBeenCalled();
+    expect(p.cfg()).toBeNull();
+  });
+
+  it('background upload: shrinks, uploads privately, adds a full-page background and selects it', async () => {
+    const p = make();
+    const c = p.c as never as { shrinkImage: () => Promise<unknown>; uploadBlob: () => Promise<string> };
+    vi.spyOn(c, 'shrinkImage').mockResolvedValue({ blob: new Blob(['j']), ext: 'jpg' });
+    const up = vi.spyOn(c, 'uploadBlob').mockResolvedValue(BGURL);
+    await p.c.onBgPick(pick(new File(['x'], 'letterhead.jpg', { type: 'image/jpeg' })));
+    expect(up).toHaveBeenCalledWith(expect.any(Blob), 'background.jpg');
+    expect(p.cfg()!.backgrounds).toEqual([expect.objectContaining({ url: BGURL, area: 'page', fit: 'cover', opacity: 1, pages: 'first' })]);
+    expect(p.c.selected()).toBe('bg:' + p.cfg()!.backgrounds![0].id);
+    p.f.detectChanges();
+    expect(p.el.textContent).toContain('Also print on letterhead paper');
+    expect(p.el.querySelector('.pf-rhe-box--bgimg.pf-rhe-box--sel')).not.toBeNull();
+  });
+
+  it('background upload: an image still over 5 MB after shrinking is refused', async () => {
+    const p = make();
+    const c = p.c as never as { shrinkImage: () => Promise<unknown>; uploadBlob: () => Promise<string> };
+    const blob = new Blob(['x']); Object.defineProperty(blob, 'size', { value: 6 * 1048576 });
+    vi.spyOn(c, 'shrinkImage').mockResolvedValue({ blob, ext: 'png' });
+    const up = vi.spyOn(c, 'uploadBlob');
+    await p.c.onBgPick(pick(new File(['x'], 'a.png', { type: 'image/png' })));
+    expect(p.c.bgError()).toMatch(/6\.0 MB/);
+    expect(up).not.toHaveBeenCalled();
+  });
+
+  it('background: opacity / pages / letterhead-paper switch / nudge / remove', async () => {
+    const p = make({ metadata: writeHeaderLayout(BASE, addBackground(null, BGURL, 'b1')) });
+    p.c.select('bg:b1');
+    p.c.setBgOpacity('b1', 20);
+    p.c.patchBg('b1', { pages: 'all', onLetterhead: true });
+    expect(p.cfg()!.backgrounds![0]).toEqual(expect.objectContaining({ opacity: 0.2, pages: 'all', onLetterhead: true }));
+    const x0 = p.c.layout().backgrounds[0].rect.x;
+    const page = p.el.querySelector<HTMLElement>('.pf-rhe-page')!;
+    page.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(p.c.layout().backgrounds[0].rect.x - x0).toBeCloseTo(1 * MM, 1);
+    expect(p.c.layout().backgrounds[0].moved).toBe(true);
+    await p.c.removeBg('b1');
+    expect(p.dialog.confirm).toHaveBeenCalled();
+    expect(p.cfg()!.backgrounds).toBeUndefined();
+    expect(p.c.selected()).toBeNull();
   });
 });

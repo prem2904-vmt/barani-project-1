@@ -5,9 +5,15 @@ import { FormsModule } from '@angular/forms';
 import { ReportTemplate } from '../../../shared/models/report.model';
 import { computeReportPageLayout } from '../../../shared/utils/report-pdf';
 import {
-  Align, HeaderField, HeaderLayoutConfig, ItemOverride, LayoutIssue, LayoutItem, LayoutRegion, MARGIN_X, MM, PAGE,
-  detectIssues, nudgeSnapX, positionReadout, ptToMm, readHeaderLayout, resetItem, setItem, snapBoxX, writeHeaderLayout,
+  Align, BG_MAX_UPLOAD_BYTES, BackgroundImage, BgArea, BgFit, HeaderField, HeaderLayoutConfig, ItemOverride, LayoutIssue,
+  LayoutItem, LayoutRegion, MARGIN_X, MAX_BACKGROUNDS, MM, PAGE, ResolvedBackground, addBackground, detectIssues,
+  downscaleSize, nudgeSnapX, positionReadout, ptToMm, readHeaderLayout, removeBackground, resetItem, setBackground,
+  setItem, snapBoxX, validateBackgroundFile, writeHeaderLayout,
 } from '../../../shared/utils/report-header-layout';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { PlatformService } from '../../../core/services/platform.service';
+import { ApiError } from '../../../shared/models/api-response.model';
 import { ImageUploadComponent } from './image-upload.component';
 import { DialogService } from '../../../core/services/dialog.service';
 
@@ -113,6 +119,24 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
             <div class="pf-rhe-guide pf-rhe-guide--v pf-rhe-guide--snap" [style.left.px]="snapGuide()! * scale()" aria-hidden="true"></div>
           }
 
+          <!-- Background images — under every element outline (and under the print). -->
+          @for (bg of layout().backgrounds; track bg.id) {
+            <button type="button" class="pf-rhe-box pf-rhe-box--bgimg"
+                    [class.pf-rhe-box--sel]="selected() === 'bg:' + bg.id"
+                    [class.pf-rhe-box--hidden]="bg.hidden"
+                    [class.pf-rhe-box--drag]="drag()?.id === 'bg:' + bg.id"
+                    [style.left.px]="bg.box.x * scale()" [style.top.px]="bg.box.y * scale()"
+                    [style.width.px]="bg.box.w * scale()" [style.height.px]="bg.box.h * scale()"
+                    [style.transform]="drag()?.id === 'bg:' + bg.id ? 'translate(' + drag()!.dxPx + 'px,' + drag()!.dyPx + 'px)' : null"
+                    [attr.aria-label]="bg.label + (bg.hidden ? ' (hidden)' : '') + (selected() === 'bg:' + bg.id ? ', selected' : '')"
+                    [attr.aria-pressed]="selected() === 'bg:' + bg.id"
+                    (pointerdown)="onBgPointerDown($event, bg)" (click)="$event.stopPropagation()"
+                    (focus)="focusSelect('bg:' + bg.id)">
+              <span class="pf-rhe-box__tag">{{ bg.label }}@if (bg.hidden) { · hidden }</span>
+              @if (drag()?.id === 'bg:' + bg.id) { <span class="pf-rhe-box__live nd-num">{{ dragReadoutBg(bg) }}</span> }
+            </button>
+          }
+
           <!-- Element outlines — the same boxes the PDF was drawn with. -->
           @for (it of regionItems(); track it.id) {
             <button type="button" class="pf-rhe-box"
@@ -154,9 +178,9 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
         <span class="nd-card__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
         </span>
-        <span class="nd-card__label">{{ sel() ? sel()!.label : (region() === 'footer' ? 'Footer elements' : 'Letterhead elements') }}</span>
+        <span class="nd-card__label">{{ selBg() ? selBg()!.label : sel() ? sel()!.label : (region() === 'footer' ? 'Footer elements' : 'Letterhead elements') }}</span>
         <span class="nd-card__spacer"></span>
-        @if (sel()) {
+        @if (sel() || selBg()) {
           <button type="button" class="nd-btn nd-btn--quiet" (click)="select(null)" aria-label="Back to all elements">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
             All elements
@@ -164,8 +188,114 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
         }
       </div>
 
-      <div class="nd-card__body pf-rhe-side__body">
-        @if (sel(); as s) {
+      <div class="nd-card__body pf-rhe-side__body" #sideBody>
+        @if (selBg(); as b) {
+          <!-- ── Selected background image ── -->
+          <div class="pf-rhe-bgthumb">
+            <span class="pf-rhe-bgthumb__img">
+              @if (imageCache()[b.url]; as src) { <img [src]="src" alt="" /> } @else { <span>Loading…</span> }
+            </span>
+            <div class="pf-rhe-bgthumb__act">
+              <label class="nd-btn nd-btn--secondary pf-rhe-file" [class.pf-rhe-file--busy]="bgBusy()">
+                <input type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="onBgPick($event, b.id)" [disabled]="bgBusy()" />
+                {{ bgBusy() ? 'Uploading…' : 'Replace image' }}
+              </label>
+              <button type="button" class="nd-btn nd-btn--danger" (click)="removeBg(b.id)">Remove</button>
+            </div>
+          </div>
+          @if (bgError()) { <p class="pf-rhe-err" role="alert">{{ bgError() }}</p> }
+          <p class="nd-field__hint">Backgrounds always print behind the text, logo and results — never over them.</p>
+
+          <div class="pf-rhe-row">
+            <div><p class="pf-rhe-row__t">Print this</p><p class="pf-rhe-row__s">{{ b.hidden ? 'Hidden — not printed' : 'Printed' }}</p></div>
+            <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="!b.hidden" aria-label="Print this background"
+                    (click)="patchBg(b.id, { hidden: b.hidden ? undefined : true })">
+              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            </button>
+          </div>
+
+          <section class="pf-rhe-sec" aria-label="Where">
+            <h4 class="pf-rhe-sec__h">Fills</h4>
+            <div class="nd-seg pf-rhe-wrapseg" role="radiogroup" aria-label="Area">
+              @for (a of bgAreas; track a.value) {
+                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="b.area === a.value"
+                        (click)="patchBg(b.id, { area: a.value, x: undefined, y: undefined })">{{ a.label }}</button>
+              }
+            </div>
+            <h4 class="pf-rhe-sec__h">Fit</h4>
+            <div class="nd-seg pf-rhe-wrapseg" role="radiogroup" aria-label="Fit">
+              @for (f of bgFits; track f.value) {
+                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="b.fit === f.value"
+                        (click)="patchBg(b.id, { fit: f.value, x: undefined, y: undefined })">{{ f.label }}</button>
+              }
+            </div>
+            <p class="nd-field__hint">{{ fitHint(b.fit) }}</p>
+            <h4 class="pf-rhe-sec__h">Size</h4>
+            <div class="pf-rhe-slider">
+              <input type="range" min="10" max="300" step="1" [ngModel]="b.scale" (ngModelChange)="setBgScale(b.id, +$event)" aria-label="Background size in percent" />
+              <label class="pf-rhe-num"><input class="nd-input nd-num" type="number" min="10" max="300" [ngModel]="b.scale"
+                     (change)="setBgScale(b.id, +$any($event.target).value)" aria-label="Background size value" /><span>%</span></label>
+            </div>
+          </section>
+
+          <section class="pf-rhe-sec" aria-label="Opacity">
+            <h4 class="pf-rhe-sec__h">Opacity</h4>
+            <div class="pf-rhe-slider">
+              <input type="range" min="5" max="100" step="1" [ngModel]="round(b.opacity * 100)" (ngModelChange)="setBgOpacity(b.id, +$event)" aria-label="Opacity in percent" />
+              <label class="pf-rhe-num"><input class="nd-input nd-num" type="number" min="5" max="100" [ngModel]="round(b.opacity * 100)"
+                     (change)="setBgOpacity(b.id, +$any($event.target).value)" aria-label="Opacity value" /><span>%</span></label>
+            </div>
+            <p class="nd-field__hint">Lower it for a faint watermark (15–25% reads well behind results).</p>
+          </section>
+
+          <section class="pf-rhe-sec" aria-label="Pages">
+            <h4 class="pf-rhe-sec__h">Pages</h4>
+            <div class="nd-seg" role="radiogroup" aria-label="Pages">
+              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="b.pages === 'first'" (click)="patchBg(b.id, { pages: 'first' })">First page only</button>
+              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="b.pages === 'all'" (click)="patchBg(b.id, { pages: 'all' })">Every page</button>
+            </div>
+            <div class="pf-rhe-row pf-rhe-row--flat">
+              <div><p class="pf-rhe-row__t">Also print on letterhead paper</p>
+                <p class="pf-rhe-row__s">Off: left out when you print on your pre-printed paper (it already has the design). Plain-paper prints, downloads, WhatsApp, the QR link and archived PDFs always include it.</p></div>
+              <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="b.onLetterhead" aria-label="Also print on letterhead paper"
+                      (click)="patchBg(b.id, { onLetterhead: b.onLetterhead ? undefined : true })">
+                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+              </button>
+            </div>
+          </section>
+
+          <section class="pf-rhe-sec" aria-label="Position">
+            <h4 class="pf-rhe-sec__h">Position</h4>
+            <p class="pf-rhe-readout nd-num">{{ b.moved ? 'Moved by you' : 'Centred in its area' }} · top-left {{ mm(b.rect.x) }} mm, {{ mm(b.rect.y) }} mm</p>
+            <div class="pf-rhe-nudge">
+              <div class="pf-rhe-pad" role="group" aria-label="Move background">
+                <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__up" (click)="nudge(0, -step())" aria-label="Move up">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
+                <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__left" (click)="nudge(-step(), 0)" aria-label="Move left">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+                <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__right" (click)="nudge(step(), 0)" aria-label="Move right">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+                <button type="button" class="nd-btn nd-btn--icon pf-rhe-pad__down" (click)="nudge(0, step())" aria-label="Move down">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+              </div>
+              <div class="pf-rhe-step">
+                <span class="nd-field__lbl">Step</span>
+                <div class="nd-seg" role="radiogroup" aria-label="Step size">
+                  @for (st of steps; track st) {
+                    <button type="button" class="nd-seg__item nd-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }} mm</button>
+                  }
+                </div>
+              </div>
+            </div>
+            <div class="pf-rhe-grid2">
+              <label class="nd-field"><span class="nd-field__lbl">From left edge (mm)</span>
+                <input class="nd-input nd-num" type="number" step="0.5" [ngModel]="round(ptToMm(b.rect.x))" (change)="setBgPos(b.id, 'x', $any($event.target).value)" /></label>
+              <label class="nd-field"><span class="nd-field__lbl">From top edge (mm)</span>
+                <input class="nd-input nd-num" type="number" step="0.5" [ngModel]="round(ptToMm(b.rect.y))" (change)="setBgPos(b.id, 'y', $any($event.target).value)" /></label>
+            </div>
+            <button type="button" class="nd-btn nd-btn--tertiary" [disabled]="!b.moved && b.scale === 100" (click)="patchBg(b.id, { x: undefined, y: undefined, scale: undefined })">Centre it again at 100%</button>
+          </section>
+        } @else if (sel(); as s) {
           <!-- ── Selected element ── -->
           @if (issuesFor(s.id).length) {
             <ul class="pf-rhe-issues" role="status">
@@ -413,6 +543,37 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
             }
           </ul>
 
+          <section class="pf-rhe-sec" aria-label="Background images">
+            <h4 class="pf-rhe-sec__h">Background images</h4>
+            @if (layout().backgrounds.length) {
+              <ul class="pf-rhe-list" role="list">
+                @for (bg of layout().backgrounds; track bg.id) {
+                  <li class="pf-rhe-li" [class.pf-rhe-li--off]="bg.hidden">
+                    <button type="button" class="pf-rhe-li__main pf-rhe-li__main--bg" (click)="select('bg:' + bg.id)" [attr.aria-label]="'Edit ' + bg.label">
+                      <span class="pf-rhe-li__thumb">@if (imageCache()[bg.url]; as src) { <img [src]="src" alt="" /> }</span>
+                      <span><span class="pf-rhe-li__name">{{ bg.label }}</span>
+                      <span class="pf-rhe-li__val">{{ bgSummary(bg) }}</span></span>
+                    </button>
+                    <button type="button" class="nd-toggle pf-rhe-li__sw" role="switch" [attr.aria-checked]="!bg.hidden" [attr.aria-label]="'Print ' + bg.label"
+                            (click)="patchBg(bg.id, { hidden: bg.hidden ? undefined : true })">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="nd-field__hint">Put your letterhead artwork or a faint watermark behind the report. It always prints under the text.</p>
+            }
+            @if (bgError()) { <p class="pf-rhe-err" role="alert">{{ bgError() }}</p> }
+            <label class="nd-btn nd-btn--secondary pf-rhe-add pf-rhe-file" [class.pf-rhe-file--off]="layout().backgrounds.length >= maxBgs || bgBusy()">
+              <input type="file" accept="image/png,image/jpeg,image/webp" hidden (change)="onBgPick($event)"
+                     [disabled]="layout().backgrounds.length >= maxBgs || bgBusy()" />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+              {{ bgBusy() ? 'Uploading…' : layout().backgrounds.length >= maxBgs ? 'Up to ' + maxBgs + ' backgrounds' : 'Add a background image' }}
+            </label>
+            <p class="nd-field__hint">PNG, JPG or WebP, up to 15 MB. Large images are shrunk to print size (A4 at 300 dpi).</p>
+          </section>
+
           @if (region() === 'header') {
             <button type="button" class="nd-btn nd-btn--secondary pf-rhe-add" (click)="addLine()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -559,6 +720,11 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
       border: 1px dashed transparent; border-radius: 3px; touch-action: none;
       transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease; }
     .pf-rhe-box--bg { z-index: 1; }
+    /* Background images: under the element outlines; outlined only on hover / when selected. */
+    .pf-rhe-box.pf-rhe-box--bgimg { z-index: 1; border-color: transparent !important; background: transparent; }
+    .pf-rhe-box.pf-rhe-box--bgimg:hover { border-color: rgba(124, 58, 237, .35) !important; }
+    .pf-rhe-box.pf-rhe-box--bgimg.pf-rhe-box--sel { border: 1.5px dashed #7c3aed !important; background: rgba(124, 58, 237, .04); }
+    .pf-rhe-box--bgimg .pf-rhe-box__tag { bottom: auto; top: 4px; left: 4px; }
     /* With guides on, every element shows a faint outline — you can see what is editable. */
     .pf-rhe--guides .pf-rhe-box:not(.pf-rhe-box--bg) { border-color: rgba(124, 58, 237, .22); }
     .pf-rhe-box--r .pf-rhe-box__tag, .pf-rhe-box--r .pf-rhe-box__live { left: auto; right: -1px; }
@@ -635,6 +801,23 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-li__warn { color: #b45309; }
     .pf-rhe-li__val { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; white-space: pre-line; }
     .pf-rhe-add { width: 100%; }
+    .pf-rhe-file { cursor: pointer; }
+    .pf-rhe-file--off { opacity: .5; cursor: not-allowed; }
+    .pf-rhe-file--busy { opacity: .7; }
+    .pf-rhe-err { margin: 0; padding: 8px 10px; border-radius: var(--nd-radius-sm); font-size: 12.5px; line-height: 1.4;
+      color: var(--red-text, #b91c1c); background: color-mix(in srgb, var(--red-text, #dc2626) 8%, var(--nd-card-bg));
+      border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent); }
+    .pf-rhe-bgthumb { display: flex; gap: 12px; align-items: center; }
+    .pf-rhe-bgthumb__img { flex: none; width: 84px; height: 112px; border-radius: 6px; border: 1px solid var(--nd-line); background: #fff;
+      display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 11px; color: #64748b; }
+    .pf-rhe-bgthumb__img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .pf-rhe-bgthumb__act { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-width: 0; }
+    .pf-rhe-wrapseg { flex-wrap: wrap; align-self: flex-start; }
+    .pf-rhe-li__main--bg { flex-direction: row; align-items: center; gap: 10px; }
+    .pf-rhe-li__main--bg > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .pf-rhe-li__thumb { flex: none; width: 34px; height: 44px; border-radius: 4px; border: 1px solid var(--nd-line); background: #fff; overflow: hidden;
+      display: flex; align-items: center; justify-content: center; }
+    .pf-rhe-li__thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
     .pf-rhe-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
     @media (max-width: 420px) { .pf-rhe-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -672,6 +855,8 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
 })
 export class ReportHeaderEditorComponent implements OnDestroy {
   private readonly dialog = inject(DialogService);
+  private readonly http = inject(HttpClient);
+  private readonly platform = inject(PlatformService);
 
   readonly template = input.required<ReportTemplate>();
   readonly region = input<LayoutRegion>('header');
@@ -716,6 +901,7 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   private readonly viewport = viewChild<ElementRef<HTMLDivElement>>('viewport');
   private readonly canvasHost = viewChild<ElementRef<HTMLDivElement>>('canvasHost');
   private readonly pageEl = viewChild<ElementRef<HTMLDivElement>>('page');
+  private readonly sideBody = viewChild<ElementRef<HTMLDivElement>>('sideBody');
 
   readonly cfg = computed(() => readHeaderLayout(this.template()));
   /** Same resolved layout the PDF was drawn with. */
@@ -729,9 +915,24 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   readonly scale = computed(() => this.pageW() / PAGE.w);
 
   readonly entries = computed<Entry[]>(() => this.buildEntries());
+  /** The selected background image, when a "bg:<id>" is selected. */
+  readonly selBg = computed<ResolvedBackground | null>(() => {
+    const id = this.selected();
+    return id?.startsWith('bg:') ? this.layout().backgrounds.find(b => 'bg:' + b.id === id) ?? null : null;
+  });
+  protected readonly maxBgs = MAX_BACKGROUNDS;
+  protected readonly bgAreas: Array<{ value: BgArea; label: string }> = [
+    { value: 'page', label: 'Whole page' }, { value: 'header', label: 'Letterhead' }, { value: 'footer', label: 'Footer' },
+  ];
+  protected readonly bgFits: Array<{ value: BgFit; label: string }> = [
+    { value: 'cover', label: 'Cover' }, { value: 'contain', label: 'Contain' },
+    { value: 'stretch', label: 'Stretch' }, { value: 'original', label: 'Original size' },
+  ];
+  readonly bgBusy = signal(false);
+  readonly bgError = signal<string | null>(null);
   readonly sel = computed<Entry | null>(() => {
     const id = this.selected();
-    return id ? this.entries().find(e => e.id === id) ?? this.entryFromItem(id) : null;
+    return id && !id.startsWith('bg:') ? this.entries().find(e => e.id === id) ?? this.entryFromItem(id) : null;
   });
 
   private ro?: ResizeObserver;
@@ -749,6 +950,12 @@ export class ReportHeaderEditorComponent implements OnDestroy {
       const w = this.pageW();
       const host = this.canvasHost()?.nativeElement;
       if (url && host) void this.drawPage(url, w, host);
+    });
+    // A new selection opens its controls from the top.
+    effect(() => {
+      this.selected();
+      const body = this.sideBody()?.nativeElement;
+      if (body) body.scrollTop = 0;
     });
     // Footer: open scrolled to the bottom of the page (where the footer is).
     effect(() => {
@@ -939,6 +1146,8 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   /** Move the selected element by (dx, dy) mm. A move that would carry an
    *  edge across the margin / centre line stops on it. */
   nudge(dxMm: number, dyMm: number) {
+    const bg = this.selBg();
+    if (bg) { this.moveBg(bg, dxMm * MM, dyMm * MM, 'nudge'); return; }
     const it = this.current();
     if (!it || !this.movable(it)) return;
     this.moveTo(it, dxMm * MM, dyMm * MM, 'nudge');
@@ -990,6 +1199,124 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     this.setOverride({ size: Math.min(spec.max, Math.max(spec.min, Math.round(v * 10) / 10)) });
   }
 
+  // ── background images ────────────────────────────────────────────────
+  fitHint(f: BgFit): string {
+    return f === 'cover' ? 'Fills the whole area; edges that don’t fit are trimmed.'
+      : f === 'contain' ? 'The whole image shows, as large as fits the area.'
+      : f === 'stretch' ? 'Squeezed to exactly the area — proportions may change.'
+      : 'Its own size (96 dpi), centred in the area.';
+  }
+  bgSummary(b: ResolvedBackground): string {
+    const fit = this.bgFits.find(f => f.value === b.fit)?.label ?? b.fit;
+    return [fit, `${this.round(b.opacity * 100)}% opacity`, b.pages === 'all' ? 'every page' : 'first page',
+            b.onLetterhead ? 'also on letterhead paper' : ''].filter(Boolean).join(' · ');
+  }
+  patchBg(id: string, p: Partial<Record<keyof BackgroundImage, unknown>>) { this.emitCfg(setBackground(this.cfg(), id, p)); }
+  setBgOpacity(id: string, pct: number) {
+    if (!isFinite(pct)) return;
+    this.patchBg(id, { opacity: Math.min(100, Math.max(5, Math.round(pct))) / 100 });
+  }
+  setBgScale(id: string, pct: number) {
+    if (!isFinite(pct)) return;
+    this.patchBg(id, { scale: Math.min(300, Math.max(10, Math.round(pct))) });
+  }
+  setBgPos(id: string, axis: 'x' | 'y', raw: string) {
+    const v = parseFloat(raw);
+    const b = this.layout().backgrounds.find(x => x.id === id);
+    if (!b || !isFinite(v)) return;
+    // Keep the other axis where it is on the page.
+    const other = axis === 'x' ? { y: ptToMm(b.rect.y) } : { x: ptToMm(b.rect.x) };
+    this.patchBg(id, { [axis]: v, ...other });
+  }
+  /** Move a background by (dx, dy) pt; a nudge that crosses a guide stops on it, a drag snaps. */
+  private moveBg(b: ResolvedBackground, dxPt: number, dyPt: number, mode: 'nudge' | 'drag') {
+    let left = b.rect.x + dxPt;
+    if (dxPt) {
+      const snapped = mode === 'nudge' ? nudgeSnapX(b.rect.x, left, b.rect.w) : snapBoxX(left, b.rect.w);
+      this.flashGuide(snapped.guide);
+      left = snapped.left;
+    }
+    this.patchBg(b.id, { x: ptToMm(left), y: ptToMm(b.rect.y + dyPt) });
+  }
+  dragReadoutBg(b: ResolvedBackground): string {
+    const d = this.drag(); if (!d) return '';
+    const s = this.scale();
+    return `${ptToMm(b.rect.x + d.dxPx / s).toFixed(1)} mm · ${ptToMm(b.rect.y + d.dyPx / s).toFixed(1)} mm`;
+  }
+  onBgPointerDown(ev: PointerEvent, b: ResolvedBackground) {
+    ev.stopPropagation();
+    const id = 'bg:' + b.id;
+    if (this.selected() !== id) { this.select(id); return; }
+    if (ev.button !== 0) return;
+    this.trackDrag(ev, id, b.rect, false, (dx, dy) => this.moveBg(b, dx, dy, 'drag'));
+  }
+  async removeBg(id: string) {
+    const ok = await this.dialog.confirm({ title: 'Remove this background image?', message: 'It stops printing on every report. You can upload it again later.',
+      confirmLabel: 'Remove', tone: 'danger' });
+    if (!ok) return;
+    this.select(null);
+    this.emitCfg(removeBackground(this.cfg(), id));
+  }
+  /** Pick → check → shrink to print size → upload (private /uploads) → add / replace. */
+  async onBgPick(ev: Event, replaceId?: string) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (input) input.value = '';
+    if (!file) return;
+    this.bgError.set(null);
+    const bad = validateBackgroundFile(file);
+    if (bad) { this.bgError.set(bad); return; }
+    if (!replaceId && (this.cfg()?.backgrounds?.length ?? 0) >= MAX_BACKGROUNDS) { this.bgError.set(`Up to ${MAX_BACKGROUNDS} background images.`); return; }
+    this.bgBusy.set(true);
+    try {
+      const shrunk = await this.shrinkImage(file);
+      if (shrunk.blob.size > BG_MAX_UPLOAD_BYTES) {
+        this.bgError.set(`Even at print size it is ${(shrunk.blob.size / 1048576).toFixed(1)} MB — save it as a JPG, or simplify it (limit 5 MB).`);
+        return;
+      }
+      const url = await this.uploadBlob(shrunk.blob, `background.${shrunk.ext}`);
+      if (replaceId) {
+        this.emitCfg(setBackground(this.cfg(), replaceId, { url }));
+      } else {
+        const id = Date.now().toString(36);
+        this.emitCfg(addBackground(this.cfg(), url, id, this.region() === 'footer' ? 'footer' : 'page'));
+        this.select('bg:' + id);
+      }
+    } catch (e) {
+      this.bgError.set(ApiError.from(e).message || 'Upload failed — try again.');
+    } finally {
+      this.bgBusy.set(false);
+    }
+  }
+  /** Shrink to A4 @ 300 dpi on the longest side; opaque images become JPEG (small),
+   *  images with transparency stay PNG. */
+  protected async shrinkImage(file: File): Promise<{ blob: Blob; ext: 'jpg' | 'png' }> {
+    const bmp = await createImageBitmap(file);
+    const size = downscaleSize(bmp.width, bmp.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = size.w; canvas.height = size.h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bmp, 0, 0, size.w, size.h);
+    bmp.close?.();
+    let alpha = false;
+    if (!/jpe?g/i.test(file.type)) {
+      const px = ctx.getImageData(0, 0, size.w, size.h).data;
+      for (let i = 3; i < px.length; i += 4 * 7) { if (px[i] < 250) { alpha = true; break; } }
+    }
+    const type = alpha ? 'image/png' : 'image/jpeg';
+    const blob = await new Promise<Blob>((res, rej) => canvas.toBlob(b => (b ? res(b) : rej(new Error('Could not read that image.'))), type, 0.86));
+    return { blob, ext: alpha ? 'png' : 'jpg' };
+  }
+  /** POST /api/uploads/image (private, tenant-scoped) → the stored path. */
+  protected async uploadBlob(blob: Blob, filename: string): Promise<string> {
+    const fd = new FormData();
+    fd.append('file', blob, filename);
+    const resp = await firstValueFrom(this.http.post<{ success: boolean; data?: { url: string }; message?: string }>(
+      `${this.platform.getApiUrl()}/api/uploads/image`, fd));
+    if (!resp?.success || !resp.data?.url) throw new Error(resp?.message || 'Upload failed — try again.');
+    return resp.data.url;
+  }
+
   onKey(ev: KeyboardEvent) {
     if (ev.key === 'Escape') { this.select(null); return; }
     const dirs: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -1005,19 +1332,23 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     ev.stopPropagation();
     if (this.selected() !== it.id) { this.select(it.id); return; }   // first tap selects
     if (!this.movable(it) || ev.button !== 0) return;
+    this.trackDrag(ev, it.id, it.box, it.kind === 'bar', (dx, dy) => this.moveTo(it, dx, dy, 'drag'));
+  }
+  /** Pointer drag with live snapping; `commit` gets the final (dx, dy) in pt. */
+  private trackDrag(ev: PointerEvent, id: string, box: { x: number; w: number }, lockX: boolean, commit: (dx: number, dy: number) => void) {
     const el = ev.currentTarget as HTMLElement;
     const sx = ev.clientX, sy = ev.clientY;
     let moved = false;
     try { el.setPointerCapture(ev.pointerId); } catch { /* jsdom */ }
     const onMove = (e: PointerEvent) => {
-      const dx = it.kind === 'bar' ? 0 : e.clientX - sx, dy = e.clientY - sy;
+      const dx = lockX ? 0 : e.clientX - sx, dy = e.clientY - sy;
       if (!moved && Math.hypot(dx, dy) < 3) return;
       moved = true;
       // Live snap: show where it will land.
       const s = this.scale();
-      const snap = snapBoxX(it.box.x + dx / s, it.box.w);
-      this.snapGuide.set(it.kind === 'bar' ? null : snap.guide);
-      this.drag.set({ id: it.id, dxPx: it.kind === 'bar' ? 0 : (snap.left - it.box.x) * s, dyPx: dy });
+      const snap = snapBoxX(box.x + dx / s, box.w);
+      this.snapGuide.set(lockX ? null : snap.guide);
+      this.drag.set({ id, dxPx: lockX ? 0 : (snap.left - box.x) * s, dyPx: dy });
     };
     const onUp = () => {
       el.removeEventListener('pointermove', onMove);
@@ -1027,7 +1358,8 @@ export class ReportHeaderEditorComponent implements OnDestroy {
       this.drag.set(null);
       if (moved && d) {
         const s = this.scale();
-        this.moveTo(it, d.dxPx / s, d.dyPx / s, 'drag');
+        // The snapped position is already in dxPx — commit it as a plain move.
+        commit(d.dxPx / s, d.dyPx / s);
       }
     };
     el.addEventListener('pointermove', onMove);

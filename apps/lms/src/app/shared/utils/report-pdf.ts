@@ -16,8 +16,9 @@ import { fillUnit, normalizeReportText } from './reference-range';
 import { reportDisplayName } from './report-name';
 import { fetchAssetBlob } from './upload-fetch';
 import {
-  Align, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
-  BODY_GAP, anchorX, boxLeft, readHeaderLayout,
+  Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
+  ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
+  readHeaderLayout, BG_MAX_EDGE, downscaleSize,
 } from './report-header-layout';
 
 /**
@@ -632,6 +633,14 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   const layout = computeReportLayout(doc, practice, template?.logoUrl ?? null, template);
   LAYOUT = layout;
   if (!LETTERPAD) HEADER_RESERVE = layout.bodyTop - MARGIN_TOP;
+  // Background images go down FIRST on every page they print on, so text,
+  // the logo and the results always draw over them. Page 1 now; later pages
+  // (ours or autotable's) as each is added.
+  if (layout.backgrounds.some(b => !b.hidden && b.loaded)) {
+    drawBackgrounds(doc, 1);
+    const ev = (doc as unknown as { internal: { events: { subscribe(n: string, f: (p: { pageNumber?: number }) => void): unknown } } }).internal.events;
+    ev.subscribe('addPage', () => drawBackgrounds(doc, doc.getNumberOfPages()));
+  }
 
   // ── Department-specific patient strip (owner's model, 2026-09-19) ──
   // Each department may carry its own patient-block arrangement on its
@@ -1015,7 +1024,9 @@ export function renderReportPdfBlobUrl(input: ReportPdfInput): string {
  *  jsPDF.addImage accepts PNG/JPEG data URLs directly but not raw URLs —
  *  hence the manual fetch + canvas pass. Re-encoding via canvas also
  *  normalises SVG/WEBP/JPEG into PNG so all uploaded formats work. */
-async function fetchAsDataUrl(url: string, baseUrl: string, signed?: Record<string, string> | null): Promise<string | null> {
+async function fetchAsDataUrl(url: string, baseUrl: string, signed?: Record<string, string> | null,
+                              /** Backgrounds: cap the longest side (px) and keep JPEGs as JPEG (a photo re-encoded as PNG is ~5× bigger). */
+                              opts?: { maxEdge?: number; keepJpeg?: boolean }): Promise<string | null> {
   try {
     // Uploads are private: "/uploads/…" goes through the session (or the
     // public page's signed URL) — see shared/utils/upload-fetch.ts.
@@ -1031,11 +1042,15 @@ async function fetchAsDataUrl(url: string, baseUrl: string, signed?: Record<stri
         i.src = objectUrl;
       });
       const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || 200;
-      canvas.height = img.naturalHeight || 200;
+      const nw = img.naturalWidth || 200, nh = img.naturalHeight || 200;
+      const size = opts?.maxEdge ? downscaleSize(nw, nh, opts.maxEdge) : { w: nw, h: nh };
+      canvas.width = size.w;
+      canvas.height = size.h;
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
-      ctx.drawImage(img, 0, 0);
+      if (size.w === nw && size.h === nh) ctx.drawImage(img, 0, 0);
+      else ctx.drawImage(img, 0, 0, size.w, size.h);
+      if (opts?.keepJpeg && /jpe?g/i.test(blob.type)) return canvas.toDataURL('image/jpeg', 0.88);
       return canvas.toDataURL('image/png');
     } finally {
       URL.revokeObjectURL(objectUrl);
@@ -1079,10 +1094,13 @@ export async function preloadReportImages(
     for (const sec of l.sections ?? []) for (const u of sec.imageUrls ?? []) urls.add(u);
   }
 
+  // Background images (report designer, template metadata): capped at A4 @ 300 dpi.
+  const bgUrls = new Set((readHeaderLayout(tpl)?.backgrounds ?? []).map(b => b.url).filter(Boolean));
+
   const cache: Record<string, string> = {};
-  await Promise.all(Array.from(urls).map(async u => {
+  await Promise.all(Array.from(new Set([...urls, ...bgUrls])).map(async u => {
     if (!u) return;
-    const data = await fetchAsDataUrl(u, baseUrl, signed);
+    const data = await fetchAsDataUrl(u, baseUrl, signed, bgUrls.has(u) ? { maxEdge: BG_MAX_EDGE, keepJpeg: true } : undefined);
     if (data) cache[u] = data; // key by original (relative) URL — what the template stores
   }));
   return cache;
@@ -1493,7 +1511,57 @@ function computeReportLayout(
     : null;
   // defBox is internal — the published items are plain LayoutItems.
   const out: LayoutItem[] = items.map(({ defBox: _d, ...rest }) => rest);
-  return { preset, active, items: out, headerBottom, bodyTop, bodyTopAuto, letterpad: lp };
+  return { preset, active, items: out, headerBottom, bodyTop, bodyTopAuto, letterpad: lp,
+           backgrounds: resolveBackgrounds(doc, cfg?.backgrounds ?? [], bodyTop) };
+}
+
+const BG_AREA_LABEL: Record<BgArea, string> = { page: 'Page background', header: 'Header background', footer: 'Footer background' };
+
+/** Place each background image on the page (see backgroundRect). */
+function resolveBackgrounds(doc: jsPDF, bgs: BackgroundImage[], bodyTop: number): ResolvedBackground[] {
+  return bgs.map((bg, index) => {
+    const data = IMG_CACHE[bg.url];
+    let img: { w: number; h: number } | null = null;
+    if (data) {
+      try { const p = doc.getImageProperties(data); img = { w: p.width, h: p.height }; } catch { img = null; }
+    }
+    const clip = backgroundArea(bg.area, bodyTop);
+    const rect = backgroundRect(bg, clip, img);
+    const same = bgs.filter(b => b.area === bg.area).length > 1;
+    return {
+      id: bg.id, index, url: bg.url, area: bg.area, fit: bg.fit, opacity: bg.opacity, pages: bg.pages,
+      label: BG_AREA_LABEL[bg.area] + (same ? ` ${bgs.filter((b, i) => b.area === bg.area && i <= index).length}` : ''),
+      onLetterhead: !!bg.onLetterhead, hidden: !!bg.hidden, scale: bg.scale ?? 100,
+      moved: bg.x !== undefined || bg.y !== undefined,
+      rect, clip, box: intersectBox(rect, clip), loaded: !!img,
+    };
+  });
+}
+
+/** Draw the backgrounds that print on THIS page, clipped to their area and
+ *  faded by their opacity, inside their own graphics state (nothing leaks).
+ *  Called before anything else is drawn on the page → always behind. */
+function drawBackgrounds(doc: jsPDF, page: number) {
+  const bgs = LAYOUT?.backgrounds ?? [];
+  if (!bgs.length) return;
+  const d = doc as unknown as {
+    saveGraphicsState(): void; restoreGraphicsState(): void; setGState?(g: unknown): void;
+    GState?: new (o: { opacity: number }) => unknown; clip(): void; discardPath(): void;
+  };
+  for (const bg of bgs) {
+    if (!backgroundPrints(bg, page, LETTERPAD)) continue;
+    const data = IMG_CACHE[bg.url];
+    const fmt = /^data:image\/jpe?g/i.test(data) ? 'JPEG' : 'PNG';
+    d.saveGraphicsState();
+    try {
+      doc.rect(bg.clip.x, bg.clip.y, bg.clip.w, bg.clip.h, null as unknown as string);
+      d.clip();
+      d.discardPath();
+      if (bg.opacity < 1 && d.setGState && d.GState) d.setGState(new d.GState({ opacity: bg.opacity }));
+      doc.addImage(data, fmt, bg.rect.x, bg.rect.y, bg.rect.w, bg.rect.h, 'bg-' + bg.id, 'FAST');
+    } catch { /* a background never breaks the report */ }
+    d.restoreGraphicsState();
+  }
 }
 
 /** Draw one resolved element. Hidden ones are skipped. */

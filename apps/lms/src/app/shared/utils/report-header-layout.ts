@@ -70,6 +70,181 @@ export interface HeaderLayoutConfig {
   lines?: Array<{ id: string; text: string }>;
   /** mm from the top where the patient details start; absent = automatic. */
   bodyTop?: number;
+  /** Background images, drawn BEHIND everything (first = bottom-most). */
+  backgrounds?: BackgroundImage[];
+}
+
+// ── background images ───────────────────────────────────────────────────
+
+export type BgFit = 'cover' | 'contain' | 'stretch' | 'original';
+export type BgArea = 'page' | 'header' | 'footer';
+export const MAX_BACKGROUNDS = 3;
+/** Height (pt) of the footer area a footer background fills — the band the
+ *  signatures, disclaimer and date strip live in (report-pdf FOOTER_RESERVE). */
+export const FOOTER_AREA_H = 64;
+
+/** One background image (letterhead artwork, watermark…). Stored in the
+ *  template metadata next to the element overrides. */
+export interface BackgroundImage {
+  id: string;
+  /** Private upload path ("/uploads/<tenant>/<file>"). */
+  url: string;
+  /** Which part of the page it fills (and is clipped to). */
+  area: BgArea;
+  fit: BgFit;
+  /** 0.05 – 1. */
+  opacity: number;
+  pages: 'first' | 'all';
+  /** Also print it on pre-printed letterhead paper (default: left out — the
+   *  paper already carries the design). */
+  onLetterhead?: boolean;
+  /** Size in % of the fitted size (100 = as the fit places it). */
+  scale?: number;
+  /** mm — the image's top-left once the lab moves it. */
+  x?: number;
+  y?: number;
+  hidden?: boolean;
+}
+
+/** A background resolved onto the page — what the PDF draws and the designer outlines. */
+export interface ResolvedBackground {
+  id: string;
+  index: number;
+  label: string;
+  url: string;
+  area: BgArea;
+  fit: BgFit;
+  opacity: number;
+  pages: 'first' | 'all';
+  onLetterhead: boolean;
+  hidden: boolean;
+  scale: number;
+  moved: boolean;
+  /** The image rectangle (pt) — may extend past the clip (cover / moved). */
+  rect: { x: number; y: number; w: number; h: number };
+  /** The area it is clipped to (pt). */
+  clip: { x: number; y: number; w: number; h: number };
+  /** rect ∩ clip — the part that actually prints (the designer's outline). */
+  box: { x: number; y: number; w: number; h: number };
+  /** True when the image bytes were available (it will actually print). */
+  loaded: boolean;
+}
+
+const FITS: BgFit[] = ['cover', 'contain', 'stretch', 'original'];
+const AREAS: BgArea[] = ['page', 'header', 'footer'];
+
+function cleanBackground(o: unknown): BackgroundImage | null {
+  if (!o || typeof o !== 'object') return null;
+  const s = o as Record<string, unknown>;
+  if (typeof s['id'] !== 'string' || typeof s['url'] !== 'string' || !s['url']) return null;
+  const op = NUM(s['opacity']);
+  const b: BackgroundImage = {
+    id: s['id'] as string, url: s['url'] as string,
+    area: AREAS.includes(s['area'] as BgArea) ? s['area'] as BgArea : 'page',
+    fit: FITS.includes(s['fit'] as BgFit) ? s['fit'] as BgFit : 'cover',
+    opacity: op === undefined ? 1 : Math.min(1, Math.max(0.05, op)),
+    pages: s['pages'] === 'all' ? 'all' : 'first',
+  };
+  if (s['onLetterhead'] === true) b.onLetterhead = true;
+  if (NUM(s['scale']) !== undefined && (s['scale'] as number) > 0) b.scale = Math.min(400, s['scale'] as number);
+  if (NUM(s['x']) !== undefined) b.x = NUM(s['x']);
+  if (NUM(s['y']) !== undefined) b.y = NUM(s['y']);
+  if (s['hidden'] === true) b.hidden = true;
+  return b;
+}
+
+/** The clip box (pt) of an area. `bodyTop` = where the patient details start. */
+export function backgroundArea(area: BgArea, bodyTop: number): { x: number; y: number; w: number; h: number } {
+  if (area === 'header') return { x: 0, y: 0, w: PAGE.w, h: bodyTop };
+  if (area === 'footer') return { x: 0, y: PAGE.h - FOOTER_AREA_H, w: PAGE.w, h: FOOTER_AREA_H };
+  return { x: 0, y: 0, w: PAGE.w, h: PAGE.h };
+}
+
+/** Where the image lands (pt) for a fit inside the area.
+ *  cover = fill the area, cropping the overflow · contain = whole image, letterboxed
+ *  · stretch = exactly the area · original = the image's own size at 96 dpi.
+ *  Then `scale` % about the centre, then the lab's move (x/y, mm) if any. */
+export function backgroundRect(
+  bg: Pick<BackgroundImage, 'fit' | 'scale' | 'x' | 'y'>,
+  clip: { x: number; y: number; w: number; h: number },
+  img: { w: number; h: number } | null,
+): { x: number; y: number; w: number; h: number } {
+  let w = clip.w, h = clip.h;
+  if (img && img.w > 0 && img.h > 0 && bg.fit !== 'stretch') {
+    if (bg.fit === 'original') { w = img.w * 0.75; h = img.h * 0.75; }       // px @96 dpi → pt
+    else {
+      const k = bg.fit === 'cover' ? Math.max(clip.w / img.w, clip.h / img.h) : Math.min(clip.w / img.w, clip.h / img.h);
+      w = img.w * k; h = img.h * k;
+    }
+  }
+  const s = (bg.scale ?? 100) / 100;
+  const cx = clip.x + clip.w / 2, cy = clip.y + clip.h / 2;
+  w *= s; h *= s;
+  let x = cx - w / 2, y = cy - h / 2;
+  if (bg.x !== undefined) x = bg.x * MM;
+  if (bg.y !== undefined) y = bg.y * MM;
+  return { x, y, w, h };
+}
+
+export function intersectBox(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) {
+  const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
+  const r = Math.min(a.x + a.w, b.x + b.w), btm = Math.min(a.y + a.h, b.y + b.h);
+  return { x, y, w: Math.max(0, r - x), h: Math.max(0, btm - y) };
+}
+
+/** Does this background print on this page of this job? */
+export function backgroundPrints(bg: Pick<ResolvedBackground, 'hidden' | 'pages' | 'onLetterhead' | 'loaded'>, page: number, letterheadPaper: boolean): boolean {
+  if (bg.hidden || !bg.loaded) return false;
+  if (letterheadPaper && !bg.onLetterhead) return false;
+  return bg.pages === 'all' || page === 1;
+}
+
+/** Immutable background edits. */
+export function setBackground(cfg: HeaderLayoutConfig | null, id: string, patch: Partial<Record<keyof BackgroundImage, unknown>>): HeaderLayoutConfig {
+  const base: HeaderLayoutConfig = cfg ? { ...cfg, items: { ...cfg.items } } : { v: 1, items: {} };
+  base.backgrounds = (base.backgrounds ?? []).map(b => {
+    if (b.id !== id) return b;
+    const cur: Record<string, unknown> = { ...b };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined) delete cur[k];
+      else cur[k] = (k === 'x' || k === 'y') && typeof v === 'number' ? round1(v) : v;
+    }
+    return cleanBackground(cur) ?? b;
+  });
+  return base;
+}
+export function addBackground(cfg: HeaderLayoutConfig | null, url: string, id: string, area: BgArea = 'page'): HeaderLayoutConfig {
+  const base: HeaderLayoutConfig = cfg ? { ...cfg, items: { ...cfg.items } } : { v: 1, items: {} };
+  const list = base.backgrounds ?? [];
+  if (list.length >= MAX_BACKGROUNDS) return base;
+  base.backgrounds = [...list, { id, url, area, fit: area === 'page' ? 'cover' : 'contain', opacity: 1, pages: 'first' }];
+  return base;
+}
+export function removeBackground(cfg: HeaderLayoutConfig | null, id: string): HeaderLayoutConfig {
+  const base: HeaderLayoutConfig = cfg ? { ...cfg, items: { ...cfg.items } } : { v: 1, items: {} };
+  base.backgrounds = (base.backgrounds ?? []).filter(b => b.id !== id);
+  if (!base.backgrounds.length) delete base.backgrounds;
+  return base;
+}
+
+/** Background upload rules — checked before anything is sent. */
+export const BG_ACCEPT = ['image/png', 'image/jpeg', 'image/webp'];
+export const BG_MAX_PICK_BYTES = 15 * 1024 * 1024;   // what you may pick (it is then shrunk)
+export const BG_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;  // what the server takes
+/** Longest side kept (px): A4 at 300 dpi — sharp in print, small in the PDF. */
+export const BG_MAX_EDGE = 2480;
+
+export function validateBackgroundFile(f: { type: string; name: string; size: number }): string | null {
+  const svg = /svg/i.test(f.type) || /\.svg$/i.test(f.name);
+  if (svg) return 'SVG files can’t be used — export the design as PNG or JPG.';
+  if (!BG_ACCEPT.includes((f.type || '').toLowerCase())) return 'Use a PNG, JPG or WebP image.';
+  if (f.size > BG_MAX_PICK_BYTES) return `That image is ${(f.size / 1048576).toFixed(1)} MB — pick one under 15 MB.`;
+  return null;
+}
+/** Target pixel size after shrinking to BG_MAX_EDGE on the longest side. */
+export function downscaleSize(w: number, h: number, max = BG_MAX_EDGE): { w: number; h: number } {
+  const k = Math.min(1, max / Math.max(w, h));
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
 }
 
 /** A resolved, positioned element — what the PDF draws and the designer outlines. */
@@ -134,6 +309,8 @@ export interface ReportLayoutResult {
   bodyTopAuto: boolean;
   /** Letterpad blank areas (pt) — print-only, shown as guides. */
   letterpad?: { top: number; bottom: number } | null;
+  /** Background images, bottom-most first. Drawn before anything else on a page. */
+  backgrounds: ResolvedBackground[];
 }
 
 export interface LayoutIssue {
@@ -197,6 +374,10 @@ export function readHeaderLayout(tpl: Pick<ReportTemplate, 'metadata'> | null | 
       .map(l => ({ id: l.id, text: typeof l.text === 'string' ? l.text : '' }));
   }
   if (NUM(src['bodyTop']) !== undefined) cfg.bodyTop = NUM(src['bodyTop']);
+  if (Array.isArray(src['backgrounds'])) {
+    const bgs = (src['backgrounds'] as unknown[]).map(cleanBackground).filter((b): b is BackgroundImage => !!b).slice(0, MAX_BACKGROUNDS);
+    if (bgs.length) cfg.backgrounds = bgs;
+  }
   return cfg;
 }
 
