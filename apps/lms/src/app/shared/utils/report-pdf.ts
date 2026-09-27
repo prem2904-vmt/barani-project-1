@@ -14,6 +14,7 @@ import { savedFlagOf, type SavedFlag } from './result-flag';
 import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
 import { reportDisplayName } from './report-name';
+import { fetchAssetBlob } from './upload-fetch';
 
 /**
  * Render an A4 lab report PDF in the Drlogy template style — blue
@@ -965,24 +966,16 @@ export function renderReportPdfBlobUrl(input: ReportPdfInput): string {
   return URL.createObjectURL(blob);
 }
 
-/** Resolve a template/practice URL to an absolute one for fetching:
- *  absolute http(s) URLs pass through; "/uploads/…" gets prepended with
- *  the supplied API base. */
-function absoluteAssetUrl(url: string, baseUrl: string): string {
-  if (!url) return '';
-  if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
-  return `${baseUrl.replace(/\/$/, '')}${url}`;
-}
-
 /** Fetch a single image and re-encode it as a PNG data URL via canvas.
  *  jsPDF.addImage accepts PNG/JPEG data URLs directly but not raw URLs —
  *  hence the manual fetch + canvas pass. Re-encoding via canvas also
  *  normalises SVG/WEBP/JPEG into PNG so all uploaded formats work. */
-async function fetchAsDataUrl(absUrl: string): Promise<string | null> {
+async function fetchAsDataUrl(url: string, baseUrl: string, signed?: Record<string, string> | null): Promise<string | null> {
   try {
-    const resp = await fetch(absUrl, { mode: 'cors' });
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
+    // Uploads are private: "/uploads/…" goes through the session (or the
+    // public page's signed URL) — see shared/utils/upload-fetch.ts.
+    const blob = await fetchAssetBlob(url, baseUrl, signed);
+    if (!blob) return null;
     const objectUrl = URL.createObjectURL(blob);
     try {
       const img = await new Promise<HTMLImageElement>((res, rej) => {
@@ -1014,7 +1007,9 @@ async function fetchAsDataUrl(absUrl: string): Promise<string | null> {
  *  renderer falls back to its placeholder visuals for missing entries. */
 export async function preloadReportImages(
   input: Omit<ReportPdfInput, 'imageCache'>,
-  baseUrl: string
+  baseUrl: string,
+  /** Public report page only: stored path → signed URL (from its verify call). */
+  signed?: Record<string, string> | null,
 ): Promise<Record<string, string>> {
   const urls = new Set<string>();
   const tpl = input.template;
@@ -1041,9 +1036,8 @@ export async function preloadReportImages(
 
   const cache: Record<string, string> = {};
   await Promise.all(Array.from(urls).map(async u => {
-    const abs = absoluteAssetUrl(u, baseUrl);
-    if (!abs) return;
-    const data = await fetchAsDataUrl(abs);
+    if (!u) return;
+    const data = await fetchAsDataUrl(u, baseUrl, signed);
     if (data) cache[u] = data; // key by original (relative) URL — what the template stores
   }));
   return cache;

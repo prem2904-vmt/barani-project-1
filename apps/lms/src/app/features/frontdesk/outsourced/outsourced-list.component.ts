@@ -2,13 +2,14 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, computed, inject, input, signal } from '@angular/core';
 import { DialogService } from '../../../core/services/dialog.service';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import {
-  OutsourcedStatusFilter, OutsourcedTube, PARTNER_REPORT_ACCEPT, STATUS_LABEL, absoluteFileUrl, actionLines,
+  OutsourcedStatusFilter, OutsourcedTube, PARTNER_REPORT_ACCEPT, STATUS_LABEL, actionLines,
   filterOutsourced, partnerFileProblem, rowReport,
 } from './outsourced-view';
 
@@ -171,7 +172,9 @@ export class OutsourcedListComponent implements OnInit {
 
   testNames(r: OutsourcedTube): string { return r.tests.map(t => t.testName).join(', '); }
 
-  view(url: string) { window.open(absoluteFileUrl(url, this.svc.apiBase), '_blank', 'noopener'); }
+  private readonly uploads = inject(UploadsService);
+  /** Partner files are private uploads — opened through a signed URL. */
+  view(url: string) { void this.uploads.open(url); }
 
   pick(r: OutsourcedTube) {
     this.target = r;

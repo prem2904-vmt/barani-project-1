@@ -4,6 +4,7 @@ import { Subject, of, throwError } from 'rxjs';
 import { CultureEntryComponent } from './culture-entry.component';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DiskReadApi } from './disk-read';
@@ -73,6 +74,8 @@ function render(opts: { embedded?: boolean; orderTestId?: string | null; caseVie
       { provide: ApiService, useValue: api },
       { provide: PlatformService, useValue: { isCapacitor: () => false, isNative: () => false, getApiUrl: () => '' } },
       { provide: HttpClient, useValue: {} },
+      // Private uploads: the plate photo comes from the session's blob cache.
+      { provide: UploadsService, useValue: { src: (u?: string | null) => (u ? 'blob:' + u : ''), blob: async () => null } },
       { provide: CapacitorService, useValue: {} },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {}, warning() {} } },
       { provide: DiskReadApi, useValue: { usage: () => throwError(() => ({ status: 404 })), read: () => new Subject(), confirm: () => of({}) } },

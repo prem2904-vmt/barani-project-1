@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { installPdfTextSanitizer } from '../../../shared/utils/pdf-text';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
+import { fetchAssetBlob } from '../../../shared/utils/upload-fetch';
 import autoTable from 'jspdf-autotable';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
@@ -901,10 +902,10 @@ export function invoiceTemplateFieldsFrom(tpl: Record<string, unknown> | null | 
 export async function loadImageDataUrl(url: string | null | undefined, baseUrl?: string): Promise<string | undefined> {
   if (!url) return undefined;
   if (url.startsWith('data:')) return url;
-  const abs = /^https?:\/\//i.test(url) ? url : `${(baseUrl ?? '').replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
   try {
-    const res = await fetch(abs);
-    const blob = await res.blob();
+    // "/uploads/…" logos are private — fetched with the session (upload-fetch.ts).
+    const blob = await fetchAssetBlob(url, baseUrl ?? '');
+    if (!blob) return undefined;
     return await new Promise<string>((resolve, reject) => {
       const r = new FileReader();
       r.onload = () => resolve(r.result as string);

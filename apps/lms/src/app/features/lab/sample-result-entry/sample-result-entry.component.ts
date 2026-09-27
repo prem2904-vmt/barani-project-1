@@ -43,6 +43,8 @@ import { ApiService } from "../../../core/services/api.service";
 import { ToastService } from "../../../core/services/toast.service";
 import { NavBackService } from "../../../core/services/nav-back.service";
 import { PlatformService } from "../../../core/services/platform.service";
+import { UploadsService } from "../../../core/services/uploads.service";
+import { isPrivateUploadPath } from "../../../shared/utils/upload-fetch";
 import { AuthService } from "../../../core/auth/auth.service";
 import { DialogService } from "../../../core/services/dialog.service";
 import {
@@ -136,6 +138,7 @@ export class SampleResultEntryComponent {
   private readonly host = inject(ElementRef);
   private readonly http = inject(HttpClient);
   private readonly platform = inject(PlatformService);
+  private readonly uploads = inject(UploadsService);
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -2246,8 +2249,19 @@ export class SampleResultEntryComponent {
     if (!raw) return [];
     try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch { return []; }
   }
+  /** Attachments are private uploads: thumbnails render from a blob: URL
+   *  fetched with the session ('' until it lands). */
   attachSrc(a: ResultAttachment): string {
-    return /^https?:/i.test(a.url) ? a.url : this.platform.getApiUrl() + a.url;
+    return this.uploads.src(a.url);
+  }
+  /** Videos aren't pre-fetched: the link opens a signed URL on click. */
+  attachHref(a: ResultAttachment): string {
+    return isPrivateUploadPath(a.url) ? '#' : this.uploads.src(a.url);
+  }
+  openAttach(ev: Event, a: ResultAttachment) {
+    if (!isPrivateUploadPath(a.url)) return;
+    ev.preventDefault();
+    void this.uploads.open(a.url);
   }
   pickAttachment(t: { id: string }, input: HTMLInputElement, param?: string) {
     this.attachTargetId = t.id;

@@ -9,7 +9,6 @@ import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
-import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
@@ -26,7 +25,8 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
 import { reportFlag } from '../../../shared/utils/report-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
-import { PartnerReport, absoluteFileUrl, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
+import { PartnerReport, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
+import { UploadsService } from '../../../core/services/uploads.service';
 
 interface ReportData {
   patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; sex?: string; phone?: string; mrn?: string };
@@ -607,13 +607,11 @@ export class ReportViewerComponent implements OnInit {
    *  so logos / signature images uploaded via the template editor resolve
    *  correctly when the viewer is served from a different host than the
    *  API (dev / capacitor / electron). Absolute http(s) URLs pass through. */
-  private readonly platform = inject(PlatformService);
   resolveAsset(url: string | null | undefined): string {
-    const u = url ?? '';
-    if (!u) return '';
-    if (/^https?:\/\//i.test(u) || u.startsWith('data:')) return u;
-    return `${this.platform.getApiUrl()}${u}`;
+    // "/uploads/…" assets are private — a blob: URL fetched with the session.
+    return this.uploadAssets.src(url);
   }
+  private readonly uploadAssets = inject(UploadsService);
 
   /** Template-driven date/time formatter (mirrors the PDF renderer).
    *  Falls back to the medium Angular date pipe shape when no template
@@ -685,8 +683,10 @@ export class ReportViewerComponent implements OnInit {
   /** Opens the partner's file in a new tab — the browser's own viewer
    *  downloads / prints it as is. */
   openPartnerReport(p: PartnerReport) {
-    window.open(absoluteFileUrl(p.url, this.outsourcing.apiBase), '_blank', 'noopener');
+    // Private upload → opened through a short-lived signed URL.
+    void this.uploads.open(p.url);
   }
+  private readonly uploads = inject(UploadsService);
 
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');

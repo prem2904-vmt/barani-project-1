@@ -1,9 +1,12 @@
 import {
   ApplicationConfig,
   ErrorHandler,
+  inject,
+  provideAppInitializer,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection
 } from '@angular/core';
+import { UploadsService } from './core/services/uploads.service';
 import { RouteReuseStrategy, provideRouter, withComponentInputBinding, withNavigationErrorHandler, withRouterConfig, withViewTransitions } from '@angular/router';
 import { IdentityRouteReuseStrategy } from './core/navigation/identity-reuse.strategy';
 import { slideTransition } from './core/navigation/slide-transition';
@@ -91,6 +94,9 @@ export const appConfig: ApplicationConfig = {
     // record changes (draft shelf A → B); see identity-reuse.strategy.ts.
     { provide: RouteReuseStrategy, useClass: IdentityRouteReuseStrategy },
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
+    // Private uploads: register the session-authenticated fetcher the PDF
+    // renderers use for "/uploads/…" assets (see shared/utils/upload-fetch.ts).
+    provideAppInitializer(() => { inject(UploadsService); }),
     { provide: APP_BASE_HREF, useValue: '/' },
     {
       provide: LocationStrategy,

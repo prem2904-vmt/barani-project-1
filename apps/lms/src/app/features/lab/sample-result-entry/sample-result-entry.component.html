@@ -512,7 +512,7 @@
                   <img [src]="attachSrc(a)" [alt]="a.name || 'attachment'" />
                 </a>
               } @else {
-                <a [href]="attachSrc(a)" target="_blank" rel="noopener" class="pf-sre__attach-thumb pf-sre__attach-thumb--video" title="Open the video">
+                <a [href]="attachHref(a)" (click)="openAttach($event, a)" target="_blank" rel="noopener" class="pf-sre__attach-thumb pf-sre__attach-thumb--video" title="Open the video">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                 </a>
               }

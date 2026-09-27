@@ -7,6 +7,8 @@ import {
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { UploadsService } from '../../core/services/uploads.service';
+import { isPrivateUploadPath } from '../../shared/utils/upload-fetch';
 import { AuthService } from '../../core/auth/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { SignalingService } from '../../core/services/signaling.service';
@@ -66,6 +68,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly moduleOff = computed(() => !this.entitlements.moduleEnabled('messages'));
   private readonly presenceSvc = inject(PresenceService);
   protected readonly api = inject(ApiService);
+  protected readonly uploads = inject(UploadsService);
   protected readonly toasts = inject(ToastService);
   private readonly chatNotify = inject(ChatNotifyService);
   protected readonly ringtone = inject(RingtoneService);
@@ -937,14 +940,24 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
-  /** Resolve a /uploads/... path against the API base. Absolute URLs (rare)
-   *  pass through unchanged. */
+  /** Chat files are private uploads: images / voice notes render from a
+   *  blob: URL fetched with the session ('' until it lands — the signal read
+   *  re-renders the bubble). Absolute URLs (rare) pass through. */
   protected resolveAttachmentUrl(url: string | null | undefined): string {
-    if (!url) return '';
-    if (/^https?:\/\//i.test(url)) return url;
-    // Strip trailing /api or /api/ if env.apiUrl includes it; uploads live at root.
-    const base = (this.api as any).baseUrl ?? '';
-    return `${base}${url}`;
+    return this.uploads.src(url);
+  }
+
+  /** href for a file card: private files open via a signed URL on click
+   *  (never pre-fetched), anything else links directly. */
+  protected fileHref(url: string | null | undefined): string {
+    return isPrivateUploadPath(url) ? '#' : this.uploads.src(url);
+  }
+
+  /** Open an attachment in a new tab (signed URL for private uploads). */
+  protected openAttachment(ev: Event, url: string | null | undefined): void {
+    if (!isPrivateUploadPath(url)) return;   // plain link — let the anchor navigate
+    ev.preventDefault();
+    void this.uploads.open(url);
   }
 
   /** True for audio MIME types — drives voice-message bubble render. */
