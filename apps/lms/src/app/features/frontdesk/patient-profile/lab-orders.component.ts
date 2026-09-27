@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, Injector, OnDestroy, computed, inject, input, output, signal,
+  ChangeDetectionStrategy, Component, Injector, OnDestroy, computed, effect, inject, input, output, signal, untracked,
 } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Router } from '@angular/router';
@@ -40,7 +40,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
                (keydown.escape)="close()">
         <header class="pf-lo-detail__head">
           <button type="button" class="nd-btn nd-btn--icon pf-lo-detail__back" (click)="close()"
-                  aria-label="Back to orders" title="Back to orders">
+                  [attr.aria-label]="detailId() ? 'Back' : 'Back to orders'" [title]="detailId() ? 'Back' : 'Back to orders'">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
           </button>
           <div class="pf-lo-detail__who">
@@ -291,6 +291,21 @@ export class LabOrdersComponent implements OnDestroy {
   readonly clearFilters = output<void>();
   /** An order opened / closed (the profile hides its list controls). */
   readonly detailChange = output<string | null>();
+  /** DETAIL-ONLY mode (the clinical profile): show this one order, no list.
+   *  The host owns the zoom; Back just emits detailChange(null). */
+  readonly detailId = input<string | null>(null);
+  /** With detailId: open the report straight away (a cumulative cell / "View
+   *  last report" / a report in the timeline). */
+  readonly autoReport = input(false);
+  private readonly _detail = effect(() => {
+    const id = this.detailId();
+    const auto = this.autoReport();
+    untracked(() => {
+      this.openId.set(id);
+      const o = id ? (this.orders() ?? []).find(x => x.id === id) : null;
+      if (o && auto && !this.showReport()[o.id]) void this.toggleReport(o);
+    });
+  });
 
   /** Order ids whose report exists but could not be rendered (design did not load). */
   readonly reportFailed = signal<Record<string, boolean>>({});
@@ -328,6 +343,7 @@ export class LabOrdersComponent implements OnDestroy {
   }
   /** Back to the list, zoomed out into the row. */
   close(): void {
+    if (this.detailId()) { this.detailChange.emit(null); return; }
     if (!this.openId()) return;
     this.zoom.runLocal('out', () => { this.openId.set(null); this.detailChange.emit(null); });
   }

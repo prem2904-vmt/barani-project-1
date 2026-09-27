@@ -262,6 +262,9 @@ export class LabTrendsComponent implements OnDestroy {
   /** Measure the viewport and size itself (standalone). Inside an nd-card
    *  body the card owns the height, so the profile passes false. */
   readonly fit = input<boolean>(true);
+  /** Open straight on one analyte (the cumulative grid's row → its chart):
+   *  its test, drilled into that parameter. Matched case-insensitively. */
+  readonly focus = input<{ testId: string; parameter: string } | null>(null);
 
   private readonly chartEl = viewChild<ElementRef<HTMLDivElement>>('chart');
   private readonly sparkEls = viewChildren<ElementRef<HTMLDivElement>>('spark');
@@ -367,11 +370,23 @@ export class LabTrendsComponent implements OnDestroy {
       next: r => {
         const list = r?.tests ?? [];
         this.tests.set(list);
-        if (list.length) this.selectTest(list[0].testId);
+        if (!this.applyFocus() && list.length) this.selectTest(list[0].testId);
         this.loading.set(false);
       },
       error: () => { this.tests.set([]); this.loading.set(false); },
     });
+  }
+
+  /** Select the focused analyte, when it is one of the trended tests. */
+  private applyFocus(): boolean {
+    const f = this.focus();
+    if (!f) return false;
+    const t = this.tests().find(x => x.testId === f.testId);
+    if (!t) return false;
+    this.selectTest(t.testId);
+    const p = t.parameters.find(x => x.parameter.trim().toLowerCase() === f.parameter.trim().toLowerCase());
+    if (p) this.drillTo(p.parameter);
+    return true;
   }
 
   selectTest(id: string) {

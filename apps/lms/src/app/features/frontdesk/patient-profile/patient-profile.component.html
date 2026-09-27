@@ -1,9 +1,9 @@
-<!-- Patient profile on the nd pattern (docs/ND-PATTERN.md → "Patient
-     profile"): band (back + tenant + actions, ONE primary: New order) whose
-     pill is the CONTEXT BAR (full name, "22/M · MRN · phone", ABHA, flags)
-     → HISTORY (main card: orders / trends / timeline behind the card
-     header's search + neutral filter) + SUMMARY (right companion card,
-     collapsible to a strip; a sheet at ≤900px). -->
+<!-- Patient profile, CLINICAL-FIRST (docs/ND-PATTERN.md §22): band (back +
+     tenant + actions, ONE primary: New order) whose pill is the CONTEXT BAR
+     → main column: SNAPSHOT (needs attention · in progress now · last visit)
+     over CUMULATIVE RESULTS (analyte × visit grid) ‖ the PATIENT companion
+     (quick actions, timeline, details), collapsible to a strip. ≤900px: one
+     stacked column; ≤640px: results as cards, New order in the bottom bar. -->
 <section class="pf-pp nd-page" (keydown.escape)="onEsc()">
   <pf-hero-band class="pf-pp-band" [back]="true" [backAction]="goBack" [customSearch]="true" [contextBar]="true">
     <ng-container band-actions>
@@ -21,7 +21,7 @@
           <svg class="pf-pp-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
           <span class="pf-pp-act__t">More</span>
         </button>
-        @if (!phone()) {
+        @if (!phone() && canNewOrder()) {
           <!-- THE primary. Phones: full width in the bottom bar instead. -->
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-pp-act pf-pp-act--new pf-pp-in" style="--i: 4"
                   [class.pf-pp-act--icon]="!web() && narrow()" aria-label="New order" title="New order" (click)="startOrder(p)">
@@ -53,14 +53,6 @@
             <span class="pf-pp-flag__dot" aria-hidden="true"></span>{{ f.label }}
           </span>
         }
-        @if (narrow()) {
-          <span class="pf-pp-ctx__grow"></span>
-          <button type="button" class="nd-btn nd-btn--quiet pf-pp-ctx__summary" (click)="summaryOpen.set(true)"
-                  aria-haspopup="dialog" [attr.aria-expanded]="summaryOpen()" aria-label="Patient summary" title="Patient summary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
-            <span class="pf-pp-ctx__summary-t">Summary</span>
-          </button>
-        }
       } @else {
         <span class="pf-pp-skel pf-pp-skel--pill" aria-hidden="true"></span>
       }
@@ -69,224 +61,236 @@
 
   <div class="nd-body pf-pp-body" [class.pf-pp-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-pp-body--narrow]="narrow()"
        [class.pf-pp-body--bar]="phone() && !!patient()">
-    <!-- ─── HISTORY: the main work card (orders · trends · timeline) ─── -->
-    <!-- ONE element from skeleton to content: it is the zoom target the
-         Front desk card morphs into, so nothing is swapped mid-morph. -->
-    <section class="nd-card pf-pp-main" aria-label="Patient history" [pfZoomTarget]="zoomKeys()" [attr.aria-busy]="showSkeleton()">
-      <header class="nd-card__head pf-pp-head">
-        <span class="nd-card__icon" aria-hidden="true">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
-        </span>
-        <span class="nd-card__label pf-pp-head__label">History</span>
-        @if (!(view() === 'orders' && orderOpen())) {
-          <!-- Card header: search first, then the neutral filter (ND §1). -->
-          <label class="pf-pp-find">
-            <svg class="pf-pp-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            <input class="nd-input pf-pp-find__input" type="search" [value]="query()" (input)="query.set($any($event.target).value)"
-                   [placeholder]="view() === 'orders' ? 'Search tests or order number' : view() === 'trends' ? 'Search tests' : 'Search visits'"
-                   [attr.aria-label]="view() === 'orders' ? 'Search orders by test, order number or doctor' : view() === 'trends' ? 'Search trend tests' : 'Search visits'" />
-          </label>
-          <div class="pf-pp-head__filter">
-            <div class="nd-seg pf-pp-seg" role="radiogroup" aria-label="Show" (keydown)="onSegKey($event)">
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === 'orders'"
-                      [attr.tabindex]="view() === 'orders' ? 0 : -1" (click)="setView('orders')">
-                Orders <span class="pf-pp-seg__n nd-num">{{ history().length }}</span>
-              </button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === 'trends'"
-                      [attr.tabindex]="view() === 'trends' ? 0 : -1" (click)="setView('trends')">
-                Trends
-              </button>
-              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === 'timeline'"
-                      [attr.tabindex]="view() === 'timeline' ? 0 : -1" (click)="setView('timeline')">
-                Timeline <span class="pf-pp-seg__n nd-num">{{ unifiedTimeline().length }}</span>
-              </button>
-            </div>
-          </div>
-          @if (view() === 'orders') {
-            <div class="pf-pp-range">
-              <button type="button" class="nd-btn nd-btn--quiet pf-pp-range__btn" (click)="rangeOpen.set(!rangeOpen())"
-                      aria-haspopup="dialog" [attr.aria-expanded]="rangeOpen()" [attr.aria-label]="'Date range: ' + rangeLabel()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                <span class="pf-pp-range__t nd-num">{{ rangeLabel() }}</span>
-              </button>
-              @if (rangeOpen()) {
-                <div class="pf-pp-pop-scrim" (click)="rangeOpen.set(false)" aria-hidden="true"></div>
-                <div class="nd-card pf-pp-pop" role="dialog" aria-label="Date range">
-                  <div class="nd-seg pf-pp-pop__seg" role="radiogroup" aria-label="Quick range">
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="range() === 'all'" (click)="setRange('all')">All</button>
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="range() === '30'" (click)="setRange('30')">30 days</button>
-                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="range() === '90'" (click)="setRange('90')">90 days</button>
-                  </div>
-                  <div class="pf-pp-pop__dates">
-                    <label class="nd-field"><span class="nd-field__lbl">From</span>
-                      <pf-nd-date [value]="fromDate()" [max]="toDate() || null" label="From date" (valueChange)="setFrom($event)"></pf-nd-date>
-                    </label>
-                    <label class="nd-field"><span class="nd-field__lbl">To</span>
-                      <pf-nd-date [value]="toDate()" [min]="fromDate() || null" label="To date" (valueChange)="setTo($event)"></pf-nd-date>
-                    </label>
-                  </div>
-                  <div class="pf-pp-pop__foot">
-                    <button type="button" class="nd-btn nd-btn--tertiary" (click)="setRange('all')">Clear</button>
-                    <button type="button" class="nd-btn nd-btn--secondary" (click)="rangeOpen.set(false)">Done</button>
-                  </div>
-                </div>
-              }
-            </div>
+    <!-- ─── MAIN COLUMN — the ONE route zoom target, skeleton to content ── -->
+    <div class="pf-pp-main" [pfZoomTarget]="zoomKeys()" [attr.aria-busy]="showSkeleton()">
+      @if (showSkeleton()) {
+        <div class="nd-card pf-pp-snap pf-pp-snap--skel" aria-hidden="true">
+          @for (i of [1, 2, 3]; track i) {
+            <div class="pf-pp-pane"><span class="pf-pp-skel" style="width: 40%"></span><span class="pf-pp-skel"></span><span class="pf-pp-skel" style="width: 70%"></span></div>
           }
-          @if (view() === 'timeline' && patient(); as p) {
-            <button type="button" class="nd-btn nd-btn--quiet pf-pp-fulltl"
-                    aria-label="Open the full timeline" title="Full timeline"
-                    (click)="patientTimeline.open(p.id, clinicalData()?.opdRecords ?? [], clinicalData()?.ipdAdmissions ?? [], clinicalData()?.prescriptions ?? [])">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h3M14 12h3"/></svg>
-              <span class="pf-pp-fulltl__t">Full timeline</span>
-            </button>
-          }
-        }
-      </header>
-
-      <div class="nd-card__body pf-pp-mainbody" [class.pf-pp-mainbody--trends]="view() === 'trends'">
-        @if (showSkeleton()) {
-          <!-- Static skeleton in the shape of the history rows. -->
-          <div class="pf-pp-skelrows" aria-hidden="true">
+        </div>
+        <div class="nd-card pf-pp-gridskel" aria-hidden="true">
+          <div class="pf-pp-skelrows">
             @for (i of [1, 2, 3, 4, 5]; track i) {
-              <div class="pf-pp-skelrow">
-                <span class="pf-pp-skel" style="width: 55%"></span>
-                <span class="pf-pp-skel pf-pp-skel--sm" style="width: 35%"></span>
-              </div>
+              <div class="pf-pp-skelrow"><span class="pf-pp-skel" style="width: 55%"></span><span class="pf-pp-skel pf-pp-skel--sm" style="width: 35%"></span></div>
             }
           </div>
-        } @else if (patient(); as p) {
-          @switch (view()) {
-            @case ('orders') {
-              <pf-lab-orders [orders]="history()" [patientId]="p.id" [query]="query()" [fromDate]="fromDate()" [toDate]="toDate()"
-                             (clearFilters)="clearFilters()" (detailChange)="orderOpen.set($event)"></pf-lab-orders>
-            }
-            @case ('trends') {
-              <pf-lab-trends [patientId]="p.id" [query]="query()" [fit]="false"></pf-lab-trends>
-            }
-            @case ('timeline') {
-              @if (unifiedTimeline().length === 0) {
-                <div class="nd-empty">
-                  <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-                  <p class="nd-empty__title">No visits yet</p>
-                  <p class="nd-empty__body">Orders and visits appear here as they happen.</p>
-                </div>
-              } @else if (shownTimeline().length === 0) {
-                <div class="nd-empty">
-                  <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
-                  <p class="nd-empty__title">No visits match</p>
-                  <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="query.set('')">Clear search</button>
-                </div>
-              } @else {
-                <ul class="pf-pp-tl" role="list" aria-label="Visits">
-                  @for (evt of shownTimeline(); track evt.id; let i = $index) {
-                    <li class="pf-pp-tl__li" [style.--i]="i < 12 ? i : 12">
-                      <div class="pf-pp-tlrow" role="button" tabindex="0" [attr.aria-expanded]="!!expandedVisits()[evt.id]"
-                           (click)="toggleVisitExpand(evt.id)" (keydown.enter)="toggleVisitExpand(evt.id)"
-                           (keydown.space)="$event.preventDefault(); toggleVisitExpand(evt.id)">
-                        <div class="pf-pp-tlrow__body">
-                          <p class="pf-pp-tlrow__name">{{ evt.title }}</p>
-                          <p class="pf-pp-tlrow__meta nd-num">
-                            <span class="pf-pp-mi">{{ evt.type === 'lab' ? 'Lab' : (evt.type | uppercase) }}</span>
-                            <span class="pf-pp-mi">{{ evt.subtitle }}</span>
-                            <span class="pf-pp-mi">{{ evt.date | date:'d MMM y, h:mm a' }}</span>
-                          </p>
-                        </div>
-                        @if (evt.type === 'lab') {
-                          <span class="pf-pp-status" [attr.data-tone]="orderTone(evt.status)"><span class="pf-pp-dot" aria-hidden="true"></span>{{ orderStatusLabel(evt.status) }}</span>
-                        } @else {
-                          <span class="pf-pp-status" [attr.data-tone]="evt.status === 'Admitted' ? 'amber' : 'green'"><span class="pf-pp-dot" aria-hidden="true"></span>{{ evt.status === 'completed' ? 'Completed' : evt.status }}</span>
-                        }
-                        <svg class="pf-pp-tlrow__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-                      </div>
-                      <div class="pf-pp-tlx" [class.pf-pp-tlx--open]="!!expandedVisits()[evt.id]" [attr.inert]="expandedVisits()[evt.id] ? null : ''">
-                        <div class="pf-pp-tlx__in">
-                          @if (expandedVisits()[evt.id]) {
-                            @if (evt.type === 'lab') {
-                              <ul class="pf-pp-tlx__tests" role="list">
-                                @for (t of orderTests(evt.data); track t.id) {
-                                  <li>
-                                    <span class="pf-pp-tlx__name">{{ t.test?.name || t.name }}
-                                      @if (t.test?.code) { <span class="pf-pp-tlx__code nd-num">{{ t.test!.code }}</span> }
-                                    </span>
-                                    <span class="pf-pp-status" [attr.data-tone]="testTone(t.status)"><span class="pf-pp-dot" aria-hidden="true"></span>{{ testStatusLabel(t.status) }}</span>
-                                  </li>
-                                }
-                              </ul>
-                              @if (evt.amount) {
-                                <p class="pf-pp-tlx__total nd-num"><span>Total invoice</span><span>{{ evt.amount | inr }}</span></p>
-                              }
-                            }
-                            @if (evt.type === 'opd') {
-                              <dl class="pf-pp-facts">
-                                <div><dt>Symptoms</dt><dd>{{ evt.data.symptoms.join(', ') }}</dd></div>
-                                <div><dt>Clinical notes</dt><dd>{{ evt.data.notes }}</dd></div>
-                                <div><dt>Prescribed medicines</dt>
-                                  <dd>
-                                    @for (med of evt.data.prescriptions; track med.name) {
-                                      <span class="pf-pp-tlx__med">{{ med.name }} <span class="pf-pp-tlx__sub">{{ med.dosage }} · {{ med.frequency }} · {{ med.duration }} · {{ med.status }}</span></span>
-                                    }
-                                  </dd>
-                                </div>
-                              </dl>
-                            }
-                            @if (evt.type === 'ipd') {
-                              <dl class="pf-pp-facts">
-                                <div><dt>Admission reason</dt><dd>{{ evt.data.reason }}</dd></div>
-                                <div><dt>Hospitalisation</dt><dd class="nd-num">Admitted {{ evt.data.admissionDate | date:'d MMM y' }} · Discharged {{ evt.data.dischargeDate | date:'d MMM y' }}</dd></div>
-                                <div><dt>Rounds</dt>
-                                  <dd>
-                                    @for (prog of evt.data.dailyProgress; track prog.date) {
-                                      <span class="pf-pp-tlx__med"><span class="pf-pp-tlx__sub nd-num">{{ prog.date | date:'d MMM y, h:mm a' }} · {{ prog.doctor }}</span>{{ prog.note }}</span>
-                                    }
-                                  </dd>
-                                </div>
-                              </dl>
-                            }
-                          }
-                        </div>
-                      </div>
-                    </li>
-                  }
-                </ul>
-              }
-            }
-          }
-        } @else {
+        </div>
+      } @else if (!patient()) {
+        <div class="nd-card pf-pp-missing">
           <div class="nd-empty">
             <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span>
             <p class="nd-empty__title">Patient not found</p>
             <p class="nd-empty__body">This record may have been merged or removed.</p>
             <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="goBack()">Back</button>
           </div>
-        }
-      </div>
-    </section>
+        </div>
+      } @else if (detail(); as d) {
+        <!-- ─── DETAIL (zoomed in from a grid row / cell / timeline row) ─── -->
+        <section class="nd-card pf-pp-detail" [pfZoomTarget]="detailKeys()" [attr.aria-label]="d.kind === 'order' ? 'Order' : 'Trend'">
+          @if (d.kind === 'trend') {
+            <header class="nd-card__head pf-pp-detail__head">
+              <button type="button" class="nd-btn nd-btn--icon pf-pp-detail__back" (click)="closeDetail()" aria-label="Back to results" title="Back to results">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <span class="nd-card__label">Trend</span>
+              <span class="pf-pp-detail__t">{{ d.title }}</span>
+            </header>
+            <div class="nd-card__body pf-pp-detail__body pf-pp-detail__body--trend">
+              <pf-lab-trends [patientId]="patient()!.id" [fit]="false" [focus]="{ testId: d.testId, parameter: d.parameter }"></pf-lab-trends>
+            </div>
+          } @else {
+            <div class="nd-card__body pf-pp-detail__body">
+              <pf-lab-orders [orders]="history()" [patientId]="patient()!.id" [detailId]="d.id" [autoReport]="d.report"
+                             (detailChange)="$event === null && closeDetail()"></pf-lab-orders>
+            </div>
+          }
+        </section>
+      } @else {
+        <!-- ─── SNAPSHOT ─────────────────────────────────────────────── -->
+        <section class="nd-card pf-pp-snap" aria-label="Clinical snapshot">
+          <!-- Needs attention: flagged values from the latest visits. -->
+          <div class="pf-pp-pane pf-pp-pane--attn">
+            <h3 class="pf-pp-pane__t">Needs attention
+              @if (attention().length) { <span class="pf-pp-pane__n nd-num">{{ attention().length }}</span> }
+            </h3>
+            @if (!canResults()) {
+              <p class="pf-pp-quiet">Results need report access.</p>
+            } @else if (cumLoading()) {
+              <span class="pf-pp-skel" style="width: 80%"></span><span class="pf-pp-skel" style="width: 60%"></span>
+            } @else if (cumFailed()) {
+              <p class="pf-pp-quiet">Couldn’t load results.</p>
+            } @else if (!attention().length) {
+              <p class="pf-pp-calm">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                {{ grid().rowCount ? 'Nothing flagged in the latest results' : 'No results yet' }}
+              </p>
+            } @else {
+              <ul class="pf-pp-attn" role="list">
+                @for (a of attention().slice(0, attentionMax()); track a.key; let i = $index) {
+                  <li class="pf-pp-attn__li" [style.--i]="i">
+                    <button type="button" class="pf-pp-attn__row" [attr.data-tone]="a.tone" [pfZoomSource]="[a.key]" (click)="openAttention(a.key, a.orderId)"
+                            [attr.aria-label]="a.title + ' ' + a.value + ' ' + a.unit + ', ' + (a.tone === 'critical' ? 'critical' : a.dir === 'up' ? 'high' : a.dir === 'down' ? 'low' : 'abnormal') + (a.delta ? ', ' + a.delta.text + ' since ' + a.delta.since : '')">
+                      <span class="pf-pp-attn__name">
+                        <span class="pf-pp-attn__dot" aria-hidden="true"></span>{{ a.title }}
+                        @if (a.testName !== a.title) { <span class="pf-pp-attn__test">{{ a.testName }}</span> }
+                      </span>
+                      <span class="pf-pp-attn__val nd-num">
+                        @if (a.dir === 'up') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg> }
+                        @if (a.dir === 'down') { <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> }
+                        {{ a.value }}@if (a.unit) {<span class="pf-pp-attn__unit">{{ a.unit }}</span>}
+                      </span>
+                      <span class="pf-pp-attn__meta nd-num">
+                        @if (a.range) { <span class="pf-pp-mi">Ref {{ a.range }}</span> }
+                        <span class="pf-pp-mi">{{ a.dateLabel }}@if (!a.final) { · prelim }</span>
+                        @if (a.delta; as dl) {
+                          <span class="pf-pp-mi pf-pp-attn__delta" [attr.data-dir]="dl.dir">{{ dl.text }} since {{ dl.since }}</span>
+                        }
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+              @if (attention().length > attentionMax()) {
+                <button type="button" class="nd-btn nd-btn--tertiary pf-pp-pane__more" (click)="abnormalSeed.set(abnormalSeed() + 1)">
+                  Show all {{ attention().length }} in results
+                </button>
+              }
+            }
+          </div>
 
-    <!-- ─── SUMMARY: right companion card (billing-style) ────────────── -->
+          <!-- In progress now: live stage + expected TAT. -->
+          <div class="pf-pp-pane pf-pp-pane--prog">
+            <h3 class="pf-pp-pane__t">In progress now
+              @if (active().length) { <span class="pf-pp-pane__n nd-num">{{ active().length }}</span> }
+            </h3>
+            @if (!active().length) {
+              <p class="pf-pp-quiet">Nothing in progress.</p>
+            } @else {
+              <ul class="pf-pp-prog" role="list">
+                @for (a of active().slice(0, 3); track a.order.id) {
+                  <li>
+                    <button type="button" class="pf-pp-prog__row" [pfZoomSource]="[a.order.id]" (click)="openOrder(a.order.id)"
+                            [attr.aria-label]="a.title + ', ' + a.stageLabel + (a.dueLabel ? ', ' + a.dueLabel : '')">
+                      <span class="pf-pp-prog__name">{{ a.title }}</span>
+                      <span class="pf-pp-steps" aria-hidden="true">
+                        @for (s of STAGES; track s; let i = $index) {
+                          <span class="pf-pp-steps__seg" [class.pf-pp-steps__seg--on]="a.stage >= i + 1" [class.pf-pp-steps__seg--now]="a.stage === i + 1"></span>
+                        }
+                      </span>
+                      <span class="pf-pp-prog__meta nd-num">
+                        <span class="pf-pp-status" [attr.data-tone]="a.stage === 3 ? 'amber' : a.stage === 1 ? 'blue' : a.stage === 0 ? 'neutral' : 'amber'"><span class="pf-pp-dot" aria-hidden="true"></span>{{ a.stageLabel }}</span>
+                        @if (a.dueLabel) { <span class="pf-pp-prog__due" [class.pf-pp-prog__due--late]="a.overdue">{{ a.dueLabel }}</span> }
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+              @if (active().length > 3) { <p class="pf-pp-quiet nd-num">+{{ active().length - 3 }} more in the timeline</p> }
+            }
+          </div>
+
+          <!-- Last visit. -->
+          <div class="pf-pp-pane pf-pp-pane--last">
+            <h3 class="pf-pp-pane__t">Last visit</h3>
+            @if (lastVisit(); as lv) {
+              <p class="pf-pp-last__date nd-num">{{ lv.date | date:'d MMM y' }}</p>
+              <p class="pf-pp-last__tests">{{ lv.title }}</p>
+              <p class="pf-pp-last__doc">{{ lv.doctor }}</p>
+              <div class="pf-pp-last__foot">
+                <span class="pf-pp-status" [attr.data-tone]="lv.report === 'ready' ? 'green' : lv.report === 'none' ? 'neutral' : 'amber'"><span class="pf-pp-dot" aria-hidden="true"></span>{{ lv.reportLabel }}</span>
+                <button type="button" class="nd-btn nd-btn--secondary pf-pp-last__view" [pfZoomSource]="[lv.order.id]" (click)="openOrder(lv.order.id, !!lv.order.report)">
+                  {{ lv.order.report ? 'View report' : 'View' }}
+                </button>
+              </div>
+            } @else {
+              <p class="pf-pp-quiet">No visits yet.</p>
+            }
+          </div>
+        </section>
+
+        <!-- ─── CUMULATIVE RESULTS ───────────────────────────────────── -->
+        <pf-cumulative-results class="pf-pp-results" [grid]="grid()" [loading]="cumLoading()" [failed]="cumFailed()"
+                               [forbidden]="!canResults()" [truncated]="cumTruncated()" [cards]="phone()" [abnormalSeed]="abnormalSeed()"
+                               (openTrend)="openTrend($event)" (openOrder)="openOrder($event, true)" (retry)="loadResults()"></pf-cumulative-results>
+
+        @if (narrow()) {
+          <!-- Stacked: the companion's content follows the results. -->
+          <section class="nd-card pf-pp-stack" aria-label="Timeline">
+            <header class="nd-card__head">
+              <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="timelineIcon"></ng-container></span>
+              <span class="nd-card__label">Timeline</span>
+              <span class="nd-card__note nd-num">{{ timeline().length }}</span>
+            </header>
+            <div class="nd-card__body">
+              <ng-container *ngTemplateOutlet="quickTpl"></ng-container>
+              <ng-container *ngTemplateOutlet="timelineTpl"></ng-container>
+            </div>
+          </section>
+          <section class="nd-card pf-pp-stack" aria-label="Patient details">
+            <header class="nd-card__head">
+              <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
+              <span class="nd-card__label">Details</span>
+            </header>
+            <div class="nd-card__body"><ng-container *ngTemplateOutlet="detailsTpl"></ng-container></div>
+          </section>
+        }
+      }
+    </div>
+
+    <!-- ─── PATIENT companion (right; quick actions · timeline · details) ── -->
     @if (!narrow()) {
       @if (sideCollapsed()) {
-        <aside class="nd-card pf-pp-strip" aria-label="Patient summary">
+        <aside class="nd-card pf-pp-strip" aria-label="Patient">
           <button type="button" class="pf-pp-strip__btn" (click)="toggleSide()"
-                  title="Show patient summary" aria-label="Show patient summary" aria-expanded="false">
+                  title="Show timeline and details" aria-label="Show timeline and details" aria-expanded="false">
             <span class="nd-btn nd-btn--icon pf-pp-strip__expand" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
             </span>
             <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
-            <span class="pf-pp-strip__label">Summary</span>
+            <span class="pf-pp-strip__label">Patient</span>
           </button>
         </aside>
       } @else {
-        <aside class="nd-card pf-pp-side" aria-label="Patient summary">
-          <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: true }"></ng-container>
-          <ng-container *ngTemplateOutlet="sideBody"></ng-container>
+        <aside class="nd-card pf-pp-side" aria-label="Patient">
+          <header class="nd-card__head pf-pp-side__head">
+            <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
+            <span class="nd-card__label">Patient</span>
+            <span class="nd-card__spacer"></span>
+            <div class="nd-seg pf-pp-seg" role="radiogroup" aria-label="Show" (keydown)="onSideSegKey($event)">
+              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="sideView() === 'timeline'"
+                      [attr.tabindex]="sideView() === 'timeline' ? 0 : -1" (click)="sideView.set('timeline')">
+                Timeline <span class="pf-pp-seg__n nd-num">{{ timeline().length }}</span>
+              </button>
+              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="sideView() === 'details'"
+                      [attr.tabindex]="sideView() === 'details' ? 0 : -1" (click)="sideView.set('details')">Details</button>
+            </div>
+            <button type="button" class="nd-btn nd-btn--icon pf-pp-collapse" (click)="toggleSide()"
+                    title="Hide the patient card" aria-label="Hide the patient card" aria-expanded="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </header>
+          <div class="nd-card__body pf-pp-sidebody">
+            @if (patient()) {
+              <ng-container *ngTemplateOutlet="quickTpl"></ng-container>
+              @if (sideView() === 'timeline') {
+                <ng-container *ngTemplateOutlet="timelineTpl"></ng-container>
+              } @else {
+                <ng-container *ngTemplateOutlet="detailsTpl"></ng-container>
+              }
+            } @else {
+              <span class="pf-pp-skel" style="width: 60%" aria-hidden="true"></span>
+              <span class="pf-pp-skel" aria-hidden="true"></span>
+              <span class="pf-pp-skel" style="width: 80%" aria-hidden="true"></span>
+            }
+          </div>
         </aside>
       }
     }
   </div>
 
   <!-- Phones: THE primary, full width above the navbar. -->
-  @if (phone() && patient(); as p) {
+  @if (phone() && canNewOrder() && patient(); as p) {
     <div class="nd-bottombar pf-pp-bottombar">
       <button type="button" class="nd-btn nd-btn--primary pf-pp-bottombar__new" (click)="startOrder(p)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
@@ -295,14 +299,13 @@
     </div>
   }
 
-  <!-- ≤900px: the SUMMARY card as a sheet from the pill. -->
-  @if (narrow() && summaryOpen()) {
-    <div class="pf-pp-scrim" (click)="summaryOpen.set(false)" aria-hidden="true"></div>
-    <aside class="nd-card pf-pp-sheet pf-pp-sheet--summary" role="dialog" aria-modal="true" aria-label="Patient summary">
-      <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
-      <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: false }"></ng-container>
-      <ng-container *ngTemplateOutlet="sideBody"></ng-container>
-    </aside>
+  <!-- Label reprint: off-screen label cards, printed on their own. -->
+  @if (reprintOrder(); as ro) {
+    <div class="pf-print-label pf-pp-reprint" aria-hidden="true">
+      @for (s of ro.samples; track s.id; let i = $index) {
+        <pf-label-card [sample]="s" [patient]="ro.patient" [index]="i" [printing]="true"></pf-label-card>
+      }
+    </div>
   }
 
   <!-- More: a menu under the band on web, a sheet on phones. -->
@@ -359,7 +362,7 @@
         </li>
         <li role="none">
           <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="timeline"
-                  (click)="closeMore(); patientTimeline.open(p.id, clinicalData()?.opdRecords ?? [], clinicalData()?.ipdAdmissions ?? [], clinicalData()?.prescriptions ?? [])">
+                  (click)="closeMore(); openFullTimeline()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h3M14 12h3"/></svg>
             Full timeline
           </button>
@@ -507,6 +510,182 @@
   <ng-template #summaryIcon>
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
   </ng-template>
+  <ng-template #timelineIcon>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+  </ng-template>
+
+  <!-- Quick actions for techs (only what this user may do). -->
+  <ng-template #quickTpl>
+    @if (sideQuick().length) {
+      <div class="pf-pp-quick" role="group" aria-label="Quick actions">
+        @for (q of sideQuick(); track q.key) {
+          <button type="button" class="nd-btn nd-btn--secondary pf-pp-quick__btn" [attr.data-q]="q.key"
+                  [disabled]="q.key === 'labels' && reprintLoading()" (click)="runQuick(q)">
+            @switch (q.key) {
+              @case ('repeat') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg> }
+              @case ('labels') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M6 18H4.5A1.5 1.5 0 0 1 3 16.5V11a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5.5a1.5 1.5 0 0 1-1.5 1.5H18"/></svg> }
+              @case ('report') { <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg> }
+            }
+            <span>{{ q.label }}</span>
+          </button>
+        }
+      </div>
+    }
+  </ng-template>
+
+  <!-- Timeline: the patient's REAL history, one feed (no made-up records). -->
+  <ng-template #timelineTpl>
+    @if (!timeline().length) {
+      <div class="nd-empty nd-empty--compact">
+        <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+        <p class="nd-empty__title">No history yet</p>
+        <p class="nd-empty__body">Orders, reports and appointments appear here as they happen.</p>
+      </div>
+    } @else {
+      <ol class="pf-tl" aria-label="Timeline">
+        @for (e of timeline(); track e.id; let i = $index) {
+          <li class="pf-tl__li" [style.--i]="i < 12 ? i : 12" [attr.data-kind]="e.kind">
+            <span class="pf-tl__rail" aria-hidden="true">
+              <span class="pf-tl__icon">
+                @switch (e.kind) {
+                  @case ('order') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6.5L4.5 17a3 3 0 0 0 2.7 4.5h9.6a3 3 0 0 0 2.7-4.5L15 8.5V2"/><path d="M8 2h8"/></svg> }
+                  @case ('report') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> }
+                  @case ('home') { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg> }
+                  @default { <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> }
+                }
+              </span>
+            </span>
+            <div class="pf-tl__row" role="button" tabindex="0" [attr.data-kind]="e.kind"
+                 [attr.aria-expanded]="e.orderId ? null : !!expanded()[e.id]"
+                 [attr.aria-label]="(e.orderId ? 'Open ' : '') + e.title + ', ' + e.status"
+                 [pfZoomSource]="e.orderId ? [e.orderId] : []" (click)="onEvent(e)" (keydown)="onEventKey($event, e)">
+              <span class="pf-tl__date nd-num">{{ e.date | date:'d MMM y' }}@if (e.kind !== 'appointment' && e.kind !== 'home') { · {{ e.date | date:'h:mm a' }} }</span>
+              <span class="pf-tl__title">{{ e.title }}</span>
+              <span class="pf-tl__meta nd-num">
+                @for (m of e.meta; track $index) { <span class="pf-pp-mi">{{ m }}</span> }
+              </span>
+              <span class="pf-pp-status pf-tl__status" [attr.data-tone]="e.tone"><span class="pf-pp-dot" aria-hidden="true"></span>{{ e.status }}</span>
+            </div>
+            @if (e.appointment; as ap) {
+              <div class="pf-pp-tlx" [class.pf-pp-tlx--open]="!!expanded()[e.id]" [attr.inert]="expanded()[e.id] ? null : ''">
+                <div class="pf-pp-tlx__in">
+                  <dl class="pf-pp-facts">
+                    <div><dt>When</dt><dd class="nd-num">{{ ap.appointmentDate | date:'d MMM y' }}@if (ap.slotTime) { · {{ ap.slotTime }} }</dd></div>
+                    <div><dt>Type</dt><dd>{{ e.kind === 'home' ? 'Home collection' : 'Visit' }}</dd></div>
+                    @if (ap.refDoctorName) { <div><dt>Doctor</dt><dd>{{ ap.refDoctorName }}</dd></div> }
+                    @if (ap.notes) { <div><dt>Notes</dt><dd>{{ ap.notes }}</dd></div> }
+                  </dl>
+                </div>
+              </div>
+            }
+          </li>
+        }
+      </ol>
+      <button type="button" class="nd-btn nd-btn--tertiary pf-pp-fulltl" (click)="openFullTimeline()">Open the full timeline</button>
+    }
+  </ng-template>
+
+  <!-- Details: demographics, contact, ABHA, billing, clinical notes. -->
+  <ng-template #detailsTpl>
+    @if (patient(); as p) {
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-who">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-who">Patient</h3>
+        <dl class="pf-pp-facts">
+          <div><dt>Age · sex</dt><dd class="nd-num">{{ ageSex() }}</dd></div>
+          @if (p.dateOfBirth) { <div><dt>Date of birth</dt><dd class="nd-num">{{ p.dateOfBirth | date:'d MMM y' }}</dd></div> }
+          <div><dt>Blood group</dt><dd>{{ p.bloodGroup || 'Not recorded' }}</dd></div>
+          <div>
+            <dt>Patient ID</dt>
+            <dd class="pf-pp-idrow">
+              <span class="nd-num">{{ p.mrn || '—' }}</span>
+              @if (p.mrn) {
+                <button type="button" class="nd-btn nd-btn--icon pf-pp-copy" (click)="copyToClipboard(p.mrn)"
+                        [attr.aria-label]="copied() ? 'Copied' : 'Copy patient ID'" [title]="copied() ? 'Copied' : 'Copy patient ID'">
+                  @if (copied()) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  } @else {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                  }
+                </button>
+              }
+            </dd>
+          </div>
+          @if (p.createdAt) { <div><dt>Registered</dt><dd class="nd-num">{{ p.createdAt | date:'d MMM y' }}</dd></div> }
+        </dl>
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-clin">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-clin">Clinical notes</h3>
+        <dl class="pf-pp-facts">
+          <div><dt>Allergies</dt><dd>{{ p.hasKnownAllergies ? 'Known allergies (recorded at registration)' : 'None recorded' }}</dd></div>
+          @if (p.isMinor) { <div><dt>Guardian</dt><dd>Required (minor)</dd></div> }
+        </dl>
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-contact">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-contact">Contact</h3>
+        <dl class="pf-pp-facts">
+          <div><dt>Phone</dt><dd>@if (p.phone) { <a class="pf-pp-link nd-num" [href]="'tel:' + p.phone">{{ p.phone }}</a> } @else { Not recorded }</dd></div>
+          @if (p.email) { <div><dt>Email</dt><dd class="pf-pp-wrap">{{ p.email }}</dd></div> }
+          @if (p.guardianName) {
+            <div><dt>Guardian</dt>
+              <dd>{{ p.guardianName }} <span class="pf-pp-sub">({{ p.guardianRelationship ?? 'Guardian' }})</span>
+                @if (p.guardianPhone) { <a class="pf-pp-link pf-pp-block nd-num" [href]="'tel:' + p.guardianPhone">{{ p.guardianPhone }}</a> }
+              </dd>
+            </div>
+          }
+          @if (kyc(); as k) {
+            @if (k.address || k.district || k.state || k.pincode) {
+              <div><dt>Address</dt><dd>{{ kycAddress(k) }}@if (k.pincode) { <span class="nd-num"> {{ k.pincode }}</span> }</dd></div>
+            }
+          }
+        </dl>
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-abha">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-abha">ABHA</h3>
+        @if (p.abhaId) {
+          <span class="nd-chip nd-chip--static pf-pp-state">
+            @if (p.abhaVerified) {
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Linked · KYC verified
+            } @else {
+              <span class="pf-pp-state__ring" aria-hidden="true"></span>
+              Linked · not verified
+            }
+          </span>
+          <dl class="pf-pp-facts">
+            <div><dt>ABHA number</dt><dd class="nd-num">{{ abhaFormatted() }}</dd></div>
+            @if (cardAbhaAddress()) { <div><dt>ABHA address</dt><dd class="pf-pp-wrap">{{ cardAbhaAddress() }}</dd></div> }
+          </dl>
+          <div class="pf-pp-sec__acts">
+            <button type="button" class="nd-btn nd-btn--secondary pf-pp-abha-card" (click)="abhaCardOpen.set(true)">View card</button>
+            <button type="button" class="nd-btn nd-btn--tertiary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">
+              {{ p.abhaVerified ? 'Refresh from ABHA' : 'Verify ABHA' }}
+            </button>
+          </div>
+        } @else {
+          <p class="pf-pp-none">No ABHA linked yet.</p>
+          <div class="pf-pp-sec__acts">
+            <button type="button" class="nd-btn nd-btn--secondary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">Link ABHA</button>
+          </div>
+        }
+      </section>
+
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-bill">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-bill">Billing</h3>
+        <dl class="pf-pp-stats">
+          <div><dt>Outstanding</dt><dd class="nd-num" [class.pf-pp-owed]="outstanding() > 0">{{ outstanding() | inr }}</dd></div>
+          <div><dt>Total billed</dt><dd class="nd-num">{{ realTotalSpent() | inr }}</dd></div>
+          <div><dt>Lab visits</dt><dd class="nd-num">{{ realVisits() }}</dd></div>
+          <div><dt>Tests ordered</dt><dd class="nd-num">{{ realTestsDone() }}</dd></div>
+        </dl>
+        @if (unpaidOrders()) {
+          <p class="pf-pp-due"><span class="pf-pp-dot" aria-hidden="true"></span>Payment due on {{ unpaidOrders() }} {{ unpaidOrders() === 1 ? 'order' : 'orders' }}</p>
+        }
+      </section>
+    }
+  </ng-template>
 
   <ng-template #modalHead let-label="label" let-close="close">
     <header class="nd-card__head">
@@ -516,131 +695,6 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
       </button>
     </header>
-  </ng-template>
-
-  <ng-template #sideHead let-collapsible="collapsible">
-    <header class="nd-card__head">
-      <span class="nd-card__icon" aria-hidden="true"><ng-container *ngTemplateOutlet="summaryIcon"></ng-container></span>
-      <span class="nd-card__label">Summary</span>
-      <span class="nd-card__spacer"></span>
-      @if (collapsible) {
-        <button type="button" class="nd-btn nd-btn--icon pf-pp-collapse" (click)="toggleSide()"
-                title="Hide patient summary" aria-label="Hide patient summary" aria-expanded="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
-      } @else {
-        <button type="button" class="nd-btn nd-btn--icon pf-pp-close" (click)="summaryOpen.set(false)" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
-      }
-    </header>
-  </ng-template>
-
-  <ng-template #sideBody>
-    <div class="nd-card__body pf-pp-sidebody">
-      @if (patient(); as p) {
-        <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-who">
-          <h3 class="pf-pp-sec__t" id="pf-pp-sec-who">Patient</h3>
-          <dl class="pf-pp-facts">
-            <div><dt>Age · sex</dt><dd class="nd-num">{{ ageSex() }}</dd></div>
-            @if (p.dateOfBirth) { <div><dt>Date of birth</dt><dd class="nd-num">{{ p.dateOfBirth | date:'d MMM y' }}</dd></div> }
-            <div><dt>Blood group</dt><dd>{{ p.bloodGroup || 'Not recorded' }}</dd></div>
-            <div>
-              <dt>Patient ID</dt>
-              <dd class="pf-pp-idrow">
-                <span class="nd-num">{{ p.mrn || '—' }}</span>
-                @if (p.mrn) {
-                  <button type="button" class="nd-btn nd-btn--icon pf-pp-copy" (click)="copyToClipboard(p.mrn)"
-                          [attr.aria-label]="copied() ? 'Copied' : 'Copy patient ID'" [title]="copied() ? 'Copied' : 'Copy patient ID'">
-                    @if (copied()) {
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                    } @else {
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                    }
-                  </button>
-                }
-              </dd>
-            </div>
-            @if (p.createdAt) { <div><dt>Registered</dt><dd class="nd-num">{{ p.createdAt | date:'d MMM y' }}</dd></div> }
-          </dl>
-        </section>
-
-        <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-contact">
-          <h3 class="pf-pp-sec__t" id="pf-pp-sec-contact">Contact</h3>
-          <dl class="pf-pp-facts">
-            <div><dt>Phone</dt><dd>@if (p.phone) { <a class="pf-pp-link nd-num" [href]="'tel:' + p.phone">{{ p.phone }}</a> } @else { Not recorded }</dd></div>
-            @if (p.email) { <div><dt>Email</dt><dd class="pf-pp-wrap">{{ p.email }}</dd></div> }
-            @if (p.guardianName) {
-              <div><dt>Guardian</dt>
-                <dd>{{ p.guardianName }} <span class="pf-pp-sub">({{ p.guardianRelationship ?? 'Guardian' }})</span>
-                  @if (p.guardianPhone) { <a class="pf-pp-link pf-pp-block nd-num" [href]="'tel:' + p.guardianPhone">{{ p.guardianPhone }}</a> }
-                </dd>
-              </div>
-            }
-            @if (kyc(); as k) {
-              @if (k.address || k.district || k.state || k.pincode) {
-                <div><dt>Address</dt><dd>{{ kycAddress(k) }}@if (k.pincode) { <span class="nd-num"> {{ k.pincode }}</span> }</dd></div>
-              }
-            }
-          </dl>
-        </section>
-
-        <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-abha">
-          <h3 class="pf-pp-sec__t" id="pf-pp-sec-abha">ABHA</h3>
-          @if (p.abhaId) {
-            <span class="nd-chip nd-chip--static pf-pp-state">
-              @if (p.abhaVerified) {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                Linked · KYC verified
-              } @else {
-                <span class="pf-pp-state__ring" aria-hidden="true"></span>
-                Linked · not verified
-              }
-            </span>
-            <dl class="pf-pp-facts">
-              <div><dt>ABHA number</dt><dd class="nd-num">{{ abhaFormatted() }}</dd></div>
-              @if (cardAbhaAddress()) { <div><dt>ABHA address</dt><dd class="pf-pp-wrap">{{ cardAbhaAddress() }}</dd></div> }
-            </dl>
-            <div class="pf-pp-sec__acts">
-              <button type="button" class="nd-btn nd-btn--secondary pf-pp-abha-card" (click)="abhaCardOpen.set(true)">View card</button>
-              <button type="button" class="nd-btn nd-btn--tertiary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">
-                {{ p.abhaVerified ? 'Refresh from ABHA' : 'Verify ABHA' }}
-              </button>
-            </div>
-          } @else {
-            <p class="pf-pp-none">No ABHA linked yet.</p>
-            <div class="pf-pp-sec__acts">
-              <button type="button" class="nd-btn nd-btn--secondary pf-pp-abha-act" (click)="abhaWizardOpen.set(true)">Link ABHA</button>
-            </div>
-          }
-        </section>
-
-        <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-act">
-          <h3 class="pf-pp-sec__t" id="pf-pp-sec-act">Activity</h3>
-          <dl class="pf-pp-stats">
-            <div><dt>Lab visits</dt><dd class="nd-num">{{ realVisits() }}</dd></div>
-            <div><dt>Tests ordered</dt><dd class="nd-num">{{ realTestsDone() }}</dd></div>
-            <div><dt>Total billed</dt><dd class="nd-num">{{ realTotalSpent() | inr }}</dd></div>
-            <div><dt>Last visit</dt><dd class="nd-num">{{ realLastVisit() ? (realLastVisit() | date:'d MMM y') : '—' }}</dd></div>
-          </dl>
-          @if (unpaidOrders()) {
-            <p class="pf-pp-due"><span class="pf-pp-dot" aria-hidden="true"></span>Payment due on {{ unpaidOrders() }} {{ unpaidOrders() === 1 ? 'order' : 'orders' }}</p>
-          }
-        </section>
-
-        <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-clin">
-          <h3 class="pf-pp-sec__t" id="pf-pp-sec-clin">Clinical</h3>
-          <dl class="pf-pp-facts">
-            <div><dt>Allergies</dt><dd>{{ p.hasKnownAllergies ? 'Known allergies (recorded at registration)' : 'None recorded' }}</dd></div>
-            <div><dt>Vitals</dt><dd class="pf-pp-sub">Not recorded; vitals are captured at OPD / IPD intake.</dd></div>
-          </dl>
-        </section>
-      } @else {
-        <span class="pf-pp-skel" style="width: 60%" aria-hidden="true"></span>
-        <span class="pf-pp-skel" aria-hidden="true"></span>
-        <span class="pf-pp-skel" style="width: 80%" aria-hidden="true"></span>
-      }
-    </div>
   </ng-template>
 
   <!-- The official ABHA card look (Ayushman Bharat Health Account / NHA). -->

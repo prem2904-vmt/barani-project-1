@@ -1358,90 +1358,129 @@ styles scoped under `.pf-apc` / `.pf-bka`).
 
 ## 22. Patient profile
 
-`/frontdesk/patients/:id` (`features/frontdesk/patient-profile/`) is the
-patient's history, and the two jobs share one screen. It is a visual
-redesign only: the APIs (`GET /api/patients/{id}`, `/lab-trends`,
-`/api/reports/by-order/{id}`, merge, directory, ABHA) and every action are
-unchanged. The helpers are in `patient-profile.nd.ts`.
+`/frontdesk/patients/:id` (`features/frontdesk/patient-profile/`) is
+**clinical-first**: a doctor or technician reads the patient's lab story in
+five seconds, then acts. The pure helpers are in `patient-profile.clinical.ts`
+(snapshot, grid, sparklines, timeline, quick actions) and
+`patient-profile.nd.ts` (pill, labels, tones).
 
-- **Band:** back · tenant · actions. Back returns to where you came from
-  (history), or to `/frontdesk` after a form or a deep link. Actions are
-  **Edit patient** (ghost), **More** (ghost icon) and THE primary **New
-  order**. Web shows text buttons; touch shows 44px icons with the words
-  kept in `aria-label`.
-- **More** holds the rest: Book appointment, Send to a colleague (Messages
-  only), Link / Verify / Refresh ABHA, Print ID card, Show QR code, Copy
-  patient ID, Full timeline and Merge a duplicate (edit rights only). On web
-  it is a menu under the band; on phones it is a sheet above the navbar, and
-  Edit patient moves into it.
-- **Context bar (the pill):** the FULL name (wraps, never cut), then a quiet
-  "22/M · AA0006 · +91 98765 43210" in tabular numbers. A neutral ABHA chip
-  follows when one is linked, with a violet check when it is verified. Then
-  the patient's flags, as neutral chips with one toned dot each: Known
-  allergies (red), Minor (amber), Payment due (red, from `billStatus =
-  unpaid`) and Fall risk (amber, over 60). At ≤900px a quiet **Summary**
-  button opens the side card.
-- **HISTORY is the main card.** Its header follows the "card header: search
-  + filter" rule: the icon chip and the label, a compact search, then the
-  neutral `.nd-seg` radiogroup **Orders n · Trends · Timeline n** (one Tab
-  stop, arrow keys move). Orders adds a quiet date-range button, which opens
-  All / 30 days / 90 days plus From and To as `pf-nd-date`. Timeline adds
-  **Full timeline**, which opens the shell overlay.
-  - **Orders:** one row per order, in the Frontdesk list-row language. The
-    tests are the primary line (at most four, then "+N more"). The meta line
-    is the order number, date, test count, doctor and price. The status is a
-    dot and a coloured word, with **Repeat** (`.nd-rowact`) stacked under it.
-    A row ZOOMS (`zoom.runLocal`) into the order in the same card: its tests,
-    each result (only abnormal or critical values carry colour, with an SVG
-    flag), Repeat order and View report (the PDF rendered in place). The
-    back chevron zooms out.
-  - **Trends:** the trendogram fills the card body (`[fit]="false"`). The
-    header search feeds its test list. Selected tests use the neutral
-    selected state, Line / Bar is an `.nd-seg`, and the loading state is a
-    skeleton. The chart is skinned in the component (`ndTrendSkin`): Noto
-    Sans, theme-aware axes and tooltip, violet data, a neutral reference
-    band, and red only on flagged points. `trend-chart.ts` still owns the
-    PDF look.
-  - **Timeline:** rows with the same anatomy (the kind, Lab / OPD / IPD, is
-    shown in the meta line). A row expands in place with grid-rows on
-    `--nd-spring`, and is `inert` while closed.
-- **SUMMARY is the right companion** (400px, or 360px at ≤1280px). It
-  collapses to a strip on the RIGHT edge, remembered per user in
-  `pf:pp:side-collapsed:<uid>`. It holds:
-  - **Patient:** age · sex, date of birth, blood group, patient ID with a
-    copy button, and the registration date.
-  - **Contact:** phone (`tel:`), email, guardian, and the ABHA KYC address.
-  - **ABHA:** a status chip, the number and address, **View card** (the
-    official card in a modal) and Verify / Refresh, or **Link ABHA** when
-    none is linked.
-  - **Activity:** lab visits, tests ordered, total billed and last visit, as
-    tabular stats, plus "Payment due on N orders".
-  - **Clinical:** allergies and vitals, shown as "not recorded" where the
-    data does not exist.
-- **Empty and loading:** every empty list is an `.nd-empty` ("No orders
-  yet", "No orders match" with Clear filters, "No visits yet", "Patient not
-  found"). Loading is a static row skeleton inside the HISTORY card, which is
-  the ONE `[pfZoomTarget]` (the patient id) from skeleton to content. The
-  skeleton also shows while `zoom.holding()`.
-- **Zoom in:** `/frontdesk/patients/:id` is a zoom detail. The Front desk
-  appointment card, the order drawer's Patient profile button and the home
-  collection "View patient profile" are `[pfZoomSource]`. Search and deep
-  links open instantly.
-- **Phones (≤640px):** HISTORY is full width with its search full width
-  (44px, 16px text) above the filter row. **New order** is the full-width
-  `.nd-bottombar` above the navbar (the band has no primary there). Summary,
-  More, the date range and every picker are sheets above the navbar. Targets
-  are at least 44px.
-- **Motion:** the pill chips and actions fade in with a 40ms stagger, rows
-  stagger by 18ms, and the side card collapses on the billing width motion.
-  All of it is off under reduced motion.
-- **Specs:** `patient-profile.nd.spec.ts` covers the pill, the one primary
-  on web and phone, every action reachable, More, the card header order,
-  rows, the order zoom, search, `pf-nd-date`, Trends, Timeline, the empty,
-  skeleton and not-found states, the collapse, the Summary sheet, the ABHA
-  card, no monospace or native controls, and the chart skin. The real
-  layout is `apps/lms-e2e/src/patient-profile-layout.rbac.spec.ts`, read
-  only (`PATIENT_ID=… BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`).
+**Data.** Two reads, fired in parallel on load, never one per report:
+`GET /api/patients/{id}` (patient, orders with bill + report summaries,
+`test.tatHours`, and the patient's appointments / home visits) and
+`GET /api/patients/{id}/cumulative-results` (every resulted test, validated =
+final, entered = preliminary, with the value, unit, printed range and flag the
+lab SAVED; one query; tenant-guarded; `view_report` | `validate_result` |
+`view_order`). The trend chart loads `/lab-trends` only when opened. Nothing is
+made up: no data → an `.nd-empty`, never generated OPD / IPD records.
+
+```
+band ‹ tenant                              [Edit patient] [⋮] [+ New order]
+ pill: FULL name · 22/M · MRN · phone · ABHA ✓ · (flags)
+┌ SNAPSHOT ──────────────────────────────────────────────┐ ┌ PATIENT  [Timeline n|Details] › ┐
+│ NEEDS ATTENTION n      │ IN PROGRESS NOW n │ LAST VISIT │ │ [Repeat last] [Reprint labels]  │
+│ ● Potassium   ↑ 6.4    │ tests ▬▬▬▭        │ 24 Sep     │ │ [View last report]              │
+│   Ref · date · +31%…   │ ● Awaiting · by…  │ tests · Dr │ │ ○ feed: order / report / visit  │
+├ CUMULATIVE RESULTS  [search] (Abnormal only) ──────────┤ │   (rows zoom into the order)    │
+│ [All][Biochemistry][Haematology]                        │ │                                 │
+│ ANALYTE      ~spark~ ↑%  REF    27 Sep  24 Sep  12 Aug… │ │                                 │
+│ BIOCHEMISTRY · Lipid Profile                            │ │                                 │
+│ LDL  mg/dL   ╱╱      +17% <130   162▲    138▲          │ │                                 │
+└──────────────────────── legend ─────────────────────────┘ └─────────────────────────────────┘
+```
+
+- **Band:** back (history, else `/frontdesk`; an open detail closes first) ·
+  tenant · **Edit patient** (ghost) · **More** · THE primary **New order**,
+  shown only when `canOpenRoute('/frontdesk/order')` passes. The pill (the
+  CONTEXT BAR) is unchanged: FULL name, "22/M · MRN · phone", a neutral ABHA
+  chip (violet check when verified), and the flags Known allergies (red),
+  Minor (amber), Payment due (red), Fall risk (amber).
+- **More:** Book appointment, Send to a colleague (Messages only), Link /
+  Verify / Refresh ABHA, Print ID card, Show QR code, Copy patient ID, Full
+  timeline (real lab history only) and Merge a duplicate (edit rights). A menu
+  on web, a sheet on phones (Edit patient moves into it).
+- **SNAPSHOT** (one card, three panes, top of the main column):
+  - **Needs attention:** each analyte's LATEST value when it is flagged and
+    comes from one of the 3 most recent resulted visits (older flags never
+    re-tested are history). Criticals first (a red tint on the row), then
+    newest. A row = dot + analyte (+ test), the value + unit in the tone with
+    an SVG ↑/↓ from the stored code (CH / H up, CL / L down; legacy C is
+    critical with no arrow; criticals via `isCriticalFlag`), "Ref …",
+    the date ("prelim" when awaiting validation) and the delta vs the
+    previous value in the same unit ("+18% since 12 Aug"; none across units).
+    Four rows (three ≤900px), then "Show all N in results" = the grid's
+    Abnormal only. A row opens the analyte's trend (or its visit when it has
+    one value).
+  - **In progress now:** active orders (ordered → collected → in lab →
+    awaiting validation), a 4-segment violet stage bar, the stage as a dot +
+    word, and "Ready by …" from created + the slowest test's `tatHours`
+    ("Overdue by N h" in red). A row zooms into the order.
+  - **Last visit:** the newest COMPLETED visit (else the newest order): date,
+    tests, doctor, report status (dot + word) and **View** (report in place).
+- **CUMULATIVE RESULTS** (`cumulative-results.component.ts`, fills the rest):
+  the card header is search analytes + the slate **Abnormal only** switch;
+  department chips (`.nd-chip[aria-pressed]`, A–Z) sit under it. A table with
+  a sticky header row and a sticky analyte column; one column per resulted
+  visit, newest first, older visits scroll sideways. Groups = department →
+  panel (the profile a test arrived through, else the test). The analyte cell
+  holds the name, unit, a 64×22 inline-SVG sparkline (violet line, the
+  reference band shaded neutral, flagged points toned, the latest dot always
+  drawn) and the trend arrow + % since the previous result. Flagged cells are
+  tinted subtly (amber H / L, red critical) with an SVG arrow; preliminary
+  values are dotted-underlined. **Units:** a row whose visits used different
+  units shows an amber "Units differ" tag, the odd cells print their unit, and
+  no trend is drawn across them. A row → the full trend chart (`pf-lab-trends`
+  with `[focus]`); a cell → that visit's order with its report open. A legend
+  (High / low · Critical · Reference band · Awaiting validation) closes the
+  card. Empty: "No results yet"; no match: Clear filters; no permission:
+  "Results need report access" (and no request is made).
+- **Detail = zoom.** Grid rows / cells, snapshot rows and timeline rows are
+  `[pfZoomSource]`; the detail card (`[pfZoomTarget]` = the order id or the
+  analyte key) replaces the main column via `zoom.runLocal('in')`: the order
+  (`pf-lab-orders [detailId] [autoReport]`: tests, saved results, Repeat,
+  View report) or the trend. Back / Esc zooms out.
+- **PATIENT companion** (right, 380px; 340px ≤1280px; collapsible to a strip,
+  remembered in `pf:pp:side-collapsed:<uid>`): header = icon + PATIENT + the
+  neutral `.nd-seg` **Timeline n · Details** (one Tab stop) + collapse.
+  - **Quick actions** (secondary buttons, only those the user may take —
+    `quickActions()` over `route-access` + the APIs' permissions, and only
+    when there is something to act on): Repeat last order, Reprint labels
+    (off-screen label cards + `printLabelOnly`), View last report. New order
+    is the band primary.
+  - **Timeline:** a rail of kind icons; orders (bill folded into the meta:
+    "₹2,350 paid" / "₹1,800 due"), reports (partial / ready, delivered),
+    appointments and home visits, newest first. Order / report rows zoom into
+    the order; appointment rows expand in place (grid-rows, `inert` closed).
+    "Open the full timeline" opens the shell overlay.
+  - **Details:** Patient (age · sex, DOB, blood group, ID + copy,
+    registered), Clinical notes (allergies), Contact (tel:, email, guardian,
+    ABHA KYC address), ABHA (status chip, number, View card / Verify / Link),
+    Billing (Outstanding in red when due, total billed, visits, tests).
+- **≤1100px:** the snapshot is attention full width over the other two.
+  **≤900px:** no companion column; ONE stacked column scrolls inside the body
+  (the navbar stays): snapshot → results → Timeline (+ quick actions) →
+  Details.
+- **Phones (≤640px):** the snapshot panes stack; results become one card per
+  analyte (name, trend %, the latest value in its tone, a 128×34 sparkline,
+  the flag word, ref, date · n results); then the timeline and details.
+  **New order** is the full-width `.nd-bottombar` above the navbar. Targets
+  ≥44px; sheets above the navbar. Pane titles are `h3` (the global phone `h2`
+  clamp would inflate them).
+- **Motion:** pill chips + actions fade in (40ms stagger), the snapshot rises,
+  attention / timeline / card rows stagger 18–30ms, list → detail zooms, the
+  companion collapses on the billing width motion. All off under reduced
+  motion.
+- **Loading:** a static skeleton (snapshot panes + rows) inside the main
+  column, which is the ONE route `[pfZoomTarget]` (the patient id) from
+  skeleton to content, and shows while `zoom.holding()` on arrival.
+- **Specs:** `patient-profile.clinical.spec.ts` (range parsing, CL / CH
+  critical + direction, legacy C, units, deltas, the grid + unit-mismatch flag,
+  filters, sparklines, needs attention, stages + TAT, last visit, a
+  real-only timeline, permission-gated quick actions) and
+  `patient-profile.nd.spec.ts` (band, one primary, More, snapshot, grid →
+  trend / report zoom, filters, phone cards, companion, empty / skeleton /
+  not-found, no monospace / emoji / native controls, reduced motion). Real
+  layout: `apps/lms-e2e/src/patient-profile-layout.rbac.spec.ts` (read only).
+  Backend: `CumulativeResultsBuilderTests`, `PatientCumulativeResultsTests`.
 
 ## API summary
 

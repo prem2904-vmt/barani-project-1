@@ -5,13 +5,13 @@ import { loginAs } from './support/auth';
  * Patient profile — REAL layout (ND-PATTERN "Patient profile"; jsdom can't
  * lay out). Seeded Micro World Lab Admin, READ-ONLY: after login every
  * non-GET API call is aborted, so nothing is ordered, merged or edited.
- *  - 1440: the band pill = FULL name + "22/M · MRN · phone" (+ ABHA, flags);
- *    ONE primary "New order"; HISTORY main card (search, then the neutral
- *    filter) + SUMMARY ~400px on the right; an order row zooms into the
- *    order and back; Trends / Timeline; collapse → strip → back; no page
- *    scroll, no monospace, no native select.
- *  - 375: history full width, the primary full width in the bottom bar
- *    above the navbar, 44px targets, Summary + More as sheets.
+ *  - 1440 (clinical-first, ND §22): the band pill = FULL name + "22/M · MRN ·
+ *    phone" (+ ABHA, flags); ONE primary "New order"; SNAPSHOT over
+ *    CUMULATIVE RESULTS (main column) + the PATIENT companion (~340–380px)
+ *    on the right; a grid row opens the trend, a timeline order row the
+ *    order; collapse → strip → back; no page scroll, no monospace / select.
+ *  - 375: one stacked column (snapshot → result cards → timeline), the
+ *    primary full width in the bottom bar above the navbar, 44px targets.
  * PATIENT_ID picks the patient (default: the owner's reference patient, else
  * the first patient the search finds). Screenshots (light + dark) into
  * $SHOTS_DIR. CORS_RELAY=1 relays backend calls so it can run against a
@@ -93,40 +93,42 @@ const TREND_FIXTURE = [{
   ],
 }];
 
-test.describe('Patient profile — HISTORY + SUMMARY', () => {
-  test('1440 band + cards + order zoom; 375 bottom bar + sheets', async ({ page }) => {
+test.describe('Patient profile — clinical-first', () => {
+  test('1440 snapshot + cumulative + companion; 375 stacked + bottom bar', async ({ page }) => {
     test.setTimeout(240_000);
     await relayCors(page);
     await loginAs(page, 'admin');
     const writes: string[] = [];
     await blockWrites(page, writes);
     await page.setViewportSize({ width: 1440, height: 900 });
+    // Trend series answered in the browser so the chart is seen even when
+    // this patient has no repeat tests yet.
+    await page.route(/\/lab-trends(\?|$)/, route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: { tests: TREND_FIXTURE } }),
+    }));
 
     await page.goto(`/frontdesk/patients/${PATIENT_ID}`);
     const name = page.locator('.pf-pp-ctx .pf-pp-name');
     await expect(name).toBeVisible({ timeout: 30_000 });
-    expect((await name.textContent())?.trim().length).toBeGreaterThan(2);
     await expect(page.locator('.pf-pp-ctx .pf-pp-meta')).toHaveText(/^\S+\/[MFO—] · /);
     if (await page.locator('.pf-pp-strip').isVisible().catch(() => false)) await page.locator('.pf-pp-strip__btn').click();
 
-    // ONE primary: New order.
     const primaries = page.locator('.nd-btn--primary:visible, .pf-hb-btn--primary:visible');
     await expect(primaries).toHaveCount(1);
     await expect(primaries.first()).toHaveAttribute('aria-label', 'New order');
-    // HISTORY main + SUMMARY on the right, ~400px.
-    const card = page.locator('section.nd-card.pf-pp-main');
+    const snap = page.locator('.pf-pp-snap');
+    const results = page.locator('pf-cumulative-results');
     const side = page.locator('aside.nd-card.pf-pp-side');
-    await expect(card).toBeVisible();
+    await expect(snap).toBeVisible();
+    await expect(results).toBeVisible();
     await expect(side).toBeVisible();
-    const cb = (await card.boundingBox())!;
     const sb = (await side.boundingBox())!;
-    expect(cb.x + cb.width).toBeLessThanOrEqual(sb.x + 1);
-    expect(sb.width).toBeGreaterThan(380);
-    expect(sb.width).toBeLessThan(420);
-    // Card header: search first, then the filter.
-    const fb = (await page.locator('.pf-pp-find').boundingBox())!;
-    const gb = (await page.locator('.pf-pp-seg').boundingBox())!;
-    expect(fb.x).toBeLessThan(gb.x);
+    const rb = (await results.boundingBox())!;
+    expect(rb.x + rb.width).toBeLessThanOrEqual(sb.x + 1);
+    expect(sb.width).toBeGreaterThan(330);
+    expect(sb.width).toBeLessThan(400);
+    expect((await snap.boundingBox())!.y).toBeLessThan(rb.y);
     await page.waitForTimeout(800);
     const mono = await page.evaluate(() => Array.from(document.querySelectorAll('.pf-pp *'))
       .filter(e => /mono|courier/i.test(getComputedStyle(e).fontFamily)).length);
@@ -137,55 +139,36 @@ test.describe('Patient profile — HISTORY + SUMMARY', () => {
     expect(ps.main).toBeLessThanOrEqual(1);
     await shoot(page, '1440');
 
-    // An order row zooms into the order (in the card) and back.
-    const row = page.locator('.pf-lo-row').first();
-    if (await row.count()) {
-      await row.click();
-      await expect(page.locator('.pf-lo-detail')).toBeVisible();
-      await page.waitForTimeout(500);
-      await shoot(page, '1440-order');
-      await page.locator('.pf-lo-detail__back').click();
-      await expect(page.locator('.pf-lo-row').first()).toBeVisible();
+    // A grid row with a series → its trend chart; back.
+    const rowBtn = page.locator('.pf-cr__namebtn').first();
+    if (await rowBtn.count()) {
+      await rowBtn.click();
+      await expect(page.locator('.pf-pp-detail')).toBeVisible();
+      await page.waitForTimeout(1200);
+      await shoot(page, '1440-detail');
+      const back = page.locator('.pf-pp-detail__back, .pf-lo-detail__back').first();
+      await back.click();
+      await expect(results).toBeVisible();
     }
+    // A timeline order row → the order.
+    const tl = page.locator('.pf-tl__row[data-kind="order"]').first();
+    if (await tl.count()) {
+      await tl.click();
+      await expect(page.locator('.pf-lo-detail')).toBeVisible();
+      await page.locator('.pf-lo-detail__back').click();
+      await expect(results).toBeVisible();
+    }
+    await page.locator('.pf-pp-side [role=radio]', { hasText: 'Details' }).click();
+    await shoot(page, '1440-details');
+    await page.locator('.pf-pp-side [role=radio]', { hasText: 'Timeline' }).click();
 
-    // Trends + Timeline behind the same filter.
-    await page.locator('.pf-pp-seg [role=radio]', { hasText: 'Trends' }).click();
-    await page.waitForTimeout(1500);
-    await shoot(page, '1440-trends');
-    // A made-up series (answered in the browser) so the restyled chart is
-    // seen even when this patient has no repeat tests yet.
-    await page.route(/\/lab-trends(\?|$)/, route => route.fulfill({
-      status: 200, contentType: 'application/json',
-      body: JSON.stringify({ success: true, data: { tests: TREND_FIXTURE } }),
-    }));
-    await page.locator('.pf-pp-seg [role=radio]', { hasText: 'Timeline' }).click();
-    await page.locator('.pf-pp-seg [role=radio]', { hasText: 'Trends' }).click();
-    await expect(page.locator('.pf-lt__matrix')).toBeVisible({ timeout: 15_000 });
-    await page.waitForTimeout(1200);
-    await shoot(page, '1440-trends-fixture');
-    await page.locator('.pf-lt__cell').first().click();
-    await expect(page.locator('.pf-lt__chart')).toBeVisible();
-    await page.waitForTimeout(1200);
-    await shoot(page, '1440-trends-chart');
-    await page.unroute(/\/lab-trends(\?|$)/);
-    await page.locator('.pf-pp-seg [role=radio]', { hasText: 'Timeline' }).click();
-    await page.waitForTimeout(500);
-    await shoot(page, '1440-timeline');
-    await page.locator('.pf-pp-seg [role=radio]', { hasText: 'Orders' }).click();
-
-    // More menu.
     await page.locator('.pf-pp-act--more').click();
     await expect(page.locator('.pf-pp-sheet--more')).toBeVisible();
-    await page.waitForTimeout(400);
-    await shoot(page, '1440-more');
     await page.keyboard.press('Escape');
     await expect(page.locator('.pf-pp-sheet--more')).toHaveCount(0);
 
-    // Collapse → a strip on the RIGHT edge → back.
     await page.locator('.pf-pp-collapse').click();
     await expect(page.locator('.pf-pp-strip')).toBeVisible();
-    await page.waitForTimeout(450);
-    await shoot(page, '1440-collapsed');
     await page.locator('.pf-pp-strip__btn').click();
     await expect(side).toBeVisible();
 
@@ -199,28 +182,12 @@ test.describe('Patient profile — HISTORY + SUMMARY', () => {
     expect(bb.width).toBeGreaterThan(300);
     expect(bb.height).toBeGreaterThanOrEqual(44);
     await expect(page.locator('.nd-btn--primary:visible, .pf-hb-btn--primary:visible')).toHaveCount(1);
-    for (const b of [page.locator('.pf-pp-act--more'), page.locator('.pf-pp-ctx__summary')]) {
-      const r = (await b.boundingBox())!;
-      expect(r.width).toBeGreaterThanOrEqual(44);
-      expect(r.height).toBeGreaterThanOrEqual(44);
-    }
-    const mb = (await card.boundingBox())!;
-    expect(mb.width).toBeGreaterThanOrEqual(370);
+    expect(await page.locator('table.pf-cr__t').count()).toBe(0);
+    const mb = (await page.locator('.pf-pp-snap').boundingBox())!;
+    expect(mb.width).toBeGreaterThanOrEqual(340);
     const ps2 = await noPageScroll(page);
     expect(ps2.doc).toBeLessThanOrEqual(1);
     await shoot(page, '375');
-
-    await page.locator('.pf-pp-ctx__summary').click();
-    await expect(page.locator('.pf-pp-sheet--summary')).toBeVisible();
-    await page.waitForTimeout(450);
-    await shoot(page, '375-summary');
-    await page.locator('.pf-pp-sheet--summary .pf-pp-close').click();
-
-    await page.locator('.pf-pp-act--more').click();
-    await expect(page.locator('.pf-pp-sheet--more')).toBeVisible();
-    await page.waitForTimeout(450);
-    await shoot(page, '375-more');
-    await page.locator('.pf-pp-sheet__cancel').click();
 
     expect(writes).toEqual([]);
   });
