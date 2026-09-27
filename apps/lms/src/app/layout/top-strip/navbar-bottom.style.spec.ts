@@ -32,7 +32,7 @@ describe('Docked bottom navbar — height', () => {
     expect(global).toMatch(
       /--pf-botbar-h:\s*calc\(var\(--pf-navbar-h\) \+ 1px \+ var\(--pf-home-inset\)\)/,
     );
-    expect(shell).toMatch(/padding-bottom:\s*var\(--pf-home-inset\);/);
+    expect(shell).toMatch(/padding-block:\s*calc\(var\(--pf-home-inset\) \/ 2\);/);
     expect(shell).not.toMatch(/padding-bottom:\s*70px/);
   });
 });

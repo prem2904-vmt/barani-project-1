@@ -83,7 +83,7 @@ describe('Safe area — bottom edge has ONE owner (the docked navbar)', () => {
     expect(rule).toMatch(/position:\s*fixed/);
     expect(rule).toMatch(/bottom:\s*0\s*;/);
     // The bar reserves the (reduced) home-indicator inset once, via the token.
-    expect(rule).toMatch(/padding-bottom:\s*var\(--pf-home-inset\);/);
+    expect(rule).toMatch(/padding-block:\s*calc\(var\(--pf-home-inset\) \/ 2\);/);
     // Flush: no margin, no min-height, no inset added as an offset.
     expect(rule).toMatch(/margin:\s*0/);
     expect(rule).not.toMatch(/min-height/);
