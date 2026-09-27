@@ -15,6 +15,7 @@ import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
 import { reportDisplayName } from './report-name';
 import { fetchAssetBlob } from './upload-fetch';
+import { collectAbnormalResults, renderAbnormalSummary, summaryTestValidated } from './report-abnormal-summary';
 import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
@@ -340,6 +341,9 @@ let IMG_CACHE: Record<string, string> = {};
 let WM_LOGO_URL: string | null = null;
 /** Letterhead + footer layout of the current render (set in buildReportPdfWithLayout). */
 let LAYOUT: ReportLayoutResult | null = null;
+/** The next added page opens with the letterhead (the department pages after
+ *  the abnormal-results sheet) — it gets the first-page backgrounds too. */
+let NEXT_PAGE_IS_FIRST = false;
 
 /** Per-render theme — frozen once at the start of buildReportPdf.
  *  Functions read from these closure-captured vars at draw time. */
@@ -638,7 +642,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   if (layout.backgrounds.some(b => !b.hidden && b.loaded)) {
     drawBackgrounds(doc, 1);
     const ev = (doc as unknown as { internal: { events: { subscribe(n: string, f: (p: { pageNumber?: number }) => void): unknown } } }).internal.events;
-    ev.subscribe('addPage', () => drawBackgrounds(doc, doc.getNumberOfPages()));
+    ev.subscribe('addPage', () => drawBackgrounds(doc, NEXT_PAGE_IS_FIRST ? 1 : doc.getNumberOfPages()));
   }
 
   // ── Department-specific patient strip (owner's model, 2026-09-19) ──
@@ -757,6 +761,8 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   for (const t of tabular) {
     const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
     g.sampleId = t.sampleId ?? undefined;
+    // The abnormal-results sheet lists validated values only.
+    if (!summaryTestValidated(t)) for (const r of g.rows) r.unvalidated = true;
     // The panel a member compiles under is the BENCH bundle: its nearest
     // PROFILE. A package's name never appears on a report — a package is
     // billing vocabulary; the report speaks in profiles and individual tests.
@@ -904,6 +910,40 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // (deferred via this collector) — every earlier department still signs
   // inline at the end of its own block.
   const finalSigs: { sigs: ReportSignature[] | null } = { sigs: null };
+
+  // ── Consolidated sheet: "Summary of abnormal results" as page 1 ──
+  // (Lab settings switch → template metadata option.) The department pages
+  // then open on a fresh page with the letterhead + patient block, exactly as
+  // page 1 of the report reads without the sheet.
+  if (readReportOption(template, 'abnormalSummary')) {
+    const sheet = collectAbnormalResults([
+      ...inScope, ...outScope,
+      // Narrative tests print their grid values after the table — same rows.
+      ...special.filter(t => tests.includes(t)
+          && (t.result as { microFormat?: string } | null)?.microFormat !== 'culture_sensitivity')
+        .map(t => {
+          const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
+          if (!summaryTestValidated(t)) for (const r of g.rows) r.unvalidated = true;
+          return g;
+        }),
+    ]);
+    if (sheet.length > 0) {
+      renderAbnormalSummary(doc, sheet, cursorY, {
+        font: PDF_FONT, fontScale: theme.fontScale, primary: theme.primary, black: BLACK, text: TEXT,
+        dim: TEXT_DIM, hair: HAIR, flagStyle: theme.flagStyle, flagIndicator: theme.flagIndicator,
+        abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor,
+        pageW: A4.w, marginX: MARGIN_X, marginBottom: MARGIN_BOTTOM,
+        continueTop: LETTERPAD ? MARGIN_TOP + 24 : 56,
+        bodyStyles: tableBodyStyles(), headStyles: tableHeadStyles(), zebra: theme.zebraRows,
+        ...summaryCellHooks(doc),
+      });
+      NEXT_PAGE_IS_FIRST = true;
+      try { doc.addPage(); } finally { NEXT_PAGE_IS_FIRST = false; }
+      drawLetterhead(doc);
+      cursorY = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + 14;
+    }
+  }
+
   if (inScope.length > 0) {
     cursorY = renderContinuousTable(doc, inScope, cursorY, practice, null, deptSigs,
       outScope.length === 0 ? finalSigs : undefined);
@@ -2279,6 +2319,8 @@ function drawRealBarcode(doc: jsPDF, value: string, x: number, y: number, w: num
 
 interface PanelRowData {
   kind: 'param' | 'note';
+  /** The row's test is not validated yet — kept off the abnormal-results sheet. */
+  unvalidated?: boolean;
   name?: string;
   result?: string;
   range?: string;
@@ -2491,7 +2533,11 @@ function buildPanelGroup(
 
   // Legacy values map.
   const values = t.result?.['values'] as Record<string, { value?: unknown; flag?: string; range?: string; unit?: string; description?: string }> | undefined;
+  // Per-report picker applies here too (as in renderLegacyTest): an unticked
+  // value never prints — nor lands on the abnormal-results sheet.
+  const hiddenLegacy = new Set((t as { hidden?: string[] | null }).hidden ?? []);
   for (const [paramName, v] of Object.entries(values ?? {})) {
+    if (hiddenLegacy.has(paramName)) continue;
     // Criticals print as H / L — never C (report rule; see report-flag.ts).
     const rf = reportFlag(v?.flag, v?.value, v?.range);
     group.rows.push({
@@ -3282,6 +3328,23 @@ function renderGridSection(
     columnStyles: columnStyles as unknown as Record<number, { cellWidth: number }>,
   });
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+}
+
+/** The report's superscript-unit + multi-band range cell hooks, for the
+ *  abnormal-results sheet's table (report-abnormal-summary.ts). */
+function summaryCellHooks(doc: jsPDF) {
+  const sup = new Map<string, SupCell>();
+  const qual = new Map<string, QualCell>();
+  return {
+    willDrawCell: (d: unknown, rangeColIdx: number) => {
+      stashQualifiedRangeCell(qual, d as CellHookArg, rangeColIdx);
+      stashSuperscriptCell(sup, d as CellHookArg);
+    },
+    didDrawCell: (d: unknown) => {
+      drawQualifiedRangeCell(doc, qual, d as CellHookArg);
+      drawSuperscriptCell(doc, sup, d as CellHookArg);
+    },
+  };
 }
 
 /** Shared body styles for both grid + legacy tables. Honours the

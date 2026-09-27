@@ -415,6 +415,17 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                       <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
                     </button>
                   </div>
+                  <!-- Same switch as Lab settings → Report (one metadata option). -->
+                  <div class="pf-toggle-row">
+                    <div class="flex flex-col pr-3">
+                      <span class="text-[13px]" style="color: var(--text-primary);">Consolidated abnormal results sheet</span>
+                      <span class="text-[12px]" style="color: var(--text-tertiary);">Print a first page listing every high and low result.</span>
+                    </div>
+                    <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="abnormalSummaryOn()"
+                            aria-label="Consolidated abnormal results sheet" (click)="toggleAbnormalSummary()">
+                      <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                    </button>
+                  </div>
                 </div>
                 </div>
               </div>
@@ -912,6 +923,11 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   specimenLineOn(): boolean { return readReportOption(this.tpl(), 'specimenLine'); }
   toggleSpecimenLine() {
     this.patch({ metadata: writeReportOption(this.tpl(), 'specimenLine', !this.specimenLineOn()) });
+  }
+  /** Consolidated "Summary of abnormal results" first page (metadata option). */
+  abnormalSummaryOn(): boolean { return readReportOption(this.tpl(), 'abnormalSummary'); }
+  toggleAbnormalSummary() {
+    this.patch({ metadata: writeReportOption(this.tpl(), 'abnormalSummary', !this.abnormalSummaryOn()) });
   }
 
   patch(p: Partial<ReportTemplate>) {

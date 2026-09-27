@@ -390,8 +390,10 @@ export function writeHeaderLayout(tpl: Pick<ReportTemplate, 'metadata'> | null |
 }
 
 /** Report print options kept in the template metadata (`options`), for
- *  switches that have no column of their own — e.g. `specimenLine`. */
-export type ReportOption = 'specimenLine';
+ *  switches that have no column of their own — e.g. `specimenLine`.
+ *  `abnormalSummary` = the consolidated "Summary of abnormal results" first
+ *  page (Lab settings → Report). */
+export type ReportOption = 'specimenLine' | 'abnormalSummary';
 
 export function readReportOption(tpl: Pick<ReportTemplate, 'metadata'> | null | undefined, key: ReportOption): boolean {
   const o = parseMeta(tpl)['options'];

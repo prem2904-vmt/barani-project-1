@@ -16,9 +16,11 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
+import { ReportTemplate } from '../../../shared/models/report.model';
+import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 
 /** Band pill tabs — the 13 section cards grouped by what they govern. */
-export type LabSettingsTab = 'collection' | 'queues' | 'rules';
+export type LabSettingsTab = 'collection' | 'queues' | 'rules' | 'report';
 
 interface AutoAssignConfig {
   id?: string;
@@ -390,6 +392,33 @@ interface AutoAssignConfig {
       </section>
       }
 
+      @if (showSec('report')) {
+      <!-- Consolidated abnormal-results sheet — a report template option
+           (metadata), so every viewer's report renders it identically. -->
+      <section class="nd-card pf-ls__card">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h3M8 17h3M15 12v6M13 14l2-2 2 2"/></svg></span><h3 class="nd-card__label pf-ls__title">Consolidated abnormal results sheet</h3><span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="abnormalSummaryOn()"
+                  aria-label="Consolidated abnormal results sheet" [disabled]="!reportTpl() || savingReportOption()"
+                  (click)="setAbnormalSummary(!abnormalSummaryOn())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
+        </div>
+        <div class="pf-ls__cardbody">
+          <p class="pf-ls__hint">
+            Print a first page listing every <strong>high</strong> and <strong>low</strong> result, grouped by
+            department and test, before the department pages. Only validated values the report prints are listed;
+            a report with none prints no summary page.
+          </p>
+          @if (reportTpl() === null) {
+            <p class="pf-ls__warn">Save the report design once (Admin → Report design) to turn this on.</p>
+          }
+          <button type="button" class="pf-ls__link" style="margin-top: 10px;" (click)="goReportTemplate()">
+            Preview in the report designer
+          </button>
+        </div>
+      </section>
+      }
+
       @if (showSec('queues')) {
       <!-- Auto-assign per department -->
       <section class="nd-card pf-ls__card">
@@ -660,6 +689,7 @@ export class LabSettingsComponent implements OnInit {
     { value: 'collection', label: 'Collection & IDs' },
     { value: 'queues', label: 'Queues & assignment' },
     { value: 'rules', label: 'Rules & gates' },
+    { value: 'report', label: 'Report' },
   ];
   readonly tab = signal<LabSettingsTab>('collection');
   showSec(key: LabSettingsTab): boolean {
@@ -821,7 +851,36 @@ export class LabSettingsComponent implements OnInit {
     });
   }
 
+  // ── Consolidated abnormal-results sheet (report template metadata option) ──
+  /** The lab's report template — `undefined` while loading, `null` when the
+   *  lab has never saved one (the switch then stays off / disabled: posting a
+   *  bare template would replace the lab's defaults). */
+  protected readonly reportTpl = signal<ReportTemplate | null | undefined>(undefined);
+  protected readonly savingReportOption = signal(false);
+  readonly abnormalSummaryOn = computed(() => readReportOption(this.reportTpl(), 'abnormalSummary'));
+  setAbnormalSummary(v: boolean) {
+    const prev = this.reportTpl();
+    if (!prev || this.savingReportOption()) return;
+    // The template POST replaces the whole row: send every field back, with
+    // only the one option changed (other metadata keys kept).
+    const next: ReportTemplate = { ...prev, metadata: writeReportOption(prev, 'abnormalSummary', v) };
+    this.reportTpl.set(next);
+    this.savingReportOption.set(true);
+    this.api.post('/api/config/report-template', next).subscribe({
+      next: () => {
+        this.savingReportOption.set(false);
+        this.toasts.success(v ? 'Reports now open with a summary of abnormal results' : 'Summary of abnormal results turned off');
+      },
+      error: e => { this.reportTpl.set(prev); this.savingReportOption.set(false); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+  goReportTemplate() { this.router.navigate(['/admin/reports'], { queryParams: { tab: 'table' } }); }
+
   ngOnInit() {
+    this.api.get<ReportTemplate | null>('/api/config/report-template').subscribe({
+      next: t => this.reportTpl.set(t && typeof t === 'object' && !Array.isArray(t) ? t : null),
+      error: () => this.reportTpl.set(null),
+    });
     this.tenantState.ensureLoaded();
     this.labCfg.ensureLoaded();
     this.entitlements.ensureLoaded();

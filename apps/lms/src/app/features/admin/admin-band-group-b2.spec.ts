@@ -79,7 +79,7 @@ describe('Admin band B2 — Lab settings', () => {
     expect(p.el.querySelector('.pf-hb__search--tabs')).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
     expect(p.body()).not.toBeNull();
-    expect(pillTabs(p).labels()).toEqual(['Collection & IDs', 'Queues & assignment', 'Rules & gates']);
+    expect(pillTabs(p).labels()).toEqual(['Collection & IDs', 'Queues & assignment', 'Rules & gates', 'Report']);
   });
 
   it('pill tabs swap the visible section cards', () => {
