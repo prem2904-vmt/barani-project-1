@@ -16,7 +16,7 @@ function renderText(tests: unknown[], resolvedLayouts: Record<string, unknown> =
       tests,
     }) },
     resolvedLayouts,
-    template: null,
+    template: { showMethod: true } as never, // these checks read the panel Method line
   } as never);
   // PDF string literals escape parentheses: "\(" → "(".
   return Buffer.from(doc.output('arraybuffer')).toString('latin1').replace(/\\([()\\])/g, '$1');

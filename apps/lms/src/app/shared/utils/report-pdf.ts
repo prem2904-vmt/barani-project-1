@@ -884,6 +884,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // (separated, never asterisked). Only when the lab is NABL-accredited
   // AND at least one test is explicitly marked out-of-scope; otherwise we
   // render a single table and make no scope claim.
+  // "Show method line" (template.showMethod) gates the "Method: …" sub-line
+  // under panel bands; off (the default) → never printed.
+  if (!template?.showMethod) for (const g of groups) g.hideMethodLine = true;
+
   const claimsNabl = !!template?.nablAccredited;
   const outScope = claimsNabl ? groups.filter(g => g.inScope === false) : [];
   const inScope = outScope.length > 0 ? groups.filter(g => g.inScope !== false) : groups;
@@ -2359,6 +2363,9 @@ interface PanelGroup {
    *  sub-line names each method with its values; the Method column prints
    *  per row. Undefined when one method covers the whole group. */
   methodLine?: string;
+  /** The template's "Show method line" switch is off — no "Method: …"
+   *  sub-line under the panel band (a configured Method column still prints). */
+  hideMethodLine?: boolean;
   code?: string;
   shortName?: string;
   section?: string;
@@ -2877,7 +2884,7 @@ function renderColumnarTable(
 
       // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
       const sub: string[] = [];
-      const methodText = g.methodLine ?? g.method;
+      const methodText = g.hideMethodLine ? undefined : (g.methodLine ?? g.method);
       if (methodText) sub.push(`Method: ${methodText}`);
       if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
       if (sub.length > 0) {

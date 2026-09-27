@@ -8,7 +8,7 @@ import { buildReportPdf } from './report-pdf';
  *   - different methods → each method named with its values;
  *   - no valueMethods (older snapshots) → the test-level `method`.
  */
-function renderText(tests: unknown[]): string {
+function renderText(tests: unknown[], template: unknown = { showMethod: true }): string {
   const doc = buildReportPdf({
     report: { id: 'r1', createdAt: '2026-09-24T00:00:00Z', data: JSON.stringify({
       patient: { displayName: 'Test Patient', age: 30, sex: 'M' },
@@ -17,7 +17,7 @@ function renderText(tests: unknown[]): string {
       tests,
     }) },
     resolvedLayouts: {},
-    template: null,
+    template,
   } as never);
   // PDF string literals escape parentheses: "\(" → "(".
   return Buffer.from(doc.output('arraybuffer')).toString('latin1').replace(/\\([()\\])/g, '$1');
@@ -56,5 +56,21 @@ describe('report Method line follows valueMethods (hybrid methodology)', () => {
   it('older snapshots without valueMethods keep the test-level method', () => {
     const text = renderText([panel()]);
     expect(text).toContain('Method: TESTLEVELMETHOD');
+  });
+});
+
+describe('report Method line follows the template\'s "Show method line" switch', () => {
+  it('switch off: no "Method:" sub-line under the panel', () => {
+    const text = renderText([panel()], { showMethod: false });
+    expect(text).not.toContain('Method:');
+    expect(text).not.toContain('TESTLEVELMETHOD');
+  });
+
+  it('no template (default): no "Method:" sub-line', () => {
+    expect(renderText([panel()], null)).not.toContain('Method:');
+  });
+
+  it('switch on: the method line prints', () => {
+    expect(renderText([panel()], { showMethod: true })).toContain('Method: TESTLEVELMETHOD');
   });
 });
