@@ -10,6 +10,7 @@ import {
   ReportColumn,
 } from '../../../shared/models/report-layout.model';
 import { Department } from '../../../shared/models/tenant.model';
+import { applyDefaultResultUnitLink as defaultResultUnitLink } from '../../../shared/utils/result-unit-link';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -430,7 +431,7 @@ export class ReportColumnsEditorComponent implements OnInit {
         const sorted = [...seed]
           .sort((a, b) => a.order - b.order)
           .map(c => ({ ...c, label: c.label ?? '', name: c.name && c.name.trim() ? c.name : this.slugifyName(c.label ?? '') }));
-        this.columns.set(this.applyDefaultResultUnitLink(this.ensureNameColumn(sorted)));
+        this.columns.set(this.ensureNameColumn(this.applyDefaultResultUnitLink(sorted)));
         this.selectedIdx.set(null);
         this.emitState();
       });
@@ -574,7 +575,7 @@ export class ReportColumnsEditorComponent implements OnInit {
       const sorted = [...res.columns]
         .sort((a, b) => a.order - b.order)
         .map(c => ({ ...c, label: c.label ?? '', name: c.name && c.name.trim() ? c.name : this.slugifyName(c.label ?? '') }));
-      this.columns.set(this.applyDefaultResultUnitLink(this.ensureNameColumn(sorted)));
+      this.columns.set(this.ensureNameColumn(this.applyDefaultResultUnitLink(sorted)));
       this.configured.set(res.configured);
       this.loading.set(false);
       this.emitState();
@@ -587,16 +588,11 @@ export class ReportColumnsEditorComponent implements OnInit {
     });
   }
 
-  /** When a loaded config has NO merges yet, merge an adjacent Result→Unit by
-   *  default so every department shows the unit beside the value ("11.4 g/dL").
-   *  Once any link exists the admin's exact choices are kept. */
+  /** The shared Result→Unit default merge (legacy configs only — an explicit
+   *  unpin, saved as `linkedNext: false`, is kept). Runs BEFORE the name
+   *  column is synthesized so it sees the config exactly as saved. */
   private applyDefaultResultUnitLink(cols: ReportColumn[]): ReportColumn[] {
-    if (cols.some(c => c.linkedNext)) return cols;
-    const ri = cols.findIndex(c => c.type === 'result');
-    if (ri >= 0 && cols[ri + 1]?.type === 'unit') {
-      return cols.map((c, i) => (i === ri ? { ...c, linkedNext: true } : c));
-    }
-    return cols;
+    return defaultResultUnitLink(cols);
   }
 
   /** Guarantee an Investigation (parameter-name) column so the param name shows.

@@ -17,6 +17,7 @@ import { reportDisplayName } from './report-name';
 import { fetchAssetBlob } from './upload-fetch';
 import { collectAbnormalResults, renderAbnormalSummary, summaryTestValidated } from './report-abnormal-summary';
 import { withResultsTables } from './results-table';
+import { applyDefaultResultUnitLink } from './result-unit-link';
 import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
@@ -2802,11 +2803,13 @@ function drawInlineSignatures(
  *  sort by order, guarantee an Investigation (name) lead column so the
  *  parameter name always shows, apply the default Result→Unit link. */
 function effectiveColumns(src: ReportColumn[]): ReportColumn[] {
-  let cfg = src.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  // The Result→Unit default runs on the columns AS CONFIGURED (before the
+  // synthesized name column) so it can tell an explicit unpin apart.
+  const cfg = applyDefaultResultUnitLink(src.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
   if (!cfg.some(c => c.type === 'name')) {
-    cfg = [{ id: 'rc-name', name: 'name', label: 'Investigation', order: 0, width: 30, type: 'name', locked: false }, ...cfg];
+    return [{ id: 'rc-name', name: 'name', label: 'Investigation', order: 0, width: 30, type: 'name', locked: false }, ...cfg];
   }
-  return applyDefaultResultUnitLink(cfg);
+  return cfg;
 }
 
 /** Resolve the BASE column layout for one department's groups — the
@@ -2819,19 +2822,6 @@ function deptColumns(groups: PanelGroup[]): ReportColumn[] {
     ?? groups.find(g => g.columnsOverridden && g.deptColumns?.length)?.deptColumns
     ?? DEFAULT_RESULT_COLUMNS;
   return effectiveColumns(src);
-}
-
-/** When a column config has NO merges set yet, merge an adjacent Result→Unit by
- *  default ("11.4 g/dL") — so EVERY department shows the unit beside the value
- *  even if its saved layout predates the link feature. Once any link exists, the
- *  admin's choices are respected exactly. */
-function applyDefaultResultUnitLink(cfg: ReportColumn[]): ReportColumn[] {
-  if (cfg.some(c => c.linkedNext)) return cfg;
-  const ri = cfg.findIndex(c => c.type === 'result');
-  if (ri >= 0 && cfg[ri + 1]?.type === 'unit') {
-    return cfg.map((c, i) => (i === ri ? { ...c, linkedNext: true } : c));
-  }
-  return cfg;
 }
 
 /** Render panel groups as ONE columnar autoTable against the column config
