@@ -82,12 +82,12 @@ describe('Docked bottom navbar — one optical scale on iPad + phone (owner 2026
   const compact = scss.slice(scss.indexOf('@media (max-width: 1279px)'));
   const px = (re: RegExp) => Number((compact.match(re) ?? [])[1]);
 
-  it('icons 22 · pf logo 26 tall · avatar 30 — the anchors stay close to the icon size', () => {
+  it('icons 22 · pf logo 24 tall · avatar 30 — the anchors stay close to the icon size', () => {
     const icon = px(/\.pf-topnav-link svg \{ width: (\d+)px; height: \d+px; \}/);
     const logo = px(/\.pf-brand-glyph \{ width: auto; height: (\d+)px; \}/);
     const avatar = px(/\.pf-avatar-circle \{ width: (\d+)px; height: \d+px;/);
     const glyphAvatar = px(/\.pf-avatar-glyph \{\s*height: (\d+)px; width: auto;/);
-    expect([icon, logo, avatar, glyphAvatar]).toEqual([22, 26, 30, 26]);
+    expect([icon, logo, avatar, glyphAvatar]).toEqual([22, 24, 30, 24]);
     // Nothing more than ~1.4x the icon — the logo no longer towers over the row.
     for (const v of [logo, avatar, glyphAvatar]) expect(v / icon).toBeLessThanOrEqual(1.4);
   });
@@ -95,5 +95,16 @@ describe('Docked bottom navbar — one optical scale on iPad + phone (owner 2026
   it('tap targets stay 44px', () => {
     expect(compact).toMatch(/\.pf-topnav-link \{\s*flex: 0 0 44px;\s*width: 44px; height: 44px;/);
     expect(scss).toMatch(/\.pf-avatar-btn \{\s*flex-shrink: 0; min-width: 44px; min-height: 44px;/);
+  });
+});
+
+describe('Docked bottom navbar — the pf mark lines up with the icons (owner 2026-09-28)', () => {
+  const compact = scss.slice(scss.indexOf('@media (max-width: 1279px)'));
+  it('the mark sits in the same 44px box as the icon buttons, with no pill padding', () => {
+    expect(compact).toMatch(/\.pf-brand-lockup \{\s*flex: 0 0 44px; width: 44px; height: 44px; padding: 0; gap: 0; justify-content: center;/);
+  });
+  it('one 6px rhythm: no extra margin before the icons, the icon row gap equals the bar gap', () => {
+    expect(compact).toMatch(/\.pf-topnav-center \{ margin-left: 0; gap: 6px; \}/);
+    expect(scss).toMatch(/\.pf-topstrip-bar \{\s*justify-content: flex-start;\s*gap: 6px;/);
   });
 });

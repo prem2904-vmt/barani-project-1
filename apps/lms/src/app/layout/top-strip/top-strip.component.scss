@@ -1285,7 +1285,15 @@ a.pf-ts-tenant:hover {
      Icons 22 · logo 26 tall · avatar 30 — anchors a touch larger, in
      proportion; every tap target stays 44px. */
   :host-context(.design-new.nav-bottom) .pf-topnav-link svg { width: 22px; height: 22px; }
-  :host-context(.design-new.nav-bottom) .pf-brand-glyph { width: auto; height: 26px; }
+  :host-context(.design-new.nav-bottom) .pf-brand-glyph { width: auto; height: 24px; }
+  /* The pf mark sits in the SAME 44px box as every icon button, and the
+     whole row shares one 6px rhythm — no pill padding, no extra margin
+     before the icons (owner: the logo floated apart from the icons). */
+  :host-context(.design-new.nav-bottom) .pf-brand-lockup {
+    flex: 0 0 44px; width: 44px; height: 44px; padding: 0; gap: 0; justify-content: center;
+  }
+  :host-context(.design-new.nav-bottom) .pf-brand-chev { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-topnav-center { margin-left: 0; gap: 6px; }
   :host-context(.design-new.nav-bottom) .pf-avatar-circle { width: 30px; height: 30px; font-size: 11px; }
   :host-context(.design-new.nav-bottom) .pf-brand-text,
   :host-context(.design-new.nav-bottom) .pf-brand-pulse { display: none !important; }
@@ -1334,7 +1342,7 @@ a.pf-ts-tenant:hover {
      the aspect ratio sets the width, and match the icon row optically.
      The 44px tap target is on the button, not the mark. */
   :host-context(.design-new.nav-bottom) .pf-avatar-glyph {
-    height: 26px; width: auto;
+    height: 24px; width: auto;
   }
 }
 
