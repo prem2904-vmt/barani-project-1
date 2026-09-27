@@ -5,6 +5,7 @@ import { HeroBandComponent } from './hero-band.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 
 /**
  * pf-hero-band — the ONE band every screen renders. Admin sub-pages
@@ -100,5 +101,43 @@ describe('pf-hero-band — admin band pill', () => {
     f.detectChanges();
     el.querySelector<HTMLButtonElement>('.pf-hb__back')!.click();
     expect(navBack.backTo).toHaveBeenCalledWith('/lab/settings');
+  });
+});
+
+/** Uploads are private: a tenant logo stored as "/uploads/…" 404s as a bare
+ *  <img src>. The band shows it through the session (UploadsService blob:
+ *  URL); data: logos from the branding wizard pass straight through. */
+describe('pf-hero-band — tenant logo', () => {
+  function withLogo(logoUrl: string, src = vi.fn(() => 'blob:tenant-logo')) {
+    TestBed.configureTestingModule({
+      imports: [HostComponent],
+      providers: [
+        { provide: AuthService, useValue: { user: () => ({ tenantName: 'Micro World' }) } },
+        { provide: TenantStateService, useValue: { tenant: () => ({ name: 'Micro World', logoUrl, brandingMode: 'both' }) } },
+        { provide: NavBackService, useValue: { showBack: signal(false), back: vi.fn(), backTo: vi.fn() } },
+        { provide: UploadsService, useValue: { src } },
+      ],
+    });
+    const f = TestBed.createComponent(HostComponent);
+    f.detectChanges();
+    return { el: f.nativeElement as HTMLElement, src };
+  }
+
+  it('a private "/uploads/…" logo renders from the session blob, never the bare path', () => {
+    const { el, src } = withLogo('/uploads/0b8f5f4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b/logo.png');
+    expect(src).toHaveBeenCalledWith('/uploads/0b8f5f4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b/logo.png');
+    expect(el.querySelector<HTMLImageElement>('.pf-hb__logo')?.getAttribute('src')).toBe('blob:tenant-logo');
+  });
+
+  it('while the logo loads the initial disc shows (no broken image)', () => {
+    const { el } = withLogo('/uploads/0b8f5f4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b/logo.png', vi.fn(() => ''));
+    expect(el.querySelector('.pf-hb__logo')).toBeNull();
+    expect(el.querySelector('.pf-hb__avatar')?.textContent?.trim()).toBe('M');
+  });
+
+  it('a data: logo (branding wizard) renders as is, without the uploads service', () => {
+    const { el, src } = withLogo('data:image/png;base64,AA==');
+    expect(src).not.toHaveBeenCalled();
+    expect(el.querySelector<HTMLImageElement>('.pf-hb__logo')?.getAttribute('src')).toBe('data:image/png;base64,AA==');
   });
 });

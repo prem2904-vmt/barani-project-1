@@ -17,6 +17,22 @@ export function isPrivateUploadPath(url: string | null | undefined): url is stri
   return !!url && url.startsWith('/uploads/') && !/[?&]sig=/.test(url);
 }
 
+/** A stored reference to one of OUR uploads, as its "/uploads/…" path. Older
+ *  rows (e.g. a tenant logo) may hold the resolved absolute link on the API
+ *  host ("https://api…/uploads/…"), which the server now refuses unsigned —
+ *  map it back to the path so it goes through the session like the rest.
+ *  Anything else (other hosts, signed links, data:/blob:) is returned as is. */
+export function uploadPathOf(url: string, apiBase: string): string {
+  if (!url || !/^https?:\/\//i.test(url) || !/^https?:\/\//i.test(apiBase || '')) return url;
+  try {
+    const u = new URL(url);
+    if (u.origin !== new URL(apiBase).origin || !u.pathname.startsWith('/uploads/') || u.searchParams.has('sig')) return url;
+    return u.pathname;
+  } catch {
+    return url;
+  }
+}
+
 /** Resolve a server-relative URL against the API origin; absolute, data: and
  *  blob: URLs pass through. */
 export function absoluteApiUrl(url: string, apiBase: string): string {
@@ -43,12 +59,14 @@ export async function fetchAssetBlob(
   url: string, apiBase: string, signed?: Record<string, string> | null,
 ): Promise<Blob | null> {
   try {
-    const viaSigned = signed?.[url];
+    // (An absolute link to our /uploads is signed under its stored path.)
+    const path = uploadPathOf(url, apiBase);
+    const viaSigned = signed?.[url] ?? signed?.[path];
     if (viaSigned) {
       const r = await fetch(absoluteApiUrl(viaSigned, apiBase), { mode: 'cors' });
       return r.ok ? await r.blob() : null;
     }
-    if (isPrivateUploadPath(url)) return authedFetcher ? await authedFetcher(url) : null;
+    if (isPrivateUploadPath(path)) return authedFetcher ? await authedFetcher(path) : null;
     const r = await fetch(absoluteApiUrl(url, apiBase), { mode: 'cors' });
     return r.ok ? await r.blob() : null;
   } catch {

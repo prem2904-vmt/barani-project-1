@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { brandingSrc } from '../../../core/services/uploads.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Tenant, TenantBrandingMode } from '../../../shared/models/tenant.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -99,7 +100,7 @@ interface BrandingDraft {
                    (dragleave)="onLogoDrag($event, false)"
                    (drop)="onLogoDrop($event)">
                 @if (branding().logoUrl) {
-                  <img [src]="branding().logoUrl" alt="Logo preview" class="brand-upload__preview" />
+                  <img [src]="logoSrc() ?? ''" alt="Logo preview" class="brand-upload__preview" />
                   <div class="brand-upload__actions">
                     <button type="button" class="nd-btn nd-btn--secondary brand-upload__btn press" (click)="openLogoPicker()">Replace</button>
                     <button type="button" class="nd-btn nd-btn--tertiary brand-upload__btn brand-upload__btn--danger press" (click)="clearLogo()">Remove</button>
@@ -164,7 +165,7 @@ interface BrandingDraft {
             <div class="brand-preview__slot"
                  [class.brand-preview__slot--empty]="!hasBrand()">
               @if (showLogoPreview()) {
-                <img [src]="branding().logoUrl" alt="" class="brand-preview__logo" />
+                <img [src]="logoSrc() ?? ''" alt="" class="brand-preview__logo" />
               }
               @if (showNamePreview()) {
                 <span class="brand-preview__name">{{ branding().brandingName }}</span>
@@ -327,6 +328,7 @@ interface BrandingDraft {
 export class SetupWizardComponent {
   private readonly api = inject(ApiService);
   private readonly tenantState = inject(TenantStateService);
+  private readonly injector = inject(Injector);
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
 
@@ -349,6 +351,9 @@ export class SetupWizardComponent {
   private readonly _saving = signal(false);
 
   readonly branding = this._branding.asReadonly();
+  /** Preview src: a saved "/uploads/…" logo loads through the session;
+   *  a freshly picked file is a data: URL and shows as is. */
+  readonly logoSrc = computed(() => brandingSrc(this.injector, this._branding().logoUrl));
   readonly draggingLogo = this._draggingLogo.asReadonly();
   readonly logoError = this._logoError.asReadonly();
   readonly nameError = this._nameError.asReadonly();

@@ -1,11 +1,12 @@
 import { HttpClient } from '@angular/common/http';
+import { Injector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
-import { UploadsService } from './uploads.service';
+import { UploadsService, brandingSrc } from './uploads.service';
 import { PlatformService } from './platform.service';
 import {
-  absoluteApiUrl, fetchAssetBlob, isPrivateUploadPath, registerUploadFetcher,
+  absoluteApiUrl, fetchAssetBlob, isPrivateUploadPath, registerUploadFetcher, uploadPathOf,
 } from '../../shared/utils/upload-fetch';
 
 /** Private uploads: "/uploads/…" is served only to the session (GET
@@ -111,5 +112,73 @@ describe('UploadsService', () => {
     } finally {
       open.mockRestore();
     }
+  });
+});
+
+describe('absolute links to our own /uploads (older stored rows)', () => {
+  it('uploadPathOf maps only unsigned API-host upload links to the stored path', () => {
+    expect(uploadPathOf(`https://api.test${PATH}`, 'https://api.test')).toBe(PATH);
+    expect(uploadPathOf(`https://api.test${PATH}?exp=1&sig=s`, 'https://api.test')).toBe(`https://api.test${PATH}?exp=1&sig=s`);
+    expect(uploadPathOf(`https://cdn.example${PATH}`, 'https://api.test')).toBe(`https://cdn.example${PATH}`);
+    expect(uploadPathOf('https://api.test/logo.png', 'https://api.test')).toBe('https://api.test/logo.png');
+    expect(uploadPathOf(PATH, 'https://api.test')).toBe(PATH);
+    expect(uploadPathOf('data:image/png;base64,AA==', 'https://api.test')).toBe('data:image/png;base64,AA==');
+    expect(uploadPathOf(`https://api.test${PATH}`, '')).toBe(`https://api.test${PATH}`);
+  });
+
+  it('fetchAssetBlob sends an absolute API upload link through the session, not a bare GET', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Blob(['x'])));
+    const authed = vi.fn(async () => new Blob(['authed']));
+    registerUploadFetcher(authed);
+    try {
+      await fetchAssetBlob(`https://api.test${PATH}`, 'https://api.test');
+      expect(authed).toHaveBeenCalledWith(PATH);
+      expect(fetchSpy).not.toHaveBeenCalled();
+
+      // Public report page: the signed map is keyed by the stored path.
+      authed.mockClear();
+      await fetchAssetBlob(`https://api.test${PATH}`, 'https://api.test', { [PATH]: `${PATH}?exp=1&sig=s` });
+      expect(fetchSpy).toHaveBeenCalledWith(`https://api.test${PATH}?exp=1&sig=s`, { mode: 'cors' });
+      expect(authed).not.toHaveBeenCalled();
+    } finally {
+      registerUploadFetcher(null);
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('src(): an absolute API upload link loads via the authenticated endpoint', async () => {
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:abs');
+    try {
+      const { svc, get } = setup();
+      expect(svc.src(`https://api.test${PATH}`)).toBe('');
+      await svc.objectUrl(`https://api.test${PATH}`);
+      expect(get).toHaveBeenCalledWith('https://api.test/api/uploads/file',
+        { params: { path: PATH }, responseType: 'blob' });
+      expect(svc.src(`https://api.test${PATH}`)).toBe('blob:abs');
+    } finally {
+      createUrl.mockRestore();
+    }
+  });
+});
+
+describe('brandingSrc (tenant logo in the bars / band)', () => {
+  it('data: / absolute / signed logos pass through without constructing UploadsService', () => {
+    const injector = { get: vi.fn() } as unknown as Injector;
+    expect(brandingSrc(injector, 'data:image/png;base64,AA==')).toBe('data:image/png;base64,AA==');
+    expect(brandingSrc(injector, 'https://cdn.example/logo.png')).toBe('https://cdn.example/logo.png');
+    expect(brandingSrc(injector, `${PATH}?exp=1&sig=s`)).toBe(`${PATH}?exp=1&sig=s`);
+    expect(brandingSrc(injector, null)).toBeNull();
+    expect(brandingSrc(injector, '')).toBeNull();
+    expect(injector.get).not.toHaveBeenCalled();
+  });
+
+  it('a private "/uploads/…" logo (bare or absolute) goes through UploadsService.src; null until it lands', () => {
+    const src = vi.fn().mockReturnValueOnce('').mockReturnValue('blob:logo');
+    const injector = { get: vi.fn(() => ({ src })) } as unknown as Injector;
+    expect(brandingSrc(injector, PATH)).toBeNull();
+    expect(brandingSrc(injector, `https://api.test${PATH}`)).toBe('blob:logo');
+    expect(injector.get).toHaveBeenCalledWith(UploadsService);
+    expect(src).toHaveBeenCalledWith(PATH);
+    expect(src).toHaveBeenCalledWith(`https://api.test${PATH}`);
   });
 });

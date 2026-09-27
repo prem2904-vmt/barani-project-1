@@ -1,6 +1,6 @@
 import {
   AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, NgZone, OnDestroy,
-  computed, effect, inject, signal, viewChild, viewChildren
+  Injector, computed, effect, inject, signal, viewChild, viewChildren
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -15,6 +15,7 @@ import { BranchLabConfigService } from '../../core/services/branch-lab-config.se
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { DialogService } from '../../core/services/dialog.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
+import { brandingSrc } from '../../core/services/uploads.service';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { DesignModeService } from '../../core/services/design-mode.service';
@@ -107,7 +108,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly tenantState = inject(TenantStateService);
   protected readonly tenantName = computed(() =>
     this.tenantState.tenant()?.name || this.auth.user()?.tenantName || '');
-  protected readonly tenantLogo = computed(() => this.tenantState.tenant()?.logoUrl || null);
+  private readonly injector = inject(Injector);
+  /** A private "/uploads/…" logo shows through the session (blob: URL). */
+  protected readonly tenantLogo = computed(() => brandingSrc(this.injector, this.tenantState.tenant()?.logoUrl));
   protected readonly tenantInitial = computed(() => {
     const n = this.tenantName().trim();
     return n ? n[0].toUpperCase() : 'P';

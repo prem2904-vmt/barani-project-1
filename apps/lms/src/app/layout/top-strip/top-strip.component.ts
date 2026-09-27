@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ChatWindowsService } from '../../core/services/chat-windows.service';
 import { DirectoryService, DirectoryUser } from '../../core/services/directory.service';
@@ -18,6 +18,7 @@ import { BranchLabConfigService } from '../../core/services/branch-lab-config.se
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
+import { brandingSrc } from '../../core/services/uploads.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { DesignModeService } from '../../core/services/design-mode.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
@@ -317,7 +318,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
     if (!u) return '';
     return u.roles?.length ? u.roles.join(' · ') : (u.tenantName ?? '');
   };
-  readonly tenantLogo = computed(() => this._tenant()?.logoUrl || null);
+  // The stored logo may be a private "/uploads/…" file: shown through the
+  // session (blob: URL) — a bare <img src> is refused by the API now.
+  private readonly injector = inject(Injector);
+  readonly tenantLogo = computed(() => brandingSrc(this.injector, this._tenant()?.logoUrl));
   readonly tenantName = computed(() => this._tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
 
   // Branding mode resolution. Default 'both' when unset so existing tenants
@@ -341,7 +345,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return m === 'name' || m === 'both';
   });
   readonly hasBrand = computed(() => {
-    const logoOk = this.showLogo() && !!this.tenantLogo();
+    const logoOk = this.showLogo() && !!this._tenant()?.logoUrl;
     const nameOk = this.showName() && !!this.brandingName();
     return logoOk || nameOk;
   });
