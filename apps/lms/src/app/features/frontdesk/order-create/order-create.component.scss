@@ -2018,6 +2018,10 @@
 }
 /* Specimen picker on culture cart rows (desk-side choice). */
 .pf-cart-spec { margin-top: 6px; max-width: 230px; }
+/* Required specimen not chosen: the picker's own border turns danger (same
+   language as .pf-input-error) and the inline message sits under it. */
+.pf-cart-spec--err :is(button, input) { border-color: var(--danger, #ef4444) !important; }
+.pf-cart-spec--err .pf-field-error { margin: 4px 0 0; }
 
 /* ════════════════════════════════════════════════════════════════════
    OPTION A — unified search pill + designer cards (catalogue, billing).

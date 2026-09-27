@@ -12,7 +12,7 @@ import { Bill } from '../../../shared/models/bill.model';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { LabelCardComponent, tubeSpec } from './label-card.component';
+import { LabelCardComponent, labelTubeLine, tubeSpec } from './label-card.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -187,7 +187,6 @@ export class PostPaymentComponent implements OnInit {
     for (const s of samples) {
       const code = s.barcode ?? s.id;
       const mrn = (patient as unknown as { mrn?: string })?.mrn;
-      const spec = tubeSpec(s);
       const res = await this.printer.printLabelData({
         code,
         qrValue: mrn ? `${mrn}|${code}` : code,
@@ -195,7 +194,7 @@ export class PostPaymentComponent implements OnInit {
         ageSex: this.ageSex(patient),
         mrn: mrn ?? undefined,
         deptCode: (s.department?.code ?? '').toUpperCase(),
-        tube: `${spec.label} · ${spec.volume}`,
+        tube: labelTubeLine(s),
         outsourced: !!s.outsourcedVendorId,
       }, opts).catch(e => ({ ok: false, direct: true, error: e?.message }));
       if (res.ok) ok++; else { fail++; if (res.error) this.toasts.error(res.error); }

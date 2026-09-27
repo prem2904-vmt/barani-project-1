@@ -33,7 +33,7 @@ import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
-import { asksSpecimen } from '../../../shared/utils/micro-specimen';
+import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../shared/utils/micro-specimen';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -98,7 +98,91 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return asksSpecimen(t, id => byId.get(id));
   }
   specimenOf(id: string): string { return this._specimens()[id] ?? ''; }
-  setSpecimen(id: string, v: string) { this._specimens.update(m => ({ ...m, [id]: v })); }
+  setSpecimen(id: string, v: string) {
+    this._specimens.update(m => ({ ...m, [id]: v }));
+    this._defaultApplied.add(id);
+    if (v) this._specimenErr.update(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n; });
+  }
+
+  // ── "There is no default" (owner 2026-09-27) ──
+  // The specimen starts EMPTY unless the test's Test–Specimen Mapping marks
+  // exactly ONE default (then it is preselected); a bundle preselects only
+  // when every asking member names the same single default. Picking is
+  // REQUIRED before the order is saved or paid.
+  /** test id → its single mapped default (null = none / several). */
+  private readonly _specimenDefaults = signal<Record<string, string | null>>({});
+  private readonly _defaultsAsked = new Set<string>();
+  /** Lines whose default was already applied (or that the user picked) —
+   *  never re-preselected, so clearing a pick sticks. */
+  private readonly _defaultApplied = new Set<string>();
+  /** Lines already on the order being edited: their specimen is history
+   *  (the server never re-checks them), so they are not required here. */
+  private readonly _onOrderIds = signal<ReadonlySet<string>>(new Set());
+  /** Inline "Choose the specimen" per cart line (set by a blocked save/pay). */
+  private readonly _specimenErr = signal<Record<string, true>>({});
+  specimenError(id: string): boolean { return !!this._specimenErr()[id]; }
+  /** Cart lines that ask for a specimen and have none — they block save/pay.
+   *  Only when the Specimen master offers something to pick. */
+  readonly missingSpecimenIds = computed<string[]>(() => {
+    if (this.specimenOpts().length === 0) return [];
+    const byId = this._testById();
+    const onOrder = this._onOrderIds();
+    return this._selected().filter(id => {
+      const t = byId.get(id);
+      return !!t && !onOrder.has(id) && !this.isCollected(id) && this.asksSpecimen(t) && !this.specimenOf(id);
+    });
+  });
+  /** Guard for Continue / Proceed / Confirm: true (and every missing picker
+   *  shows its inline error, the first one scrolled to + focused) when a
+   *  specimen is still to be chosen, so the caller stops. */
+  requireSpecimens(): boolean {
+    const missing = this.missingSpecimenIds();
+    if (missing.length === 0) return false;
+    this._specimenErr.set(Object.fromEntries(missing.map(id => [id, true as const])));
+    this.billPhase.set('cart');
+    setTimeout(() => {
+      const host = typeof document !== 'undefined'
+        ? document.querySelector<HTMLElement>(`[data-spec-id="${missing[0]}"]`) : null;
+      host?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      host?.querySelector<HTMLElement>('button, input, [tabindex]')?.focus();
+    }, 0);
+    return true;
+  }
+  /** Read the mapping defaults for asking cart lines not yet asked about. */
+  private loadSpecimenDefaults(ids: string[]) {
+    const fresh = ids.filter(id => !this._defaultsAsked.has(id));
+    if (fresh.length === 0) return;
+    fresh.forEach(id => this._defaultsAsked.add(id));
+    this.api.get<Array<{ testId: string; defaultSpecimen?: string | null }>>(
+      `/api/microbiology/test-specimens?testIds=${fresh.join(',')}`).subscribe({
+      next: rows => this._specimenDefaults.update(m => {
+        const n = { ...m };
+        for (const id of fresh) n[id] = null;
+        for (const r of rows ?? []) n[r.testId] = r.defaultSpecimen ?? null;
+        return n;
+      }),
+      error: () => { /* no mapping (or micro module absent): nothing preselects */ }
+    });
+  }
+  /** Preselect the single default on lines that have no choice yet. */
+  private applySpecimenDefaults() {
+    if (this.isReadOnly()) return;
+    const byId = this._testById();
+    const opts = new Set(this.specimenOpts().map(o => String(o.value)));
+    const defaults = this._specimenDefaults();
+    const picks: Record<string, string> = {};
+    for (const id of this._selected()) {
+      if (this._defaultApplied.has(id) || this.specimenOf(id)) continue;
+      const t = byId.get(id);
+      if (!t || !this.asksSpecimen(t)) continue;
+      const lookup = specimenLookupIds(t, mid => byId.get(mid));
+      if (lookup.some(l => !(l in defaults))) continue;       // still loading
+      this._defaultApplied.add(id);
+      const d = deskDefaultSpecimen(t, defaults, mid => byId.get(mid));
+      if (d && opts.has(d)) picks[id] = d;
+    }
+    if (Object.keys(picks).length) this._specimens.update(m => ({ ...m, ...picks }));
+  }
   /** Only the chosen specimens for tests still in the cart. */
   private specimenPayload(): Record<string, string> | null {
     const sel = new Set(this._selected());
@@ -146,6 +230,21 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly trendogramCount = computed(() => this.trendogramConfig()?.charts.length ?? 0);
 
   constructor() {
+    // Specimen defaults: read the mapping for asking cart lines, then
+    // preselect a single default (none / several → the picker stays empty).
+    effect(() => {
+      const byId = this._testById();
+      if (this.specimenOpts().length === 0) return;
+      const ids = this._selected().flatMap(id => {
+        const t = byId.get(id);
+        return t && this.asksSpecimen(t) ? specimenLookupIds(t, mid => byId.get(mid)) : [];
+      });
+      if (ids.length) this.loadSpecimenDefaults(ids);
+    });
+    effect(() => {
+      this._specimenDefaults(); this._selected(); this.specimenOpts(); this._testById();
+      this.applySpecimenDefaults();
+    });
     // Fetch trend eligibility whenever the attached patient changes.
     effect(() => {
       const p = this._patient();
@@ -354,6 +453,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     switch (err.field) {
       case 'refHospitalName': this.refHospitalError.set(err.message); return;
       case 'refDoctorName':   this.refDoctorError.set(err.message);   return;
+      case 'specimen':        if (this.requireSpecimens()) return; this.toasts.error(err.message); return;
       default:                this.toasts.error(err.message);
     }
   }
@@ -861,6 +961,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
             }
           }
           this._selected.set(testIds);
+          this.hydrateSpecimensFrom(o);
         },
         error: () => this.toasts.error('Could not load order details')
       });
@@ -892,6 +993,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           if (o?.patient) this._patient.set(o.patient);
           if (o) this.extractCollectedTestIds(o);
           this.preselectFromOrder(o as unknown as HistoryRow, true);
+          this.hydrateSpecimensFrom(o);
         },
         error: () => this.toasts.error('Could not load order')
       });
@@ -967,6 +1069,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._patient.set(null);
     this._selected.set([]);
     this._specimens.set({});
+    this._specimenErr.set({});
+    this._defaultApplied.clear();
+    this._onOrderIds.set(new Set());
     this._hasDraft.set(false);
     this.setPriority('Normal');
     this.discountValue.set('');
@@ -1056,7 +1161,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     try { raw = localStorage.getItem(this.DRAFT_KEY_PREFIX + patientId); } catch { return false; }
     if (!raw) return false;
     try {
-      const parsed = JSON.parse(raw) as { savedAt?: number; priority?: Priority; testIds?: string[] };
+      const parsed = JSON.parse(raw) as { savedAt?: number; priority?: Priority; testIds?: string[]; specimens?: Record<string, string> | null };
       if (!parsed?.savedAt || Date.now() - parsed.savedAt > this.DRAFT_TTL_MS) {
         try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + patientId); } catch { /* ignore */ }
         return false;
@@ -1064,6 +1169,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       const ids = (parsed.testIds ?? []).filter(id => typeof id === 'string');
       if (ids.length === 0) return false;
       this._selected.set(ids);
+      // The draft's specimen picks come back too (a pick is a pick: never
+      // overwritten by a mapping default).
+      const sp = parsed.specimens && typeof parsed.specimens === 'object' ? parsed.specimens : {};
+      const picks = Object.fromEntries(Object.entries(sp).filter(([k, v]) => ids.includes(k) && typeof v === 'string' && v));
+      Object.keys(picks).forEach(k => this._defaultApplied.add(k));
+      this._specimens.set(picks);
       if (parsed.priority) this._priority.set(parsed.priority);
       this._hasDraft.set(true);
       this.toasts.info('Draft restored');
@@ -1091,6 +1202,26 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   isCollected(testId: string): boolean {
     return this.collectedTestIds().has(testId);
+  }
+
+  /** An existing order's lines → the cart's specimen picks (keyed as
+   *  ordered: the leaf, or the bundle it came in) and the set of lines
+   *  already on the order (not re-required on edit). */
+  private hydrateSpecimensFrom(o: Order | null | undefined) {
+    const picks: Record<string, string> = {};
+    const onOrder = new Set<string>();
+    for (const s of o?.samples ?? []) for (const t of s.tests ?? []) {
+      for (const k of [t.testId, t.packageTestId, t.profileTestId]) {
+        if (!k) continue;
+        onOrder.add(k);
+        const sp = (t.specimen ?? '').trim();
+        if (sp && !picks[k]) picks[k] = sp;
+      }
+    }
+    Object.keys(picks).forEach(k => this._defaultApplied.add(k));
+    onOrder.forEach(k => this._defaultApplied.add(k));
+    this._onOrderIds.set(onOrder);
+    this._specimens.update(m => ({ ...picks, ...m }));
   }
 
   private extractCollectedTestIds(o: Order) {
@@ -1306,6 +1437,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   continueToPayment(): void {
     if (this._selected().length === 0) return;
     if (this.requirePatient()) return;
+    if (this.requireSpecimens()) return;
     this.billPhase.set('pay');
   }
   /** The one-line cart summary in the payment phase → back to the cart. */
@@ -1561,6 +1693,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const p = this._patient();
     if (!p || this.confirming() || this._selected().length === 0) return;
+    if (this.requireSpecimens()) return;
     if (this.discountOverCap()) {
       this.toasts.error(`Discount ${this.discountPct().toFixed(0)}% exceeds your limit of ${this.discountCapPct()}%. Reduce it to continue.`);
       return;
@@ -1921,6 +2054,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   submit() {
     const p = this._patient();
     if (!p || this._saving() || this._selected().length === 0) return;
+    if (this.requireSpecimens()) return;
 
     // EDIT mode → PATCH the existing order's tests; the bill recomputes server-
     // side and we route to billing to collect-the-difference / refund.
@@ -1971,6 +2105,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       source: appointmentId ? 'appointment' : 'walkin',
       collectionType: 'walkin',
       testIds: this._selected(),
+      // The desk's specimen choices (dropped on this path before).
+      specimens: this.specimenPayload(),
       metadataJson: this.buildOrderMetadata(appointmentId)
     }).subscribe({
       next: order => {
@@ -2457,9 +2593,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return true;
   }
   onSaveDraftClick(): void { if (!this.requirePatient()) this.saveDraft(); }
-  onProceedClick(): void { if (!this.requirePatient()) this.submit(); }
+  onProceedClick(): void { if (!this.requirePatient() && !this.requireSpecimens()) this.submit(); }
   onConfirmClick(): void {
     if (this.requirePatient()) return;
+    if (this.requireSpecimens()) return;
     this.payPanel()?.emit();
   }
 

@@ -45,7 +45,9 @@ import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-stri
 import {
   LabelCardComponent,
   tubeSpec,
+  labelTubeLine,
 } from "../../frontdesk/post-payment/label-card.component";
+import { tubeChosenSpecimen, tubeSpecimen } from "../../../shared/utils/micro-specimen";
 import { PrinterService } from "../../../core/printer/printer.service";
 import { PrintConfigService } from "../../../core/printer/print-config.service";
 import { BranchLabConfigService } from "../../../core/services/branch-lab-config.service";
@@ -250,7 +252,9 @@ export function containerFor(
     // Sterile pots hold ONE specimen type each — label it with the specimen so
     // two sterile containers on an order read differently (Stool vs CSF…).
     if (s.tubeColor === "sterile") {
-      const spec = (s.tests[0]?.test?.sampleType ?? "").toLowerCase().trim();
+      // The specimen CHOSEN at the desk wins (tubes group by it), else the
+      // Test Master's own specimen.
+      const spec = (tubeSpecimen(s) ?? "").toLowerCase().trim();
       return {
         kind: "jar",
         color: tc.color,
@@ -258,13 +262,15 @@ export function containerFor(
         label: spec ? `Sterile · ${specimenTitle(spec)}` : tc.label,
       };
     }
-    if (s.tubeColor === "blood_culture")
+    if (s.tubeColor === "blood_culture") {
+      const chosen = tubeChosenSpecimen(s);
       return {
         kind: "bottle",
         color: tc.color,
         fill: BLOOD_FILL,
-        label: tc.label,
+        label: chosen ? `${tc.label} · ${specimenTitle(chosen.toLowerCase())}` : tc.label,
       };
+    }
     if (s.tubeColor === "urine")
       return {
         kind: "urine_cup",
@@ -303,7 +309,7 @@ export function containerFor(
   // Map the test's specimen/sampleType to the NABL vacutainer cap colour.
   // Ordered specific → general so e.g. "EDTA Plasma" resolves to EDTA, not
   // the generic plasma branch below.
-  const raw = (s.tests[0]?.test?.sampleType ?? "").toLowerCase().trim();
+  const raw = (tubeSpecimen(s) ?? "").toLowerCase().trim();
   // "A + B" ("Serum + 24h Urine") means BOTH containers are drawn; a literal
   // "Multiple" specimen likewise → the Multiple tube.
   if (raw === "multiple" || raw.includes("+")) {
@@ -1458,7 +1464,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       const p = s.order?.patient;
       const code = s.barcode ?? s.id;
       const mrn = p?.mrn ?? undefined;
-      const spec = tubeSpec(s);
       const res = await this.printer
         .printLabelData(
           {
@@ -1470,7 +1475,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
             ageSex: this.labelAgeSex(p),
             mrn,
             deptCode: (s.department?.code ?? "").toUpperCase(),
-            tube: `${spec.label} · ${spec.volume}`,
+            tube: labelTubeLine(s),
             outsourced: !!s.outsourcedVendorId,
           },
           opts,

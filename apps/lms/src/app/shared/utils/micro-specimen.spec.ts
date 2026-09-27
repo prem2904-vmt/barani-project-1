@@ -1,4 +1,4 @@
-import { ASK_SPECIMEN_KEY, asksSpecimen, ownAsksSpecimen, withAskSpecimen } from './micro-specimen';
+import { ASK_SPECIMEN_KEY, asksSpecimen, chosenSpecimen, deskDefaultSpecimen, ownAsksSpecimen, specimenLookupIds, tubeChosenSpecimen, tubeSpecimen, withAskSpecimen } from './micro-specimen';
 
 describe('micro-specimen — which tests ask the desk for their specimen', () => {
   const culture = JSON.stringify({ microFormat: 'culture_sensitivity', parameters: [] });
@@ -42,5 +42,46 @@ describe('micro-specimen — which tests ask the desk for their specimen', () =>
     expect(ASK_SPECIMEN_KEY in off).toBe(false);
     expect(off.microFormat).toBe('microscopy_v11');
     expect(JSON.parse(withAskSpecimen('{bad', true))).toEqual({ askSpecimen: true });
+  });
+});
+
+describe('micro-specimen — the chosen specimen downstream', () => {
+  it('chosenSpecimen trims and treats blank as none', () => {
+    expect(chosenSpecimen({ specimen: ' Urine ' })).toBe('Urine');
+    expect(chosenSpecimen({ specimen: '  ' })).toBeNull();
+    expect(chosenSpecimen(null)).toBeNull();
+  });
+
+  it('a tube holds its first chosen specimen, else the Test Master specimen', () => {
+    expect(tubeSpecimen({ tests: [{ specimen: null, test: { sampleType: 'As applicable' } }, { specimen: 'Pus' }] })).toBe('Pus');
+    expect(tubeSpecimen({ tests: [{ specimen: null, test: { sampleType: 'Stool' } }] })).toBe('Stool');
+    expect(tubeChosenSpecimen({ tests: [{ specimen: null }] })).toBeNull();
+  });
+});
+
+describe('micro-specimen — "there is no default" at the desk', () => {
+  const ask = JSON.stringify({ askSpecimen: true });
+  const a = { id: 'a', parameters: ask };
+  const b = { id: 'b', parameters: ask };
+  const plain = { id: 'p', parameters: '{}' };
+  const byId = (id: string) => ({ a, b, p: plain } as Record<string, typeof a>)[id];
+  const bundle = { id: 'pkg', parameters: JSON.stringify({ items: [{ testId: 'a' }, { testId: 'b' }, { testId: 'p' }] }) };
+
+  it('a single mapped default preselects; none or several do not', () => {
+    expect(deskDefaultSpecimen(a, { a: 'Urine' })).toBe('Urine');
+    expect(deskDefaultSpecimen(a, { a: null })).toBeNull();
+    expect(deskDefaultSpecimen(a, {})).toBeNull();
+  });
+
+  it('a bundle preselects only when every asking member names the same default', () => {
+    expect(deskDefaultSpecimen(bundle, { a: 'Urine', b: 'Urine' }, byId)).toBe('Urine');
+    expect(deskDefaultSpecimen(bundle, { a: 'Urine', b: 'Pus' }, byId)).toBeNull();
+    expect(deskDefaultSpecimen(bundle, { a: 'Urine', b: null }, byId)).toBeNull();
+  });
+
+  it('the lookup asks about the test itself, or a bundle\'s asking members', () => {
+    expect(specimenLookupIds(a)).toEqual(['a']);
+    expect(specimenLookupIds(bundle, byId)).toEqual(['a', 'b']);
+    expect(specimenLookupIds(plain, byId)).toEqual([]);
   });
 });

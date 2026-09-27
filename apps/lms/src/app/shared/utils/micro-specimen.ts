@@ -60,3 +60,71 @@ export function withAskSpecimen(parameters: string | null | undefined, on: boole
   else delete w[ASK_SPECIMEN_KEY];
   return JSON.stringify(w);
 }
+
+// ── The CHOSEN specimen downstream (tubes, labels, result entry) ──────────
+
+/** The desk's choice on one ordered line, trimmed; '' / missing → null. */
+export function chosenSpecimen(t: { specimen?: string | null } | null | undefined): string | null {
+  const v = (t?.specimen ?? '').trim();
+  return v ? v : null;
+}
+
+/**
+ * The specimen a TUBE holds: the first line's chosen specimen, else its
+ * Test Master specimen. Tubes group by the chosen specimen server-side
+ * (one sterile pot per chosen specimen), so every line in a pot agrees.
+ */
+export function tubeSpecimen(
+  s: { tests?: Array<{ specimen?: string | null; test?: { sampleType?: string | null } | null }> | null } | null | undefined,
+): string | null {
+  const tests = s?.tests ?? [];
+  for (const t of tests) { const c = chosenSpecimen(t); if (c) return c; }
+  const own = (tests[0]?.test?.sampleType ?? '').trim();
+  return own ? own : null;
+}
+
+/** Only the desk's CHOSEN specimen of a tube (no Test Master fallback) —
+ *  what the printed label names. */
+export function tubeChosenSpecimen(
+  s: { tests?: Array<{ specimen?: string | null }> | null } | null | undefined,
+): string | null {
+  for (const t of s?.tests ?? []) { const c = chosenSpecimen(t); if (c) return c; }
+  return null;
+}
+
+/**
+ * The default to PRESELECT at the desk for one cart line (owner 2026-09-27:
+ * "there is no default"): the test's single mapped default, else nothing.
+ * A bundle preselects only when every asking member names the SAME single
+ * default. `defaults` = test id → default name (null = none / several).
+ */
+export function deskDefaultSpecimen(
+  t: { id: string; parameters?: string | null },
+  defaults: Record<string, string | null | undefined>,
+  memberById?: (id: string) => ({ id: string; parameters?: string | null } | undefined),
+): string | null {
+  if (ownAsksSpecimen(t.parameters)) return defaults[t.id] ?? null;
+  const items = wrapperOf(t.parameters)?.['items'];
+  if (!Array.isArray(items) || !memberById) return null;
+  const picks = items
+    .map(i => { const id = (i as { testId?: unknown })?.testId; return typeof id === 'string' ? memberById(id) : undefined; })
+    .filter((m): m is { id: string; parameters?: string | null } => !!m && ownAsksSpecimen(m.parameters))
+    .map(m => defaults[m.id] ?? null);
+  if (picks.length === 0 || picks.some(p => !p)) return null;
+  return picks.every(p => p === picks[0]) ? picks[0] : null;
+}
+
+/** The ids whose mapping the desk must read for `t`: itself when it asks,
+ *  plus its asking members when it is a bundle. */
+export function specimenLookupIds(
+  t: { id: string; parameters?: string | null },
+  memberById?: (id: string) => ({ id: string; parameters?: string | null } | undefined),
+): string[] {
+  if (ownAsksSpecimen(t.parameters)) return [t.id];
+  const items = wrapperOf(t.parameters)?.['items'];
+  if (!Array.isArray(items) || !memberById) return [];
+  return items
+    .map(i => { const id = (i as { testId?: unknown })?.testId; return typeof id === 'string' ? memberById(id) : undefined; })
+    .filter((m): m is { id: string; parameters?: string | null } => !!m && ownAsksSpecimen(m.parameters))
+    .map(m => m.id);
+}

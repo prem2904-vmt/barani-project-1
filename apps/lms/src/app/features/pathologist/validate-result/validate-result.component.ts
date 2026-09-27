@@ -8,6 +8,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderTest } from '../../../shared/models/order.model';
+import { chosenSpecimen } from '../../../shared/utils/micro-specimen';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
@@ -124,6 +125,7 @@ interface ValueRow {
                           Culture &amp; sensitivity
                         } @else {
                           {{ c.total }} parameters
+                          @if (specimenLabel(st); as sp) { <span class="pf-vt__spec" title="Specimen chosen at the order desk">· Specimen: {{ sp }}</span> }
                           @if (c.critical) { <span class="pf-flagtag" data-flag="critical">{{ c.critical }} critical</span> }
                           @if (c.abnormal) { <span class="pf-flagtag" data-flag="abnormal">{{ c.abnormal }} abnormal</span> }
                           @if (!c.abnormal && !c.critical && c.total && hasRefRows(st)) { <span class="pf-flagtag" data-flag="normal">all within range</span> }
@@ -1207,6 +1209,11 @@ export class ValidateResultComponent implements OnInit {
    *  and signed out on the Culture case page (owner). */
   /** Culture tests are reviewed + signed out on the Culture case page. */
   openCultureBench(t: OrderTest) { void this.router.navigate(['/lab/culture', t.id]); }
+  /** "Specimen: Urine" — chosen at the order desk, for a non-culture test
+   *  (culture shows it on the bench). */
+  specimenLabel(t: OrderTest): string | null {
+    return this.isCultureFor(t) ? null : chosenSpecimen(t);
+  }
   isCultureFor(t: OrderTest | null): boolean {
     const raw = t?.test?.parameters;
     if (!raw) return false;

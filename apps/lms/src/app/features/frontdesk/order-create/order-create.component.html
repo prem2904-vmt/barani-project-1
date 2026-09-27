@@ -654,9 +654,14 @@
           @if (isReadOnly() || isCollected(t.id)) {
           @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenOf(t.id) }}</p> }
           } @else {
-          <div class="pf-cart-spec" (click)="$event.stopPropagation()">
+          <!-- Required: no default unless the test's mapping marks exactly
+               one (owner 2026-09-27: "there is no default"). -->
+          <div class="pf-cart-spec" [class.pf-cart-spec--err]="specimenError(t.id)" [attr.data-spec-id]="t.id"
+            (click)="$event.stopPropagation()">
             <pf-select size="sm" [searchable]="true" [options]="specimenOpts()" [value]="specimenOf(t.id)"
-              placeholder="Specimen…" (valueChange)="setSpecimen(t.id, $event)"></pf-select>
+              placeholder="Choose specimen…" [attr.aria-invalid]="specimenError(t.id) ? 'true' : null"
+              (valueChange)="setSpecimen(t.id, $event)"></pf-select>
+            @if (specimenError(t.id)) { <p class="pf-field-error" role="alert">Choose the specimen for this test.</p> }
           </div>
           }
           }

@@ -63,6 +63,8 @@ import { HeroBandComponent } from "../../../shared/components/hero-band/hero-ban
 import { ZoomTransitionService } from "../../../core/navigation/zoom-transition";
 import { ZoomTargetDirective } from "../../../core/navigation/zoom.directive";
 import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
+import { chosenSpecimen } from "../../../shared/utils/micro-specimen";
+
 
 /** Live flag preview beside a numeric input — client mirror only; the
  *  backend conditions engine still decides the persisted/reported flag. */
@@ -1078,6 +1080,11 @@ export class SampleResultEntryComponent {
   });
   isCultureTest(t: OrderTest): boolean {
     return this._cultureTestIds().has(t.id);
+  }
+  /** "Specimen: Urine" — the specimen chosen at the order desk, for a
+   *  non-culture test that has one (culture shows it on the bench). */
+  specimenLabel(t: OrderTest): string | null {
+    return this.isCultureTest(t) ? null : chosenSpecimen(t);
   }
   /** Culture tests live on the Culture case page (entry AND sign-out). */
   openCultureBench(t: OrderTest) {

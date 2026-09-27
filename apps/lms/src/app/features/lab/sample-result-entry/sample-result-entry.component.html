@@ -295,6 +295,7 @@
                           <tr class="pf-sre__gsub">
                             <td colspan="6">
                               {{ t.test?.name ?? "Test" }}
+                              @if (specimenLabel(t); as sp) { <span class="pf-sre__gwho pf-sre__spec" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span> }
                               @if (enteredByLabel(t)) { <span class="pf-sre__gwho" title="Entered by">{{ enteredByLabel(t) }}</span> }
                             </td>
                           </tr>
@@ -313,6 +314,9 @@
                                   <ng-container *ngTemplateOutlet="commentMark"></ng-container>
                                 }
                               </span>
+                              @if (idx === 0 && parametersFor(t).length === 1 && specimenLabel(t)) {
+                                <span class="pf-sre__gwho pf-sre__spec" title="Specimen chosen at the order desk">Specimen: {{ specimenLabel(t) }}</span>
+                              }
                               @if (idx === 0 && parametersFor(t).length === 1 && enteredByLabel(t)) {
                                 <span class="pf-sre__gwho" title="Entered by">{{ enteredByLabel(t) }}</span>
                               }
@@ -573,6 +577,11 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
               </span>
               <h2 class="nd-card__label pf-sre-card__label pf-sre__test-name">{{ t.test?.name ?? "Test" }}</h2>
+              @if (specimenLabel(t); as sp) {
+                <!-- The specimen chosen at the order desk (non-culture micro;
+                     culture shows it on the bench). -->
+                <span class="nd-chip nd-chip--static pf-sre__test-pill" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span>
+              }
               @if (t.status === "re_entry") {
                 <span class="nd-chip nd-chip--static pf-sre__test-pill pf-sre__test-pill--rejected">Re-entry needed</span>
               } @else if (t.status === "entered" || t.status === "validated") {
