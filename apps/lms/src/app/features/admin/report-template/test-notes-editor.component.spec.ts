@@ -123,4 +123,19 @@ describe('TestNotesEditor — saves on top of the latest stored layout', () => {
       expect(layout.saveTestLayout).toHaveBeenCalledTimes(1);
     } finally { vi.useRealTimers(); }
   });
+
+  it('no Description column → an accurate hint (prints as a line under the result), not a "nothing prints" warning', () => {
+    const { c, f } = make(['ppbs']);
+    c.loading?.set?.(false);
+    f.componentRef.setInput('descriptionColumn', false);
+    f.detectChanges();
+    const hint = (f.nativeElement as HTMLElement).querySelector('[data-testid="desc-no-column-hint"]');
+    expect(hint?.textContent).toContain('No Description column in this report — it prints as a line under the result.');
+    expect(hint?.textContent).toContain('Change the columns');
+    expect(hint?.classList.contains('pf-tl-desc-warn--err')).toBe(false);
+    expect((f.nativeElement as HTMLElement).textContent).not.toContain('nothing written here prints');
+    f.componentRef.setInput('descriptionColumn', true);
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('[data-testid="desc-no-column-hint"]')).toBeNull();
+  });
 });

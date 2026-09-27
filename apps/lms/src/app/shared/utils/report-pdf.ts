@@ -2366,6 +2366,11 @@ interface PanelRowData {
    *  columnar renderer can fill admin text columns instead of leaving them
    *  permanently blank. */
   texts?: Record<string, string>;
+  /** The value's resolved Description text (the engine resolves it — and a
+   *  "depends on the result" line — even when the table has no Description
+   *  column). With no such column it prints as a full-width row directly
+   *  under this value's row (owner 2026-09-28, like the Sentence row). */
+  description?: string;
   /** This value's EFFECTIVE method (snapshot `valueMethods`, else the test's). */
   method?: string;
 }
@@ -2467,6 +2472,20 @@ function sentenceRow(sec: ResolvedSection): PanelRowData | null {
   const label = (sec.label ?? '').trim();
   return { kind: 'note', note: text, sentence: true,
     sentenceLabel: label && !DEFAULT_SENTENCE_NAMES.test(label) ? label : undefined };
+}
+
+/** A value row's Description cell (key matched case-insensitively), line
+ *  breaks normalised and kept; '' when blank. */
+function descriptionText(cells: Record<string, unknown> | undefined): string {
+  if (!cells) return '';
+  const key = Object.keys(cells).find(k => k.toLowerCase() === 'description');
+  return key ? coerceCellText(cells[key]).replace(/\r\n?/g, '\n') : '';
+}
+
+/** Does this column config carry a Description column? Its text then prints
+ *  in that column only — never again as a row under the value. */
+function hasDescriptionColumn(cfg: ReportColumn[]): boolean {
+  return cfg.some(c => (c.name ?? '').trim().toLowerCase() === 'description');
 }
 
 /** Can this test's Sentences print as merged rows of the results table? Yes
@@ -2600,6 +2619,7 @@ function buildPanelGroup(
           color: r.color ?? null,
           bold: !!r.isBold,
           texts: Object.keys(texts).length ? texts : undefined,
+          description: descriptionText(r.cells) || undefined,
           method: methodForValue(t, r.parameterName),
         });
       }
@@ -2626,6 +2646,7 @@ function buildPanelGroup(
     group.rows.push({
       // Text columns (Description) read from the value payload when present.
       texts: v?.description ? { description: v.description } : undefined,
+      description: descriptionText({ description: v?.description }) || undefined,
       kind: 'param',
       name: humanize(paramName),
       result: String(v?.value ?? '—'),
@@ -2984,7 +3005,7 @@ function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>,
   const lhf = doc.getLineHeightFactor?.() ?? 1.15;
   // A Sentence can split across pages, so one line of it is enough to keep
   // it company; any other row has to fit whole.
-  const need = kinds[j + 1] === 'sentence'
+  const need = kinds[j + 1] === 'sentence' || kinds[j + 1] === 'desc'
     ? Math.max(...Object.values(after.cells).map(c => c.padding('vertical') + c.styles.fontSize * lhf))
     : after.height;
   if (top + next.height > bottom || top + next.height + need <= bottom) return;
@@ -3088,7 +3109,10 @@ function renderColumnarTable(
    *  and the Sentence under it, or a Sentence and the row it introduces. */
   const keepWithNext = new Set<number>();
   /** Body row kinds, parallel to `body` (glue decisions). */
-  const bodyKind: Array<'param' | 'sentence' | 'other'> = [];
+  const bodyKind: Array<'param' | 'sentence' | 'desc' | 'other'> = [];
+  /** No Description column in this table → each value's description prints
+   *  as a full-width row right under that value's row (P1, D1, P2, P3, D3). */
+  const descAsRow = !hasDescriptionColumn(cfg);
   for (const g of groups) {
     // A single-analyte test renders COMPACT: one plain row, no bold panel band
     // and no Method sub-line — the band + method treatment is reserved for
@@ -3249,12 +3273,27 @@ function renderColumnarTable(
             text: String(resultCellText),
             bold: (!isNormal && theme.flagIndicator !== 'none') || r.flag === 'A' }
         : null);
+      // Its description, when the table has no column for it: ONE merged
+      // row directly under the value, styled like the Sentence row.
+      const desc = descAsRow ? (r.description ?? '').trim() : '';
+      if (desc) {
+        body.push([{
+          content: desc,
+          colSpan: COLSPAN,
+          styles: { fillColor: '#ffffff', textColor: TEXT, fontStyle: 'normal', halign: 'left', valign: 'top',
+                    fontSize: 8.5 * theme.fontScale },
+        }]);
+        bodyMeta.push(null);
+        bodyKind.push('desc');
+      }
     }
     // Keep each Sentence on the page of the row it belongs to: the one it
     // follows (a test's last row) or, above the table, the one it introduces.
+    // A description row always stays with the value row above it.
     for (let i = groupStart; i < body.length; i++) {
+      if (bodyKind[i] === 'desc') { keepWithNext.add(i - 1); continue; }
       if (bodyKind[i] !== 'sentence') continue;
-      if (i > groupStart && bodyKind[i - 1] === 'param') keepWithNext.add(i - 1);
+      if (i > groupStart && (bodyKind[i - 1] === 'param' || bodyKind[i - 1] === 'desc')) keepWithNext.add(i - 1);
       else if (bodyKind[i + 1] === 'param') keepWithNext.add(i);
     }
   }

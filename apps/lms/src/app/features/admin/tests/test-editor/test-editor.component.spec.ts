@@ -702,7 +702,7 @@ describe('TestEditor — Printed report tab (owner bug 2026-09-27)', () => {
       fasting_blood_sugar: 'Fasting Blood Sugar', hba1c: 'hba1c', eag: 'Estimated average glucose' });
   });
 
-  it('warns when the printed table has no Description column (descriptions would never print)', () => {
+  it('knows whether the printed table has a Description column (none → the editor hints it prints as a line under the result)', () => {
     const { c } = make();
     expect(c.descriptionColumnPrints()).toBeNull();            // not loaded: engine defaults include one
     c.deptColumnCfg.set([{ name: 'result', type: 'result' }, { name: 'methodology', type: 'method' }]);
