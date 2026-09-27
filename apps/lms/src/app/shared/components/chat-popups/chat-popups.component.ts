@@ -88,7 +88,7 @@ import { ThemeService } from '../../../core/services/theme.service';
       color: var(--text-primary);
       min-height: 64px;
     }
-    .pf-cpop__main:hover { background: var(--nd-sel-bg, #eceff2); }
+    .pf-cpop__card:hover { background: color-mix(in srgb, var(--nd-sel-bg, #eceff2) 55%, var(--nd-card-bg, #fff)); }
     .pf-cpop__main:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
 
     /* The app's neutral initials avatar (Messages / chat windows anatomy). */
