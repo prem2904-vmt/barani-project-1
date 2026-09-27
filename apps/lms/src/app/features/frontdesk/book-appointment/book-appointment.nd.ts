@@ -4,7 +4,65 @@
  * renders in the new design, so the classic booking page is untouched.
  */
 
+import { addDays, addMonths, endOfWeek, format, isSameMonth, parse, startOfMonth, startOfWeek } from 'date-fns';
+
 export type SlotPeriod = 'morning' | 'afternoon' | 'evening' | 'night';
+
+/** One day in the Date card's month grid. */
+export interface MonthCell {
+  iso: string;
+  n: number;
+  /** Belongs to the previous / next month (muted). */
+  outside: boolean;
+  today: boolean;
+  /** Before today: not bookable (the page's min date is today). */
+  past: boolean;
+  /** "Monday 28 September 2026". */
+  label: string;
+}
+
+/** Weekday column heads (the grid starts on Monday, like the calendar). */
+export const MONTH_DOWS: ReadonlyArray<{ s: string; long: string }> = [
+  { s: 'M', long: 'Monday' }, { s: 'T', long: 'Tuesday' }, { s: 'W', long: 'Wednesday' },
+  { s: 'T', long: 'Thursday' }, { s: 'F', long: 'Friday' }, { s: 'S', long: 'Saturday' }, { s: 'S', long: 'Sunday' },
+];
+
+/** Always six Monday-first weeks (a stable 7 x 6 grid, no height jumps). */
+export function monthGrid(month: Date, todayIso: string): MonthCell[][] {
+  const first = startOfMonth(month);
+  const start = startOfWeek(first, { weekStartsOn: 1 });
+  const weeks: MonthCell[][] = [];
+  for (let w = 0; w < 6; w++) {
+    const row: MonthCell[] = [];
+    for (let d = 0; d < 7; d++) {
+      const day = addDays(start, w * 7 + d);
+      const iso = format(day, 'yyyy-MM-dd');
+      row.push({ iso, n: day.getDate(), outside: !isSameMonth(day, first), today: iso === todayIso,
+                 past: iso < todayIso, label: format(day, 'EEEE d MMMM yyyy') });
+    }
+    weeks.push(row);
+  }
+  return weeks;
+}
+
+/** Where a grid key moves the focused day (null = not a move key).
+ *  Arrows ±1 / ±7, Home / End = start / end of the week, PageUp / PageDown
+ *  = the same day a month earlier / later. */
+export function calendarMove(iso: string, key: string): string | null {
+  const d = parse(iso, 'yyyy-MM-dd', new Date());
+  const to = (x: Date) => format(x, 'yyyy-MM-dd');
+  switch (key) {
+    case 'ArrowLeft': return to(addDays(d, -1));
+    case 'ArrowRight': return to(addDays(d, 1));
+    case 'ArrowUp': return to(addDays(d, -7));
+    case 'ArrowDown': return to(addDays(d, 7));
+    case 'Home': return to(startOfWeek(d, { weekStartsOn: 1 }));
+    case 'End': return to(endOfWeek(d, { weekStartsOn: 1 }));
+    case 'PageUp': return to(addMonths(d, -1));
+    case 'PageDown': return to(addMonths(d, 1));
+    default: return null;
+  }
+}
 
 /** The slot chip that owns the grid's single Tab stop: the picked time when
  *  it is shown, else the first available slot, else the first slot. */
@@ -59,6 +117,10 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
   @media (min-width: 768px) {
     .pf-bka-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .pf-bka-details { grid-column: 1 / -1; }
+    /* Patient + Date beside Time slot: the Date card grows to the row's
+       height and its month grid stretches (no empty space). */
+    .pf-bka-grid > .pf-bka-col { align-self: stretch; }
+    .pf-bka-date { flex: 1 1 auto; }
   }
   /* ≥1200px: three columns side by side FILLING the body; only card bodies
      scroll (no page scroll), like registration. */
@@ -107,19 +169,56 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
   .pf-bka-picked__meta { font-size: 12.5px; color: var(--text-secondary); }
   .pf-bka-change { height: 36px; min-height: 36px; }
 
-  /* ── Date: typed kit date + one-tap days ── */
+  /* ── Date: typed kit date + a full month grid that fills the card ── */
   .pf-bka-date pf-nd-date { display: block; }
-  .pf-bka-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-  .pf-bka-day {
-    display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 52px; padding: 6px 0;
-    border-radius: 10px; border: 1px solid var(--nd-line); background: var(--nd-card-bg); font: inherit; color: var(--text-secondary); cursor: pointer;
+  .pf-bka-date .nd-card__body { min-height: 0; }
+  .pf-bka-cal { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+  .pf-bka-cal__head { flex: none; display: flex; align-items: center; gap: 4px; }
+  .pf-bka-cal__title { flex: 1 1 auto; min-width: 0; text-align: center; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .pf-bka-cal__nav {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+    border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer;
+    transition: background var(--nd-dur-fast) ease, color var(--nd-dur-fast) ease;
+  }
+  .pf-bka-cal__nav:hover:not(:disabled) { background: var(--nd-chip-bg); color: var(--text-primary); }
+  .pf-bka-cal__nav:disabled { opacity: 0.35; cursor: default; }
+  .pf-bka-cal__nav:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .pf-bka-cal__grid { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+  .pf-bka-cal__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .pf-bka-cal__dow { padding: 2px 0 4px; text-align: center; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-tertiary); }
+  .pf-bka-cal__weeks { flex: 1 1 auto; min-height: 0; display: grid; grid-template-rows: repeat(6, minmax(40px, 1fr)); gap: 4px; }
+  .pf-bka-cal__weeks--next { animation: pf-bka-cal-next var(--nd-dur, 220ms) var(--nd-spring, ease) both; }
+  .pf-bka-cal__weeks--prev { animation: pf-bka-cal-prev var(--nd-dur, 220ms) var(--nd-spring, ease) both; }
+  @keyframes pf-bka-cal-next { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+  @keyframes pf-bka-cal-prev { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+  .pf-bka-cal__day {
+    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-width: 0; min-height: 40px; height: 100%; padding: 0;
+    border-radius: 10px; border: 1px solid transparent; background: transparent;
+    font: inherit; color: var(--text-primary); cursor: pointer;
     transition: border-color var(--nd-dur-fast) ease, background var(--nd-dur-fast) ease;
   }
-  .pf-bka-day:hover { border-color: var(--nd-sel-border); }
-  .pf-bka-day[aria-pressed='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); color: var(--text-primary); }
-  .pf-bka-day__dow { font-size: 11px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
-  .pf-bka-day__n { font-size: 15px; font-weight: 600; color: var(--text-primary); }
-  .pf-bka-day--today .pf-bka-day__dow, .pf-bka-day--today .pf-bka-day__n { color: var(--violet-text, #7c3aed); }
+  .pf-bka-cal__n {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 4px;
+    border-radius: 999px; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums;
+  }
+  .pf-bka-cal__day:hover:not([aria-disabled='true']) { border-color: var(--nd-line); background: var(--nd-chip-bg); }
+  .pf-bka-cal__day:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .pf-bka-cal__day--out { color: var(--text-muted, var(--text-tertiary)); }
+  .pf-bka-cal__day--out .pf-bka-cal__n { font-weight: 400; }
+  .pf-bka-cal__day[aria-disabled='true'] { cursor: not-allowed; color: var(--text-muted, var(--text-tertiary)); }
+  .pf-bka-cal__day[aria-disabled='true'] .pf-bka-cal__n { font-weight: 400; opacity: 0.7; }
+  /* Today: a subtle violet disc (like the calendar's today). */
+  .pf-bka-cal__day--today .pf-bka-cal__n {
+    color: var(--violet-text, #7c3aed); font-weight: 600;
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  }
+  /* Selected: the neutral raised chip with a violet border (= the picked slot). */
+  .pf-bka-cal__day[aria-selected='true'] {
+    border-color: var(--color-violet-600, #7c3aed); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, var(--nd-card-bg));
+    box-shadow: var(--nd-shadow-sm); color: var(--text-primary);
+  }
+  .pf-bka-cal__day[aria-selected='true'] .pf-bka-cal__n { font-weight: 600; }
 
   /* ── Slots: neutral chips — available / taken / selected ── */
   .pf-bka-periods { display: flex; width: 100%; }
@@ -188,7 +287,11 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
     .pf-bka-periods .nd-seg__item, .pf-bka-coll .nd-seg__item { height: 44px; }
     .pf-bka-periods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .pf-bka-home { grid-template-columns: minmax(0, 1fr); }
-    .pf-bka-days { gap: 2px; }
+    /* Phones: a compact square-cell month, 44px targets. */
+    .pf-bka-cal__weeks { flex: none; grid-template-rows: none; grid-auto-rows: 44px; gap: 2px; }
+    .pf-bka-cal__row { gap: 2px; }
+    .pf-bka-cal__day { min-height: 44px; }
+    .pf-bka-cal__nav { width: 44px; height: 44px; }
     .pf-bka-change, .pf-bka-ptest__x { min-height: 44px; height: 44px; }
     .pf-bka-ptest__x { width: 44px; }
     .pf-bka-ptest--total .pf-bka-ptest__price { margin-right: 54px; }
@@ -200,6 +303,6 @@ export const BOOK_APPOINTMENT_ND_STYLES = `
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .pf-bka-chip, .pf-bka-results--float, .pf-bka-home, .pf-bka-day { animation: none !important; transition: none !important; }
+    .pf-bka-chip, .pf-bka-results--float, .pf-bka-home, .pf-bka-cal__day, .pf-bka-cal__nav, .pf-bka-cal__weeks { animation: none !important; transition: none !important; }
   }
 `;

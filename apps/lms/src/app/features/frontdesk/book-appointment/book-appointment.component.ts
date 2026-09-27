@@ -44,7 +44,7 @@ import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.comp
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { plural } from '../../../shared/utils/plural';
 import { formatPatientMeta } from '../../../shared/models/patient.model';
-import { BOOK_APPOINTMENT_ND_STYLES, SlotPeriod, nextFocus, rovingIndex } from './book-appointment.nd';
+import { BOOK_APPOINTMENT_ND_STYLES, MONTH_DOWS, SlotPeriod, calendarMove, monthGrid, nextFocus, rovingIndex } from './book-appointment.nd';
 import {
   addDays,
   addMonths,
@@ -213,14 +213,47 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                   <pf-nd-date data-nav label="Appointment date" [value]="selectedDate()" [min]="todayIso"
                               (valueChange)="$event && selectDate($event)"></pf-nd-date>
                 </label>
-                <div class="pf-bka-days" role="group" aria-label="Quick pick a day">
-                  @for (d of quickDays(); track d.iso) {
-                    <button type="button" class="pf-bka-day" tabindex="-1" [attr.aria-pressed]="d.iso === selectedDate()"
-                            [class.pf-bka-day--today]="d.today" [attr.aria-label]="d.long" (click)="selectDate(d.iso)">
-                      <span class="pf-bka-day__dow">{{ d.dow }}</span>
-                      <span class="pf-bka-day__n nd-num">{{ d.n }}</span>
+                <!-- The whole month (fills the card): ‹ Month Year ›, weekday
+                     initials, six weeks. Past days are disabled (min = today). -->
+                <div class="pf-bka-cal">
+                  <div class="pf-bka-cal__head">
+                    <button type="button" class="pf-bka-cal__nav" tabindex="-1" aria-label="Previous month" title="Previous month (Page Up)"
+                            [disabled]="!canPrevMonth()" (click)="navCalMonth(-1)">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
                     </button>
-                  }
+                    <span class="pf-bka-cal__title" id="pf-bka-cal-title" aria-live="polite">{{ calTitle() }}</span>
+                    <button type="button" class="pf-bka-cal__nav" tabindex="-1" aria-label="Next month" title="Next month (Page Down)"
+                            (click)="navCalMonth(1)">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                  </div>
+                  <div class="pf-bka-cal__grid" role="grid" aria-labelledby="pf-bka-cal-title" (keydown)="onCalKey($event)">
+                    <div class="pf-bka-cal__row" role="row">
+                      @for (w of monthDows; track $index) {
+                        <span class="pf-bka-cal__dow" role="columnheader" [attr.aria-label]="w.long">{{ w.s }}</span>
+                      }
+                    </div>
+                    @for (k of [calKey()]; track k) {
+                      <div class="pf-bka-cal__weeks" role="rowgroup"
+                           [class.pf-bka-cal__weeks--next]="calSlide() === 'next'" [class.pf-bka-cal__weeks--prev]="calSlide() === 'prev'">
+                        @for (week of calWeeks(); track week[0].iso) {
+                          <div class="pf-bka-cal__row" role="row">
+                            @for (d of week; track d.iso) {
+                              <button type="button" class="pf-bka-cal__day" role="gridcell" [attr.data-iso]="d.iso"
+                                      [class.pf-bka-cal__day--out]="d.outside" [class.pf-bka-cal__day--today]="d.today"
+                                      [attr.aria-selected]="d.iso === selectedDate()" [attr.aria-disabled]="d.past ? true : null"
+                                      [attr.aria-current]="d.today ? 'date' : null" [attr.aria-label]="d.label"
+                                      [attr.tabindex]="d.iso === calRoving() ? 0 : -1" (click)="pickDay(d.iso)">
+                                <span class="pf-bka-cal__n">{{ d.n }}</span>
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
                 </div>
               </div>
             </section>
@@ -1464,14 +1497,26 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     const d = this.selectedDate();
     return d ? format(parse(d, "yyyy-MM-dd", new Date()), "EEE d MMM yyyy") : "—";
   });
-  /** Today + the next 6 days as one-tap chips beside the typed date. */
-  protected readonly quickDays = computed(() => {
-    const t = new Date(); t.setHours(0, 0, 0, 0);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = addDays(t, i);
-      return { iso: format(d, "yyyy-MM-dd"), dow: i === 0 ? "Today" : format(d, "EEE"), n: format(d, "d"),
-               today: i === 0, long: format(d, "EEEE d MMMM yyyy") };
-    });
+  // ── Date card: the full month grid (new design) ──
+  protected readonly monthDows = MONTH_DOWS;
+  /** The month the grid shows (follows the picked date; ‹ › / PageUp / PageDown move it). */
+  protected readonly calMonth = signal<Date>(startOfMonth(new Date()));
+  /** The day that holds the grid's single Tab stop (arrows move it). */
+  protected readonly calFocus = signal<string>(format(new Date(), "yyyy-MM-dd"));
+  /** Which way the last month change went (drives the subtle slide). */
+  protected readonly calSlide = signal<"next" | "prev" | null>(null);
+  protected readonly calKey = computed(() => format(this.calMonth(), "yyyy-MM"));
+  protected readonly calTitle = computed(() => format(this.calMonth(), "MMMM yyyy"));
+  protected readonly calWeeks = computed(() => monthGrid(this.calMonth(), this.todayIso));
+  /** No month before the current one (every day there is past). */
+  protected readonly canPrevMonth = computed(() => this.calKey() > this.todayIso.slice(0, 7));
+  /** The Tab stop: the focused day if shown in this month, else the picked
+   *  day, else today, else the month's first bookable day. */
+  protected readonly calRoving = computed(() => {
+    const cells = this.calWeeks().flat().filter(c => !c.outside);
+    const has = (iso: string) => cells.some(c => c.iso === iso);
+    for (const iso of [this.calFocus(), this.selectedDate(), this.todayIso]) if (has(iso)) return iso;
+    return (cells.find(c => !c.past) ?? cells[0])?.iso ?? "";
   });
   /** The chip that holds the slot grid's single Tab stop. */
   protected readonly rovingSlot = computed(() => {
@@ -1851,6 +1896,8 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 
     if (dateParam) {
       this.selectedDate.set(dateParam);
+      this.calFocus.set(dateParam);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) this.calMonth.set(startOfMonth(parse(dateParam, "yyyy-MM-dd", new Date())));
       this.calendarMonth.set(
         startOfMonth(parse(dateParam, "yyyy-MM-dd", new Date())),
       );
@@ -1888,9 +1935,55 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     this.calendarMonth.set(delta < 0 ? subMonths(cur, 1) : addMonths(cur, 1));
   }
   selectDate(iso: string) {
+    this.showCalMonth(iso);
+    this.calFocus.set(iso);
     if (iso === this.selectedDate()) return;
     this.selectedDate.set(iso);
     this.selectedTime.set("");
+  }
+
+  /** A day in the month grid: past days are not bookable (min = today). */
+  pickDay(iso: string) {
+    if (!iso || iso < this.todayIso) return;
+    this.selectDate(iso);
+  }
+  /** ‹ / ›: the grid's month (the picked date stays). */
+  navCalMonth(delta: 1 | -1) {
+    if (delta < 0 && !this.canPrevMonth()) return;
+    const next = addMonths(this.calMonth(), delta);
+    this.calSlide.set(delta > 0 ? "next" : "prev");
+    this.calMonth.set(next);
+    const f = format(addMonths(parse(this.calFocus(), "yyyy-MM-dd", new Date()), delta), "yyyy-MM-dd");
+    this.calFocus.set(f < this.todayIso ? this.todayIso : f);
+  }
+  /** The month grid (one Tab stop): arrows / Home / End move the day,
+   *  PageUp / PageDown the month, Enter / Space pick it. */
+  onCalKey(e: KeyboardEvent) {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>(".pf-bka-cal__day");
+    if (!cell) return;
+    const iso = cell.getAttribute("data-iso") ?? "";
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      this.pickDay(iso);
+      return;
+    }
+    let to = calendarMove(iso, e.key);
+    if (!to) return;
+    e.preventDefault();
+    const floor = this.todayIso.slice(0, 7) + "-01";
+    if (to < floor) to = floor;
+    this.calFocus.set(to);
+    this.showCalMonth(to);
+    setTimeout(() => this.host().querySelector<HTMLElement>(`.pf-bka-cal__day[data-iso="${to}"]`)?.focus());
+  }
+  /** Bring the grid to the month holding `iso` (sliding the right way). */
+  private showCalMonth(iso: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    const key = iso.slice(0, 7);
+    const cur = this.calKey();
+    if (key === cur) return;
+    this.calSlide.set(key > cur ? "next" : "prev");
+    this.calMonth.set(startOfMonth(parse(iso, "yyyy-MM-dd", new Date())));
   }
 
   // ── Slots ───────────────────────────────────────────────────

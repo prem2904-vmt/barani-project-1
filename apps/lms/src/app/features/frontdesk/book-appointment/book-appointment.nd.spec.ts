@@ -5,7 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { BookAppointmentComponent } from './book-appointment.component';
-import { BOOK_APPOINTMENT_ND_STYLES, nextFocus, rovingIndex } from './book-appointment.nd';
+import { BOOK_APPOINTMENT_ND_STYLES, calendarMove, monthGrid, nextFocus, rovingIndex } from './book-appointment.nd';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -161,19 +161,121 @@ describe('New appointment (nd) — the form', () => {
     expect(el.querySelector('.pf-bka-slots .pf-bka-note')?.textContent).toContain('No slots in this part of the day');
   });
 
-  it('date: the kit date (typed dd/mm/yyyy, min today) + one-tap days; a new day clears the slot', async () => {
-    const { el, f, c } = await render();
+  it('date: the kit date (typed dd/mm/yyyy, min today) above a full month grid', async () => {
+    const { el } = await render();
     const d = el.querySelector('.pf-bka-date pf-nd-date input[type="text"]') as HTMLInputElement;
     expect(d.placeholder).toBe('dd/mm/yyyy');
     expect(d.value).toBe(`${pad(DAY.getDate())}/${pad(DAY.getMonth() + 1)}/${DAY.getFullYear()}`);
+    // The 7-day strip is gone: one month grid, ‹ Month Year ›, M..S, 6 weeks.
+    expect(el.querySelector('.pf-bka-days')).toBeNull();
+    const grid = el.querySelector('.pf-bka-date [role="grid"]')!;
+    expect(grid.getAttribute('aria-labelledby')).toBe('pf-bka-cal-title');
+    const monthName = DAY.toLocaleString('en-GB', { month: 'long' });
+    expect(el.querySelector('#pf-bka-cal-title')?.textContent?.trim()).toBe(`${monthName} ${DAY.getFullYear()}`);
+    expect(Array.from(grid.querySelectorAll('[role="columnheader"]')).map(h => h.textContent?.trim()).join('')).toBe('MTWTFSS');
+    expect(grid.querySelectorAll('.pf-bka-cal__weeks [role="row"]').length).toBe(6);
+    expect(grid.querySelectorAll('[role="gridcell"]').length).toBe(42);
+    const sel = grid.querySelector(`[data-iso="${DAY_ISO}"]`)!;
+    expect(sel.getAttribute('aria-selected')).toBe('true');
+    expect(grid.querySelectorAll('[aria-selected="true"]').length).toBe(1);
+    expect(sel.getAttribute('aria-label')).toBe(DAY.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(',', ''));
+    // Days of the neighbouring months are muted.
+    const cells = Array.from(grid.querySelectorAll('[role="gridcell"]'));
+    const first = cells.findIndex(c => c.textContent?.trim() === '1');
+    cells.slice(0, first).forEach(c => expect(c.classList).toContain('pf-bka-cal__day--out'));
+    // One Tab stop: the picked day.
+    expect(cells.filter(c => c.getAttribute('tabindex') === '0')).toEqual([sel]);
+  });
+
+  it('date: past days are disabled (min = today), today is marked', async () => {
+    const { el, f, c, api } = await render();
+    const today = new Date();
+    // Show the current month (the picked day may sit in the next one).
+    c.calMonth.set(new Date(today.getFullYear(), today.getMonth(), 1)); f.detectChanges();
+    const t = el.querySelector(`.pf-bka-cal__day[data-iso="${iso(today)}"]`)!;
+    expect(t.classList).toContain('pf-bka-cal__day--today');
+    expect(t.getAttribute('aria-current')).toBe('date');
+    expect(t.getAttribute('aria-disabled')).toBeNull();
+    // A shown day before today (yesterday, or the previous month's tail).
+    const past = Array.from(el.querySelectorAll<HTMLElement>('.pf-bka-cal__day'))
+      .filter(x => x.getAttribute('data-iso')! < iso(today)).pop() ?? null;
+    if (!past) return; // today is a Monday the 1st: nothing before it is shown.
+    expect(past.getAttribute('aria-disabled')).toBe('true');
+    const calls = api.get.mock.calls.length;
+    click(past); f.detectChanges();
+    expect(c.selectedDate()).toBe(DAY_ISO);
+    expect(api.get.mock.calls.length).toBe(calls);
+    // No month before the current one.
+    expect((el.querySelector('.pf-bka-cal__nav[aria-label="Previous month"]') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('date: a picked day updates the pill + the typed date, clears the slot and reloads the slots', async () => {
+    const { el, f, c, api } = await render();
     click(chip(el, '10:00')); f.detectChanges();
-    const days = el.querySelectorAll('.pf-bka-day');
-    expect(days.length).toBe(7);
-    expect(days[0].textContent).toContain('Today');
-    expect(days[2].getAttribute('aria-pressed')).toBe('true');
-    click(days[3]); f.detectChanges();
-    expect(c.selectedDate()).not.toBe(DAY_ISO);
+    expect(c.selectedTime()).toBe('10:00');
+    const next = new Date(DAY); next.setDate(next.getDate() + 1);
+    const nextIso = iso(next);
+    const cell = el.querySelector(`.pf-bka-cal__day[data-iso="${nextIso}"]`) as HTMLElement;
+    const before = api.get.mock.calls.filter((x: any[]) => String(x[0]).startsWith('/api/appointments?')).length;
+    click(cell); f.detectChanges(); await f.whenStable(); f.detectChanges();
+    expect(c.selectedDate()).toBe(nextIso);
     expect(c.selectedTime()).toBe('');
+    expect(el.querySelector(`.pf-bka-cal__day[data-iso="${nextIso}"]`)?.getAttribute('aria-selected')).toBe('true');
+    expect(el.querySelector('.pf-bka-ctx__date')?.textContent).toContain(String(next.getDate()));
+    const typed = el.querySelector('.pf-bka-date pf-nd-date input[type="text"]') as HTMLInputElement;
+    expect(typed.value).toBe(`${pad(next.getDate())}/${pad(next.getMonth() + 1)}/${next.getFullYear()}`);
+    expect(api.get.mock.calls.filter((x: any[]) => String(x[0]).startsWith('/api/appointments?')).length).toBe(before + 1);
+    // The other way: the typed date moves the grid to its month.
+    const later = new Date(DAY.getFullYear(), DAY.getMonth() + 2, 10);
+    c.selectDate(iso(later)); f.detectChanges();
+    expect(el.querySelector('#pf-bka-cal-title')?.textContent).toContain(later.toLocaleString('en-GB', { month: 'long' }));
+    expect(el.querySelector(`.pf-bka-cal__day[data-iso="${iso(later)}"]`)?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('date keyboard: arrows move the day, Enter picks it, PageUp / PageDown change the month', async () => {
+    const { el, f, c } = await render();
+    const key = (k: string) => {
+      const ev = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
+      (document.activeElement as HTMLElement).dispatchEvent(ev);
+      f.detectChanges();
+      return ev;
+    };
+    const focusDay = (d: string) => (el.querySelector(`.pf-bka-cal__day[data-iso="${d}"]`) as HTMLElement).focus();
+    const shift = (n: number) => { const x = new Date(DAY); x.setDate(x.getDate() + n); return iso(x); };
+    focusDay(DAY_ISO);
+    key('ArrowRight'); await sleep(0);
+    expect(document.activeElement?.getAttribute('data-iso')).toBe(shift(1));
+    key('ArrowDown'); await sleep(0);
+    expect(document.activeElement?.getAttribute('data-iso')).toBe(shift(8));
+    key('ArrowLeft'); await sleep(0);
+    expect(document.activeElement?.getAttribute('data-iso')).toBe(shift(7));
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('0');
+    const ev = key('Enter');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(c.selectedDate()).toBe(shift(7));
+    // PageDown: the same day next month, with the grid on that month.
+    const sel = new Date(DAY); sel.setDate(sel.getDate() + 7);
+    const title0 = el.querySelector('#pf-bka-cal-title')?.textContent;
+    key('PageDown'); await sleep(0);
+    expect(el.querySelector('#pf-bka-cal-title')?.textContent).not.toBe(title0);
+    const nm = new Date(sel.getFullYear(), sel.getMonth() + 1, 1);
+    expect(document.activeElement?.getAttribute('data-iso')?.slice(0, 7)).toBe(iso(nm).slice(0, 7));
+    expect(el.querySelector('.pf-bka-cal__weeks')?.classList).toContain('pf-bka-cal__weeks--next');
+    key('PageUp'); await sleep(0);
+    expect(el.querySelector('#pf-bka-cal-title')?.textContent).toBe(title0);
+    expect(document.activeElement?.getAttribute('data-iso')).toBe(shift(7));
+    // The picked date only changes on Enter / click.
+    expect(c.selectedDate()).toBe(shift(7));
+  });
+
+  it('date: ‹ › change the month without changing the picked day', async () => {
+    const { el, f, c } = await render();
+    const title0 = el.querySelector('#pf-bka-cal-title')?.textContent;
+    click(el.querySelector('.pf-bka-cal__nav[aria-label="Next month"]')); f.detectChanges();
+    expect(el.querySelector('#pf-bka-cal-title')?.textContent).not.toBe(title0);
+    expect(c.selectedDate()).toBe(DAY_ISO);
+    click(el.querySelector('.pf-bka-cal__nav[aria-label="Previous month"]')); f.detectChanges();
+    expect(el.querySelector('#pf-bka-cal-title')?.textContent).toBe(title0);
   });
 
   it('validation is inline: Book with nothing picked marks the patient + the slot, sends nothing', async () => {
@@ -284,6 +386,10 @@ describe('New appointment (nd) — phones + rules', () => {
     const phone = s.slice(s.indexOf('@media (max-width: 640px)'));
     expect(phone).toMatch(/\.pf-bka-chips \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
     expect(phone).toMatch(/font-size: 16px/);
+    // The month grid: stretching rows on wide screens, 44px square cells on phones.
+    expect(s).toMatch(/\.pf-bka-cal__weeks \{[^}]*grid-template-rows: repeat\(6, minmax\(40px, 1fr\)\)/);
+    expect(phone).toMatch(/\.pf-bka-cal__weeks \{[^}]*grid-auto-rows: 44px/);
+    expect(phone).toMatch(/\.pf-bka-cal__day \{ min-height: 44px; \}/);
   });
 
   it('no native controls / flatpickr, no emoji / glyphs, no monospace, palette only', async () => {
@@ -299,6 +405,7 @@ describe('New appointment (nd) — phones + rules', () => {
     expect(s).not.toMatch(/monospace|JetBrains/i);
     expect(s).not.toMatch(/linear-gradient|#ec4899|#10b981|#22c55e/i);
     expect(s.slice(s.indexOf('@media (prefers-reduced-motion: reduce)'))).toContain('.pf-bka-chip');
+    expect(s.slice(s.indexOf('@media (prefers-reduced-motion: reduce)'))).toContain('.pf-bka-cal__weeks');
   });
 
   it('the classic design keeps its own page untouched', async () => {
@@ -321,5 +428,27 @@ describe('New appointment (nd) — helpers', () => {
     const b = document.createElement('div'); b.innerHTML = '<input type="text">';
     expect(nextFocus([a, b], 0)).toBe(b.querySelector('input'));
     expect(nextFocus([a], 0)).toBeNull();
+  });
+  it('monthGrid: six Monday-first weeks, outside / today / past flags, long labels', () => {
+    const w = monthGrid(new Date(2026, 8, 15), '2026-09-27');
+    expect(w.length).toBe(6);
+    expect(w.every(r => r.length === 7)).toBe(true);
+    expect(w[0][0].iso).toBe('2026-08-31');
+    expect(w[0][0].outside).toBe(true);
+    const c28 = w.flat().find(c => c.iso === '2026-09-28')!;
+    expect(c28.label).toBe('Monday 28 September 2026');
+    expect(c28.past).toBe(false);
+    expect(w.flat().find(c => c.iso === '2026-09-27')!.today).toBe(true);
+    expect(w.flat().find(c => c.iso === '2026-09-26')!.past).toBe(true);
+  });
+  it('calendarMove: arrows, Home / End, PageUp / PageDown', () => {
+    expect(calendarMove('2026-09-28', 'ArrowRight')).toBe('2026-09-29');
+    expect(calendarMove('2026-09-28', 'ArrowUp')).toBe('2026-09-21');
+    expect(calendarMove('2026-09-30', 'ArrowDown')).toBe('2026-10-07');
+    expect(calendarMove('2026-10-01', 'Home')).toBe('2026-09-28');
+    expect(calendarMove('2026-10-01', 'End')).toBe('2026-10-04');
+    expect(calendarMove('2026-01-31', 'PageDown')).toBe('2026-02-28');
+    expect(calendarMove('2026-09-28', 'PageUp')).toBe('2026-08-28');
+    expect(calendarMove('2026-09-28', 'a')).toBeNull();
   });
 });
