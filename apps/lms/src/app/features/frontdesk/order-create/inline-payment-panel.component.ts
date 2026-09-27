@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   output,
@@ -9,6 +10,7 @@ import {
 } from "@angular/core";
 import { ApiService } from "../../../core/services/api.service";
 import { CurrencyInrPipe } from "../../../shared/pipes/currency-inr.pipe";
+import { UpiPayee, upiLink, upiQrDataUrl } from "../../../shared/utils/upi";
 
 export type PayMode = "upi" | "card" | "cash" | "wallet" | "split" | "later";
 
@@ -90,16 +92,25 @@ interface MethodDef {
           <div class="pf-ipp__detail">
             @switch (method()) {
               @case ("upi") {
-                <div class="pf-ipp__upi">
-                  <div class="pf-ipp__qr">
-                    <img [src]="upiQrUrl()" alt="UPI QR code to pay" width="84" height="84" />
+                @if (upiVpa()) {
+                  <div class="pf-ipp__upi">
+                    <div class="pf-ipp__qr">
+                      @if (upiQr()) {
+                        <img [src]="upiQr()" alt="UPI QR code to pay" width="84" height="84" data-testid="upi-qr" />
+                      }
+                    </div>
+                    <div class="pf-ipp__upi-text">
+                      <span>Scan with any UPI app</span>
+                      <strong>{{ amount() | inr }}</strong>
+                      <span class="pf-ipp__mono">{{ upiVpa() }}</span>
+                    </div>
                   </div>
-                  <div class="pf-ipp__upi-text">
-                    <span>Scan with any UPI app</span>
-                    <strong>{{ amount() | inr }}</strong>
-                    <span class="pf-ipp__mono">prefrontal&#64;upi</span>
+                } @else {
+                  <div class="pf-ipp__stack" data-testid="upi-missing">
+                    <span>Collect <strong>{{ amount() | inr }}</strong> by UPI.</span>
+                    <span>No UPI address is set, so no QR is shown. An admin can add it in Admin, Billing.</span>
                   </div>
-                </div>
+                }
               }
               @case ("card") {
                 <div class="pf-ipp__stack">
@@ -207,15 +218,19 @@ interface MethodDef {
             <span class="pf-ipp__title">Pay later</span>
             <label class="pf-ipp__label">
               Advance collected now (optional)
-              <input #advInput type="text" inputmode="numeric" class="pf-ipp__input"
-                     [class.pf-ipp__input--err]="advanceOverTotal()"
-                     placeholder="₹0.00"
-                     [value]="advance()" (input)="setAdvance(advInput.value, advInput)" />
+              <input type="text" inputmode="numeric" class="pf-ipp__input" placeholder="₹0.00"
+                     [class.pf-ipp__input--err]="advanceOver()"
+                     [attr.aria-invalid]="advanceOver() ? 'true' : null"
+                     [attr.aria-describedby]="advanceOver() ? 'pf-ipp-adv-err' : null"
+                     [value]="advance()" (input)="setAdvance(asVal($event))" />
             </label>
-            @if (advanceOverTotal()) {
-              <p class="pf-ipp__err">Advance cannot exceed order total of {{ amount() | inr }}.</p>
-            }
-            @if (advanceNum() > 0) {
+            @if (advanceOver()) {
+              <!-- Never silently clamp: the desk must see the advance is over
+                   the bill and correct it (Confirm stays blocked). -->
+              <p class="pf-ipp__err" id="pf-ipp-adv-err" role="alert">
+                Advance can't be more than the bill, {{ amount() | inr }}. Reduce it to continue.
+              </p>
+            } @else if (advanceNum() > 0) {
               <div class="pf-ipp__tenders" role="radiogroup" aria-label="Advance paid by">
                 @for (t of advanceModes; track t.id) {
                   <button type="button" class="pf-ipp__tender" role="radio"
@@ -329,20 +344,11 @@ interface MethodDef {
       .pf-ipp__splitrow .pf-ipp__input { height: 28px; }
 
       .pf-ipp__muted { margin: 0; font-size: 12px; color: var(--text-tertiary); }
+      .pf-ipp__err { margin: 0; font-size: 12px; color: var(--error-text, #ef4444); }
+      .pf-ipp__input--err, .pf-ipp__input--err:focus { border-color: var(--error-text, #ef4444); }
       .pf-ipp__muted strong { color: var(--text-primary); }
       .pf-ipp__muted[data-kind='ok'] { color: var(--violet-text, #6d28d9); }
       .pf-ipp__muted[data-kind='short'] { color: var(--error-text, #ef4444); }
-
-      .pf-ipp__input--err {
-        border-color: var(--error-text, #ef4444) !important;
-        background: color-mix(in srgb, var(--error-text, #ef4444) 6%, transparent);
-      }
-      .pf-ipp__err {
-        margin: 2px 0 0;
-        font-size: 11px;
-        color: var(--error-text, #ef4444);
-        line-height: 1.3;
-      }
 
       .pf-ipp__vendor {
         display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -474,37 +480,19 @@ export class InlinePaymentPanelComponent {
 
   // Advance (pay-later): collect part now, leave the rest outstanding.
   readonly advance = signal("");
-  readonly advanceNum = computed(() =>
-    Math.min(this.amount(), parseInt(this.advance() || "0", 10) || 0),
-  );
-  readonly advanceOverTotal = computed(() => {
-    const raw = (this.advance() || "").trim();
-    if (!raw) return false;
-    const n = parseInt(raw, 10);
-    return !isNaN(n) && n > this.amount();
-  });
+  /** The advance as typed (whole rupees). Never silently clamped: an advance
+   *  above the payable balance is an error the desk must correct. */
+  readonly advanceNum = computed(() => parseInt(this.advance() || "0", 10) || 0);
+  /** Advance exceeds what is owed → inline error + Confirm blocked. */
+  readonly advanceOver = computed(() => this.advanceNum() > this.amount() + 0.005);
   readonly advanceMode = signal<PayMode>("cash");
   readonly advanceModes: Array<{ id: PayMode; label: string }> = [
     { id: "cash", label: "Cash" },
     { id: "upi", label: "UPI" },
     { id: "card", label: "Card" },
   ];
-  setAdvance(v: string, inputEl?: HTMLInputElement) {
-    const digits = (v || "").replace(/\D/g, "");
-    if (!digits) {
-      this.advance.set("");
-      if (inputEl && inputEl.value !== "") inputEl.value = "";
-      return;
-    }
-    const n = parseInt(digits, 10);
-    if (!isNaN(n) && n > this.amount()) {
-      const maxStr = String(this.amount());
-      this.advance.set(maxStr);
-      if (inputEl && inputEl.value !== maxStr) inputEl.value = maxStr;
-    } else {
-      this.advance.set(digits);
-      if (inputEl && inputEl.value !== digits) inputEl.value = digits;
-    }
+  setAdvance(v: string) {
+    this.advance.set((v || "").replace(/\D/g, ""));
   }
   setAdvanceMode(m: PayMode) {
     this.advanceMode.set(m);
@@ -579,27 +567,44 @@ export class InlinePaymentPanelComponent {
     this.splitAmounts.update((a) => ({ ...a, [m]: isFinite(n) && n > 0 ? n : 0 }));
   }
 
-  // UPI QR (same generator as before, driven by the amount).
-  readonly upiQrUrl = computed<string>(() => {
-    const params = new URLSearchParams({
-      pa: "prefrontal@upi",
-      pn: "Prefrontal Lab",
-      am: String(this.amount()),
-      cu: "INR",
-    });
-    return `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${encodeURIComponent("upi://pay?" + params.toString())}`;
+  // UPI QR — the lab's payee from Admin → Billing (reception-readable
+  // visibility slice), the amount fixed, rendered in the app.
+  readonly upiPayee = signal<UpiPayee | null>(null);
+  readonly upiVpa = computed(() => (this.upiPayee()?.upiVpa ?? "").trim());
+  readonly upiLink = computed<string | null>(() => {
+    const vpa = this.upiVpa();
+    return vpa ? upiLink(vpa, this.upiPayee()?.upiPayeeName, this.amount()) : null;
   });
+  readonly upiQr = signal<string | null>(null);
+  private upiQrSeq = 0;
+
+  constructor() {
+    this.api.get<UpiPayee>("/api/config/billing/visibility").subscribe({
+      next: (c) => this.upiPayee.set(c && !Array.isArray(c) ? c : null),
+      error: () => this.upiPayee.set(null),
+    });
+    effect(() => {
+      const link = this.upiLink();
+      const seq = ++this.upiQrSeq;
+      if (!link) { this.upiQr.set(null); return; }
+      upiQrDataUrl(link).then(
+        (url) => { if (seq === this.upiQrSeq) this.upiQr.set(url); },
+        () => { if (seq === this.upiQrSeq) this.upiQr.set(null); },
+      );
+    });
+  }
 
   readonly canConfirm = computed(() => {
     switch (this.mode()) {
       case "cash":
         return this.cashNum() >= this.amount() && this.amount() > 0;
       case "wallet":
-        return !!this.vendorId();
+        // Nothing to bill on a ₹0 order — never post a ₹0 vendor charge.
+        return !!this.vendorId() && this.amount() > 0;
       case "split":
         return this.splitOk();
       case "later":
-        return !this.advanceOverTotal() && this.amount() > 0;
+        return !this.advanceOver() && this.amount() > 0;
       default:
         return this.amount() > 0;
     }
@@ -616,7 +621,7 @@ export class InlinePaymentPanelComponent {
       case "wallet":
         return `Bill ${amt} to vendor`;
       case "later": {
-        const adv = this.advanceNum();
+        const adv = this.advanceOver() ? 0 : this.advanceNum();
         return adv > 0
           ? `Collect ${this.inr.transform(adv)} now, ${this.inr.transform(this.amount() - adv)} due`
           : `Place order, ${amt} due`;

@@ -63,17 +63,16 @@ test.describe('Amend a finalized result', () => {
 
     // ── Read the ORIGINAL report — the amend must supersede exactly this row ──
     await page.goto(`/frontdesk/patients/${patient.patientId}`);
-    const labsTab = page.locator('.pf-pp__tabbar button', { hasText: 'Lab Orders' });
-    await expect(labsTab).toBeVisible({ timeout: 15_000 });
-    await labsTab.click();
+    // Clinical-first profile: the PATIENT card's timeline → the order row
+    // zooms into the order (tests + results + View report) in the main column.
+    const row = page.locator('.pf-tl__row[data-kind="order"]');
+    await expect(row).toHaveCount(1, { timeout: 15_000 });
+    await row.click();
+    const card = page.locator('.pf-lo-detail');
 
-    const card = page.locator('.pf-lo__card');
-    await expect(card).toHaveCount(1, { timeout: 10_000 });
-    await card.locator('.pf-lo__head').click();
-
-    const testRow = card.locator('.pf-lo__test', { hasText: result.testName });
+    const testRow = card.locator('.pf-lo-test', { hasText: result.testName });
     await expect(testRow).toBeVisible({ timeout: 10_000 });
-    await expect(testRow.locator('.pf-lo__rval')).toContainText('85');
+    await expect(testRow.locator('.pf-lo-res__val')).toContainText('85');
 
     const viewReportBtn = card.getByRole('button', { name: /view report/i });
     const [firstReportResponse] = await Promise.all([
@@ -180,11 +179,10 @@ test.describe('Amend a finalized result', () => {
 
     // ── Read the AMENDED report — must be a NEW row superseding the first ──
     await page.goto(`/frontdesk/patients/${patient.patientId}`);
-    await labsTab.click();
-    await expect(card).toHaveCount(1, { timeout: 10_000 });
-    await card.locator('.pf-lo__head').click();
+    await expect(row).toHaveCount(1, { timeout: 15_000 });
+    await row.click();
 
-    await expect(testRow.locator('.pf-lo__rval')).toContainText('150', { timeout: 15_000 });
+    await expect(testRow.locator('.pf-lo-res__val')).toContainText('150', { timeout: 15_000 });
 
     const [amendedReportResponse] = await Promise.all([
       page.waitForResponse(

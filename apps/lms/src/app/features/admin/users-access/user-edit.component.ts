@@ -19,6 +19,9 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ROLE_INFO } from './permission-catalog';
 import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
 import { UserAccountActionsService } from './user-account-actions.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { rolePickerRows } from './role-assignability';
+import { SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, scopeValuesFromRoles, soleScope } from './branch-scope';
 
 interface EditForm {
   /** Honorific ("Dr." for doctors, etc.) — prefixes every mention of the name. */
@@ -27,8 +30,8 @@ interface EditForm {
   fathersName: string;
   phone: string;
   roleIds: string[];
-  branchId: string;
-  subBranchId: string;
+  /** Branch scope: 'all' | 'b:<id>' | 'sb:<id>' (see branch-scope.ts). */
+  scope: string[];
 }
 
 @Component({
@@ -162,9 +165,12 @@ interface EditForm {
               </div>
               <div class="nd-card__body">
                 <div class="nd-field">
-                  <span class="nd-field__lbl">Branch</span>
-                  <pf-select [options]="scopeOptions()" [value]="scopeValue()" placeholder="All branches" (valueChange)="onScopeChange($event)"></pf-select>
-                  <p class="nd-field__hint">Pick a sub-branch (indented →) to scope the user to that lab only.</p>
+                  <span class="nd-field__lbl">Branches <span class="pf-uf-req">*</span></span>
+                  <pf-select class="pf-uf-scope" [multiple]="true" [searchable]="true"
+                             [options]="scopeOptions()" [values]="form().scope" placeholder="Pick branches"
+                             (valuesChange)="onScopeChange($event)"></pf-select>
+                  @if (rolesLoaded() && !form().scope.length) { <p class="pf-uf-err">Pick at least one branch, or All branches.</p> }
+                  <p class="nd-field__hint">{{ scopeHint }}</p>
                 </div>
               </div>
             </section>
@@ -181,15 +187,19 @@ interface EditForm {
               <div class="pf-uf-roles">
                 @for (r of roleOptions(); track r.value) {
                   <button type="button" class="nd-toggle pf-uf-sw press" role="switch" [attr.aria-checked]="hasRole(r.value)"
+                          [class.pf-uf-sw--locked]="r.locked" [attr.aria-disabled]="r.locked || null"
+                          [title]="r.locked ? lockedHint : ''"
                           (click)="toggleRole(r.value)">
                     <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
                     <span class="pf-uf-sw__txt">
                       <span class="pf-uf-sw__name">{{ r.label }}</span>
                       @if (r.hint) { <span class="pf-uf-sw__what">{{ r.hint }}</span> }
+                      @if (r.locked) { <span class="pf-uf-sw__lock">Kept — you can't assign or remove this role</span> }
                     </span>
                   </button>
                 }
               </div>
+              @if (hasLocked()) { <p class="nd-field__hint pf-uf-lock-note">{{ lockedHint }}</p> }
             </div>
           </section>
         </div>
@@ -216,8 +226,11 @@ export class UserEditComponent implements OnInit {
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
-  private readonly _form = signal<EditForm>({ title: '', firstName: '', fathersName: '', phone: '', roleIds: [], branchId: '', subBranchId: '' });
+  private readonly _form = signal<EditForm>({ title: '', firstName: '', fathersName: '', phone: '', roleIds: [], scope: [] });
   private readonly _saving = signal(false);
+  /** The user's role rows have landed (so a sole-branch default won't be
+   *  overwritten by — or overwrite — the loaded scope). */
+  readonly rolesLoaded = signal(false);
   private readonly _username = signal('');
   private readonly _loadedName = signal('');
   /** The loaded user's account state (band: Reset password / (De|Re)activate). */
@@ -255,8 +268,19 @@ export class UserEditComponent implements OnInit {
   readonly loadedName = this._loadedName.asReadonly();
   readonly fieldError = this._fieldError.asReadonly();
 
-  readonly roleOptions = computed<PfSelectOption<string>[]>(() =>
-    this._roles().map(r => ({ value: r.id, label: r.name, hint: ROLE_INFO[r.name] ?? undefined })));
+  /** The roles the user held when the page loaded (the locked ones stay). */
+  private readonly _heldIds = signal<string[]>([]);
+  private readonly auth = inject(AuthService);
+  /** Editing your own account: the server holds self-assignment to the subset
+   *  rule even with manage_tenant, so the picker uses assignableToSelf. */
+  private readonly isSelf = computed(() => this.auth.user()?.id === this.id);
+  /** Only roles THIS caller may assign (server flags, role-assignability.ts),
+   *  plus the user's held roles they can't — shown ON and read-only. */
+  readonly roleOptions = computed<(PfSelectOption<string> & { locked: boolean })[]>(() =>
+    rolePickerRows(this._roles(), this._heldIds(), this.isSelf())
+      .map(r => ({ ...r, hint: ROLE_INFO[r.label] ?? undefined })));
+  readonly hasLocked = computed(() => this.roleOptions().some(r => r.locked));
+  readonly lockedHint = 'Roles you can\'t assign stay as they are. Widening this user\'s branches with them needs someone who can assign them.';
   readonly titleOptions: PfSelectOption<string>[] = TITLE_OPTIONS;
   /** Country codes as pf-select options (code + country; no flag emoji). */
   readonly countryOptions: PfSelectOption<string>[] = COUNTRY_CODES.map(c => ({ value: c.code, label: c.code, hint: c.country }));
@@ -267,33 +291,10 @@ export class UserEditComponent implements OnInit {
     return [f.title, f.firstName, f.fathersName].map(x => (x ?? '').trim()).filter(Boolean).join(' ');
   });
 
-  readonly scopeOptions = computed<PfSelectOption<string>[]>(() => {
-    const branches = this._branches();
-    let totalCount = 0;
-    for (const b of branches) {
-      totalCount++;
-      totalCount += (b.subBranches?.length ?? 0);
-    }
+  readonly scopeOptions = computed<PfSelectOption<string>[]>(() => buildScopeOptions(this._branches()));
+  readonly scopeHint = SCOPE_HINT;
 
-    const out: PfSelectOption<string>[] = [];
-    if (totalCount > 1) {
-      out.push({ value: '', label: 'All branches' });
-    }
-
-    for (const b of branches) {
-      out.push({ value: `b:${b.id}`, label: b.name });
-      for (const sb of b.subBranches ?? []) out.push({ value: `sb:${sb.id}`, label: `  → ${sb.name}` });
-    }
-    return out;
-  });
-  readonly scopeValue = computed(() => {
-    const i = this._form();
-    if (i.subBranchId) return `sb:${i.subBranchId}`;
-    if (i.branchId) return `b:${i.branchId}`;
-    return '';
-  });
-
-  readonly canSave = computed(() => this._form().roleIds.length > 0);
+  readonly canSave = computed(() => this._form().roleIds.length > 0 && this._form().scope.length > 0);
 
   ngOnInit() {
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
@@ -301,25 +302,9 @@ export class UserEditComponent implements OnInit {
       next: l => {
         const branches = l ?? [];
         this._branches.set(branches);
-
-        let totalCount = 0;
-        let singleVal = '';
-        for (const b of branches) {
-          totalCount++;
-          singleVal = `b:${b.id}`;
-          for (const sb of b.subBranches ?? []) {
-            totalCount++;
-            singleVal = `sb:${sb.id}`;
-          }
-        }
-
-        if (totalCount === 1 && !this._form().branchId && !this._form().subBranchId) {
-          if (singleVal.startsWith('sb:')) {
-            this.patch({ branchId: '', subBranchId: singleVal.substring(3) });
-          } else if (singleVal.startsWith('b:')) {
-            this.patch({ branchId: singleVal.substring(2), subBranchId: '' });
-          }
-        }
+        // One-branch tenant: that branch is the only possible scope.
+        const sole = soleScope(branches);
+        if (sole && this.rolesLoaded() && !this._form().scope.length) this.patch({ scope: [sole] });
       }
     });
     // No single-user GET endpoint — read the list + this user's role assignments.
@@ -342,36 +327,13 @@ export class UserEditComponent implements OnInit {
           }
         }
         const rs = roles ?? [];
-        const first = rs[0];
-        let branchId = first?.subBranchId ? '' : (first?.branchId ?? '');
-        let subBranchId = first?.subBranchId ?? '';
-
-        // If user has no branch set and tenant has only 1 branch, auto-set it
-        const branches = this._branches();
-        let totalCount = 0;
-        let singleVal = '';
-        for (const b of branches) {
-          totalCount++;
-          singleVal = `b:${b.id}`;
-          for (const sb of b.subBranches ?? []) {
-            totalCount++;
-            singleVal = `sb:${sb.id}`;
-          }
-        }
-        if (totalCount === 1 && !branchId && !subBranchId) {
-          if (singleVal.startsWith('sb:')) {
-            subBranchId = singleVal.substring(3);
-          } else if (singleVal.startsWith('b:')) {
-            branchId = singleVal.substring(2);
-          }
-        }
-
-        this._form.update(v => ({
-          ...v,
-          roleIds: rs.map(r => r.roleId),
-          branchId,
-          subBranchId,
-        }));
+        let scope = scopeValuesFromRoles(rs);
+        const sole = soleScope(this._branches());
+        if (!scope.length && sole) scope = [sole];
+        this.rolesLoaded.set(true);
+        const held = [...new Set(rs.map(r => r.roleId))];
+        this._heldIds.set(held);
+        this._form.update(v => ({ ...v, roleIds: held, scope }));
       },
     });
   }
@@ -410,12 +372,11 @@ export class UserEditComponent implements OnInit {
   back() { this.navBack.backTo('/admin/users?tab=users'); }
   hasRole(id: string) { return this._form().roleIds.includes(id); }
   toggleRole(id: string) {
+    if (this.roleOptions().find(r => r.value === id)?.locked) return;
     this._form.update(v => ({ ...v, roleIds: v.roleIds.includes(id) ? v.roleIds.filter(r => r !== id) : [...v.roleIds, id] }));
   }
-  onScopeChange(v: string) {
-    if (!v) { this.patch({ branchId: '', subBranchId: '' }); return; }
-    if (v.startsWith('sb:')) { this.patch({ branchId: '', subBranchId: v.substring(3) }); return; }
-    if (v.startsWith('b:')) { this.patch({ branchId: v.substring(2), subBranchId: '' }); }
+  onScopeChange(next: string[]) {
+    this.patch({ scope: applyScopePick(this._form().scope, next ?? [], this._branches()) });
   }
 
   save() {
@@ -428,8 +389,9 @@ export class UserEditComponent implements OnInit {
       title: i.title, firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
     }).subscribe({
       next: () => {
+        // Roles apply at every selected branch (one assignment per role × branch).
         this.api.put(`/api/users/${this.id}/roles`, {
-          roleIds: i.roleIds, branchId: i.branchId || undefined, subBranchId: i.subBranchId || undefined,
+          roleIds: i.roleIds, ...scopePayload(i.scope, this._branches()),
         }).subscribe({
           next: () => { this._saving.set(false); this.toasts.success('User updated'); this.back(); },
           error: e => { this._saving.set(false); this.showError(e); },

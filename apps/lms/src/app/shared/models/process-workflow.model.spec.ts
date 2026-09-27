@@ -17,8 +17,8 @@ import {
   COUNTER_SCREEN,
   workAreaRoute,
   deriveModes,
-  REPEATABLE_ACTIONS,
-  isRepeatable,
+  COLLECTION_SLOTS,
+  isFixedSlotAction,
   frontdeskMenu,
   collectionLocations,
   collectsAtFrontdesk,
@@ -199,8 +199,8 @@ describe('isLocked', () => {
   it('returns false for unlocked actions', () => {
     expect(isLocked('billing')).toBe(false);
     expect(isLocked('queue')).toBe(false);
-    // sample_collection IS locked now — to the system Collect area (home copy
-    // only; it stays repeatable, see process-workflow.collect-area.spec).
+    // sample_collection IS locked — every copy sits in a fixed slot
+    // (Collect / Frontdesk / Lab, see process-workflow.collect-area.spec).
     expect(isLocked('sample_collection')).toBe(true);
   });
 
@@ -469,11 +469,11 @@ describe('deriveModes', () => {
     const cfg: ProcessWorkflowConfig = {
       categories: [
         { id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 },
-        { id: 'counter', name: 'Counter', icon: 'folder', color: '#000', order: 1 },
+        { id: 'collect', name: 'Collect', icon: 'folder', color: '#000', order: 1 },
       ],
       actions: [
         { id: 'reg', type: 'patient_registration', categoryId: 'frontdesk', order: 0, enabled: true },
-        { id: 'coll', type: 'sample_collection', categoryId: 'counter', order: 0, enabled: true },
+        { id: 'coll', type: 'sample_collection', categoryId: 'collect', order: 0, enabled: true },
       ],
     };
     const modes = deriveModes(cfg);
@@ -508,29 +508,16 @@ describe('deriveModes', () => {
   });
 });
 
-describe('REPEATABLE_ACTIONS', () => {
-  it('is a Set of action type strings', () => {
-    expect(REPEATABLE_ACTIONS instanceof Set).toBe(true);
+describe('COLLECTION_SLOTS / isFixedSlotAction', () => {
+  it('Sample Collection sits only in Collect, Frontdesk and Lab', () => {
+    expect(COLLECTION_SLOTS).toEqual(['collect', 'frontdesk', 'lab']);
   });
 
-  it('contains sample_collection', () => {
-    expect(REPEATABLE_ACTIONS.has('sample_collection')).toBe(true);
-  });
-});
-
-describe('isRepeatable', () => {
-  it('returns true for repeatable actions', () => {
-    expect(isRepeatable('sample_collection')).toBe(true);
-  });
-
-  it('returns false for non-repeatable actions', () => {
-    expect(isRepeatable('billing')).toBe(false);
-    expect(isRepeatable('queue')).toBe(false);
-    expect(isRepeatable('patient_registration')).toBe(false);
-  });
-
-  it('returns false for unknown actions', () => {
-    expect(isRepeatable('unknown_action')).toBe(false);
+  it('only sample_collection is a fixed-slot action', () => {
+    expect(isFixedSlotAction('sample_collection')).toBe(true);
+    expect(isFixedSlotAction('billing')).toBe(false);
+    expect(isFixedSlotAction('queue')).toBe(false);
+    expect(isFixedSlotAction('unknown_action')).toBe(false);
   });
 });
 
@@ -592,43 +579,55 @@ describe('collectionLocations', () => {
   it('returns empty array when no sample_collection actions', () => {
     const cfg: ProcessWorkflowConfig = {
       categories: [],
-      actions: [{ id: 'bill', type: 'billing', categoryId: 'desk', order: 0, enabled: true }],
+      actions: [{ id: 'bill', type: 'billing', categoryId: 'frontdesk', order: 0, enabled: true }],
     };
     expect(collectionLocations(cfg)).toEqual([]);
   });
 
   it('returns single menu id when collection placed in one menu', () => {
     const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'desk', name: 'Desk', icon: 'folder', color: '#000', order: 0 }],
+      categories: [{ id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 }],
       actions: [
-        { id: 'coll', type: 'sample_collection', categoryId: 'desk', order: 0, enabled: true },
+        { id: 'coll', type: 'sample_collection', categoryId: 'frontdesk', order: 0, enabled: true },
       ],
     };
-    expect(collectionLocations(cfg)).toEqual(['desk']);
+    expect(collectionLocations(cfg)).toEqual(['frontdesk']);
   });
 
   it('returns multiple menu ids when collection placed in several menus', () => {
     const cfg: ProcessWorkflowConfig = {
       categories: [
-        { id: 'desk', name: 'Desk', icon: 'folder', color: '#000', order: 0 },
+        { id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 },
         { id: 'lab', name: 'Lab', icon: 'flask', color: '#000', order: 1 },
       ],
       actions: [
-        { id: 'coll1', type: 'sample_collection', categoryId: 'desk', order: 0, enabled: true },
+        { id: 'coll1', type: 'sample_collection', categoryId: 'frontdesk', order: 0, enabled: true },
         { id: 'coll2', type: 'sample_collection', categoryId: 'lab', order: 0, enabled: true },
       ],
     };
     const locs = collectionLocations(cfg);
     expect(locs.length).toBe(2);
-    expect(locs).toContain('desk');
+    expect(locs).toContain('frontdesk');
     expect(locs).toContain('lab');
+  });
+
+  it('ignores copies outside the fixed slots (billing counter / custom)', () => {
+    const cfg: ProcessWorkflowConfig = {
+      categories: [],
+      actions: [
+        { id: 'c1', type: 'sample_collection', categoryId: 'billdesk', order: 0, enabled: true },
+        { id: 'c2', type: 'sample_collection', categoryId: 'custom1', order: 0, enabled: true },
+        { id: 'c3', type: 'sample_collection', categoryId: 'collect', order: 0, enabled: true },
+      ],
+    };
+    expect(collectionLocations(cfg)).toEqual(['collect']);
   });
 
   it('ignores disabled sample_collection actions', () => {
     const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'desk', name: 'Desk', icon: 'folder', color: '#000', order: 0 }],
+      categories: [{ id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 }],
       actions: [
-        { id: 'coll', type: 'sample_collection', categoryId: 'desk', order: 0, enabled: false },
+        { id: 'coll', type: 'sample_collection', categoryId: 'frontdesk', order: 0, enabled: false },
       ],
     };
     expect(collectionLocations(cfg)).toEqual([]);
@@ -636,15 +635,15 @@ describe('collectionLocations', () => {
 
   it('deduplicates menu ids', () => {
     const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'desk', name: 'Desk', icon: 'folder', color: '#000', order: 0 }],
+      categories: [{ id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 }],
       actions: [
-        { id: 'coll1', type: 'sample_collection', categoryId: 'desk', order: 0, enabled: true },
-        { id: 'coll2', type: 'sample_collection', categoryId: 'desk', order: 1, enabled: true },
+        { id: 'coll1', type: 'sample_collection', categoryId: 'frontdesk', order: 0, enabled: true },
+        { id: 'coll2', type: 'sample_collection', categoryId: 'frontdesk', order: 1, enabled: true },
       ],
     };
     const locs = collectionLocations(cfg);
     expect(locs.length).toBe(1);
-    expect(locs[0]).toBe('desk');
+    expect(locs[0]).toBe('frontdesk');
   });
 
   it('returns empty array when config is null', () => {
@@ -668,11 +667,11 @@ describe('collectsAtFrontdesk', () => {
     const cfg: ProcessWorkflowConfig = {
       categories: [
         { id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 },
-        { id: 'counter', name: 'Counter', icon: 'folder', color: '#000', order: 1 },
+        { id: 'collect', name: 'Collect', icon: 'folder', color: '#000', order: 1 },
       ],
       actions: [
         { id: 'reg', type: 'patient_registration', categoryId: 'frontdesk', order: 0, enabled: true },
-        { id: 'coll', type: 'sample_collection', categoryId: 'counter', order: 0, enabled: true },
+        { id: 'coll', type: 'sample_collection', categoryId: 'collect', order: 0, enabled: true },
       ],
     };
     expect(collectsAtFrontdesk(cfg)).toBe(false);
@@ -717,11 +716,11 @@ describe('hasDedicatedCollection', () => {
     const cfg: ProcessWorkflowConfig = {
       categories: [
         { id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 },
-        { id: 'counter', name: 'Counter', icon: 'folder', color: '#000', order: 1 },
+        { id: 'collect', name: 'Collect', icon: 'folder', color: '#000', order: 1 },
       ],
       actions: [
         { id: 'reg', type: 'patient_registration', categoryId: 'frontdesk', order: 0, enabled: true },
-        { id: 'coll', type: 'sample_collection', categoryId: 'counter', order: 0, enabled: true },
+        { id: 'coll', type: 'sample_collection', categoryId: 'collect', order: 0, enabled: true },
       ],
     };
     expect(hasDedicatedCollection(cfg)).toBe(true);
@@ -731,12 +730,12 @@ describe('hasDedicatedCollection', () => {
     const cfg: ProcessWorkflowConfig = {
       categories: [
         { id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 },
-        { id: 'counter', name: 'Counter', icon: 'folder', color: '#000', order: 1 },
+        { id: 'collect', name: 'Collect', icon: 'folder', color: '#000', order: 1 },
       ],
       actions: [
         { id: 'reg', type: 'patient_registration', categoryId: 'frontdesk', order: 0, enabled: true },
         { id: 'coll1', type: 'sample_collection', categoryId: 'frontdesk', order: 1, enabled: true },
-        { id: 'coll2', type: 'sample_collection', categoryId: 'counter', order: 0, enabled: true },
+        { id: 'coll2', type: 'sample_collection', categoryId: 'collect', order: 0, enabled: true },
       ],
     };
     expect(hasDedicatedCollection(cfg)).toBe(true);
@@ -776,9 +775,9 @@ describe('collectsInLab', () => {
 
   it('returns false when sample_collection is not in lab menu', () => {
     const cfg: ProcessWorkflowConfig = {
-      categories: [{ id: 'desk', name: 'Desk', icon: 'folder', color: '#000', order: 0 }],
+      categories: [{ id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 }],
       actions: [
-        { id: 'coll', type: 'sample_collection', categoryId: 'desk', order: 0, enabled: true },
+        { id: 'coll', type: 'sample_collection', categoryId: 'frontdesk', order: 0, enabled: true },
       ],
     };
     expect(collectsInLab(cfg)).toBe(false);
@@ -812,9 +811,9 @@ describe('collectsAtBillingCounter', () => {
     ],
   });
 
-  it('is true when collection sits in the billing counter menu', () => {
-    expect(collectsAtBillingCounter(cfg(['billdesk']))).toBe(true);
-    expect(collectsAtBillingCounter(cfg(['collect', 'billdesk']))).toBe(true);
+  it('is RETIRED (fixed slots): false even with a copy in the billing counter menu', () => {
+    expect(collectsAtBillingCounter(cfg(['billdesk']))).toBe(false);
+    expect(collectsAtBillingCounter(cfg(['collect', 'billdesk']))).toBe(false);
   });
   it('is false when collection lives elsewhere', () => {
     expect(collectsAtBillingCounter(cfg(['collect']))).toBe(false);
@@ -843,8 +842,10 @@ describe('areasWithCollection / screenWorkArea (band Collect entry point)', () =
     ],
   };
 
-  it('lists every area holding an ENABLED sample_collection, once each', () => {
-    expect(areasWithCollection(cfg).sort()).toEqual(['billdesk', 'custom1', 'frontdesk']);
+  it('lists only the Frontdesk / Lab slots whose copy is ENABLED (strays ignored)', () => {
+    expect(areasWithCollection(cfg).sort()).toEqual(['frontdesk']);
+    const labOn = { ...cfg, actions: cfg.actions.map(a => a.id === 'c3' ? { ...a, enabled: true } : a) };
+    expect(areasWithCollection(labOn).sort()).toEqual(['frontdesk', 'lab']);
   });
 
   it('no workflow configured → []', () => {
@@ -853,8 +854,8 @@ describe('areasWithCollection / screenWorkArea (band Collect entry point)', () =
     expect(areasWithCollection({ categories: [], actions: [] })).toEqual([]);
   });
 
-  it('keeps collectsAtBillingCounter consistent with it', () => {
-    expect(collectsAtBillingCounter(cfg)).toBe(true);
+  it('the billing counter never collects', () => {
+    expect(collectsAtBillingCounter(cfg)).toBe(false);
   });
 
   it('maps screens to their work-area like the nav', () => {

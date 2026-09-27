@@ -1,9 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Session } from '@supabase/supabase-js';
 import { environment } from '../../../environments/environment';
-import { BranchLabConfigService } from '../services/branch-lab-config.service';
 import { AccountsService, StoredAccount } from './accounts.service';
 import { BranchRef, CurrentUser } from './mock-user';
+import { SessionScopeService } from './session-scope.service';
 import { supabase } from './supabase.client';
 
 interface MeResponse {
@@ -34,9 +34,11 @@ interface MeResponse {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly labCfg = inject(BranchLabConfigService);
   /** Gmail-style multi-account registry (shared lab machines). */
   readonly accounts = inject(AccountsService);
+  /** One "session changed" event for every user-scoped service — fired
+   *  BEFORE a different person's profile is published (see loadProfile). */
+  private readonly scope = inject(SessionScopeService);
 
   private readonly _session = signal<Session | null>(null);
   private readonly _user = signal<CurrentUser | null>(null);
@@ -75,7 +77,36 @@ export class AuthService {
       }
     } catch { /* private mode */ }
   }
+  // Per-TAB account pin (sessionStorage: survives this tab's reloads, never
+  // shared with other tabs). Two tabs showing two accounts used to share the
+  // single `pf.session` key, so a reload of either tab came back as whichever
+  // account wrote last — and a token refresh in one tab was filed under the
+  // OTHER tab's registry row (Messages RCA §1 "two tabs").
+  private static readonly TAB_ACCOUNT_KEY = 'pf.tabAccount';
+  private static readTabAccount(): string | null {
+    try { return sessionStorage.getItem(AuthService.TAB_ACCOUNT_KEY); } catch { return null; }
+  }
+  private static writeTabAccount(userId: string | null): void {
+    try {
+      if (userId) sessionStorage.setItem(AuthService.TAB_ACCOUNT_KEY, userId);
+      else sessionStorage.removeItem(AuthService.TAB_ACCOUNT_KEY);
+    } catch { /* private mode */ }
+  }
+  /** The registry row whose tokens THIS tab holds. */
+  private ownAccountId(): string | null {
+    return this._user()?.id ?? AuthService.readTabAccount() ?? this.accounts.activeUserId();
+  }
+
   private restorePersistedSession(): Session | null {
+    // This tab was showing a specific account → resume THAT account from the
+    // registry (freshest rotated tokens), not the device-wide last writer.
+    const pinned = AuthService.readTabAccount();
+    if (pinned) {
+      const acc = this.accounts.accounts().find(a => a.userId === pinned);
+      if (acc?.accessToken && acc.refreshToken) {
+        return { access_token: acc.accessToken, refresh_token: acc.refreshToken } as Session;
+      }
+    }
     try {
       const raw = localStorage.getItem(AuthService.SESSION_KEY);
       if (!raw) return null;
@@ -118,8 +149,24 @@ export class AuthService {
   }
 
   private async doRefreshAccessToken(): Promise<boolean> {
-    const refresh = this._session()?.refresh_token;
+    let refresh = this._session()?.refresh_token;
     if (!refresh) return false;
+    // Another tab holding the SAME account may already have rotated the
+    // refresh token (Supabase revokes the old one, and re-using it outside
+    // the reuse window revokes the whole session). Prefer the registry's
+    // newer copy: adopt it outright if its access token is still good,
+    // otherwise refresh with the newest refresh token.
+    const ownId = this.ownAccountId();
+    const row = ownId ? this.accounts.fresh(ownId) : null;
+    if (row?.refreshToken && row.refreshToken !== refresh) {
+      if (row.accessToken && !this.isExpiringSoon(row.accessToken)) {
+        const adopted = { access_token: row.accessToken, refresh_token: row.refreshToken } as Session;
+        this._session.set(adopted);
+        this.persistSession(adopted);
+        return true;
+      }
+      refresh = row.refreshToken;
+    }
     const ctrl = new AbortController();
     const killer = setTimeout(() => ctrl.abort(), 4000);
     try {
@@ -137,18 +184,24 @@ export class AuthService {
       this.persistSession(s);
       // Keep the multi-account registry's copy fresh — Supabase rotates the
       // refresh token on every exchange, so a stale registry copy goes dead.
-      const activeId = this.accounts.activeUserId();
-      if (activeId) this.accounts.updateTokens(activeId, s.access_token, s.refresh_token!);
+      // File them under the account THIS tab holds — not the device-wide
+      // "active" id, which another tab may have switched to someone else.
+      const ownId = this.ownAccountId();
+      if (ownId) this.accounts.updateTokens(ownId, s.access_token, s.refresh_token!);
       return true;
     } catch { return false; }
     finally { clearTimeout(killer); }
   }
 
   /** Exchange ANY refresh token for a fresh session (used when switching to a
-   *  non-active profile — proves this device holds that account's session). */
-  private async exchangeRefreshToken(refresh: string): Promise<Session | null> {
+   *  non-active profile — proves this device holds that account's session).
+   *  `dead` = the auth server REJECTED the token (400/401: revoked, reused,
+   *  not found) — only then is the profile's saved sign-in really over. A
+   *  timeout / network error / 5xx is transient and must not kill the
+   *  profile (it used to be removed from the device on any failure). */
+  private async exchangeRefreshToken(refresh: string): Promise<{ session: Session | null; dead: boolean }> {
     const ctrl = new AbortController();
-    const killer = setTimeout(() => ctrl.abort(), 6000);
+    const killer = setTimeout(() => ctrl.abort(), 8000);
     try {
       const res = await fetch(`${environment.auth.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
         method: 'POST',
@@ -157,11 +210,27 @@ export class AuthService {
         cache: 'no-store',
         signal: ctrl.signal,
       });
-      if (!res.ok) return null;
+      if (!res.ok) return { session: null, dead: res.status === 400 || res.status === 401 };
       const s = await res.json() as Session;
-      return s?.access_token ? s : null;
-    } catch { return null; }
+      return s?.access_token ? { session: s, dead: false } : { session: null, dead: false };
+    } catch { return { session: null, dead: false }; }
     finally { clearTimeout(killer); }
+  }
+
+  /** Who a token belongs to (app user id) — read-only /api/auth/me. */
+  private async profileIdFor(token: string): Promise<string | null> {
+    try {
+      const res = await fetch(`${environment.apiUrl}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+      });
+      if (!res.ok) return null;
+      const json = await res.json().catch(() => null);
+      return json?.data?.id ?? null;
+    } catch { return null; }
+  }
+
+  private static switchError(code: string, message: string): Error {
+    return Object.assign(new Error(message), { code });
   }
 
   // Remembered organizations for the login dropdown (most-recent first).
@@ -178,7 +247,9 @@ export class AuthService {
 
   // Active branch for the branch switcher. The interceptor sends this as the
   // X-Active-Branch header; the backend validates it against the user's
-  // permitted branches and falls back to their default if it isn't allowed.
+  // permitted branches and REFUSES anything else (403 branch_not_permitted —
+  // strict branch access, 2026-09-27). /me still answers, so a stale id is
+  // reset here on every profile load; see also dropActiveBranch().
   private static readonly ACTIVE_BRANCH_KEY = 'pf.activeBranch';
   private readonly _activeBranchId = signal<string | null>(
     (() => { try { return localStorage.getItem(AuthService.ACTIVE_BRANCH_KEY); } catch { return null; } })()
@@ -201,6 +272,17 @@ export class AuthService {
     // Full reload is the most robust way to re-scope the many components that
     // cache branch-scoped data in signals; the Supabase session survives it.
     try { window.location.reload(); } catch { /* SSR/native guard */ }
+  }
+
+  /** The server refused our X-Active-Branch (the user's branches changed
+   *  under them, or a stale id from another account). Forget it — requests
+   *  fall back to the user's default branch — and re-pull /me so the switcher
+   *  and the header re-seed from the current permitted list. */
+  dropActiveBranch(): void {
+    if (!this._activeBranchId()) return;
+    this._activeBranchId.set(null);
+    try { localStorage.removeItem(AuthService.ACTIVE_BRANCH_KEY); } catch { /* private mode */ }
+    void this.loadProfile();
   }
 
   constructor() {
@@ -286,26 +368,16 @@ export class AuthService {
   }
 
   /**
-   * Permission check with mode-aware suppression. Same as hasPermission for
-   * everything except `collect_sample` in dedicated-counter mode: the
-   * Receptionist role keeps the seeded perm so an admin can flip the branch
-   * back to front-desk collection without a re-seed, but in dedicated mode
-   * the FD counter doesn't draw samples — only the dedicated counter does.
-   * Users who hold collect_sample via Sample Collector / Lab Tech / Lab Admin
-   * roles still pass.
+   * The permission check the nav / guards use for "can this user DO it here".
+   * Identical to hasPermission: collection is purely permission-based (owner
+   * 2026-09-27 — "if the receptionist is assigned [collect_sample], they can
+   * collect"), gated only by collect_sample + the workflow's Collect /
+   * Frontdesk / Lab slots. The old front-end-only rule that hid collection
+   * from a Receptionist when the branch collected at a dedicated counter is
+   * gone (the backend never enforced it). Kept as the single hook for any
+   * future mode-aware check.
    */
   hasEffectivePermission(code: string): boolean {
-    // Suppress FD collection only when collection runs at a dedicated counter and
-    // is NOT also placed at the front desk (multi-placement: if FD collects too,
-    // reception keeps the perm).
-    if (code === 'collect_sample' && this.labCfg.hasDedicatedCollection() && !this.labCfg.collectsAtFrontdesk()) {
-      const roles = this._user()?.roles ?? [];
-      const otherCollectorRole =
-        roles.includes('Sample Collector') ||
-        roles.includes('Lab Technician')   ||
-        roles.includes('Lab Admin');
-      if (roles.includes('Receptionist') && !otherCollectorRole) return false;
-    }
     return this.hasPermission(code);
   }
 
@@ -432,8 +504,12 @@ export class AuthService {
   async signOut(): Promise<void> {
     // Remove ONLY the active profile from the device registry — other signed-in
     // accounts stay so their owners can still switch in with their PIN.
-    const activeId = this.accounts.activeUserId();
+    const activeId = this._user()?.id ?? this.accounts.activeUserId();
     if (activeId) this.accounts.remove(activeId);
+    // Tear down every user-scoped realtime service (hubs, stores, windows,
+    // pop-ups, rings) before anything else can react to the sign-out.
+    this.scope.changed(null);
+    AuthService.writeTabAccount(null);
     this.persistSession(null);   // clear our stored tokens
     this._session.set(null);
     this._user.set(null);
@@ -455,16 +531,45 @@ export class AuthService {
    *  exchanges), AND the person must know that account's PIN (verified
    *  server-side, rate-limited). Throws with a user-readable message. */
   async switchAccount(acc: StoredAccount, pin: string): Promise<void> {
-    if (!acc.refreshToken) throw new Error('This profile’s session has expired — sign in again.');
-    const sess = await this.exchangeRefreshToken(acc.refreshToken);
-    if (!sess) {
-      // Dead session: drop the stale profile so the switcher stops offering it.
-      this.accounts.remove(acc.userId);
-      throw new Error('This profile’s session has expired — sign in again.');
+    const first = (acc.displayName || 'this profile').split(' ')[0];
+    const expired = () => AuthService.switchError('session_expired',
+      `${first}’s saved sign-in has ended on this device — sign in again to switch.`);
+    // Always work from the FRESHEST stored tokens (another tab may have
+    // rotated them since this list was rendered).
+    const row = this.accounts.fresh(acc.userId) ?? acc;
+    if (!row.refreshToken) { this.accounts.markExpired(acc.userId); throw expired(); }
+
+    // A still-valid access token needs no exchange (no rotation, nothing to
+    // lose); otherwise — or if the server no longer accepts it — exchange
+    // the refresh token.
+    let sess: Session | null = null;
+    let who: string | null = null;
+    if (row.accessToken && !this.isExpiringSoon(row.accessToken)) {
+      who = await this.profileIdFor(row.accessToken);
+      if (who) sess = { access_token: row.accessToken, refresh_token: row.refreshToken } as Session;
     }
-    // Supabase rotated the refresh token — save it even if the PIN fails,
-    // otherwise the stored one is dead and the profile bricks.
-    this.accounts.updateTokens(acc.userId, sess.access_token, sess.refresh_token!);
+    if (!sess) {
+      const ex = await this.exchangeRefreshToken(row.refreshToken);
+      if (!ex.session) {
+        if (ex.dead) { this.accounts.markExpired(acc.userId); throw expired(); }
+        throw AuthService.switchError('network', 'Couldn’t reach the sign-in server — check the connection and try again.');
+      }
+      sess = ex.session;
+      // Supabase rotated the refresh token — save it even if the PIN fails,
+      // otherwise the stored one is dead and the profile bricks.
+      this.accounts.updateTokens(acc.userId, sess.access_token, sess.refresh_token!);
+      who = await this.profileIdFor(sess.access_token);
+      if (!who) throw AuthService.switchError('network', 'Couldn’t reach the server — check the connection and try again.');
+    }
+
+    // Never half-switch: the saved session must really be THIS profile
+    // (a cross-tab write used to file one account's tokens under another's
+    // row). Checked read-only, before any state changes.
+    if (who !== acc.userId) {
+      this.accounts.markExpired(acc.userId);
+      throw AuthService.switchError('session_mismatch',
+        `The saved sign-in for ${first} belongs to a different account — sign in again to switch.`);
+    }
 
     const res = await fetch(`${environment.apiUrl}/api/auth/pin/verify`, {
       method: 'POST',
@@ -612,6 +717,13 @@ export class AuthService {
       const json = await res.json();
       const data: MeResponse | undefined = json?.data;
       if (!data) { this._user.set(null); return; }
+
+      // A DIFFERENT person is about to become the active user (Add account
+      // signs in without a reload): reset every user-scoped service FIRST so
+      // nothing — hub sockets, message stores, windows, rings — survives
+      // from the previous account. No-op for the same person.
+      this.scope.changed({ userId: data.id, tenantId: data.tenantId, authId: data.authId ?? null });
+      AuthService.writeTabAccount(data.id);
 
       this._user.set({
         id: data.id,

@@ -32,6 +32,7 @@
           </svg>
           Refresh
         </button>
+        @if (canGenerate()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rq-generate" (click)="promptGenerate()"
                 aria-label="Generate a report" title="Generate a report for an order">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -41,6 +42,9 @@
           </svg>
           Generate
         </button>
+        } @else if (viewOnly()) {
+        <span class="nd-chip nd-chip--static pf-rq-viewonly" title="You can view, download and print reports. Sending them needs the Deliver reports permission.">View only</span>
+        }
       </ng-container>
     </pf-hero-band>
     }
@@ -309,7 +313,7 @@
                       <span class="pf-rq-value__range nd-num">{{ v.range || '—' }}</span>
                       <span class="pf-rq-value__flag" [attr.data-flag]="v.flag">
                         @switch (v.flag) {
-                          @case ('critical') { Critical }
+                          @case ('critical') { {{ v.code || 'C' }} }
                           @case ('abnormal') { {{ v.code === 'H' ? 'High' : v.code === 'L' ? 'Low' : 'Abnormal' }} }
                         }
                       </span>
@@ -337,12 +341,14 @@
               </p>
               }
             </div>
+            @if (canGenerate()) {
             <div class="pf-rq-card__foot">
               <button type="button" class="nd-btn nd-btn--secondary pf-rq-genpartial" [disabled]="generating() === po.id"
                       (click)="generatePartial(po)">
                 {{ generating() === po.id ? 'Generating…' : 'Generate partial PDF' }}
               </button>
             </div>
+            }
           </div>
         </div>
       </li>
@@ -404,6 +410,21 @@
               </svg>
               <span class="nd-rowact__t">Download</span>
             </button>
+            <!-- View-only Results can PRINT (not a delivery: nothing recorded);
+                 the delivery desk prints from the Share menu below. -->
+            @if (!canDeliver() && canPrint()) {
+            <button type="button" class="nd-rowact pf-rq-print" [class.nd-rowact--icon]="!web()" aria-label="Print" title="Print"
+                    (click)="printReport(r)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+              </svg>
+              <span class="nd-rowact__t">Print</span>
+            </button>
+            }
+            <!-- Sending needs deliver_report; a view_report-only viewer sees the
+                 SAME list with View / Download / More only (route-access.ts). -->
+            @if (canDeliver()) {
             <span class="pf-rq-split pf-rq-split--nd">
               <button type="button" class="nd-rowact pf-rq-split__face" [class.nd-rowact--icon]="!web()" aria-label="Share" title="Send via WhatsApp"
                       (click)="deliver(r, 'whatsapp')">
@@ -428,6 +449,8 @@
                 </div>
               }
             </span>
+            }
+            @if (hasMore(r)) {
             <span class="pf-rq-split pf-rq-split--nd">
               <button type="button" class="nd-rowact pf-rq-more" [class.nd-rowact--icon]="!web()" (click)="toggleMore(r.id, $event)"
                       [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions" title="More actions">
@@ -439,7 +462,7 @@
               @if (moreFor() === r.id) {
                 <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleMore(r.id)"></div>
                 <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                  @if (r.orderId) {
+                  @if (canOpenLabResults() && r.orderId) {
                     <button type="button" class="pf-rq-menu__item press" role="menuitem"
                             (click)="viewLabResults(r); toggleMore(r.id)">Open lab results</button>
                   }
@@ -447,13 +470,14 @@
                     <button type="button" class="pf-rq-menu__item press" role="menuitem"
                             (click)="openEditDialog(r); toggleMore(r.id)">Edit results</button>
                   }
-                  @if (r.orderId) {
+                  @if (canGenerate() && r.orderId) {
                     <button type="button" class="pf-rq-menu__item press" role="menuitem"
                             (click)="regenerate(r); toggleMore(r.id)">Regenerate</button>
                   }
                 </div>
               }
             </span>
+            }
           </div>
         </div>
       </li>
@@ -539,9 +563,21 @@
             <span class="pf-rq-act__lbl">Download</span>
           </button>
 
+          <!-- View-only Results can PRINT (not a delivery: nothing recorded). -->
+          @if (!canDeliver() && canPrint()) {
+          <button type="button" class="pf-rq-act pf-rq-print press" title="Print" (click)="printReport(r)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            <span class="pf-rq-act__lbl">Print</span>
+          </button>
+          }
+
           <!-- Split button: the face sends it the usual way (WhatsApp opens
                pre-filled - the send is still the user's), the caret picks a
                different channel. -->
+          @if (canDeliver()) {
           <div class="pf-rq-split">
             <button type="button" class="pf-rq-act pf-rq-act--face press" title="Send via WhatsApp"
                     (click)="deliver(r, 'whatsapp')">
@@ -567,7 +603,9 @@
               </div>
             }
           </div>
+          }
 
+          @if (hasMore(r)) {
           <!-- Everything that changes the report rather than sends it. -->
           <div class="pf-rq-split">
             <button type="button" class="pf-rq-act pf-rq-act--more press" (click)="toggleMore(r.id, $event)"
@@ -579,7 +617,7 @@
             @if (moreFor() === r.id) {
               <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleMore(r.id)"></div>
               <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                @if (r.orderId) {
+                @if (canOpenLabResults() && r.orderId) {
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
                           (click)="viewLabResults(r); toggleMore(r.id)">Open lab results</button>
                 }
@@ -587,13 +625,14 @@
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
                           (click)="openEditDialog(r); toggleMore(r.id)">Edit results</button>
                 }
-                @if (r.orderId) {
+                @if (canGenerate() && r.orderId) {
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
                           (click)="regenerate(r); toggleMore(r.id)">Regenerate</button>
                 }
               </div>
             }
           </div>
+          }
         </div>
       </div>
       }

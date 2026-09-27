@@ -1,3 +1,4 @@
+import { firstValueFrom } from 'rxjs';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -29,6 +30,7 @@ import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ROLE_INFO } from './permission-catalog';
+import { UserBranchScope, branchScopeChips } from './branch-scope';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -40,6 +42,14 @@ const ICON_CALL = svg('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8
 const ICON_EDIT = svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>');
 const ICON_KEY = svg('<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>');
 const ICON_SHIELD = svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>');
+const ICON_TRASH = svg('<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>');
+
+/** A tenant's own CUSTOM role — the only kind DELETE /api/roles/{id} accepts.
+ *  Built-ins are the shared pre-seeded rows AND a tenant's customised copy of
+ *  one (same seeded name, isPreSeeded false) — the server answers 400 for both. */
+export function isDeletableRole(r: Pick<Role, 'isPreSeeded' | 'tenantId' | 'name'>): boolean {
+  return !r.isPreSeeded && !!r.tenantId && !(r.name in ROLE_INFO);
+}
 
 /** Kit row action (ND-PATTERN): a 32px secondary TEXT button on web, a
  *  neutral 44px ICON button on touch (label kept for AT + tooltip). */
@@ -275,16 +285,21 @@ export class UsersAccessComponent implements OnInit {
   private readonly _users = signal<User[]>([]);
   private readonly _roles = signal<Role[]>([]);
   private readonly _search = signal('');
+  /** Each user's branch scope (the Branches column), keyed by user id. */
+  private readonly _scopes = signal<Map<string, UserBranchScope>>(new Map());
 
   readonly users = this._users.asReadonly();
   readonly roles = this._roles.asReadonly();
   readonly search = this._search.asReadonly();
 
-  readonly filteredUsers = computed(() => {
+  readonly filteredUsers = computed<(User & { branchScope?: UserBranchScope })[]>(() => {
     const s = this._search().toLowerCase();
-    return s
-      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || u.email.toLowerCase().includes(s))
+    const scopes = this._scopes();
+    const list = s
+      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || u.email.toLowerCase().includes(s)
+          || branchScopeChips(scopes.get(u.id)).some(c => c.toLowerCase().includes(s)))
       : this._users();
+    return scopes.size ? list.map(u => ({ ...u, branchScope: scopes.get(u.id) })) : list;
   });
 
   readonly filteredRoles = computed(() => {
@@ -319,13 +334,28 @@ export class UsersAccessComponent implements OnInit {
     return wrap;
   };
 
+  /** Branches column: "All branches", or one chip per branch / lab. */
+  private userBranchesCellRenderer = (params: ICellRendererParams<User & { branchScope?: UserBranchScope }>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pf-ua-branches';
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:100%;padding:6px 0;';
+    for (const label of branchScopeChips(params.data?.branchScope)) {
+      const chip = document.createElement('span');
+      chip.className = 'nd-chip nd-chip--static pf-ua-branch';
+      chip.style.cssText = 'cursor:default;height:24px;white-space:nowrap;';
+      chip.textContent = label;
+      wrap.appendChild(chip);
+    }
+    return wrap;
+  };
+
   private userStatusCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;';
     if (!params.data) return wrap;
 
     const u = params.data;
-    // Kit slate switch (.nd-toggle[role=switch]) — ON = slate, never violet / green.
+    // Kit switch (.nd-toggle[role=switch]) — ON = brand violet, never green.
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'nd-toggle pf-ua-status';
@@ -422,6 +452,20 @@ export class UsersAccessComponent implements OnInit {
       ctx?.openRole?.(r);
     });
     wrap.appendChild(btn);
+
+    if (isDeletableRole(r)) {
+      // ND danger row action: same kit button, red text (no filled red).
+      const del = rowAction(web, 'Delete', ICON_TRASH, `Delete ${r.name}`);
+      del.classList.add('pf-ua-del');
+      del.style.color = 'var(--red-text, #dc2626)';
+      del.style.marginLeft = '8px';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const ctx = params.context as { deleteRole?: (r: Role) => void };
+        ctx?.deleteRole?.(r);
+      });
+      wrap.appendChild(del);
+    }
     return wrap;
   };
 
@@ -442,6 +486,17 @@ export class UsersAccessComponent implements OnInit {
       valueGetter: p => p.data?.username || p.data?.email || 'no login',
       flex: 1,
       minWidth: 180,
+      sortable: true,
+      filter: true,
+    },
+    {
+      headerName: 'Branches',
+      colId: 'branches',
+      valueGetter: p => branchScopeChips((p.data as { branchScope?: UserBranchScope } | undefined)?.branchScope).join(', '),
+      cellRenderer: this.userBranchesCellRenderer,
+      flex: 1.2,
+      minWidth: 200,
+      autoHeight: true,
       sortable: true,
       filter: true,
     },
@@ -518,7 +573,7 @@ export class UsersAccessComponent implements OnInit {
       headerName: '',
       colId: 'actions',
       cellRenderer: this.roleActionsCellRenderer,
-      width: web ? 200 : 80,
+      width: web ? 300 : 120,
       editable: false,
       sortable: false,
       filter: false,
@@ -537,6 +592,7 @@ export class UsersAccessComponent implements OnInit {
     reactivate: (u: User) => this.reactivate(u),
     toggleActive: (u: User) => this.toggleUserActive(u),
     openRole: (r: Role) => this.openRole(r),
+    deleteRole: (r: Role) => this.deleteRole(r),
   };
 
   ngOnInit() {
@@ -551,6 +607,10 @@ export class UsersAccessComponent implements OnInit {
       this.presence.seedFromUsers(l ?? []);
     } });
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
+    this.api.get<UserBranchScope[]>('/api/users/branch-scopes').subscribe({
+      next: l => this._scopes.set(new Map((l ?? []).map(s => [s.userId, s]))),
+      error: () => { /* older server: the column stays empty */ },
+    });
   }
 
   setTab(t: Tab) {
@@ -568,6 +628,28 @@ export class UsersAccessComponent implements OnInit {
   openNewRole() { this.router.navigateByUrl('/admin/roles/new'); }
   openRole(r: Role) { this.router.navigate(['/admin/roles', r.id, 'edit']); }
   editUser(u: User) { this.router.navigate(['/admin/users', u.id, 'edit']); }
+
+  /** Delete a custom role (DialogService confirm, danger tone). The server
+   *  refuses a role that is still assigned (409, with the user count) rather
+   *  than silently stripping access — its message is shown as-is. */
+  async deleteRole(r: Role) {
+    if (!isDeletableRole(r)) return;
+    const ok = await this.dialog.confirm({
+      title: `Delete ${r.name}?`,
+      message: 'The role and its permissions are removed for good. A role that is still assigned to someone can\'t be deleted — move those users to another role first.',
+      tone: 'danger',
+      confirmLabel: 'Delete role',
+    });
+    if (!ok) return;
+    try {
+      await firstValueFrom(this.api.delete(`/api/roles/${r.id}`));
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+      return;
+    }
+    this._roles.update(list => list.filter(x => x.id !== r.id));
+    this.toasts.success(`Role "${r.name}" deleted`);
+  }
 
   toggleUserActive(u: User) {
     if (u.isActive) {

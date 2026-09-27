@@ -9,7 +9,6 @@ import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
-import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
@@ -26,7 +25,8 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
 import { reportFlag } from '../../../shared/utils/report-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
-import { PartnerReport, absoluteFileUrl, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
+import { PartnerReport, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
+import { UploadsService } from '../../../core/services/uploads.service';
 
 interface ReportData {
   patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; sex?: string; phone?: string; mrn?: string };
@@ -259,6 +259,18 @@ export class ReportViewerComponent implements OnInit {
   // edit_result is held by Lab Technician, Pathologist and Lab Admin —
   // deliberately not the front desk.
   readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
+  /** Delivery desk (deliver_report): Send WhatsApp, Print, Share with a
+   *  colleague. Without it (view_report only — Lab Tech, Branch / Quality
+   *  Manager) the viewer is VIEW-ONLY; the PDF download lives on the list. */
+  readonly canDeliver = computed(() => this.auth.hasPermission('deliver_report'));
+  /** Print is NOT a delivery here (owner, 2026-09-27): everyone who can open
+   *  the viewer (its route: deliver_report | view_report | validate_result)
+   *  may print. print() is a client-side render + the letterpad choice — it
+   *  never calls /deliver or archives, so a view-only print records nothing. */
+  readonly canPrint = computed(() =>
+    ['deliver_report', 'view_report', 'validate_result'].some(p => this.auth.hasPermission(p)));
+  /** The phones' More sheet has something in it. */
+  readonly hasMoreActions = computed(() => this.canPrint() || this.canDeliver() || this.canEditResult());
   readonly editDialogOpen = signal(false);
 
   openEditDialog() { this.editDialogOpen.set(true); }
@@ -270,6 +282,7 @@ export class ReportViewerComponent implements OnInit {
     const id = this._report()?.id;
     if (!id) return;
     this._pdfBlob = null;
+    this._pdfInput = null;
     this.api.get<Report>(`/api/reports/${id}`).subscribe({
       // Re-arm the preview so the pages are rebuilt from the fresh data.
       next: r => { this._pdfReady.set(false); this._report.set(r); this.resolveLayouts(); },
@@ -287,6 +300,9 @@ export class ReportViewerComponent implements OnInit {
   readonly pdfReady = this._pdfReady.asReadonly();
   readonly pdfError = this._pdfError.asReadonly();
   private _pdfBlob: Blob | null = null;
+  /** The prepared render input (template + layouts + images), cached so a
+   *  letterpad print job can re-render without refetching. */
+  private _pdfInput: import('../../../shared/utils/report-pdf').ReportPdfInput | null = null;
   private _pdfRendering = false;
   // Kick the render only once BOTH the report data and the #pdfPages host
   // exist (the host is inside the @if(report()) branch, so it appears a
@@ -601,13 +617,11 @@ export class ReportViewerComponent implements OnInit {
    *  so logos / signature images uploaded via the template editor resolve
    *  correctly when the viewer is served from a different host than the
    *  API (dev / capacitor / electron). Absolute http(s) URLs pass through. */
-  private readonly platform = inject(PlatformService);
   resolveAsset(url: string | null | undefined): string {
-    const u = url ?? '';
-    if (!u) return '';
-    if (/^https?:\/\//i.test(u) || u.startsWith('data:')) return u;
-    return `${this.platform.getApiUrl()}${u}`;
+    // "/uploads/…" assets are private — a blob: URL fetched with the session.
+    return this.uploadAssets.src(url);
   }
+  private readonly uploadAssets = inject(UploadsService);
 
   /** Template-driven date/time formatter (mirrors the PDF renderer).
    *  Falls back to the medium Angular date pipe shape when no template
@@ -679,8 +693,10 @@ export class ReportViewerComponent implements OnInit {
   /** Opens the partner's file in a new tab — the browser's own viewer
    *  downloads / prints it as is. */
   openPartnerReport(p: PartnerReport) {
-    window.open(absoluteFileUrl(p.url, this.outsourcing.apiBase), '_blank', 'noopener');
+    // Private upload → opened through a short-lived signed URL.
+    void this.uploads.open(p.url);
   }
+  private readonly uploads = inject(UploadsService);
 
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
@@ -744,7 +760,8 @@ export class ReportViewerComponent implements OnInit {
       this._pdfReady.set(true);
     } catch (err) {
       console.error('[report-viewer] PDF render failed', err);
-      this._pdfError.set('Could not render the report PDF.');
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this._pdfError.set(reportRenderErrorMessage(err, 'Could not render the report PDF.'));
     } finally {
       this._pdfRendering = false;
     }
@@ -767,10 +784,16 @@ export class ReportViewerComponent implements OnInit {
     // The ONE resolver: SCALAR values (the snapshot's { value, flag, … }
     // wrappers are unwrapped so "show when result > X" conditions match),
     // snapshot images, and the ordered PROFILES' layouts.
-    const next = await resolveReportLayouts<ResolvedReportLayout>(
-      (id, values, images, p) => this.layoutSvc.preview(id, values, images as never, p),
-      tests as unknown as LayoutSnapshotTest[], patient);
-    this._resolved.set(next);
+    try {
+      const next = await resolveReportLayouts<ResolvedReportLayout>(
+        (id, values, images, p) => this.layoutSvc.preview(id, values, images as never, p),
+        tests as unknown as LayoutSnapshotTest[], patient);
+      this._resolved.set(next);
+    } catch (err) {
+      // Permission / network failure: the PDF pane shows the error state; the
+      // on-screen extras simply stay unresolved (never a half-resolved mix).
+      console.error('[report-viewer] layout resolve failed', err);
+    }
   }
 
   back() { this.navBack.backTo('/reports'); }
@@ -778,28 +801,42 @@ export class ReportViewerComponent implements OnInit {
   /** Print the SAME PDF the viewer shows / Download produces. Native shell:
    *  hand the file to the share sheet (it has Print). Web: open the PDF in a
    *  new tab — the browser's PDF viewer prints it verbatim, unlike
-   *  window.print() which would rasterize the app shell. */
+   *  window.print() which would rasterize the app shell.
+   *  Letterpad setting on → ask letterhead vs plain paper for THIS job only
+   *  (letterhead paper renders with the header & footer left blank). */
   async print() {
     const r = this._report();
-    if (!r || this.busy() === 'print') return;
+    if (!r || this.busy() === 'print' || !this.canPrint()) return;
     this.busy.set('print');
     try {
-      this._pdfBlob ??= await this.buildPdfBlob(r);
+      const input = await this.buildPdfInput(r);
+      const { askPrintLetterhead } = await import('../../../shared/utils/print-letterhead');
+      const { DialogService } = await import('../../../core/services/dialog.service');
+      const job = await askPrintLetterhead(input.template, this.injector.get(DialogService));
+      if (!job) return;   // dismissed — print nothing
+      let blob: Blob;
+      if (job.blankLetterhead) {
+        const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+        blob = buildReportPdf({ ...input, blankLetterhead: true }).output('blob');
+      } else {
+        blob = this._pdfBlob ??= await this.buildPdfBlob(r);
+      }
       const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
         .Capacitor?.isNativePlatform?.();
-      const file = new File([this._pdfBlob], `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`,
+      const file = new File([blob], `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`,
         { type: 'application/pdf' });
       if (isNative && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Print report' });
       } else {
         // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
-        printPdfBlobUrl(URL.createObjectURL(this._pdfBlob), { revokeOnDone: true });
+        printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
       }
       this.flash('print');
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') return; // share sheet dismissed
       console.error('[report-viewer] print failed', err);
-      this.toasts.error('Could not prepare the report for printing');
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this.toasts.error(reportRenderErrorMessage(err, 'Could not prepare the report for printing'));
     } finally {
       this.busy.set(null);
     }
@@ -815,7 +852,7 @@ export class ReportViewerComponent implements OnInit {
   deliverWhatsApp() {
     const r = this._report();
     const d = this.data();
-    if (!r) return;
+    if (!r || !this.canDeliver()) return;
     const lab = this.tpl()?.labName || 'our lab';
     const name = d?.patient?.name ?? '';
     const link = r.qrToken ? this.verifyCode(r.qrToken) : '';
@@ -847,41 +884,32 @@ export class ReportViewerComponent implements OnInit {
 
   /** Render the report to the SAME PDF the Download button in the queue
    *  produces (jsPDF + tenant template + per-test resolved layouts + images).
-   *  Single source for the inline view, Print and the archive upload. */
+   *  Single source for the inline view, Print and the archive upload. Always
+   *  WITH the letterhead — only a letterpad print job leaves it blank. */
   private async buildPdfBlob(r: Report): Promise<Blob> {
-    const [{ buildReportPdf, preloadReportImages }, { ReportLayoutService }, { PlatformService }] = await Promise.all([
-      import('../../../shared/utils/report-pdf'),
+    const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
+    return buildReportPdf(await this.buildPdfInput(r)).output('blob');
+  }
+
+  /** The prepared render input, cached per loaded report. */
+  private async buildPdfInput(r: Report): Promise<import('../../../shared/utils/report-pdf').ReportPdfInput> {
+    if (this._pdfInput && this._pdfInput.report.id === r.id) return this._pdfInput;
+    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
       import('../../../core/services/report-layout.service'),
       import('../../../core/services/platform.service'),
+      import('../../../shared/utils/report-render-input'),
     ]);
     const svc = this.injector.get(ReportLayoutService);
     const platform = this.injector.get(PlatformService);
-    const resolvedLayouts: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-
-    let tests: LayoutSnapshotTest[] = [];
-    let patient: { sex?: string | null; age?: number | null } | undefined;
-    try {
-      const snap = JSON.parse(r.data ?? '{}');
-      tests = snap?.tests ?? [];
-      patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
-    } catch { /* malformed snapshot — render without layouts */ }
-
-    // Resolves PROFILE layouts as well as each test's own. Looping `tests` by
-    // hand here omitted the profiles, so a profile-ordered test printed NO
-    // notes on this screen while the report queue printed them correctly.
-    const [template, layouts] = await Promise.all([
-      this.api.get<ReportTemplate | null>('/api/config/report-template').toPromise().catch(() => null),
-      resolveReportLayouts<import('../../../shared/models/report-layout.model').ResolvedReportLayout>(
-        (id, values, conds, p) => svc.preview(id, values, conds as never, p), tests, patient),
-    ]);
-    Object.assign(resolvedLayouts, layouts);
-
-    const baseInput = { report: r, resolvedLayouts, template: template ?? null };
-    const [imageCache, trendograms] = await Promise.all([
-      preloadReportImages(baseInput, platform.getApiUrl()),
-      (await import('../../../shared/utils/trendogram-report')).prepareTrendograms(r, this.api),
-    ]);
-    return buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob');
+    // The ONE recipe (template + layouts incl. PROFILE layouts + images +
+    // trendograms). Throws instead of silently rendering the default design.
+    const input = await prepareReportPdfInput(r, {
+      api: this.api,
+      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+      apiUrl: platform.getApiUrl(),
+    });
+    this._pdfInput = input;
+    return input;
   }
 
   /** Render + archive the report PDF to storage (best-effort, no download) so

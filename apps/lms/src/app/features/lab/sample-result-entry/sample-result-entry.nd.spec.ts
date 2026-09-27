@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { signal } from '@angular/core';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { SampleResultEntryComponent } from './sample-result-entry.component';
 import { ApiService } from '../../../core/services/api.service';
@@ -12,6 +12,7 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 
 /**
  * Result entry on the nd pattern (docs/ND-PATTERN.md → "Result entry"):
@@ -62,18 +63,22 @@ function siblingFixture(): any {
   };
 }
 
-async function render(opts: { rich?: boolean; hold?: boolean } = {}) {
+async function render(opts: {
+  rich?: boolean; hold?: boolean; single?: boolean;
+  sibling?: () => any; post?: (url: string, body: any) => any; confirm?: boolean;
+} = {}) {
   const sample = sampleFixture(!!opts.rich);
+  if (opts.single) sample.siblings = [];
   let release!: () => void;
   const gate = new Promise<void>(r => (release = r));
   const api = {
     get: vi.fn((url: string) => {
-      if (url.endsWith('/smp-2/tests')) return of(siblingFixture());
+      if (url.endsWith('/smp-2/tests')) return of((opts.sibling ?? siblingFixture)());
       if (url.endsWith('/tests')) return opts.hold ? { subscribe: (o: any) => { gate.then(() => o.next(sample)); return { unsubscribe() {} }; } } as any : of(sample);
       if (url.includes('lab-trends')) return of({ tests: [] });
       return of([]);
     }),
-    post: vi.fn(() => of({})), patch: vi.fn(() => of({})), put: vi.fn(() => of({})),
+    post: vi.fn((url: string, body: any) => (opts.post ? opts.post(url, body) : of({}))), patch: vi.fn(() => of({})), put: vi.fn(() => of({})),
   };
   // A live route: navigating to /lab/sample/:id re-emits the param (the
   // component is REUSED, as the real router does for a same-route hop).
@@ -89,15 +94,19 @@ async function render(opts: { rich?: boolean; hold?: boolean } = {}) {
       return Promise.resolve(true);
     }),
   };
+  const dialog = { confirm: vi.fn(async (_req: any) => !!opts.confirm), prompt: vi.fn() };
+  const shelf = { drop: vi.fn() };
+  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
       { provide: HttpClient, useValue: {} },
       { provide: PlatformService, useValue: { getApiUrl: () => '' } },
-      { provide: ToastService, useValue: { success() {}, error() {}, info() {}, warning() {} } },
+      { provide: ToastService, useValue: toasts },
       { provide: NavBackService, useValue: { showBack: () => true, back: vi.fn(), backTo: vi.fn() } },
       { provide: AuthService, useValue: { user: () => ({ displayName: 'Admin User', registrationId: '123434', tenantName: 'Micro World' }), hasPermission: () => true } },
-      { provide: DialogService, useValue: {} },
+      { provide: DialogService, useValue: dialog },
+      { provide: DraftShelfService, useValue: shelf },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
       { provide: ActivatedRoute, useValue: route },
       { provide: Router, useValue: router },
@@ -110,7 +119,7 @@ async function render(opts: { rich?: boolean; hold?: boolean } = {}) {
     await new Promise(r => setTimeout(r, 0));
     f.detectChanges();
   }
-  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, release, api, params$, query$, router };
+  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, release, api, params$, query$, router, dialog, shelf, toasts };
 }
 
 /** Component CSS with Angular's scoping attributes stripped. */
@@ -166,7 +175,7 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
   });
 
   it('the band carries Save draft (secondary) + Submit results (the single primary)', async () => {
-    const { el } = await render();
+    const { el } = await render({ single: true });
     const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
     const draft = actions.querySelector('.pf-sre-draft') as HTMLButtonElement;
     const submit = actions.querySelector('.pf-sre-submit') as HTMLButtonElement;
@@ -181,7 +190,7 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
   });
 
   it('Submit keeps its disabled logic (nothing writable → disabled)', async () => {
-    const { f, el, c } = await render();
+    const { f, el, c } = await render({ single: true });
     c._sample.update((s: any) => ({ ...s, tests: s.tests.map((t: any) => ({ ...t, status: 'validated' })) }));
     f.detectChanges();
     const submit = el.querySelector('pf-hero-band .pf-sre-submit') as HTMLButtonElement;
@@ -190,7 +199,7 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
   });
 
   it('phones: Save draft + Submit are 44px ICON buttons in the band (Submit primary); no bottom bar', async () => {
-    const { el } = await render();
+    const { el } = await render({ single: true });
     expect(el.querySelector('.nd-bottombar')).toBeNull();
     const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
     const draft = actions.querySelector('.pf-sre-draft') as HTMLElement;
@@ -218,8 +227,8 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     expect(draft.getAttribute('title')).toBe('Save draft · Saved 14:02');
   });
 
-  it('sample tabs: this tube + siblings as a neutral segmented control; open work = violet dot', async () => {
-    const { el } = await render();
+  it('sample tabs: this tube + siblings as a neutral segmented control; draft values = violet dot, all filled = check', async () => {
+    const { f, el, c } = await render();
     const tabs = el.querySelector('pf-hero-band .pf-sre-tabs') as HTMLElement;
     expect(tabs.classList).toContain('nd-seg');
     const items = tabs.querySelectorAll('[role="tab"]');
@@ -230,7 +239,19 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     expect(items[1].textContent!.trim()).toBe('26124');
     expect(items[1].getAttribute('title')).toBe('Bacterial Identification');
     expect(items[1].getAttribute('aria-label')).toContain('Bacterial Identification');
-    expect(items[1].querySelector('.pf-sre-tab__dot')).not.toBeNull();
+    // Nothing typed anywhere yet: no marks.
+    expect(el.querySelector('.pf-sre-tabs .pf-sre-tab__dot, .pf-sre-tabs .pf-sre-tab__ok')).toBeNull();
+    // Some values on this tube → the dot ("has unsaved or draft values").
+    c.setValue('ot1', 'target', 'Detected');
+    f.detectChanges();
+    expect(items[0].querySelector('.pf-sre-tab__dot')!.getAttribute('aria-label')).toBe('Has unsaved or draft values');
+    // Every field filled → the check ("ready for Submit all").
+    c.setValue('ot1', 'adequacy', 'Adequate');
+    c.setValue('ot1', 'qc', 'Pass');
+    f.detectChanges();
+    expect(items[0].querySelector('.pf-sre-tab__dot')).toBeNull();
+    expect(items[0].querySelector('svg.pf-sre-tab__ok')!.getAttribute('aria-label')).toBe('Every field filled');
+    expect(items[1].querySelector('.pf-sre-tab__dot, .pf-sre-tab__ok')).toBeNull();
     expect(css()).toMatch(/\.pf-sre-tab__dot[^{]*\{[^}]*background:\s*var\(--color-violet-500/);
     expect(el.querySelector('select')).toBeNull();
   });
@@ -566,5 +587,176 @@ describe('Result entry — switching drafts on the SAME route (draft shelf)', ()
     f.destroy();
     expect(JSON.parse(localStorage.getItem('pf-lms.sre-draft.smp-1')!)).toEqual({ ot1: { adequacy: 'Adequate' } });
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results/draft', expect.anything());
+  });
+});
+
+describe('Result entry — Submit all (2+ tube tabs of one order)', () => {
+  const settle = async (f: any) => {
+    for (let i = 0; i < 4; i++) { f.detectChanges(); await f.whenStable(); await new Promise(r => setTimeout(r, 0)); }
+    f.detectChanges();
+  };
+  beforeEach(() => {
+    const mem = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, String(v)),
+      removeItem: (k: string) => void mem.delete(k),
+      clear: () => mem.clear(),
+    });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+  const FULL = { target: 'Detected', adequacy: 'Adequate', qc: 'Pass' };
+  /** The sibling tube with a SAVED DRAFT on the server (currentResult). */
+  const siblingWith = (values: Record<string, string> | null) => () => {
+    const s = siblingFixture();
+    if (values) s.tests[0].currentResult = JSON.stringify({ values });
+    return s;
+  };
+  const resultPosts = (api: any) => api.post.mock.calls
+    .map((a: unknown[]) => String(a[0])).filter((u: string) => /\/results$/.test(u));
+  const clickSubmitAll = async (f: any, el: HTMLElement) => {
+    (el.querySelector('pf-hero-band .pf-sre-submit-all') as HTMLButtonElement).click();
+    await settle(f);
+  };
+
+  it('the band: "Submit all" is the ONE primary; "Submit this sample" is the secondary', async () => {
+    const { f, el } = await render();
+    await settle(f);
+    const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
+    const all = actions.querySelector('.pf-sre-submit-all') as HTMLButtonElement;
+    const one = actions.querySelector('.pf-sre-submit-one') as HTMLButtonElement;
+    expect(all.textContent!.trim()).toBe('Submit all');
+    expect(all.classList).toContain('pf-hb-btn--primary');
+    expect(all.getAttribute('aria-label')).toBe('Submit all');            // phones: the icon keeps the words
+    expect(all.querySelector('svg.pf-sre-act__i')).not.toBeNull();
+    expect(all.disabled).toBe(false);                                     // never silently disabled
+    expect(one.textContent!.trim()).toBe('Submit this sample');
+    expect(one.classList).toContain('pf-hb-btn--ghost');
+    expect(one.querySelector('svg.pf-sre-act__i')).not.toBeNull();
+    expect(actions.querySelectorAll('.pf-hb-btn--primary').length).toBe(1);
+  });
+
+  it('a single-tab order is unchanged: "Submit results" posts only this tube, no dialog', async () => {
+    const { f, el, c, api, dialog } = await render({ single: true });
+    expect(el.querySelector('.pf-sre-submit-all, .pf-sre-submit-one')).toBeNull();
+    c.setValue('ot1', 'target', 'Detected');                              // others left empty
+    (el.querySelector('pf-hero-band .pf-sre-submit') as HTMLButtonElement).click();
+    await settle(f);
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results']);
+    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results',
+      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined }] });
+  });
+
+  it('"Submit this sample" is the per-tab submit: only the open tube', async () => {
+    const { f, el, c, api } = await render({ sibling: siblingWith(FULL) });
+    await settle(f);
+    c.setValue('ot1', 'target', 'Detected');
+    (el.querySelector('pf-hero-band .pf-sre-submit-one') as HTMLButtonElement).click();
+    await settle(f);
+    expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results']);
+  });
+
+  it('all fields filled: NO dialog; the unsaved typing is flushed first, then every tab is submitted', async () => {
+    const { f, el, c, api, dialog, shelf, toasts, router } = await render({ sibling: siblingWith(FULL) });
+    await settle(f);
+    for (const [k, v] of Object.entries(FULL)) c.setValue('ot1', k, v);   // unsaved: debounces pending
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const done = c.submitAllTabs();
+    await vi.advanceTimersByTimeAsync(0);
+    await done;
+    const urls = api.post.mock.calls.map((a: unknown[]) => String(a[0]));
+    // Local copy written + the server draft sent BEFORE any submit.
+    expect(urls[0]).toBe('/api/samples/smp-1/results/draft');
+    expect(urls.slice(1)).toEqual(['/api/samples/smp-1/results', '/api/samples/smp-2/results']);
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    // The same per-tab payloads — the sibling's saved draft rides along.
+    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results',
+      { results: [{ orderTestId: 'ot1', values: FULL, note: undefined }] });
+    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-2/results',
+      { results: [{ orderTestId: 'ot2', values: FULL, note: undefined }] });
+    expect(toasts.success).toHaveBeenCalledWith('2 samples submitted — back to your queue');
+    expect(shelf.drop).toHaveBeenCalledWith('lab', ['lab:smp-1', 'lab:smp-2']);
+    expect(localStorage.getItem('pf-lms.sre-draft.smp-1')).toBeNull();
+    await vi.advanceTimersByTimeAsync(700);
+    expect(router.navigate).toHaveBeenCalledWith(['/lab/my-work']);
+  });
+
+  it('some fields empty: ONE confirmation listing them by tab and test', async () => {
+    const { f, el, c, api, dialog } = await render({ sibling: siblingWith(null) });
+    await settle(f);
+    c.setValue('ot1', 'target', 'Detected');
+    c.setValue('ot1', 'qc', 'Pass');
+    await clickSubmitAll(f, el);
+    expect(dialog.confirm).toHaveBeenCalledTimes(1);
+    const req = (dialog.confirm.mock.calls[0] as any[])[0];
+    expect(req.title).toBe('Some fields are empty');
+    expect(req.items).toEqual([
+      '26123 · Bacterial PCR Detection — Sample Adequacy',
+      '26124 · Bacterial Identification — Target Detection, Sample Adequacy, Molecular QC',
+    ]);
+    expect(req.question).toBe('Do you still want to submit?');
+    expect(req.cancelLabel).toBe('Go back');
+    expect(req.confirmLabel).toBe('Submit anyway');
+    expect(resultPosts(api)).toEqual([]);                                // "Go back" (the mock says no)
+  });
+
+  it('"Submit anyway": every tab goes as-is (empty fields stay empty)', async () => {
+    const { f, el, c, api } = await render({ sibling: siblingWith(null), confirm: true });
+    await settle(f);
+    c.setValue('ot1', 'target', 'Detected');
+    await clickSubmitAll(f, el);
+    expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results', '/api/samples/smp-2/results']);
+    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results',
+      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined }] });
+    expect(api.post).toHaveBeenCalledWith('/api/samples/smp-2/results',
+      { results: [{ orderTestId: 'ot2', values: {}, note: undefined }] });
+  });
+
+  it('"Go back" focuses the first empty field on the open tab', async () => {
+    const { f, el, c, api } = await render({ sibling: siblingWith(FULL) });
+    await settle(f);
+    c.setValue('ot1', 'target', 'Detected');
+    await clickSubmitAll(f, el);
+    await settle(f);
+    expect(resultPosts(api)).toEqual([]);
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.closest('[data-sre-param]')!.getAttribute('data-sre-param')).toBe('ot1::adequacy');
+  });
+
+  it('"Go back" switches to the first tab with an empty field and focuses it', async () => {
+    const { f, el, c, router } = await render({ sibling: siblingWith({ target: 'Detected' }) });
+    await settle(f);
+    for (const [k, v] of Object.entries(FULL)) c.setValue('ot1', k, v);
+    await clickSubmitAll(f, el);
+    await settle(f);
+    expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 'smp-2'], expect.anything());
+    expect(c.sample().id).toBe('smp-2');
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.closest('[data-sre-param]')!.getAttribute('data-sre-param')).toBe('ot2::adequacy');
+  });
+
+  it('partial failure: reported per tab, the failed tab keeps its data and is the one on screen', async () => {
+    const { f, el, c, api, shelf, toasts, router } = await render({
+      sibling: siblingWith(FULL),
+      post: (url: string) => url === '/api/samples/smp-2/results'
+        ? throwError(() => ({ error: { message: 'Sample has not been collected yet.' } }))
+        : of({}),
+    });
+    await settle(f);
+    localStorage.setItem('pf-lms.sre-draft.smp-2', JSON.stringify({ ot2: { qc: 'Fail' } }));
+    for (const [k, v] of Object.entries(FULL)) c.setValue('ot1', k, v);
+    await clickSubmitAll(f, el);
+    expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results', '/api/samples/smp-2/results']);
+    expect(toasts.error).toHaveBeenCalledWith('26123 submitted · 26124 failed: Sample has not been collected yet.');
+    expect(toasts.success).not.toHaveBeenCalled();
+    expect(shelf.drop).toHaveBeenCalledWith('lab', ['lab:smp-1']);
+    expect(router.navigate).not.toHaveBeenCalledWith(['/lab/my-work']);
+    // Stays on (moves to) the failed tube, its typing intact.
+    expect(c.sample().id).toBe('smp-2');
+    expect(c.getValue('ot2', 'qc')).toBe('Fail');
+    const report = Array.from(el.querySelectorAll('.pf-sre-report li')).map(li => li.textContent!.replace(/\s+/g, ' ').trim());
+    expect(report).toEqual(['26123 · Submitted', '26124 · Not submitted — Sample has not been collected yet.']);
   });
 });

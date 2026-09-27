@@ -33,9 +33,9 @@ const OGTT = (over: any = {}) => ({
 });
 
 function render(opts: { test?: any; type?: string; nd?: boolean } = {}) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always install the stub (never 'only if missing'): another spec in the same
+  // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const test = opts.test ?? OGTT();
   const api = {
     get: vi.fn((url: string) => {

@@ -45,7 +45,7 @@ export interface WorkflowStepCompleteEvent {
            actions (the ONE primary sits in the band). Keyboard-first: Enter
            moves to the next field in reading order; on the last field it
            asks the host to submit (enterSubmit). Errors are field-level. -->
-      <div class="pf-wr-cards" (keydown)="onNdKey($event)">
+      <div class="pf-wr-cards" (keydown)="onNdKey($event)" (focusout)="onNdBlur($event)">
         @for (s of visibleSteps(); track s.id) {
           @let req = requiredCount(s);
           <section class="nd-card pf-wr-card" [attr.data-step]="s.id" [attr.aria-labelledby]="'pf-wr-h-' + s.id">
@@ -251,6 +251,7 @@ export interface WorkflowStepCompleteEvent {
                 [nd]="nd()"
                 [error]="nd() ? fieldError(step, f.name) : null"
                 [defaultCountryCode]="nd() ? $any(context()['defaultPhoneCode'] ?? null) : null"
+                (localErrorChange)="setLocalError(step, f.name, $event)"
                 (valueChange)="setValue(step, f.name, $event)"></pf-dynamic-input>
             </div>
           }
@@ -354,7 +355,7 @@ export class WorkflowRendererComponent implements OnChanges {
       for (const f of this.visibleFields(steps[i])) {
         if (f.type === 'test_parameters') continue;
         const v = this.valueFor(steps[i], f.name);
-        const err = validateFieldValue(f, v);
+        const err = this.localError(steps[i], f.name) ?? validateFieldValue(f, v);
         if (err) {
           const message = `${f.title}: ${err}`;
           this._validationError.set(message);
@@ -384,7 +385,7 @@ export class WorkflowRendererComponent implements OnChanges {
     for (const step of this.visibleSteps()) {
       for (const f of this.visibleFields(step)) {
         if (f.type === 'test_parameters') continue;
-        const err = validateFieldValue(f, this.valueFor(step, f.name));
+        const err = this.localError(step, f.name) ?? validateFieldValue(f, this.valueFor(step, f.name));
         if (!err) continue;
         errs[`${step.name}::${f.name}`] = err;
         if (!first) first = { step, f, message: `${f.title}: ${err}` };
@@ -405,6 +406,47 @@ export class WorkflowRendererComponent implements OnChanges {
       WorkflowRendererComponent.stopOf(wrap)?.focus();
     });
     return false;
+  }
+
+  /** Errors an input reported that its VALUE can't carry (a half-typed or
+   *  impossible DOB, an out-of-range age → the value is null). Kept apart
+   *  from _fieldErrors (which a value change clears). */
+  private readonly _localErrors = signal<Record<string, string>>({});
+  private localError(step: WorkflowStep, name: string): string | null {
+    return this._localErrors()[`${step.name}::${name}`] ?? null;
+  }
+  setLocalError(step: WorkflowStep, name: string, msg: string | null): void {
+    const key = `${step.name}::${name}`;
+    const cur = this._localErrors();
+    if ((cur[key] ?? null) === msg) return;
+    const next = { ...cur };
+    if (msg) next[key] = msg; else delete next[key];
+    this._localErrors.set(next);
+  }
+
+  /** Blur = check THAT field's format (phone length, ABHA / Aadhaar digits,
+   *  email) and show the message under it. Empty fields aren't flagged on
+   *  blur ("Required" waits for submit) so Enter-ing past optional fields
+   *  stays quiet. Focus moving inside the same field (country code ⇄
+   *  number) is not a blur. */
+  onNdBlur(e: FocusEvent): void {
+    const t = e.target as HTMLElement | null;
+    const wrap = t?.closest<HTMLElement>('[data-field]');
+    if (!wrap) return;
+    const to = e.relatedTarget as Node | null;
+    if (to && wrap.contains(to)) return;
+    const name = wrap.getAttribute('data-field');
+    const stepId = wrap.closest<HTMLElement>('[data-step]')?.getAttribute('data-step');
+    const step = this.visibleSteps().find(s => s.id === stepId);
+    const f = step && this.visibleFields(step).find(x => x.name === name);
+    if (!step || !f || f.type === 'test_parameters') return;
+    const v = this.valueFor(step, f.name);
+    if (this.isEmpty(v)) return;
+    const err = validateFieldValue(f, v);
+    const key = `${step.name}::${f.name}`;
+    const cur = this._fieldErrors();
+    if (err) this._fieldErrors.set({ ...cur, [key]: err });
+    else if (cur[key]) { const rest = { ...cur }; delete rest[key]; this._fieldErrors.set(rest); }
   }
 
   /** Required fields a card shows in its header ("2 required"). */
@@ -465,7 +507,7 @@ export class WorkflowRendererComponent implements OnChanges {
   isStepValid(step: WorkflowStep): boolean {
     for (const f of this.visibleFields(step)) {
       if (f.type === 'test_parameters') continue;
-      if (validateFieldValue(f, this.valueFor(step, f.name))) return false;
+      if (this.localError(step, f.name) || validateFieldValue(f, this.valueFor(step, f.name))) return false;
     }
     return true;
   }

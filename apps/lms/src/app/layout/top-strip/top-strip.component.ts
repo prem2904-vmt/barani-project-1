@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ChatWindowsService } from '../../core/services/chat-windows.service';
 import { DirectoryService, DirectoryUser } from '../../core/services/directory.service';
 import { MessagesPanelService } from '../../core/services/messages-panel.service';
-import { conversationInitials, conversationTitle } from '../../shared/models/conversation-name';
+import { conversationDisambiguator, conversationInitials, conversationPeerId, conversationTitle } from '../../shared/models/conversation-name';
+import { PresenceAvatarComponent } from '../../shared/components/presence-avatar/presence-avatar.component';
 import { Conversation } from '../../shared/models/chat.model';
 import { DraftShelfService } from '../../core/services/draft-shelf.service';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
@@ -17,6 +18,7 @@ import { BranchLabConfigService } from '../../core/services/branch-lab-config.se
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { CapacitorService } from '../../core/services/capacitor.service';
 import { TenantStateService } from '../../core/services/tenant-state.service';
+import { brandingSrc } from '../../core/services/uploads.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { DesignModeService } from '../../core/services/design-mode.service';
 import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
@@ -29,14 +31,15 @@ import { PushService } from '../../core/services/push.service';
 import { WebrtcService } from '../../core/services/webrtc.service';
 import { PatientProfileService } from '../../core/services/patient-profile.service';
 import { AppointmentBookingService } from '../../core/services/appointment-booking.service';
-import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, withCollectionFallback } from '../nav-items';
+import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback } from '../nav-items';
+import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
-import { LANDINGS } from '../../core/auth/landing.guard';
+import { pickLanding } from '../../core/auth/landing.guard';
 
 @Component({
   selector: 'pf-top-strip',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, FormsModule, NotificationBellComponent],
+  imports: [RouterLink, RouterLinkActive, FormsModule, NotificationBellComponent, PresenceAvatarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './top-strip.component.html',
   styleUrl: './top-strip.component.scss'
@@ -74,11 +77,14 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  already have a 1:1 thread with (those show under Recent). */
   readonly msgPeople = computed(() => {
     const q = this.msgQuery().trim().toLowerCase();
+    // By id, not display name: two colleagues can share a name ("Front
+    // Desk"), and a name match hid the second one from People.
+    const me = this.meId();
     const inThreads = new Set(this.chat.conversations()
       .filter(c => !c.isGroup)
-      .flatMap(c => c.participants?.map(p => p.displayName.toLowerCase()) ?? []));
+      .flatMap(c => c.participants?.map(p => p.userId).filter(id => id !== me) ?? []));
     return this.directory.others()
-      .filter(u => !inThreads.has(u.displayName.toLowerCase()))
+      .filter(u => !inThreads.has(u.id))
       .filter(u => !q || u.displayName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   });
 
@@ -134,6 +140,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Shared with the floating windows so both label a thread identically. */
   convoTitle(c: Conversation): string { return conversationTitle(c, this.meId()); }
   convoInitials(c: Conversation): string { return conversationInitials(c, this.meId()); }
+  /** 1:1 peer (AuthId) for the presence dot; null for groups. */
+  convoPeerId(c: Conversation): string | null { return conversationPeerId(c, this.meId()); }
+  /** Second label when two rows would read the same (context thread,
+   *  same-name colleague, group vs person). */
+  convoDisambiguator(c: Conversation): string | null {
+    return conversationDisambiguator(c, this.meId(), this.chat.conversations());
+  }
 
   /**
    * Open a conversation. Desktop/tablet in the new design get a floating
@@ -194,23 +207,26 @@ export class TopStripComponent implements OnInit, OnDestroy {
   readonly branches = computed(() => this.auth.user()?.branches ?? []);
   /** Whether to show the switcher at all (more than one branch available). */
   readonly canSwitchBranch = computed(() => this.branches().length > 1);
+  /** The route-guard context (same rule the guards + landing use). */
+  private routeCtx(): RouteAccessCtx {
+    return {
+      hasAny: p => this.auth.hasAnyPermission(p),
+      hasAnyEffective: p => this.auth.hasAnyEffectivePermission(p),
+      isEnabled: a => this.process.isEnabled(a),
+      isSuper: this.auth.permissions().includes('*'),
+    };
+  }
+  /** Shared nav rule (nav-items.navItemVisible): an item shows only when its
+   *  destination route's guard admits the user, plus its mode/module/action gates. */
   private readonly visible = (items: NavItem[]): NavItem[] => {
-    const cMode = this.labCfg.collectionMode();
-    const bMode = this.labCfg.billingMode();
-    return items.filter(i => {
-      if (i.permissions?.length && !this.auth.hasAnyPermission(i.permissions)) return false;
-      if (i.collectionModes && !i.collectionModes.includes(cMode)) return false;
-      if (i.billingModes && !i.billingModes.includes(bMode)) return false;
-      // Inventory work area only appears when the branch has it enabled.
-      if (i.requiresInventory && !this.labCfg.inventoryEnabled()) return false;
-      // Product-module entitlement: hide a whole work area the tenant's plan
-      // doesn't include (inventory / messages / home collection / reports).
-      if (i.module && !this.entitlements.moduleEnabled(i.module)) return false;
-      // Workflow source-of-truth: hide a nav item whose action the admin
-      // switched off in /admin/process (the screen itself is unchanged).
-      if (i.action && !this.process.isEnabled(i.action)) return false;
-      return true;
-    });
+    const ctx: NavVisibilityCtx = {
+      ...this.routeCtx(),
+      collectionMode: this.labCfg.collectionMode(),
+      billingMode: this.labCfg.billingMode(),
+      inventoryEnabled: this.labCfg.inventoryEnabled(),
+      moduleEnabled: m => this.entitlements.moduleEnabled(m),
+    };
+    return items.filter(i => navItemVisible(i, ctx));
   };
   private navCtx(): WorkflowNavCtx {
     return {
@@ -218,6 +234,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
       // Effective = the route guards' check (mode-aware collect_sample), so a
       // work area never shows to someone its screen would bounce.
       hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
+      hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
       isSuper: this.auth.permissions().includes('*'),
     };
   }
@@ -301,7 +318,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
     if (!u) return '';
     return u.roles?.length ? u.roles.join(' · ') : (u.tenantName ?? '');
   };
-  readonly tenantLogo = computed(() => this._tenant()?.logoUrl || null);
+  // The stored logo may be a private "/uploads/…" file: shown through the
+  // session (blob: URL) — a bare <img src> is refused by the API now.
+  private readonly injector = inject(Injector);
+  readonly tenantLogo = computed(() => brandingSrc(this.injector, this._tenant()?.logoUrl));
   readonly tenantName = computed(() => this._tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
 
   // Branding mode resolution. Default 'both' when unset so existing tenants
@@ -325,7 +345,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return m === 'name' || m === 'both';
   });
   readonly hasBrand = computed(() => {
-    const logoOk = this.showLogo() && !!this.tenantLogo();
+    const logoOk = this.showLogo() && !!this._tenant()?.logoUrl;
     const nameOk = this.showName() && !!this.brandingName();
     return logoOk || nameOk;
   });
@@ -509,13 +529,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   }
 
   pickLanding() {
-    const landingPages = LANDINGS;
-    for (const { perm, path } of landingPages) {
-      if (this.auth.hasPermission(perm)) {
-        return path;
-      }
-    }
-    return '/403';
+    return pickLanding({ ...this.routeCtx(), moduleEnabled: m => this.entitlements.moduleEnabled(m) });
   }
 
   @HostListener('document:click', ['$event'])

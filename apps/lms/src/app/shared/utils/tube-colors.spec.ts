@@ -90,3 +90,14 @@ describe('tubeHex', () => {
     expect(tubeHex('PLAIN')).toBe('#ef4444');
   });
 });
+
+describe('Microbiology containers', () => {
+  it('offers the Sterile container and the Blood culture bottle', () => {
+    expect(tubeColor('sterile')?.label).toBe('Sterile Container');
+    const bc = tubeColor('blood_culture');
+    expect(bc?.label).toBe('Blood culture bottle');
+    expect(bc?.short).toBe('BC bottle');
+    expect(TUBE_COLORS.map(t => t.key)).toContain('blood_culture');
+    expect(tubeHex('Blood_Culture')).toBe(bc?.hex);
+  });
+});

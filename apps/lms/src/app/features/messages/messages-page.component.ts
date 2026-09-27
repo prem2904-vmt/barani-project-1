@@ -7,6 +7,8 @@ import {
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
+import { UploadsService } from '../../core/services/uploads.service';
+import { isPrivateUploadPath } from '../../shared/utils/upload-fetch';
 import { AuthService } from '../../core/auth/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { SignalingService } from '../../core/services/signaling.service';
@@ -18,7 +20,7 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
-import { isPresenceKey, presenceLabel } from '../../shared/models/presence.model';
+import { presenceText as presenceDisplayText } from '../../shared/models/presence.model';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiError } from '../../shared/models/api-response.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
@@ -66,6 +68,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly moduleOff = computed(() => !this.entitlements.moduleEnabled('messages'));
   private readonly presenceSvc = inject(PresenceService);
   protected readonly api = inject(ApiService);
+  protected readonly uploads = inject(UploadsService);
   protected readonly toasts = inject(ToastService);
   private readonly chatNotify = inject(ChatNotifyService);
   protected readonly ringtone = inject(RingtoneService);
@@ -293,19 +296,22 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  otherwise the other user's custom Teams-style status (In surgery,
    *  On rounds, …) when known, falling back to online/away. */
   protected presenceFor(c: Conversation): string | null {
-    if (c.isGroup) return null;
-    const other = c.participants.find(p => p.userId !== this.me());
-    if (!other) return null;
-    const conn = this.signaling.userPresences().get(other.userId) ?? 'offline';
-    if (conn === 'offline' || conn === 'in-a-call') return conn;
-    return this.presenceSvc.statusFor(other.userId) ?? conn;
+    // One resolver for every avatar (PresenceService.displayStatus): not
+    // connected (away / offline) or on a call wins over a custom status — a
+    // disconnected user with "Available" used to show green for 2 minutes.
+    return this.presenceSvc.displayStatus(this.peerId(c));
+  }
+
+  /** The 1:1 peer's AuthId (presence dot); null for groups / notes. */
+  protected peerId(c: Conversation): string | null {
+    if (c.isGroup || c.contextType === 'self') return null;
+    return c.participants.find(p => p.userId !== this.me())?.userId ?? null;
   }
 
   /** Human label for a presence value — custom preset labels first,
    *  then the connection-presence vocabulary. */
   protected presenceText(p: string): string {
-    if (isPresenceKey(p)) return presenceLabel(p);
-    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : 'Offline';
+    return presenceDisplayText(p);
   }
 
   /** Subline beneath name — last message preview or "No messages yet". */
@@ -428,7 +434,15 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  /** Unregisters this page as the surface showing the active thread. */
+  private readonly unregisterViewer: () => void;
+
   constructor() {
+    // While mounted, the page is what shows the active thread: messages that
+    // land in it are read (only while the tab is visible) and don't alert.
+    // Leaving /messages unregisters — the thread no longer swallows
+    // notifications (RCA §3: the sticky activeConversationId did).
+    this.unregisterViewer = this.chat.registerViewer('reader', () => [this.chat.activeConversationId()]);
     // Auto-scroll to bottom whenever messages change or active thread switches —
     // EXCEPT when the change came from a prepend (load-older). In that case
     // onScroll captured the offset and will restore it manually.
@@ -531,6 +545,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unregisterViewer();
     this.stopRecording(false);
     this.discardVoiceDraft();
     if (typeof document !== 'undefined') {
@@ -580,7 +595,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       this.chat.connect().catch(() => undefined),
       this.signaling.connect().catch(() => undefined)
     ]);
-    const wanted = this.route.snapshot.queryParamMap.get('c');
+    // `?c=` (in-app links) and `?open=` (older native push payloads).
+    const wanted = this.route.snapshot.queryParamMap.get('c') ?? this.route.snapshot.queryParamMap.get('open');
     await Promise.all([
       this.chat.loadConversations().catch(() => undefined),
       this.signaling.getOnlineUsersWithStatus().catch(() => undefined),
@@ -924,14 +940,24 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
-  /** Resolve a /uploads/... path against the API base. Absolute URLs (rare)
-   *  pass through unchanged. */
+  /** Chat files are private uploads: images / voice notes render from a
+   *  blob: URL fetched with the session ('' until it lands — the signal read
+   *  re-renders the bubble). Absolute URLs (rare) pass through. */
   protected resolveAttachmentUrl(url: string | null | undefined): string {
-    if (!url) return '';
-    if (/^https?:\/\//i.test(url)) return url;
-    // Strip trailing /api or /api/ if env.apiUrl includes it; uploads live at root.
-    const base = (this.api as any).baseUrl ?? '';
-    return `${base}${url}`;
+    return this.uploads.src(url);
+  }
+
+  /** href for a file card: private files open via a signed URL on click
+   *  (never pre-fetched), anything else links directly. */
+  protected fileHref(url: string | null | undefined): string {
+    return isPrivateUploadPath(url) ? '#' : this.uploads.src(url);
+  }
+
+  /** Open an attachment in a new tab (signed URL for private uploads). */
+  protected openAttachment(ev: Event, url: string | null | undefined): void {
+    if (!isPrivateUploadPath(url)) return;   // plain link — let the anchor navigate
+    ev.preventDefault();
+    void this.uploads.open(url);
   }
 
   /** True for audio MIME types — drives voice-message bubble render. */

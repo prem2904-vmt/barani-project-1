@@ -162,16 +162,14 @@
                   <li [style.--i]="idx">
                     <button type="button" class="pf-mnd-row" (click)="openRow(c)"
                             [attr.aria-pressed]="chat.activeConversationId() === c.id"
-                            [attr.aria-label]="displayName(c) + (c.unreadCount > 0 ? ', ' + c.unreadCount + ' unread' : '')">
+                            [attr.aria-label]="displayName(c) + (presenceFor(c) ? ', ' + presenceText(presenceFor(c)!) : '') + (c.unreadCount > 0 ? ', ' + c.unreadCount + ' unread' : '')">
                       <span class="pf-mnd-av" [class.pf-mnd-av--group]="c.isGroup" aria-hidden="true">
                         @if (c.isGroup) {
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                         } @else {
                           {{ initials(c) }}
                         }
-                        @if (presenceFor(c); as p) {
-                          <span class="pf-mnd-presence" [attr.data-tone]="presenceTone(p)"></span>
-                        }
+                        <pf-presence-dot [userId]="peerId(c)" />
                       </span>
                       <span class="pf-mnd-row__main">
                         <span class="pf-mnd-row__top">
@@ -233,7 +231,7 @@
                     <li>
                       <button type="button" class="pf-mnd-row" (click)="openPerson(u)"
                               [attr.aria-label]="'Message ' + u.displayName">
-                        <span class="pf-mnd-av" aria-hidden="true">{{ nameInitials(u.displayName) }}</span>
+                        <span class="pf-mnd-av" aria-hidden="true">{{ nameInitials(u.displayName) }}<pf-presence-dot [userId]="u.id" /></span>
                         <span class="pf-mnd-row__main">
                           <span class="pf-mnd-row__name">{{ u.displayName }}</span>
                           <span class="pf-mnd-row__preview"><span class="pf-mnd-row__pv">{{ u.email }}</span></span>
@@ -254,7 +252,7 @@
                 }
                 @for (cl of callsList(); track cl.id) {
                   <li class="pf-mnd-callrow" [class.pf-mnd-callrow--missed]="isMissed(cl)">
-                    <span class="pf-mnd-av" aria-hidden="true">{{ nameInitials(cl.peer.displayName) }}</span>
+                    <span class="pf-mnd-av" aria-hidden="true">{{ nameInitials(cl.peer.displayName) }}<pf-presence-dot [userId]="cl.peer.userId" /></span>
                     <span class="pf-mnd-row__main">
                       <span class="pf-mnd-row__top">
                         <span class="pf-mnd-row__name">{{ cl.peer.displayName }}</span>
@@ -305,9 +303,7 @@
                 @if (conv.isGroup) {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 } @else { {{ initials(conv) }} }
-                @if (presenceFor(conv); as p) {
-                  <span class="pf-mnd-presence" [attr.data-tone]="presenceTone(p)"></span>
-                }
+                <pf-presence-dot [userId]="peerId(conv)" />
               </span>
               <span class="pf-mnd-thread__who">
                 <span class="pf-mnd-thread__name">{{ displayName(conv) }}</span>
@@ -496,7 +492,7 @@
                                 <span class="pf-mnd-voice__t nd-num">{{ fmtSecs(audioId() === m.id && audioPos() > 0 ? audioPos() : voiceSecs(m)) }}</span>
                               </div>
                             } @else {
-                              <a class="pf-mnd-file" [href]="resolveAttachmentUrl(m.attachmentUrl)" target="_blank" rel="noopener">
+                              <a class="pf-mnd-file" [href]="fileHref(m.attachmentUrl)" (click)="openAttachment($event, m.attachmentUrl)" target="_blank" rel="noopener">
                                 <span class="nd-card__icon" aria-hidden="true">
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
                                 </span>
@@ -725,7 +721,7 @@
                   @for (p of mentionCandidates(); track p.userId; let idx = $index) {
                     <button type="button" class="pf-mnd-pop__row" role="option" [attr.aria-selected]="idx === mentionActiveIdx()"
                             (mouseenter)="mentionActiveIdx.set(idx)" (click)="pickMention(p)">
-                      <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(p.displayName) }}</span>
+                      <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(p.displayName) }}<pf-presence-dot [userId]="p.userId" /></span>
                       <span class="pf-mnd-pop__meta">
                         <span class="pf-mnd-pop__n">{{ p.displayName }}</span>
                         <span class="pf-mnd-pop__s">{{ p.email }}</span>
@@ -829,7 +825,7 @@
               <span class="nd-row__check pf-mnd-check" aria-hidden="true">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
               </span>
-              <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(u.displayName) }}</span>
+              <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(u.displayName) }}<pf-presence-dot [userId]="u.id" /></span>
               <span class="pf-mnd-row__main">
                 <span class="pf-mnd-row__name">{{ u.displayName }}</span>
                 <span class="pf-mnd-row__preview"><span class="pf-mnd-row__pv">{{ u.email }}</span></span>
@@ -875,7 +871,7 @@
       <ul class="nd-card__body pf-mnd-modal__list" role="list">
         @for (p of conv.participants; track p.userId) {
           <li class="pf-mnd-member">
-            <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(p.displayName) }}</span>
+            <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(p.displayName) }}<pf-presence-dot [userId]="p.userId" /></span>
             <span class="pf-mnd-row__main">
               <span class="pf-mnd-row__name">
                 {{ p.displayName }}
@@ -926,7 +922,7 @@
         @for (u of addMemberCandidates(); track u.id) {
           <li>
             <button type="button" class="pf-mnd-row" [disabled]="addMemberBusy()" (click)="addMember(u.id)">
-              <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(u.displayName) }}</span>
+              <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(u.displayName) }}<pf-presence-dot [userId]="u.id" /></span>
               <span class="pf-mnd-row__main">
                 <span class="pf-mnd-row__name">{{ u.displayName }}</span>
                 <span class="pf-mnd-row__preview"><span class="pf-mnd-row__pv">{{ u.email }}</span></span>
@@ -966,7 +962,7 @@
         @for (c of forwardCandidates(); track c.id) {
           <li>
             <button type="button" class="pf-mnd-row" (click)="confirmForward(c)">
-              <span class="pf-mnd-av pf-mnd-av--sm" [class.pf-mnd-av--group]="c.isGroup" aria-hidden="true">{{ initials(c) }}</span>
+              <span class="pf-mnd-av pf-mnd-av--sm" [class.pf-mnd-av--group]="c.isGroup" aria-hidden="true">{{ initials(c) }}<pf-presence-dot [userId]="peerId(c)" /></span>
               <span class="pf-mnd-row__main">
                 <span class="pf-mnd-row__name">{{ displayName(c) }}</span>
                 <span class="pf-mnd-row__preview"><span class="pf-mnd-row__pv">@if (c.isGroup) {Group · {{ c.participants.length }}} @else {Direct chat}</span></span>

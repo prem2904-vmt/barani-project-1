@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { PlatformService } from '../../../core/services/platform.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ImageEditorComponent } from '../../../shared/components/image-editor/image-editor.component';
@@ -9,8 +10,9 @@ import { ImageEditorComponent } from '../../../shared/components/image-editor/im
  *  for the lab logo, NABL badge, and signature scans. POSTs the file to
  *  /api/uploads/image, then emits the returned URL via (urlChange).
  *
- *  Raster picks (PNG/JPG/WEBP) open the crop + resize editor first (OPS-14);
- *  SVG is vector and uploads untouched. */
+ *  Picks (PNG/JPG/WEBP) open the crop + resize editor first (OPS-14). SVG is
+ *  refused: it is active content (script), so the server no longer accepts it.
+ *  Uploaded assets are private — the thumbnail loads through the session. */
 @Component({
   selector: 'pf-image-upload',
   standalone: true,
@@ -30,7 +32,7 @@ import { ImageEditorComponent } from '../../../shared/components/image-editor/im
       </div>
       <div class="flex-1 min-w-0">
         <label class="pf-file-btn">
-          <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp"
+          <input type="file" accept="image/png,image/jpeg,image/webp"
                  (change)="onPick($event)" hidden />
           {{ uploading() ? 'Uploading…' : (url ? 'Replace image' : 'Upload image') }}
         </label>
@@ -38,7 +40,7 @@ import { ImageEditorComponent } from '../../../shared/components/image-editor/im
           <button type="button" class="pf-remove-link" (click)="clear()">Remove</button>
         }
         <p class="pf-image-hint">
-          PNG / JPG / SVG / WEBP · max 5 MB
+          PNG / JPG / WEBP · max 5 MB
         </p>
       </div>
     </div>
@@ -90,14 +92,12 @@ export class ImageUploadComponent {
   /** The raster file currently open in the crop/resize editor (OPS-14). */
   readonly editFile = signal<File | null>(null);
 
-  /** Prepend the API base URL when the stored value is a server-relative
-   *  path (i.e. starts with "/uploads/…"). Absolute http(s) URLs pass
-   *  through untouched. */
+  private readonly uploads = inject(UploadsService);
+
+  /** "/uploads/…" assets are private: a blob: URL fetched with the session
+   *  ('' until it lands). Absolute / data: URLs pass through. */
   resolvedSrc(): string {
-    const u = this.url ?? '';
-    if (!u) return '';
-    if (/^https?:\/\//i.test(u)) return u;
-    return `${this.platform.getApiUrl()}${u}`;
+    return this.uploads.src(this.url);
   }
 
   clear() { this.urlChange.emit(''); }
@@ -111,10 +111,9 @@ export class ImageUploadComponent {
       this.toasts.error('File too large — max 5 MB');
       return;
     }
-    // SVG is vector — it can't be canvas-cropped, so upload it untouched.
-    // Raster images open the crop/resize editor first (OPS-14).
+    // SVG is active content (can carry script) — refused server-side too.
     const isSvg = /svg/i.test(file.type) || /\.svg$/i.test(file.name);
-    if (isSvg) { void this.uploadFile(file, file.name); return; }
+    if (isSvg) { this.toasts.error('SVG isn\'t supported — export the image as PNG'); return; }
     this.editFile.set(file);
   }
 

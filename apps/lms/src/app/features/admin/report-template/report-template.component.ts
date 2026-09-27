@@ -268,7 +268,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                   <div class="pf-toggle-row">
                     <div>
                       <p class="font-semibold text-[13px]" style="color: var(--text-primary);">Pre-printed letterpad</p>
-                      <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">Print onto your own letterhead stationery — leaves the header &amp; footer blank on every page and prints only the results in between.</p>
+                      <p class="text-[11.5px] mt-0.5" style="color: var(--text-tertiary);">When printing, you’ll be asked whether to print on your letterhead paper (header &amp; footer left blank). Shared and downloaded reports always include the header &amp; footer.</p>
                     </div>
                     <button type="button" class="nd-toggle pf-rt-sw" role="switch" [attr.aria-checked]="!!(tpl().letterpadMode ?? false)"
                             aria-label="Pre-printed letterpad" (click)="patch({ letterpadMode: !(tpl().letterpadMode ?? false) })">

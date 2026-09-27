@@ -96,3 +96,99 @@ describe('WorkflowRendererComponent — new design', () => {
     expect(el.querySelector('.pf-di-err')).toBeNull();
   });
 });
+
+/** QA #2 (2026-09-27): registration field rules surface inline — on blur
+ *  (format only; empty stays quiet) and on submit (focus the first). */
+describe('WorkflowRendererComponent — registration field validation', () => {
+  beforeEach(() => TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] }));
+
+  const reg = (): WorkflowConfig => ({
+    id: 'c', name: 'patient_registration', title: 'Patient Registration', module: 'lms', screenName: 'patient_registration',
+    version: 1, status: 'published', globalConditions: [], actions: [],
+    steps: [
+      { id: 'a', name: 'basic_info', title: 'Contact', type: 'entry', isRequired: true, canSkip: false, isStandard: true,
+        fields: [F('p', 'phone', 'Phone', 'phone', true),
+                 F('d', 'date_of_birth', 'Date of birth', 'date'),
+                 F('ab', 'abha_id', 'ABHA ID', 'text'),
+                 F('aa', 'aadhaar_last4', 'Aadhaar (last 4)', 'text'),
+                 F('x', 'additional_contact', 'Additional contact', 'number', false, { storageKey: 'metadata.additional_contact' }),
+                 F('e', 'email', 'Email', 'email')] },
+    ],
+  } as unknown as WorkflowConfig);
+
+  function create() {
+    const f = TestBed.createComponent(WorkflowRendererComponent);
+    f.componentRef.setInput('config', reg());
+    f.componentRef.setInput('singlePage', true);
+    f.componentRef.setInput('nd', true);
+    f.componentRef.setInput('hideActions', true);
+    f.detectChanges();
+    return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance };
+  }
+  const step = () => reg().steps[0];
+  const errOf = (el: HTMLElement, name: string) => el.querySelector(`[data-field="${name}"] .pf-di-err`)?.textContent ?? null;
+
+  it('blur on a short ABHA / Aadhaar-last-4 / bad email shows the error under that field; empty stays quiet', () => {
+    const { c, f, el } = create();
+    c.setValue(step(), 'abha_id', '1234567');
+    c.setValue(step(), 'aadhaar_last4', '12');
+    c.setValue(step(), 'email', 'ravi@');
+    f.detectChanges();
+    for (const name of ['abha_id', 'aadhaar_last4', 'email', 'additional_contact']) {
+      el.querySelector<HTMLInputElement>(`[data-field="${name}"] input`)!
+        .dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    }
+    f.detectChanges();
+    expect(errOf(el, 'abha_id')).toContain('14 digits (7 entered)');
+    expect(errOf(el, 'aadhaar_last4')).toContain('last 4');
+    expect(errOf(el, 'email')).toContain('valid email');
+    expect(errOf(el, 'additional_contact')).toBeNull();     // empty optional → no error
+  });
+
+  it('submit blocks on each invalid field (incl. the additional contact) and names the first', () => {
+    const { c, f, el } = create();
+    const seen: string[] = [];
+    let done = false;
+    c.invalid.subscribe(e => seen.push(e.fieldName));
+    c.workflowComplete.subscribe(() => (done = true));
+    c.setValue(step(), 'phone', '+919876543210');
+    c.setValue(step(), 'abha_id', '12345678901234');
+    c.setValue(step(), 'additional_contact', '+91123');
+    c.setValue(step(), 'email', 'x@y');
+    c.finish();
+    f.detectChanges();
+    expect(done).toBe(false);
+    expect(seen).toEqual(['additional_contact']);
+    expect(errOf(el, 'additional_contact')).toMatch(/10-digit/);
+    expect(errOf(el, 'email')).toMatch(/valid email/);
+    expect(errOf(el, 'abha_id')).toBeNull();
+  });
+
+  it('an age the DOB box rejected (value null) still blocks submit on an OPTIONAL DOB', () => {
+    const { c, f, el } = create();
+    let done = false;
+    c.workflowComplete.subscribe(() => (done = true));
+    c.setValue(step(), 'phone', '+919876543210');
+    c.setLocalError(step(), 'date_of_birth', 'Age must be 0–150 years');
+    c.finish();
+    f.detectChanges();
+    expect(done).toBe(false);
+    expect(errOf(el, 'date_of_birth')).toContain('0–150');
+    c.setLocalError(step(), 'date_of_birth', null);
+    c.finish();
+    expect(done).toBe(true);
+  });
+
+  it('valid values submit', () => {
+    const { c } = create();
+    let done = false;
+    c.workflowComplete.subscribe(() => (done = true));
+    c.setValue(step(), 'phone', '+919876543210');
+    c.setValue(step(), 'abha_id', '12345678901234');
+    c.setValue(step(), 'aadhaar_last4', '1234');
+    c.setValue(step(), 'additional_contact', '+918765432109');
+    c.setValue(step(), 'email', 'ravi@example.com');
+    c.finish();
+    expect(done).toBe(true);
+  });
+});

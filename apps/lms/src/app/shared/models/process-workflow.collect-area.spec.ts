@@ -1,6 +1,7 @@
 import {
   ACTION_POLICY, COLLECT_AREA_ID, COLLECT_AREA_DEFAULT_ROLES, COLLECT_HOME_ACTION_ID,
-  ProcessWorkflowConfig, SYSTEM_AREA_SCREEN, areasWithCollection, isLocked, isLockedItem, isRepeatable,
+  COLLECTION_SLOTS, ProcessWorkflowConfig, SYSTEM_AREA_SCREEN, areasWithCollection, collectionLocations,
+  collectsAtBillingCounter, isAllowedPlacement, isFixedSlotAction, isLocked, isLockedItem,
   isMandatoryItem, normalizeWorkflow, workAreaRoute,
 } from './process-workflow.model';
 
@@ -31,18 +32,21 @@ const withCC = (ccEnabled = true): ProcessWorkflowConfig => ({
 });
 
 describe('Collect work area — policy', () => {
-  it('sample_collection is locked to the Collect area, home copy always on, still repeatable', () => {
+  it('sample_collection is a fixed-slot action: home Collect (always on) + Frontdesk + Lab', () => {
     expect(ACTION_POLICY['sample_collection']).toEqual({ home: 'collect', locked: true, homeMandatory: true });
     expect(isLocked('sample_collection')).toBe(true);
-    expect(isRepeatable('sample_collection')).toBe(true);
+    expect(isFixedSlotAction('sample_collection')).toBe(true);
+    expect(isFixedSlotAction('billing')).toBe(false);
+    expect(COLLECTION_SLOTS).toEqual(['collect', 'frontdesk', 'lab']);
   });
 
-  it('only the home copy is pinned; copies elsewhere are free', () => {
+  it('every copy is pinned (no drag, no removal) — the three slots are the only placements', () => {
     expect(isLockedItem('sample_collection', 'collect')).toBe(true);
-    expect(isLockedItem('sample_collection', 'frontdesk')).toBe(false);
-    expect(isLockedItem('sample_collection', 'lab')).toBe(false);
-    expect(isLockedItem('sample_collection', 'custom-1')).toBe(false);
-    // Non-repeatable locked actions stay pinned wherever they sit.
+    expect(isLockedItem('sample_collection', 'frontdesk')).toBe(true);
+    expect(isLockedItem('sample_collection', 'lab')).toBe(true);
+    for (const a of ['collect', 'frontdesk', 'lab']) expect(isAllowedPlacement('sample_collection', a)).toBe(true);
+    for (const a of ['billdesk', 'validate', 'results', 'custom-1', null]) expect(isAllowedPlacement('sample_collection', a)).toBe(false);
+    expect(isAllowedPlacement('billing', 'billdesk')).toBe(true);
     expect(isLockedItem('result_entry', 'lab')).toBe(true);
     expect(isLockedItem('billing', 'frontdesk')).toBe(false);
   });
@@ -69,7 +73,9 @@ describe('normalizeWorkflow', () => {
     // Existing copies in Frontdesk + Lab are untouched.
     expect(out.actions.filter(a => a.type === 'sample_collection').map(a => a.categoryId).sort())
       .toEqual(['collect', 'frontdesk', 'lab']);
-    expect(areasWithCollection(out).sort()).toEqual(['collect', 'frontdesk', 'lab']);
+    expect(collectionLocations(out).sort()).toEqual(['collect', 'frontdesk', 'lab']);
+    // The band Collect goes to the Frontdesk / Lab slots only (Collect IS the page).
+    expect(areasWithCollection(out).sort()).toEqual(['frontdesk', 'lab']);
   });
 
   it('is idempotent (second pass returns the same object)', () => {
@@ -87,7 +93,9 @@ describe('normalizeWorkflow', () => {
     expect(collect).toEqual(expect.objectContaining({ name: 'Collection Center', icon: 'droplet', order: 1, roles: ['Sample Collector'] }));
     expect(out.categories.some(c => c.id === 'cc-123')).toBe(false);
     expect(out.actions.find(a => a.id === 'cc1')!.categoryId).toBe('collect');
-    expect(out.actions.filter(a => a.type === 'sample_collection').length).toBe(1);
+    // Home copy + the fixed Frontdesk / Lab copies (added OFF).
+    expect(out.actions.filter(a => a.type === 'sample_collection').map(a => [a.categoryId, a.enabled]).sort())
+      .toEqual([['collect', true], ['frontdesk', false], ['lab', false]]);
     expect(normalizeWorkflow(out)).toBe(out);
   });
 
@@ -104,6 +112,8 @@ describe('normalizeWorkflow', () => {
     const out = normalizeWorkflow(cfg);
     expect(out.categories.length).toBe(2);
     expect(out.actions.filter(a => a.categoryId === 'collect').map(a => a.type)).toEqual(['sample_collection']);
+    expect(out.actions.find(a => a.type === 'sample_collection' && a.categoryId === 'frontdesk'))
+      .toMatchObject({ id: 'collect-frontdesk', enabled: false });
   });
 
   it('never adopts a system area or a mixed menu', () => {
@@ -114,6 +124,8 @@ describe('normalizeWorkflow', () => {
     };
     const out = normalizeWorkflow(cfg);
     expect(out.categories.map(c => c.id).sort()).toEqual(['bill', 'collect', 'frontdesk', 'lab']);
+    // …and the billing counter's copy is dropped (not a slot).
+    expect(out.actions.some(a => a.categoryId === 'bill' && a.type === 'sample_collection')).toBe(false);
   });
 
   it('leaves missing / empty configs alone (no workflow ⇒ fallback nav)', () => {
@@ -159,5 +171,66 @@ describe('Collect home copy is always on (owner: only roles change)', () => {
     };
     const out = normalizeWorkflow(cfg);
     expect(out.actions.find(a => a.id === 'c')).toMatchObject({ categoryId: 'collect', enabled: true });
+  });
+});
+
+describe('Fixed slots — normalise (owner\'s final rule, 2026-09-27)', () => {
+  const base = (): ProcessWorkflowConfig => ({
+    categories: [cat('frontdesk', 'Frontdesk', 0), cat('collect', 'Collect', 1), cat('billdesk', 'Billing counter', 2),
+                 cat('lab', 'Lab', 3), cat('validate', 'Validate', 4), cat('x', 'Custom', 5)],
+    actions: [
+      act('a1', 'patient_registration', 'frontdesk'), act('h', 'sample_collection', 'collect'),
+      act('k1', 'billing', 'billdesk'), act('k2', 'sample_collection', 'billdesk', true, 1),
+      act('v1', 'validate', 'validate'), act('v2', 'sample_collection', 'validate', true, 1),
+      act('x1', 'sample_collection', 'x'), act('b1', 'result_entry', 'lab'),
+    ],
+  });
+
+  it('drops stray copies (billing counter, Validate, custom) and adds missing Frontdesk / Lab copies DISABLED', () => {
+    const out = normalizeWorkflow(base());
+    const sc = out.actions.filter(a => a.type === 'sample_collection');
+    expect(sc.map(a => [a.categoryId, a.enabled]).sort()).toEqual([['collect', true], ['frontdesk', false], ['lab', false]]);
+    expect(sc.find(a => a.categoryId === 'lab')!.id).toBe('collect-lab');
+    // Other actions survive untouched.
+    expect(out.actions.find(a => a.id === 'k1')).toBeTruthy();
+    expect(normalizeWorkflow(out)).toBe(out);
+  });
+
+  it('keeps an existing Frontdesk / Lab copy\'s enabled state', () => {
+    const cfg = base();
+    cfg.actions.push(act('f', 'sample_collection', 'frontdesk', true, 1), act('l', 'sample_collection', 'lab', false, 1));
+    const out = normalizeWorkflow(cfg);
+    expect(out.actions.find(a => a.id === 'f')!.enabled).toBe(true);
+    expect(out.actions.find(a => a.id === 'l')!.enabled).toBe(false);
+  });
+
+  it('merges duplicate copies in one slot (on if any was on)', () => {
+    const cfg = base();
+    cfg.actions.push(act('f1', 'sample_collection', 'frontdesk', false, 1), act('f2', 'sample_collection', 'frontdesk', true, 2));
+    const out = normalizeWorkflow(cfg);
+    const fd = out.actions.filter(a => a.type === 'sample_collection' && a.categoryId === 'frontdesk');
+    expect(fd).toEqual([expect.objectContaining({ id: 'f1', enabled: true })]);
+  });
+
+  it('skips a slot whose area the workflow lacks', () => {
+    const cfg: ProcessWorkflowConfig = {
+      categories: [cat('fd-custom', 'Frontdesk', 0), cat('validate', 'Validate', 1)],
+      actions: [act('a1', 'patient_registration', 'fd-custom'), act('s', 'sample_collection', 'fd-custom')],
+    };
+    const out = normalizeWorkflow(cfg);
+    expect(out.actions.filter(a => a.type === 'sample_collection').map(a => a.categoryId)).toEqual(['collect']);
+  });
+
+  it('the billing-counter collect helper is always false', () => {
+    const raw = base();   // even un-normalised, with a copy next to billing
+    expect(collectsAtBillingCounter(raw)).toBe(false);
+    expect(collectsAtBillingCounter(normalizeWorkflow(raw))).toBe(false);
+    expect(collectsAtBillingCounter(null)).toBe(false);
+  });
+
+  it('placement helpers ignore copies outside the slots on an un-normalised config', () => {
+    const raw = base();
+    expect(collectionLocations(raw)).toEqual(['collect']);
+    expect(areasWithCollection(raw)).toEqual([]);
   });
 });

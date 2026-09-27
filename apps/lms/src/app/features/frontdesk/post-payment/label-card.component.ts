@@ -17,6 +17,7 @@ import { OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { tubeColor } from '../../../shared/utils/tube-colors';
+import { tubeChosenSpecimen } from '../../../shared/utils/micro-specimen';
 
 export interface TubeSpec {
   label: string;
@@ -51,7 +52,7 @@ const DEFAULT_TUBE: TubeSpec = { label: 'Grey', color: 'grey', volume: '5 mL' };
  *  chip is a visual aid, and a missing swatch beats a mislabelled tube. */
 const CHIP_BY_KEY: Readonly<Record<string, TubeSpec['color']>> = {
   edta: 'lavender', sst: 'yellow', urine: 'yellow', plain: 'red',
-  heparin: 'green', sterile: 'container', fluoride: 'grey',
+  heparin: 'green', sterile: 'container', blood_culture: 'container', fluoride: 'grey',
   citrate: 'grey', esr: 'grey', trace: 'grey', multiple: 'grey',
 };
 
@@ -80,6 +81,26 @@ export function tubeSpec(s: OrderSample): TubeSpec {
     };
   }
   return deptTube(s);
+}
+
+/** Blood vacutainers — one per colour, never one per specimen. */
+const BLOOD_TUBE_KEYS = new Set(['sst', 'edta', 'fluoride', 'citrate', 'plain', 'heparin', 'esr', 'red', 'lavender', 'grey', 'blue', 'gold', 'green', 'black']);
+
+/** The specimen CHOSEN at the desk that this tube's label names — only for
+ *  pots/bottles (tubes group by it server-side); a blood vacutainer is one
+ *  tube per colour whatever the line's specimen, so it names none. */
+export function labelSpecimen(s: OrderSample): string | null {
+  const key = (s.tubeColor ?? '').trim().toLowerCase();
+  if (key && BLOOD_TUBE_KEYS.has(key)) return null;
+  return tubeChosenSpecimen(s);
+}
+
+/** The label's tube line: "Sterile · Urine" when a specimen was chosen,
+ *  else "{tube} · {volume}" as before. */
+export function labelTubeLine(s: OrderSample): string {
+  const spec = tubeSpec(s);
+  const chosen = labelSpecimen(s);
+  return chosen ? `${spec.label} · ${chosen}` : `${spec.label} · ${spec.volume}`;
 }
 
 function deptTube(s: OrderSample): TubeSpec {
@@ -115,7 +136,7 @@ function deptTube(s: OrderSample): TubeSpec {
         </span>
         <span class="pf-lc__tube-chip" [attr.data-color]="spec.color">
           <span class="pf-lc__tube-dot"></span>
-          {{ spec.label }} · {{ spec.volume }}
+          {{ tubeLine }}
         </span>
       </div>
 
@@ -133,6 +154,10 @@ function deptTube(s: OrderSample): TubeSpec {
         </p>
         <p class="pf-lc__demo">MRN {{ mrnStr }}</p>
         <p class="pf-lc__sid">{{ barcode }}</p>
+        @if (specimen) {
+          <!-- The specimen chosen at the desk (pots / bottles only). -->
+          <p class="pf-lc__specimen">{{ specimen }}</p>
+        }
         <div class="pf-lc__codes">
           <div class="pf-lc__bar-wrap" [class.pf-lc__hidden]="!showBarcode">
             <svg #barSvg class="pf-lc__bar" role="img" [attr.aria-label]="'Barcode ' + barcode"></svg>
@@ -339,6 +364,13 @@ function deptTube(s: OrderSample): TubeSpec {
       font-family: 'JetBrains Mono', ui-monospace, monospace;
       color: #0f172a;
       letter-spacing: 0.04em;
+    }
+    .pf-lc__specimen {
+      margin: 0;
+      font-size: 10px;
+      font-weight: 700;
+      color: #0f172a;
+      overflow-wrap: anywhere;
     }
     /* Codes row: barcode and/or QR, centered. Hidden ones collapse. */
     .pf-lc__codes {
@@ -557,6 +589,8 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   constructor() { this.labelCfg.ensureLoaded(); }
 
   get spec(): TubeSpec { return tubeSpec(this.sample); }
+  get specimen(): string | null { return labelSpecimen(this.sample); }
+  get tubeLine(): string { return labelTubeLine(this.sample); }
   get num(): string { return String(this.index + 1).padStart(2, '0'); }
   get deptName(): string { return (this.sample.department?.name ?? 'Sample').toUpperCase(); }
   get deptCode(): string { return (this.sample.department?.code ?? '').toUpperCase(); }

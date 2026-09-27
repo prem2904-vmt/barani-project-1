@@ -4,11 +4,11 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
-import { RingtoneService } from '../../../core/services/ringtone.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { SrcObjectDirective } from '../../directives/src-object.directive';
+import { PresenceAvatarComponent, PresenceDotComponent } from '../presence-avatar/presence-avatar.component';
 
 interface DirectoryUser {
   id: string;          // Supabase sub (== AuthId)
@@ -18,14 +18,18 @@ interface DirectoryUser {
 }
 
 /**
- * Global call overlay — mounted once in the shell. Renders four surfaces:
+ * Global call overlay — mounted once in the shell. New design (ND-PATTERN,
+ * owner 2026-09-27): neutral cards + neutral initials avatars, a violet dot
+ * on a neutral status chip, violet only for Answer / Send, solid danger red
+ * only for Decline / Cancel / End (no glows), Noto tabular numbers.
  *
- * - Incoming-call ringer: centered glass card (full sheet on phone) with
- *   caller name, pulsing avatar rings, Accept / Decline.
- * - Outgoing ringer: same card family with a single Cancel action.
- * - Active-call screen: glass card with timer, connection-type dot,
- *   participants, in-call chat and circular controls. Minimisable.
- * - Active-call mini-pill: floating bottom-right capsule.
+ * - Incoming: caller name + avatar, "Incoming audio call", Decline · Answer.
+ * - Outgoing: the CALLEE's name + initials (was "Calling" / "C"), "Ringing…"
+ *   with a gentle pulse ring, Cancel.
+ * - In call: status chip "On call · 00:27", Direct/Group, participant tiles
+ *   (full name, quiet "You", neutral muted chip), 56px round controls
+ *   (mute = filled neutral dark chip when ON), in-call chat, add participant.
+ * - Minimised pill: bottom-right capsule. Phones: full-screen sheets.
  *
  * The overlay reads everything from `WebrtcService` signals — no @Input
  * plumbing needed. Audio playback uses a hidden `<audio>` per remote peer.
@@ -33,285 +37,281 @@ interface DirectoryUser {
 @Component({
   selector: 'pf-call-overlay',
   standalone: true,
-  imports: [SrcObjectDirective, DatePipe],
+  imports: [SrcObjectDirective, DatePipe, PresenceAvatarComponent, PresenceDotComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Hidden audio sinks for each remote peer's stream. The SrcObjectDirective
          (selector "audio[srcObject]") intercepts the [srcObject] binding in
          the directive lifecycle — after the element is in the DOM — and
-         calls .play() explicitly. This is the reliable cross-browser path;
-         Angular's raw [srcObject] property binding worked on Chrome but
-         silently no-op'd on Safari, and the earlier querySelectorAll-based
-         effect raced Angular's render and ran before the element existed. -->
+         calls .play() explicitly (Safari ignored a raw property binding). -->
     @for (entry of audioEntries(); track entry.userId) {
       <audio [srcObject]="entry.stream" autoplay playsinline></audio>
     }
 
+    <!-- ── INCOMING ───────────────────────────────────────────────────── -->
     @if (webrtc.incomingCall(); as ic) {
       <div class="pf-call-ring pf-modal-centered" role="dialog" aria-modal="true" aria-label="Incoming call">
         <div class="pf-call-ring__backdrop"></div>
-        <div class="pf-call-ring__card pf-modal-centered" [class.pf-call-ring__card--group]="ic.isGroup">
-          <p class="pf-call-ring__eyebrow">
-            @if (ic.isGroup) { Incoming group call }
-            @else { Incoming call }
-          </p>
+        <div class="pf-call-ring__card pf-modal-centered" data-testid="call-incoming">
+          <p class="pf-call-ring__eyebrow">{{ ic.isGroup ? 'Group call' : 'Audio call' }}</p>
           <div class="pf-call-ring__avatar-wrap">
-            <span class="pf-call-ring__glow" aria-hidden="true"></span>
-            <span class="pf-call-ring__pulse-ring" aria-hidden="true"></span>
-            <span class="pf-call-ring__pulse-ring pf-call-ring__pulse-ring--delay" aria-hidden="true"></span>
-            <div class="pf-call-ring__avatar">
+            <span class="pf-call-ring__pulse" aria-hidden="true"></span>
+            <span class="pf-call-ring__pulse pf-call-ring__pulse--late" aria-hidden="true"></span>
+            <span class="pf-call-avatar pf-call-avatar--xl" aria-hidden="true">
               {{ initials(ic.isGroup ? (ic.conversationName ?? 'Group') : ic.callerName) }}
-            </div>
+            </span>
+            @if (!ic.isGroup) { <pf-presence-dot [userId]="ic.callerId" /> }
           </div>
           <h2 class="pf-call-ring__name">{{ ic.isGroup ? (ic.conversationName ?? 'Group call') : ic.callerName }}</h2>
-          @if (ic.isGroup) {
-            <p class="pf-call-ring__source">{{ ic.callerName }} is calling…</p>
-          } @else if (ic.source) {
-            <p class="pf-call-ring__source">{{ sourceLabel(ic.source) }}</p>
-          } @else {
-            <p class="pf-call-ring__source">Incoming call…</p>
-          }
+          <p class="pf-call-ring__sub">
+            @if (ic.isGroup) { {{ ic.callerName }} is calling }
+            @else if (ic.source) { {{ sourceLabel(ic.source) }} }
+            @else { Incoming audio call }
+          </p>
           <div class="pf-call-ring__actions">
-            <div class="pf-call-ring__action">
-              <button type="button" class="pf-call-ring__btn pf-call-ring__btn--reject press"
-                      (click)="reject()" aria-label="Decline">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"
-                        transform="rotate(135 12 12)"/>
+            <div class="pf-call-ctl">
+              <button type="button" class="pf-call-round pf-call-round--lg pf-call-round--danger"
+                      (click)="reject()" aria-label="Decline" data-testid="call-decline">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path [attr.d]="PHONE" transform="rotate(135 12 12)"/>
                 </svg>
               </button>
-              <span class="pf-call-ring__action-lbl">Decline</span>
+              <span class="pf-call-ctl__lbl">Decline</span>
             </div>
-            <div class="pf-call-ring__action">
-              <button type="button" class="pf-call-ring__btn pf-call-ring__btn--accept press"
-                      (click)="accept()" aria-label="Accept">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"/>
+            <div class="pf-call-ctl">
+              <button type="button" class="pf-call-round pf-call-round--lg pf-call-round--primary"
+                      (click)="accept()" aria-label="Answer" data-testid="call-answer">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path [attr.d]="PHONE"/>
                 </svg>
               </button>
-              <span class="pf-call-ring__action-lbl">Accept</span>
+              <span class="pf-call-ctl__lbl">Answer</span>
             </div>
           </div>
         </div>
       </div>
     }
 
-    <!-- Full-screen call view (toggleable with the minimise button on the
-         pill). Same controls as the pill but with caller avatars + much
-         more breathing room. Click the minimise icon to return to the
-         floating pill; click End to leave. -->
+    <!-- ── OUTGOING ───────────────────────────────────────────────────── -->
+    @if (webrtc.status() === 'outgoing' && !webrtc.incomingCall()) {
+      <div class="pf-call-ring pf-call-ring--outgoing pf-modal-centered" role="dialog" aria-modal="true"
+           [attr.aria-label]="'Calling ' + outgoingName()">
+        <div class="pf-call-ring__backdrop"></div>
+        <div class="pf-call-ring__card pf-modal-centered" data-testid="call-outgoing">
+          <p class="pf-call-ring__eyebrow">{{ webrtc.outgoingPeer()?.isGroup ? 'Group call' : 'Audio call' }}</p>
+          <div class="pf-call-ring__avatar-wrap">
+            <span class="pf-call-ring__pulse" aria-hidden="true"></span>
+            <span class="pf-call-ring__pulse pf-call-ring__pulse--late" aria-hidden="true"></span>
+            <span class="pf-call-avatar pf-call-avatar--xl" aria-hidden="true">{{ initials(outgoingName()) }}</span>
+            @if (webrtc.outgoingPeer(); as op) { @if (!op.isGroup) { <pf-presence-dot [userId]="op.id" /> } }
+          </div>
+          <h2 class="pf-call-ring__name" data-testid="call-outgoing-name">{{ outgoingName() }}</h2>
+          <p class="pf-call-ring__sub" aria-live="polite">Ringing…</p>
+          <div class="pf-call-ring__actions">
+            <div class="pf-call-ctl">
+              <button type="button" class="pf-call-round pf-call-round--lg pf-call-round--danger"
+                      (click)="cancelOutgoing()" aria-label="Cancel call" data-testid="call-cancel">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path [attr.d]="PHONE" transform="rotate(135 12 12)"/>
+                </svg>
+              </button>
+              <span class="pf-call-ctl__lbl">Cancel</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ── IN CALL (expanded) ─────────────────────────────────────────── -->
     @if (showInCallPanel() && callExpanded()) {
       <div class="pf-call-screen pf-modal-centered" role="dialog" aria-modal="true" aria-label="Active call">
         <div class="pf-call-screen__backdrop"></div>
-        <div class="pf-call-screen__card pf-modal-centered" [class.pf-call-screen__card--with-chat]="chatPanelOpen()">
+        <div class="pf-call-screen__card pf-modal-centered" data-testid="call-screen"
+             [class.pf-call-screen__card--with-chat]="chatPanelOpen()">
           <header class="pf-call-screen__hdr">
-            <button type="button" class="pf-call-screen__icon-btn"
-                    (click)="minimise()" aria-label="Minimise" title="Minimise">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
+            <button type="button" class="pf-call-icon" (click)="minimise()" aria-label="Minimise call" title="Minimise">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div class="pf-call-screen__hdr-info">
-              <span class="pf-call-screen__hdr-status"
-                    [class.pf-call-screen__hdr-status--live]="webrtc.status() === 'active'"
-                    [class.pf-call-screen__hdr-status--pulse]="webrtc.status() !== 'active'">
-                <span class="pf-call-screen__live-dot"></span>
-                {{ webrtc.status() === 'active' ? 'On call' : 'Connecting…' }}
-              </span>
-              <span class="pf-call-screen__hdr-meta">
-                <span class="pf-call-screen__time">{{ duration() }}</span>
+              <span class="pf-call-chip" data-testid="call-status">
+                <span class="pf-call-chip__dot" [class.pf-call-chip__dot--pulse]="webrtc.status() !== 'active'" aria-hidden="true"></span>
                 @if (webrtc.status() === 'active') {
-                  <span class="pf-call-screen__conn"
-                        [class.pf-call-screen__conn--relay]="webrtc.usingTurnRelay()"
-                        [title]="webrtc.usingTurnRelay()
-                          ? 'Relayed via TURN server'
-                          : 'Direct peer-to-peer connection'">
-                    <span class="pf-call-screen__conn-dot" aria-hidden="true"></span>
-                    {{ webrtc.usingTurnRelay() ? 'Relay' : 'Direct' }}
-                  </span>
-                }
-                @if (showRemaining()) {
-                  <span class="pf-call-screen__remaining" [class.pf-call-screen__remaining--urgent]="remainingUrgent()"
-                        title="Call auto-ends at this point">
-                    {{ remainingLabel() }}
-                  </span>
-                }
+                  On call · <span class="pf-call-num" data-testid="call-timer">{{ duration() }}</span>
+                } @else { Connecting… }
               </span>
+              <span class="pf-call-chip pf-call-chip--quiet">{{ isGroupCall() ? 'Group' : 'Direct' }}</span>
+              @if (webrtc.status() === 'active' && webrtc.usingTurnRelay()) {
+                <span class="pf-call-chip pf-call-chip--quiet" title="Relayed via TURN server">Relay</span>
+              }
+              @if (showRemaining()) {
+                <span class="pf-call-chip pf-call-chip--quiet pf-call-num" [class.pf-call-chip--urgent]="remainingUrgent()"
+                      title="Call auto-ends at this point">{{ remainingLabel() }}</span>
+              }
             </div>
-            <button type="button" class="pf-call-screen__icon-btn"
-                    [class.pf-call-screen__icon-btn--active]="chatPanelOpen()"
-                    (click)="toggleChatPanel()" aria-label="In-call chat" title="In-call chat">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button type="button" class="pf-call-icon" (click)="toggleChatPanel()"
+                    [attr.aria-pressed]="chatPanelOpen()" aria-label="In-call chat" title="In-call chat">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            </button>
-            <button type="button" class="pf-call-screen__icon-btn"
-                    (click)="leave()" aria-label="End call" title="End call">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
             </button>
           </header>
 
           @if (webrtc.callError(); as err) {
             <div class="pf-call-screen__error" role="alert">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
               <span>{{ err }}</span>
             </div>
           }
 
-          <div class="pf-call-screen__participants" [attr.data-count]="participants().length">
-            @for (p of participants(); track p.id) {
-              <div class="pf-call-screen__pcard"
-                   [class.pf-call-screen__pcard--mine]="p.isMe"
-                   [class.pf-call-screen__pcard--muted]="p.muted">
-                <div class="pf-call-screen__avatar-wrap">
-                  <span class="pf-call-screen__avatar-ring" aria-hidden="true"></span>
-                  <div class="pf-call-screen__avatar">{{ initials(p.name) }}</div>
-                  @if (p.muted) {
-                    <span class="pf-call-screen__mute-badge" title="Muted">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                           stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="1" y1="1" x2="23" y2="23"/>
-                        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
-                        <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
-                      </svg>
-                    </span>
+          <div class="pf-call-screen__body">
+            <div class="pf-call-screen__participants" [attr.data-count]="participants().length">
+              @for (p of participants(); track p.id) {
+                <div class="pf-call-tile" data-testid="call-tile">
+                  <pf-presence-avatar size="lg" [name]="p.name" [userId]="p.id" />
+                  <p class="pf-call-tile__name">{{ p.name }}</p>
+                  <p class="pf-call-tile__meta">
+                    @if (p.isMe) { <span class="pf-call-tile__you">You</span> }
+                    @if (p.muted) {
+                      <span class="pf-call-chip pf-call-chip--quiet pf-call-chip--sm" data-testid="call-muted-chip">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <line x1="1" y1="1" x2="23" y2="23"/>
+                          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                          <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                        </svg>
+                        Muted
+                      </span>
+                    } @else if (!p.isMe) {
+                      <span class="pf-call-tile__quiet">Connected</span>
+                    }
+                  </p>
+                </div>
+              }
+            </div>
+
+            @if (chatPanelOpen()) {
+              <aside class="pf-call-chat" aria-label="In-call chat">
+                <header class="pf-call-chat__hdr">
+                  <span class="pf-call-chat__title">Chat</span>
+                  <button type="button" class="pf-call-icon pf-call-icon--sm" (click)="toggleChatPanel()" aria-label="Close chat">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </header>
+                <div class="pf-call-chat__scroller">
+                  @if (chat.activeMessages().length === 0) {
+                    <p class="pf-call-chat__empty">No messages yet — say something during the call.</p>
+                  }
+                  @for (m of chat.activeMessages(); track m.id) {
+                    <div class="pf-call-chat__row" [class.pf-call-chat__row--mine]="m.fromUserId === meAuthId()">
+                      <div class="pf-call-chat__bubble" [class.pf-call-chat__bubble--mine]="m.fromUserId === meAuthId()">
+                        <div class="pf-call-chat__body">{{ m.body }}</div>
+                        <div class="pf-call-chat__time pf-call-num">{{ m.sentAt | date:'shortTime' }}</div>
+                      </div>
+                    </div>
                   }
                 </div>
-                <p class="pf-call-screen__pname">{{ p.name }}</p>
-                <p class="pf-call-screen__pmeta">
-                  @if (p.isMe) { You }
-                  @else if (p.muted) { Muted }
-                  @else { Connected }
-                </p>
-              </div>
+                <div class="pf-call-chat__composer">
+                  <input type="text" class="pf-call-chat__input" placeholder="Type a message" aria-label="Message"
+                         [value]="chatDraft()" (input)="chatDraft.set($any($event.target).value)" (keydown)="onChatKeyDown($event)">
+                  <button type="button" class="pf-call-round pf-call-round--sm pf-call-round--primary"
+                          (click)="sendInCallMessage()" [disabled]="!chatDraft().trim()" aria-label="Send">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                  </button>
+                </div>
+              </aside>
             }
           </div>
 
-          @if (chatPanelOpen()) {
-            <aside class="pf-call-screen__chat" aria-label="In-call chat">
-              <header class="pf-call-screen__chat-hdr">
-                <span class="pf-call-screen__chat-title">Chat</span>
-                <button type="button" class="pf-call-screen__icon-btn pf-call-screen__icon-btn--sm"
-                        (click)="toggleChatPanel()" title="Close chat">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
-              </header>
-              <div class="pf-call-screen__chat-scroller">
-                @if (chat.activeMessages().length === 0) {
-                  <p class="pf-call-screen__chat-empty">No messages yet — say something during the call.</p>
-                }
-                @for (m of chat.activeMessages(); track m.id) {
-                  <div class="pf-call-screen__chat-row"
-                       [class.pf-call-screen__chat-row--mine]="m.fromUserId === meAuthId()">
-                    <div class="pf-call-screen__chat-bubble"
-                         [class.pf-call-screen__chat-bubble--mine]="m.fromUserId === meAuthId()">
-                      <div class="pf-call-screen__chat-body">{{ m.body }}</div>
-                      <div class="pf-call-screen__chat-time">{{ m.sentAt | date:'shortTime' }}</div>
-                    </div>
-                  </div>
-                }
-              </div>
-              <div class="pf-call-screen__chat-composer">
-                <input type="text" placeholder="Type a message" [value]="chatDraft()"
-                       (input)="chatDraft.set($any($event.target).value)" (keydown)="onChatKeyDown($event)">
-                <button type="button" (click)="sendInCallMessage()" [disabled]="!chatDraft().trim()" title="Send">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                  </svg>
-                </button>
-              </div>
-            </aside>
-          }
-
           <footer class="pf-call-screen__ctrls">
-            <button type="button" class="pf-call-screen__ctrl"
-                    [class.pf-call-screen__ctrl--on]="webrtc.micMuted()"
-                    (click)="toggleMute()"
-                    [attr.aria-label]="webrtc.micMuted() ? 'Unmute' : 'Mute'">
-              <div class="pf-call-screen__ctrl-circle">
+            <div class="pf-call-ctl">
+              <button type="button" class="pf-call-round" (click)="toggleMute()" data-testid="call-mute"
+                      [attr.aria-pressed]="webrtc.micMuted()" [attr.aria-label]="webrtc.micMuted() ? 'Unmute' : 'Mute'">
                 @if (webrtc.micMuted()) {
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <line x1="1" y1="1" x2="23" y2="23"/>
                     <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
                     <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
                     <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
                   </svg>
                 } @else {
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                     <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
                   </svg>
                 }
-              </div>
-              <span class="pf-call-screen__ctrl-lbl">{{ webrtc.micMuted() ? 'Unmute' : 'Mute' }}</span>
-            </button>
-            <button type="button" class="pf-call-screen__ctrl"
-                    [class.pf-call-screen__ctrl--active]="invitePopoverOpen()"
-                    (click)="toggleInvite()" aria-label="Add participant">
-              <div class="pf-call-screen__ctrl-circle">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="8.5" cy="7" r="4"/>
-                  <line x1="20" y1="8" x2="20" y2="14"/>
-                  <line x1="23" y1="11" x2="17" y2="11"/>
+              </button>
+              <span class="pf-call-ctl__lbl">{{ webrtc.micMuted() ? 'Unmute' : 'Mute' }}</span>
+            </div>
+            <div class="pf-call-ctl">
+              <button type="button" class="pf-call-round" (click)="toggleInvite()"
+                      [attr.aria-pressed]="invitePopoverOpen()" aria-label="Add participant">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/>
+                  <line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
                 </svg>
-              </div>
-              <span class="pf-call-screen__ctrl-lbl">Add</span>
-            </button>
-            <button type="button" class="pf-call-screen__ctrl pf-call-screen__ctrl--end"
-                    (click)="leave()" aria-label="End call">
-              <div class="pf-call-screen__ctrl-circle">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"
-                        transform="rotate(135 12 12)"/>
+              </button>
+              <span class="pf-call-ctl__lbl">Add</span>
+            </div>
+            <div class="pf-call-ctl">
+              <button type="button" class="pf-call-round" (click)="toggleChatPanel()"
+                      [attr.aria-pressed]="chatPanelOpen()" aria-label="Chat">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
-              </div>
-              <span class="pf-call-screen__ctrl-lbl">End</span>
-            </button>
+              </button>
+              <span class="pf-call-ctl__lbl">Chat</span>
+            </div>
+            <div class="pf-call-ctl">
+              <button type="button" class="pf-call-round pf-call-round--danger" (click)="leave()"
+                      aria-label="End call" data-testid="call-end">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path [attr.d]="PHONE" transform="rotate(135 12 12)"/>
+                </svg>
+              </button>
+              <span class="pf-call-ctl__lbl">End</span>
+            </div>
           </footer>
 
-          <!-- Invite popover stays attached to the full-screen Add button too. -->
           @if (invitePopoverOpen()) {
-            <div class="pf-call-invite-pop pf-call-invite-pop--screen" role="dialog" aria-label="Invite to call"
+            <div class="pf-call-invite pf-call-invite--screen" role="dialog" aria-label="Invite to call"
                  (click)="$event.stopPropagation()">
-              <header class="pf-call-invite-pop__hdr">
-                <span class="pf-call-invite-pop__title">Invite to call</span>
-                <span class="pf-call-invite-pop__count">{{ availableToInvite().length }} online</span>
+              <header class="pf-call-invite__hdr">
+                <span class="pf-call-invite__title">Invite to call</span>
+                <span class="pf-call-invite__count pf-call-num">{{ availableToInvite().length }} online</span>
               </header>
               @if (loadingInvite()) {
-                <p class="pf-call-invite-pop__empty">Loading…</p>
+                <p class="pf-call-invite__empty">Loading…</p>
               } @else if (availableToInvite().length === 0) {
-                <p class="pf-call-invite-pop__empty">No one else is online right now.</p>
+                <p class="pf-call-invite__empty">No one else is online right now.</p>
               } @else {
-                <ul class="pf-call-invite-pop__list" role="listbox">
+                <ul class="pf-call-invite__list" role="listbox">
                   @for (u of availableToInvite(); track u.id) {
                     <li>
-                      <button type="button" class="pf-call-invite-pop__item press" (click)="inviteUser(u)">
-                        <span class="pf-call-invite-pop__name">{{ u.displayName }}</span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
+                      <button type="button" class="pf-call-invite__item" (click)="inviteUser(u)">
+                        <pf-presence-avatar size="sm" [name]="u.displayName" [userId]="u.id" />
+                        <span class="pf-call-invite__name">{{ u.displayName }}</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                       </button>
                     </li>
                   }
@@ -323,103 +323,77 @@ interface DirectoryUser {
       </div>
     }
 
+    <!-- ── IN CALL (minimised pill) ───────────────────────────────────── -->
     @if (showInCallPanel() && !callExpanded()) {
-      <div class="pf-call-pill" role="region" aria-label="Active call">
-        <div class="pf-call-pill__avatar">
-          @if (webrtc.status() === 'active') {
-            <span class="pf-call-pill__avatar-live" aria-hidden="true"></span>
-          }
-          {{ initials(pillTitle()) }}
-        </div>
+      <div class="pf-call-pill" role="region" aria-label="Active call" data-testid="call-pill">
+        <span class="pf-call-avatar pf-call-avatar--sm" aria-hidden="true">{{ initials(pillTitle()) }}</span>
         <div class="pf-call-pill__meta">
           <span class="pf-call-pill__label">{{ pillTitle() }}</span>
-          <span class="pf-call-pill__time">
-            {{ webrtc.status() === 'active' ? duration() : 'Connecting…' }}
+          <span class="pf-call-pill__status">
+            <span class="pf-call-chip__dot" [class.pf-call-chip__dot--pulse]="webrtc.status() !== 'active'" aria-hidden="true"></span>
+            @if (webrtc.status() === 'active') { <span class="pf-call-num">{{ duration() }}</span> } @else { Connecting… }
+            @if (showRemaining()) {
+              <span class="pf-call-num pf-call-pill__remaining" [class.pf-call-chip--urgent]="remainingUrgent()"
+                    title="Call auto-ends at this point — 10-minute cap on 1:1, 30-minute on group">· {{ remainingLabel() }}</span>
+            }
           </span>
         </div>
-        @if (showRemaining()) {
-          <span class="pf-call-pill__remaining" [class.pf-call-pill__remaining--urgent]="remainingUrgent()"
-                title="Call auto-ends at this point — 10-minute cap on 1:1, 30-minute on group">
-            {{ remainingLabel() }}
-          </span>
-        }
-        <!-- Compact route badge: green "Direct" when peer-to-peer, amber
-             "Relay" when media is relayed via TURN (CF egress = billable). -->
-        <span class="pf-call-pill__route" [attr.data-cost]="routeCost()" [title]="routeTitle()">
-          {{ routeLabel() }}
-        </span>
-        <button type="button" class="pf-call-pill__btn"
-                (click)="expand()" aria-label="Open full call screen" title="Expand">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M15 3h6v6M14 10l7-7M9 21H3v-6M10 14l-7 7"/>
-          </svg>
+        <button type="button" class="pf-call-icon" (click)="expand()" aria-label="Open full call screen" title="Expand">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M14 10l7-7M9 21H3v-6M10 14l-7 7"/></svg>
         </button>
-        <button type="button" class="pf-call-pill__btn"
-                [class.pf-call-pill__btn--on]="webrtc.micMuted()"
-                (click)="toggleMute()" [attr.aria-label]="webrtc.micMuted() ? 'Unmute' : 'Mute'">
+        <button type="button" class="pf-call-icon" (click)="toggleMute()"
+                [attr.aria-pressed]="webrtc.micMuted()" [attr.aria-label]="webrtc.micMuted() ? 'Unmute' : 'Mute'">
           @if (webrtc.micMuted()) {
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="1" y1="1" x2="23" y2="23"/>
               <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
               <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
               <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
             </svg>
           } @else {
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
               <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
             </svg>
           }
         </button>
-        <!-- Add participant (group call) — opens a popover with online
-             tenant users not already in the call. Click one to invite. -->
-        <button type="button" class="pf-call-pill__btn pf-call-pill__btn--add"
-                (click)="toggleInvite()"
-                [class.pf-call-pill__btn--on]="invitePopoverOpen()"
-                aria-label="Add participant" title="Add participant">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="8.5" cy="7" r="4"/>
-            <line x1="20" y1="8" x2="20" y2="14"/>
-            <line x1="23" y1="11" x2="17" y2="11"/>
+        <button type="button" class="pf-call-icon pf-call-pill__add" (click)="toggleInvite()"
+                [attr.aria-pressed]="invitePopoverOpen()" aria-label="Add participant" title="Add participant">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/>
+            <line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
           </svg>
         </button>
-        <button type="button" class="pf-call-pill__btn pf-call-pill__btn--end"
-                (click)="leave()" aria-label="End call">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"
-                  transform="rotate(135 12 12)"/>
+        <button type="button" class="pf-call-round pf-call-round--sm pf-call-round--danger" (click)="leave()" aria-label="End call">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path [attr.d]="PHONE" transform="rotate(135 12 12)"/>
           </svg>
         </button>
 
         @if (invitePopoverOpen()) {
-          <div class="pf-call-invite-pop" role="dialog" aria-label="Invite to call"
-               (click)="$event.stopPropagation()">
-            <header class="pf-call-invite-pop__hdr">
-              <span class="pf-call-invite-pop__title">Invite to call</span>
-              <span class="pf-call-invite-pop__count">{{ availableToInvite().length }} online</span>
+          <div class="pf-call-invite" role="dialog" aria-label="Invite to call" (click)="$event.stopPropagation()">
+            <header class="pf-call-invite__hdr">
+              <span class="pf-call-invite__title">Invite to call</span>
+              <span class="pf-call-invite__count pf-call-num">{{ availableToInvite().length }} online</span>
             </header>
             @if (loadingInvite()) {
-              <p class="pf-call-invite-pop__empty">Loading…</p>
+              <p class="pf-call-invite__empty">Loading…</p>
             } @else if (availableToInvite().length === 0) {
-              <p class="pf-call-invite-pop__empty">No one else is online right now.</p>
+              <p class="pf-call-invite__empty">No one else is online right now.</p>
             } @else {
-              <ul class="pf-call-invite-pop__list" role="listbox">
+              <ul class="pf-call-invite__list" role="listbox">
                 @for (u of availableToInvite(); track u.id) {
                   <li>
-                    <button type="button" class="pf-call-invite-pop__item press"
-                            (click)="inviteUser(u)">
-                      <span class="pf-call-invite-pop__name">{{ u.displayName }}</span>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M5 12h14M12 5l7 7-7 7"/>
-                      </svg>
+                    <button type="button" class="pf-call-invite__item" (click)="inviteUser(u)">
+                      <pf-presence-avatar size="sm" [name]="u.displayName" [userId]="u.id" />
+                      <span class="pf-call-invite__name">{{ u.displayName }}</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </button>
                   </li>
                 }
@@ -429,944 +403,302 @@ interface DirectoryUser {
         }
       </div>
     }
-
-    @if (webrtc.status() === 'outgoing' && !webrtc.incomingCall()) {
-      <div class="pf-call-ring pf-call-ring--outgoing pf-modal-centered" role="dialog" aria-modal="true" aria-label="Outgoing call">
-        <div class="pf-call-ring__backdrop"></div>
-        <div class="pf-call-ring__card pf-modal-centered">
-          <p class="pf-call-ring__eyebrow">Calling</p>
-          <div class="pf-call-ring__avatar-wrap">
-            <span class="pf-call-ring__glow" aria-hidden="true"></span>
-            <span class="pf-call-ring__pulse-ring" aria-hidden="true"></span>
-            <span class="pf-call-ring__pulse-ring pf-call-ring__pulse-ring--delay" aria-hidden="true"></span>
-            <div class="pf-call-ring__avatar">
-              {{ initials(webrtc.localCallerName() ?? 'Calling') }}
-            </div>
-          </div>
-          <h2 class="pf-call-ring__name">{{ webrtc.localCallerName() ?? 'Calling' }}</h2>
-          <p class="pf-call-ring__source">Ringing…</p>
-          <div class="pf-call-ring__actions">
-            <div class="pf-call-ring__action">
-              <button type="button" class="pf-call-ring__btn pf-call-ring__btn--reject press"
-                      (click)="cancelOutgoing()" aria-label="Cancel call">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.94.36 1.85.68 2.72a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 2.11-.45c.87.32 1.78.55 2.72.68A2 2 0 0 1 22 16.92z"
-                        transform="rotate(135 12 12)"/>
-                </svg>
-              </button>
-              <span class="pf-call-ring__action-lbl">Cancel</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    }
   `,
   styles: [`
-    /* Call overlay — glass/ambient theme. Centered glass cards on desktop
-       and iPad, full-height sheets (100dvh + safe areas) on phones.
-       Themed via the app tokens (--glass-*, --card-bg, --gradient-primary,
-       --text-*); the only hardcoded colors are the accept/decline gradients
-       and the connection-dot semantics (green = direct, red = relay). */
-    :host { display: contents; }
+    /* Call overlay — NEW DESIGN (docs/ND-PATTERN.md; owner 2026-09-27).
+       Palette only: neutral cards, the app's neutral initials avatar, a
+       violet dot on the status chip, violet primary ONLY for Answer / Send,
+       and the kit's danger red ONLY for Decline / Cancel / End (solid — the
+       universal hang-up — but no glow). Noto Sans with tabular numbers (the
+       timer too; never monospace). Round controls get a CIRCULAR
+       :focus-visible ring; labels sit outside the button so the ring never
+       wraps button + label. Phones: full-screen sheets with safe areas,
+       44px+ targets. Reduced motion: nothing pulses. */
+    :host {
+      display: contents;
+      /* Text red follows the theme; the SOLID hang-up fill stays a strong
+         red in both themes (the dark-theme text red is too pale for a fill
+         under a white glyph). */
+      --call-danger: var(--red-text, #dc2626);
+      --call-danger-fill: #dc2626;
+      --call-danger-hover: #b91c1c;
+      --call-primary: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3));
+      --call-violet: var(--color-primary, #7c3aed);
+      --call-font: 'Noto Sans', var(--font-sans, system-ui), sans-serif;
+    }
+    .pf-call-num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
 
-    /* Soft pulse used by the "Incoming call…" / "Ringing…" / "Connecting…"
-       status lines — a calm breathe instead of an animated ellipsis. */
-    @keyframes pf-call-status-pulse {
-      0%, 100% { opacity: 1; }
-      50%      { opacity: 0.45; }
+    /* ── Shared atoms ────────────────────────────────────────────────── */
+    .pf-call-avatar {
+      display: inline-flex; align-items: center; justify-content: center; flex: none;
+      border-radius: 9999px;
+      background: var(--nd-chip-bg, #f3f4f6);
+      border: 1px solid var(--nd-line, var(--border-muted, #e5e7eb));
+      color: var(--text-secondary);
+      font-family: var(--call-font); font-weight: 600; letter-spacing: 0;
+    }
+    .pf-call-avatar--sm { width: 36px; height: 36px; font-size: 13px; }
+    .pf-call-avatar--lg { width: 64px; height: 64px; font-size: 20px; }
+    .pf-call-avatar--xl { width: 88px; height: 88px; font-size: 28px; position: relative; z-index: 1; }
+
+    .pf-call-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 28px; padding: 0 10px; border-radius: 9999px;
+      background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary);
+      font-family: var(--call-font); font-size: 13px; font-weight: 500; white-space: nowrap;
+    }
+    .pf-call-chip--quiet { color: var(--text-secondary); font-weight: 500; }
+    .pf-call-chip--sm { height: 22px; padding: 0 8px; font-size: 12px; gap: 4px; }
+    .pf-call-chip--urgent { color: var(--call-danger); }
+    .pf-call-chip__dot { width: 7px; height: 7px; border-radius: 9999px; background: var(--call-violet); flex: none; }
+    .pf-call-chip__dot--pulse { animation: pf-call-blink 1.4s ease-in-out infinite; }
+    @keyframes pf-call-blink { 50% { opacity: 0.35; } }
+
+    /* 40px quiet icon button (header / pill). */
+    .pf-call-icon {
+      display: inline-flex; align-items: center; justify-content: center; flex: none;
+      width: 40px; height: 40px; border-radius: 9999px;
+      background: transparent; border: 1px solid transparent; color: var(--text-secondary);
+      cursor: pointer; transition: background-color var(--nd-dur-fast, 200ms) ease, color var(--nd-dur-fast, 200ms) ease;
+    }
+    .pf-call-icon:hover { background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary); }
+    /* ON (muted mic / open panel): the same filled neutral dark chip as the
+       56px controls. */
+    .pf-call-icon[aria-pressed='true'] {
+      background: var(--text-primary, #111827); border-color: var(--text-primary, #111827); color: var(--nd-card-bg, #fff);
+    }
+    .pf-call-icon--sm { width: 32px; height: 32px; }
+
+    /* 56px round control — neutral secondary by default. */
+    .pf-call-round {
+      display: inline-flex; align-items: center; justify-content: center; flex: none;
+      width: 56px; height: 56px; border-radius: 9999px;
+      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
+      color: var(--text-primary); cursor: pointer;
+      box-shadow: var(--nd-shadow-sm);
+      transition: background-color var(--nd-dur-fast, 200ms) ease, transform 120ms ease;
+    }
+    .pf-call-round:hover:not(:disabled) { background: var(--nd-chip-bg, #f3f4f6); }
+    .pf-call-round:active:not(:disabled) { transform: scale(0.96); }
+    .pf-call-round:disabled { opacity: 0.45; cursor: not-allowed; }
+    /* ON state (muted mic, open panel): a filled neutral dark chip. */
+    .pf-call-round[aria-pressed='true'] {
+      background: var(--text-primary, #111827); border-color: var(--text-primary, #111827);
+      color: var(--nd-card-bg, #fff);
+    }
+    .pf-call-round--lg { width: 64px; height: 64px; }
+    .pf-call-round--sm { width: 40px; height: 40px; box-shadow: none; }
+    .pf-call-round--danger { background: var(--call-danger-fill); border-color: var(--call-danger-fill); color: #fff; }
+    .pf-call-round--danger:hover:not(:disabled) { background: var(--call-danger-hover); }
+    .pf-call-round--primary { background: var(--call-primary); border-color: transparent; color: #fff; }
+    .pf-call-round--primary:hover:not(:disabled) { background: var(--call-primary); filter: brightness(1.05); }
+    /* Circular focus ring on the round button itself. */
+    .pf-call-round:focus-visible, .pf-call-icon:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--nd-card-bg, #fff), 0 0 0 5px var(--call-violet);
     }
 
-    /* ─────────────────────────────────────────────────────────
-       RING CARD (incoming + outgoing) — dimmed blurred backdrop,
-       centered glass card with an ambient violet glow behind the
-       avatar and two expanding pulse rings.
-       ───────────────────────────────────────────────────────── */
+    .pf-call-ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 64px; }
+    .pf-call-ctl__lbl { font-family: var(--call-font); font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+
+    /* ── Ring card (incoming + outgoing) ─────────────────────────────── */
     .pf-call-ring {
-      position: fixed; inset: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
+      position: fixed; inset: 0; z-index: 80;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+      font-family: var(--call-font);
     }
-    .pf-call-ring__backdrop {
+    .pf-call-ring__backdrop, .pf-call-screen__backdrop {
       position: absolute; inset: 0;
-      background:
-        radial-gradient(90% 60% at 50% 12%, rgba(124, 58, 237, 0.22) 0%, transparent 60%),
-        rgba(8, 10, 16, 0.62);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      background: rgba(15, 23, 42, 0.42);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
     }
     .pf-call-ring__card {
-      position: relative;
-      width: 100%; max-width: 400px;
-      display: flex; flex-direction: column; align-items: center;
-      padding: 30px 24px 28px;
-      border-radius: 24px;
-      background: var(--card-bg);
-      border: 1px solid var(--glass-border);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 80px rgba(124, 58, 237, 0.12);
-      color: var(--text-primary); text-align: center;
-      overflow: hidden;
-      animation: pf-call-ring-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative; width: min(360px, 100%);
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      padding: 28px 24px 28px;
+      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
+      border-radius: var(--nd-radius-card, 16px);
+      box-shadow: var(--nd-shadow-sm), 0 24px 60px rgba(15, 23, 42, 0.18);
+      animation: pf-call-rise var(--nd-dur, 320ms) var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
     }
-    @keyframes pf-call-ring-in {
-      from { opacity: 0; transform: translateY(14px) scale(0.96); }
-      to   { opacity: 1; transform: none; }
-    }
-    .pf-call-ring__eyebrow {
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 0.16em; text-transform: uppercase;
-      color: var(--text-tertiary);
-      margin: 0 0 26px;
-    }
+    @keyframes pf-call-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .pf-call-ring__eyebrow { margin: 0 0 20px; font-size: 13px; font-weight: 500; color: var(--text-muted); }
     .pf-call-ring__avatar-wrap {
-      position: relative;
-      width: 124px; height: 124px;
-      margin: 0 auto 22px;
+      position: relative; width: 88px; height: 88px; margin-bottom: 18px;
       display: flex; align-items: center; justify-content: center;
+      --pf-pdot-size: 18px; --pf-pdot-ring: var(--nd-card-bg, #fff);
     }
-    /* Ambient glow: soft violet radial halo behind the avatar. */
-    .pf-call-ring__glow {
-      position: absolute; inset: -56px;
-      border-radius: 50%;
-      background: radial-gradient(circle,
-        rgba(139, 92, 246, 0.28) 0%,
-        rgba(236, 72, 153, 0.10) 45%,
-        transparent 70%);
-      pointer-events: none;
+    .pf-call-ring__avatar-wrap pf-presence-dot { right: 3px; bottom: 3px; z-index: 2; }
+    /* Gentle pulse ring (violet hairline) — no glow. */
+    .pf-call-ring__pulse {
+      position: absolute; inset: 0; border-radius: 9999px;
+      border: 2px solid color-mix(in srgb, var(--call-violet) 45%, transparent);
+      animation: pf-call-pulse 2.4s var(--nd-spring, ease-out) infinite;
     }
-    .pf-call-ring__pulse-ring {
-      position: absolute; inset: 8px;
-      border-radius: 50%;
-      border: 2px solid rgba(167, 139, 250, 0.6);
-      animation: pf-call-ring-pulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-      opacity: 0;
-    }
-    .pf-call-ring__pulse-ring--delay { animation-delay: 1.2s; }
-    @keyframes pf-call-ring-pulse {
-      0%   { transform: scale(0.82); opacity: 0.65; }
-      70%  { transform: scale(1.45); opacity: 0;    }
-      100% { transform: scale(1.45); opacity: 0;    }
-    }
-    .pf-call-ring__avatar {
-      position: relative;
-      width: 104px; height: 104px; border-radius: 50%;
-      background: var(--gradient-primary);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 36px; font-weight: 700; color: #fff;
-      letter-spacing: 0.02em;
-      box-shadow:
-        0 0 44px rgba(139, 92, 246, 0.45),
-        0 12px 32px rgba(0, 0, 0, 0.35),
-        inset 0 0 0 2px rgba(255, 255, 255, 0.16);
-    }
-    .pf-call-ring__card--group .pf-call-ring__avatar {
-      background: linear-gradient(135deg, #06b6d4, #6366f1);
-      box-shadow:
-        0 0 44px rgba(99, 102, 241, 0.42),
-        0 12px 32px rgba(0, 0, 0, 0.35),
-        inset 0 0 0 2px rgba(255, 255, 255, 0.16);
-    }
-    .pf-call-ring__card--group .pf-call-ring__pulse-ring {
-      border-color: rgba(129, 140, 248, 0.6);
-    }
+    .pf-call-ring__pulse--late { animation-delay: 1.2s; }
+    @keyframes pf-call-pulse { from { opacity: 0.9; transform: scale(1); } to { opacity: 0; transform: scale(1.45); } }
     .pf-call-ring__name {
-      font-size: 20px; font-weight: 700; margin: 0;
-      letter-spacing: -0.01em;
-      color: var(--text-primary);
-      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; color: var(--text-primary);
+      overflow-wrap: anywhere;
     }
-    .pf-call-ring__source {
-      font-size: 14px; color: var(--text-secondary);
-      margin: 7px 0 0;
-      animation: pf-call-status-pulse 2s ease-in-out infinite;
-    }
-    .pf-call-ring__actions {
-      margin-top: 34px;
-      display: flex; gap: 56px; justify-content: center;
-    }
-    .pf-call-ring__action {
-      display: inline-flex; flex-direction: column; align-items: center; gap: 10px;
-    }
-    .pf-call-ring__action-lbl {
-      font-size: 12.5px; font-weight: 600;
-      color: var(--text-secondary);
-    }
-    .pf-call-ring__btn {
-      width: 64px; height: 64px;
-      display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 50%; border: none; cursor: pointer; color: #fff;
-      transition: transform 0.12s, box-shadow 0.2s, filter 0.2s;
-    }
-    .pf-call-ring__btn:hover { filter: brightness(1.08); }
-    .pf-call-ring__btn:active { transform: scale(0.92); }
-    .pf-call-ring__btn--reject {
-      background: linear-gradient(135deg, #f43f5e, #e11d48);
-      box-shadow: 0 10px 26px rgba(244, 63, 94, 0.45);
-    }
-    .pf-call-ring__btn--accept {
-      background: linear-gradient(135deg, #22c55e, #16a34a);
-      box-shadow: 0 10px 26px rgba(34, 197, 94, 0.45);
-      animation: pf-call-accept-breathe 1.8s ease-in-out infinite;
-    }
-    @keyframes pf-call-accept-breathe {
-      0%, 100% { transform: scale(1);    box-shadow: 0 10px 26px rgba(34, 197, 94, 0.45); }
-      50%      { transform: scale(1.06); box-shadow: 0 16px 38px rgba(34, 197, 94, 0.6); }
-    }
+    .pf-call-ring__sub { margin: 6px 0 0; font-size: 14px; color: var(--text-secondary); }
+    .pf-call-ring__actions { display: flex; justify-content: center; gap: 56px; margin-top: 28px; }
 
-    /* iPad / mid widths: slightly larger centered card. */
-    @media (min-width: 641px) and (max-width: 1279px) {
-      .pf-call-ring__card { max-width: 440px; }
-    }
-
-    /* ─────────────────────────────────────────────────────────
-       MINIMIZED PILL — slim glass capsule bottom-right with a
-       small avatar, peer name + duration, and the core controls.
-       Sits above the mobile bottom-nav.
-       ───────────────────────────────────────────────────────── */
-    .pf-call-pill {
-      position: fixed;
-      bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-      right: 12px; z-index: 60;
-      display: inline-flex; align-items: center; gap: 10px;
-      padding: 6px 8px 6px 6px;
-      border-radius: 9999px;
-      background: var(--surface-elevated);
-      border: 1px solid var(--glass-border-hover);
-      box-shadow: var(--glass-shadow), 0 0 0 1px rgba(139, 92, 246, 0.15) inset;
-      backdrop-filter: blur(var(--glass-blur));
-      -webkit-backdrop-filter: blur(var(--glass-blur));
-      color: var(--text-primary);
-      font-size: 12.5px; line-height: 1.2;
-      animation: pf-call-pill-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-      max-width: calc(100vw - 24px);
-    }
-    @media (min-width: 1280px) {
-      .pf-call-pill { bottom: 16px; right: 16px; }
-    }
-    @keyframes pf-call-pill-in {
-      from { opacity: 0; transform: translateY(10px) scale(0.92); }
-      to   { opacity: 1; transform: none; }
-    }
-    .pf-call-pill__avatar {
-      position: relative;
-      width: 34px; height: 34px; border-radius: 50%;
-      background: var(--gradient-primary);
-      display: inline-flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 700; color: #fff;
-      letter-spacing: 0.02em;
-      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-      flex-shrink: 0;
-    }
-    .pf-call-pill__avatar-live {
-      position: absolute; inset: -3px;
-      border-radius: 50%;
-      border: 2px solid var(--color-success);
-      box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
-      animation: pf-call-pill-ring 1.8s ease-in-out infinite;
-    }
-    @keyframes pf-call-pill-ring {
-      0%, 100% { transform: scale(1);   opacity: 0.85; }
-      50%      { transform: scale(1.15); opacity: 0.25; }
-    }
-    .pf-call-pill__meta {
-      display: flex; flex-direction: column; gap: 0;
-      min-width: 0; max-width: 130px;
-    }
-    .pf-call-pill__label {
-      font-weight: 600; color: var(--text-primary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .pf-call-pill__time {
-      font-size: 11px; color: var(--text-tertiary);
-      font-variant-numeric: tabular-nums;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
-    .pf-call-pill__btn {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: var(--glass-bg-hover);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      display: inline-flex; align-items: center; justify-content: center;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: background 0.12s, color 0.12s, transform 0.08s, border-color 0.12s;
-    }
-    .pf-call-pill__btn:hover {
-      background: rgba(139, 92, 246, 0.2);
-      border-color: rgba(139, 92, 246, 0.4);
-      color: var(--text-primary);
-    }
-    .pf-call-pill__btn:active { transform: scale(0.92); }
-    .pf-call-pill__btn--on {
-      background: rgba(244, 63, 94, 0.22);
-      border-color: rgba(244, 63, 94, 0.4);
-      color: #fb7185;
-    }
-    .pf-call-pill__btn--add {
-      background: rgba(139, 92, 246, 0.2);
-      border-color: rgba(139, 92, 246, 0.4);
-      color: var(--color-violet-300);
-    }
-    .pf-call-pill__btn--end {
-      background: linear-gradient(135deg, #f43f5e, #e11d48);
-      border-color: transparent;
-      color: #fff;
-      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.4);
-    }
-    .pf-call-pill__btn--end:hover {
-      background: linear-gradient(135deg, #ec4055, #be123c);
-      color: #fff;
-    }
-
-    /* Remaining time + route chips on the pill */
-    .pf-call-pill__remaining {
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
-      padding: 3px 8px; border-radius: 9999px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      background: var(--info-bg); color: var(--info-text);
-      white-space: nowrap; cursor: help;
-    }
-    .pf-call-pill__remaining--urgent {
-      background: var(--error-bg); color: var(--error-text);
-      animation: pf-call-remaining-pulse 1s ease-in-out infinite;
-    }
-    @keyframes pf-call-remaining-pulse {
-      0%, 100% { opacity: 1; }
-      50%      { opacity: 0.5; }
-    }
-    .pf-call-pill__route {
-      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
-      padding: 3px 8px; border-radius: 9999px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      white-space: nowrap; cursor: help;
-      text-transform: uppercase;
-    }
-    .pf-call-pill__route[data-cost='free'] {
-      background: var(--success-bg); color: var(--success-text);
-    }
-    .pf-call-pill__route[data-cost='paid'] {
-      background: var(--warning-bg); color: var(--warning-text);
-    }
-    /* Hide the route badge on narrow phones — keep the pill compact. */
-    @media (max-width: 420px) {
-      .pf-call-pill__route { display: none; }
-    }
-
-    /* ─────────────────────────────────────────────────────────
-       ACTIVE CALL SCREEN — centered glass card with a compact
-       header (status + timer + connection dot), participant
-       tiles, in-call chat, and circular glass controls.
-       ───────────────────────────────────────────────────────── */
+    /* ── In-call screen ──────────────────────────────────────────────── */
     .pf-call-screen {
-      position: fixed; inset: 0; z-index: 90;
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
-    }
-    .pf-call-screen__backdrop {
-      position: absolute; inset: 0;
-      background:
-        radial-gradient(90% 55% at 50% 8%, rgba(124, 58, 237, 0.18) 0%, transparent 60%),
-        rgba(8, 10, 16, 0.6);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      position: fixed; inset: 0; z-index: 75;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+      font-family: var(--call-font);
     }
     .pf-call-screen__card {
-      position: relative;
-      width: 100%; max-width: 440px;
-      height: min(640px, calc(100dvh - 64px));
-      padding: 16px 18px 20px;
-      border-radius: 24px;
-      background: var(--card-bg);
-      border: 1px solid var(--glass-border);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 80px rgba(124, 58, 237, 0.1);
-      color: var(--text-primary);
-      display: flex; flex-direction: column; gap: 14px;
-      animation: pf-call-screen-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative; width: min(560px, 100%); max-height: calc(100dvh - 32px);
+      display: flex; flex-direction: column;
+      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
+      border-radius: var(--nd-radius-card, 16px);
+      box-shadow: var(--nd-shadow-sm), 0 24px 60px rgba(15, 23, 42, 0.18);
+      animation: pf-call-rise var(--nd-dur, 320ms) var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
     }
-    @keyframes pf-call-screen-in {
-      from { opacity: 0; transform: translateY(14px) scale(0.97); }
-      to   { opacity: 1; transform: none; }
-    }
-    @media (min-width: 641px) and (max-width: 1279px) {
-      .pf-call-screen__card { max-width: 480px; }
-    }
-
-    /* Header: icon-btn left (minimise) + status pill + chips + icon-btns right. */
+    .pf-call-screen__card--with-chat { width: min(900px, 100%); }
     .pf-call-screen__hdr {
-      display: flex; align-items: center; gap: 10px;
-      flex-shrink: 0;
-    }
-    .pf-call-screen__icon-btn {
-      width: 36px; height: 36px; border-radius: 12px;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: var(--glass-bg-hover);
-      border: 1px solid var(--glass-border);
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
-      flex-shrink: 0;
-    }
-    .pf-call-screen__icon-btn:hover {
-      background: rgba(139, 92, 246, 0.16);
-      color: var(--text-primary);
-      border-color: rgba(139, 92, 246, 0.35);
-    }
-    .pf-call-screen__icon-btn:active { transform: scale(0.94); }
-    .pf-call-screen__hdr-info {
-      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
-      min-width: 0;
-    }
-    .pf-call-screen__hdr-status {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 3px 10px; border-radius: 9999px;
-      font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em;
-      text-transform: uppercase;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-tertiary);
-    }
-    .pf-call-screen__hdr-status--pulse {
-      animation: pf-call-status-pulse 2s ease-in-out infinite;
-    }
-    .pf-call-screen__hdr-status--live {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: rgba(16, 185, 129, 0.32);
-      color: var(--color-success);
-    }
-    .pf-call-screen__live-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--color-success);
-      box-shadow: 0 0 6px var(--color-success);
-      animation: pf-call-live-blink 1.6s ease-in-out infinite;
-    }
-    .pf-call-screen__hdr-status:not(.pf-call-screen__hdr-status--live) .pf-call-screen__live-dot {
-      background: var(--color-violet-400);
-      box-shadow: 0 0 6px var(--color-violet-400);
-    }
-    @keyframes pf-call-live-blink {
-      0%, 100% { opacity: 0.55; transform: scale(0.85); }
-      50%      { opacity: 1;    transform: scale(1.15); }
-    }
-    .pf-call-screen__hdr-meta {
-      display: inline-flex; align-items: center; gap: 8px;
-      flex-wrap: wrap; justify-content: center;
-    }
-    .pf-call-screen__time {
-      font-size: 12px; color: var(--text-tertiary);
-      font-variant-numeric: tabular-nums;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
-
-    /* Connection-type indicator: green dot = direct P2P, red dot = TURN
-       relay. Only rendered while the call is active. */
-    .pf-call-screen__conn {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-size: 11px; font-weight: 600;
-      color: var(--text-tertiary);
-      cursor: help;
-    }
-    .pf-call-screen__conn-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #34d399;
-      box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
-    }
-    .pf-call-screen__conn--relay .pf-call-screen__conn-dot {
-      background: #f87171;
-      box-shadow: 0 0 8px rgba(248, 113, 113, 0.8);
-    }
-    .pf-call-screen__remaining {
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
-      padding: 3px 8px; border-radius: 9999px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      background: var(--info-bg); color: var(--info-text);
-    }
-    .pf-call-screen__remaining--urgent {
-      background: var(--error-bg); color: var(--error-text);
-      animation: pf-call-remaining-pulse 1s ease-in-out infinite;
-    }
-
-    /* Soft red glass banner for call errors (mic denied etc.). */
-    .pf-call-screen__error {
       display: flex; align-items: center; gap: 8px;
-      padding: 9px 12px;
-      border-radius: 12px;
-      background: rgba(244, 63, 94, 0.12);
-      border: 1px solid rgba(244, 63, 94, 0.3);
-      color: var(--rose-text);
-      font-size: 12.5px; font-weight: 500;
-      flex-shrink: 0;
+      padding: 12px 12px 12px 12px; border-bottom: 1px solid var(--nd-line, #e5e7eb);
     }
-    .pf-call-screen__error svg { flex-shrink: 0; }
-
-    /* Participants grid — glass tiles, ring around the avatar that
-       pulses for connected (unmuted) participants, mute badge in the
-       corner. Phone gets a 2-col stack. */
+    .pf-call-screen__hdr-info { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .pf-call-screen__error {
+      display: flex; align-items: center; gap: 8px; margin: 12px 16px 0;
+      padding: 8px 12px; border-radius: var(--nd-radius-sm, 10px);
+      background: color-mix(in srgb, var(--call-danger) 8%, var(--nd-card-bg, #fff));
+      color: var(--call-danger); font-size: 13px;
+    }
+    .pf-call-screen__body { flex: 1; min-height: 0; display: flex; }
     .pf-call-screen__participants {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-      padding: 4px 0;
-      overflow-y: auto;
-      flex: 1; min-height: 0;
+      flex: 1; min-width: 0; overflow-y: auto;
+      display: grid; gap: 12px; padding: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       align-content: center;
     }
-    .pf-call-screen__participants[data-count='1'],
-    .pf-call-screen__participants[data-count='2'] {
-      grid-template-columns: repeat(2, 1fr);
+    .pf-call-tile {
+      --pf-pdot-ring: var(--nd-chip-bg, #f3f4f6);
+      display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+      padding: 22px 14px 18px; border-radius: var(--nd-radius, 12px);
+      background: var(--nd-chip-bg, #f3f4f6);
     }
-    .pf-call-screen__participants[data-count='1'] {
-      grid-template-columns: 1fr;
-    }
-    @media (max-width: 520px) {
-      .pf-call-screen__participants {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
-      }
-      .pf-call-screen__participants[data-count='1'] {
-        grid-template-columns: 1fr;
-      }
-    }
-    .pf-call-screen__pcard {
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
-      padding: 20px 12px 16px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 18px;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .pf-call-screen__pcard--mine {
-      border-color: rgba(167, 139, 250, 0.4);
-      background: rgba(124, 58, 237, 0.12);
-    }
-    .pf-call-screen__pcard--muted { opacity: 0.7; }
+    .pf-call-tile__name { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-call-tile__meta { margin: 0; display: flex; align-items: center; gap: 6px; min-height: 22px; }
+    .pf-call-tile__you, .pf-call-tile__quiet { font-size: 12.5px; color: var(--text-muted); }
+    .pf-call-tile .pf-call-chip--sm { background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb); }
 
-    .pf-call-screen__avatar-wrap {
-      position: relative;
-      width: 60px; height: 60px;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .pf-call-screen__avatar-ring {
-      position: absolute; inset: -4px;
-      border-radius: 50%;
-      border: 2px solid var(--color-success);
-      opacity: 0;
-      animation: pf-call-screen-ring 2.2s ease-in-out infinite;
-    }
-    /* Only show the connected-ring pulse on participants who are NOT
-       muted (best-effort visual; real VAD would need WebAudio). */
-    .pf-call-screen__pcard:not(.pf-call-screen__pcard--muted) .pf-call-screen__avatar-ring {
-      opacity: 1;
-    }
-    @keyframes pf-call-screen-ring {
-      0%, 100% { transform: scale(1);    opacity: 0.7; }
-      50%      { transform: scale(1.08); opacity: 0.2; }
-    }
-    .pf-call-screen__avatar {
-      width: 60px; height: 60px; border-radius: 50%;
-      background: var(--gradient-primary);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px; font-weight: 700; color: #fff;
-      letter-spacing: 0.02em;
-      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.32), inset 0 0 0 2px rgba(255, 255, 255, 0.15);
-    }
-    .pf-call-screen__pcard--mine .pf-call-screen__avatar {
-      background: linear-gradient(135deg, #06b6d4, #6366f1);
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.32), inset 0 0 0 2px rgba(255, 255, 255, 0.15);
-    }
-    .pf-call-screen__mute-badge {
-      position: absolute;
-      right: -2px; bottom: -2px;
-      width: 22px; height: 22px;
-      border-radius: 50%;
-      background: var(--surface-elevated);
-      border: 2px solid var(--bg-card-solid);
-      color: var(--color-danger);
-      display: inline-flex; align-items: center; justify-content: center;
-    }
-    .pf-call-screen__pname {
-      margin: 0;
-      font-size: 13.5px; font-weight: 600;
-      text-align: center;
-      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      color: var(--text-primary);
-    }
-    .pf-call-screen__pmeta {
-      margin: 0;
-      font-size: 11px; font-weight: 500;
-      color: var(--text-tertiary);
-      text-transform: uppercase; letter-spacing: 0.06em;
-    }
-    @media (max-width: 520px) {
-      .pf-call-screen__avatar-wrap { width: 52px; height: 52px; }
-      .pf-call-screen__avatar      { width: 52px; height: 52px; font-size: 18px; }
-      .pf-call-screen__pcard       { padding: 14px 8px 12px; gap: 8px; }
-      .pf-call-screen__pname       { font-size: 12.5px; }
-      .pf-call-screen__pmeta       { font-size: 10px; }
-    }
-
-    /* Control row: buttons as {glass circle + label} stacks; 48px circles
-       on desktop, 56px on touch. End is a red gradient disc. */
     .pf-call-screen__ctrls {
-      display: flex; align-items: flex-start; justify-content: center; gap: 26px;
-      padding-top: 6px;
-      flex-shrink: 0;
-    }
-    .pf-call-screen__ctrl {
-      display: inline-flex; flex-direction: column; align-items: center; gap: 6px;
-      background: transparent; border: none; padding: 0;
-      cursor: pointer;
-      color: var(--text-secondary);
-      transition: color 0.12s;
-    }
-    .pf-call-screen__ctrl:hover { color: var(--text-primary); }
-    .pf-call-screen__ctrl-circle {
-      width: 48px; height: 48px;
-      border-radius: 50%;
-      background: var(--glass-bg-hover);
-      border: 1px solid var(--glass-border);
-      display: inline-flex; align-items: center; justify-content: center;
-      transition: background 0.15s, border-color 0.15s, transform 0.08s, box-shadow 0.15s;
-    }
-    .pf-call-screen__ctrl-circle svg { width: 20px; height: 20px; }
-    .pf-call-screen__ctrl:hover .pf-call-screen__ctrl-circle {
-      background: rgba(139, 92, 246, 0.18);
-      border-color: rgba(139, 92, 246, 0.4);
-    }
-    .pf-call-screen__ctrl:active .pf-call-screen__ctrl-circle {
-      transform: scale(0.92);
-    }
-    .pf-call-screen__ctrl--on .pf-call-screen__ctrl-circle {
-      background: rgba(244, 63, 94, 0.2);
-      border-color: rgba(244, 63, 94, 0.45);
-      color: #fb7185;
-    }
-    .pf-call-screen__ctrl--on { color: #fb7185; }
-    .pf-call-screen__ctrl--active .pf-call-screen__ctrl-circle {
-      background: rgba(139, 92, 246, 0.28);
-      border-color: var(--color-violet-500);
-    }
-    .pf-call-screen__ctrl--active { color: var(--color-violet-300); }
-    .pf-call-screen__ctrl--end .pf-call-screen__ctrl-circle {
-      background: linear-gradient(135deg, #f43f5e, #e11d48);
-      border-color: transparent;
-      color: #fff;
-      box-shadow: 0 8px 20px rgba(244, 63, 94, 0.42);
-    }
-    .pf-call-screen__ctrl--end:hover .pf-call-screen__ctrl-circle {
-      background: linear-gradient(135deg, #ec4055, #be123c);
-    }
-    .pf-call-screen__ctrl--end { color: #fb7185; }
-    .pf-call-screen__ctrl-lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
-
-    /* Touch devices: comfortable 56px discs + bigger ring buttons. */
-    @media (pointer: coarse) {
-      .pf-call-screen__ctrl-circle { width: 56px; height: 56px; }
-      .pf-call-screen__ctrl-circle svg { width: 22px; height: 22px; }
-      .pf-call-ring__btn { width: 72px; height: 72px; }
+      display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;
+      padding: 16px 16px 20px; border-top: 1px solid var(--nd-line, #e5e7eb);
     }
 
-    /* ── In-call chat side panel ─────────────────────────────── */
-    .pf-call-screen__card--with-chat {
-      max-width: 840px;
-      display: grid;
-      grid-template-areas:
-        "hdr      hdr"
-        "err      err"
-        "people   chat"
-        "ctrls    ctrls";
-      grid-template-columns: 1fr min(340px, 40%);
-      grid-template-rows: auto auto 1fr auto;
-      gap: 12px;
+    /* In-call chat (right column). */
+    .pf-call-chat {
+      width: 320px; flex: none; display: flex; flex-direction: column; min-height: 320px;
+      border-left: 1px solid var(--nd-line, #e5e7eb);
     }
-    @media (min-width: 641px) and (max-width: 1279px) {
-      .pf-call-screen__card--with-chat { max-width: min(840px, calc(100vw - 48px)); }
+    .pf-call-chat__hdr { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 10px 14px; }
+    .pf-call-chat__title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-call-chat__scroller { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+    .pf-call-chat__empty { margin: auto; font-size: 12.5px; color: var(--text-muted); text-align: center; }
+    .pf-call-chat__row { display: flex; }
+    .pf-call-chat__row--mine { justify-content: flex-end; }
+    .pf-call-chat__bubble {
+      max-width: 85%; padding: 7px 10px; border-radius: 12px;
+      background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary); font-size: 13px;
     }
-    .pf-call-screen__card--with-chat .pf-call-screen__hdr           { grid-area: hdr; }
-    .pf-call-screen__card--with-chat .pf-call-screen__error         { grid-area: err; }
-    .pf-call-screen__card--with-chat .pf-call-screen__participants  { grid-area: people; }
-    .pf-call-screen__card--with-chat .pf-call-screen__chat          { grid-area: chat; }
-    .pf-call-screen__card--with-chat .pf-call-screen__ctrls         { grid-area: ctrls; }
-    @media (max-width: 720px) {
-      .pf-call-screen__card--with-chat {
-        grid-template-areas:
-          "hdr"
-          "err"
-          "chat"
-          "ctrls";
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto 1fr auto;
-      }
-      .pf-call-screen__card--with-chat .pf-call-screen__participants { display: none; }
+    .pf-call-chat__bubble--mine { background: var(--nd-in-tint, #f5f3ff); }
+    .pf-call-chat__body { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .pf-call-chat__time { margin-top: 2px; font-size: 11px; color: var(--text-muted); text-align: right; }
+    .pf-call-chat__composer { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--nd-line, #e5e7eb); }
+    .pf-call-chat__input {
+      flex: 1; min-width: 0; height: 40px; padding: 0 12px;
+      border: 1px solid var(--nd-line, #e5e7eb); border-radius: var(--nd-radius-sm, 10px);
+      background: var(--nd-card-bg, #fff); color: var(--text-primary); font: inherit; font-size: 14px;
     }
+    .pf-call-chat__input:focus-visible { outline: 2px solid var(--call-violet); outline-offset: 0; }
 
-    .pf-call-screen__chat {
-      display: flex; flex-direction: column;
-      min-height: 0; min-width: 0;
-      background: var(--bg-card);
-      border: 1px solid var(--glass-border);
-      border-radius: 14px;
+    /* Invite list (screen + pill). */
+    .pf-call-invite {
+      position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 2;
+      width: 280px; max-height: 320px; display: flex; flex-direction: column;
+      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
+      border-radius: var(--nd-radius, 12px); box-shadow: var(--nd-shadow-sm), 0 16px 40px rgba(15, 23, 42, 0.16);
       overflow: hidden;
     }
-    .pf-call-screen__chat-hdr {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 8px;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border-muted);
-      background: var(--bg-card-solid);
+    .pf-call-invite--screen { left: 50%; right: auto; transform: translateX(-50%); bottom: 96px; }
+    .pf-call-invite__hdr { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--nd-line, #e5e7eb); }
+    .pf-call-invite__title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-call-invite__count { font-size: 12px; color: var(--text-muted); }
+    .pf-call-invite__empty { margin: 0; padding: 16px 14px; font-size: 13px; color: var(--text-muted); }
+    .pf-call-invite__list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+    .pf-call-invite__item {
+      width: 100%; display: flex; align-items: center; gap: 10px; min-height: 48px;
+      padding: 6px 8px; border: 0; border-radius: var(--nd-radius-sm, 10px);
+      background: transparent; color: var(--text-secondary); cursor: pointer; text-align: left; font: inherit;
     }
-    .pf-call-screen__chat-title {
-      font-size: 12px; font-weight: 700;
-      letter-spacing: 0.04em; text-transform: uppercase;
-      color: var(--text-secondary);
-    }
-    .pf-call-screen__icon-btn--sm {
-      width: 24px; height: 24px;
-      border-radius: 8px;
-      padding: 0;
-    }
-    .pf-call-screen__icon-btn--active {
-      background: rgba(139, 92, 246, 0.22);
-      border-color: rgba(139, 92, 246, 0.45);
-      color: var(--color-violet-300);
-    }
-    .pf-call-screen__chat-scroller {
-      flex: 1; min-height: 0;
-      overflow-y: auto;
-      padding: 10px 10px 6px;
-      display: flex; flex-direction: column; gap: 6px;
-    }
-    .pf-call-screen__chat-empty {
-      margin: auto;
-      text-align: center;
-      font-size: 12px;
-      color: var(--text-tertiary);
-      padding: 16px;
-    }
-    .pf-call-screen__chat-row {
-      display: flex;
-      &.pf-call-screen__chat-row--mine { justify-content: flex-end; }
-    }
-    .pf-call-screen__chat-bubble {
-      max-width: 78%;
-      padding: 6px 10px;
-      border-radius: 10px 10px 10px 3px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      color: var(--text-primary);
-      &.pf-call-screen__chat-bubble--mine {
-        border-radius: 10px 10px 3px 10px;
-        background: var(--gradient-primary);
-        color: #fff;
-        border-color: transparent;
-      }
-    }
-    .pf-call-screen__chat-body {
-      font-size: 12.5px;
-      line-height: 1.4;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-    .pf-call-screen__chat-time {
-      font-size: 10px;
-      opacity: 0.7;
-      margin-top: 2px;
-      font-variant-numeric: tabular-nums;
-    }
-    .pf-call-screen__chat-composer {
-      display: flex; gap: 6px;
-      padding: 8px 10px;
-      border-top: 1px solid var(--border-muted);
-      background: var(--bg-card-solid);
-      input {
-        flex: 1; min-width: 0;
-        padding: 6px 10px;
-        border-radius: 16px;
-        border: 1px solid var(--input-border);
-        background: var(--bg-input);
-        color: var(--input-text);
-        font-size: 12.5px;
-        outline: none;
-        &:focus { border-color: var(--input-border-focus); }
-      }
-      button {
-        width: 30px; height: 30px;
-        border-radius: 50%;
-        border: none;
-        background: var(--gradient-primary);
-        color: #fff;
-        display: inline-flex; align-items: center; justify-content: center;
-        cursor: pointer;
-        flex-shrink: 0;
-        &:disabled { opacity: 0.4; cursor: not-allowed; }
-      }
-    }
+    .pf-call-invite__item:hover { background: var(--nd-chip-bg, #f3f4f6); color: var(--text-primary); }
+    .pf-call-invite__item:focus-visible { outline: 2px solid var(--call-violet); outline-offset: -2px; }
+    .pf-call-invite__name { flex: 1; min-width: 0; font-size: 14px; color: var(--text-primary); overflow-wrap: anywhere; }
 
-    /* ── Invite-to-call popover ───────────────────────────────── */
-    .pf-call-invite-pop {
-      position: absolute; bottom: calc(100% + 8px); right: 0;
-      width: 280px; max-height: 320px;
-      display: flex; flex-direction: column;
-      background: var(--surface-elevated);
-      border: 1px solid var(--glass-border-hover);
-      border-radius: 14px;
-      box-shadow: var(--glass-shadow-hover);
-      overflow: hidden;
-      animation: pf-call-pop-in 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* ── Minimised pill ──────────────────────────────────────────────── */
+    .pf-call-pill {
+      position: fixed; z-index: 70;
+      right: 16px; bottom: calc(var(--pf-botbar-h, 0px) + 16px + env(safe-area-inset-bottom, 0px));
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 6px 6px 8px; border-radius: 9999px;
+      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb);
+      box-shadow: var(--nd-shadow-sm), 0 12px 32px rgba(15, 23, 42, 0.14);
+      font-family: var(--call-font);
     }
-    .pf-call-invite-pop--screen {
-      position: absolute;
-      bottom: 92px;
-      left: 50%; right: auto;
-      transform: translateX(-50%);
-    }
-    @keyframes pf-call-pop-in {
-      from { opacity: 0; transform: translateY(8px) scale(0.95); }
-      to   { opacity: 1; transform: none; }
-    }
-    .pf-call-invite-pop--screen[class] {
-      /* Override the translateY animation start so the centered one
-         doesn't override our centering. */
-      animation: pf-call-pop-in-center 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    @keyframes pf-call-pop-in-center {
-      from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.95); }
-      to   { opacity: 1; transform: translateX(-50%); }
-    }
-    .pf-call-invite-pop__hdr {
-      display: flex; align-items: baseline; justify-content: space-between;
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border-muted);
-    }
-    .pf-call-invite-pop__title {
-      font-size: 13px; font-weight: 700;
-      color: var(--text-primary);
-    }
-    .pf-call-invite-pop__count {
-      font-size: 10.5px; color: var(--text-tertiary);
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
-    .pf-call-invite-pop__list {
-      list-style: none; padding: 6px; margin: 0;
-      overflow-y: auto;
-    }
-    .pf-call-invite-pop__item {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      width: 100%; padding: 9px 10px;
-      background: transparent; border: none; border-radius: 8px;
-      color: var(--text-secondary);
-      font-size: 13px; font-weight: 500; text-align: left;
-      cursor: pointer;
-      transition: background 0.12s, color 0.12s;
-    }
-    .pf-call-invite-pop__item:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-    .pf-call-invite-pop__name {
-      flex: 1; min-width: 0;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .pf-call-invite-pop__empty {
-      padding: 22px 16px; text-align: center;
-      font-size: 12.5px; color: var(--text-tertiary);
-    }
+    .pf-call-pill__meta { display: flex; flex-direction: column; min-width: 0; max-width: 180px; margin: 0 6px 0 4px; }
+    .pf-call-pill__label { font-size: 13.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-call-pill__status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
 
-    /* ────────────────────────────────────────────────────────────
-       MOBILE — phone-first overrides (max-width 640, additive only)
-       The call surface is the most safety-critical UX in the app.
-       On phone the cards become full-height sheets:
-         - 100dvh (never vh) with env(safe-area-inset-*) padding
-         - action buttons pushed into the natural thumb-zone
-         - bigger tap targets, home indicator never covers End
-       ──────────────────────────────────────────────────────────── */
+    /* ── Phones: full-screen sheets, safe areas, 44px+ targets ───────── */
     @media (max-width: 640px) {
-      /* Ring card (incoming + outgoing) fills the screen like a real
-         phone call. */
-      .pf-call-ring { padding: 0; }
-      .pf-call-ring__card {
-        max-width: none;
-        height: 100dvh;
-        border-radius: 0;
-        border: 0;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        padding:
-          calc(env(safe-area-inset-top, 0px) + 56px)
-          28px
-          calc(env(safe-area-inset-bottom, 0px) + 36px);
-        justify-content: flex-start;
+      .pf-call-ring, .pf-call-screen { padding: 0; }
+      .pf-call-ring__card, .pf-call-screen__card, .pf-call-screen__card--with-chat {
+        width: 100%; height: 100dvh; max-height: none; border-radius: 0; border: 0;
+        padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
       }
-      .pf-call-ring__eyebrow     { margin-bottom: 48px; }
-      .pf-call-ring__avatar-wrap { width: 144px; height: 144px; margin-bottom: 28px; }
-      .pf-call-ring__avatar      { width: 120px; height: 120px; font-size: 40px; }
-      .pf-call-ring__name        { font-size: 27px; }
-      .pf-call-ring__source      { font-size: 15px; }
-      .pf-call-ring__actions {
-        gap: 64px;
-        margin-top: auto;       /* push to bottom thumb-zone */
-        padding-top: 48px;
-      }
-      .pf-call-ring__btn { width: 74px; height: 74px; }
-
-      /* Active call — edge-to-edge sheet, thicker controls */
-      .pf-call-screen { padding: 0; }
-      .pf-call-screen__card {
-        max-width: none;
-        height: 100dvh;
-        border-radius: 0;
-        border: 0;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        padding:
-          calc(env(safe-area-inset-top, 0px) + 12px)
-          14px
-          calc(env(safe-area-inset-bottom, 0px) + 18px);
-      }
-      .pf-call-screen__ctrls       { gap: 24px; padding-top: 14px; }
-      .pf-call-screen__ctrl-circle { width: 56px; height: 56px; }
-      .pf-call-screen__hdr-info    { gap: 6px; }
-      .pf-call-screen__hdr-meta    { gap: 8px; }
-
-      /* In-call chat: when open on phone, it takes the participants
-         space + controls area becomes a slim bar at the bottom. */
-      .pf-call-screen__card--with-chat {
-        grid-template-areas: "hdr" "err" "chat" "ctrls" !important;
-        grid-template-columns: 1fr !important;
-        grid-template-rows: auto auto 1fr auto !important;
-      }
-      .pf-call-screen__card--with-chat .pf-call-screen__participants {
-        display: none !important;
-      }
-
-      /* Floating pill — bigger, more prominent above the bottom nav */
-      .pf-call-pill {
-        bottom: calc(96px + env(safe-area-inset-bottom));
-        padding: 8px 10px 8px 8px;
-        font-size: 13px;
-      }
-      .pf-call-pill__avatar { width: 38px; height: 38px; font-size: 13px; }
-      .pf-call-pill__btn    { width: 40px; height: 40px; }
+      .pf-call-ring__card { justify-content: center; padding-left: 24px; padding-right: 24px; }
+      .pf-call-ring__actions { gap: 72px; margin-top: 48px; }
+      .pf-call-screen__hdr { padding-left: 8px; padding-right: 8px; }
+      .pf-call-icon { width: 44px; height: 44px; }
+      .pf-call-screen__participants { grid-template-columns: 1fr 1fr; padding: 16px; }
+      .pf-call-screen__body { flex-direction: column; }
+      .pf-call-chat { width: auto; border-left: 0; border-top: 1px solid var(--nd-line, #e5e7eb); flex: 1; }
+      .pf-call-screen__card--with-chat .pf-call-screen__participants { display: none; }
+      .pf-call-screen__ctrls { gap: 14px; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+      .pf-call-pill { left: 12px; right: 12px; }
+      .pf-call-pill__meta { flex: 1; max-width: none; }
+      .pf-call-invite, .pf-call-invite--screen { left: 12px; right: 12px; width: auto; transform: none; }
+    }
+    @media (max-width: 380px) {
+      .pf-call-pill__add { display: none; }
     }
 
-    @media (max-width: 400px) {
-      .pf-call-pill__meta { max-width: 90px; }
-      .pf-call-pill__btn--add { display: none; }
-      .pf-call-ring__actions { gap: 52px; }
+    @media (prefers-reduced-motion: reduce) {
+      .pf-call-ring__card, .pf-call-screen__card { animation: none; }
+      .pf-call-ring__pulse { animation: none; opacity: 0.5; transform: scale(1.12); }
+      .pf-call-ring__pulse--late { display: none; }
+      .pf-call-chip__dot--pulse { animation: none; }
+      .pf-call-round, .pf-call-icon { transition: none; }
     }
   `]
 })
 export class CallOverlayComponent {
+  /** Handset glyph (rotated 135° for hang-up). */
+  protected readonly PHONE = 'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z';
+
   protected readonly webrtc = inject(WebrtcService);
   protected readonly chat = inject(ChatService);
   private readonly toast = inject(ToastService);
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly signaling = inject(SignalingService);
-  private readonly ringtone = inject(RingtoneService);
 
   // ── In-call chat side panel ──────────────────────────────────────
   protected readonly chatPanelOpen = signal(false);
@@ -1450,6 +782,16 @@ export class CallOverlayComponent {
     if (others.length === 1) return others[0].name;
     return `Group call · ${others.length + 1}`;
   });
+
+  /** Callee (or group) shown on the outgoing card — never the placeholder
+   *  "Calling". Falls back to a neutral "Colleague" only while the name is
+   *  still being looked up. */
+  protected readonly outgoingName = computed(() => this.webrtc.outgoingPeer()?.name || 'Colleague');
+
+  /** Direct (1:1) vs Group, for the header chip. */
+  protected readonly isGroupCall = computed(() =>
+    !!this.webrtc.incomingCall()?.isGroup || !!this.webrtc.outgoingPeer()?.isGroup
+    || this.webrtc.remoteParticipants().length > 1);
 
   /** Self + remote participants, with names resolved from the directory cache. */
   protected readonly participants = computed(() => {
@@ -1541,21 +883,8 @@ export class CallOverlayComponent {
       }
     });
 
-    // Audio cues — synthesised tones via Web Audio API, no asset files.
-    // ringback while outgoing (caller hears it before pickup); ringtone
-    // while an incoming call is pending. Stops the moment status leaves
-    // those states (answered / rejected / cancelled).
-    effect(() => {
-      const status = this.webrtc.status();
-      const incoming = this.webrtc.incomingCall();
-      if (incoming) {
-        this.ringtone.play('ringtone');
-      } else if (status === 'outgoing') {
-        this.ringtone.play('ringback');
-      } else {
-        this.ringtone.stop();
-      }
-    });
+    // Audio cues (ringtone / ringback) are owned by the root CallRingService
+    // — an effect here died with the shell and left rings looping.
 
     // Voice playback runs via SrcObjectDirective on the <audio> elements —
     // see template above. The directive handles property-assignment +

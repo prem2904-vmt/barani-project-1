@@ -8,13 +8,14 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
+import { chosenSpecimen } from '../../../shared/utils/micro-specimen';
 import { patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
-import { flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
+import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
 import { effectiveMethodology } from '../../../shared/utils/methodology';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
 import { choiceOptionsFor, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
@@ -106,6 +107,10 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           }
 
           <h1 class="pf-head__title">{{ orderTest()?.test?.name ?? 'Result entry' }}</h1>
+          @if (specimenLabel(); as sp) {
+            <!-- Specimen chosen at the order desk (non-culture; culture shows it on the bench). -->
+            <span class="nd-chip nd-chip--static pf-head__spec" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span>
+          }
 
           @if (autoSavedAgo(); as t) {
             <span class="pf-autosave"><span class="pf-autosave__dot"></span>saved · {{ t }}</span>
@@ -2534,6 +2539,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       flex-shrink: 0;
     }
     @media (min-width: 768px) { .pf-head__title { font-size: 26px; } }
+    .pf-head__spec { height: 26px; font-size: 11.5px; flex: none; }
     .pf-head__sep { color: var(--text-muted); opacity: 0.6; }
     .pf-head__sub {
       margin: 0;
@@ -2929,6 +2935,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   // ── Microbiology Culture & Sensitivity ───────────────────────────────
   readonly microFormat = computed<string | null>(() => this._paramsBlob()?.microFormat ?? null);
   readonly isCulture = computed(() => this.microFormat() === 'culture_sensitivity');
+  /** "Specimen: Urine" — chosen at the order desk; culture keeps it on the bench. */
+  readonly specimenLabel = computed(() => this.isCulture() ? null : chosenSpecimen(this.orderTest()));
   /** Culture tests are entered on the Culture case page, never here. */
   openCultureBench() {
     const id = this.route.snapshot.paramMap.get('id');
@@ -3389,7 +3397,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const saved = savedFlagOf(parseResultSnapshot(ot?.currentResult), p.name);
     if (saved && saved.flag != null && String(saved.value ?? '') === String(raw)) {
       const code = flagCodeOf(saved.flag);
-      if (code === 'C') return { tone: 'critical', label: 'Critical' };
+      // Lab badge keeps the direction: CL / CH (legacy rows: C).
+      const crit = criticalBadge(code);
+      if (crit) return { tone: 'critical', label: crit };
       if (code === 'L') return { tone: 'low', label: 'Low' };
       if (code === 'H') return { tone: 'high', label: 'High' };
       if (code === 'A') return { tone: 'high', label: 'Abnormal' };
@@ -3401,7 +3411,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const lf = liveFlag(p, v, normalizeSex(ot?.subOrder?.order?.patient?.sex),
       typeof ageRaw === 'number' ? ageRaw : null, ot?.profileCode);
     if (!lf) return null;
-    if (lf.code === 'C') return { tone: 'critical', label: `Critical ${lf.critical === 'low' ? 'low · below' : 'high · above'} ${lf.limit}` };
+    if (lf.code === 'CL' || lf.code === 'CH') return { tone: 'critical', label: `${lf.code} · ${lf.code === 'CL' ? 'below' : 'above'} ${lf.limit}` };
     if (lf.code === 'L') return { tone: 'low',  label: 'Low' };
     if (lf.code === 'H') return { tone: 'high', label: 'High' };
     return { tone: 'normal', label: 'Normal' };

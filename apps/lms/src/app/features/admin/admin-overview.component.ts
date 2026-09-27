@@ -11,6 +11,7 @@ import { ThemeService } from '../../core/services/theme.service';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
+import { canOpenRoute } from "../../core/auth/route-access";
 import { ApiService } from "../../core/services/api.service";
 import { ApiError } from "../../shared/models/api-response.model";
 import { ToastService } from "../../core/services/toast.service";
@@ -363,6 +364,7 @@ interface KpiCard {
             <span class="pf-ov__stat-v">{{ summary()?.workflows ?? "—" }}</span
             ><span class="pf-ov__stat-l">Form flows</span>
           </div>
+          @if (canOpen("/dashboard")) {
           <a
             routerLink="/dashboard"
             class="pf-ov__stat pf-ov__stat--link nd-card press"
@@ -370,6 +372,7 @@ interface KpiCard {
             <span class="pf-ov__stat-v">TAT</span
             ><span class="pf-ov__stat-l">Live turnaround →</span>
           </a>
+          }
         </div>
 
         <!-- Shortcuts into the settings hub, grouped by relevance. -->
@@ -1032,13 +1035,23 @@ export class AdminOverviewComponent implements OnInit {
     },
   ];
 
+  /** Route-access context for filtering links (ROUTE_ACCESS — same rule as the
+   *  guards), so a custom admin role never sees a card that lands on /403. */
+  protected canOpen(href: string): boolean {
+    // hasAnyPermission already honours '*' (super-admin).
+    return canOpenRoute(href, { hasAny: (p) => this.auth.hasAnyPermission(p) });
+  }
+  private openable<T extends { href?: string }>(items: T[]): T[] {
+    return items.filter((i) => !i.href || this.canOpen(i.href));
+  }
+
   readonly groups: Array<{
     cat: string;
     label: string;
     blurb: string;
     icon: string;
     href?: string;
-  }> = [
+  }> = this.openable([
     // Module-first admin: one card per MODULE (Lab here; OPD/IPD/Pharmacy slot in
     // as each ships), then the shared/platform cards. Module ENABLEMENT lives in
     // the platform console (admin.prefrontal.health) — not here.
@@ -1144,7 +1157,7 @@ export class AdminOverviewComponent implements OnInit {
       blurb: "Process builder & form flows",
       icon: "M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z",
     },
-  ];
+  ]);
 
   // ── Admin search (item 140) ────────────────────────────────────
   // A flat index of every config screen / admin page so any setting is one
@@ -1166,7 +1179,7 @@ export class AdminOverviewComponent implements OnInit {
     icon: string;
     kw: string;
     queryParams?: Record<string, string>;
-  }> = [
+  }> = this.openable([
     {
       label: "Users & Access",
       href: "/admin/users",
@@ -1359,7 +1372,7 @@ export class AdminOverviewComponent implements OnInit {
       icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.6 1.6 0 0 0 .3 1.7M4.6 15a1.6 1.6 0 0 1-.3 1.7",
       kw: "settings hub manage browse category all configuration",
     },
-  ];
+  ]);
   readonly results = computed(() => {
     const term = this._q().trim().toLowerCase();
     if (!term) return [];

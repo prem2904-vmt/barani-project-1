@@ -36,8 +36,12 @@ import { loginAs, RoleKey } from './support/auth';
  *     → hides: Frontdesk, Lab, Validate, Results, Admin
  *   labTech (Lab Technician: collect_sample, receive_sample, enter_result,
  *            view_report, ...)
- *     → sees:  Collect, Lab, Results
- *     → hides: Frontdesk, Validate, Admin
+ *     → sees:  Collect, Lab
+ *     → hides: Frontdesk, Validate, Results (needs deliver_report), Admin
+ *   receptionist (Receptionist: register_patient, create_order, collect_sample,
+ *            deliver_report, ...)
+ *     → sees:  Frontdesk, Results
+ *     → hides: Lab (its screen needs enter_result | receive_sample), Validate
  *   pathologist (Pathologist: validate_result, deliver_report, view_report)
  *     → sees:  Validate, Results
  *     → hides: Frontdesk, Collect, Lab, Admin
@@ -111,10 +115,22 @@ const MATRIX: RoleExpectation[] = [
     adminVisible: false,
   },
   {
+    // Results is hidden: /reports is guarded on deliver_report and a Lab Tech
+    // holds only view_report (it used to show and land on /403).
     role: 'labTech',
     anchor: 'Lab',
-    present: ['Collect', 'Lab', 'Results'],
-    absent: ['Frontdesk', 'Validate'],
+    present: ['Collect', 'Lab'],
+    absent: ['Frontdesk', 'Validate', 'Results'],
+    adminVisible: false,
+  },
+  {
+    // Owner report 2026-09-27: "FD can see the Lab page, but going there results
+    // in 403". The Lab area holds a Sample-collection copy (collect_sample), but
+    // its screen /lab/my-work needs enter_result | receive_sample — so no Lab.
+    role: 'receptionist',
+    anchor: 'Frontdesk',
+    present: ['Frontdesk', 'Results'],
+    absent: ['Lab', 'Validate'],
     adminVisible: false,
   },
   {
@@ -210,4 +226,21 @@ test.describe('RBAC nav visibility — Branch Manager (documented findings, not 
     // ADMIN_PERMS includes 'manage_branches').
     await expect.soft(page, 'manager should be bounced off /admin per the RBAC contract').not.toHaveURL(/\/admin$/);
   });
+});
+
+test.describe('RBAC nav visibility — every nav link opens (read-only; no data created)', () => {
+  for (const role of ['receptionist', 'labTech', 'pathologist', 'sampleCollector'] as const) {
+    test(`${role}: no primary-nav link lands on /403`, async ({ page }) => {
+      await loginAs(page, role);
+      await expect(page).not.toHaveURL(/\/403$/, { timeout: 15_000 });
+      await expect(primaryNav(page).locator('a').first()).toBeVisible({ timeout: 15_000 });
+      const links = await primaryNav(page).locator('a').all();
+      const hrefs = (await Promise.all(links.map((l) => l.getAttribute('href'))))
+        .filter((h): h is string => !!h && h.startsWith('/'));
+      for (const href of hrefs) {
+        await page.goto(href);
+        await expect(page, `${role} → ${href}`).not.toHaveURL(/\/403$/, { timeout: 10_000 });
+      }
+    });
+  }
 });

@@ -40,9 +40,9 @@ const perms = [
 ];
 
 function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (...a: any[]) => Promise<boolean> } = {}) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always install the stub (never 'only if missing'): another spec in the same
+  // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const api = {
     get: vi.fn((url: string) => {
       if (url.startsWith('/api/roles/') && url.endsWith('/permissions')) return of(['p1']);

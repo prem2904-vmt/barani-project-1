@@ -6,14 +6,14 @@
    ═════════════════════════════════════════════════════════════════ */
 @media (max-width: 640px) {
 
-  /* ── Page padding: reclaim 24px+ of horizontal real-estate so cards
-        actually fit. The Tailwind `px-4` on .pf-page__header (= 16px)
-        is fine but Tailwind `px-8` at md+ doesn't apply here; we just
-        ensure body matches header so things line up vertically. */
+  /* ── Page padding: header + body gutter == the band bleed, so the
+        hero band reaches both screen edges and the cards sit one bleed
+        (16px) in. The section's own global 12px gutter is zeroed in
+        frontdesk-landing.component.scss — never stack the two again. */
   .pf-page__header,
   .pf-page__body {
-    padding-left: 14px !important;
-    padding-right: 14px !important;
+    padding-left: var(--pf-hb-bleed) !important;
+    padding-right: var(--pf-hb-bleed) !important;
   }
 
   /* ── Greeting + header block tighten. */

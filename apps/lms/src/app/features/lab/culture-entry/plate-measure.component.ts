@@ -3,6 +3,8 @@ import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { PlatformService } from '../../../core/services/platform.service';
+import { UploadsService } from '../../../core/services/uploads.service';
+import { isPrivateUploadPath } from '../../../shared/utils/upload-fetch';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { PlateMeasurement, PlateMeasureSession } from '../../../shared/models/culture.model';
@@ -630,6 +632,7 @@ const NOT_A_DISK = '__not_a_disk';
 export class PlateMeasureComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly platform = inject(PlatformService);
+  private readonly uploads = inject(UploadsService);
   private readonly cap = inject(CapacitorService);
   private readonly toasts = inject(ToastService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -746,7 +749,11 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     this.diskApi.usage().subscribe({ next: u => this.usage.set(u), error: () => { /* no usage line */ } });
     if (this.existingImageUrl) {
       this.uploadedUrl = this.existingImageUrl;
-      this.imageSrc.set(this.resolve(this.existingImageUrl));
+      // A private upload has no direct URL: show the session's cached blob
+      // (the case thumbnail usually loaded it) until the blob load below lands.
+      this.imageSrc.set(isPrivateUploadPath(this.existingImageUrl)
+        ? (this.uploads.src(this.existingImageUrl) || null)
+        : this.resolve(this.existingImageUrl));
       void this.loadExistingBlob(this.existingImageUrl);
       const s = this.existingSession;
       if (s?.calPts?.length === 2) { this.calPts.set(s.calPts.map(pt => ({ x: pt.x, y: pt.y }))); this.restoreRows(s); this.mode.set('measure'); }
@@ -765,7 +772,10 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   }
   private async loadExistingBlob(url: string) {
     try {
-      this.photoBlob = await (await fetch(this.resolve(url))).blob();
+      // Private upload → fetched with the session (UploadsService).
+      const blob = await this.uploads.blob(url);
+      if (!blob) return;
+      this.photoBlob = blob;
       // A same-origin blob URL keeps the canvas readable for OpenCV.
       this.imageSrc.set(URL.createObjectURL(this.photoBlob));
     } catch { /* offline → manual rings only */ }

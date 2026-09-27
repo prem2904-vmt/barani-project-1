@@ -22,7 +22,9 @@ import { PatientProfileModalComponent } from "../../shared/components/patient-pr
 import { CallOverlayComponent } from "../../shared/components/call-overlay/call-overlay.component";
 import { PeopleDrawerComponent } from "../../shared/components/people-drawer/people-drawer.component";
 import { ChatWindowsComponent } from "../../shared/components/chat-windows/chat-windows.component";
+import { ChatPopupsComponent } from "../../shared/components/chat-popups/chat-popups.component";
 import { SignalingService } from "../../core/services/signaling.service";
+import { WorkEventsService } from '../../core/services/work-events.service';
 import { ChatService } from "../../core/services/chat.service";
 import { ChatNotifyService } from "../../core/services/chat-notify.service";
 import { PlatformService } from "../../core/services/platform.service";
@@ -56,6 +58,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
     CallOverlayComponent,
     PeopleDrawerComponent,
     ChatWindowsComponent,
+    ChatPopupsComponent,
     BarcodeScannerModalComponent,
     PatientTimelineComponent,
     SwipeBackDirective,
@@ -122,6 +125,8 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         <!-- Messenger-style floating chat windows (new design, >=768px).
              Phones/classic keep the drawer above as the chat surface. -->
         <pf-chat-windows></pf-chat-windows>
+        <!-- "New message" pop-ups (bottom-right web, top on phones). -->
+        <pf-chat-popups></pf-chat-popups>
       }
 
       <!-- Patient profile modal — globally available; opens via
@@ -318,7 +323,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       }
       /* Content clears the docked bar; the band now starts at the very top. */
       :host-context(.design-new.nav-bottom) .shell-main {
-        padding-bottom: 70px !important;
+        padding-bottom: calc(var(--pf-botbar-h, 57px) + 12px) !important;
       }
 
       /* NEW design (Figma 446-113): a FLUSH full-width bar — no
@@ -516,14 +521,13 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         border-top: 1px solid var(--header-border);
         padding-bottom: env(safe-area-inset-bottom, 0px);
         z-index: 40;
-        /* Same --pf-band-* wash as the hero band, with the fade mirrored
-           so it darkens toward the floor. One source of truth in
-           styles.scss — the two bars cannot drift apart. */
-        /* Glassmorphism (owner): translucent base + a blur of whatever is
+        /* The bar's surface lives in styles.scss as --pf-navbar-* (light
+           = the band's wash; dark = its own VERTICAL violet fade, owner).
+           Glassmorphism (owner): translucent base + a blur of whatever is
            scrolling underneath, so the bar frosts the page instead of
            capping it. The wash rides on top of the frost. */
-        background-color: var(--pf-band-bg-glass);
-        background-image: var(--pf-band-fade-up), var(--pf-band-sweep);
+        background-color: var(--pf-navbar-bg-glass);
+        background-image: var(--pf-navbar-wash);
         backdrop-filter: blur(18px) saturate(1.3);
         -webkit-backdrop-filter: blur(18px) saturate(1.3);
       }
@@ -538,11 +542,13 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
          than a see-through one with unreadable icons. */
       @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
         :host-context(.design-new.nav-bottom) .pf-chrome {
-          background-color: var(--pf-band-bg);
+          background-color: var(--pf-navbar-bg);
         }
       }
       :host-context(.dark.design-new.nav-bottom) .pf-chrome {
-        border-top-color: var(--pf-band-edge);
+        border-top-color: var(--pf-navbar-edge);
+        /* Faint violet glow off the top edge, paired with the band's. */
+        box-shadow: var(--pf-navbar-glow, none);
       }
       /* One bottom surface only: the phone pill / iPad rail steps aside. */
       :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }
@@ -595,6 +601,9 @@ export class ShellComponent {
   }
   private readonly signaling = inject(SignalingService);
   private readonly chat = inject(ChatService);
+  /** Live work screens: one branch-scoped socket (/hubs/work) for every
+   *  signed-in user — independent of the Messages module. */
+  private readonly workEvents = inject(WorkEventsService);
   private readonly chatNotify = inject(ChatNotifyService);
   private readonly platform = inject(PlatformService);
   protected readonly entitlements = inject(TenantEntitlementsService);
@@ -632,6 +641,8 @@ export class ShellComponent {
           if (this.entitlements.moduleEnabled('messages')) {
             await this.signaling.connect();
           }
+          // Work events first: queues go live even if chat is slow to come up.
+          void this.workEvents.start().catch(() => undefined);
           // Chat connects independently — its own hub, own reconnection.
           await this.chat.connect().catch(() => undefined);
         }

@@ -249,9 +249,13 @@ export function scoreTestSearchStrict(test: Test | any, query: string, aliases: 
 export function filterTestListStrict<T extends Test | any>(list: T[], query: string, catalogue: readonly (Test | any)[] = list): T[] {
   if (!query || !query.trim()) return list;
   const aliases = profileAliases(catalogue);
+  // Relevance first, then A→Z by name (QA #4b), then catalogue order.
+  const nameOf = (t: any) => String(t?.name ?? '').trim();
   return oneRowPerKey(list)
     .map((t, i) => ({ t, i, s: scoreTestSearchStrict(t, query, aliasesFor(t, aliases)) }))
     .filter(x => x.s > 0)
-    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .sort((a, b) => b.s - a.s
+      || nameOf(a.t).localeCompare(nameOf(b.t), undefined, { sensitivity: 'base', numeric: true })
+      || a.i - b.i)
     .map(x => x.t);
 }

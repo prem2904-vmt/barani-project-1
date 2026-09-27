@@ -1,5 +1,5 @@
 import { Location } from '@angular/common';
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -15,6 +15,7 @@ import { Test } from '../../../shared/models/test.model';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from './invoice-pdf';
 import { environment } from '../../../../environments/environment';
 import { waLink } from '../../../shared/utils/whatsapp';
+import { upiLink, upiQrDataUrl } from '../../../shared/utils/upi';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -22,6 +23,8 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
+import { billRoundOff, maxDiscountWithinPaid, previewBillForDiscount } from '../../../shared/utils/bill-math';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -178,10 +181,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   <span>Subtotal</span>
                   <span class="tabular-nums">{{ b.subTotal | inr }}</span>
                 </div>
-                @if (b.totalTax > 0) {
+                @if (shownTax() > 0) {
                   <div class="pf-bill-line">
                     <span>GST</span>
-                    <span class="tabular-nums">{{ b.totalTax | inr }}</span>
+                    <span class="tabular-nums">{{ shownTax() | inr }}</span>
                   </div>
                 }
                 <div class="pf-bill-line pf-bill-line--discount">
@@ -199,7 +202,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                            inputmode="numeric"
                            min="0"
                            step="1"
-                           [attr.max]="discountKind() === 'percent' ? 100 : (b.subTotal + b.totalTax)"
+                           [attr.max]="discountKind() === 'percent' ? 100 : preDiscountGross()"
                            [class.pf-discount__input--err]="discountOverCap() || !!discountError()"
                            [value]="discount()"
                            (input)="setDiscount(asInput($event))"
@@ -293,12 +296,18 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       <p class="pf-eyebrow mb-0.5">Scan to pay</p>
                       <p class="pf-big-amount">{{ effectivePayable() | inr }}</p>
                     </div>
-                    <div class="pf-qr">
-                      <img class="pf-qr__img" [src]="upiQrUrl()"
-                           alt="Scan to pay via UPI"/>
-                    </div>
+                    @if (upiVpa()) {
+                      <div class="pf-qr">
+                        @if (upiQrUrl()) {
+                          <img class="pf-qr__img" [src]="upiQrUrl()"
+                               alt="Scan to pay via UPI" data-testid="upi-qr"/>
+                        }
+                      </div>
+                    } @else {
+                      <p class="pf-qr__hint" data-testid="upi-missing">No UPI address is set, so no QR is shown. An admin can add it in Admin, Billing.</p>
+                    }
                     <div class="flex flex-col items-center gap-1">
-                      <p class="pf-qr__hint">prefrontal&#64;upi · Chennai Main</p>
+                      @if (upiVpa()) { <p class="pf-qr__hint">{{ upiVpa() }}</p> }
                       <div class="pf-live-badge">
                         <span class="pf-live__dot"></span>
                         <span>Listening for payment…</span>
@@ -1702,17 +1711,49 @@ export class BillingComponent implements OnInit, OnChanges {
     if (this._discountKind() === 'flat') return raw;
     const b = this._bill();
     if (!b) return 0;
-    const base = b.subTotal + b.totalTax;
-    return Math.max(0, Math.min(base, Math.round((base * raw) / 100)));
+    // % of the pre-discount gross, rounded DOWN to the paisa (never up to a
+    // whole rupee — that pushed small bills over the cap).
+    return percentDiscountAmount(this.preDiscountGross(), raw);
   });
-  /** The full invoice total after the reception discount (no payments applied). */
+  /** What the bill becomes once the typed discount is applied — the server's
+   *  own recompute (POST /discount re-splits the lines: discount off the
+   *  taxable value, GST on the rest). Null when no discount is typed. */
+  readonly discountPreview = computed(() => {
+    const d = this.discountNum();
+    return d > 0 ? previewBillForDiscount(this._bill(), d) : null;
+  });
+  /** The full invoice total after the reception discount (no payments applied)
+   *  — exactly the payable the server will hold (never payable − discount). */
   readonly fullTotal = computed(() => {
     const b = this._bill();
     if (!b) return 0;
-    return Math.max(0, b.totalPayable - this.discountNum());
+    return this.discountPreview()?.payable ?? b.totalPayable;
   });
+  /** GST as the bill will carry it (post-discount when a discount is typed). */
+  readonly shownTax = computed(() => this.discountPreview()?.tax ?? this._bill()?.totalTax ?? 0);
+  /** Round-off (±0.xx to the whole-rupee total) as the bill will carry it. */
+  readonly shownRoundOff = computed(() => this.discountPreview()?.roundOff ?? billRoundOff(this._bill()));
   /** Amount already collected (payments − refunds), from the loaded bill. */
   readonly alreadyPaid = computed(() => this._bill()?.totalPaid ?? 0);
+  /** Part-paid bill: the most discount that keeps the payable ≥ what is paid
+   *  (null when nothing is paid — only the role cap applies). */
+  readonly maxDiscountAllowed = computed(() =>
+    this.alreadyPaid() > 0 ? maxDiscountWithinPaid(this._bill(), this.alreadyPaid()) : null);
+  /** The typed discount would take the payable below what is already paid —
+   *  the server refuses it (400 discount_exceeds_balance); block confirm. */
+  readonly discountExceedsPaid = computed(() => {
+    const p = this.discountPreview();
+    return !!p && this.alreadyPaid() > 0 && p.payable < this.alreadyPaid();
+  });
+  /** The refusal, worded as the server words it, plus the most allowed. */
+  readonly discountExceedsPaidMessage = computed(() => {
+    const b = this._bill();
+    if (!this.discountExceedsPaid() || !b) return '';
+    const unpaid = Math.max(0, b.totalPayable - this.alreadyPaid());
+    const max = this.maxDiscountAllowed() ?? 0;
+    const inr = (n: number) => new CurrencyInrPipe().transform(n);
+    return `This discount is more than the unpaid balance of ${inr(unpaid)} — reduce it (at most ${inr(max)}), or record a refund instead.`;
+  });
   /** Outstanding to collect — the difference after prior payments. */
   readonly effectivePayable = computed(() => Math.max(0, this.fullTotal() - this.alreadyPaid()));
   /** Overpayment to refund (e.g. a test was removed after the bill was paid). */
@@ -1803,22 +1844,25 @@ export class BillingComponent implements OnInit, OnChanges {
     return `≈ ${days} day${days === 1 ? '' : 's'} to report`;
   });
 
-  /** UPI deep-link encoded into a real QR (rendered via api.qrserver.com).
-   *  Amount + invoice id are baked in so the patient's UPI app prefills
-   *  everything. payee VPA + name are placeholder constants for now. */
-  readonly upiQrUrl = computed<string>(() => {
-    const amt = this.effectivePayable();
-    const inv = this.invoiceNumber();
-    const params = new URLSearchParams({
-      pa: 'prefrontal@upi',
-      pn: 'Prefrontal Lab',
-      tn: inv,
-      am: String(amt),
-      cu: 'INR'
-    });
-    const upi = `upi://pay?${params.toString()}`;
-    const enc = encodeURIComponent(upi);
-    return `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${enc}`;
+  /** UPI QR for the payable amount — payee from Admin → Billing (the
+   *  reception-readable visibility slice), invoice no. as the note,
+   *  rendered in the app (no third-party QR service). */
+  private readonly _upiPayee = signal<{ upiVpa?: string | null; upiPayeeName?: string | null } | null>(null);
+  readonly upiVpa = computed(() => (this._upiPayee()?.upiVpa ?? '').trim());
+  readonly upiLink = computed<string | null>(() => {
+    const vpa = this.upiVpa();
+    return vpa ? upiLink(vpa, this._upiPayee()?.upiPayeeName, this.effectivePayable(), this.invoiceNumber()) : null;
+  });
+  readonly upiQrUrl = signal<string | null>(null);
+  private _upiQrSeq = 0;
+  private readonly _upiQrEffect = effect(() => {
+    const link = this.upiLink();
+    const seq = ++this._upiQrSeq;
+    if (!link) { this.upiQrUrl.set(null); return; }
+    upiQrDataUrl(link).then(
+      url => { if (seq === this._upiQrSeq) this.upiQrUrl.set(url); },
+      () => { if (seq === this._upiQrSeq) this.upiQrUrl.set(null); },
+    );
   });
 
   // ── Per-role discount cap (notify rather than silently clamp) ──
@@ -1830,11 +1874,10 @@ export class BillingComponent implements OnInit, OnChanges {
     : this.auth.hasPermission('give_discount') ? this._maxDiscountPct()
     : 0);
   /** Entered discount as a % of the bill's pre-discount total. */
-  readonly discountPct = computed(() => {
-    const b = this._bill();
-    const base = b ? b.subTotal + b.totalTax : 0;
-    return base > 0 ? (this.discountNum() / base) * 100 : 0;
-  });
+  /** The bill's pre-discount gross (price + full-price GST) — the base of
+   *  every discount % here and of the server's cap check. */
+  readonly preDiscountGross = computed(() => billPreDiscountGross(this._bill()));
+  readonly discountPct = computed(() => discountPctOf(this.discountNum(), this.preDiscountGross()));
   /** True when the entered discount exceeds the user's cap → block + notify. */
   readonly discountOverCap = computed(() =>
     this.discountNum() > 0 && this.discountPct() > this.discountCapPct() + 0.01);
@@ -1842,6 +1885,7 @@ export class BillingComponent implements OnInit, OnChanges {
   readonly canConfirm = computed(() => {
     if (this._paid()) return false; // already paid — never let it re-fire
     if (this.discountOverCap()) return false; // discount above this user's limit
+    if (this.discountExceedsPaid()) return false; // below what's already paid
     const m = this._mode();
     if (m === 'cash') return this.cashAmountNum() >= this.effectivePayable();
     if (m === 'wallet') {
@@ -1894,10 +1938,12 @@ export class BillingComponent implements OnInit, OnChanges {
     // Per-role discount caps (Level-1 give_discount / Level-2 override_discount).
     // Slim endpoint: the full config GET is admin-gated, so a receptionist's
     // fetch 403'd and the caps silently fell back to 100%.
-    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing/visibility').subscribe({
+    // Same slice carries the UPI payee for the pay-now QR.
+    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number; upiVpa?: string | null; upiPayeeName?: string | null }>('/api/config/billing/visibility').subscribe({
       next: c => {
         if (typeof c?.maxDiscountPct === 'number') this._maxDiscountPct.set(c.maxDiscountPct);
         if (typeof c?.overrideDiscountPct === 'number') this._overrideDiscountPct.set(c.overrideDiscountPct);
+        this._upiPayee.set(c ? { upiVpa: c.upiVpa, upiPayeeName: c.upiPayeeName } : null);
       },
       error: () => { /* default 100% cap */ }
     });
@@ -2046,7 +2092,7 @@ export class BillingComponent implements OnInit, OnChanges {
       return;
     }
     const b = this._bill();
-    const cap = b ? b.subTotal + b.totalTax : Number.POSITIVE_INFINITY;
+    const cap = b ? billPreDiscountGross(b) : Number.POSITIVE_INFINITY;
     const n = Math.min(raw, cap);
     this._discount.set(n === 0 ? '' : String(n));
   }
@@ -2078,6 +2124,7 @@ export class BillingComponent implements OnInit, OnChanges {
   confirm() {
     const b = this._bill();
     if (!b || this._saving()) return;
+    if (this.discountExceedsPaid()) { this.toasts.error(this.discountExceedsPaidMessage()); return; }
     if (!this.canConfirm()) {
       this.toasts.warning('Enter an amount at least equal to the total due.');
       return;
@@ -2096,7 +2143,8 @@ export class BillingComponent implements OnInit, OnChanges {
         // anytime before report delivery).
         const collectAdvance = (bill: Bill) => {
           this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount: adv,
+            // Never above what the (recomputed) server bill owes.
+            amount: Math.min(adv, Math.max(0, bill.balance)),
             mode: this._advanceMode(),
             referenceNo: this._referenceNo() || undefined
           }).subscribe({
@@ -2128,12 +2176,26 @@ export class BillingComponent implements OnInit, OnChanges {
         }
         return;
       }
-      this._saving.set(false);
-      this._paid.set(true);
-      this.clearDraft();
-      this.toasts.warning('Marked as Pay later — outstanding balance recorded');
-      this.billingEvents.notifyPayLater();
-      this._paymentDoneOpen.set(true);
+      const markLater = () => {
+        this._saving.set(false);
+        this._paid.set(true);
+        this.clearDraft();
+        this.toasts.warning('Marked as Pay later — outstanding balance recorded');
+        this.billingEvents.notifyPayLater();
+        this._paymentDoneOpen.set(true);
+      };
+      // A typed discount must reach the money on pay-later too (it was
+      // dropped here: the outstanding stayed at the full price).
+      const dLater = this.discountNum();
+      if (dLater > 0) {
+        this.api.post<Bill>(`/api/billing/${b.id}/discount`, { amount: dLater, reason: 'Reception discount' })
+          .subscribe({
+            next: updated => { this._bill.set(updated); markLater(); },
+            error: e => { this._saving.set(false); this.showDiscountError(e); }
+          });
+      } else {
+        markLater();
+      }
       return;
     }
     // 'wallet' mode charges the selected vendor's credit BEFORE
@@ -2143,8 +2205,9 @@ export class BillingComponent implements OnInit, OnChanges {
     if (this._mode() === 'wallet') {
       const vendor = this.selectedVendor();
       if (!vendor) { this._saving.set(false); this.toasts.warning('Pick a vendor first'); return; }
-      const amount = this.effectivePayable();
       const applyAndPay = (currentBill: Bill) => {
+        // Charge the SERVER's outstanding on the (recomputed) bill.
+        const amount = Math.max(0, currentBill.balance);
         this.api.post<VendorWallet>(`/api/vendors/${vendor.id}/charge`, {
           amount, billId: currentBill.id,
           reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`
@@ -2200,7 +2263,10 @@ export class BillingComponent implements OnInit, OnChanges {
       // reopening billing for that patient collects only what's left instead
       // of double-charging (which would push the bill into an overpaid /
       // refund-owed state).
-      const amountDue = this.alreadyPaid() > 0 ? this.effectivePayable() : bill.totalPayable;
+      // The bill passed in is the server's — after POST /discount it is the
+      // RECOMPUTED bill — so its balance is exactly what is owed (it used to
+      // post bill.totalPayable, the pre-discount figure).
+      const amountDue = Math.max(0, bill.balance);
       this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
         amount: amountDue,
         mode: this._mode(),
@@ -2299,7 +2365,8 @@ export class BillingComponent implements OnInit, OnChanges {
         bill: b,
         order: this._order(),
         invoiceNumber: this.invoiceNumber(),
-        effectivePayable: this.effectivePayable(),
+        // The invoice prints the server bill's payable (source of truth).
+        effectivePayable: b.totalPayable,
         tatLabel: this.tatLabel(),
         qrDataUrl, orderQrDataUrl, logoDataUrl,
         cashierName: this.auth.user()?.displayName || undefined,

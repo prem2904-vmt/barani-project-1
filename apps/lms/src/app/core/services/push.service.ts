@@ -349,11 +349,14 @@ export class PushService {
       case 'chat-message': {
         const conv = data['conversationId'] as string;
         if (opened && conv) {
-          this.router.navigate(['/messages'], { queryParams: { open: conv } });
-        } else if (title || body) {
-          // Foreground delivery: subtle toast so the user can tap to jump.
-          this.toasts.info(`${title ?? 'New message'} — ${body ?? ''}`);
+          // `c` is the param /messages reads (it used to send `open`, which
+          // the page ignored — a tapped push landed on the list).
+          this.router.navigate(['/messages'], { queryParams: { c: conv } });
         }
+        // Foreground delivery: no toast. The live hub already raised the
+        // in-app pop-up (Android) and iOS presents its own banner in the
+        // foreground (presentationOptions) — a toast here was a third copy
+        // that also ignored mute and the open thread.
         break;
       }
       case 'call-incoming': {

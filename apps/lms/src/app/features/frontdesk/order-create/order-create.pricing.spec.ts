@@ -22,9 +22,9 @@ import { AuthService } from '../../../core/auth/auth.service';
  * here never reaches the picker.
  */
 function make(tests: any[], perms: string[] = []) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always install the stub (never 'only if missing'): another spec in the same
+  // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const api = { get: vi.fn(() => of([])), post: vi.fn(() => of({})), patch: vi.fn(() => of({})) };
   const stub = {};
   TestBed.configureTestingModule({
@@ -90,6 +90,37 @@ describe('OrderCreate pricing (pricing-table DTO)', () => {
     c.setDiscountValue('20');
     expect(c.discountAmount()).toBe(236);            // 20% of 1180
     expect(c.discountOverCap()).toBe(true);
+  });
+
+  it('owner bug: a 17–25% discount on a small (₹3) cart stays within the 25% cap', () => {
+    // Three ₹1 (unpriced) tests, GST off. Rounding the percent to whole rupees
+    // made 17% → ₹1 = 33% → "exceeds your limit of 25%".
+    const c = make([T('a', 1), T('b', 1), T('c', 1)], ['give_discount', 'override_discount']);
+    c._selected.set(['a', 'b', 'c']);
+    c.gstEnabled.set(false);
+    c.maxDiscountPct.set(10);
+    c.overrideDiscountPct.set(25);
+    expect(c.discountCapPct()).toBe(25);
+    c.setDiscountKind('percent');
+    for (const pct of ['17', '20', '24', '25']) {
+      c.setDiscountValue(pct);
+      expect(c.discountPct()).toBeLessThanOrEqual(Number(pct));
+      expect(c.discountOverCap()).toBe(false);
+    }
+    c.setDiscountValue('25');
+    expect(c.discountAmount()).toBe(0.75);
+    c.setDiscountValue('26');
+    expect(c.discountOverCap()).toBe(true);
+  });
+
+  it('percent of a GST cart resolves on the gross the server measures (25% of 1180 = ₹295)', () => {
+    const c = make([T('cbc', 1000, { taxSlab: 18 })], ['override_discount']);
+    c._selected.set(['cbc']);
+    c.overrideDiscountPct.set(25);
+    c.setDiscountKind('percent');
+    c.setDiscountValue('25');
+    expect(c.discountAmount()).toBe(295);
+    expect(c.discountOverCap()).toBe(false);
   });
 
   it('an unpriced test defaults to ₹1 (data knows it is the default; the UI shows just the price)', () => {

@@ -12,6 +12,9 @@ interface PublicReportResult {
   template?: unknown;
   /** Outsourced tests' partner-lab reports, delivered alongside ours. */
   partnerReports?: { testName: string; partnerLabName?: string | null; url: string; fileName?: string | null }[];
+  /** Uploads are private; the verified page gets short-lived signed URLs for
+   *  every "/uploads/…" asset its report needs, keyed by the stored path. */
+  assetUrls?: Record<string, string>;
 }
 
 /**
@@ -154,7 +157,8 @@ export class PublicReportComponent {
 
   private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
 
-  /** Partner files live on the API host ("/uploads/…"). */
+  /** Partner files live on the API host — already signed by the verify call
+   *  ("/uploads/…?exp=…&sig=…"). */
   protected fileUrl(url: string): string {
     return /^https?:\/\//i.test(url) ? url : `${environment.apiUrl.replace(/\/$/, '')}${url}`;
   }
@@ -214,7 +218,7 @@ export class PublicReportComponent {
         template: (data.template ?? null) as never,
         resolvedLayouts: {},
       };
-      const imageCache = await preloadReportImages(baseInput, environment.apiUrl);
+      const imageCache = await preloadReportImages(baseInput, environment.apiUrl, data.assetUrls);
       const blob = buildReportPdf({ ...baseInput, imageCache }).output('blob');
       const url = URL.createObjectURL(blob);
       this.rawPdfUrl.set(url);

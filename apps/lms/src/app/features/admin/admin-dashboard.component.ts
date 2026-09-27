@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
+import { canOpenRoute } from '../../core/auth/route-access';
 import { ApiService } from '../../core/services/api.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -418,7 +419,9 @@ export class AdminDashboardComponent implements OnInit {
   // Tiles map 1:1 to existing admin routes. Subtitles read live
   // counts from /api/_seed/summary where applicable so the dashboard
   // doubles as a quick status glance.
-  readonly categories: Category[] = [
+  // Tiles are filtered to routes this user can open (ROUTE_ACCESS) — a custom
+  // admin role (e.g. manage_tests only) must not see tiles that land on /403.
+  readonly categories: Category[] = this.openable([
     {
       id: 'people',
       label: 'People & Access',
@@ -501,7 +504,18 @@ export class AdminDashboardComponent implements OnInit {
           subtitle: () => `${this._summary()?.workflows ?? '—'} screen forms configured` },
       ]
     },
-  ];
+  ]);
+
+  /** Keep only tiles whose destination route the user can open; drop empty
+   *  categories. */
+  private openable(cats: Category[]): Category[] {
+    // hasAnyPermission already honours '*' (super-admin).
+    const ctx = { hasAny: (p: string[]) => this.auth.hasAnyPermission(p) };
+    const out = cats
+      .map(c => ({ ...c, tiles: c.tiles.filter(t => canOpenRoute(t.href, ctx)) }))
+      .filter(c => c.tiles.length > 0);
+    return out.length ? out : cats.slice(0, 1).map(c => ({ ...c, tiles: [] }));
+  }
 
   private readonly _active = signal<string>(this.categories[0].id);
   readonly active = this._active.asReadonly();

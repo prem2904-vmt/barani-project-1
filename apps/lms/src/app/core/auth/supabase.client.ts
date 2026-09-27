@@ -19,7 +19,14 @@ export const supabase: SupabaseClient = createClient(
   {
     auth: {
       persistSession: true,
-      autoRefreshToken: true,
+      // OFF (RCA 2026-09-27, "profile's session has expired" on switch): the
+      // SDK keeps ONE session in ONE storage key for every profile on the
+      // device and background-refreshed whichever profile it last held —
+      // rotating that profile's refresh token behind our back, so the copy in
+      // the accounts registry became a revoked token and switching back to it
+      // failed. AuthService owns refresh (single-flight, on demand, written
+      // to the registry row of the account the tab actually holds).
+      autoRefreshToken: false,
       detectSessionInUrl: false,
       // Don't phone home on a 60s tick for refresh — our watchdog and the
       // on-demand refresh in getAccessToken() cover staleness.

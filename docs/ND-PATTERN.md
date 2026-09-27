@@ -50,6 +50,8 @@ The band always shows the **back chevron**, the **tenant logo and name** and
 the **band actions**. It **never** becomes a page or patient title.
 Every screen of a work-area where the Process builder places Sample collection gets `pf-collect-band-button` as the RIGHTMOST band action (quiet slate secondary, tube icon, icon-only 44px on phones): with an order selected it opens `/lab/collect?orderId=…&from=…`, otherwise the general queue, and Back returns to the calling screen.
 
+Lab → My Work's LEFT companion follows the workflow: collection placed in the Lab with no dispatch/intake step (tubes auto-receive) → a COLLECTION card (embedded `pf-sample-collection`: find/scan, pending list, collect in place; band Collect focuses it instead of navigating); dispatch + Lab Intake on → the LAB INTAKE card; neither → the work pane runs full width.
+
 The band's pill is the **CONTEXT BAR** for the step:
 
 - **Search screens:** the pill *is* the search (Order & Payments: scope tiles
@@ -225,12 +227,14 @@ pill. Functional exceptions — these are data or warnings, not decoration:
 - Drive state with ARIA attributes, not `…--on` classes. A global new-design
   rule turns any `button[class*="--on"]` violet.
 
-## 4. Toggles are slate
+## 4. Toggles are violet
 
 `.nd-toggle[role=switch][aria-checked]` > `.nd-toggle__track` > `.nd-toggle__knob`.
 
-- ON is a slate track (`--nd-toggle-on`: #AEB8C2 in light, a darker slate in
-  dark), with a white knob and a small shadow.
+- ON is a flat brand-violet track (`--nd-switch-on`: the primary #7C3AED in
+  light, #8B5CF6 in dark), with a white knob and a small shadow (owner,
+  2026-09-27: switches were slate; now violet). `--nd-toggle-on` stays slate
+  for the non-switch neutrals that share it (status dots, sliders).
 - OFF is a lighter neutral.
 - `.nd-toggle--urgent` makes ON a muted red, never violet.
 - Examples: Urgent and Include Trendogram in the BILLING header.
@@ -460,6 +464,12 @@ unit of work. It follows the band rules above with these specifics
   open-work dot; tests in its tooltip / aria-label), in a **fixed order**
   (series offset, then sample ID). Switching moves only the selected
   indicator, which slides on `--nd-spring` (off under reduced motion).
+- **Submit all** (2+ tube tabs): the ONE primary becomes **Submit all**
+  (per-tab submit = secondary "Submit this sample"; phones: both as icons).
+  Every field filled → submits every tab straight away; any empty field →
+  ONE `DialogService` confirm ("Some fields are empty", the fields listed
+  by tab · test, Go back → first empty field / Submit anyway). Tab marks:
+  violet dot = unsaved or draft values, green check = every field filled.
 - **Phones: the patient chip shows the FULL name** — the "29/M · AA0012"
   meta moves to its tooltip, and a long name wraps to two lines; never an
   ellipsis.
@@ -1270,6 +1280,209 @@ the Report view (§19). The New design only; classic is unchanged.
   grid-rows on `--nd-spring` (off under reduced motion), `inert` when closed.
 - **Empty:** `.nd-empty`. **Specs:** `report-queue.nd.spec.ts`; real layout
   `apps/lms-e2e/src/reports-list-layout.rbac.spec.ts` (read only).
+
+## 21. Appointments
+
+`/frontdesk/appointments` (`features/frontdesk/appointments-calendar/`) and
+`/frontdesk/appointments/new` (`features/frontdesk/book-appointment/`). A
+visual redesign only: the same APIs (`GET /api/appointments?from&to`, the
+queue transitions, `/api/appointments/config`, `/api/tests/`,
+`/api/patients?q=`, `POST /api/appointments`), guards and actions. Classic
+keeps its own templates; the new design lives in `*.nd.ts` (helpers +
+styles scoped under `.pf-apc` / `.pf-bka`).
+
+- **Calendar band:** back (`/frontdesk`) · tenant · ONE primary **New
+  appointment**. The pill: search "patient, phone or MRN" (filters what is
+  loaded: name / MRN substring, phone digits 3+ — the grid, the counts and
+  the day list) · the neutral **Day · Week · Month** `.nd-seg` radiogroup
+  (one Tab stop, arrows move) · ‹ **Today** › · a jump icon over a hidden
+  native date picker. Web default = Month (as before); ≤900px opens on Day.
+- **CALENDAR = main card** (the range in the header, "N appointments" /
+  "N matches"). Day / Week = ONE scroller with sticky day headers and a
+  sticky hour rail (128px an hour, half-hour slot buttons; a free future slot
+  books that time, a past one keeps the warning). Appointments are neutral
+  cards: the FULL name, a quiet "10:30 · 22/M · AA0006" (Noto tabular), and
+  the status as a 7px dot + coloured word (booked violet, checked in / in
+  progress amber, completed green, cancelled / no-show red). Same start =
+  side-by-side lanes; in a week those lanes are `--tight` (name + dot; meta
+  and word in the tooltip / aria-label and the day list). Today = a light
+  violet disc on the date, a 3% column tint and a thin violet now-line with a
+  time chip — never a gradient. A day header opens that day. Month: a day
+  books on it; its neutral "N appointments" chip opens the day.
+- **DAY = the right companion** (billing-style, 400px / 360px ≤1280,
+  collapses to a strip on the RIGHT edge, remembered per user
+  `pf:appt:side-collapsed:<uid>`): a 7-day strip (picks the day without
+  changing the view) and one row per appointment (full name + meta +
+  status). A row or a calendar card **zooms** into the APPOINTMENT detail
+  in the same card (`[pfZoomSource]` → `[pfZoomTarget]`, `zoom.runLocal`):
+  name, meta, status, When / Type / Collection / Token / Phone / Tests /
+  Address / Notes, then every original action as secondaries — Open
+  profile · Check in · Reschedule · No-show (booked) · Complete · Mark
+  urgent · No-show (checked in) · **Cancel appointment** (`.nd-btn--danger`).
+  **Reschedule is a step** that slides in (`pf-nd-date` + a searchable
+  `pf-select` of half-hours; Back slides back). Esc steps back.
+- **New appointment:** ONE page, no tabs. Band: back (the calendar) · Cancel
+  (ghost) · ONE primary **Book appointment** (Ctrl / ⌘ + Enter anywhere).
+  The pill = the context bar: Date · Slot ("Not picked") · the patient's
+  full name + "44/F · AA0007" once chosen. Cards in reading order (3
+  columns ≥1200px filling the body, card bodies scroll; 2 on tablets; 1 on
+  phones): **PATIENT** (a kit combobox over the same patient lookup, one row
+  per result; picked = a kit row + Change) and **DATE** (`pf-nd-date`, min
+  today, + 7 one-tap days) · **TIME SLOT** (Morning / Afternoon / Evening /
+  Night radiogroup with counts, a chip grid: available = neutral outline,
+  taken = dashed + struck + "Full" (`aria-disabled`), selected = violet
+  border + light tint + check) · **DETAILS** (tests: search, ↑/↓ + Enter
+  adds, rows code · name · price, the total; Walk-in / Home collection
+  `.nd-seg` with address · pincode · latitude · longitude as text fields;
+  notes).
+- **Keyboard-first:** the patient search has focus on arrival (web). Enter
+  = the next field: patient (Enter picks) → date → the slot grid (one Tab
+  stop; arrows move, Enter / Space picks) → tests (Enter adds; empty = next)
+  → collection → the home fields → notes (a textarea keeps Enter).
+- **Validation is inline:** Book with something missing outlines the
+  patient field / the slot grid with "Pick the patient to book for." /
+  "Pick a time slot." and focuses the first; a server error is one alert
+  line above the cards. Nothing is sent until it is complete.
+- **Phones (≤640px):** calendar = the day list first with a full-width
+  **New appointment** at the card foot; the pill's tools are two rows (the
+  switch, then ‹ Today › · jump); Week scrolls sideways to today; the detail
+  is a sheet above the navbar (tablets: a side sheet). Booking = one column,
+  2-column slot chips (≥48px), 44px targets, 16px inputs, and **Book
+  appointment** full width in the bottom bar above the navbar.
+- **Motion:** calendar → New appointment slides forward, back reverses
+  (`slideDirection`); list / card → detail zooms; Reschedule slides; rows
+  stagger in 18ms. All off under reduced motion.
+- **Specs:** `appointments-calendar.nd.spec.ts`,
+  `book-appointment.nd.spec.ts`; real layout
+  `apps/lms-e2e/src/appointments-layout.rbac.spec.ts` (read only — writes
+  aborted; the calendar GET gets made-up appointments for today on top of
+  the real list; `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`).
+
+## 22. Patient profile
+
+`/frontdesk/patients/:id` (`features/frontdesk/patient-profile/`) is
+**clinical-first**: a doctor or technician reads the patient's lab story in
+five seconds, then acts. The pure helpers are in `patient-profile.clinical.ts`
+(snapshot, grid, sparklines, timeline, quick actions) and
+`patient-profile.nd.ts` (pill, labels, tones).
+
+**Data.** Two reads, fired in parallel on load, never one per report:
+`GET /api/patients/{id}` (patient, orders with bill + report summaries,
+`test.tatHours`, and the patient's appointments / home visits) and
+`GET /api/patients/{id}/cumulative-results` (every resulted test, validated =
+final, entered = preliminary, with the value, unit, printed range and flag the
+lab SAVED; one query; tenant-guarded; `view_report` | `validate_result` |
+`view_order`). The trend chart loads `/lab-trends` only when opened. Nothing is
+made up: no data → an `.nd-empty`, never generated OPD / IPD records.
+
+```
+band ‹ tenant                              [Edit patient] [⋮] [+ New order]
+ pill: FULL name · 22/M · MRN · phone · ABHA ✓ · (flags)
+┌ SNAPSHOT ──────────────────────────────────────────────┐ ┌ PATIENT  [Timeline n|Details] › ┐
+│ NEEDS ATTENTION n      │ IN PROGRESS NOW n │ LAST VISIT │ │ [Repeat last] [Reprint labels]  │
+│ ● Potassium   ↑ 6.4    │ tests ▬▬▬▭        │ 24 Sep     │ │ [View last report]              │
+│   Ref · date · +31%…   │ ● Awaiting · by…  │ tests · Dr │ │ ○ feed: order / report / visit  │
+├ CUMULATIVE RESULTS  [search] (Abnormal only) ──────────┤ │   (rows zoom into the order)    │
+│ [All][Biochemistry][Haematology]                        │ │                                 │
+│ ANALYTE      ~spark~ ↑%  REF    27 Sep  24 Sep  12 Aug… │ │                                 │
+│ BIOCHEMISTRY · Lipid Profile                            │ │                                 │
+│ LDL  mg/dL   ╱╱      +17% <130   162▲    138▲          │ │                                 │
+└──────────────────────── legend ─────────────────────────┘ └─────────────────────────────────┘
+```
+
+- **Band:** back (history, else `/frontdesk`; an open detail closes first) ·
+  tenant · **Edit patient** (ghost) · **More** · THE primary **New order**,
+  shown only when `canOpenRoute('/frontdesk/order')` passes. The pill (the
+  CONTEXT BAR) is unchanged: FULL name, "22/M · MRN · phone", a neutral ABHA
+  chip (violet check when verified), and the flags Known allergies (red),
+  Minor (amber), Payment due (red), Fall risk (amber).
+- **More:** Book appointment, Send to a colleague (Messages only), Link /
+  Verify / Refresh ABHA, Print ID card, Show QR code, Copy patient ID, Full
+  timeline (real lab history only) and Merge a duplicate (edit rights). A menu
+  on web, a sheet on phones (Edit patient moves into it).
+- **SNAPSHOT** (one card, three panes, top of the main column):
+  - **Needs attention:** each analyte's LATEST value when it is flagged and
+    comes from one of the 3 most recent resulted visits (older flags never
+    re-tested are history). Criticals first (a red tint on the row), then
+    newest. A row = dot + analyte (+ test), the value + unit in the tone with
+    an SVG ↑/↓ from the stored code (CH / H up, CL / L down; legacy C is
+    critical with no arrow; criticals via `isCriticalFlag`), "Ref …",
+    the date ("prelim" when awaiting validation) and the delta vs the
+    previous value in the same unit ("+18% since 12 Aug"; none across units).
+    Four rows (three ≤900px), then "Show all N in results" = the grid's
+    Abnormal only. A row opens the analyte's trend (or its visit when it has
+    one value).
+  - **In progress now:** active orders (ordered → collected → in lab →
+    awaiting validation), a 4-segment violet stage bar, the stage as a dot +
+    word, and "Ready by …" from created + the slowest test's `tatHours`
+    ("Overdue by N h" in red). A row zooms into the order.
+  - **Last visit:** the newest COMPLETED visit (else the newest order): date,
+    tests, doctor, report status (dot + word) and **View** (report in place).
+- **CUMULATIVE RESULTS** (`cumulative-results.component.ts`, fills the rest):
+  the card header is search analytes + the slate **Abnormal only** switch;
+  department chips (`.nd-chip[aria-pressed]`, A–Z) sit under it. A table with
+  a sticky header row and a sticky analyte column; one column per resulted
+  visit, newest first, older visits scroll sideways. Groups = department →
+  panel (the profile a test arrived through, else the test). The analyte cell
+  holds the name, unit, a 64×22 inline-SVG sparkline (violet line, the
+  reference band shaded neutral, flagged points toned, the latest dot always
+  drawn) and the trend arrow + % since the previous result. Flagged cells are
+  tinted subtly (amber H / L, red critical) with an SVG arrow; preliminary
+  values are dotted-underlined. **Units:** a row whose visits used different
+  units shows an amber "Units differ" tag, the odd cells print their unit, and
+  no trend is drawn across them. A row → the full trend chart (`pf-lab-trends`
+  with `[focus]`); a cell → that visit's order with its report open. A legend
+  (High / low · Critical · Reference band · Awaiting validation) closes the
+  card. Empty: "No results yet"; no match: Clear filters; no permission:
+  "Results need report access" (and no request is made).
+- **Detail = zoom.** Grid rows / cells, snapshot rows and timeline rows are
+  `[pfZoomSource]`; the detail card (`[pfZoomTarget]` = the order id or the
+  analyte key) replaces the main column via `zoom.runLocal('in')`: the order
+  (`pf-lab-orders [detailId] [autoReport]`: tests, saved results, Repeat,
+  View report) or the trend. Back / Esc zooms out.
+- **PATIENT companion** (right, 380px; 340px ≤1280px; collapsible to a strip,
+  remembered in `pf:pp:side-collapsed:<uid>`): header = icon + PATIENT + the
+  neutral `.nd-seg` **Timeline n · Details** (one Tab stop) + collapse.
+  - **Quick actions** (secondary buttons, only those the user may take —
+    `quickActions()` over `route-access` + the APIs' permissions, and only
+    when there is something to act on): Repeat last order, Reprint labels
+    (off-screen label cards + `printLabelOnly`), View last report. New order
+    is the band primary.
+  - **Timeline:** a rail of kind icons; orders (bill folded into the meta:
+    "₹2,350 paid" / "₹1,800 due"), reports (partial / ready, delivered),
+    appointments and home visits, newest first. Order / report rows zoom into
+    the order; appointment rows expand in place (grid-rows, `inert` closed).
+    "Open the full timeline" opens the shell overlay.
+  - **Details:** Patient (age · sex, DOB, blood group, ID + copy,
+    registered), Clinical notes (allergies), Contact (tel:, email, guardian,
+    ABHA KYC address), ABHA (status chip, number, View card / Verify / Link),
+    Billing (Outstanding in red when due, total billed, visits, tests).
+- **≤1100px:** the snapshot is attention full width over the other two.
+  **≤900px:** no companion column; ONE stacked column scrolls inside the body
+  (the navbar stays): snapshot → results → Timeline (+ quick actions) →
+  Details.
+- **Phones (≤640px):** the snapshot panes stack; results become one card per
+  analyte (name, trend %, the latest value in its tone, a 128×34 sparkline,
+  the flag word, ref, date · n results); then the timeline and details.
+  **New order** is the full-width `.nd-bottombar` above the navbar. Targets
+  ≥44px; sheets above the navbar. Pane titles are `h3` (the global phone `h2`
+  clamp would inflate them).
+- **Motion:** pill chips + actions fade in (40ms stagger), the snapshot rises,
+  attention / timeline / card rows stagger 18–30ms, list → detail zooms, the
+  companion collapses on the billing width motion. All off under reduced
+  motion.
+- **Loading:** a static skeleton (snapshot panes + rows) inside the main
+  column, which is the ONE route `[pfZoomTarget]` (the patient id) from
+  skeleton to content, and shows while `zoom.holding()` on arrival.
+- **Specs:** `patient-profile.clinical.spec.ts` (range parsing, CL / CH
+  critical + direction, legacy C, units, deltas, the grid + unit-mismatch flag,
+  filters, sparklines, needs attention, stages + TAT, last visit, a
+  real-only timeline, permission-gated quick actions) and
+  `patient-profile.nd.spec.ts` (band, one primary, More, snapshot, grid →
+  trend / report zoom, filters, phone cards, companion, empty / skeleton /
+  not-found, no monospace / emoji / native controls, reduced motion). Real
+  layout: `apps/lms-e2e/src/patient-profile-layout.rbac.spec.ts` (read only).
+  Backend: `CumulativeResultsBuilderTests`, `PatientCumulativeResultsTests`.
 
 ## API summary
 

@@ -1361,6 +1361,22 @@
   color: var(--red-text);
 }
 
+/* A bundle beside its own member (old draft / repeat) — flagged, not dropped. */
+.pf-cart-dup {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--red-text) 8%, transparent);
+}
+.pf-cart-dup__msg {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--red-text);
+}
+.pf-cart-dup__msg + .pf-cart-dup__msg { margin-top: 4px; }
+
 /* ════════════════════════════════════════════════════════════════════
    CROSS-PLATFORM OVERRIDES (additive only — desktop-web ≥1280 untouched)
    Every rule below is scoped under :host and gated to sub-desktop widths,
@@ -2025,6 +2041,10 @@
 }
 /* Specimen picker on culture cart rows (desk-side choice). */
 .pf-cart-spec { margin-top: 6px; max-width: 230px; }
+/* Required specimen not chosen: the picker's own border turns danger (same
+   language as .pf-input-error) and the inline message sits under it. */
+.pf-cart-spec--err :is(button, input) { border-color: var(--danger, #ef4444) !important; }
+.pf-cart-spec--err .pf-field-error { margin: 4px 0 0; }
 
 /* ════════════════════════════════════════════════════════════════════
    OPTION A — unified search pill + designer cards (catalogue, billing).
@@ -3324,7 +3344,7 @@
   --pf-neutral-sel-bg: var(--nd-sel-bg);
   --pf-neutral-sel-border: var(--nd-sel-border);
   --pf-neutral-chip-bg: var(--nd-chip-bg);
-  --pf-toggle-on: var(--nd-toggle-on);
+  --pf-toggle-on: var(--nd-switch-on);
   --pf-toggle-off: var(--nd-toggle-off);
   --pf-toggle-urgent: var(--nd-toggle-urgent);
 }

@@ -100,7 +100,7 @@
             @if (b.totalTax > 0) {
               <div class="pf-bill-line">
                 <span>GST</span>
-                <span class="tabular-nums">{{ b.totalTax | inr }}</span>
+                <span class="tabular-nums">{{ shownTax() | inr }}</span>
               </div>
             }
             <div class="pf-bill-line pf-bill-line--discount">
@@ -133,8 +133,19 @@
             @if (discountOverCap()) {
               <p class="pf-discount__err">Discount {{ discountPct().toFixed(0) }}% exceeds your {{ discountCapPct() }}% limit — reduce it to confirm.</p>
             }
+            @if (discountExceedsPaid()) {
+              <p class="pf-discount__err">{{ discountExceedsPaidMessage() }}</p>
+            } @else if (maxDiscountAllowed() !== null && !discountOverCap()) {
+              <p class="pf-discount__cap">Part-paid bill — discount at most {{ maxDiscountAllowed() | inr }}</p>
+            }
             @if (discountError()) {
               <p class="pf-discount__err">{{ discountError() }}</p>
+            }
+            @if (shownRoundOff() !== 0) {
+              <div class="pf-bill-line">
+                <span>Round off</span>
+                <span class="tabular-nums">{{ shownRoundOff() > 0 ? '+' : '−' }}{{ (shownRoundOff() < 0 ? -shownRoundOff() : shownRoundOff()) | inr }}</span>
+              </div>
             }
             <div class="pf-bill-line pf-bill-line--total">
               <span>Total</span>

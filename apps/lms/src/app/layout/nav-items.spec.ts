@@ -41,7 +41,7 @@ describe('NavItem interface', () => {
 describe('ADMIN_NAV', () => {
   it('has correct id, label, and href', () => {
     expect(ADMIN_NAV.id).toBe('admin');
-    expect(ADMIN_NAV.label).toBe('Admin');
+    expect(ADMIN_NAV.label).toBe('Settings');   // renamed upstream (4e651cbb)
     expect(ADMIN_NAV.href).toBe('/admin');
   });
 
@@ -262,8 +262,10 @@ describe('menusFromWorkflow', () => {
   it('work-area names show in sentence case in the nav ("billing" → "Billing"; the built-ins already are)', () => {
     const cfg = makeCfg(
       [{ id: 'cat1', name: '  billing ', order: 1, icon: 'default' }, { id: 'cat2', name: 'Frontdesk', order: 2, icon: 'default' }],
-      [{ id: 'a1', type: 'sample_collection', categoryId: 'cat1', enabled: true, order: 1 },
-       { id: 'a2', type: 'sample_collection', categoryId: 'cat2', enabled: true, order: 1 }]
+      // (Not sample_collection: it only sits in its fixed Collect / Frontdesk /
+      // Lab slots, so the normaliser would drop copies in these custom areas.)
+      [{ id: 'a1', type: 'billing', categoryId: 'cat1', enabled: true, order: 1 },
+       { id: 'a2', type: 'queue', categoryId: 'cat2', enabled: true, order: 1 }]
     );
     const labels = menusFromWorkflow(cfg, { ...baseCtx, isSuper: true })!.map(i => i.label);
     expect(labels).toContain('Billing');
@@ -335,8 +337,11 @@ describe('menusFromWorkflow', () => {
     );
     const permCtx: WorkflowNavCtx = {
       roles: ['tech'],
+      // register_patient: the queue-only area opens /frontdesk/queue, whose
+      // /frontdesk parent guard needs a front-desk perm (collect_sample alone
+      // would be bounced — so that area is correctly hidden without it).
       hasAnyPermission: (perms) =>
-        perms.includes('collect_sample') || perms.includes('enter_result'),
+        perms.includes('collect_sample') || perms.includes('enter_result') || perms.includes('register_patient'),
       isSuper: false,
     };
     const result = menusFromWorkflow(cfg, permCtx);

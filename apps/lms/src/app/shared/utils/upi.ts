@@ -31,3 +31,14 @@ export function upiLink(
 export function isLikelyVpa(vpa: string | null | undefined): boolean {
   return !!vpa && /^[a-z0-9._-]{2,}@[a-z][a-z0-9.]{1,}$/i.test(vpa.trim());
 }
+
+/** The lab's UPI payee from Admin → Billing (the reception-readable
+ *  /api/config/billing/visibility slice). */
+export interface UpiPayee { upiVpa?: string | null; upiPayeeName?: string | null }
+
+/** Encode a upi://pay link as a QR data URL — rendered in the app, so the
+ *  payee and amount never go to a third-party QR service. */
+export async function upiQrDataUrl(link: string): Promise<string> {
+  const QRCode = (await import('qrcode')).default;
+  return QRCode.toDataURL(link, { margin: 1, width: 240 });
+}

@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
-import { AccountsService } from '../../core/auth/accounts.service';
+import { AccountsService, StoredAccount } from '../../core/auth/accounts.service';
 import { LockService } from '../../core/auth/lock.service';
 import { PinDotsComponent } from './pin-dots.component';
 
@@ -22,13 +23,22 @@ import { PinDotsComponent } from './pin-dots.component';
           <h2 class="pf-sw-name">{{ target.displayName }}</h2>
           <p class="pf-sw-org">{{ target.org }}</p>
 
-          @if (pinNeeded()) {
-            <p class="pf-sw-hint">Enter {{ target.displayName.split(' ')[0] }}'s PIN</p>
-            <pf-pin-dots #dots [disabled]="busy()" (completed)="attempt($event)" />
+          @if (needsSignIn()) {
+            <!-- The saved sign-in is really over: recover INLINE for this
+                 profile (tenant-locked add-account, username pre-filled). -->
+            <p class="pf-sw-hint">{{ error() || (target.displayName.split(' ')[0] + '’s saved sign-in has ended on this device.') }}</p>
+            <button type="button" class="pf-sw-primary" (click)="signInAgain(target)" data-testid="switch-sign-in-again">
+              Sign in as {{ target.displayName.split(' ')[0] }}
+            </button>
           } @else {
-            <p class="pf-sw-hint">{{ busy() ? 'Opening profile…' : 'No PIN — opening directly.' }}</p>
+            @if (pinNeeded()) {
+              <p class="pf-sw-hint">Enter {{ target.displayName.split(' ')[0] }}'s PIN</p>
+              <pf-pin-dots #dots [disabled]="busy()" (completed)="attempt($event)" />
+            } @else {
+              <p class="pf-sw-hint">{{ busy() ? 'Opening profile…' : 'No PIN — opening directly.' }}</p>
+            }
+            @if (error()) { <p class="pf-sw-error" role="alert">{{ error() }}</p> }
           }
-          @if (error()) { <p class="pf-sw-error">{{ error() }}</p> }
 
           <button class="pf-sw-alt" (click)="cancel()" [disabled]="busy()">Cancel — stay as {{ auth.user()?.displayName }}</button>
         </div>
@@ -86,6 +96,12 @@ import { PinDotsComponent } from './pin-dots.component';
     .pf-sw-org { margin: -4px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--text-muted); }
     .pf-sw-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--text-secondary); text-align: center; }
     .pf-sw-error { margin: 4px 0 0; font-size: 12px; color: var(--red-text); }
+    .pf-sw-primary {
+      margin-top: 10px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 12px; cursor: pointer;
+      background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3)); color: #fff;
+      font-size: 14px; font-weight: 600;
+    }
+    .pf-sw-primary:focus-visible { outline: 2px solid #c4b5fd; outline-offset: 2px; }
     .pf-sw-alt {
       margin-top: 4px; border: none; background: transparent; cursor: pointer;
       font-size: 12px; color: var(--text-muted); text-decoration: underline;
@@ -97,6 +113,9 @@ export class SwitchScreenComponent {
   readonly auth = inject(AuthService);
   readonly accounts = inject(AccountsService);
   readonly lock = inject(LockService);
+  private readonly router = inject(Router);
+  /** The target's saved sign-in is dead → offer an inline sign-in. */
+  readonly needsSignIn = signal(false);
 
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -109,9 +128,17 @@ export class SwitchScreenComponent {
     effect(() => {
       const target = this.lock.switchTarget();
       if (!target) return;
-      this.error.set(null);
-      this.pinNeeded.set(target.hasPin);
-      if (!target.hasPin) void this.attempt('');
+      // untracked: attempt() READS busy() synchronously — tracked, every
+      // busy flip re-ran this effect and re-attempted, so a PIN-less profile
+      // whose switch failed retried in a tight loop (hammering the token
+      // endpoint). Only a new target may start an attempt.
+      untracked(() => {
+        this.error.set(null);
+        this.needsSignIn.set(!!target.expired);
+        if (target.expired) return;
+        this.pinNeeded.set(target.hasPin);
+        if (!target.hasPin) void this.attempt('');
+      });
     });
   }
 
@@ -126,6 +153,15 @@ export class SwitchScreenComponent {
       location.assign('/');
     } catch (e) {
       const err = e as Error & { code?: string };
+      if (err.code === 'session_expired' || err.code === 'session_mismatch') {
+        // Not a dead end: the profile stays listed, and its owner signs in
+        // again right here. Nothing was switched (checked before any state
+        // changed), so the current account is untouched.
+        this.error.set(err.message);
+        this.needsSignIn.set(true);
+        this.busy.set(false);
+        return;
+      }
       if (pin === '' && (err.code === 'wrong_pin' || err.code === 'locked')) {
         // Local cache said "no PIN" but the server disagrees — ask for it.
         this.pinNeeded.set(true);
@@ -141,5 +177,14 @@ export class SwitchScreenComponent {
 
   cancel() {
     this.lock.switchTarget.set(null);
+  }
+
+  /** Tenant-locked "add account" sign-in, username pre-filled; the fresh
+   *  session replaces the dead one in the registry. */
+  signInAgain(target: StoredAccount) {
+    const handle = (target.username || '').trim()
+      || (/\.tenant\.prefrontal$/i.test(target.email ?? '') ? target.email.split('@')[0] : (target.email ?? ''));
+    this.lock.switchTarget.set(null);
+    void this.router.navigate(['/login'], { queryParams: { add: '1', username: handle || null } });
   }
 }

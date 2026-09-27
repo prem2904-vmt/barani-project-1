@@ -8,6 +8,11 @@ describe('slideDirection (step-to-step slide)', () => {
   it('Collect → frontdesk slides back', () => {
     expect(slideDirection('/lab/collect?orderId=o1', '/frontdesk')).toBe('back');
   });
+  it('Appointments calendar → New appointment slides forward; back reverses', () => {
+    expect(slideDirection('/frontdesk/appointments', '/frontdesk/appointments/new?date=2026-09-27&time=10:30')).toBe('forward');
+    expect(slideDirection('/frontdesk/appointments/new?date=2026-09-27', '/frontdesk/appointments')).toBe('back');
+    expect(slideDirection('/frontdesk/appointments/new', '/frontdesk')).toBeNull();
+  });
   it('every other navigation keeps the instant swap', () => {
     expect(slideDirection('/admin', '/frontdesk')).toBeNull();
     expect(slideDirection('/frontdesk', '/frontdesk/order')).toBeNull();

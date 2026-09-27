@@ -5,6 +5,7 @@ import {
   OnInit,
   OnDestroy,
   ElementRef,
+  DestroyRef,
   computed,
   inject,
   signal,
@@ -37,6 +38,13 @@ import { ScreenHeaderComponent } from "../../../shared/primitives/screen-header.
 import { LoadingLogoComponent } from "../../../shared/components/loading-logo/loading-logo.component";
 import { PatientSearchComponent } from "../../../shared/components/patient-search/patient-search.component";
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { plural } from '../../../shared/utils/plural';
+import { formatPatientMeta } from '../../../shared/models/patient.model';
+import { BOOK_APPOINTMENT_ND_STYLES, MONTH_DOWS, SlotPeriod, calendarMove, monthGrid, nextFocus, rovingIndex } from './book-appointment.nd';
 import {
   addDays,
   addMonths,
@@ -78,9 +86,360 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
     LoadingLogoComponent,
     PatientSearchComponent,
     CurrencyInrPipe,
+    HeroBandComponent,
+    NdDateComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (theme.isNewDesign()) {
+    <!-- NEW DESIGN (ND-PATTERN §21): ONE page, no tabs, keyboard-first.
+         Band = back · tenant · Cancel + the ONE primary "Book appointment";
+         the pill = the context bar (date · slot · patient). Cards in reading
+         order: PATIENT · DATE → TIME SLOT → DETAILS. Enter = next field;
+         Ctrl/⌘+Enter books from anywhere. -->
+    <section class="pf-band-page pf-bka" (keydown)="onFormKey($event)">
+      <pf-hero-band class="pf-bka-band" [back]="true" backTo="/frontdesk/appointments"
+                    [customSearch]="true" [contextBar]="true" [standardPill]="true">
+        <ng-container band-actions>
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-bka-cancel press" [disabled]="saving()" (click)="back()"
+                  aria-label="Cancel" title="Cancel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            <span class="pf-bka-cancel__t">Cancel</span>
+          </button>
+          @if (!phone()) {
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-bka-book press" [disabled]="saving()"
+                    (click)="attemptBook()" [attr.aria-label]="saving() ? 'Booking' : 'Book appointment'"
+                    title="Book appointment (Ctrl/⌘+Enter)" aria-keyshortcuts="Control+Enter Meta+Enter">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
+              {{ saving() ? 'Booking…' : 'Book appointment' }}
+            </button>
+          }
+        </ng-container>
+
+        <!-- The pill = the CONTEXT BAR: date · slot · patient (once chosen). -->
+        <div band-search class="nd-ctx pf-bka-ctx">
+          <span class="nd-ctx__chip pf-bka-ctx__date"><span class="nd-ctx__k">Date</span><span class="nd-num">{{ dateLabel() }}</span></span>
+          <span class="nd-ctx__chip pf-bka-ctx__slot">
+            <span class="nd-ctx__k">Slot</span>
+            @if (selectedTime()) { <span class="nd-num">{{ selectedTime() }}</span> } @else { <span class="pf-bka-ctx__none">Not picked</span> }
+          </span>
+          @if (patient(); as p) {
+            <span class="nd-ctx__primary pf-bka-ctx__patient">
+              <span>{{ patientName() }}</span>
+              <span class="pf-bka-ctx__pmeta nd-num">{{ patientMeta(p) }}</span>
+            </span>
+          }
+        </div>
+      </pf-hero-band>
+
+      <div class="pf-band-body pf-bka-body">
+        @if (errorMsg()) {
+          <p class="pf-bka-alert" role="alert">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            {{ errorMsg() }}
+          </p>
+        }
+        <div class="pf-bka-grid">
+          <!-- ── Column 1: PATIENT + DATE ── -->
+          <div class="pf-bka-col">
+            <section class="nd-card pf-bka-card pf-bka-patient" aria-labelledby="pf-bka-l-patient">
+              <header class="nd-card__head">
+                <span class="nd-card__icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </span>
+                <span class="nd-card__label" id="pf-bka-l-patient">Patient</span>
+                <span class="nd-card__spacer"></span>
+                <span class="pf-bka-req"><span class="nd-dot-unpriced" aria-hidden="true"></span>Required</span>
+              </header>
+              <div class="nd-card__body">
+                @if (patient(); as p) {
+                  <div class="pf-bka-picked nd-row nd-row--in">
+                    <span class="pf-bka-picked__who">
+                      <span class="pf-bka-picked__name">{{ patientName() }}</span>
+                      <span class="pf-bka-picked__meta nd-num">{{ patientMeta(p) }}@if (p.phone) { · {{ p.phone }} }</span>
+                    </span>
+                    <button type="button" class="nd-btn nd-btn--tertiary pf-bka-change" data-nav (click)="changePatient()">Change</button>
+                  </div>
+                } @else {
+                  <div class="nd-field pf-bka-psearch">
+                    <label class="nd-field__lbl" for="pf-bka-pq">Find the patient</label>
+                    <span class="pf-bka-inputwrap">
+                      <svg class="pf-bka-inputwrap__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                      <input #patientInput id="pf-bka-pq" type="text" class="nd-input pf-bka-pq" data-nav autocomplete="off" spellcheck="false"
+                             role="combobox" aria-autocomplete="list" aria-controls="pf-bka-plist" [attr.aria-expanded]="pResults().length > 0"
+                             [attr.aria-activedescendant]="pHighlight() >= 0 ? 'pf-bka-p-' + pHighlight() : null"
+                             [class.nd-input--error]="showErr() && !patient()" [attr.aria-invalid]="showErr() && !patient() ? true : null"
+                             [attr.aria-describedby]="showErr() && !patient() ? 'pf-bka-e-patient' : null"
+                             placeholder="Name, phone or MRN" [value]="pQuery()" (input)="onPatientQuery($any($event.target).value)"
+                             (keydown.arrowDown)="movePatient($event, 1)" (keydown.arrowUp)="movePatient($event, -1)" />
+                    </span>
+                    @if (showErr() && !patient()) { <p class="pf-bka-err" id="pf-bka-e-patient">Pick the patient to book for.</p> }
+                    @if (pQuery().trim().length >= 2) {
+                      <ul class="pf-bka-results" id="pf-bka-plist" role="listbox" aria-label="Patients">
+                        @for (p of pResults(); track p.id; let i = $index) {
+                          <li>
+                            <button type="button" class="pf-bka-result" role="option" [id]="'pf-bka-p-' + i" tabindex="-1"
+                                    [attr.aria-selected]="i === pHighlight()" (mouseenter)="pHighlight.set(i)"
+                                    (mousedown)="$event.preventDefault()" (click)="pickPatient(p)">
+                              <span class="pf-bka-result__name">{{ nameOf(p) }}</span>
+                              <span class="pf-bka-result__meta nd-num">{{ patientMeta(p) }}@if (p.phone) { · {{ p.phone }} }</span>
+                            </button>
+                          </li>
+                        } @empty {
+                          <li class="pf-bka-note">{{ pLoading() ? 'Searching…' : 'No patient matches.' }}</li>
+                        }
+                      </ul>
+                    }
+                  </div>
+                }
+              </div>
+            </section>
+
+            <section class="nd-card pf-bka-card pf-bka-date" aria-labelledby="pf-bka-l-date">
+              <header class="nd-card__head">
+                <span class="nd-card__icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                </span>
+                <span class="nd-card__label" id="pf-bka-l-date">Date</span>
+                <span class="nd-card__spacer"></span>
+                <span class="pf-bka-req"><span class="nd-dot-unpriced" aria-hidden="true"></span>Required</span>
+              </header>
+              <div class="nd-card__body">
+                <label class="nd-field">
+                  <span class="nd-field__lbl">Appointment date</span>
+                  <pf-nd-date data-nav label="Appointment date" [value]="selectedDate()" [min]="todayIso"
+                              (valueChange)="$event && selectDate($event)"></pf-nd-date>
+                </label>
+                <!-- The whole month (fills the card): ‹ Month Year ›, weekday
+                     initials, six weeks. Past days are disabled (min = today). -->
+                <div class="pf-bka-cal">
+                  <div class="pf-bka-cal__head">
+                    <button type="button" class="pf-bka-cal__nav" tabindex="-1" aria-label="Previous month" title="Previous month (Page Up)"
+                            [disabled]="!canPrevMonth()" (click)="navCalMonth(-1)">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
+                    <span class="pf-bka-cal__title" id="pf-bka-cal-title" aria-live="polite">{{ calTitle() }}</span>
+                    <button type="button" class="pf-bka-cal__nav" tabindex="-1" aria-label="Next month" title="Next month (Page Down)"
+                            (click)="navCalMonth(1)">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
+                  </div>
+                  <div class="pf-bka-cal__grid" role="grid" aria-labelledby="pf-bka-cal-title" (keydown)="onCalKey($event)">
+                    <div class="pf-bka-cal__row" role="row">
+                      @for (w of monthDows; track $index) {
+                        <span class="pf-bka-cal__dow" role="columnheader" [attr.aria-label]="w.long">{{ w.s }}</span>
+                      }
+                    </div>
+                    @for (k of [calKey()]; track k) {
+                      <div class="pf-bka-cal__weeks" role="rowgroup"
+                           [class.pf-bka-cal__weeks--next]="calSlide() === 'next'" [class.pf-bka-cal__weeks--prev]="calSlide() === 'prev'">
+                        @for (week of calWeeks(); track week[0].iso) {
+                          <div class="pf-bka-cal__row" role="row">
+                            @for (d of week; track d.iso) {
+                              <button type="button" class="pf-bka-cal__day" role="gridcell" [attr.data-iso]="d.iso"
+                                      [class.pf-bka-cal__day--out]="d.outside" [class.pf-bka-cal__day--today]="d.today"
+                                      [attr.aria-selected]="d.iso === selectedDate()" [attr.aria-disabled]="d.past ? true : null"
+                                      [attr.aria-current]="d.today ? 'date' : null" [attr.aria-label]="d.label"
+                                      [attr.tabindex]="d.iso === calRoving() ? 0 : -1" (click)="pickDay(d.iso)">
+                                <span class="pf-bka-cal__n">{{ d.n }}</span>
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ── Column 2: TIME SLOT ── -->
+          <section class="nd-card pf-bka-card pf-bka-slots" aria-labelledby="pf-bka-l-slot">
+            <header class="nd-card__head">
+              <span class="nd-card__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              </span>
+              <span class="nd-card__label" id="pf-bka-l-slot">Time slot</span>
+              <span class="nd-card__spacer"></span>
+              <span class="pf-bka-req"><span class="nd-dot-unpriced" aria-hidden="true"></span>Required</span>
+            </header>
+            <div class="nd-card__body">
+              @if (loadingSlots()) {
+                <p class="pf-bka-note" role="status">Loading slots…</p>
+              } @else if (slots().length === 0) {
+                <div class="nd-empty nd-empty--compact">
+                  <span class="nd-empty__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  </span>
+                  <p class="nd-empty__title">No slots on this day</p>
+                  <p class="nd-empty__body">The branch is closed, or every slot has passed. Pick another day.</p>
+                </div>
+              } @else {
+                <div class="nd-seg pf-bka-periods" role="radiogroup" aria-label="Part of the day">
+                  @for (per of periods; track per.id) {
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="timePeriod() === per.id"
+                            tabindex="-1" (click)="timePeriod.set(per.id)">
+                      {{ per.label }} <span class="pf-bka-periods__n nd-num">{{ periodsWithSlots()[per.id] }}</span>
+                    </button>
+                  }
+                </div>
+                @if (visibleSlots().length === 0) {
+                  <p class="pf-bka-note">No slots in this part of the day.</p>
+                } @else {
+                  <div class="pf-bka-chips" role="radiogroup" aria-label="Time slot" data-nav
+                       [class.pf-bka-chips--error]="showErr() && !selectedTime()"
+                       [attr.aria-invalid]="showErr() && !selectedTime() ? true : null"
+                       [attr.aria-describedby]="showErr() && !selectedTime() ? 'pf-bka-e-slot' : null"
+                       (keydown)="onSlotKey($event)">
+                    @for (s of visibleSlots(); track s.time) {
+                      <button type="button" class="pf-bka-chip" role="radio"
+                              [attr.aria-checked]="s.time === selectedTime()" [attr.aria-disabled]="!s.available ? true : null"
+                              [attr.tabindex]="s.time === rovingSlot() ? 0 : -1" [attr.data-time]="s.time"
+                              [attr.aria-label]="s.time + (s.available ? '' : ', full')"
+                              (click)="s.available && selectTime(s.time)">
+                        <span class="pf-bka-chip__t nd-num">{{ s.time }}</span>
+                        @if (!s.available) { <span class="pf-bka-chip__full">Full</span> }
+                        @else if (s.time === selectedTime()) {
+                          <svg class="pf-bka-chip__ok" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                        }
+                      </button>
+                    }
+                  </div>
+                }
+                @if (showErr() && !selectedTime()) { <p class="pf-bka-err" id="pf-bka-e-slot">Pick a time slot.</p> }
+                @else if (showErr() && slotFull()) { <p class="pf-bka-err" id="pf-bka-e-slot">That slot is full — pick another.</p> }
+                <p class="pf-bka-legend" aria-hidden="true">
+                  <span class="pf-bka-legend__k pf-bka-legend__k--free"></span>Available
+                  <span class="pf-bka-legend__k pf-bka-legend__k--sel"></span>Selected
+                  <span class="pf-bka-legend__k pf-bka-legend__k--full"></span>Full
+                </p>
+              }
+            </div>
+          </section>
+
+          <!-- ── Column 3: DETAILS (tests · collection · notes) ── -->
+          <section class="nd-card pf-bka-card pf-bka-details" aria-labelledby="pf-bka-l-details">
+            <header class="nd-card__head">
+              <span class="nd-card__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.4A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.4-2.6L14 9.5V3"/></svg>
+              </span>
+              <span class="nd-card__label" id="pf-bka-l-details">Details</span>
+              <span class="nd-card__spacer"></span>
+              <span class="pf-bka-opt">Optional</span>
+            </header>
+            <div class="nd-card__body pf-bka-dbody">
+              <div class="nd-field pf-bka-tests">
+                <label class="nd-field__lbl" for="pf-bka-tq">Tests</label>
+                <span class="pf-bka-inputwrap">
+                  <svg class="pf-bka-inputwrap__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <input #testSearchInput id="pf-bka-tq" type="text" class="nd-input" data-nav autocomplete="off" spellcheck="false"
+                         role="combobox" aria-autocomplete="list" aria-controls="pf-bka-tlist"
+                         [attr.aria-expanded]="testDropOpen()"
+                         [attr.aria-activedescendant]="testDropOpen() && tHighlight() >= 0 ? 'pf-bka-t-' + tHighlight() : null"
+                         placeholder="Code, name, short name or profile" [value]="testQuery()"
+                         (input)="setTestQuery($any($event.target).value); tHighlight.set(0)" (focus)="onSearchFocus()" (blur)="onSearchBlur()"
+                         (keydown.arrowDown)="moveTest($event, 1)" (keydown.arrowUp)="moveTest($event, -1)"
+                         (keydown.escape)="testQuery.set('')" />
+                </span>
+                @if (testDropOpen()) {
+                  <ul class="pf-bka-results pf-bka-results--float" id="pf-bka-tlist" role="listbox" aria-label="Tests" aria-multiselectable="true">
+                    @for (t of filteredTests(); track t.id; let i = $index) {
+                      <li>
+                        <button type="button" class="pf-bka-result pf-bka-result--test" role="option" [id]="'pf-bka-t-' + i" tabindex="-1"
+                                [attr.aria-selected]="i === tHighlight()" [attr.aria-checked]="isTestSelected(t.id)"
+                                (mouseenter)="tHighlight.set(i)" (mousedown)="$event.preventDefault(); selectTest(t.id)">
+                          <span class="pf-bka-result__check" aria-hidden="true">
+                            @if (isTestSelected(t.id)) {
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                            }
+                          </span>
+                          <span class="pf-bka-result__code nd-num">{{ t.testCode || t.code }}</span>
+                          <span class="pf-bka-result__name">{{ t.name }}@if (t.shortName) { <span class="pf-bka-result__short"> · {{ t.shortName }}</span> }</span>
+                          <span class="pf-bka-result__price nd-num">{{ priceOf(t) | inr }}</span>
+                        </button>
+                      </li>
+                    } @empty {
+                      <li class="pf-bka-note">No tests match.</li>
+                    }
+                  </ul>
+                }
+                @if (selectedTests().length > 0) {
+                  <ul class="pf-bka-picked-tests" aria-label="Tests booked">
+                    @for (t of selectedTests(); track t.id) {
+                      <li class="pf-bka-ptest">
+                        <span class="pf-bka-ptest__name">{{ t.name }}</span>
+                        <span class="pf-bka-ptest__price nd-num">{{ priceOf(t) | inr }}</span>
+                        <button type="button" class="pf-bka-ptest__x" tabindex="-1" (click)="toggleTest(t.id)" [attr.aria-label]="'Remove ' + t.name" title="Remove">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                        </button>
+                      </li>
+                    }
+                    <li class="pf-bka-ptest pf-bka-ptest--total">
+                      <span class="pf-bka-ptest__name">{{ plural(selectedTests().length, 'test') }}</span>
+                      <span class="pf-bka-ptest__price nd-num">{{ selectedTestsTotal() | inr }}</span>
+                    </li>
+                  </ul>
+                }
+              </div>
+
+              <div class="nd-field">
+                <span class="nd-field__lbl" id="pf-bka-l-coll">Collection</span>
+                <div class="nd-seg pf-bka-coll" role="radiogroup" aria-labelledby="pf-bka-l-coll" data-nav (keydown)="onCollKey($event)">
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="collectionType() === 'walkin'"
+                          [attr.tabindex]="collectionType() === 'walkin' ? 0 : -1" (click)="collectionType.set('walkin')">Walk-in (lab visit)</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="collectionType() === 'home_collection'"
+                          [attr.tabindex]="collectionType() === 'home_collection' ? 0 : -1" (click)="collectionType.set('home_collection')">Home collection</button>
+                </div>
+              </div>
+              @if (collectionType() === 'home_collection') {
+                <div class="pf-bka-home">
+                  <label class="nd-field pf-bka-span">
+                    <span class="nd-field__lbl">Address <span class="nd-dot-unpriced" aria-hidden="true"></span></span>
+                    <input type="text" class="nd-input" data-nav placeholder="Patient address" [value]="hcAddress()" (input)="hcAddress.set($any($event.target).value)" />
+                  </label>
+                  <label class="nd-field">
+                    <span class="nd-field__lbl">Pincode</span>
+                    <input type="text" inputmode="numeric" class="nd-input nd-num" data-nav [value]="hcPincode()" (input)="hcPincode.set($any($event.target).value)" />
+                  </label>
+                  <label class="nd-field">
+                    <span class="nd-field__lbl">Latitude</span>
+                    <input type="text" inputmode="decimal" class="nd-input nd-num" data-nav placeholder="Optional" [value]="hcLat() ?? ''" (input)="setCoord('lat', $any($event.target).value)" />
+                  </label>
+                  <label class="nd-field">
+                    <span class="nd-field__lbl">Longitude</span>
+                    <input type="text" inputmode="decimal" class="nd-input nd-num" data-nav placeholder="Optional" [value]="hcLng() ?? ''" (input)="setCoord('lng', $any($event.target).value)" />
+                  </label>
+                  <p class="nd-field__hint pf-bka-span">The pincode (or coordinates) assigns the nearest agent automatically.</p>
+                </div>
+              }
+
+              <label class="nd-field">
+                <span class="nd-field__lbl">Notes</span>
+                <textarea class="nd-input pf-bka-notes" data-nav rows="3" placeholder="Booking instructions or clinical notes"
+                          [value]="notes()" (input)="notes.set($any($event.target).value)"></textarea>
+              </label>
+              <p class="nd-field__hint">WhatsApp confirmation goes out automatically once booked.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      @if (phone()) {
+        <div class="nd-bottombar pf-bka-bar">
+          <span class="nd-bottombar__info nd-num">{{ dateLabel() }}@if (selectedTime()) { · {{ selectedTime() }} }</span>
+          <button type="button" class="nd-btn nd-btn--primary pf-bka-book press" [disabled]="saving()" (click)="attemptBook()">
+            {{ saving() ? 'Booking…' : 'Book appointment' }}
+          </button>
+        </div>
+      }
+    </section>
+    } @else {
     <section class="book-appt-page px-4 md:px-8 pt-4 pb-10 flex flex-col gap-3">
       <pf-screen-header
         eyebrow="Frontdesk · Appointments"
@@ -807,8 +1166,10 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
         </section>
       </div>
     </section>
+    }
   `,
   styles: [
+    BOOK_APPOINTMENT_ND_STYLES,
     `
       :host {
         display: block;
@@ -1104,6 +1465,204 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 
   protected readonly dows = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+  // ── New design (ND-PATTERN §21): one keyboard-first page ────────────────
+  protected readonly theme = inject(ThemeService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly hostEl = inject(ElementRef<HTMLElement>, { optional: true });
+  private host(): HTMLElement { return (this.hostEl?.nativeElement as HTMLElement | undefined) ?? document.createElement('div'); }
+  /** Web pointer: the patient search takes focus on arrival (never on touch). */
+  protected readonly web = webPointerSignal();
+  /** ≤640px: the primary moves to a full-width bottom bar above the navbar. */
+  readonly phone = signal(false);
+  protected readonly plural = plural;
+  protected readonly todayIso = format(new Date(), "yyyy-MM-dd");
+  readonly patientInput = viewChild<ElementRef<HTMLInputElement>>("patientInput");
+  protected readonly periods: Array<{ id: SlotPeriod; label: string }> = [
+    { id: "morning", label: "Morning" }, { id: "afternoon", label: "Afternoon" },
+    { id: "evening", label: "Evening" }, { id: "night", label: "Night" },
+  ];
+  /** Book was pressed with something missing → inline field errors show. */
+  protected readonly showErr = signal(false);
+  // Patient pick (same lookup as the shared patient search).
+  protected readonly pQuery = signal("");
+  protected readonly pResults = signal<Patient[]>([]);
+  protected readonly pLoading = signal(false);
+  protected readonly pHighlight = signal(-1);
+  private pTimer?: ReturnType<typeof setTimeout>;
+  // Tests dropdown highlight (↑/↓ + Enter adds).
+  protected readonly tHighlight = signal(0);
+  protected readonly testDropOpen = computed(() => this.testSearchFocused() && this.testQuery().trim() !== "");
+
+  protected readonly dateLabel = computed(() => {
+    const d = this.selectedDate();
+    return d ? format(parse(d, "yyyy-MM-dd", new Date()), "EEE d MMM yyyy") : "—";
+  });
+  // ── Date card: the full month grid (new design) ──
+  protected readonly monthDows = MONTH_DOWS;
+  /** The month the grid shows (follows the picked date; ‹ › / PageUp / PageDown move it). */
+  protected readonly calMonth = signal<Date>(startOfMonth(new Date()));
+  /** The day that holds the grid's single Tab stop (arrows move it). */
+  protected readonly calFocus = signal<string>(format(new Date(), "yyyy-MM-dd"));
+  /** Which way the last month change went (drives the subtle slide). */
+  protected readonly calSlide = signal<"next" | "prev" | null>(null);
+  protected readonly calKey = computed(() => format(this.calMonth(), "yyyy-MM"));
+  protected readonly calTitle = computed(() => format(this.calMonth(), "MMMM yyyy"));
+  protected readonly calWeeks = computed(() => monthGrid(this.calMonth(), this.todayIso));
+  /** No month before the current one (every day there is past). */
+  protected readonly canPrevMonth = computed(() => this.calKey() > this.todayIso.slice(0, 7));
+  /** The Tab stop: the focused day if shown in this month, else the picked
+   *  day, else today, else the month's first bookable day. */
+  protected readonly calRoving = computed(() => {
+    const cells = this.calWeeks().flat().filter(c => !c.outside);
+    const has = (iso: string) => cells.some(c => c.iso === iso);
+    for (const iso of [this.calFocus(), this.selectedDate(), this.todayIso]) if (has(iso)) return iso;
+    return (cells.find(c => !c.past) ?? cells[0])?.iso ?? "";
+  });
+  /** The chip that holds the slot grid's single Tab stop. */
+  protected readonly rovingSlot = computed(() => {
+    const list = this.visibleSlots();
+    const i = rovingIndex(list, this.selectedTime());
+    return i >= 0 ? list[i].time : "";
+  });
+  /** The picked time exists but is already full. */
+  protected readonly slotFull = computed(() => {
+    const t = this.selectedTime();
+    const s = t ? this._slots().find(x => x.time === t) : undefined;
+    return !!s && !s.available;
+  });
+
+  protected nameOf(p: Patient): string { return patientDisplayName(p) || "Patient"; }
+  /** "22/M · AA0006" — the name has its own emphasis. */
+  protected patientMeta(p: Patient): string { return formatPatientMeta(p); }
+
+  onPatientQuery(v: string) {
+    this.pQuery.set(v);
+    clearTimeout(this.pTimer);
+    const q = v.trim();
+    if (q.length < 2) { this.pResults.set([]); this.pLoading.set(false); this.pHighlight.set(-1); return; }
+    this.pLoading.set(true);
+    this.pTimer = setTimeout(() => {
+      this.api.get<Patient[]>(`/api/patients?q=${encodeURIComponent(q)}&limit=10`).subscribe({
+        next: (list) => { this.pResults.set(list ?? []); this.pLoading.set(false); this.pHighlight.set(list?.length ? 0 : -1); },
+        error: () => { this.pResults.set([]); this.pLoading.set(false); },
+      });
+    }, 220);
+  }
+  movePatient(e: Event, delta: number) {
+    const n = this.pResults().length;
+    if (!n) return;
+    e.preventDefault();
+    const i = this.pHighlight();
+    this.pHighlight.set(i < 0 ? (delta > 0 ? 0 : n - 1) : (i + delta + n) % n);
+  }
+  pickPatient(p: Patient) {
+    this.setPatient(p);
+    this.pQuery.set(""); this.pResults.set([]); this.pHighlight.set(-1);
+    // Keyboard-first: straight on to the date.
+    setTimeout(() => this.focusNav(this.navEls().findIndex(el => el.matches("pf-nd-date"))));
+  }
+  changePatient() {
+    this.clearPatient();
+    setTimeout(() => this.patientInput()?.nativeElement.focus());
+  }
+  moveTest(e: Event, delta: number) {
+    const n = this.filteredTests().length;
+    if (!this.testDropOpen() || !n) return;
+    e.preventDefault();
+    this.tHighlight.set((Math.max(0, this.tHighlight()) + delta + n) % n);
+  }
+  setCoord(which: "lat" | "lng", v: string) {
+    const n = parseFloat(String(v).replace(",", "."));
+    (which === "lat" ? this.hcLat : this.hcLng).set(Number.isFinite(n) ? n || null : null);
+  }
+
+  /** Book: every problem shows at its field (and focus goes to the first);
+   *  a complete form books exactly as before. */
+  attemptBook() {
+    if (this.saving()) return;
+    this.showErr.set(true);
+    if (this.canSubmit()) { this.submit(); return; }
+    setTimeout(() => {
+      const root = this.host();
+      const bad = !this.patient()
+        ? root.querySelector<HTMLElement>(".pf-bka-pq")
+        : root.querySelector<HTMLElement>('.pf-bka-chip[tabindex="0"]');
+      bad?.focus();
+      bad?.scrollIntoView?.({ block: "nearest" });
+    });
+  }
+
+  /** Keyboard-first (like registration): Enter = the next field, a textarea
+   *  keeps Enter, Ctrl/⌘+Enter books from anywhere. */
+  onFormKey(e: KeyboardEvent) {
+    if (e.key !== "Enter" || e.defaultPrevented || e.isComposing) return;
+    if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.attemptBook(); return; }
+    const t = e.target as HTMLElement;
+    if (t.tagName === "TEXTAREA") return;
+    if (t.classList.contains("pf-bka-pq")) {
+      e.preventDefault();
+      const p = this.pResults()[this.pHighlight()];
+      if (p) this.pickPatient(p);
+      return;
+    }
+    if (t.id === "pf-bka-tq" && this.testDropOpen()) {
+      e.preventDefault();
+      const tt = this.filteredTests()[this.tHighlight()];
+      if (tt) this.selectTest(tt.id);
+      return;
+    }
+    // Plain buttons (Change, remove) keep their own Enter.
+    if (t.tagName === "BUTTON" && !t.closest(".pf-bka-coll")) return;
+    const els = this.navEls();
+    const i = els.findIndex(el => el === t || el.contains(t));
+    if (i < 0) return;
+    e.preventDefault();
+    this.focusNav(i + 1);
+  }
+  /** The slot grid (one Tab stop): arrows move, Enter / Space picks and
+   *  moves on to the next field. */
+  onSlotKey(e: KeyboardEvent) {
+    const chips = Array.from((e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(".pf-bka-chip"));
+    const i = chips.indexOf(e.target as HTMLElement);
+    if (i < 0) return;
+    const cols = Math.max(1, getComputedStyle(e.currentTarget as HTMLElement).gridTemplateColumns.split(" ").filter(Boolean).length);
+    const to = (j: number) => { e.preventDefault(); chips[Math.max(0, Math.min(chips.length - 1, j))]?.focus(); };
+    switch (e.key) {
+      case "ArrowRight": return to(i + 1);
+      case "ArrowLeft": return to(i - 1);
+      case "ArrowDown": return to(i + cols);
+      case "ArrowUp": return to(i - cols);
+      case "Home": return to(0);
+      case "End": return to(chips.length - 1);
+      case "Enter":
+      case " ": {
+        e.preventDefault();
+        const time = chips[i].getAttribute("data-time") ?? "";
+        const s = this.visibleSlots().find(x => x.time === time);
+        if (!s?.available) return;
+        this.selectTime(time);
+        const els = this.navEls();
+        this.focusNav(els.findIndex(el => el.classList.contains("pf-bka-chips")) + 1);
+      }
+    }
+  }
+  /** Walk-in / Home collection radio group: arrows switch. */
+  onCollKey(e: KeyboardEvent) {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const next = this.collectionType() === "walkin" ? "home_collection" : "walkin";
+    this.collectionType.set(e.key === "Home" ? "walkin" : e.key === "End" ? "home_collection" : next);
+    setTimeout(() => this.host()
+      .querySelector<HTMLElement>('.pf-bka-coll [aria-checked="true"]')?.focus());
+  }
+  private navEls(): HTMLElement[] {
+    return Array.from(this.host().querySelectorAll<HTMLElement>("[data-nav]"));
+  }
+  private focusNav(i: number) {
+    const el = nextFocus(this.navEls(), i);
+    el?.focus();
+  }
+
   // Booking state.
   protected readonly patient = signal<Patient | null>(null);
   protected readonly selectedDate = signal<string>(
@@ -1258,6 +1817,21 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   });
 
   constructor() {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      const m = window.matchMedia("(max-width: 640px)");
+      this.phone.set(!!m.matches);
+      const on = (e: MediaQueryListEvent) => this.phone.set(e.matches);
+      try { m.addEventListener?.("change", on); this.destroyRef.onDestroy(() => m.removeEventListener?.("change", on)); } catch { /* old engines */ }
+    }
+    // New design, web only: the patient search has focus on arrival.
+    let autofocused = false;
+    effect(() => {
+      const el = this.patientInput()?.nativeElement;
+      if (!el || autofocused || !this.web() || !this.theme.isNewDesign()) return;
+      autofocused = true;
+      setTimeout(() => el.focus());
+    });
+
     effect(() => {
       const el = this.flatpickrEl()?.nativeElement;
       if (el) {
@@ -1322,6 +1896,8 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 
     if (dateParam) {
       this.selectedDate.set(dateParam);
+      this.calFocus.set(dateParam);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) this.calMonth.set(startOfMonth(parse(dateParam, "yyyy-MM-dd", new Date())));
       this.calendarMonth.set(
         startOfMonth(parse(dateParam, "yyyy-MM-dd", new Date())),
       );
@@ -1359,9 +1935,55 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     this.calendarMonth.set(delta < 0 ? subMonths(cur, 1) : addMonths(cur, 1));
   }
   selectDate(iso: string) {
+    this.showCalMonth(iso);
+    this.calFocus.set(iso);
     if (iso === this.selectedDate()) return;
     this.selectedDate.set(iso);
     this.selectedTime.set("");
+  }
+
+  /** A day in the month grid: past days are not bookable (min = today). */
+  pickDay(iso: string) {
+    if (!iso || iso < this.todayIso) return;
+    this.selectDate(iso);
+  }
+  /** ‹ / ›: the grid's month (the picked date stays). */
+  navCalMonth(delta: 1 | -1) {
+    if (delta < 0 && !this.canPrevMonth()) return;
+    const next = addMonths(this.calMonth(), delta);
+    this.calSlide.set(delta > 0 ? "next" : "prev");
+    this.calMonth.set(next);
+    const f = format(addMonths(parse(this.calFocus(), "yyyy-MM-dd", new Date()), delta), "yyyy-MM-dd");
+    this.calFocus.set(f < this.todayIso ? this.todayIso : f);
+  }
+  /** The month grid (one Tab stop): arrows / Home / End move the day,
+   *  PageUp / PageDown the month, Enter / Space pick it. */
+  onCalKey(e: KeyboardEvent) {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>(".pf-bka-cal__day");
+    if (!cell) return;
+    const iso = cell.getAttribute("data-iso") ?? "";
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      this.pickDay(iso);
+      return;
+    }
+    let to = calendarMove(iso, e.key);
+    if (!to) return;
+    e.preventDefault();
+    const floor = this.todayIso.slice(0, 7) + "-01";
+    if (to < floor) to = floor;
+    this.calFocus.set(to);
+    this.showCalMonth(to);
+    setTimeout(() => this.host().querySelector<HTMLElement>(`.pf-bka-cal__day[data-iso="${to}"]`)?.focus());
+  }
+  /** Bring the grid to the month holding `iso` (sliding the right way). */
+  private showCalMonth(iso: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    const key = iso.slice(0, 7);
+    const cur = this.calKey();
+    if (key === cur) return;
+    this.calSlide.set(key > cur ? "next" : "prev");
+    this.calMonth.set(startOfMonth(parse(iso, "yyyy-MM-dd", new Date())));
   }
 
   // ── Slots ───────────────────────────────────────────────────

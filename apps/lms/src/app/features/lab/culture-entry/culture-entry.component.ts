@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, OnInit, Output, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
-import { PlatformService } from '../../../core/services/platform.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { AstRow, CultureOrganism, CultureResult, COMMON_ORGANISMS, PlateMeasurement, PlateMeasureSession, panelForSpecimen } from '../../../shared/models/culture.model';
 import { LiveDisk, PlateMeasureComponent } from './plate-measure.component';
 import { DiskCandidate, MasterAntibiotic, baseDrug, drugForCode, masterCandidates, panelCandidates } from './disk-codes';
@@ -857,7 +857,7 @@ export class CultureEntryComponent implements OnInit {
   get organisms(): string[] { return this.organismNames?.length ? this.organismNames : COMMON_ORGANISMS; }
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService, { optional: true });
-  private readonly platform = inject(PlatformService);
+  private readonly uploads = inject(UploadsService);
   private readonly el = inject(ElementRef<HTMLElement>);
 
   // Camera measure-assist: index of the organism whose plate is being measured.
@@ -1790,11 +1790,10 @@ export class CultureEntryComponent implements OnInit {
     return mm >= bp.s ? 'S' : mm <= bp.r ? 'R' : 'I';
   };
 
-  /** Resolve a server-relative plate URL to an absolute one for display. */
+  /** Plate photos are private uploads: display from a blob: URL fetched
+   *  with the session ('' until it lands); other URLs pass through. */
   resolveUrl(u?: string | null): string {
-    if (!u) return '';
-    if (/^https?:\/\//i.test(u) || u.startsWith('data:') || u.startsWith('blob:')) return u;
-    return `${this.platform.getApiUrl()}${u}`;
+    return this.uploads.src(u);
   }
 
   /** Enough entered to submit: no-growth, or at least one named organism. */

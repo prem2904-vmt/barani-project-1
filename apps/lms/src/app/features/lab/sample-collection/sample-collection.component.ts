@@ -45,7 +45,9 @@ import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-stri
 import {
   LabelCardComponent,
   tubeSpec,
+  labelTubeLine,
 } from "../../frontdesk/post-payment/label-card.component";
+import { tubeChosenSpecimen, tubeSpecimen } from "../../../shared/utils/micro-specimen";
 import { PrinterService } from "../../../core/printer/printer.service";
 import { PrintConfigService } from "../../../core/printer/print-config.service";
 import { BranchLabConfigService } from "../../../core/services/branch-lab-config.service";
@@ -59,6 +61,11 @@ import {
   sortForCollection,
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
+import {
+  isDrawn,
+  isNotCollected,
+  notCollectedLabel,
+} from "../../../shared/utils/sample-not-collected";
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
@@ -69,7 +76,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
  * cap/container colour so labelling matches what's on the rack; "fill" is the
  * liquid colour used when the sample's drawn.
  */
-type ContainerKind = "vacutainer" | "urine_cup" | "jar";
+type ContainerKind = "vacutainer" | "urine_cup" | "jar" | "bottle";
 interface Container {
   kind: ContainerKind;
   color: string; // cap / container accent
@@ -112,6 +119,9 @@ const TUBE_COLOR_MAP: Record<string, { color: string; label: string }> = {
   trace: { color: "#1d4ed8", label: "Trace metal · Royal blue" },
   sterile: { color: "#e5e7eb", label: "Sterile Container" },
   urine: { color: "#facc15", label: "Urine Bottle" },
+  // Microbiology blood-culture bottle — drawn as a bottle (neck + crimped
+  // flip-cap), filling with blood like the vacutainer (shared/utils/tube-colors).
+  blood_culture: { color: "#0f766e", label: "Blood culture bottle" },
   multiple: { color: "#6366f1", label: "Multiple" },
   // Legacy keys (pre-NABL) so older tests still render a colour.
   red: { color: "#ef4444", label: "Plain · Red" },
@@ -236,7 +246,7 @@ function specimenContainer(sampleType: string): Container | null {
   return null;
 }
 
-function containerFor(
+export function containerFor(
   s: OrderSample,
   deptCfg?: Record<string, { color?: string | null; label?: string | null }>,
 ): Container {
@@ -247,12 +257,23 @@ function containerFor(
     // Sterile pots hold ONE specimen type each — label it with the specimen so
     // two sterile containers on an order read differently (Stool vs CSF…).
     if (s.tubeColor === "sterile") {
-      const spec = (s.tests[0]?.test?.sampleType ?? "").toLowerCase().trim();
+      // The specimen CHOSEN at the desk wins (tubes group by it), else the
+      // Test Master's own specimen.
+      const spec = (tubeSpecimen(s) ?? "").toLowerCase().trim();
       return {
         kind: "jar",
         color: tc.color,
         fill: "#9ca3af",
         label: spec ? `Sterile · ${specimenTitle(spec)}` : tc.label,
+      };
+    }
+    if (s.tubeColor === "blood_culture") {
+      const chosen = tubeChosenSpecimen(s);
+      return {
+        kind: "bottle",
+        color: tc.color,
+        fill: BLOOD_FILL,
+        label: chosen ? `${tc.label} · ${specimenTitle(chosen.toLowerCase())}` : tc.label,
       };
     }
     if (s.tubeColor === "urine")
@@ -293,7 +314,7 @@ function containerFor(
   // Map the test's specimen/sampleType to the NABL vacutainer cap colour.
   // Ordered specific → general so e.g. "EDTA Plasma" resolves to EDTA, not
   // the generic plasma branch below.
-  const raw = (s.tests[0]?.test?.sampleType ?? "").toLowerCase().trim();
+  const raw = (tubeSpecimen(s) ?? "").toLowerCase().trim();
   // "A + B" ("Serum + 24h Urine") means BOTH containers are drawn; a literal
   // "Multiple" specimen likewise → the Multiple tube.
   if (raw === "multiple" || raw.includes("+")) {
@@ -334,7 +355,11 @@ interface OrderGroup {
   createdAt: string;
   samples: OrderSample[];
   totalVials: number;
+  /** Tubes DRAWN (collected or further). A not-collected tube never counts. */
   collected: number;
+  /** Tubes marked "Can't collect" (rejected before any draw) — a sink: they
+   *  are neither drawn nor pending, and never dispatchable. */
+  notCollected: number;
   /** Server-computed on the embedded order: the require-bill gate is on and
    *  the bill isn't settled — dispatch would be rejected, offer "Bill". */
   paymentHold: boolean;
@@ -668,13 +693,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
           samples: [],
           totalVials: 0,
           collected: 0,
+          notCollected: 0,
           paymentHold: false,
         };
         byOrder.set(s.orderId, g);
       }
       g.samples.push(s);
       g.totalVials++;
-      if (s.status !== "pending") g.collected++;
+      if (isNotCollected(s)) g.notCollected++;
+      else if (s.status !== "pending") g.collected++;
       if (s.order?.paymentHold) g.paymentHold = true;
     }
     // Meta line = the SAMPLE barcode(s), not the order number — the tube in
@@ -814,7 +841,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return [
       { id: 'all', label: 'All', count: ss.length },
       { id: 'pending', label: 'Pending', count: ss.filter(s => s.status === 'pending').length },
-      { id: 'drawn', label: 'Drawn', count: ss.filter(s => s.status !== 'pending').length },
+      { id: 'drawn', label: 'Drawn', count: ss.filter(s => isDrawn(s)).length },
       { id: 'external', label: 'External', count: ss.filter(s => s.source === 'external').length },
     ];
   }
@@ -829,7 +856,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const f = this.vialFilter();
     const list = this.orderedSamples(g);
     if (f === 'pending') return list.filter(s => s.status === 'pending');
-    if (f === 'drawn') return list.filter(s => s.status !== 'pending');
+    if (f === 'drawn') return list.filter(s => isDrawn(s));
     if (f === 'external') return list.filter(s => s.source === 'external');
     return list;
   }
@@ -862,20 +889,30 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   /** Order → drawn → dispatched, from the timestamps the payload carries. */
-  collectTimeline(g: OrderGroup): Array<{ key: string; label: string; at: string | null; done: boolean; note?: string }> {
+  collectTimeline(g: OrderGroup): Array<{ key: string; label: string; at: string | null; done: boolean; note?: string; tone?: "stopped" }> {
     const o = g.samples.find((x) => !!x.order)?.order;
     const drawnAts = g.samples.map((x) => x.collectedAt).filter((x): x is string => !!x).sort();
     const dispAts = g.samples.map((x) => x.dispatchedAt).filter((x): x is string => !!x).sort();
     const allDrawn = g.collected === g.totalVials;
-    return [
+    const steps: Array<{ key: string; label: string; at: string | null; done: boolean; note?: string; tone?: "stopped" }> = [
       { key: "ordered", label: "Ordered", at: o?.createdAt ?? g.createdAt ?? null, done: true },
       {
         key: "drawn", label: "Drawn", done: allDrawn,
         at: allDrawn ? drawnAts[drawnAts.length - 1] ?? null : null,
         note: allDrawn ? undefined : `${g.collected} of ${g.totalVials}`,
       },
-      { key: "dispatched", label: "Dispatched", done: this.isDispatched(g), at: dispAts[dispAts.length - 1] ?? null },
     ];
+    // "Can't collect" is its own stop on the timeline — never folded into
+    // Drawn / Dispatched (QA #6).
+    if (g.notCollected > 0) {
+      const reasons = [...new Set(g.samples.filter(isNotCollected).map((x) => (x.rejectedReason ?? "").trim()).filter(Boolean))];
+      steps.push({
+        key: "not_collected", label: "Not collected", at: null, done: false, tone: "stopped",
+        note: `${g.notCollected} of ${g.totalVials}${reasons.length ? " · " + reasons.join(", ") : ""}`,
+      });
+    }
+    steps.push({ key: "dispatched", label: "Dispatched", done: this.isDispatched(g), at: dispAts[dispAts.length - 1] ?? null });
+    return steps;
   }
 
   hasCollectInfo(g: OrderGroup): boolean {
@@ -926,7 +963,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  ('normal' | 'anchor' | 'due') — locked future offsets and missed
    *  windows don't hold the collector hostage in the drawer. */
   doneDisabled(g: OrderGroup): boolean {
-    if (!this.hasSeries(g)) return g.collected < g.totalVials;
+    // A not-collected tube is settled (it waits for Recollect at the desk),
+    // so it doesn't hold the collector in the drawer.
+    if (!this.hasSeries(g)) return g.collected + (g.notCollected ?? 0) < g.totalVials;
     return g.samples.some((s) => {
       if (s.status !== "pending") return false;
       const k = this.tubeState(s).kind;
@@ -1332,6 +1371,21 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return any ? Math.round(sum * 10) / 10 : null;
   }
 
+  /** Tube drawn (collected or further) — drives the filled tube, the check
+   *  and the time stamp. A not-collected tube is NOT drawn. */
+  drawn(s: OrderSample): boolean {
+    return isDrawn(s);
+  }
+  /** Tube marked "Can't collect" (rejected before any draw). */
+  notCollected(s: OrderSample): boolean {
+    return isNotCollected(s);
+  }
+  /** "Not collected — Patient refused" / "1 of 2 not collected — …" for the
+   *  drawer's status line; null when every tube is drawable. */
+  notCollectedText(g: OrderGroup): string | null {
+    return notCollectedLabel(g.samples, { full: true });
+  }
+
   openOrder(id: string) {
     this.zoom.runLocal('in', () => {
       this.resetSeriesOverrides();
@@ -1448,7 +1502,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       const p = s.order?.patient;
       const code = s.barcode ?? s.id;
       const mrn = p?.mrn ?? undefined;
-      const spec = tubeSpec(s);
       const res = await this.printer
         .printLabelData(
           {
@@ -1460,7 +1513,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
             ageSex: this.labelAgeSex(p),
             mrn,
             deptCode: (s.department?.code ?? "").toUpperCase(),
-            tube: `${spec.label} · ${spec.volume}`,
+            tube: labelTubeLine(s),
             outsourced: !!s.outsourcedVendorId,
           },
           opts,
@@ -1602,6 +1655,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this.markPending(s);
       return;
     }
+    // "Can't collect" tube: the patient is back → offer Recollect (the tube
+    // returns to pending with the same barcode — it was never drawn).
+    if (isNotCollected(s)) {
+      void this.recollect(s);
+      return;
+    }
     // Auto-receive workflows have NO dispatch step: collection immediately marks
     // the tube 'received' at the lab. The front desk must still be able to undo a
     // mis-tap, so treat an auto-received tube as un-collectable here — the backend
@@ -1692,35 +1751,94 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return true;
   }
 
+  /** True while the "Can't collect" submit is in flight (no double submit). */
+  protected readonly rejectBusy = signal(false);
+
+  /**
+   * "Can't collect" submit (QA #6). Marks every pending tube on the order NOT
+   * COLLECTED with the reason (PATCH /api/samples/{id}/reject — the server
+   * keeps it as 'rejected' with no collection stamp), then:
+   *   - reflects the new state locally (tube shows "Not collected — reason"),
+   *   - toasts what happened,
+   *   - returns to where the user came from (the Frontdesk for a deep link),
+   *     or back to the collection queue.
+   * The old code cleared the open order without navigating: on a deep link
+   * (FD "Collect" → /lab/collect?orderId=…) the queue is suppressed, so the
+   * page fell into the "Opening collection…" skeleton for ever — the BLANK
+   * PAGE. When every PATCH fails nothing changed: the dialog stays open with
+   * the error so the user can retry or cancel.
+   */
   async submitReject() {
     const m = this._rejectModal();
-    if (!m || !this.canSubmitReject()) return;
+    if (!m || !this.canSubmitReject() || this.rejectBusy()) return;
     const label =
       this.REJECT_REASONS.find((r) => r.code === m.reason)?.label ?? m.reason;
     const reason =
       m.note.trim().length > 0 ? `${label} — ${m.note.trim()}` : label;
     const pending = m.group.samples.filter((s) => s.status === "pending");
-    const failures = await Promise.all(
+    if (pending.length === 0) {
+      this._rejectModal.set(null);
+      return;
+    }
+    this.rejectBusy.set(true);
+    const results = await Promise.all(
       pending.map((s) =>
         firstValueFrom(
-          this.api.patch(`/api/samples/${s.id}/reject`, { reason }),
+          this.api.patch<OrderSample>(`/api/samples/${s.id}/reject`, { reason }),
         )
-          .then(() => null)
-          .catch((e) => ApiError.from(e)),
+          .then(() => ({ id: s.id, error: null as ApiError | null }))
+          .catch((e) => ({ id: s.id, error: ApiError.from(e) })),
       ),
     );
-    const failed = failures.filter((e): e is ApiError => e !== null);
-    const ok = pending.length - failed.length;
-    if (ok > 0)
-      this.toasts.success(
-        `${ok} tube${ok === 1 ? "" : "s"} flagged for re-collection`,
-      );
-    if (failed.length) this.toasts.error(failed[0].message);
+    this.rejectBusy.set(false);
+    const done = new Set(results.filter((r) => !r.error).map((r) => r.id));
+    const failed = results.filter((r) => !!r.error);
+    if (done.size === 0) {
+      this.toasts.error(failed[0]?.error?.message ?? "Could not mark the tubes not collected");
+      return;
+    }
+    this._pending.update((list) =>
+      list.map((x) =>
+        done.has(x.id)
+          ? { ...x, status: "rejected", rejectedReason: reason, collectedAt: undefined }
+          : x,
+      ),
+    );
+    const n = done.size;
+    this.toasts.success(
+      `${n} tube${n === 1 ? "" : "s"} marked not collected — ${label}`,
+    );
+    if (failed.length) this.toasts.error(failed[0].error!.message);
     this._rejectModal.set(null);
-    if (failed.length === 0) {
-      this.close();
-    } else {
-      this.refresh();
+    this.sampleCollected.emit();
+    // All marked → back to the Frontdesk (deep link) or the queue — never a
+    // dead page. Some failed → stay and refresh so the desk sees what's left.
+    if (failed.length === 0) this.close();
+    else this.refresh();
+  }
+
+  /** Recollect a "Can't collect" tube — the patient is back. The tube returns
+   *  to pending (back in the collection queue) and can be drawn right here. */
+  async recollect(s: OrderSample) {
+    const ok = await this.dialog.confirm({
+      title: "Recollect this tube?",
+      message: `It was marked not collected${s.rejectedReason ? ` (${s.rejectedReason})` : ""}. It goes back to pending so you can draw it now.`,
+      confirmLabel: "Recollect",
+      tone: "primary",
+    });
+    if (!ok) return;
+    try {
+      await firstValueFrom(
+        this.api.patch<OrderSample>(`/api/samples/${s.id}/recollect`, {}),
+      );
+      this._pending.update((list) =>
+        list.map((x) =>
+          x.id === s.id ? { ...x, status: "pending", rejectedReason: undefined } : x,
+        ),
+      );
+      this.toasts.success("Back to pending — tap the tube when drawn");
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
     }
   }
 
@@ -1751,7 +1869,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (failed.length < pending.length)
       this.toasts.success("Marked for re-collection");
     if (failed.length) this.toasts.error(failed[0].message);
-    this._openOrderId.set(null);
-    this.refresh();
+    // close(), not a bare _openOrderId reset: a deep link must navigate back
+    // (the bare reset stranded it on the loader — QA #6).
+    this.close();
   }
 }

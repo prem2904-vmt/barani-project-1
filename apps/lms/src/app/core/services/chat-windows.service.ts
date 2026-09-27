@@ -1,5 +1,6 @@
 import { DOCUMENT } from '@angular/common';
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { SessionScopeService } from '../auth/session-scope.service';
 
 /** Width of one docked chat window + the gap between windows. */
 const WIN_W = 330;
@@ -20,6 +21,7 @@ const RAIL = 72;
 @Injectable({ providedIn: 'root' })
 export class ChatWindowsService {
   private readonly doc = inject(DOCUMENT);
+  private readonly scope = inject(SessionScopeService);
   private readonly win = this.doc.defaultView;
 
   /** Open windows, left → right. */
@@ -31,8 +33,11 @@ export class ChatWindowsService {
 
   /** Favourites — pinned people (owner). A favourite keeps its head on
    *  the rail even after its window is CLOSED, so the people you talk to
-   *  all day are always one tap away. Persisted per device. */
+   *  all day are always one tap away. Persisted per device PER ACCOUNT
+   *  (`pf.chat.favourites:<tenant>:<user>`) — a shared lab machine must not
+   *  show one person's pinned heads to the next. */
   private static readonly FAV_KEY = 'pf.chat.favourites';
+  private favKey(): string { return this.scope.storageKey(ChatWindowsService.FAV_KEY); }
   private readonly _favourites = signal<string[]>(this.restoreFavourites());
   readonly favourites = this._favourites.asReadonly();
 
@@ -46,13 +51,21 @@ export class ChatWindowsService {
         ? ids.filter((i) => i !== conversationId)
         : [...ids, conversationId]);
     try {
-      localStorage.setItem(ChatWindowsService.FAV_KEY, JSON.stringify(this._favourites()));
+      localStorage.setItem(this.favKey(), JSON.stringify(this._favourites()));
     } catch { /* private mode — favourites just won't survive the session */ }
   }
 
   private restoreFavourites(): string[] {
+    if (!this.scope.identity()) return [];
     try {
-      const raw = localStorage.getItem(ChatWindowsService.FAV_KEY);
+      // One-time move of the old device-wide key to the first account that
+      // loads after the upgrade (ids of threads it isn't in never render).
+      const legacy = localStorage.getItem(ChatWindowsService.FAV_KEY);
+      if (legacy !== null) {
+        if (localStorage.getItem(this.favKey()) === null) localStorage.setItem(this.favKey(), legacy);
+        localStorage.removeItem(ChatWindowsService.FAV_KEY);
+      }
+      const raw = localStorage.getItem(this.favKey());
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
     } catch { return []; }
@@ -76,6 +89,8 @@ export class ChatWindowsService {
   });
 
   constructor() {
+    // New account → no windows, heads or favourites from the previous one.
+    this.scope.onChange(() => this.reset());
     this.win?.addEventListener('resize', () => {
       this._width.set(this.win?.innerWidth ?? 1280);
       this.enforceCapacity();
@@ -101,6 +116,15 @@ export class ChatWindowsService {
     this._open.update(ids => ids.filter(i => i !== conversationId));
     this._minimized.update(ids => ids.filter(i => i !== conversationId));
     this.focusSeq.delete(conversationId);
+  }
+
+  /** Clean slate (account switch / sign-out): close every window + head
+   *  and load the new account's favourites. */
+  reset(): void {
+    this._open.set([]);
+    this._minimized.set([]);
+    this.focusSeq.clear();
+    this._favourites.set(this.restoreFavourites());
   }
 
   /** Mark a window as the most recently used (typing / clicking in it). */

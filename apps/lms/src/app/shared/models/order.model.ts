@@ -127,6 +127,10 @@ export interface OrderTest {
   rejectedAt?: string;
   rejectedBy?: string;
   rejectionReason?: string;
+  /** The specimen CHOSEN at the order desk for this line (tests that ask
+   *  for one — every micro test, Culture & Sensitivity); null = none chosen,
+   *  the Test Master's own specimen applies. */
+  specimen?: string | null;
   test?: Test;
   subOrder?: OrderSample;
 }

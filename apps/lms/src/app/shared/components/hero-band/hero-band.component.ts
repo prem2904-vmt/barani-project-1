@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injector, computed, inject, input, output } from '@angular/core';
 import { AuthService } from '../../../core/auth/auth.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { brandingSrc } from '../../../core/services/uploads.service';
 
 /**
  * Hero band — the designer's common screen header (Figma: "Prefrontal LMS —
@@ -124,6 +125,8 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     :host-context(.dark) .pf-hb__band,
     :host-context([data-theme='dark']) .pf-hb__band {
       border-bottom: 1px solid var(--pf-band-edge);
+      /* Soft violet bloom below the bottom edge (dark only; styles.scss). */
+      box-shadow: var(--pf-band-glow, none);
     }
 
     .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -404,7 +407,9 @@ export class HeroBandComponent {
   /* Branding resolution — mirrors the classic bar's tenant chip: mode
      defaults to 'both'; brandingName falls back to the official name. */
   private readonly brandingMode = computed(() => this.tenantState.tenant()?.brandingMode ?? 'both');
-  readonly tenantLogo = computed(() => this.tenantState.tenant()?.logoUrl || null);
+  private readonly injector = inject(Injector);
+  /** A private "/uploads/…" logo shows through the session (blob: URL). */
+  readonly tenantLogo = computed(() => brandingSrc(this.injector, this.tenantState.tenant()?.logoUrl));
   readonly brandingName = computed(() => this.tenantState.tenant()?.brandingName?.trim() || null);
   readonly showLogo = computed(() => this.brandingMode() === 'logo' || this.brandingMode() === 'both');
   readonly showName = computed(() => this.brandingMode() === 'name' || this.brandingMode() === 'both');

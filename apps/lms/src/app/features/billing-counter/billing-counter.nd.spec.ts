@@ -12,6 +12,7 @@ import { TenantStateService } from '../../core/services/tenant-state.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { ProcessWorkflowConfig } from '../../shared/models/process-workflow.model';
+import { WorkEventsService } from '../../core/services/work-events.service';
 
 /**
  * Billing counter (ND-PATTERN §17): the band + ONE pill search, a LEFT queue
@@ -47,7 +48,9 @@ const RECON = {
 const BILL1 = { id: 'b1', orderId: 'o1', totalPayable: 1200, totalPaid: 200, balance: 1000, totalDiscount: 100, totalTax: 0, invoiceNumber: 'INV-000123',
   items: [{ id: 'i1', testName: 'Haemoglobin', price: 200, total: 200 }, { id: 'i2', testName: 'Lipid profile', price: 1100, total: 1000 }] };
 
-/** Collection placed in the billing counter's own menu (Process builder). */
+/** A (stray, pre-fixed-slot) collection copy in the billing counter's own menu.
+ *  Sample Collection now sits only in Collect / Frontdesk / Lab, so this is
+ *  NOT a placement: the counter never offers "Collect sample". */
 const WF_COLLECT_AT_BILLING: ProcessWorkflowConfig = {
   categories: [
     { id: 'frontdesk', name: 'FD', icon: 'folder', color: '#000', order: 0 },
@@ -237,6 +240,32 @@ describe('Billing counter — the queue (LEFT)', () => {
     expect(urls).toContain('/api/orders/today');
   });
 
+  it('live: a bill / order work event refreshes the lists (debounced, once) — no 20 s network poll', () => {
+    const { c, api } = render();
+    const work = TestBed.inject(WorkEventsService);
+    vi.useFakeTimers();
+    try {
+      api.get.mockClear();
+      vi.advanceTimersByTime(30_000);                 // old cadence: nothing on the wire now
+      expect(api.get).not.toHaveBeenCalled();
+
+      work.push({ type: 'bill.paid', id: 'b9' });
+      work.push({ type: 'order.created' });
+      vi.advanceTimersByTime(500);
+      const urls = api.get.mock.calls.map((x: any[]) => x[0]);
+      expect(urls.filter((u: string) => u === '/api/billing/outstanding').length).toBe(1);
+      expect(urls).toContain('/api/orders/today');
+
+      api.get.mockClear();
+      work.push({ type: 'result.draft' });            // not a billing list event
+      vi.advanceTimersByTime(500);
+      expect(api.get).not.toHaveBeenCalled();
+      expect(c).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('waitingLabel / orderTestCount helpers', () => {
     const t0 = new Date('2026-09-26T08:00:00Z').getTime();
     expect(waitingLabel('2026-09-26T08:00:00Z', t0 + 20_000)).toBe('just now');
@@ -383,6 +412,17 @@ describe('Billing counter — Pay later', () => {
     expect(primaries(el)[0].textContent).toMatch(/Collect ₹300(\.00)? — rest later/);
   });
 
+  it('QA #3b: an advance above the balance is an inline error and the CTA is not ready', async () => {
+    const { f, el, c } = await openO1();
+    c.payPanel().setKind('later');
+    c.payPanel().setAdvance('1500');          // o1 owes ₹1,000
+    f.detectChanges();
+    expect(el.querySelector('.pf-ipp__err')?.textContent).toContain("Advance can't be more than the bill");
+    expect(c.collectReady()).toBe(false);
+    expect(primaries(el).length).toBe(0);
+    expect(c.collectLabel()).toBe('Save — pay later');
+  });
+
   it('records the bill with its balance (no payment), stamps it pay-later, shows the saved state', async () => {
     const { f, el, c, api, router, toasts } = await openO1();
     await c.confirmPayment({ mode: 'later' });
@@ -481,13 +521,12 @@ describe('Billing counter — Pay later', () => {
     expect(report.el.querySelector('.pf-bc-done__hint')?.textContent).toContain('report');
   });
 
-  it('collection at the billing counter: "Collect sample" stays the primary after Pay later', async () => {
+  it('a stray collection copy at the billing counter: no "Collect sample" after Pay later (fixed slots)', async () => {
     const { f, el, c } = await openO1({ workflow: WF_COLLECT_AT_BILLING });
     await c.confirmPayment({ mode: 'later' });
     f.detectChanges();
-    const ps = primaries(el);
-    expect(ps.length).toBe(1);
-    expect(ps[0].textContent?.trim()).toBe('Collect sample');
+    expect(c.collectsHere()).toBe(false);
+    expect(Array.from(primaries(el)).some(p => p.textContent?.trim() === 'Collect sample')).toBe(false);
   });
 });
 
@@ -518,15 +557,10 @@ describe('Billing counter — collect sample only when the workflow says so', ()
     expect(hasCollect(el)).toBe(false);
   });
 
-  it('collection AT the billing counter → "Collect sample" is the primary, opening that order\'s collection', async () => {
-    const { el, c, router } = await payFirst({ workflow: WF_COLLECT_AT_BILLING });
-    expect(c.collectsHere()).toBe(true);
-    const ps = primaries(el);
-    expect(ps.length).toBe(1);
-    expect(ps[0].textContent?.trim()).toBe('Collect sample');
-    (ps[0] as HTMLButtonElement).click();
-    expect(router.navigate).toHaveBeenCalledWith(['/sample-collection'], { queryParams: { orderId: 'o1' } });
-    neverToOrderScreen(router);
+  it('a stray collection copy AT the billing counter → still no "Collect sample" (fixed slots)', async () => {
+    const { el, c } = await payFirst({ workflow: WF_COLLECT_AT_BILLING });
+    expect(c.collectsHere()).toBe(false);
+    expect(hasCollect(el)).toBe(false);
   });
 });
 

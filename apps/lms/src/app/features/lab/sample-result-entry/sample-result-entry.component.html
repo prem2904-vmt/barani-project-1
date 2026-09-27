@@ -36,7 +36,12 @@
                     [attr.aria-label]="'Sample ' + activeBarcode() + ' — switch tube'"
                     (click)="tubeMenuOpen.set(!tubeMenuOpen())">
               <span class="nd-num pf-sre-chip__id">{{ activeBarcode() }}</span>
-              @if (hasWritable()) { <span class="pf-sre-tab__dot" aria-hidden="true"></span> }
+              @switch (tabMarks()[activeTubeId() ?? ""]) {
+                  @case ("complete") {
+                    <svg class="pf-sre-tab__ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Every field filled"><path d="M20 6 9 17l-5-5"/></svg>
+                  }
+                  @case ("draft") { <span class="pf-sre-tab__dot" role="img" aria-label="Has unsaved or draft values"></span> }
+                }
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </button>
             @if (tubeMenuOpen()) {
@@ -48,7 +53,12 @@
                           (click)="pickTube(tab.id)">
                     <span class="nd-num pf-sre-switch__id">{{ tab.barcode || "Tube" }}</span>
                     @if (tab.tests) { <span class="pf-sre-switch__tests">{{ tab.tests }}</span> }
-                    @if (tab.open && tab.id !== activeTubeId()) { <span class="pf-sre-tab__dot" aria-label="Open work"></span> }
+                    @switch (tabMarks()[tab.id]) {
+                  @case ("complete") {
+                    <svg class="pf-sre-tab__ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Every field filled"><path d="M20 6 9 17l-5-5"/></svg>
+                  }
+                  @case ("draft") { <span class="pf-sre-tab__dot" role="img" aria-label="Has unsaved or draft values"></span> }
+                }
                   </button>
                 }
               </span>
@@ -91,7 +101,12 @@
                     (click)="openSibling(tab.id)" [title]="tab.tests"
                     [attr.aria-label]="(tab.barcode || 'Tube') + (tab.tests ? ' — ' + tab.tests : '')">
               <span class="nd-num pf-sre-tab__id">{{ tab.barcode || "Tube" }}</span>
-              @if (tab.open && tab.id !== activeTubeId()) { <span class="pf-sre-tab__dot" aria-label="Open work"></span> }
+              @switch (tabMarks()[tab.id]) {
+                  @case ("complete") {
+                    <svg class="pf-sre-tab__ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Every field filled"><path d="M20 6 9 17l-5-5"/></svg>
+                  }
+                  @case ("draft") { <span class="pf-sre-tab__dot" role="img" aria-label="Has unsaved or draft values"></span> }
+                }
             </button>
           }
         </span>
@@ -144,12 +159,31 @@
           @if (lastSavedLabel() && !autosaving()) { <span class="pf-sre-act__saved" aria-hidden="true"></span> }
         </button>
       }
-      <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit"
-              aria-label="Submit results" title="Submit results"
-              [disabled]="loading() || submitting() || savingDraft() || !hasWritable()" (click)="submitAll()">
-        <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-        <span class="pf-sre-act__t">{{ submitting() ? "Submitting…" : hasReopenable() && !hasWritable() ? "Submitted" : "Submit results" }}</span>
-      </button>
+      @if (multiTube()) {
+        <!-- 2+ tube tabs: "Submit this sample" (secondary, the per-tab
+             submit) + "Submit all" (the ONE primary, every tab). -->
+        @if (hasWritable()) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-submit-one"
+                  aria-label="Submit this sample" [title]="'Submit only ' + activeBarcode()"
+                  [disabled]="loading() || submitting() || savingDraft()" (click)="submitAll()">
+            <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="pf-sre-act__t">Submit this sample</span>
+          </button>
+        }
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit pf-sre-submit-all"
+                aria-label="Submit all" [title]="'Submit all ' + tubeTabs().length + ' samples'"
+                [disabled]="loading() || submitting() || savingDraft() || !anyWritableAcrossTabs()" (click)="submitAllTabs()">
+          <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>
+          <span class="pf-sre-act__t">{{ submitting() ? "Submitting…" : "Submit all" }}</span>
+        </button>
+      } @else {
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit"
+                aria-label="Submit results" title="Submit results"
+                [disabled]="loading() || submitting() || savingDraft() || !hasWritable()" (click)="submitAll()">
+          <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          <span class="pf-sre-act__t">{{ submitting() ? "Submitting…" : hasReopenable() && !hasWritable() ? "Submitted" : "Submit results" }}</span>
+        </button>
+      }
     }
   </ng-template>
 
@@ -181,7 +215,7 @@
         <!-- Order-level extras, only when they apply: the validator's
              "submitted" line, the Trendogram switch (slate) and the flags
              the last submit raised. -->
-        @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0) {
+        @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0 || submitReport().length > 0) {
           <div class="pf-sre-strip">
             @if (validateMode()) {
               <span class="nd-chip nd-chip--static pf-sre-strip__meta nd-num">Submitted{{ submittedAtLabel() ? " " + submittedAtLabel() : "" }}</span>
@@ -206,6 +240,16 @@
                            [value]="trendogramDuration()"
                            (valueChange)="setTrendDuration($event)"></pf-select>
               }
+            }
+            @if (submitReport().length > 0) {
+              <!-- Submit all did not fully go through: per tab, what happened. -->
+              <ul class="pf-sre__flags pf-sre-report" role="status" aria-label="Submit all">
+                @for (r of submitReport(); track r.sampleId) {
+                  <li class="pf-sre__flag" [class.pf-sre__flag--crit]="!r.ok" [class.pf-sre-report--ok]="r.ok">
+                    <strong class="nd-num">{{ r.barcode }}</strong> · {{ r.ok ? "Submitted" : "Not submitted — " + (r.message || "failed") }}
+                  </li>
+                }
+              </ul>
             }
             @if (lastFlags().length > 0) {
               <ul class="pf-sre__flags">
@@ -295,6 +339,7 @@
                           <tr class="pf-sre__gsub">
                             <td colspan="6">
                               {{ t.test?.name ?? "Test" }}
+                              @if (specimenLabel(t); as sp) { <span class="pf-sre__gwho pf-sre__spec" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span> }
                               @if (enteredByLabel(t)) { <span class="pf-sre__gwho" title="Entered by">{{ enteredByLabel(t) }}</span> }
                             </td>
                           </tr>
@@ -313,6 +358,9 @@
                                   <ng-container *ngTemplateOutlet="commentMark"></ng-container>
                                 }
                               </span>
+                              @if (idx === 0 && parametersFor(t).length === 1 && specimenLabel(t)) {
+                                <span class="pf-sre__gwho pf-sre__spec" title="Specimen chosen at the order desk">Specimen: {{ specimenLabel(t) }}</span>
+                              }
                               @if (idx === 0 && parametersFor(t).length === 1 && enteredByLabel(t)) {
                                 <span class="pf-sre__gwho" title="Entered by">{{ enteredByLabel(t) }}</span>
                               }
@@ -464,7 +512,7 @@
                   <img [src]="attachSrc(a)" [alt]="a.name || 'attachment'" />
                 </a>
               } @else {
-                <a [href]="attachSrc(a)" target="_blank" rel="noopener" class="pf-sre__attach-thumb pf-sre__attach-thumb--video" title="Open the video">
+                <a [href]="attachHref(a)" (click)="openAttach($event, a)" target="_blank" rel="noopener" class="pf-sre__attach-thumb pf-sre__attach-thumb--video" title="Open the video">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                 </a>
               }
@@ -503,6 +551,7 @@
             <input type="text" inputmode="decimal"
                    class="pf-sre__ginput pf-sre__ginput--num"
                    [attr.aria-label]="p.title || p.name"
+                   [attr.data-sre-field]="t.id + '::' + p.name"
                    [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
                    [class.pf-sre__input--outr]="isOutOfRange(t, p)"
                    [class.pf-sre__input--crit]="isCriticalValue(t, p)"
@@ -526,6 +575,7 @@
             <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
                       (input)="autoGrow($event)"
                       [attr.aria-label]="p.title || p.name"
+                   [attr.data-sre-field]="t.id + '::' + p.name"
                       [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
                       [ngModel]="getValue(t.id, p.name)"
                       (ngModelChange)="setValue(t.id, p.name, $event)"
@@ -534,6 +584,7 @@
           @case ("checkbox") {
             <input type="checkbox" class="pf-sre__cb"
                    [attr.aria-label]="p.title || p.name"
+                   [attr.data-sre-field]="t.id + '::' + p.name"
                    [ngModel]="!!getValue(t.id, p.name)"
                    (ngModelChange)="setValue(t.id, p.name, $event)"
                    (keydown.enter)="onEnterKey($event)" />
@@ -541,6 +592,7 @@
           @case ("date") {
             <input type="date" class="pf-sre__ginput"
                    [attr.aria-label]="p.title || p.name"
+                   [attr.data-sre-field]="t.id + '::' + p.name"
                    [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
                    [ngModel]="getValue(t.id, p.name)"
                    (ngModelChange)="setValue(t.id, p.name, $event)"
@@ -551,6 +603,7 @@
                  phones); Enter still moves to the next field. -->
             <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
                       [attr.aria-label]="p.title || p.name"
+                   [attr.data-sre-field]="t.id + '::' + p.name"
                       [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
                       [ngModel]="getValue(t.id, p.name)"
                       (ngModelChange)="setValue(t.id, p.name, $event)"
@@ -573,6 +626,11 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
               </span>
               <h2 class="nd-card__label pf-sre-card__label pf-sre__test-name">{{ t.test?.name ?? "Test" }}</h2>
+              @if (specimenLabel(t); as sp) {
+                <!-- The specimen chosen at the order desk (non-culture micro;
+                     culture shows it on the bench). -->
+                <span class="nd-chip nd-chip--static pf-sre__test-pill" title="Specimen chosen at the order desk">Specimen: {{ sp }}</span>
+              }
               @if (t.status === "re_entry") {
                 <span class="nd-chip nd-chip--static pf-sre__test-pill pf-sre__test-pill--rejected">Re-entry needed</span>
               } @else if (t.status === "entered" || t.status === "validated") {

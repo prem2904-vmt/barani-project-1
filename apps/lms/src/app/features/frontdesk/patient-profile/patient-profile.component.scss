@@ -1,470 +1,290 @@
-:host {
-  display: block;
-  height: 100%;
-  overflow: hidden;
+// ═════════════════════════════════════════════════════════════════════════
+// Patient profile (/frontdesk/patients/:id) — CLINICAL-FIRST, on the nd
+// pattern (docs/ND-PATTERN.md §22). Band (back + tenant + actions, ONE
+// primary: New order) whose pill is the CONTEXT BAR → main column: SNAPSHOT
+// (needs attention · in progress now · last visit) over CUMULATIVE RESULTS ‖
+// the PATIENT companion (quick actions, timeline, details), collapsible to
+// a strip. ≤900px one stacked column; ≤640px results as cards.
+// Palette: violet + neutrals / slate; the only colour is data: flagged
+// values (amber high / low, red critical) and dot-word statuses.
+// Noto Sans only, tabular numbers, never monospace.
+// ═════════════════════════════════════════════════════════════════════════
+@use '../../../shared/styles/nd-mixins' as nd;
+
+/* WORK page: the host fills the shell; only regions scroll. */
+:host { display: block; height: 100%; min-height: 0; overflow: hidden; }
+.pf-pp { height: 100%; }
+.pf-pp-band { flex: none; }
+
+/* ── First render: pill chips + actions fade in, gently staggered ──── */
+.pf-pp-in { animation: pf-pp-in var(--nd-dur, 320ms) var(--nd-spring) both; animation-delay: calc(var(--i, 0) * 40ms); }
+@keyframes pf-pp-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ── CONTEXT BAR (the band's pill) ─────────────────────────────────── */
+.pf-pp-ctx { gap: 6px 8px; }
+.pf-pp-who { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; min-width: 0; padding: 0 6px 0 4px; }
+.pf-pp-name { font-size: 15px; }
+.pf-pp-meta { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+.pf-pp-abha .nd-num { font-size: 12.5px; }
+.pf-pp-check { flex: none; color: var(--violet-text, #7c3aed); }
+.pf-pp-flag { font-size: 12.5px; }
+.pf-pp-flag__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--text-tertiary); }
+.pf-pp-flag[data-tone='amber'] .pf-pp-flag__dot { background: #d97706; }
+.pf-pp-flag[data-tone='red'] .pf-pp-flag__dot { background: var(--red-text, #dc2626); }
+
+/* ── Band actions: text on web, a 44px icon on touch ──────────────── */
+.pf-pp-act { position: relative; justify-content: center; flex: none; font-size: 14px; gap: 6px; }
+.pf-pp-act__i { display: none; flex: none; }
+.pf-pp-act__t { white-space: nowrap; }
+.pf-pp-act__plus { flex: none; }
+.pf-pp-act.pf-pp-act--icon { width: 44px; min-width: 44px; height: 44px; padding: 0; gap: 0; border-radius: 12px; }
+.pf-pp-act.pf-pp-act--icon .pf-pp-act__i { display: block; }
+.pf-pp-act.pf-pp-act--icon .pf-pp-act__t {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ── WORK page: non-scroll app layout ───────────────────────────────────
-   The page fills the shell's main area exactly and never scrolls as a
-   whole — scrolling happens INSIDE the panels. Applies on all sizes
-   (intentional, approved desktop change for a WORK screen). */
-.pf-pp__root {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+/* ── Body: main column ‖ PATIENT companion ─────────────────────────── */
+.pf-pp-body {
+  display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: minmax(0, 1fr); gap: 16px;
+  padding-top: 4px;
+  transition: grid-template-columns var(--nd-dur, 320ms) var(--nd-spring);
 }
+.pf-pp-body--collapsed { grid-template-columns: minmax(0, 1fr) 52px; }
+@media (max-width: 1280px) { .pf-pp-body:not(.pf-pp-body--collapsed) { grid-template-columns: minmax(0, 1fr) 340px; } }
+.pf-pp-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; }
+.pf-pp-results { flex: 1 1 auto; min-height: 220px; }
+.pf-pp-gridskel, .pf-pp-missing { flex: 1 1 auto; }
+.pf-pp-gridskel { padding: 14px; }
 
-/* ── Mobile tabs: active tab labeled, the rest icon-only ──────────────────
-   Hide everything after the leading icon (label, count badge, lock) for
-   NON-active tabs on phones; the active tab keeps its full label so you can
-   still see where you are. */
-@media (max-width: 767px) {
-  .pf-pp__tabbar > button:not(.pf-pp__tab-active) > span > *:not(:first-child) {
-    display: none;
-  }
-  /* Spread the tabs evenly so the icons line up across the bar instead of
-     packing to the left. */
-  .pf-pp__tabbar { justify-content: space-between; }
-  .pf-pp__tabbar > button { flex: 0 0 auto; }
-  /* Icon-only tabs: even square-ish footprint so icons align. */
-  .pf-pp__tabbar > button:not(.pf-pp__tab-active) {
-    padding-left: 0.55rem; padding-right: 0.55rem;
-    justify-content: center;
-  }
-  .pf-pp__tabbar > button > span { justify-content: center; }
-}
+/* ── DETAIL (order / trend), zoomed in over the main column ────────── */
+.pf-pp-detail { flex: 1 1 auto; }
+.pf-pp-detail__head { flex-wrap: nowrap; }
+.pf-pp-detail__back { width: 32px !important; height: 32px; min-height: 32px; flex: none; }
+.pf-pp-detail__t { min-width: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); @include nd.no-truncate; }
+.pf-pp-detail__body { overscroll-behavior: contain; }
+.pf-pp-detail__body--trend { overflow: hidden; display: flex; }
 
-/* Single-column layout now (top bar + full-width content). The grid scrolls as
-   ONE region at every width — no more independent 2-column scroll tracks. */
-.pf-pp__grid {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+/* ── PATIENT companion ─────────────────────────────────────────────── */
+.pf-pp-side__head { flex-wrap: nowrap; }
+.pf-pp-seg { height: 34px; align-items: center; flex: none; }
+.pf-pp-seg .nd-seg__item { height: 28px; font-size: 12.5px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.pf-pp-seg .nd-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+.pf-pp-seg__n { font-weight: 400; color: var(--text-tertiary); }
+.pf-pp-quick { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--nd-line); }
+.pf-pp-quick__btn { flex: 1 1 auto; height: 34px; min-height: 34px; padding: 0 10px; gap: 6px; font-size: 12.5px; white-space: nowrap; }
+.pf-pp-quick__btn svg { flex: none; }
+.pf-pp-fulltl { align-self: center; height: 34px; min-height: 34px; font-size: 12.5px; }
 
-/* Loading-skeleton and empty-state branches: fill the remaining height and
-   scroll internally rather than overflow-clipping under the hidden root. */
-.pf-pp__fill {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+/* Status = a 7px dot + a coloured word (Frontdesk tones), no chip. */
+.pf-pp-status {
+  --pf-tone: var(--amber-text);
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  font-size: 12.5px; font-weight: 500; line-height: 16px; white-space: nowrap;
+  color: color-mix(in srgb, var(--pf-tone) 70%, var(--text-primary));
 }
+.pf-pp-status[data-tone='green'] { --pf-tone: var(--green-text); }
+.pf-pp-status[data-tone='blue'] { --pf-tone: var(--blue-text); }
+.pf-pp-status[data-tone='red'] { --pf-tone: var(--red-text); }
+.pf-pp-status[data-tone='violet'] { --pf-tone: var(--violet-text); }
+.pf-pp-status[data-tone='neutral'] { --pf-tone: var(--text-tertiary); }
+.pf-pp-dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--pf-tone, var(--red-text)); }
+.pf-pp-owed { color: color-mix(in srgb, var(--red-text) 75%, var(--text-primary)) !important; }
 
-/* ── Patient top bar ─────────────────────────────────────── */
-/* Pinned to the top of the scroll region so the patient stays "locked" to the
-   screen while the tabs/content scroll underneath. */
-.pf-pp__topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 12px 16px;
-  border-radius: 16px;
-  background: var(--bg-card-solid);
-  border: 1px solid var(--glass-border);
-}
+/* Off-screen label sheet (printed on its own by printLabelOnly). */
+.pf-pp-reprint { position: absolute; left: -10000px; top: 0; width: 640px; display: grid; gap: 12px; }
 
-/* ── Trendogram panel ────────────────────────────────────── */
-/* Fills the Lab Orders content area (patient bar + tab bar stay put); the
-   corner toggle swaps it with the orders list. Chart runs tall to use the
-   space. */
-.pf-pp__trendo-panel {
-  background: var(--bg-card-solid);
-  border: 1px solid rgba(168, 85, 247, 0.16);
-  border-radius: 18px;
-  padding: 18px;
-  /* Fit the viewport: the child <pf-lab-trends> measures the space left below
-     the page chrome and sets its own height, so the whole Trendogram is visible
-     at once and the page never scrolls. Internal regions (test list, sparkline
-     matrix) scroll on their own if needed. */
-  display: flex;
-  overflow: hidden;
-  box-shadow: 0 1px 40px rgba(124, 58, 237, 0.06);
-  animation: pf-pp-fade 0.16s ease-out;
-}
-.pf-pp__trendo-panel ::ng-deep .pf-lt { height: 100%; }
-/* Phone: tighter panel + icon-only toggle (matches the header's +/⋯ actions). */
-@media (max-width: 640px) {
-  .pf-pp__trendo-panel { padding: 12px; border-radius: 14px; }
-  .pf-pp__trendo-label { display: none; }
-  .pf-pp__trendo-toggle { padding: 8px; }
-}
-.pf-pp__idblock { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.pf-pp__tb-back {
-  width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--glass-border); color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.03);
-}
-.pf-pp__tb-name { font-size: 18px; font-weight: 700; color: var(--text-primary); line-height: 1.15; letter-spacing: -0.01em; }
-.pf-pp__tb-demo {
-  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-  margin-top: 2px; font-size: 12px; color: var(--text-secondary); font-weight: 500;
-}
-.pf-pp__tb-sep { color: var(--text-tertiary); user-select: none; }
-.pf-pp__tb-id { color: var(--text-secondary); font-weight: 600; }
-.pf-pp__tb-rest { display: inline-flex; align-items: center; gap: 7px; }
-/* On phones, drop the age/sex · phone · blood group to a smaller secondary
-   line so name + ID lead. ID + copy stay together on line 1. */
-@media (max-width: 639.98px) {
-  .pf-pp__tb-rest {
-    flex-basis: 100%;      /* wrap onto its own line */
-    font-size: 11px;
-    opacity: 0.85;
-    margin-top: 2px;
-  }
-  .pf-pp__tb-rest .pf-pp__tb-sep:first-child { display: none; }
-}
-.pf-pp__tb-copy {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 2px; border-radius: 4px; color: var(--text-tertiary);
-}
-.pf-pp__tb-copy:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
-.pf-pp__tb-actions { display: flex; align-items: center; gap: 8px; }
-.pf-pp__tb-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 36px; padding: 0 12px; border-radius: 10px; font-size: 12.5px; font-weight: 600;
-  border: 1px solid var(--glass-border); color: var(--text-secondary); background: rgba(255, 255, 255, 0.03);
-}
-.pf-pp__tb-btn:hover { color: var(--text-primary); border-color: rgba(168, 85, 247, 0.4); }
-.pf-pp__tb-btn--on { color: var(--text-primary); border-color: rgba(168, 85, 247, 0.5); }
-.pf-pp__tb-cta {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 36px; padding: 0 16px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: #fff;
-  background: linear-gradient(135deg, #7c3aed, #db2777);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.2);
-}
-.pf-pp__tb-cta:hover { filter: brightness(1.08); }
+/* ── Skeleton (static — no looping shimmer) ────────────────────────── */
+.pf-pp-skel { display: block; height: 12px; width: 100%; border-radius: 6px; background: var(--nd-chip-bg); }
+.pf-pp-skel--sm { height: 9px; }
+.pf-pp-skel--pill { width: 320px; max-width: 70%; }
+.pf-pp-skelrows { display: flex; flex-direction: column; gap: 8px; }
+.pf-pp-skelrow { display: flex; flex-direction: column; justify-content: center; gap: 8px; height: 56px; padding: 0 14px; border-radius: var(--nd-radius, 12px); border: 1px solid var(--nd-line); }
+.pf-pp-snap--skel { min-height: 150px; }
 
-/* Edit lives in the bar on sm+, folds into the ⋯ menu on phones (so the bar
-   isn't cluttered with a lone icon-only button). !important beats the scoped
-   base-class display. */
-@media (max-width: 639.98px) { .pf-pp__edit-desktop { display: none !important; } }
-@media (min-width: 640px)    { .pf-pp__edit-mobile  { display: none !important; } }
+/* ── SUMMARY side card ─────────────────────────────────────────────── */
+.pf-pp-side, .pf-pp-strip { min-height: 0; animation: pf-pp-side-in var(--nd-dur, 320ms) var(--nd-spring) both; }
+@keyframes pf-pp-side-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+.pf-pp-collapse, .pf-pp-close { width: 32px !important; height: 32px; min-height: 32px; }
+.pf-pp-sidebody { gap: 0; padding-top: 4px; }
+.pf-pp-sec { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
+.pf-pp-sec + .pf-pp-sec { border-top: 1px solid var(--nd-line); }
+.pf-pp-sec__t { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
+.pf-pp-sec__acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pf-pp-facts { margin: 0; display: grid; grid-template-columns: minmax(96px, auto) minmax(0, 1fr); gap: 8px 14px; }
+.pf-pp-facts > div { display: contents; }
+.pf-pp-facts dt { font-size: 12.5px; color: var(--text-tertiary); }
+.pf-pp-facts dd { margin: 0; font-size: 13px; color: var(--text-primary); @include nd.no-truncate; }
+.pf-pp-idrow { display: flex; align-items: center; gap: 6px; }
+.pf-pp-copy { width: 28px !important; height: 28px; min-height: 28px; }
+.pf-pp-link { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--nd-sel-border); }
+.pf-pp-link:hover { color: var(--violet-text, #7c3aed); }
+.pf-pp-block { display: inline-block; margin-top: 2px; }
+.pf-pp-sub { color: var(--text-tertiary); }
+.pf-pp-wrap { overflow-wrap: anywhere; }
+.pf-pp-none { margin: 0; font-size: 13px; color: var(--text-tertiary); }
+.pf-pp-state { align-self: flex-start; height: 30px; gap: 7px; font-size: 12.5px; color: var(--text-primary); }
+.pf-pp-state svg { flex: none; color: var(--violet-text, #7c3aed); }
+.pf-pp-state__ring { flex: none; width: 7px; height: 7px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--color-violet-500, #8b5cf6); }
+.pf-pp-stats { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pf-pp-stats > div { padding: 10px 12px; border-radius: var(--nd-radius-sm, 10px); background: var(--nd-chip-bg); }
+.pf-pp-stats dt { font-size: 12px; color: var(--text-tertiary); }
+.pf-pp-stats dd { margin: 2px 0 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.pf-pp-due { --pf-tone: var(--red-text); display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; font-weight: 500; color: color-mix(in srgb, var(--red-text) 70%, var(--text-primary)); }
+.pf-pp-explain { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); }
 
-/* ── Mobile pass (≤640px): a tight, tidy patient bar — just name + ID, with a
-   compact "+" (new lab order) and a ⋯ that holds the demographics + the
-   secondary actions. Comfortable 44px touch targets. ── */
-@media (max-width: 640px) {
-  /* Name + ID on the left, the +/⋯ actions pinned top-right (so the row is
-     balanced and the ⋯ menu opens on-screen instead of clipping left). */
-  .pf-pp__topbar { padding: 12px 14px; gap: 10px; flex-wrap: nowrap; align-items: flex-start; }
-  /* Top-align back + avatar + name so they share one top edge with the +/⋯
-     actions (centering them against the tall wrapping name read as skewed). */
-  .pf-pp__idblock { flex: 1 1 auto; min-width: 0; align-items: flex-start; gap: 10px; }
-  .pf-pp__idblock > pf-avatar { margin-top: 1px; }
-  .pf-pp__tb-back { width: 40px; height: 40px; margin-top: 1px; }
-  .pf-pp__tb-actions { flex-shrink: 0; }
-  .pf-pp__tb-name { font-size: 17px; line-height: 1.25; }
-  /* Demographics leave the bar entirely — they live in the ⋯ menu now. */
-  .pf-pp__tb-rest { display: none !important; }
-  /* Actions: a compact "+" square + the ⋯ square, both 44px. */
-  .pf-pp__tb-cta { width: 44px; height: 44px; padding: 0; justify-content: center; }
-  .pf-pp__cta-label { display: none; }        /* icon-only CTA */
-  .pf-pp__more > .pf-pp__tb-btn { height: 44px; width: 44px; padding: 0; }
+/* Collapsed SUMMARY: a slim strip on the RIGHT edge, one expand target. */
+.pf-pp-strip__btn {
+  flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 10px 0 14px; border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); font: inherit;
 }
-/* Never let the ⋯ menu run off the screen edge. */
-.pf-pp__menu { max-width: calc(100vw - 28px); }
+.pf-pp-strip__btn:hover .pf-pp-strip__expand { border-color: var(--nd-sel-border); color: var(--text-primary); }
+.pf-pp-strip__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-pp-strip__expand { width: 32px !important; height: 32px; min-height: 32px; pointer-events: none; }
+.pf-pp-strip__label { writing-mode: vertical-rl; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
 
-/* Overflow menu */
-.pf-pp__more { position: relative; }
-.pf-pp__menu-backdrop { position: fixed; inset: 0; z-index: 40; }
-.pf-pp__menu {
-  position: absolute; right: 0; top: calc(100% + 6px); z-index: 41;
-  min-width: 200px; padding: 6px; border-radius: 12px;
-  background: var(--bg-card-solid); border: 1px solid var(--glass-border);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  display: flex; flex-direction: column; gap: 2px;
+/* ── Overlays: scrim + sheets / modals (above the navbar, never over) ── */
+.pf-pp-scrim {
+  position: fixed; top: 0; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 120;
+  background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px);
+  animation: pf-pp-fade var(--nd-dur-fast, 200ms) var(--nd-spring) both;
 }
-.pf-pp__menu-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 10px; border-radius: 8px; font-size: 13px; font-weight: 500;
-  color: var(--text-secondary); text-align: left; background: none; border: 0; cursor: pointer;
-}
-.pf-pp__menu-item:hover { background: var(--bg-hover, rgba(255,255,255,0.05)); color: var(--text-primary); }
-.pf-pp__menu-item svg { color: var(--text-tertiary); flex-shrink: 0; }
-/* Demographics header inside the ⋯ menu — phones only (desktop shows them in
-   the bar). */
-.pf-pp__menu-demo {
-  display: none;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 8px 10px 6px;
-  margin-bottom: 2px;
-  border-bottom: 1px solid var(--glass-border);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-@media (max-width: 640px) { .pf-pp__menu-demo { display: flex; } }
-
-/* On-demand QR popover */
-.pf-pp__qr-backdrop {
-  position: fixed; inset: 0; z-index: 60;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(2px);
-}
-.pf-pp__qr-card {
-  position: relative; display: flex; flex-direction: column; align-items: center;
-  padding: 24px; border-radius: 20px; background: #fff; color: #000;
-}
-.pf-pp__qr-close {
-  position: absolute; top: 8px; right: 10px; width: 28px; height: 28px;
-  border: 0; background: none; color: #64748b; font-size: 16px; cursor: pointer;
-}
-
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-none {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* ”€”€ Send-to-chat colleague picker modal ”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€”€ */
-.pf-pp__chat-pick-backdrop {
-  position: fixed; inset: 0; z-index: 200;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-  padding: 16px;
-  animation: pf-pp-fade 0.16s ease-out;
-}
-.pf-pp__chat-pick {
-  background: var(--surface-elevated);
-  border: 1px solid var(--glass-border-hover);
-  border-radius: 14px;
-  width: 100%; max-width: 440px;
-  max-height: min(80vh, 560px);
-  display: flex; flex-direction: column;
-  box-shadow: var(--glass-shadow-hover);
-  color: var(--text-primary);
-  overflow: hidden;
-  animation: pf-pp-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.pf-pp__chat-pick-hdr {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border-muted);
-  h3 { font-size: 14px; font-weight: 700; margin: 0; color: var(--text-primary); }
-  p { font-size: 11.5px; color: var(--text-tertiary); margin: 2px 0 0; }
-}
-.pf-pp__chat-pick-close {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-secondary);
-  width: 28px; height: 28px;
-  border-radius: 7px;
-  display: inline-flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  &:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-}
-.pf-pp__chat-pick-search {
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--border-muted);
-  input {
-    width: 100%;
-    padding: 9px 12px;
-    border-radius: 9px;
-    border: 1px solid var(--input-border);
-    background: var(--bg-input);
-    color: var(--input-text);
-    font-size: 13px;
-    outline: none;
-    &:focus { border-color: var(--input-border-focus); }
-    &::placeholder { color: var(--input-placeholder); }
-  }
-}
-.pf-pp__chat-pick-list {
-  list-style: none; margin: 0;
-  padding: 6px 0 10px;
-  overflow-y: auto;
-  flex: 1; min-height: 0;
-}
-.pf-pp__chat-pick-row {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%; padding: 8px 18px;
-  background: transparent; border: none;
-  color: inherit; text-align: left;
-  cursor: pointer;
-  transition: background 0.12s;
-  &:hover:not(:disabled) { background: var(--bg-hover); }
-  &:disabled { opacity: 0.55; cursor: progress; }
-}
-.pf-pp__chat-pick-avatar {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  background: var(--gradient-primary);
-  color: #fff;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700;
-  flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
-}
-.pf-pp__chat-pick-meta {
-  display: flex; flex-direction: column; min-width: 0;
-}
-.pf-pp__chat-pick-name {
-  font-size: 13px; font-weight: 600;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.pf-pp__chat-pick-email {
-  font-size: 11px; color: var(--text-tertiary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.pf-pp__chat-pick-empty {
-  padding: 20px 16px;
-  text-align: center;
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-}
+.pf-pp-scrim--menu { background: transparent; backdrop-filter: none; }
+:host-context(.dark) .pf-pp-scrim:not(.pf-pp-scrim--menu), :host-context([data-theme='dark']) .pf-pp-scrim:not(.pf-pp-scrim--menu) { background: rgba(0, 0, 0, 0.55); }
 @keyframes pf-pp-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes pf-pp-pop {
-  from { opacity: 0; transform: scale(0.96) translateY(8px); }
-  to   { opacity: 1; transform: none; }
+.pf-pp-sheet { position: fixed; z-index: 121; box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22); }
+.pf-pp-sheet__handle { display: none; }
+/* Web: modals are centred nd-cards. */
+.pf-pp-sheet--modal {
+  top: 50%; left: 50%; width: min(440px, calc(100vw - 32px)); max-height: min(84dvh, 640px);
+  transform: translate(-50%, -50%);
+  animation: pf-pp-modal-in var(--nd-dur, 320ms) var(--nd-spring) both;
+}
+.pf-pp-sheet--abha { width: min(480px, calc(100vw - 32px)); }
+.pf-pp-sheet--qr { width: min(340px, calc(100vw - 32px)); }
+@keyframes pf-pp-modal-in { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
+/* Web: More is a menu under the band's actions. */
+.pf-pp-sheet--more {
+  top: 64px; right: 20px; width: 280px; max-height: calc(100dvh - var(--nd-nav-h, 0px) - 80px);
+  animation: pf-pp-pop var(--nd-dur, 320ms) var(--nd-spring) both;
+}
+.pf-pp-sheet--more .pf-pp-sheet__foot { display: none; }
+.pf-pp-menu__phone { display: none; }
+.pf-pp-modalbody { padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.pf-pp-facts--kyc { padding: 0 2px; }
+
+.pf-pp-menu { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; overflow-y: auto; }
+.pf-pp-menu__row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 0 12px;
+  border: 0; border-radius: var(--nd-radius-sm, 10px); background: transparent; color: var(--text-primary);
+  font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
+}
+.pf-pp-menu__row svg { flex: none; color: var(--text-secondary); }
+.pf-pp-menu__row:hover, .pf-pp-menu__row:focus-visible { background: var(--nd-chip-bg); outline: none; }
+.pf-pp-sheet__foot { flex: none; display: flex; padding: 4px 12px 12px; }
+.pf-pp-sheet__cancel { flex: 1 1 auto; min-height: 48px; }
+
+.pf-pp-qr { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 14px 20px; }
+.pf-pp-qr__code { padding: 10px; border-radius: 12px; background: #fff; border: 1px solid var(--nd-line); }
+.pf-pp-qr__t { margin: 0; font-size: 13px; color: var(--text-secondary); text-align: center; }
+
+.pf-pp-pick__lead { margin: 0; padding: 10px 14px 0; font-size: 12.5px; color: var(--text-tertiary); }
+.pf-pp-pick__search { position: relative; flex: none; padding: 10px 14px; border-bottom: 1px solid var(--nd-line); }
+.pf-pp-pick__search > svg { position: absolute; left: 26px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
+.pf-pp-pick__search .nd-input { width: 100%; padding-left: 36px; }
+.pf-pp-pick__list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1 1 auto; min-height: 120px; }
+.pf-pp-pick__row {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 10px;
+  border: 0; border-radius: var(--nd-radius-sm, 10px); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.pf-pp-pick__row:hover:not(:disabled) { background: var(--nd-chip-bg); }
+.pf-pp-pick__row:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-pp-pick__row:disabled { opacity: 0.55; cursor: progress; }
+.pf-pp-pick__avatar {
+  flex: none; width: 34px; height: 34px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--nd-chip-bg); border: 1px solid var(--nd-line); color: var(--text-secondary); font-size: 12px; font-weight: 600;
+}
+.pf-pp-pick__meta { display: flex; flex-direction: column; min-width: 0; }
+.pf-pp-pick__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
+.pf-pp-pick__sub { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+
+
+/* ── ≤1100px: snapshot panes 2 + 1 ─────────────────────────────────── */
+@media (max-width: 1100px) {
+  .pf-pp-main { overflow-y: auto; overscroll-behavior: contain; }
+  .pf-pp-results { flex: none; height: max(420px, 60vh); }
 }
 
-/* ── Cross-platform additive overrides (scoped to :host) ─────────────────
-   Desktop-web (>=1280) is intentionally untouched: every rule below is
-   gated by a below-desktop @media query or by pointer/hover capability. */
+/* ── ≤900px: ONE stacked column that scrolls (the navbar stays) ───── */
+.pf-pp-body.pf-pp-body--narrow, .pf-pp-body.pf-pp-body--narrow:not(.pf-pp-body--collapsed) { grid-template-columns: minmax(0, 1fr); }
+.pf-pp-body--narrow .pf-pp-main { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
+.pf-pp-body--narrow .pf-pp-results { flex: none; height: auto; max-height: none; min-height: 0; }
+.pf-pp-body--narrow .pf-pp-stack { flex: none; }
+.pf-pp-body--narrow .pf-pp-stack .nd-card__body { overflow: visible; }
+.pf-pp-body--narrow .pf-pp-detail { flex: none; min-height: calc(100% - 4px); }
 
-/* Touch sizing — coarse pointers (touch screens). The horizontal tab bar
-   buttons are ~38px tall by default; lift them to a >=44px tap target.
-   Width-independent so it applies on touch iPad as well, but never on a
-   mouse-driven desktop. */
-@media (pointer: coarse) {
-  :host .scrollbar-none > button {
-    min-height: 44px;
-  }
-  /* Colleague-picker rows need a comfortable touch target too. */
-  :host .pf-pp__chat-pick-row {
-    min-height: 48px;
-  }
-  :host .pf-pp__chat-pick-close {
-    width: 36px;
-    height: 36px;
-  }
-}
-
-/* Hover affordances only where a real hover pointer exists, so touch
-   devices don't get sticky :hover states after a tap. */
-@media (hover: none) {
-  :host .pf-pp__chat-pick-row:hover:not(:disabled) { background: transparent; }
-  :host .pf-pp__chat-pick-close:hover {
-    background: var(--glass-bg);
-    color: var(--text-secondary);
-  }
-}
-
-/* Momentum scrolling for the horizontally scrollable tab bar on touch. */
-@media (pointer: coarse) {
-  :host .scrollbar-none {
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
-/* Phone (<=640): the colleague-picker search input must be >=16px to stop
-   iOS Safari from auto-zooming the viewport on focus. Default is 13px. */
+/* ── Phones (≤640px): additive only ────────────────────────────────── */
 @media (max-width: 640px) {
-  :host .pf-pp__chat-pick-search input {
-    font-size: 16px;
+  .pf-pp-body { padding: 0; gap: 0; }
+  .pf-pp-main { gap: 10px; padding: 10px 10px 12px; }
+  .pf-pp-body--bar .pf-pp-main { padding-bottom: 84px; }
+  .pf-pp-quick__btn { min-height: 44px; height: 44px; flex: 1 1 100%; }
+  .pf-tl__row { min-height: 44px; }
+  .pf-pp-fulltl { min-height: 44px; }
+  .pf-pp-detail__back { width: 44px !important; height: 44px; min-height: 44px; }
+
+  /* Band: More as a 44px icon; the primary is in the bottom bar. */
+  .pf-pp-band .pf-pp-act { width: 44px; min-width: 44px; height: 44px; padding: 0; gap: 0; border-radius: 12px; }
+  .pf-pp-band .pf-pp-act__i { display: block; }
+  .pf-pp-band .pf-pp-act__t {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }
+  .pf-pp-band .pf-pp-act--edit { display: none; }
+  .pf-pp-menu__phone { display: list-item; }
+
+  /* Pill: the FULL name wraps; meta below it; chips scroll sideways. */
+  .pf-pp-who { flex-direction: column; align-items: flex-start; gap: 0; max-width: calc(100vw - 132px); }
+  .pf-pp-name { white-space: normal; line-height: 1.25; }
+  .pf-pp-meta { font-size: 12.5px; }
+
+  .pf-pp-bottombar { padding: 10px; }
+  .pf-pp-bottombar__new { flex: 1 1 auto; min-height: 48px; gap: 8px; font-size: 15px; }
+
+  /* Sheets rise from the bottom, above the navbar. */
+  .pf-pp-sheet--modal, .pf-pp-sheet--more {
+    top: auto; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); width: auto; transform: none;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 16px);
+    border-radius: 20px 20px 0 0;
+    animation: nd-rise var(--nd-dur-sheet, 360ms) var(--nd-spring-bounce) both;
+  }
+  .pf-pp-sheet--pick { height: min(86dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--nd-nav-h, 0px) - 16px)); }
+  .pf-pp-sheet--more .pf-pp-sheet__foot { display: flex; }
+  .pf-pp-scrim--menu { background: rgba(15, 23, 42, 0.4); }
+  .pf-pp-sheet__handle { display: block; flex: none; width: 40px; height: 5px; margin: 8px auto 2px; border-radius: 999px; background: var(--nd-line); }
+  .pf-pp-menu__row { min-height: 52px; font-size: 15px; }
+  .pf-pp-pick__search .nd-input { font-size: 16px; min-height: 44px; }
+  .pf-pp-close, .pf-pp-collapse, .pf-pp-copy { width: 44px !important; height: 44px; min-height: 44px; }
+  .pf-pp-sec__acts .nd-btn { min-height: 44px; flex: 1 1 auto; }
+}
+@media (hover: none) and (pointer: coarse) {
+  .pf-pp-collapse, .pf-pp-strip__expand, .pf-pp-close, .pf-pp-copy { width: 44px !important; height: 44px; min-height: 44px; }
+  .pf-pp-pick__row:hover:not(:disabled) { background: transparent; }
 }
 
-/* ── Edit patient info modal ─────────────────────────────────────── */
-.pf-pp-edit-backdrop {
-  position: fixed; inset: 0; z-index: 200;
-  background: rgba(2, 4, 16, 0.7); backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center; padding: 16px;
-}
-.pf-pp-edit {
-  width: 100%; max-width: 520px; max-height: 90dvh; overflow: hidden;
-  display: flex; flex-direction: column;
-  background: var(--bg-card-solid); border: 1px solid var(--glass-border);
-  border-radius: 16px; box-shadow: 0 30px 90px rgba(0,0,0,0.5);
-}
-.pf-pp-edit__head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 18px; border-bottom: 1px solid var(--border-muted);
-  h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary); }
-}
-.pf-pp-edit__x {
-  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--glass-border);
-  background: var(--glass-bg); color: var(--text-secondary); cursor: pointer; font-size: 13px;
-  &:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-}
-.pf-pp-edit__body { padding: 18px; overflow-y: auto; }
-.pf-pp-edit__grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-  @media (max-width: 540px) { grid-template-columns: 1fr; }
-  label {
-    display: flex; flex-direction: column; gap: 5px;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
-    text-transform: uppercase; color: var(--text-tertiary);
+/* ── Reduced motion: nothing moves, everything is instant ──────────── */
+@media (prefers-reduced-motion: reduce) {
+  .pf-pp-in, .pf-pp-side, .pf-pp-strip, .pf-pp-scrim, .pf-pp-sheet, .pf-pp-snap, .pf-pp-attn__li, .pf-tl__li,
+  .pf-pp-sheet--modal, .pf-pp-sheet--more {
+    animation: none !important;
   }
-  input, select {
-    padding: 9px 11px; border-radius: 9px; font-size: 14px;
-    background: var(--input-bg, var(--glass-bg)); border: 1px solid var(--input-border, var(--glass-border));
-    color: var(--input-text, var(--text-primary)); outline: none;
-    &:focus { border-color: var(--input-border-focus, rgba(139,92,246,0.6)); box-shadow: 0 0 0 3px rgba(139,92,246,0.18); }
-  }
-}
-.pf-pp-edit__foot {
-  display: flex; justify-content: flex-end; gap: 10px;
-  padding: 14px 18px; border-top: 1px solid var(--border-muted);
+  .pf-pp-body, .pf-pp-tlx, .pf-tl__row { transition: none !important; }
 }
 
-/* ── Edit-patient modal → bottom sheet on phones (<=640) ──────────────────
-   Desktop/tablet keep the centered dialog above (byte-for-byte untouched).
-   Below 640 it docks to the bottom as a sheet with a rounded top edge and a
-   home-indicator-clearing footer, matching the colleague-picker's behaviour. */
-@media (max-width: 640px) {
-  :host .pf-pp-edit-backdrop {
-    align-items: flex-end;
-    padding: 0;
-  }
-  :host .pf-pp-edit {
-    width: 100%;
-    max-width: none;
-    max-height: 90dvh;
-    border-radius: 18px 18px 0 0;
-    animation: pf-pp-sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  /* Footer is the sticky action row — clear the home indicator / soft nav. */
-  :host .pf-pp-edit__foot {
-    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  }
-  /* >=16px inputs stop iOS Safari from auto-zooming the viewport on focus
-     (the grid's default is 14px). */
-  :host .pf-pp-edit__grid input,
-  :host .pf-pp-edit__grid select {
-    font-size: 16px;
-  }
-}
-
-@keyframes pf-pp-sheet-up {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
-}
-
-/* Phone-only header back chevron */
-.pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
-.pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
-@media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
-
-/* ── ABHA health card theming ─────────────────────────────────────────────
-   Tailwind's dark: variant is OS-media-based in this build (the Sass
-   @import url('tailwindcss') swallows @custom-variant), so it can't follow the
-   app's theme toggle. We theme the card off the reliably-toggled .dark class
-   via CSS variables instead. Light = physical white card; dark = navy card.
-   The QR quiet-zone stays white in both so it always scans. */
+/* ── ABHA health card theming (the official card look) ────────────────
+   Themed off the app's .dark class via CSS variables (Tailwind's dark:
+   variant is OS-media-based in this build). Light = physical card; dark =
+   navy card. The QR quiet-zone stays white in both so it always scans. */
 .abc {
   --abc-bg: #f6f4fc; --abc-fg: #262536; --abc-sub: #3b3952; --abc-mut: #8b88a3;
   --abc-brand: #123a86; --abc-border: rgba(76, 29, 149, 0.12);
@@ -484,5 +304,5 @@
 .abc__hr    { border-color: var(--abc-border); }
 .abc__ok    { color: var(--green-text); }
 .abc__chip  { background: var(--abc-chip-bg); box-shadow: 0 0 0 1px var(--abc-chip-bd); }
-.abc__badge { box-shadow: 0 0 0 2px var(--abc-badge); }        /* ring matches card bg */
 .abc__qr    { background: #ffffff; box-shadow: 0 0 0 1px var(--abc-chip-bd); }
+.abc__strip { background: linear-gradient(90deg, rgba(255, 153, 51, 0.12), rgba(19, 136, 8, 0.12)); }

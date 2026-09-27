@@ -18,9 +18,9 @@ export function renderBandPage(cmp: Type<unknown>, opts: {
   getFor?: (url: string) => unknown;
   providers?: unknown[];
 } = {}) {
-  if (!window.matchMedia) {
-    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  }
+  // Always install the stub (never 'only if missing'): another spec in the same
+  // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   document.documentElement.classList.add('design-new');
   const api = {
     get: vi.fn((url: string) => of(opts.getFor?.(url) ?? [])),

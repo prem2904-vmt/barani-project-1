@@ -136,3 +136,40 @@ describe('work-search — the header search filters rows', () => {
     expect(patientMatchesWorkQuery(undefined, '')).toBe(true);
   });
 });
+
+describe('Frontdesk landing — phone band bleed (no top-corner gap)', () => {
+  // The global styles.scss phone rule pads every .pf-page by max(12px, safe-area).
+  // Stacked under the header's own padding, it left the band 10px short of the
+  // screen edge. Contract: the section's gutter is zeroed on phones and the
+  // header + body gutter IS --pf-hb-bleed at every breakpoint.
+  const phone = (s: string) => {
+    const blocks = s.split('@media (max-width: 640px)').slice(1);
+    expect(blocks.length).toBeGreaterThan(0);
+    return blocks.join('\n');
+  };
+
+  it('defines the bleed on .pf-page (shared by header + body) at 1 / 2 / 2.5rem', () => {
+    expect(scss).toMatch(/\.pf-page\s*\{\s*--pf-hb-bleed:\s*1rem;/);
+    expect(scss).toMatch(/min-width:\s*768px\)\s*\{\s*\.pf-page\s*\{\s*--pf-hb-bleed:\s*2rem;/);
+    expect(scss).toMatch(/min-width:\s*1024px\)\s*\{\s*\.pf-page\s*\{\s*--pf-hb-bleed:\s*2\.5rem;/);
+    // …and the Tailwind gutters on header + body are exactly those values.
+    expect(html).toMatch(/class="pf-page__header px-4 md:px-8 lg:px-10\b/);
+    expect(html).toMatch(/class="pf-page__body px-4 md:px-8 lg:px-10\b/);
+  });
+
+  it('zeroes the global .pf-page phone gutter so the band reaches the screen edge', () => {
+    const block = phone(scss);
+    expect(block).toMatch(/\.pf-page\s*\{[^}]*padding-left:\s*0\s*!important/);
+    expect(block).toMatch(/\.pf-page\s*\{[^}]*padding-right:\s*0\s*!important/);
+    // Landscape notch still respected (the global rule's safe-area max()).
+    expect(block).toMatch(/--pf-hb-bleed:\s*max\(1rem,\s*env\(safe-area-inset-left/);
+  });
+
+  it('phone header + body side padding equals --pf-hb-bleed (never a fixed px)', () => {
+    const block = phone(mobile);
+    const rule = between(block, '.pf-page__header,\n  .pf-page__body {', '}');
+    expect(rule).toMatch(/padding-left:\s*var\(--pf-hb-bleed\)\s*!important/);
+    expect(rule).toMatch(/padding-right:\s*var\(--pf-hb-bleed\)\s*!important/);
+    expect(rule).not.toMatch(/padding-(left|right):\s*\d+px/);
+  });
+});

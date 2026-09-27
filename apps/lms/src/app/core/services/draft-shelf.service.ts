@@ -115,6 +115,18 @@ export class DraftShelfService {
     this._byArea.update(m => ({ ...m, [area]: items }));
   }
 
+  /** Take chips off `area`'s shelf at once (e.g. tubes just submitted) —
+   *  the publisher screen re-publishes the truth on its next visit. */
+  drop(area: DraftArea, ids: readonly string[]): void {
+    if (!ids.length) return;
+    const gone = new Set(ids);
+    this._byArea.update(m => {
+      const cur = m[area];
+      if (!cur || !cur.some(d => gone.has(d.id))) return m;
+      return { ...m, [area]: cur.filter(d => !gone.has(d.id)) };
+    });
+  }
+
   private static areaOf(url: string): DraftArea | null {
     if (url.startsWith('/frontdesk')) return 'frontdesk';
     if (url.startsWith('/lab')) return 'lab';

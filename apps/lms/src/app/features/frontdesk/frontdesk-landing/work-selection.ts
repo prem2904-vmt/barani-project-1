@@ -1,5 +1,6 @@
 import { Signal, computed, signal } from '@angular/core';
 import { Order } from '../../../shared/models/order.model';
+import { isNotCollected } from '../../../shared/utils/sample-not-collected';
 
 /**
  * Multi-select for the Frontdesk work list (In progress tab).
@@ -30,7 +31,9 @@ export interface WorkSelection {
 }
 
 /** A row can take "Mark dispatched" / "Bundle as package": it has a collected
- *  tube not yet sent, and no payment hold (the server would reject it). */
+ *  tube not yet sent, and no payment hold (the server would reject it).
+ *  A not-collected ("Can't collect") tube is status 'rejected', so it can
+ *  never make a row dispatchable on its own (QA #6). */
 export function canBulkDispatch(o: Pick<Order, 'paymentHold' | 'samples'>): boolean {
   return !o.paymentHold && (o.samples ?? []).some(s => s.status === 'collected');
 }
@@ -83,12 +86,26 @@ export function createWorkSelection(
  *  on the way (created, collected, in lab, partially ready, a balance due) =
  *  amber, cancelled / rejected = red, a live repeat series = violet. The
  *  order drawer keeps its neutral chip (orderStatusState). */
+/** The row offers "Recollect" (the patient is back) when a tube on the order
+ *  was marked not collected — the backend reopens it to pending
+ *  (PATCH /api/samples/{id}/recollect). Takes the Collect slot: a
+ *  not-collected order must never offer "Collect" as if nothing happened, nor
+ *  "Dispatch". Cancelled / delivered orders are closed. (QA #6) */
+export function canRecollect(o: Pick<Order, 'status' | 'samples'>): boolean {
+  if (o.status === 'cancelled' || o.status === 'delivered') return false;
+  return (o.samples ?? []).some(s => isNotCollected(s));
+}
+
 export type WorkRowTone = 'green' | 'blue' | 'amber' | 'red' | 'violet';
 export function workRowTone(status: string | null | undefined, label = '', series = false): WorkRowTone {
   if (series) return 'violet';
+  // "Not collected — <reason>" is a stop that needs the desk (Recollect /
+  // cancel), whatever the raw order status says.
+  if (/not collected/i.test(label)) return 'red';
   switch (status) {
     case 'cancelled':
-    case 'rejected': return 'red';
+    case 'rejected':
+    case 'partially_rejected': return 'red';
     case 'billed':
     case 'completed':
     case 'validated':

@@ -106,6 +106,8 @@ function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
     openDirectConversation: vi.fn(async () => 'c9'),
     setTyping: vi.fn(async () => {}),
     openNotesToSelf: vi.fn(async () => 'n1'),
+    // The page registers itself as the surface showing the active thread.
+    registerViewer: vi.fn(() => () => undefined),
   };
   const api = { get: vi.fn((url: string) => of(url.startsWith('/api/directory/users') ? [
     { id: 'u5', displayName: 'Meera Nair', email: 'meera@lab.test', isActive: true },
@@ -123,7 +125,7 @@ function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
       { provide: WebrtcService, useValue: { inCall: signal(false), startCall: vi.fn(async () => 'r1'), startGroupCall: vi.fn(async () => 'r2') } },
       { provide: AuthService, useValue: { user: () => ({ id: 'user-1', authId: ME }) } },
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true } },
-      { provide: PresenceService, useValue: { statusFor: () => null } },
+      { provide: PresenceService, useValue: { statusFor: () => null, displayStatus: (id: string | null) => (id ? 'active' : null) } },
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: { info: vi.fn(), error: vi.fn(), success: vi.fn() } },
       { provide: ChatNotifyService, useValue: { ensurePermission: vi.fn(async () => {}) } },

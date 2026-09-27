@@ -119,3 +119,14 @@ describe('Draft shelf markup — selected chip', () => {
     expect(scss).toMatch(/@media \(pointer: coarse\)[\s\S]*\.pf-draftshelf__chip::after[\s\S]*height:\s*44px/);
   });
 });
+
+describe('DraftShelfService — drop (submitted tubes leave the shelf)', () => {
+  it('removes only the named chips of that area', async () => {
+    const { router, shelf } = setup();
+    await router.navigateByUrl('/lab/my-work');
+    shelf.drop('lab', ['lab:A', 'lab:nope']);
+    expect(shelf.items().map(d => d.id)).toEqual(['lab:B']);
+    await router.navigateByUrl('/frontdesk');
+    expect(shelf.items().map(d => d.id)).toEqual(['fd:pA', 'fd:pB']);   // other areas untouched
+  });
+});

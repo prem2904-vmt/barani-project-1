@@ -184,7 +184,31 @@ export class ReportQueueComponent implements OnInit {
   // report is usually spotted, so the action belongs on the row too.
   // edit_result: Lab Technician, Pathologist, Lab Admin — not front desk.
   readonly canEditResult = computed(() => this.auth.hasPermission("edit_result"));
+  /** Share / WhatsApp / Print-delivery record a DELIVERY (deliver_report).
+   *  Everyone who can open this page sees the same reports; only the send
+   *  actions depend on the permission. */
+  readonly canDeliver = computed(() => this.auth.hasPermission("deliver_report"));
+  /** Generate / Regenerate / Partial PDF change what the patient receives:
+   *  the backend admits deliver_report | validate_result (same as Amend). */
+  readonly canGenerate = computed(() => this.auth.hasAnyPermission(["deliver_report", "validate_result"]));
+  /** VIEW-ONLY Results (view_report without deliver_report — Lab Tech, Branch
+   *  Manager, Quality Manager): the same branch-scoped list, View + Download
+   *  + Print (not recorded as a delivery). No Share / WhatsApp, no
+   *  Generate / Regenerate. */
+  readonly viewOnly = computed(() => !this.canDeliver());
+  /** Print (owner, 2026-09-27): everyone who can open Results may print —
+   *  view-only included, via the same letterpad choice. For them it is NOT a
+   *  delivery: nothing is recorded (POST /deliver stays deliver_report). */
+  readonly canPrint = computed(() => this.canDeliver() || this.auth.hasPermission("view_report"));
+  /** "Open lab results" lands on /lab/sample/:id — its guard. */
+  readonly canOpenLabResults = computed(() =>
+    this.auth.hasAnyPermission(["enter_result", "edit_result", "validate_result"]));
   readonly editOrderId = signal<string | null>(null);
+
+  /** The row's More menu has at least one item (else no empty menu button). */
+  hasMore(r: Report): boolean {
+    return !!r.orderId && (this.canOpenLabResults() || this.canEditResult() || this.canGenerate());
+  }
 
   openEditDialog(r: Report) {
     if (r.orderId) this.editOrderId.set(r.orderId);
@@ -400,7 +424,7 @@ export class ReportQueueComponent implements OnInit {
   readonly generating = this._generating.asReadonly();
 
   generatePartial(po: PrelimOrder) {
-    if (this._generating()) return;
+    if (this._generating() || !this.canGenerate()) return;
     this._generating.set(po.id);
     const sampleIds = po.readySampleIds;
     this.api
@@ -493,6 +517,9 @@ export class ReportQueueComponent implements OnInit {
     // (balance > 0). We only need the order IDs to flag "Unpaid" rows —
     // no per-row bill lookups. Non-fatal: if the user lacks billing
     // permission (403) or the call fails, we simply show no Unpaid tags.
+    // Skip the call entirely for users the endpoint would 403 (e.g. a
+    // Pathologist: no collect_payment | create_bill | view_bill).
+    if (!["collect_payment", "create_bill", "view_bill"].some((c) => this.auth.hasPermission(c))) return;
     this.api
       .get<{ due?: { orderId: string }[] }>("/api/billing/outstanding")
       .subscribe({
@@ -553,7 +580,8 @@ export class ReportQueueComponent implements OnInit {
       this.uploadReportPdf(r, blob);
     } catch (err) {
       console.error("[reports] download failed", err);
-      this.toasts.error("Could not download report");
+      const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
+      this.toasts.error(reportRenderErrorMessage(err, "Could not download report"));
     }
   }
 
@@ -597,62 +625,22 @@ export class ReportQueueComponent implements OnInit {
    *  The template carries the admin-tunable chrome (colours, logo, signatures);
    *  without it the PDF falls back to the hardcoded Drlogy defaults. */
   private async buildReportRender(r: Report) {
-    const [
-      { preloadReportImages },
-      { ReportLayoutService },
-      { PlatformService },
-    ] = await Promise.all([
-      import("../../../shared/utils/report-pdf"),
+    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
       import("../../../core/services/report-layout.service"),
       import("../../../core/services/platform.service"),
+      import("../../../shared/utils/report-render-input"),
     ]);
     const svc = this.injector.get(ReportLayoutService);
     const platform = this.injector.get(PlatformService);
-    const resolvedLayouts: Record<
-      string,
-      import("../../../shared/models/report-layout.model").ResolvedReportLayout
-    > = {};
-
-    let tests: Array<{
-      testId?: string;
-      result?: { values?: Record<string, unknown> };
-    }> = [];
-    let patient: { sex?: string | null; age?: number | null } | undefined;
-    try {
-      const snap = JSON.parse(r.data ?? "{}");
-      tests = snap?.tests ?? [];
-      patient = {
-        sex: snap?.patient?.sex ?? null,
-        age: snap?.patient?.age ?? null,
-      };
-    } catch {
-      /* malformed snapshot — render PDF without layouts */
-    }
-
-    // ONE resolver for every report entry point: posts SCALAR values (so
-    // "show when the result is above 70" conditions match), the snapshot's
-    // images, and the PROFILE layouts whose notes print for ordered profiles.
-    const { resolveReportLayouts } = await import("../../../shared/utils/report-layouts");
-    const [template, layouts] = await Promise.all([
-      this.api
-        .get<
-          import("../../../shared/models/report.model").ReportTemplate | null
-        >("/api/config/report-template")
-        .toPromise()
-        .catch(() => null),
-      resolveReportLayouts<import("../../../shared/models/report-layout.model").ResolvedReportLayout>(
-        (id, values, images, p) => svc.preview(id, values, images as never, p),
-        tests,
-        patient,
-      ),
-    ]);
-    Object.assign(resolvedLayouts, layouts);
-
-    const baseInput = { report: r, resolvedLayouts, template: template ?? null };
-    const [imageCache, trendograms] = await Promise.all([
-      preloadReportImages(baseInput, platform.getApiUrl()),
-      (await import('../../../shared/utils/trendogram-report')).prepareTrendograms(r, this.api),
-    ]);
+    // The ONE recipe for every report entry point (template + layouts incl.
+    // PROFILE layouts + images + trendograms). It throws instead of silently
+    // falling back to the default design, so a report that can't be rendered
+    // exactly as the lab designed it is never downloaded or archived.
+    const { imageCache = {}, trendograms = [], ...baseInput } = await prepareReportPdfInput(r, {
+      api: this.api,
+      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+      apiUrl: platform.getApiUrl(),
+    });
     return { baseInput, imageCache, trendograms };
   }
 
@@ -680,6 +668,7 @@ export class ReportQueueComponent implements OnInit {
   }
 
   deliver(r: Report, via: string) {
+    if (!this.canDeliver()) return;
     // WhatsApp: the Meta API isn't wired up yet, so open WhatsApp Web / app
     // (wa.me) pre-filled with the patient's number + a message carrying the
     // report's QR verify link. wa.me can't auto-attach the PDF, so the link
@@ -708,36 +697,53 @@ export class ReportQueueComponent implements OnInit {
       );
     }
     if (via === "print") {
-      if (this.isNativePlatform()) {
-        // Capacitor WKWebView: render PDF and hand it to native share sheet
-        (async () => {
-          try {
-            const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-            const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-            await this.sharePdfNative(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'), 'Print report');
-          } catch (err) {
-            console.error("[reports] native print share failed", err);
-            this.toasts.error("Could not open report");
-          }
-        })();
-      } else {
-        // Web: render PDF and open browser print window
-        (async () => {
-          try {
-            const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-            const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-            const doc = buildReportPdf({ ...baseInput, imageCache, trendograms });
-            doc.autoPrint();
-            const blob = doc.output('blob');
-            // Off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
-            printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
-          } catch (err) {
-            console.error("[reports] print failed", err);
-            this.toasts.error("Could not open print window");
-          }
-        })();
-      }
+      // Print is its own flow: it may ask letterhead vs plain paper first, and
+      // the delivery is recorded only once something was actually printed.
+      void this.printReport(r);
+      return;
     }
+    this.recordDelivery(r, via);
+  }
+
+  /** Print a report from the queue. A delivery for deliver_report users; a
+   *  plain print (no delivery record, no send) for view-only users.
+   *  Letterpad setting on → one quick choice (letterhead paper, header &
+   *  footer blank — the default — or plain paper) for THIS job only. */
+  async printReport(r: Report) {
+    if (!this.canPrint()) return;
+    if (await this.printJob(r) && this.canDeliver()) this.recordDelivery(r, "print");
+  }
+
+  /** Render + hand the report to the printer. True when something was
+   *  printed (false: letterpad question dismissed, or the render failed). */
+  private async printJob(r: Report): Promise<boolean> {
+    try {
+      const [{ buildReportPdf }, { askPrintLetterhead }] = await Promise.all([
+        import('../../../shared/utils/report-pdf'),
+        import('../../../shared/utils/print-letterhead'),
+      ]);
+      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
+      const job = await askPrintLetterhead(baseInput.template, this.dialog);
+      if (!job) return false;   // dismissed — nothing printed, nothing recorded
+      const doc = buildReportPdf({ ...baseInput, imageCache, trendograms, blankLetterhead: job.blankLetterhead });
+      if (this.isNativePlatform()) {
+        // Capacitor WKWebView: hand the PDF to the native share sheet (Print).
+        await this.sharePdfNative(r, doc.output('blob'), 'Print report');
+      } else {
+        // Web: off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
+        doc.autoPrint();
+        printPdfBlobUrl(URL.createObjectURL(doc.output('blob')), { revokeOnDone: true });
+      }
+      return true;
+    } catch (err) {
+      console.error("[reports] print failed", err);
+      const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
+      this.toasts.error(reportRenderErrorMessage(err, "Could not open print window"));
+      return false;
+    }
+  }
+
+  private recordDelivery(r: Report, via: string) {
     this.api
       .post(`/api/reports/${r.id}/deliver`, {
         via,
@@ -758,6 +764,7 @@ export class ReportQueueComponent implements OnInit {
   }
 
   async promptGenerate() {
+    if (!this.canGenerate()) return;
     const oid = await this.dialog.prompt({
       title: "Generate report",
       message: "Enter the order ID to generate a final report.",
@@ -782,7 +789,7 @@ export class ReportQueueComponent implements OnInit {
    *  The backend re-snapshots and supersedes the previous final; we then
    *  re-render and re-archive the PDF so the stored/QR copy matches too. */
   async regenerate(r: Report) {
-    if (!r.orderId) return;
+    if (!r.orderId || !this.canGenerate()) return;
     const ok = await this.dialog.confirm({
       title: "Regenerate report?",
       message: "Rebuild this report using the current report template. The previous version is replaced.",

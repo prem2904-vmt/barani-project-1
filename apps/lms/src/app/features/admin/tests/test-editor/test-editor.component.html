@@ -209,6 +209,42 @@
             </div>
             @if (d.type === 'individual' && isMicroDept()) {
               <div class="pf-uf pf-uf--span">
+                <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="askSpecimen()"
+                [disabled]="cultureBench()" (click)="setAskSpecimen(!(askSpecimen()))">
+          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          <span>Ask for specimen at order</span>
+        </button>
+                <p class="pf-hint">
+                  @if (cultureBench()) {
+                    Culture &amp; Sensitivity always asks. The front desk picks
+                    the specimen sent (from the Specimen master); it prints on
+                    the report.
+                  } @else {
+                    The front desk picks which specimen was sent (from the
+                    Specimen master) when this test is ordered; it prints on
+                    the report.
+                  }
+                </p>
+              </div>
+              @if (d.id && (askSpecimen() || cultureBench())) {
+                <div class="pf-uf pf-uf--span">
+                  <label class="pf-uf__lbl">Default specimen</label>
+                  <pf-select [options]="defaultSpecimenOptions()" [value]="defaultSpecimenCode()" [searchable]="true"
+                             [disabled]="savingDefaultSpecimen()" placeholder="No default (the desk must choose)"
+                             (valueChange)="setDefaultSpecimen($event)"></pf-select>
+                  <p class="pf-hint">
+                    @if (severalSpecimenDefaults()) {
+                      Several specimens are marked default, which counts as none.
+                      Pick one, or keep "No default".
+                    } @else {
+                      Zero or one. With a default the desk preselects it; with
+                      none the desk starts empty and the specimen must be chosen.
+                      Saved as soon as you pick.
+                    }
+                  </p>
+                </div>
+              }
+              <div class="pf-uf pf-uf--span">
                 <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="specimenEntry()"
                 (click)="setSpecimenEntry(!(specimenEntry()))">
           <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>

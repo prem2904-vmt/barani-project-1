@@ -5,17 +5,24 @@
  * done-status whitelist used to drift and leave the Dispatch button showing
  * after everything was already dispatched.
  */
+import { isNotCollected } from '../../../shared/utils/sample-not-collected';
 
 export interface DispatchSampleLike {
   status: string;
+  collectedAt?: string | null;
 }
 
 /** True once every tube on the order has moved past `collected` — i.e. none is
  *  still `pending` or awaiting dispatch (`collected`). Matches the per-tube
- *  "Dispatched" badge, which excludes exactly those two states. */
+ *  "Dispatched" badge, which excludes exactly those two states.
+ *  Not-collected tubes ("Can't collect") are ignored: they never left the
+ *  counter, so they can neither make an order "dispatched" nor hold it back —
+ *  and an order whose every tube is not collected is NOT dispatched (QA #6:
+ *  it used to read "Dispatched"). */
 export function isOrderDispatched(samples: readonly DispatchSampleLike[]): boolean {
-  return samples.length > 0
-    && samples.every(s => s.status !== 'pending' && s.status !== 'collected');
+  const live = samples.filter(s => !isNotCollected(s));
+  return live.length > 0
+    && live.every(s => s.status !== 'pending' && s.status !== 'collected');
 }
 
 /** Count of tubes drawn but not yet dispatched (the ones a Dispatch action

@@ -369,6 +369,62 @@
   }
 }
 
+/* ── Tablet stack (641–1023px): nothing spills out of its card ─────────
+ * The Appointments pane carries an inline `flex-basis: N%` — the DESKTOP
+ * row split (drag handle). In this column stack that percentage became a
+ * HEIGHT, so the pane was squeezed to ~half the column while its content
+ * (header + week strip + a 200px-min empty state) was taller, and with
+ * `overflow: visible` the "Open calendar" button painted over the work
+ * card's tabs. Here:
+ *   • the inline basis is neutralised (it only means something side by side);
+ *   • the Appointments pane sizes to its content and, when that is taller
+ *     than the room left, scrolls INSIDE its own card (visible overflow is
+ *     kept only while its date-filter popover is open, so the popover can
+ *     still escape the card);
+ *   • its empty state uses the kit's compact metrics (.nd-empty--compact)
+ *     so the card stays short;
+ *   • the work pane, when expanded, takes the remaining height.
+ * Phones (≤640px) show one pane at a time and keep their own rules. */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .pf-appt-split > .pf-appt-split__pane {
+    flex-basis: auto !important;
+  }
+  .pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--filtering {
+    overflow: visible;
+  }
+  .pf-appt-split > .pf-appt-split__pane--work.pf-appt-split__pane--expanded {
+    flex: 1 1 auto;
+  }
+  .pf-appt-split__pane > .pf-daystrip {
+    flex-shrink: 0;
+  }
+  /* A collapsed pane is header-only: round the header's bottom corners with
+     the card (the design skins give it a 20px-top-only radius, whose square
+     bottom corners poked out of the card once it was header-high). */
+  .pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--expanded) > .pf-appt-split__hdr {
+    border-radius: inherit !important;
+    border-bottom-color: transparent !important;
+  }
+  /* Mirrors .nd-empty.nd-empty--compact (shared/styles/_nd-kit.scss) —
+     Appointments pane, tablet only — the desktop pane and the work pane keep
+     their full, centred empty state. */
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile {
+    flex: none;
+    min-height: 0;
+    padding: 20px 12px;
+    margin: 0;
+  }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .nd-empty__icon { width: 32px; height: 32px; border-radius: 10px; }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .nd-empty__icon > svg { width: 16px; height: 16px; }
+  .pf-appt-split__pane:not(.pf-appt-split__pane--work).pf-appt-split__pane--expanded > .pf-empty-tile .nd-empty__title { font-size: 13.5px; }
+}
+
 @media (min-width: 1024px) {
   /* Use FLEX (not grid) for the splitter row so we can drive the split
    * by writing `flex-basis` directly on the first pane via an Angular

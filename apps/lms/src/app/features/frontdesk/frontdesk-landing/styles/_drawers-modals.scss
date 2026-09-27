@@ -731,6 +731,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Stopped step ("Sample — not collected (reason)", QA #6): rose node with an
+   ✕, rose caption. Never reads as done or as the live step. */
+.pf-vtl__row[data-state='stopped'] .pf-vtl__node {
+  background: #e11d48;
+  border-color: #e11d48;
+}
+.pf-vtl__row[data-state='stopped'] .pf-vtl__status {
+  color: var(--red-text, #e11d48);
+  overflow-wrap: anywhere;
+}
+
 .pf-vtl__row[data-state='pending'] .pf-vtl__label {
   font-weight: 500;
   color: var(--text-secondary);

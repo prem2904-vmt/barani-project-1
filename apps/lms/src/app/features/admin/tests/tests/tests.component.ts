@@ -671,7 +671,7 @@ export class TestsComponent implements OnInit {
     btn.style.cssText = 'position:relative;flex-shrink:0;width:36px;height:20px;border-radius:999px;padding:0;cursor:pointer;'
       + 'transition:background 0.15s, border-color 0.15s;outline:none;'
       + (isActive
-          ? 'background:var(--nd-toggle-on, #aeb8c2);border:1px solid var(--nd-toggle-on, #aeb8c2);'
+          ? 'background:var(--nd-switch-on, #7c3aed);border:1px solid var(--nd-switch-on, #7c3aed);'
           : 'background:var(--nd-toggle-off, #e3e7eb);border:1px solid var(--nd-toggle-off, #e3e7eb);');
 
     const knob = document.createElement('span');

@@ -49,6 +49,11 @@ describe('zoom keys + routes (pure)', () => {
     for (const u of ['/lab/my-work', '/pathologist', '/reports', '/lab/collect', '/lab/sample'])
       expect(isZoomDetail(u)).toBe(false);
   });
+  it('isZoomDetail: the patient profile is a detail; registration is not', () => {
+    expect(isZoomDetail('/frontdesk/patients/32c6cd34-1a99-4aea-ad43-f9889d8b3bf0')).toBe(true);
+    for (const u of ['/frontdesk/patients/new', '/frontdesk/patients/new?patientId=x', '/frontdesk', '/frontdesk/patients'])
+      expect(isZoomDetail(u)).toBe(false);
+  });
   it('the zoom and the step slide never claim the same navigation', () => {
     expect(slideDirection('/lab/my-work', '/lab/sample/abc')).toBeNull();
     expect(slideDirection('/lab/sample/abc', '/lab/my-work')).toBeNull();

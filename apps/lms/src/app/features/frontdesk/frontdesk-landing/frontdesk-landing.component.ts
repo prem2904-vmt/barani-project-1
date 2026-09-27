@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
@@ -14,6 +15,7 @@ import { AppointmentBookingService } from '../../../core/services/appointment-bo
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
 import { BillingEventsService } from '../../../core/services/billing-events.service';
+import { WorkEventsService } from '../../../core/services/work-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
@@ -107,8 +109,9 @@ import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { drawerAgeSex, drawerName, orderStatusState } from './order-drawer';
-import { canBulkDispatch, createWorkSelection, workRowTone } from './work-selection';
+import { drawerAgeSex, drawerName, drawerPipeline, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
+import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
+import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -147,7 +150,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -180,6 +183,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly booking = inject(AppointmentBookingService);
   private readonly billingEvents = inject(BillingEventsService);
+  private readonly work = inject(WorkEventsService);
   // Cached ETag from /api/orders/today; sent as If-None-Match next poll.
   private _ordersEtag: string | null = null;
   // Local content signature used as a belt-and-braces no-op detector when an
@@ -1079,10 +1083,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
 
 
-  // Live polling: 30s tick keeps Today's Orders fresh so reception sees
-  // status changes (collected → dispatched → received → validated) without
-  // a manual refresh. Stopped on destroy + when the tab is hidden so we
-  // don't burn requests on a backgrounded laptop.
+  // Live: Today's Orders follow the branch's work events (see ngOnInit), so
+  // reception sees collected → dispatched → received → validated without a
+  // manual refresh. (The 30 s poll handle is retired; kept null-safe.)
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   protected readonly lastUpdated = signal<number>(Date.now());
   protected isAdmin = false;
@@ -1112,7 +1115,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       const v = this._twoPaneSplit();
       const el = this.apptSplitEl()?.nativeElement;
       if (!el) return;
-      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
       if (firstPane) firstPane.style.flexBasis = v + '%';
     });
 
@@ -1161,12 +1164,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Drafts are local-only — load them once on init so the tab badge is
     // correct even before the Draft tab is opened.
     this.refreshDrafts();
-    this.pollHandle = setInterval(() => {
-      // Skip polls while the tab is hidden — saves bandwidth on inactive
-      // tabs without changing perceived freshness once focus returns.
-      if (typeof document !== 'undefined' && document.hidden) return;
-      this.refresh();
-    }, 30_000);
+    // Live: refetch the lists (never an open drawer / form) when a work event
+    // lands for this branch — order created, sample collected / not collected,
+    // received, result validated, report ready, bill paid / pay later,
+    // appointment booked … Debounced by the service; its slow poll covers a
+    // dropped socket, and a tab coming back into view re-syncs. Replaces the
+    // old 30 s network poll.
+    this.work.on('frontdesk', 'collection', 'billing', 'appointments', 'reports', 'receive')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.refresh());
 
     const perms = this.auth.user()?.permissions ?? [];
     this.isAdmin = perms.includes('*');
@@ -1249,8 +1255,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     });
 
     // Test catalogue (once) — used to show requested-test names in the
-    // home-collection detail.
-    if (this._tests().length === 0) {
+    // home-collection detail. Only for users the /api/tests read admits
+    // (view_test | manage_tests | create_order): a Billing Counter lacks all
+    // three, got a 403, and — the list staying empty — re-sent it every poll.
+    if (this._tests().length === 0 && ['view_test', 'manage_tests', 'create_order'].some(c => this.auth.hasPermission(c))) {
       this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
     }
   }
@@ -1444,7 +1452,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const clamped = Math.max(minPct, Math.min(maxPct, this._twoPaneSplit()));
     if (clamped !== this._twoPaneSplit()) {
       this._twoPaneSplit.set(clamped);
-      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+      const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
       if (firstPane) firstPane.style.flexBasis = clamped + '%';
     }
   }
@@ -1491,7 +1499,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const maxPct = Math.min(85, ((rect.width - minPx - handlePx) / rect.width) * 100);
     const clamped = Math.max(minPct, Math.min(maxPct, raw));
     this._twoPaneSplit.set(clamped);
-    const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane');
+    const firstPane = el.querySelector<HTMLElement>(':scope > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
     if (firstPane) firstPane.style.flexBasis = clamped + '%';
   }
 
@@ -1983,7 +1991,20 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  until the lab receives), so when the order reads collected but the tubes
    *  have actually been dispatched / received, show the further-along state.
    *  Past the lab (validated/delivered/etc.) the raw status wins. */
+  /** Drawer header chip: the short state ("Not collected") — the timeline
+   *  carries the count and the reason, and a long chip squeezed the name. */
+  drawerStatusLabel(o: Order): string {
+    if (o.status !== 'cancelled' && o.status !== 'delivered' && notCollectedSamples(o.samples).length > 0) return 'Not collected';
+    return this.effectiveStatusLabel(o);
+  }
   effectiveStatusLabel(o: Order): string {
+    // "Can't collect" (QA #6): the tube was never drawn — say so, with the
+    // reason, instead of the raw rollup ('Rejected' / 'Partially Rejected',
+    // or worse a stale 'Dispatched').
+    if (o.status !== 'cancelled' && o.status !== 'delivered') {
+      const nc = notCollectedLabel(o.samples);
+      if (nc) return nc;
+    }
     // A live repeat series (some tubes drawn, timed points still pending)
     // reads as its own state — the raw order status ('billed'/'collected')
     // under-describes an OGTT mid-run.
@@ -2018,6 +2039,34 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/lab/collect'], { queryParams: { orderId: o.id } });
   }
 
+  /** Row "Recollect" — a tube on this order was marked not collected and the
+   *  patient is back. Takes the Collect slot (never Collect / Dispatch for a
+   *  not-collected order). Needs collect_sample, like the endpoint. */
+  showRecollectOn(o: Order): boolean {
+    return this.auth.hasPermission('collect_sample') && canRecollect(o);
+  }
+  private readonly _recollecting = signal<string | null>(null);
+  readonly recollecting = this._recollecting.asReadonly();
+  /** Reopen every not-collected tube (PATCH /api/samples/{id}/recollect → back
+   *  to pending, back in the collection queue), then go draw them when the
+   *  desk collects here, else leave them in the queue for the collector. */
+  async recollectOrder(o: Order) {
+    const tubes = notCollectedSamples(o.samples);
+    if (tubes.length === 0 || this._recollecting()) return;
+    this._recollecting.set(o.id);
+    const res = await Promise.all(tubes.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/recollect`, {}))
+        .then(() => null).catch((e: unknown) => ApiError.from(e))));
+    this._recollecting.set(null);
+    const failed = res.filter((e): e is ApiError => e !== null);
+    const ok = tubes.length - failed.length;
+    if (failed.length) this.toasts.error(failed[0].message);
+    if (ok === 0) return;
+    this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} back in the collection queue`);
+    if (this.labCfg.collectsAtFrontdesk()) this.collectSample(o);
+    else this.fetchOrdersWithEtag();
+  }
+
   // Dispatch button: visible when every tube on the order has been
   // collected but none has left for the lab yet. The FD/courier desk taps
   // it to mark all collected tubes 'dispatched' in one go.
@@ -2047,7 +2096,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Per-tube status in 5 buckets — finer than order.status. Drives the
       FD slim card's per-dept badge + the action button gating. */
   sampleStatus(o: Order): 'pending' | 'partially_collected' | 'fully_collected' | 'dispatched' | 'received' {
-    const samples = o.samples ?? [];
+    // Not-collected tubes are a sink — they never make an order look
+    // (partially) collected or dispatched (QA #6: collected + not-collected
+    // used to read 'partially_collected' and re-offer Collect).
+    const samples = (o.samples ?? []).filter(s => !isNotCollected(s));
     if (samples.length === 0) return 'pending';
     const isAtOrPast = (s: string, target: string) => {
       const order = ['pending', 'collected', 'dispatched', 'in_transit', 'received', 'processing'];
@@ -2338,7 +2390,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   /** All validated samples on the order — feeds the Preliminary report
       panel in the order drawer. */
-  validatedSamples(o: Order): Array<{ id: string; deptName: string; deptCode: string; tests: Array<{ id: string; name: string; values: Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical' }> }> }> {
+  validatedSamples(o: Order): Array<{ id: string; deptName: string; deptCode: string; tests: Array<{ id: string; name: string; values: Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; code?: string }> }> }> {
     const out: Array<any> = [];
     for (const s of (o.samples ?? [])) {
       if (!this.isSampleValidated(s)) continue;
@@ -2363,10 +2415,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Parse the OrderTest's currentResult JSON into per-parameter rows with
       the flag + range mw SAVED with the result (never a browser recompute). */
   private extractValuesFor(t: { currentResult?: string; test?: { parameters?: string } }):
-    Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical' }> {
+    Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; code?: string }> {
     if (!t.currentResult || !t.test?.parameters) return [];
     return savedValueRows(t.currentResult, t.test.parameters).map(r => ({
-      name: r.name, title: r.title, value: r.value ?? '—', unit: r.unit, range: r.range, flag: r.flag,
+      name: r.name, title: r.title, value: r.value ?? '—', unit: r.unit, range: r.range, flag: r.flag, code: r.code,
     }));
   }
   isDispatched(o: Order): boolean {
@@ -2648,51 +2700,31 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         this.toasts.warning('No report yet for this order — try again in a moment.');
         return;
       }
-      const { generateReportPdf, preloadReportImages } = await import('../../../shared/utils/report-pdf');
-      const { PlatformService } = await import('../../../core/services/platform.service');
-      const platform = this.injector.get(PlatformService);
-      const [template, resolvedLayouts] = await Promise.all([
-        // Fetch the tenant's report template so colors / logo / signatures
-        // / date format flow into the PDF. Soft-fail (null) so an unconfigured
-        // tenant still gets a sensible default-themed report.
-        firstValueFrom(this.api.get<import('../../../shared/models/report.model').ReportTemplate | null>('/api/config/report-template')).catch(() => null),
-        this.fetchResolvedLayouts(report),
-      ]);
-      const baseInput = { report, resolvedLayouts, template: template ?? null };
-      const imageCache = await preloadReportImages(baseInput, platform.getApiUrl());
-      generateReportPdf({ ...baseInput, imageCache });
+      const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
+      generateReportPdf(await this.reportInput(report));
     } catch (err) {
       console.error('[fd] download report failed', err);
-      this.toasts.error('Could not download the report');
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this.toasts.error(reportRenderErrorMessage(err, 'Could not download the report'));
     } finally {
       this._downloadingReport.set(null);
     }
   }
-  /** Walk every test on the report and ask the engine to resolve its
-   *  per-test layout against the entered values. Returns a testId →
-   *  ResolvedReportLayout map that the PDF generator consumes; the map
-   *  is empty for tests without a configured layout (PDF then falls
-   *  back to the legacy parameter table for those). */
-  private async fetchResolvedLayouts(report: Report): Promise<Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout>> {
-    const out: Record<string, import('../../../shared/models/report-layout.model').ResolvedReportLayout> = {};
-    let tests: Array<{ testId?: string; packageTestId?: string | null; result?: { values?: Record<string, unknown> } }> = [];
-    let patient: { sex?: string | null; age?: number | null } | undefined;
-    try {
-      const snap = JSON.parse(report.data ?? '{}');
-      tests = snap?.tests ?? [];
-      patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
-    } catch { /* malformed — proceed with empty layouts map */ }
-    if (tests.length === 0) return out;
-
-    const { ReportLayoutService } = await import('../../../core/services/report-layout.service');
-    const { resolveReportLayouts } = await import('../../../shared/utils/report-layouts');
+  /** The full PDF input for a stored report — the ONE recipe shared by every
+   *  report entry point (template + layouts incl. PROFILE layouts + images +
+   *  trendograms). Throws rather than rendering the product-default design. */
+  private async reportInput(report: Report) {
+    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
+      import('../../../core/services/report-layout.service'),
+      import('../../../core/services/platform.service'),
+      import('../../../shared/utils/report-render-input'),
+    ]);
     const svc = this.injector.get(ReportLayoutService);
-    // The ONE resolver: SCALAR values (so "show when result > X" conditions
-    // match), snapshot images, and the ordered PROFILES' layouts (their notes
-    // print instead of the members').
-    Object.assign(out, await resolveReportLayouts<import('../../../shared/models/report-layout.model').ResolvedReportLayout>(
-      (id, values, images, p) => svc.preview(id, values, images as never, p), tests, patient));
-    return out;
+    return prepareReportPdfInput(report, {
+      api: this.api,
+      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
+      apiUrl: this.injector.get(PlatformService).getApiUrl(),
+    });
   }
 
   /** Count of staff with status === 'on_duty' for the button badge. */
@@ -2885,56 +2917,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       default: return 'default';
     }
   }
-  pipeline(o: Order): Array<{ label: string; state: 'done' | 'active' | 'pending' }> {
-    const billDone = o.status !== 'draft' && o.status !== 'created';
-    const collected = o.samples.some(s => s.status && s.status !== 'pending');
-    const dispatched = o.samples.some(s => s.status === 'dispatched' || s.status === 'in_transit'
-      || s.status === 'received' || s.status === 'processing');
-    const received = o.samples.some(s => s.status === 'received' || s.status === 'processing');
-    // "Report" step is done once the order has reached validated /
-    // partially_validated / delivered / completed — those all mean
-    // the lab work is signed off and the report is generated.
-    const reportDone = o.status === 'validated' || o.status === 'partially_validated'
-                    || o.status === 'delivered'  || o.status === 'completed';
-    // "Result" step is done as soon as every test has a value entered
-    // or already validated. Differs from reportDone — entered values
-    // still need a pathologist's signature before the report exists.
-    const allTests = o.samples.flatMap(s => s.tests ?? []);
-    const allTestsResulted = allTests.length > 0
-      && allTests.every(t => t.status === 'validated' || t.status === 'entered');
-    const anyResult = allTests.some(t => t.status === 'validated' || t.status === 'entered');
-    return [
-      { label: 'Billing', state: billDone ? 'done' : 'active' },
-      { label: 'Sample', state: collected ? 'done' : billDone ? 'active' : 'pending' },
-      { label: 'Dispatch', state: received ? 'done' : dispatched ? 'done' : collected ? 'active' : 'pending' },
-      { label: 'Result', state: allTestsResulted ? 'done' : anyResult ? 'active' : received ? 'active' : 'pending' },
-      { label: 'Report', state: reportDone ? 'done' : anyResult ? 'active' : 'pending' }
-    ];
+  /** Drawer timeline — see order-drawer.ts drawerPipeline (not-collected aware). */
+  pipeline(o: Order): PipelineStep[] {
+    return drawerPipeline(o);
   }
-  stepCaption(o: Order, step: { label: string; state: 'done' | 'active' | 'pending' }): string {
-    if (step.state === 'pending') return 'Pending';
-    switch (step.label) {
-      case 'Billing': return step.state === 'done' ? 'Billed' : 'Billing in progress';
-      case 'Sample': {
-        const total = o.samples.length;
-        const collected = o.samples.filter(s => s.status && s.status !== 'pending').length;
-        const received = o.samples.filter(s => s.status === 'received' || s.status === 'processing').length;
-        return step.state === 'done' ? `${received}/${total} received at lab` : `${collected}/${total} collected`;
-      }
-      case 'Result': {
-        const all = o.samples.flatMap(s => s.tests ?? []);
-        const validated = all.filter(t => t.status === 'validated' || t.status === 'entered').length;
-        return `${validated}/${all.length} tests resulted`;
-      }
-      case 'Report': {
-        if (step.state !== 'done') return 'Awaiting validation';
-        if (o.status === 'delivered') return 'Report delivered';
-        if (o.status === 'partially_validated') return 'Partial ready · awaiting full sign-off';
-        // 'validated' / 'completed' → ready for handover at the desk.
-        return 'Ready for delivery';
-      }
-      default: return '';
-    }
+  stepCaption(o: Order, step: PipelineStep): string {
+    return drawerStepCaption(o, step);
   }
   readonly patientTokens = computed(() => {
     const tokens = new Map<string, number>();

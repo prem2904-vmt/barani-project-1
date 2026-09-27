@@ -100,7 +100,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean } = {}) {
+async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[] } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover') ? !opts.touch : false,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
@@ -124,7 +124,7 @@ async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unkno
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
       { provide: DialogService, useValue: { prompt: vi.fn(async () => null), confirm: vi.fn(async () => false) } },
       { provide: NavBackService, useValue: { showBack: () => false, back: vi.fn(), backTo: vi.fn() } },
-      { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World' }), hasPermission: () => true } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World' }), hasPermission: (p: string) => !opts.perms || opts.perms.includes(p), hasAnyPermission: (ps: string[]) => !opts.perms || ps.some(p => opts.perms!.includes(p)) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
       { provide: ZoomTransitionService, useValue: { holding: signal(false), tap: () => true, rearm() {}, attachSource() {}, detachSource() {} } },
       { provide: Router, useValue: router },
@@ -389,7 +389,7 @@ describe('Reports list (nd) — Partial tab, truthful per department', () => {
     expect(api.post).toHaveBeenCalledWith('/api/reports/generate/partial', { orderId: PARTIAL_ORDER.id, sampleIds: ['s-mic-1'] });
   });
 
-  it('plain results: value rows with words for flags (High / Critical), no glyphs', async () => {
+  it('plain results: value rows with words for flags (High) and the critical badge (C / CL / CH), no glyphs', async () => {
     const r = await render();
     r.tab('partial');
     r.c.toggle(VALUES_ORDER.id); r.f.detectChanges();
@@ -397,7 +397,7 @@ describe('Reports list (nd) — Partial tab, truthful per department', () => {
     expect(card.querySelector('.pf-rq-card__meta')!.textContent).toContain('44/F · AA0007 · Order #AAAA1111');
     expect(card.querySelector('.pf-rq-card__count')!.textContent!.trim()).toBe('1 of 2 departments ready');
     const flags = [...card.querySelectorAll('.pf-rq-value__flag')].map(x => x.textContent!.trim());
-    expect(flags).toEqual(['High', 'Critical']);
+    expect(flags).toEqual(['High', 'C']);   // legacy saved 'C' shows as C; new rows badge CL / CH
     expect(card.textContent).not.toMatch(/[⚠⚑✓]/);
     expect(card.querySelector('.pf-rq-pending')!.textContent).toContain('Microbiology');
   });
@@ -456,5 +456,116 @@ describe('report-queue.partial helpers', () => {
     expect(deptCountLabel(1, 0, 3)).toBe('1 of 3 departments ready');
     expect(deptCountLabel(0, 1, 2)).toBe('1 of 2 departments partly ready');
     expect(deptCountLabel(1, 1, 3)).toBe('1 of 3 departments ready · 1 partly');
+  });
+});
+
+describe('Reports list — same reports for every viewer, actions by permission', () => {
+  const rowNames = (el: HTMLElement) => [...el.querySelectorAll('.pf-rq-card__name, .pf-rq-row p.font-semibold')].map(n => n.textContent!.trim());
+
+  for (const nd of [true, false]) {
+    it(`view_report-only sees the SAME rows, minus the send actions (${nd ? 'new' : 'classic'} design)`, async () => {
+      const full = await render({ nd, perms: ['deliver_report', 'view_report', 'edit_result'] });
+      full.c._filter.set('all'); full.f.detectChanges();
+      const fullRows = rowNames(full.el);
+      expect(fullRows.length).toBeGreaterThan(0);
+      expect(full.el.querySelector('[title="Send via WhatsApp"]')).not.toBeNull();
+      TestBed.resetTestingModule();
+
+      const viewer = await render({ nd, perms: ['view_report'] });
+      viewer.c._filter.set('all'); viewer.f.detectChanges();
+      expect(rowNames(viewer.el)).toEqual(fullRows);                       // identical list
+      expect(viewer.el.querySelector('[title="Send via WhatsApp"]')).toBeNull();  // no delivery
+      expect(viewer.el.querySelector('[title="View on screen"]')).not.toBeNull();
+      expect(viewer.el.querySelector('[title="Download PDF"]')).not.toBeNull();
+      // No Generate / Regenerate; branch managers (no edit_result, no bench
+      // perms) get no empty More menu either.
+      expect(viewer.el.querySelector('.pf-rq-generate')).toBeNull();
+      expect(viewer.el.querySelector('.pf-rq-more, .pf-rq-act--more')).toBeNull();
+    });
+  }
+
+  it('view-only: a "View only" chip replaces Generate in the band; Partial has no Generate button', async () => {
+    const { el, tab } = await render({ perms: ['view_report'] });
+    expect(el.querySelector('.pf-rq-viewonly')?.textContent?.trim()).toBe('View only');
+    expect(el.querySelector('.pf-rq-generate')).toBeNull();
+    tab('partial');
+    expect(el.querySelectorAll('.pf-rq-card').length).toBeGreaterThan(0);
+    expect(el.querySelector('.pf-rq-genpartial')).toBeNull();
+  });
+
+  it('view-only + edit_result (Lab Technician): More keeps Open lab results + Edit, never Regenerate', async () => {
+    const { el, f } = await render({ perms: ['view_report', 'edit_result', 'enter_result'] });
+    const more = el.querySelector('.pf-rq-more') as HTMLButtonElement;
+    expect(more).not.toBeNull();
+    more.click(); f.detectChanges();
+    const items = [...el.querySelectorAll('.pf-rq-menu__item')].map(b => b.textContent!.trim());
+    expect(items).toEqual(['Open lab results', 'Edit results']);
+  });
+
+  it('view-only: the send / generate handlers are inert even if called directly', async () => {
+    const { c, api } = await render({ perms: ['view_report'] });
+    const r = c.items()[0];
+    c.deliver(r, 'print');
+    await c.regenerate(r);
+    await c.promptGenerate();
+    c.generatePartial({ id: 'o1', readySampleIds: ['s1'] });
+    const posted = (api.post.mock.calls as unknown as unknown[][]).map(a => String(a[0]));
+    expect(posted.filter((u: string) => /\/deliver|\/generate/.test(u))).toEqual([]);
+  });
+
+  for (const nd of [true, false]) {
+    it(`view-only can PRINT from the list (${nd ? 'new' : 'classic'} design) — a row Print, no Share menu`, async () => {
+      const { el, c, f } = await render({ nd, perms: ['view_report'] });
+      c._filter.set('all'); f.detectChanges();
+      const print = el.querySelector('.pf-rq-print') as HTMLButtonElement;
+      expect(print).not.toBeNull();
+      expect(el.querySelector('[title="Send via WhatsApp"]')).toBeNull();
+      const spy = vi.spyOn(c, 'printReport').mockResolvedValue(undefined);
+      print.click();
+      expect(spy).toHaveBeenCalled();
+    });
+  }
+
+  it('view-only print is NOT a delivery: nothing is recorded', async () => {
+    const { c, api } = await render({ perms: ['view_report'] });
+    api.post.mockClear();   // init's /backfill
+    const job = vi.spyOn(c, 'printJob').mockResolvedValue(true);
+    await c.printReport(c.items()[0]);
+    expect(job).toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('the delivery desk\'s print still records the delivery (via print); a dismissed print records nothing', async () => {
+    const { c, api } = await render({ perms: ['deliver_report', 'view_report'] });
+    api.post.mockClear();   // init's /backfill
+    const job = vi.spyOn(c, 'printJob').mockResolvedValue(true);
+    await c.printReport(c.items()[0]);
+    expect(api.post).toHaveBeenCalledWith(`/api/reports/${c.items()[0].id}/deliver`, expect.objectContaining({ via: 'print' }));
+    api.post.mockClear();
+    job.mockResolvedValue(false);
+    await c.printReport(c.items()[0]);
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('the delivery desk keeps Print inside the Share menu, not as a row button', async () => {
+    const { el } = await render({ perms: ['deliver_report', 'view_report'] });
+    expect(el.querySelector('.pf-rq-print')).toBeNull();
+  });
+
+  it('no report permission → no print at all', async () => {
+    const { c, api } = await render({ perms: ['edit_result'] });
+    api.post.mockClear();   // init's /backfill
+    const job = vi.spyOn(c, 'printJob').mockResolvedValue(true);
+    await c.printReport(c.items()[0] ?? { id: 'x' });
+    expect(job).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('the delivery desk (deliver_report) keeps Generate and Regenerate', async () => {
+    const { el, f } = await render({ perms: ['deliver_report', 'view_report'] });
+    expect(el.querySelector('.pf-rq-generate')).not.toBeNull();
+    expect(el.querySelector('.pf-rq-viewonly')).toBeNull();
+    (el.querySelector('.pf-rq-more') as HTMLButtonElement).click(); f.detectChanges();
+    expect([...el.querySelectorAll('.pf-rq-menu__item')].map(b => b.textContent!.trim())).toContain('Regenerate');
   });
 });

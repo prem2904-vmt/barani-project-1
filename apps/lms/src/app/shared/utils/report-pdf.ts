@@ -14,6 +14,7 @@ import { savedFlagOf, type SavedFlag } from './result-flag';
 import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
 import { reportDisplayName } from './report-name';
+import { fetchAssetBlob } from './upload-fetch';
 
 /**
  * Render an A4 lab report PDF in the Drlogy template style — blue
@@ -80,6 +81,14 @@ export interface ReportPdfInput {
    *  (half-page each), up to 6 per page. Prepared by the caller via
    *  renderTrendogramPng() before the sync build. */
   trendograms?: Array<{ title: string; dataUrl: string }>;
+  /** PRINT ONLY — leave the header & footer areas blank (same margins as the
+   *  template's letterpad reserves) so the body lands on the lab's pre-printed
+   *  stationery. Set solely by a print entry point, after asking the user
+   *  (`askPrintLetterhead`, when the template's `letterpadMode` is on). Every
+   *  other render — preview, download, share, WhatsApp, the archived PDF, the
+   *  public link — leaves it unset, so a digital report ALWAYS carries the
+   *  lab's letterhead regardless of the letterpad setting. */
+  blankLetterhead?: boolean;
 }
 
 /** Effective theme + chrome values fed to every drawing function.
@@ -571,11 +580,13 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
   // data URLs, so no prefetch is required.
   if (snap.signatures && snap.signatures.length > 0) theme.signatures = snap.signatures;
 
-  // Pre-printed letterpad mode: skip the rendered header + footer and reserve
+  // Blank-letterhead PRINT: skip the rendered header + footer and reserve
   // blank top/bottom space on every page (the lab's stationery occupies it),
-  // printing only the results body. Reset to the normal defaults otherwise
-  // (module-level margins persist across renders).
-  LETTERPAD = !!template?.letterpadMode;
+  // printing only the results body. Driven ONLY by the per-print-job
+  // `blankLetterhead` option — never by the template flag on its own, so no
+  // digital output loses its letterhead. Reset to the normal defaults
+  // otherwise (module-level margins persist across renders).
+  LETTERPAD = !!input.blankLetterhead;
   PREVIEW_KEEP_EMPTY_COLS = !!input.previewKeepEmptyColumns;
   if (LETTERPAD) {
     MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;
@@ -965,24 +976,16 @@ export function renderReportPdfBlobUrl(input: ReportPdfInput): string {
   return URL.createObjectURL(blob);
 }
 
-/** Resolve a template/practice URL to an absolute one for fetching:
- *  absolute http(s) URLs pass through; "/uploads/…" gets prepended with
- *  the supplied API base. */
-function absoluteAssetUrl(url: string, baseUrl: string): string {
-  if (!url) return '';
-  if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
-  return `${baseUrl.replace(/\/$/, '')}${url}`;
-}
-
 /** Fetch a single image and re-encode it as a PNG data URL via canvas.
  *  jsPDF.addImage accepts PNG/JPEG data URLs directly but not raw URLs —
  *  hence the manual fetch + canvas pass. Re-encoding via canvas also
  *  normalises SVG/WEBP/JPEG into PNG so all uploaded formats work. */
-async function fetchAsDataUrl(absUrl: string): Promise<string | null> {
+async function fetchAsDataUrl(url: string, baseUrl: string, signed?: Record<string, string> | null): Promise<string | null> {
   try {
-    const resp = await fetch(absUrl, { mode: 'cors' });
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
+    // Uploads are private: "/uploads/…" goes through the session (or the
+    // public page's signed URL) — see shared/utils/upload-fetch.ts.
+    const blob = await fetchAssetBlob(url, baseUrl, signed);
+    if (!blob) return null;
     const objectUrl = URL.createObjectURL(blob);
     try {
       const img = await new Promise<HTMLImageElement>((res, rej) => {
@@ -1014,7 +1017,9 @@ async function fetchAsDataUrl(absUrl: string): Promise<string | null> {
  *  renderer falls back to its placeholder visuals for missing entries. */
 export async function preloadReportImages(
   input: Omit<ReportPdfInput, 'imageCache'>,
-  baseUrl: string
+  baseUrl: string,
+  /** Public report page only: stored path → signed URL (from its verify call). */
+  signed?: Record<string, string> | null,
 ): Promise<Record<string, string>> {
   const urls = new Set<string>();
   const tpl = input.template;
@@ -1041,9 +1046,8 @@ export async function preloadReportImages(
 
   const cache: Record<string, string> = {};
   await Promise.all(Array.from(urls).map(async u => {
-    const abs = absoluteAssetUrl(u, baseUrl);
-    if (!abs) return;
-    const data = await fetchAsDataUrl(abs);
+    if (!u) return;
+    const data = await fetchAsDataUrl(u, baseUrl, signed);
     if (data) cache[u] = data; // key by original (relative) URL — what the template stores
   }));
   return cache;

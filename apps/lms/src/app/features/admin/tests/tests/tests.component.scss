@@ -459,11 +459,11 @@
 }
 
 .pf-tm-status-switch--on {
-  background: var(--nd-toggle-on);
-  border-color: var(--nd-toggle-on);
+  background: var(--nd-switch-on);
+  border-color: var(--nd-switch-on);
 }
 
-/* slate, never violet/green */
+/* violet switch (ND-PATTERN §4), never green */
 .pf-tm-status-switch-knob {
   position: absolute;
   top: 1px;

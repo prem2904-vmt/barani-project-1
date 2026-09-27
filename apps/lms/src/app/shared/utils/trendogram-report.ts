@@ -1,6 +1,7 @@
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import { TrendTest, filterTrendPoints, renderTrendogramPng } from './trend-chart';
+import { isAccessFailure } from './report-layouts';
 
 /** The trendogram preference stored on the order metadata + echoed into the
  *  report snapshot. `charts` is the explicit list the user picked in the popup;
@@ -16,7 +17,9 @@ export interface TrendogramConfig {
  * From a report row, produce the Trendogram PNGs to embed in its PDF. Reads
  * snapshot.trendogram + snapshot.patient.id, fetches /lab-trends, and renders
  * each selected (test, parameter) to a PNG over the chosen duration. Returns []
- * when the feature is off, there's no data, or anything fails (never throws).
+ * when the feature is off, there's no data, or the data call fails for a reason
+ * that is the same for every viewer. Throws only on a permission / network
+ * failure (isAccessFailure) so the report is never rendered viewer-dependent.
  */
 export async function prepareTrendograms(
   report: { data?: string | null },
@@ -32,7 +35,12 @@ export async function prepareTrendograms(
   try {
     const r = await firstValueFrom(api.get<{ tests: TrendTest[] }>(`/api/patients/${patientId}/lab-trends`));
     trends = r?.tests ?? [];
-  } catch { return []; }
+  } catch (e) {
+    // A trend chart the lab configured must not vanish for one viewer only:
+    // permission / network failures abort the render (caller shows an error).
+    if (isAccessFailure(e)) throw e;
+    return [];
+  }
   if (trends.length === 0) return [];
 
   const duration = cfg.duration ?? '5';

@@ -23,7 +23,11 @@ export interface Bill {
   totalSgst: number;
   totalIgst: number;
   totalTax: number;
+  /** Whole-rupee bill total (owner round-off rule). */
   totalPayable: number;
+  /** ±0.xx taking taxable + GST to the whole-rupee payable (server-derived;
+   *  absent/0 on bills raised before round-off). Read via billRoundOff(). */
+  roundOff?: number;
   totalPaid: number;
   balance: number;
   status: string;

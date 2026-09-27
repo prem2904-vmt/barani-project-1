@@ -72,6 +72,17 @@ describe('ValidateResult.valueRowsFor — saved flag (Phase 0)', () => {
     expect(rows(a)[0].flag).toBe('abnormal');
   });
 
+  it('owner 2026-09-27: the chip badges CL / CH; legacy C shows as C', () => {
+    const cl = rows(ot({ hb: '6' }, [hb], undefined, { flagged: { hb: { value: '6', flag: 'CL' } } }))[0];
+    const ch = rows(ot({ hb: '21' }, [hb], undefined, { flagged: { hb: { value: '21', flag: 'CH' } } }))[0];
+    const legacy = rows(ot({ hb: '21' }, [hb], undefined, { flagged: { hb: { value: '21', flag: 'C' } } }))[0];
+    expect([cl.flag, ch.flag, legacy.flag]).toEqual(['critical', 'critical', 'critical']);
+    expect(P.flagLabel(cl.flag, cl.crit)).toBe('CL');
+    expect(P.flagLabel(ch.flag, ch.crit)).toBe('CH');
+    expect(P.flagLabel(legacy.flag, legacy.crit)).toBe('C');
+    expect(P.flagLabel('abnormal', '')).toBe('ABNORMAL');
+  });
+
   it('TARGET phase 0: band-scoped criticals are honoured (via the saved flag)', () => {
     const k = { name: 'k', title: 'K', referenceRanges: [{ min: 3.5, max: 5, criticalLow: 2.5, criticalHigh: 6.5 }] };
     const t = ot({ k: '7' }, [k], undefined, { flagged: { k: { value: '7', flag: 'C' } } });

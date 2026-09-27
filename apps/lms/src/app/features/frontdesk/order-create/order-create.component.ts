@@ -16,7 +16,12 @@ import { Patient, formatPatientInfo, patientDisplayName } from '../../../shared/
 import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList, filterTestListStrict } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, taxSlabOf } from '../../../shared/utils/test-pricing';
+import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, taxSlabOf } from '../../../shared/utils/test-pricing';
+import { computeBill } from '../../../shared/utils/bill-math';
+import { cartOverlaps, overlapMessage, overlapOnAdd } from './cart-duplicates';
+import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
+import { buildOrderDraft, parseOrderDraft } from './order-draft';
+import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -33,6 +38,8 @@ import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
+import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../shared/utils/micro-specimen';
+import { byName, mergeRecent, planRepeat, sortByName, type RepeatItem } from './catalogue-order';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -85,14 +92,103 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _tests = signal<Test[]>([]);
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
-  // ── Specimen choice at the desk (culture tests): testId → specimen ──
+  // ── Specimen choice at the desk: testId → specimen ──
+  // Every test that asks (Culture & Sensitivity, and any test whose Test
+  // Master "Ask specimen" switch is on — all of Microbiology), or a bundle
+  // carrying one (shared/utils/micro-specimen).
   private readonly _specimens = signal<Record<string, string>>({});
   readonly specimenOpts = signal<PfSelectOption[]>([]);
-  isCultureTest(t: { parameters?: string }): boolean {
-    return (t.parameters ?? '').includes('culture_sensitivity');
+  private readonly _testById = computed(() => new Map(this._tests().map(t => [t.id, t] as const)));
+  asksSpecimen(t: { parameters?: string | null; type?: string | null }): boolean {
+    const byId = this._testById();
+    return asksSpecimen(t, id => byId.get(id));
   }
   specimenOf(id: string): string { return this._specimens()[id] ?? ''; }
-  setSpecimen(id: string, v: string) { this._specimens.update(m => ({ ...m, [id]: v })); }
+  setSpecimen(id: string, v: string) {
+    this._specimens.update(m => ({ ...m, [id]: v }));
+    this._defaultApplied.add(id);
+    if (v) this._specimenErr.update(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n; });
+  }
+
+  // ── "There is no default" (owner 2026-09-27) ──
+  // The specimen starts EMPTY unless the test's Test–Specimen Mapping marks
+  // exactly ONE default (then it is preselected); a bundle preselects only
+  // when every asking member names the same single default. Picking is
+  // REQUIRED before the order is saved or paid.
+  /** test id → its single mapped default (null = none / several). */
+  private readonly _specimenDefaults = signal<Record<string, string | null>>({});
+  private readonly _defaultsAsked = new Set<string>();
+  /** Lines whose default was already applied (or that the user picked) —
+   *  never re-preselected, so clearing a pick sticks. */
+  private readonly _defaultApplied = new Set<string>();
+  /** Lines already on the order being edited: their specimen is history
+   *  (the server never re-checks them), so they are not required here. */
+  private readonly _onOrderIds = signal<ReadonlySet<string>>(new Set());
+  /** Inline "Choose the specimen" per cart line (set by a blocked save/pay). */
+  private readonly _specimenErr = signal<Record<string, true>>({});
+  specimenError(id: string): boolean { return !!this._specimenErr()[id]; }
+  /** Cart lines that ask for a specimen and have none — they block save/pay.
+   *  Only when the Specimen master offers something to pick. */
+  readonly missingSpecimenIds = computed<string[]>(() => {
+    if (this.specimenOpts().length === 0) return [];
+    const byId = this._testById();
+    const onOrder = this._onOrderIds();
+    return this._selected().filter(id => {
+      const t = byId.get(id);
+      return !!t && !onOrder.has(id) && !this.isCollected(id) && this.asksSpecimen(t) && !this.specimenOf(id);
+    });
+  });
+  /** Guard for Continue / Proceed / Confirm: true (and every missing picker
+   *  shows its inline error, the first one scrolled to + focused) when a
+   *  specimen is still to be chosen, so the caller stops. */
+  requireSpecimens(): boolean {
+    const missing = this.missingSpecimenIds();
+    if (missing.length === 0) return false;
+    this._specimenErr.set(Object.fromEntries(missing.map(id => [id, true as const])));
+    this.billPhase.set('cart');
+    setTimeout(() => {
+      const host = typeof document !== 'undefined'
+        ? document.querySelector<HTMLElement>(`[data-spec-id="${missing[0]}"]`) : null;
+      host?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      host?.querySelector<HTMLElement>('button, input, [tabindex]')?.focus();
+    }, 0);
+    return true;
+  }
+  /** Read the mapping defaults for asking cart lines not yet asked about. */
+  private loadSpecimenDefaults(ids: string[]) {
+    const fresh = ids.filter(id => !this._defaultsAsked.has(id));
+    if (fresh.length === 0) return;
+    fresh.forEach(id => this._defaultsAsked.add(id));
+    this.api.get<Array<{ testId: string; defaultSpecimen?: string | null }>>(
+      `/api/microbiology/test-specimens?testIds=${fresh.join(',')}`).subscribe({
+      next: rows => this._specimenDefaults.update(m => {
+        const n = { ...m };
+        for (const id of fresh) n[id] = null;
+        for (const r of rows ?? []) n[r.testId] = r.defaultSpecimen ?? null;
+        return n;
+      }),
+      error: () => { /* no mapping (or micro module absent): nothing preselects */ }
+    });
+  }
+  /** Preselect the single default on lines that have no choice yet. */
+  private applySpecimenDefaults() {
+    if (this.isReadOnly()) return;
+    const byId = this._testById();
+    const opts = new Set(this.specimenOpts().map(o => String(o.value)));
+    const defaults = this._specimenDefaults();
+    const picks: Record<string, string> = {};
+    for (const id of this._selected()) {
+      if (this._defaultApplied.has(id) || this.specimenOf(id)) continue;
+      const t = byId.get(id);
+      if (!t || !this.asksSpecimen(t)) continue;
+      const lookup = specimenLookupIds(t, mid => byId.get(mid));
+      if (lookup.some(l => !(l in defaults))) continue;       // still loading
+      this._defaultApplied.add(id);
+      const d = deskDefaultSpecimen(t, defaults, mid => byId.get(mid));
+      if (d && opts.has(d)) picks[id] = d;
+    }
+    if (Object.keys(picks).length) this._specimens.update(m => ({ ...m, ...picks }));
+  }
   /** Only the chosen specimens for tests still in the cart. */
   private specimenPayload(): Record<string, string> | null {
     const sel = new Set(this._selected());
@@ -140,6 +236,21 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly trendogramCount = computed(() => this.trendogramConfig()?.charts.length ?? 0);
 
   constructor() {
+    // Specimen defaults: read the mapping for asking cart lines, then
+    // preselect a single default (none / several → the picker stays empty).
+    effect(() => {
+      const byId = this._testById();
+      if (this.specimenOpts().length === 0) return;
+      const ids = this._selected().flatMap(id => {
+        const t = byId.get(id);
+        return t && this.asksSpecimen(t) ? specimenLookupIds(t, mid => byId.get(mid)) : [];
+      });
+      if (ids.length) this.loadSpecimenDefaults(ids);
+    });
+    effect(() => {
+      this._specimenDefaults(); this._selected(); this.specimenOpts(); this._testById();
+      this.applySpecimenDefaults();
+    });
     // Fetch trend eligibility whenever the attached patient changes.
     effect(() => {
       const p = this._patient();
@@ -346,8 +457,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     switch (err.field) {
+      case 'discount':        this.discountServerError.set(err.message); this.toasts.error(err.message); return;
       case 'refHospitalName': this.refHospitalError.set(err.message); return;
       case 'refDoctorName':   this.refDoctorError.set(err.message);   return;
+      case 'specimen':        if (this.requireSpecimens()) return; this.toasts.error(err.message); return;
       default:                this.toasts.error(err.message);
     }
   }
@@ -373,7 +486,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly individualTests = computed(() => this._tests().filter(t => t.type === 'individual'));
   readonly packages = computed(() => {
     const list = this._tests().filter(t => t.type === 'package');
-    return list;   // browse view: the pill query never filters the grid
+    return sortByName(list);   // A→Z; browse view: the pill query never filters the grid
   });
   /** Profiles — orderable coded bundles, their own filter tab (kept out of
    *  "All tests", which is individuals only). */
@@ -390,7 +503,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       if (arr) arr.push(p); else groups.set(key, [p]);
     }
     return [...groups.entries()]
-      .map(([department, tests]) => ({ department, tests: tests.slice().sort(this.byCode) }))
+      .map(([department, tests]) => ({ department, tests: tests.slice().sort(byName) }))
       .sort((a, b) => a.department.localeCompare(b.department));
   });
 
@@ -424,7 +537,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (ids.size === 0) return [];
     const byId = new Map(this._tests().map(t => [t.id, t]));
     const list = Array.from(ids).map(id => byId.get(id)).filter((t): t is Test => !!t && t.isActive);
-    return list;   // browse view: the pill query never filters the grid
+    // No user reordering exists for favourites, so they read A→Z like the
+    // other lists (QA #4b). Browse view: the pill query never filters it.
+    return sortByName(list);
   });
 
   /** Tests this user has ordered in the past, most-recent first. */
@@ -436,6 +551,27 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return list;   // browse view: the pill query never filters the grid
   });
 
+  /** (Re)load this user's recent items from the server — the ordered
+   *  tests, profiles and packages, most recent first. */
+  private loadRecent(): void {
+    this.api.get<string[]>('/api/test-picker/recent').subscribe({
+      // Merge, don't clobber: an order placed a moment ago may not be in a
+      // response that raced it.
+      next: ids => this.recentIds.set(mergeRecent(this._justOrdered, ids ?? [])),
+      error: () => { /* silent: keep what we have */ }
+    });
+  }
+  /** Items ordered on this screen instance, newest first (the screen is
+   *  reused across patients, so Recent must update without a reload). */
+  private _justOrdered: string[] = [];
+  /** An order was just placed with these cart ids: they go to the top of
+   *  Recent right away (QA #4a), then the server list is re-read. */
+  private noteOrdered(ids: readonly string[]): void {
+    this._justOrdered = mergeRecent(ids, this._justOrdered);
+    this.recentIds.set(mergeRecent(this._justOrdered, this.recentIds()));
+    this.loadRecent();
+  }
+
   /** True when the test id is in the user's favourites. */
   isFavourite(testId: string): boolean { return this.favouriteIds().has(testId); }
 
@@ -445,10 +581,6 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // pill, which stays visible above an on-screen keyboard (iPad / touch).
     return this.filterByDept(this.individualTests());
   });
-
-  /** Sort key: test code, natural/numeric-aware (BIO0002 before BIO0010). */
-  private byCode = (a: Test, b: Test) =>
-    ((a.testCode ?? a.code ?? '')).localeCompare(b.testCode ?? b.code ?? '', undefined, { numeric: true });
 
   /** Search a (sub-)list; profile aliases are derived from the FULL loaded
    *  catalogue's memberships (SGOT is found by "LFT" / "liver"). */
@@ -469,7 +601,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return Array.from(groups.entries())
       .map(([department, tests]) => ({
         department,
-        tests: tests.slice().sort(this.byCode)
+        tests: tests.slice().sort(byName)
       }))
       .sort((a, b) => a.department.localeCompare(b.department));
   });
@@ -598,6 +730,23 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return covered;
   });
 
+  /** Items in the cart that sit inside another bundle in the cart (owner rule:
+   *  never orderable). Adds are refused up front (overlapOnAdd); this flags a
+   *  cart that ARRIVED with one — a restored draft, a repeat, an appointment
+   *  prefill — and blocks placing it until one side is removed. */
+  readonly cartOverlapList = computed(() => cartOverlaps(this._tests(), this._selected()));
+  readonly cartOverlapMessages = computed(() => this.cartOverlapList().map(overlapMessage));
+
+  /** Refuse an ADD that would put the same test in the order twice (a bundle
+   *  beside its own member, either way round). Removing is never refused. */
+  private refuseDuplicateAdd(id: string): boolean {
+    if (this.isSelected(id)) return false;
+    const o = overlapOnAdd(this._tests(), this._selected(), id);
+    if (!o) return false;
+    this.toasts.error(overlapMessage(o));
+    return true;
+  }
+
   /** True when an individual test in the cart is included in a package/profile
    *  that's also in the cart — it renders as "Included" and is not re-billed. */
   isCoveredMember(id: string): boolean {
@@ -644,13 +793,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Tenant GST master switch — when off, the cart shows no tax (mirrors the
    *  backend bill, which bills at a zero slab → Bill of Supply). */
   readonly gstEnabled = signal(true);
-  /** GST preview = Σ per line at that test's own `taxSlab` (the bill's rule),
-   *  not a flat rate. */
-  readonly gst = computed(() => {
-    if (!this.gstEnabled()) return 0;
-    const sum = this.billedLines().reduce((a, t) => a + lineGst(effectivePrice(t), taxSlabOf(t)), 0);
-    return Math.round(sum * 100) / 100;
+  /** The cart as the bill's units: each billed line at its own `taxSlab`
+   *  (0 when GST is off → Bill of Supply). */
+  private readonly billUnits = computed(() => {
+    const gstOn = this.gstEnabled();
+    return this.billedLines().map(t => ({ price: effectivePrice(t), slab: gstOn ? taxSlabOf(t) : 0 }));
   });
+  /** PRE-discount gross = subtotal + GST at full price — the total the patient
+   *  sees before a discount and the ONE base every discount % / cap is measured
+   *  on (server: BillingService.PreDiscountGross). */
+  readonly grossTotal = computed(() => computeBill(this.billUnits(), 0).gross);
+  /** The bill the server WILL raise (BillMath mirror): the discount comes off
+   *  the taxable value, GST on the rest, split per line in whole paise. Drives
+   *  the shown GST, the Total and the amount the payment panel charges. */
+  readonly billPreview = computed(() => computeBill(this.billUnits(), this.discountAmount()));
+  /** GST on the DISCOUNTED taxable value — exactly the invoice's GST. */
+  readonly gst = computed(() => this.billPreview().tax);
   /** "GST · 5%" when every taxed line shares one slab, else plain "GST". */
   readonly gstLabel = computed(() => {
     const slabs = new Set(this.billedLines().map(t => taxSlabOf(t)).filter(x => x > 0));
@@ -664,14 +822,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly overrideDiscountPct = signal(100);
   readonly discountValue = signal<string>('');   // raw input
   readonly discountKind = signal<'flat' | 'percent'>('flat');
-  setDiscountKind(k: 'flat' | 'percent') {
-    if (this.orderLocked()) return;
-    this.discountKind.set(k);
-  }
-  setDiscountValue(v: string) {
-    if (this.orderLocked()) return;
-    this.discountValue.set(v);
-  }
+  /** The discount is frozen once the order is read-only or its payment is
+   *  recorded (QA #3a) — the server rejects a change on a settled bill too. */
+  readonly discountLocked = computed(() => this.orderLocked() || this.isPaymentSettled());
+  setDiscountKind(k: 'flat' | 'percent') { if (this.discountLocked()) return; this.discountServerError.set(null); this.discountKind.set(k); }
+  setDiscountValue(v: string) { if (this.discountLocked()) return; this.discountServerError.set(null); this.discountValue.set(v); }
 
   /** The discount % this user may grant, by their role's permission tier:
    *  override_discount → Level-2 cap, else give_discount → Level-1 cap, else 0. */
@@ -686,19 +841,29 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!this.allowDiscounts()) return 0;
     const raw = parseFloat(this.discountValue() || '0');
     if (!isFinite(raw) || raw <= 0) return 0;
-    const base = this.subtotal() + this.gst();
-    const amt = this.discountKind() === 'percent' ? Math.round(base * raw / 100) : raw;
+    const base = this.grossTotal();
+    // Percent → ₹ rounded DOWN to the paisa, never up to whole rupees: on a
+    // small cart (₹3) 17% rounded to ₹1 = 33% and tripped the 25% cap.
+    const amt = this.discountKind() === 'percent' ? percentDiscountAmount(base, raw) : raw;
     return Math.max(0, Math.min(amt, base));
   });
-  /** Entered discount as a % of the pre-discount total. */
-  readonly discountPct = computed(() => {
-    const base = this.subtotal() + this.gst();
-    return base > 0 ? (this.discountAmount() / base) * 100 : 0;
-  });
+  /** Entered discount as a % of the pre-discount gross (subtotal + GST) — the
+   *  same base the server's cap check uses (BillingService.PreDiscountGross). */
+  readonly discountPct = computed(() => discountPctOf(this.discountAmount(), this.grossTotal()));
   /** True when the entered discount exceeds this user's cap → block + notify. */
   readonly discountOverCap = computed(() =>
     this.allowDiscounts() && this.discountAmount() > 0 && this.discountPct() > this.discountCapPct() + 0.01);
-  readonly total = computed(() => Math.max(0, this.subtotal() + this.gst() - this.discountAmount()));
+  /** Discount the bill will actually carry (≤ subtotal). */
+  readonly discountApplied = computed(() => this.billPreview().discount);
+  /** Total = the server bill's payable to the paisa (never gross − discount:
+   *  ₹1000 @18% − ₹295 is 705 + 126.90 = ₹831.90, not 1180 − 295 = ₹885). */
+  readonly total = computed(() => this.billPreview().payable);
+  /** ±0.xx taking the exact taxable + GST to the whole-rupee Total (owner
+   *  round-off rule) — shown as its own row when non-zero. */
+  readonly roundOff = computed(() => this.billPreview().roundOff);
+  /** Server-side discount rejection (e.g. cap) shown under the discount input;
+   *  cleared on edit. */
+  readonly discountServerError = signal<string | null>(null);
 
   /** Slowest test in the cart drives the report ETA. Packages count as
    *  the max of their member tests' tatHours. */
@@ -826,10 +991,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       next: ids => this.favouriteIds.set(new Set(ids ?? [])),
       error: () => { /* silent: empty favourites list */ }
     });
-    this.api.get<string[]>('/api/test-picker/recent').subscribe({
-      next: ids => this.recentIds.set(ids ?? []),
-      error: () => { /* silent: empty recent list */ }
-    });
+    this.loadRecent();
 
     // Draft shelf: a later ?patientId= on this SAME, reused screen (another
     // parked order tapped in the app bar) swaps the patient + cart in place.
@@ -861,6 +1023,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
             }
           }
           this._selected.set(testIds);
+          this.hydrateSpecimensFrom(o);
         },
         error: () => this.toasts.error('Could not load order details')
       });
@@ -892,6 +1055,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           if (o?.patient) this._patient.set(o.patient);
           if (o) this.extractCollectedTestIds(o);
           this.preselectFromOrder(o as unknown as HistoryRow, true);
+          this.hydrateSpecimensFrom(o);
         },
         error: () => this.toasts.error('Could not load order')
       });
@@ -906,16 +1070,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this._patient.set(res.patient);
           if (resumed) return;
           // Preselection priority:
-          //   1) localStorage draft for this patient
-          //   2) ?fromOrderId=… (Repeat flow from a prior order)
+          //   1) ?fromOrderId=… (Repeat flow from a prior order) — an explicit
+          //      Repeat always wins; a leftover draft for this patient used to
+          //      win here and Repeat showed the DRAFT's tests (QA #5).
+          //   2) localStorage draft for this patient
           //   3) ?appointmentId=… → fetch the appointment's draft TestIds
           //      and pre-load them into the cart (reception just clicks Create)
+          if (fromOrderId) { this.repeatFromOrder(fromOrderId); return; }
           const restored = this.restoreDraftFor(pid);
           if (restored) return;
-          if (fromOrderId) {
-            const prior = (res.history ?? []).find(h => h.id === fromOrderId);
-            if (prior) { this.preselectFromOrder(prior); return; }
-          }
           if (appointmentId) this.preselectFromAppointment(appointmentId);
         },
         error: () => this.toasts.error('Could not load patient')
@@ -954,19 +1117,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     // switch — just remember it so a later tap on ANY draft counts.
     if (!pid || q.has('orderId') || q.has('editOrderId')) { this.stagedPid = pid; return; }
     if (pid === this.stagedPid) return;
-    this.switchToPatient(pid);
+    this.switchToPatient(pid, q.get('fromOrderId'));
   }
 
   /** Put patient `pid`'s parked order on stage: park the cart on screen
    *  first (never lose a picked test), reset every per-order field, then
    *  load the patient and restore their draft — the same path a fresh
    *  /frontdesk/order?patientId= visit takes. */
-  private switchToPatient(pid: string) {
+  private switchToPatient(pid: string, fromOrderId: string | null = null) {
     this.parkCurrentCart();
     this.stagedPid = pid;
     this._patient.set(null);
     this._selected.set([]);
     this._specimens.set({});
+    this._specimenErr.set({});
+    this._defaultApplied.clear();
+    this._onOrderIds.set(new Set());
     this._hasDraft.set(false);
     this.setPriority('Normal');
     this.discountValue.set('');
@@ -988,7 +1154,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       next: res => {
         if (this.stagedPid !== pid) return;          // superseded by a later switch
         this._patient.set(res.patient);
-        this.restoreDraftFor(pid);
+        if (fromOrderId) this.repeatFromOrder(fromOrderId);
+        else this.restoreDraftFor(pid);
       },
       error: () => { if (this.stagedPid === pid) this.toasts.error('Could not load patient'); }
     });
@@ -1005,15 +1172,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Persist the cart as `p`'s draft (the Draft tab / shelf read this key). */
   private writeDraft(p: Patient): boolean {
     try {
-      localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify({
+      localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify(buildOrderDraft({
         savedAt: Date.now(),
         priority: this._priority(),
         testIds: this._selected(),
         specimens: this.specimenPayload(),
         // Snapshot the patient so the front-desk Draft tab can list it without
         // a lookup (the key only carries the id).
-        patient: p
-      }));
+        patient: p,
+        // The discount AS TYPED (₹ or %) — it was dropped from drafts.
+        discountValue: this.discountValue(),
+        discountKind: this.discountKind()
+      })));
       return true;
     } catch {
       return false;
@@ -1054,19 +1224,37 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private restoreDraftFor(patientId: string): boolean {
     let raw: string | null = null;
     try { raw = localStorage.getItem(this.DRAFT_KEY_PREFIX + patientId); } catch { return false; }
-    if (!raw) return false;
-    try {
-      const parsed = JSON.parse(raw) as { savedAt?: number; priority?: Priority; testIds?: string[] };
-      if (!parsed?.savedAt || Date.now() - parsed.savedAt > this.DRAFT_TTL_MS) {
-        try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + patientId); } catch { /* ignore */ }
-        return false;
+    const parsed = parseOrderDraft(raw, Date.now(), this.DRAFT_TTL_MS);
+    if (!parsed) {
+      // Stale drafts are dropped (an empty/unreadable one is left alone).
+      if (raw) {
+        try {
+          const savedAt = (JSON.parse(raw) as { savedAt?: number })?.savedAt;
+          if (!savedAt || Date.now() - savedAt > this.DRAFT_TTL_MS) localStorage.removeItem(this.DRAFT_KEY_PREFIX + patientId);
+        } catch { /* ignore */ }
       }
-      const ids = (parsed.testIds ?? []).filter(id => typeof id === 'string');
-      if (ids.length === 0) return false;
+      return false;
+    }
+    try {
+      const ids = parsed.testIds;
       this._selected.set(ids);
-      if (parsed.priority) this._priority.set(parsed.priority);
+      // The draft's specimen picks come back too (a pick is a pick: never
+      // overwritten by a mapping default).
+      const picks = parsed.specimens;
+      Object.keys(picks).forEach(k => this._defaultApplied.add(k));
+      this._specimens.set(picks);
+      if (parsed.priority === 'Normal' || parsed.priority === 'Urgent') this._priority.set(parsed.priority as Priority);
+      // The discount comes back exactly as typed, so the over-cap check and the
+      // totals rebuild the same; an old draft without one restores with none.
+      this.discountServerError.set(null);
+      this.discountKind.set(parsed.discount?.kind ?? 'flat');
+      this.discountValue.set(parsed.discount?.value ?? '');
       this._hasDraft.set(true);
       this.toasts.info('Draft restored');
+      // An old draft may hold a bundle beside its own member — flag it (the
+      // cart shows it too), never crash or silently drop a line.
+      const overlap = this.cartOverlapMessages();
+      if (overlap.length > 0) this.toasts.warning(overlap[0]);
       return true;
     } catch {
       return false;
@@ -1093,6 +1281,26 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.collectedTestIds().has(testId);
   }
 
+  /** An existing order's lines → the cart's specimen picks (keyed as
+   *  ordered: the leaf, or the bundle it came in) and the set of lines
+   *  already on the order (not re-required on edit). */
+  private hydrateSpecimensFrom(o: Order | null | undefined) {
+    const picks: Record<string, string> = {};
+    const onOrder = new Set<string>();
+    for (const s of o?.samples ?? []) for (const t of s.tests ?? []) {
+      for (const k of [t.testId, t.packageTestId, t.profileTestId]) {
+        if (!k) continue;
+        onOrder.add(k);
+        const sp = (t.specimen ?? '').trim();
+        if (sp && !picks[k]) picks[k] = sp;
+      }
+    }
+    Object.keys(picks).forEach(k => this._defaultApplied.add(k));
+    onOrder.forEach(k => this._defaultApplied.add(k));
+    this._onOrderIds.set(onOrder);
+    this._specimens.update(m => ({ ...picks, ...m }));
+  }
+
   private extractCollectedTestIds(o: Order) {
     const collected = new Set<string>();
     for (const s of (o.samples ?? []) as unknown as Array<{ status?: string; collectedAt?: string; collectedBy?: string; tests?: Array<{ testId?: string; packageTestId?: string; status?: string; test?: { id?: string } }> }>) {
@@ -1107,6 +1315,48 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
     this.collectedTestIds.set(collected);
+  }
+
+  /**
+   * Repeat (?fromOrderId=): put EXACTLY the source order's items back in the
+   * cart — the tests, profiles and packages that were picked, never a
+   * bundle's members. The server resolves each to the tenant's CURRENT row
+   * (reference mode: a master id follows a later tenant override), so the
+   * cart holds the ids the catalogue lists. Anything no longer orderable is
+   * named in a notice instead of silently dropped or swapped.
+   *
+   * QA #5 root cause: the old path read each sample line's leaf `testId`
+   * from the patient history — a profile/package came back as its members,
+   * ids that no longer matched the catalogue (overrides) were dropped, and a
+   * saved draft for the patient took precedence over the Repeat itself.
+   */
+  private repeatFromOrder(orderId: string) {
+    this.api.get<RepeatItem[]>(`/api/orders/${orderId}/repeat-items`).subscribe({
+      next: items => this.whenCatalogue(() => this.applyRepeat(items ?? [])),
+      error: e => this.toasts.error(`Could not repeat the order: ${ApiError.from(e).message}`),
+    });
+  }
+
+  /** Cart ← the repeat plan, with a notice for anything left out. */
+  applyRepeat(items: readonly RepeatItem[]) {
+    if (items.length === 0) { this.toasts.warning('Repeated order had no tests'); return; }
+    const plan = planRepeat(items, this._tests());
+    this._selected.set(plan.ids);
+    const n = plan.ids.length;
+    if (plan.unavailable.length > 0) {
+      this.toasts.warning(`Repeated ${n} item${n === 1 ? '' : 's'}. No longer available: ${plan.unavailable.join(', ')}`);
+    } else {
+      this.toasts.success(`Repeated ${n} item${n === 1 ? '' : 's'}`);
+    }
+  }
+
+  /** Run `fn` once the orderable catalogue has loaded (it arrives async). */
+  private whenCatalogue(fn: () => void) {
+    if (this._tests().length > 0) { fn(); return; }
+    const interval = setInterval(() => {
+      if (this._tests().length > 0) { clearInterval(interval); fn(); }
+    }, 150);
+    setTimeout(() => clearInterval(interval), 10000);
   }
 
   private preselectFromOrder(prior: HistoryRow, isEdit = false) {
@@ -1306,6 +1556,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   continueToPayment(): void {
     if (this._selected().length === 0) return;
     if (this.requirePatient()) return;
+    if (this.requireSpecimens()) return;
     this.billPhase.set('pay');
   }
   /** The one-line cart summary in the payment phase → back to the cart. */
@@ -1331,6 +1582,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       this.toasts.warning(`Cannot remove ${t.name} — sample has already been collected`);
       return;
     }
+    if (this.refuseDuplicateAdd(t.id)) return;
     this._selected.update(cur => cur.includes(t.id) ? cur.filter(id => id !== t.id) : [...cur, t.id]);
     this.showCart();
   }
@@ -1371,6 +1623,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       this.toasts.warning(`Cannot remove ${pkg.name} — sample has already been collected`);
       return;
     }
+    if (this.refuseDuplicateAdd(pkg.id)) return;
     this._selected.update(cur =>
       cur.includes(pkg.id) ? cur.filter(id => id !== pkg.id) : [...cur, pkg.id]
     );
@@ -1471,6 +1724,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly confirming = signal(false);
   /** Set once payment is taken → the pane swaps to Print / Show invoice. */
   readonly paidOrderId = signal<string | null>(null);
+  /** An order this Confirm created whose billing / payment hasn't completed —
+   *  a retry reuses it (see planConfirmOrder). */
+  private pendingOrder: PendingOrder | null = null;
   /** The bill in its post-payment state (has totalPayable / totalPaid /
    *  balance). A signal so the paid summary can render Total, Paid/Advance
    *  and Balance Due — including after a partial (advance) payment. */
@@ -1537,7 +1793,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         } else if (d.mode === 'later') {
           if (d.advanceAmount && d.advanceAmount > 0) {
             const updated = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-              amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
+              amount: Math.min(d.advanceAmount, bill.balance), mode: d.advanceMode ?? 'cash'
             }));
             this.currentBill.set(updated);
           }
@@ -1561,35 +1817,69 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const p = this._patient();
     if (!p || this.confirming() || this._selected().length === 0) return;
+    if (this.requireSpecimens()) return;
     if (this.discountOverCap()) {
-      this.toasts.error(`Discount ${this.discountPct().toFixed(0)}% exceeds your limit of ${this.discountCapPct()}%. Reduce it to continue.`);
+      this.toasts.error(`Discount ${fmtPct(this.discountPct())} exceeds your limit of ${fmtPct(this.discountCapPct())}. Reduce it to continue.`);
       return;
     }
     this.confirming.set(true);
     try {
       const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
-      const order = await firstValueFrom(this.api.post<Order>('/api/orders/', {
-        patientId: p.id,
-        refDoctorName: this.refDoctorName().trim() || null,
-        refHospitalName: this.refHospitalName().trim() || null,
-        priority: this._priority(),
-        source: appointmentId ? 'appointment' : 'walkin',
-        collectionType: 'walkin',
-        testIds: this._selected(),
-        specimens: this.specimenPayload(),
-        // Same metadata as submit(): the appointment link AND the Trendogram
-        // choice from the billing card (it was dropped on this path before).
-        metadataJson: this.buildOrderMetadata(appointmentId)
-      }));
+      const discount = this.discountAmount();
+      // Bug 3: a Confirm whose billing failed left its order behind. Retry
+      // bills THAT order (tests re-synced if the cart changed) — never a
+      // duplicate. A fresh order carries the discount so the server rejects an
+      // over-cap discount BEFORE the order exists.
+      const key = cartKey(this._selected(), this.specimenPayload());
+      const plan = planConfirmOrder(this.pendingOrder, p.id, key);
+      let order: { id: string };
+      if (plan.action === 'create') {
+        order = await firstValueFrom(this.api.post<Order>('/api/orders/', {
+          patientId: p.id,
+          refDoctorName: this.refDoctorName().trim() || null,
+          refHospitalName: this.refHospitalName().trim() || null,
+          priority: this._priority(),
+          source: appointmentId ? 'appointment' : 'walkin',
+          collectionType: 'walkin',
+          testIds: this._selected(),
+          specimens: this.specimenPayload(),
+          // Same metadata as submit(): the appointment link AND the Trendogram
+          // choice from the billing card (it was dropped on this path before).
+          metadataJson: this.buildOrderMetadata(appointmentId),
+          ...(discount > 0 ? { discount } : {})
+        }));
+        this.pendingOrder = { id: order.id, patientId: p.id, key };
+        this.noteOrdered(this._selected());
+      } else {
+        if (plan.action === 'patch') {
+          await firstValueFrom(this.api.patch<unknown>(`/api/orders/${plan.orderId}/tests`, {
+            testIds: this._selected(), specimens: this.specimenPayload(), reason: 'reception edit'
+          }));
+          this.pendingOrder = { id: plan.orderId, patientId: p.id, key };
+        }
+        order = { id: plan.orderId };
+      }
       const targetAmount = this.total();
-      const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', {
+      let bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', {
         orderId: order.id,
-        discount: this.discountAmount(),
-        tax: this.gst()
+        discount
       }));
+      // Retrying an order whose bill already exists: POST /api/billing returns
+      // that bill as-is, so bring its discount in line with the cart (the
+      // server recomputes the money).
+      if (discountNeedsSync(bill, discount)) {
+        bill = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/discount`, {
+          amount: discount, reason: 'Order & Payments'
+        }));
+      }
       // Track the latest bill state so the paid summary reflects the actual
       // amount paid / balance due (the payment endpoint returns the updated bill).
       let latest = bill;
+      // Never post more than the bill actually owes: the server rejects an
+      // overpayment (QA #3b), and the cart preview can differ from the
+      // server's figure by rounding.
+      const owed = (n: number) => (typeof bill?.balance === 'number' && bill.balance >= 0)
+        ? Math.min(n, bill.balance) : n;
       if (d.mode !== 'later') {
         if (d.mode === 'split' && d.splitParts?.length) {
           for (const part of d.splitParts) {
@@ -1599,7 +1889,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           // Credit Wallet: accrue the charge to the vendor's tab FIRST, then
           // record the bill payment.
           if (!d.vendorId) throw new Error('No vendor selected');
-          const payAmt = targetAmount;
+          const payAmt = owed(targetAmount);
           await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
             amount: payAmt, billId: bill.id, reason: `Bill #${bill.id.substring(0, 8)}`
           }));
@@ -1607,7 +1897,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
             amount: payAmt, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
           }));
         } else {
-          const payAmt = targetAmount;
+          const payAmt = owed(targetAmount);
           latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
             amount: payAmt, mode: d.mode, referenceNo: d.referenceNo
           }));
@@ -1616,21 +1906,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         // Pay-later with an advance: record the partial payment now; the rest
         // of the bill stays outstanding (due on report).
         latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-          amount: d.advanceAmount, mode: d.advanceMode ?? 'cash'
+          amount: owed(d.advanceAmount), mode: d.advanceMode ?? 'cash'
         }));
       }
 
-      if (latest) {
-        const finalPayable = Math.max(latest.totalPayable ?? 0, latest.totalPaid ?? 0, targetAmount);
-        const finalPaid = Math.max(latest.totalPaid ?? 0, (d.mode !== 'later' ? targetAmount : (d.advanceAmount ?? 0)));
-        latest = {
-          ...latest,
-          totalPayable: finalPayable,
-          totalPaid: finalPaid,
-          balance: Math.max(0, finalPayable - finalPaid)
-        };
-      }
-
+      // The paid summary shows the SERVER's bill as returned — the invoice is
+      // the source of truth (it used to be patched up from the cart total).
+      this.pendingOrder = null;
       try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
       this._hasDraft.set(false);
       this._paidBill.set(latest);
@@ -1921,6 +2203,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   submit() {
     const p = this._patient();
     if (!p || this._saving() || this._selected().length === 0) return;
+    if (this.requireSpecimens()) return;
+    // A cart that arrived with a bundle beside its own member (old draft,
+    // repeat, prefill) is flagged in the cart; a NEW order can't be placed
+    // until one side is removed (the server refuses it: duplicate_item).
+    const overlap = this.cartOverlapMessages();
+    if (overlap.length > 0 && !this.editOrderId()) { this.toasts.error(overlap[0]); return; }
 
     // EDIT mode → PATCH the existing order's tests; the bill recomputes server-
     // side and we route to billing to collect-the-difference / refund.
@@ -1971,10 +2259,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       source: appointmentId ? 'appointment' : 'walkin',
       collectionType: 'walkin',
       testIds: this._selected(),
-      metadataJson: this.buildOrderMetadata(appointmentId)
+      // The desk's specimen choices (dropped on this path before).
+      specimens: this.specimenPayload(),
+      metadataJson: this.buildOrderMetadata(appointmentId),
+      // Validated against the cap BEFORE the order exists (no orphan order).
+      ...(this.discountAmount() > 0 ? { discount: this.discountAmount() } : {})
     }).subscribe({
       next: order => {
         this._saving.set(false);
+        this.noteOrdered(this._selected());
         // Order persisted — drop any saved draft for this patient.
         const pid = p.id;
         try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + pid); } catch { /* ignore */ }
@@ -2457,9 +2750,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return true;
   }
   onSaveDraftClick(): void { if (!this.requirePatient()) this.saveDraft(); }
-  onProceedClick(): void { if (!this.requirePatient()) this.submit(); }
+  onProceedClick(): void { if (!this.requirePatient() && !this.requireSpecimens()) this.submit(); }
   onConfirmClick(): void {
     if (this.requirePatient()) return;
+    if (this.requireSpecimens()) return;
     this.payPanel()?.emit();
   }
 

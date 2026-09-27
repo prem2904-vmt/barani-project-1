@@ -52,7 +52,11 @@ export const FLAG_CONDITIONS: readonly FlagCondOption[] = [
   { value: 'abnormal', label: 'is Abnormal (any flag)', hint: 'Anything that is not normal — low, high or critical.', levels: ['critical_low', 'low', 'high', 'critical_high'] },
 ];
 
-const ALIASES: Record<string, FlagCond> = { H: 'high_only', L: 'low_only', C: 'critical_any', N: 'normal', A: 'abnormal' };
+/** Stored flag codes as conditions — mirrors mw FlagConditions: CL / CH carry
+ *  the critical's direction (owner 2026-09-27); legacy C = either critical. */
+const ALIASES: Record<string, FlagCond> = {
+  H: 'high_only', L: 'low_only', CL: 'critical_low', CH: 'critical_high', C: 'critical_any', N: 'normal', A: 'abnormal',
+};
 
 /** A stored flag-condition value → its canonical meaning (null = unknown). */
 export function normalizeFlagCond(v: unknown): FlagCond | null {

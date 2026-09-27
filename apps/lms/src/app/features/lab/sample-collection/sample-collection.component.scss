@@ -204,6 +204,8 @@
       box-shadow: inset 0 -2px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
     }
     .pf-sc__chip--done { opacity: 0.3; }
+    /* "Can't collect" tube: faded + rose outline (never reads as drawn). */
+    .pf-sc__chip--nc { opacity: 0.35; outline: 1.5px solid rgba(244, 63, 94, 0.8); outline-offset: 1px; }
     /* Outsourced vials carry a pink outline so collectors spot the
        send-out tubes at a glance in the rack. */
     .pf-sc__chip--out {
@@ -765,6 +767,10 @@
       display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px;
       --pf-rej-chip-min-height: 38px;
       width: 100%; min-height: calc(2 * var(--pf-rej-chip-min-height) + 8px);
+      /* The global status-chip rule ([class*='__chip'] → height: 24px, nowrap)
+         also matches this CONTAINER ("__chips"): undo it for the grid so rows
+         never spill over the Notes field. */
+      height: auto; padding: 0; border-radius: 0; white-space: normal; letter-spacing: normal;
     }
     .pf-rej__chip {
       display: inline-flex;
@@ -2122,6 +2128,13 @@
     .pf-sc-timeline__step--done .pf-sc-timeline__mark { border-color: var(--color-violet-600, #7c3aed); background: var(--color-violet-600, #7c3aed); }
     .pf-sc-timeline__label { flex: 1 1 auto; }
     .pf-sc-timeline__at { flex: none; color: var(--text-tertiary); }
+    /* "Not collected" stop — rose mark + text (QA #6). */
+    .pf-sc-timeline__step--stopped { color: var(--rose-text, #e11d48); }
+    .pf-sc-timeline__step--stopped .pf-sc-timeline__mark { border-color: #f43f5e; background: #f43f5e; }
+    .pf-sc-timeline__step--stopped .pf-sc-timeline__at { color: var(--rose-text, #e11d48); overflow-wrap: anywhere; text-align: right; }
+    .pf-sc-status__dot--nc { background: #f43f5e; }
+    .pf-sc-status--nc { height: auto; min-height: 34px; white-space: normal; }
+    .pf-tube__stamp--nc { white-space: normal; text-align: center; overflow-wrap: anywhere; }
     .pf-sc-labelinfo { padding-top: 12px; border-top: 1px solid var(--nd-line); }
 
     /* New design: the drawer lives inside the shell (no teleport) BELOW the
@@ -2143,3 +2156,44 @@
    the top (nd-chip — no new colours). */
 .pf-tube__out { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 1;
   height: 20px; padding: 0 8px; font-size: 10.5px; pointer-events: none; }
+
+    /* ─── Embedded: My Work's COLLECTION companion (ADD ONLY) ────────────
+       A ~⅓-width left card, so: one column of patients, full names (they
+       wrap, never ellipsis), and in the new design a calm nd field instead
+       of the violet hero scan strip — the camera button rides inside it. */
+    .pf-sc-embed .pf-sc__list { grid-template-columns: minmax(0, 1fr) !important; gap: 8px; }
+    .pf-sc-embed .pf-sc__who-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    .pf-sc-embed .pf-sc__section { margin: 14px 2px 8px; }
+    :host-context(.design-new) .pf-sc-embed .pf-scan {
+      align-items: center; gap: 10px; margin: 0; padding: 6px 12px 6px 6px;
+      background: var(--nd-card-bg); border: 1px solid var(--nd-line);
+      border-radius: var(--nd-radius-sm, 10px); box-shadow: none;
+    }
+    :host-context(.design-new) .pf-sc-embed .pf-scan:focus-within { border-color: var(--nd-sel-border, #7c3aed); }
+    :host-context(.design-new) .pf-sc-embed .pf-scan__icon-btn {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--nd-chip-bg, rgba(124, 58, 237, 0.08)); color: var(--violet-text, #6d28d9);
+    }
+    :host-context(.design-new) .pf-sc-embed .pf-scan__label {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-tertiary);
+    }
+    :host-context(.design-new) .pf-sc-embed .pf-scan__input { height: 24px; font-size: 14px; font-weight: 500; letter-spacing: 0; }
+    :host-context(.design-new) .pf-sc-embed .pf-sc__section {
+      font-weight: 500; letter-spacing: 0.08em; color: var(--text-tertiary);
+    }
+    :host-context(.design-new) .pf-sc-embed .pf-sc__card {
+      padding: 12px 12px; border-radius: var(--nd-radius-sm, 10px);
+      background: var(--nd-card-bg); border-color: var(--nd-line);
+    }
+    :host-context(.design-new) .pf-sc-embed .pf-sc__card:hover {
+      background: var(--nd-sel-bg, rgba(124, 58, 237, 0.04)); border-color: var(--nd-sel-border, rgba(124, 58, 237, 0.4));
+      box-shadow: none;
+    }
+    :host-context(.design-new) .pf-sc-embed .pf-sc__who-name { font-size: 13.5px; font-weight: 500; }
+    :host-context(.design-new) .pf-sc-embed .pf-sc__empty {
+      border-radius: var(--nd-radius-sm, 10px); background: transparent; border-color: var(--nd-line);
+    }
+    /* iOS focus-zoom guard: inputs under 16px zoom the page on phones. */
+    @media (max-width: 640px) {
+      :host-context(.design-new) .pf-sc-embed .pf-scan__input { font-size: 16px; }
+    }

@@ -611,6 +611,13 @@
       </div>
 
       <!-- Compact single-line rows (>=44px): name · code · price · x. -->
+      @if (cartOverlapMessages().length > 0) {
+      <div class="pf-cart-dup" role="alert">
+        @for (m of cartOverlapMessages(); track m) {
+        <p class="pf-cart-dup__msg">{{ m }}</p>
+        }
+      </div>
+      }
       <ul class="pf-cart-list pf-cart-list--compact">
         @if (selected().length === 0) {
         <li class="pf-cart-empty">No tests selected yet. Pick them from the catalogue or the search.</li>
@@ -647,15 +654,21 @@
             }
             }
           </div>
-          @if (isCultureTest(t) && specimenOpts().length) {
-          <!-- Culture tests: the desk picks WHICH specimen (urine vs pus vs
-               blood); the bench can refine it later. -->
+          @if (asksSpecimen(t) && specimenOpts().length) {
+          <!-- Tests that ask for their specimen (culture, and every micro
+               test): the desk picks WHICH specimen (urine vs pus vs blood);
+               the bench can refine it later, and it prints on the report. -->
           @if (orderLocked() || isCollected(t.id)) {
           @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenOf(t.id) }}</p> }
           } @else {
-          <div class="pf-cart-spec" (click)="$event.stopPropagation()">
+          <!-- Required: no default unless the test's mapping marks exactly
+               one (owner 2026-09-27: "there is no default"). -->
+          <div class="pf-cart-spec" [class.pf-cart-spec--err]="specimenError(t.id)" [attr.data-spec-id]="t.id"
+            (click)="$event.stopPropagation()">
             <pf-select size="sm" [searchable]="true" [options]="specimenOpts()" [value]="specimenOf(t.id)"
-              placeholder="Specimen…" (valueChange)="setSpecimen(t.id, $event)"></pf-select>
+              placeholder="Choose specimen…" [attr.aria-invalid]="specimenError(t.id) ? 'true' : null"
+              (valueChange)="setSpecimen(t.id, $event)"></pf-select>
+            @if (specimenError(t.id)) { <p class="pf-field-error" role="alert">Choose the specimen for this test.</p> }
           </div>
           }
           }
@@ -710,6 +723,11 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
         </button>
+      <!-- Editable cart totals (subtotal, GST, the discount input) only while
+           the bill is still open. Once payment is recorded they give way to
+           the final summary below: the discount is shown read-only there,
+           never as an input (QA #3a). -->
+      @if (!isPaymentSettled()) {
       <div class="pf-cart-totals">
         <div class="pf-cart-line">
           <span>Subtotal</span>
@@ -727,25 +745,33 @@
           <div class="pf-cart-disc__ctl">
             <div class="pf-cart-disc__kind" role="radiogroup" aria-label="Discount unit">
               <button type="button" role="radio" [attr.aria-checked]="discountKind() === 'flat'"
-                [disabled]="orderLocked()"
-                (click)="orderLocked() ? null : setDiscountKind('flat')" aria-label="Discount in rupees">₹</button>
+                [disabled]="discountLocked()"
+                (click)="discountLocked() ? null : setDiscountKind('flat')" aria-label="Discount in rupees">₹</button>
               <button type="button" role="radio" [attr.aria-checked]="discountKind() === 'percent'"
-                [disabled]="orderLocked()"
-                (click)="orderLocked() ? null : setDiscountKind('percent')" aria-label="Discount in percent">%</button>
+                [disabled]="discountLocked()"
+                (click)="discountLocked() ? null : setDiscountKind('percent')" aria-label="Discount in percent">%</button>
             </div>
             <input type="text" inputmode="decimal" aria-label="Discount amount"
-              [class.pf-cart-disc__input--err]="discountOverCap()" [value]="discountValue()" [disabled]="orderLocked()"
+              [class.pf-cart-disc__input--err]="discountOverCap() || !!discountServerError()" [value]="discountValue()" [disabled]="discountLocked()"
               (input)="setDiscountValue($any($event.target).value)" class="pf-cart-disc__input" placeholder="0" />
           </div>
         </div>
         @if (discountOverCap()) {
         <p class="pf-cart-disc__err">Exceeds your {{ discountCapPct() }}% limit. Reduce the discount to continue.</p>
-        } @else if (discountAmount() > 0) {
+        } @else if (discountServerError(); as dErr) {
+        <p class="pf-cart-disc__err">{{ dErr }}</p>
+        } @else if (discountApplied() > 0) {
         <div class="pf-cart-line">
           <span>You save</span>
-          <span class="tabular-nums pf-cart-line__save">−{{ discountAmount() | inr }}</span>
+          <span class="tabular-nums pf-cart-line__save">−{{ discountApplied() | inr }}</span>
         </div>
         }
+        }
+        @if (roundOff() !== 0) {
+        <div class="pf-cart-line">
+          <span>Round off</span>
+          <span class="tabular-nums">{{ roundOff() > 0 ? '+' : '−' }}{{ (roundOff() < 0 ? -roundOff() : roundOff()) | inr }}</span>
+        </div>
         }
         <div class="pf-cart-line pf-cart-line--total">
           <span>Total</span>
@@ -766,6 +792,7 @@
         </div>
         }
       </div>
+      }
 
       @if (showInlinePay()) {
       @if (paidOrderId() || (isReadOnly() && currentBill() && (currentBill()?.balance ?? 0) <= 0)) {
@@ -786,6 +813,12 @@
              visible. (item 123) -->
         @if (paymentSummaryBill(); as sb) {
         <div class="pf-paid__summary">
+          @if (sb.totalDiscount > 0) {
+          <div class="pf-paid__sumline" data-testid="paid-discount">
+            <span>Discount applied</span>
+            <span class="tabular-nums">−{{ sb.totalDiscount | inr }}</span>
+          </div>
+          }
           <div class="pf-paid__sumline">
             <span>Total</span>
             <span class="tabular-nums">{{ (sb.totalPayable >= sb.totalPaid ? sb.totalPayable : sb.totalPaid) | inr }}</span>

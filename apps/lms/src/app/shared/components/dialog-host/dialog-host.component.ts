@@ -47,6 +47,15 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
             </div>
           </header>
 
+          @if (d.items?.length) {
+            <ul class="pf-dh-items">
+              @for (it of d.items; track $index) { <li class="pf-dh-item">{{ it }}</li> }
+            </ul>
+          }
+          @if (d.question) {
+            <p class="pf-dh-question">{{ d.question }}</p>
+          }
+
           @if (d.kind === 'prompt') {
             <div class="pf-dh-input-wrap">
               @if (d.multiline) {
@@ -64,6 +73,26 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
                        [placeholder]="d.placeholder ?? ''"
                        [(ngModel)]="value"
                        (keydown.enter)="onConfirm()" />
+              }
+            </div>
+          }
+
+          @if (d.kind === 'choice') {
+            <div class="pf-dh-choices" role="radiogroup" [attr.aria-label]="d.title">
+              @for (c of d.choices ?? []; track c.value) {
+                <button type="button" role="radio" class="pf-dh-choice"
+                        [class.is-on]="choice() === c.value"
+                        [attr.aria-checked]="choice() === c.value"
+                        [attr.data-choice]="c.value"
+                        (click)="choice.set(c.value)"
+                        (dblclick)="choice.set(c.value); onConfirm()"
+                        (keydown.enter)="$event.preventDefault(); choice.set(c.value); onConfirm()">
+                  <span class="pf-dh-radio" aria-hidden="true"></span>
+                  <span class="pf-dh-choice-text">
+                    <span class="pf-dh-choice-label">{{ c.label }}</span>
+                    @if (c.hint) { <span class="pf-dh-choice-hint">{{ c.hint }}</span> }
+                  </span>
+                </button>
               }
             </div>
           }
@@ -197,6 +226,36 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
       color: var(--text-secondary);
     }
 
+    /* ── Optional list + closing question ───────────────────── */
+    .pf-dh-items {
+      position: relative;
+      margin: 14px 0 0;
+      padding: 8px 12px;
+      list-style: none;
+      max-height: 40vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-radius: 12px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pf-dh-item {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text-primary);
+      overflow-wrap: anywhere;
+    }
+    .pf-dh-question {
+      position: relative;
+      margin: 14px 0 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
     /* ── Input field ───────────────────────────────────────── */
     .pf-dh-input-wrap { margin-top: 18px; }
 
@@ -235,6 +294,60 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
       line-height: 1.5;
       font-family: inherit;
     }
+
+    /* ── Choice cards (choose()) ─────────────────────────────── */
+    .pf-dh-choices {
+      position: relative;
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .pf-dh-choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      width: 100%;
+      min-height: 44px;
+      padding: 12px 14px;
+      text-align: left;
+      font: inherit;
+      color: var(--text-primary);
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+    .pf-dh-choice:hover:not(.is-on) { border-color: var(--glass-border-hover); }
+    .pf-dh-choice:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25); }
+    .pf-dh-choice.is-on {
+      border-color: rgba(168, 85, 247, 0.55);
+      background: var(--bg-card-solid);
+      box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.25);
+    }
+    .pf-dh-radio {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      margin-top: 1px;
+      border-radius: 50%;
+      border: 1.5px solid var(--text-tertiary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pf-dh-choice.is-on .pf-dh-radio { border-color: var(--violet-text); }
+    .pf-dh-choice.is-on .pf-dh-radio::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--violet-text);
+    }
+    .pf-dh-choice-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .pf-dh-choice-label { font-size: 14px; font-weight: 600; line-height: 1.35; }
+    .pf-dh-choice-hint { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
 
     /* ── Footer actions ────────────────────────────────────── */
     .pf-dh-actions {
@@ -275,10 +388,13 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
 })
 export class DialogHostComponent {
   readonly dialog = inject(DialogService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   @ViewChild('inputEl') inputEl?: ElementRef<HTMLInputElement | HTMLTextAreaElement>;
 
   readonly value = signal('');
+  /** Selected option of a choice dialog. */
+  readonly choice = signal<string | null>(null);
 
   constructor() {
     // Reset field and focus the input when a prompt opens.
@@ -286,14 +402,21 @@ export class DialogHostComponent {
       const d = this.dialog.active();
       if (!d) { this.value.set(''); return; }
       this.value.set(d.initialValue ?? '');
+      this.choice.set(d.kind === 'choice' ? (d.initialChoice ?? d.choices?.[0]?.value ?? null) : null);
       if (d.kind === 'prompt') {
         queueMicrotask(() => setTimeout(() => this.inputEl?.nativeElement.focus(), 0));
+      }
+      if (d.kind === 'choice') {
+        // Focus the pre-selected card so Enter prints the default at once.
+        queueMicrotask(() => setTimeout(() =>
+          (this.host.nativeElement.querySelector('.pf-dh-choice.is-on') as HTMLElement | null)?.focus(), 0));
       }
     });
   }
 
   canConfirm(): boolean {
     const d = this.dialog.active();
+    if (d?.kind === 'choice') return this.choice() !== null;
     if (!d || d.kind !== 'prompt') return true;
     if (!d.required) return true;
     return this.value().trim().length > 0;
@@ -302,7 +425,7 @@ export class DialogHostComponent {
   onCancel() {
     const d = this.dialog.active();
     if (!d) return;
-    this.dialog.resolve(d.kind === 'prompt' ? null : false);
+    this.dialog.resolve(d.kind === 'confirm' ? false : null);
   }
 
   onConfirm() {
@@ -311,6 +434,9 @@ export class DialogHostComponent {
     if (d.kind === 'prompt') {
       if (d.required && this.value().trim().length === 0) return;
       this.dialog.resolve(this.value());
+    } else if (d.kind === 'choice') {
+      const c = this.choice();
+      if (c !== null) this.dialog.resolve(c);
     } else {
       this.dialog.resolve(true);
     }
