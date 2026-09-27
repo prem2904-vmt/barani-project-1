@@ -5,6 +5,7 @@
 // and result-entry (blocks submission on failure).
 
 import { FormField, FormFieldType, ValidationConfig } from './form-field.model';
+import { identityKind, isContactNumberField, validateEmail, validateIdentity } from './patient-fields';
 
 export interface CountryPhoneRule {
   code: string;
@@ -151,6 +152,10 @@ export interface GenericValidationRule {
 
 export interface ValidatableField {
   type: string;
+  /** Field name / label: identity numbers (ABHA / Aadhaar) and number fields
+   *  that are really phone numbers ("Additional contact") are recognised by it. */
+  name?: string;
+  title?: string;
   isRequired?: boolean;
   validation?: ValidationConfig | GenericValidationRule[] | null;
 }
@@ -163,9 +168,18 @@ export function validateFieldValue(field: ValidatableField, value: unknown): str
   }
   if (empty) return null;
 
-  if (field.type === 'phone') {
+  if (field.type === 'phone' || isContactNumberField(field)) {
     const phoneErr = validatePhoneNumber(value);
     if (phoneErr) return phoneErr;
+  }
+  if (field.type === 'email') {
+    const emailErr = validateEmail(value);
+    if (emailErr) return emailErr;
+  }
+  const idKind = identityKind(field);
+  if (idKind) {
+    const idErr = validateIdentity(idKind, value);
+    if (idErr) return idErr;
   }
 
   const v = field.validation;

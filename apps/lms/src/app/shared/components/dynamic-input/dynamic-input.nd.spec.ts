@@ -97,7 +97,7 @@ describe('DynamicInputComponent — new-design markup', () => {
     expect(c.countrySelectOptionsNd[0]).toMatchObject({ value: '+91', label: '+91', hint: 'India' });
   });
 
-  it('DOB keeps the date ⇄ age logic: typed dd/mm/yyyy + numeric-text age + a neutral Yrs / Mo segment', () => {
+  it('DOB keeps the date ⇄ age logic: typed dd/mm/yyyy + numeric-text age + a neutral Yrs / Mo / Days segment', () => {
     const { el, c } = create({ name: 'date_of_birth', title: 'Date of birth', type: 'date' });
     const dob = el.querySelector<HTMLInputElement>('input.pf-di-date__in.nd-input.nd-num')!;
     expect(dob.value).toBe('');
@@ -105,7 +105,7 @@ describe('DynamicInputComponent — new-design markup', () => {
     expect(el.querySelector('input.pf-di-dob__age[type="text"][inputmode="numeric"]')).not.toBeNull();
     expect(el.querySelector('input[type="number"]')).toBeNull();
     const unit = el.querySelectorAll('.pf-di-seg--unit .nd-seg__item');
-    expect(Array.from(unit).map(b => b.textContent!.trim())).toEqual(['Yrs', 'Mo']);
+    expect(Array.from(unit).map(b => b.textContent!.trim())).toEqual(['Yrs', 'Mo', 'Days']);
     expect(unit[0].getAttribute('aria-checked')).toBe('true');
     let out: unknown;
     c.valueChange.subscribe(v => (out = v));

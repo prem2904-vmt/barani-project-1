@@ -5,6 +5,7 @@ import { TestParameter } from '../../models/test.model';
 import { FieldOption, ReferenceRange, WorkflowContext, WorkflowField } from '../../models/workflow.model';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 import { COUNTRY_PHONE_RULES, CountryPhoneRule, getCountryPhoneRule, validatePhoneNumber } from '../../forms/validate';
+import { AGE_LIMITS, AgeUnit, dobFromAge, isContactNumberField, validateAge } from '../../forms/patient-fields';
 import { normalizeSex, selectReferenceRange } from '../../utils/reference-range';
 import { liveFlag } from '../../utils/result-flag';
 
@@ -37,11 +38,9 @@ export interface DynamicFieldConfig {
 
 type Flag = 'none' | 'normal' | 'low' | 'high' | 'critical_low' | 'critical_high';
 
-/** A number field that is really a phone number (by its name / label). */
-export function isContactNumberField(f: { type?: string; name?: string; title?: string } | null | undefined): boolean {
-  if (!f || !['number', 'numeric'].includes(f.type ?? '')) return false;
-  return /phone|mobile|contact|whats\s?app|(^|[^a-z])tel([^a-z]|$)/i.test(`${f.name ?? ''} ${f.title ?? ''}`);
-}
+/** A number field that is really a phone number (by its name / label).
+ *  Lives in shared/forms (validation uses it too); re-exported for callers. */
+export { isContactNumberField };
 
 @Component({
   selector: 'pf-dynamic-input',
@@ -106,11 +105,12 @@ export function isContactNumberField(f: { type?: string; name?: string; title?: 
               <pf-select class="pf-di-phone__cc" [options]="countrySelectOptionsNd" [searchable]="true"
                          [value]="selectedCountryCode()" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
               <span class="pf-di-phone__sep" aria-hidden="true"></span>
-              <input [id]="inputId" data-pf-stop type="tel" inputmode="tel" class="pf-di-phone__num nd-num"
+              <input #phIn [id]="inputId" data-pf-stop type="tel" inputmode="tel" class="pf-di-phone__num nd-num"
                      [attr.aria-required]="field.required || null"
                      [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
+                     [attr.maxlength]="activePhoneRule().maxDigits"
                      [placeholder]="activePhoneRule().placeholder"
-                     [ngModel]="phoneDigits()" (ngModelChange)="onPhoneDigitsChange($event)" />
+                     [ngModel]="phoneDigits()" (ngModelChange)="onPhoneDigitsChange($event, phIn)" />
             </div>
           }
           @case ('number') { <ng-container *ngTemplateOutlet="ndNumTpl; context: { err: err }"></ng-container> }
@@ -141,16 +141,19 @@ export function isContactNumberField(f: { type?: string; name?: string; title?: 
                          [attr.max]="todayIso" [value]="value || ''" (change)="onDobPicked(dobPick.value)" />
                 </span>
                 <span class="pf-di-dob__or">or</span>
-                <input #ageIn type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off"
+                <input #ageIn type="text" inputmode="numeric" pattern="[0-9]*" [attr.maxlength]="ageMaxLength()" autocomplete="off"
                        class="nd-input nd-num pf-di-dob__age" [class.nd-input--error]="!!err" placeholder="Age"
-                       [attr.aria-label]="'Age in ' + ageUnit()"
-                       [value]="hybridAgeDisplay() ?? ''" (input)="onAgeText(ageIn)" />
+                       [attr.aria-label]="'Age in ' + ageUnit()" [attr.aria-invalid]="err ? true : null"
+                       [attr.aria-describedby]="err ? inputId + '-e' : null"
+                       [value]="ageText() ?? hybridAgeDisplay() ?? ''" (input)="onAgeText(ageIn)" (blur)="onAgeBlur()" />
                 <div class="nd-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
                      (keydown)="onUnitKey($event)">
                   <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
-                          [attr.tabindex]="ageUnit() === 'years' ? 0 : -1" (click)="setAgeUnit('years')">Yrs</button>
+                          [attr.tabindex]="ageUnit() === 'years' ? 0 : -1" (click)="setAgeUnit('years')" title="Years (0–150)">Yrs</button>
                   <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'months'"
-                          [attr.tabindex]="ageUnit() === 'months' ? 0 : -1" (click)="setAgeUnit('months')">Mo</button>
+                          [attr.tabindex]="ageUnit() === 'months' ? 0 : -1" (click)="setAgeUnit('months')" title="Months (0–1199)">Mo</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'days'"
+                          [attr.tabindex]="ageUnit() === 'days' ? 0 : -1" (click)="setAgeUnit('days')" title="Days (0–365)">Days</button>
                 </div>
               </div>
               @if (!err) { <p class="nd-field__hint">Type either — an entered age stays current automatically.</p> }
@@ -306,11 +309,13 @@ export function isContactNumberField(f: { type?: string; name?: string; title?: 
               ></pf-select>
               <span class="pf-phone__sep" aria-hidden="true"></span>
               <input
+                #phInC
                 type="tel"
                 class="pf-phone__num"
+                [attr.maxlength]="activePhoneRule().maxDigits"
                 [placeholder]="activePhoneRule().placeholder"
                 [ngModel]="phoneDigits()"
-                (ngModelChange)="onPhoneDigitsChange($event)"
+                (ngModelChange)="onPhoneDigitsChange($event, phInC)"
               />
             </div>
             @if (phoneError(); as err) {
@@ -352,7 +357,7 @@ export function isContactNumberField(f: { type?: string; name?: string; title?: 
                      [ngModel]="value" (ngModelChange)="emit($event)" />
               <span class="text-xs" style="color: var(--text-tertiary);">or</span>
               <input type="number" class="pf-input" style="flex:0 0 84px" min="0"
-                     [attr.max]="ageUnit() === 'months' ? 240 : 150"
+                     [attr.max]="ageLimit()"
                      placeholder="Age"
                      [ngModel]="hybridAgeDisplay()" (ngModelChange)="onHybridAge($event)" />
               <div class="pf-age-unit" role="group" aria-label="Age unit">
@@ -362,8 +367,14 @@ export function isContactNumberField(f: { type?: string; name?: string; title?: 
                 <button type="button" class="pf-age-unit__btn"
                         [class.pf-age-unit__btn--on]="ageUnit() === 'months'"
                         (click)="setAgeUnit('months')">Mo</button>
+                <button type="button" class="pf-age-unit__btn"
+                        [class.pf-age-unit__btn--on]="ageUnit() === 'days'"
+                        (click)="setAgeUnit('days')">Days</button>
               </div>
             </div>
+            @if (dobError(); as ageErr) {
+              <p class="text-xs text-red-500 font-medium">{{ ageErr }}</p>
+            }
             <p class="text-[11px]" style="color: var(--text-tertiary);">
               Type either — an entered age stays current automatically.
             </p>
@@ -1063,7 +1074,24 @@ export class DynamicInputComponent {
   // ── New-design DOB: typed dd/mm/yyyy, never prefilled ──────────────
   private readonly _dobTyping = signal<string | null>(null);
   private readonly _dobError = signal<string | null>(null);
+  /** The DOB / age box's own error (bad date, future date, age out of range). */
   readonly dobError = this._dobError.asReadonly();
+  /** A value this input could NOT turn into a field value (a half-typed or
+   *  impossible DOB, an out-of-range age) — the value is emitted as null, so
+   *  the host must also be told, or an optional field would submit blank. */
+  @Output() localErrorChange = new EventEmitter<string | null>();
+  private _blocking: string | null = null;
+  /** `show` = put it under the field now; a half-typed date blocks submit
+   *  but is only SHOWN once the user leaves the box (or submits). */
+  private setLocalError(msg: string | null, show = true): void {
+    if (show) this._dobError.set(msg);
+    if (this._blocking === msg) return;
+    this._blocking = msg;
+    this.localErrorChange.emit(msg);
+  }
+  /** The age as typed (kept on screen while it's invalid); null → derived. */
+  private readonly _ageText = signal<string | null>(null);
+  readonly ageText = this._ageText.asReadonly();
   /** What the box shows: the text being typed, else the value as dd/mm/yyyy
    *  (EMPTY when there is no value — nothing is ever defaulted). */
   readonly dobText = computed(() => this._dobTyping() ?? DynamicInputComponent.isoToDmy(this._value()));
@@ -1076,36 +1104,57 @@ export class DynamicInputComponent {
     const t = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
     if (el.value !== t) el.value = t;
     this._dobTyping.set(t);
-    this._dobError.set(null);
-    if (d.length < 8) { if (this._value()) this.emit(null); return; }
+    this._ageText.set(null);
+    if (d.length < 8) {
+      // Still typing: hide any old message; a partial date blocks submit and
+      // is shown on blur. Cleared box = no error.
+      this._dobError.set(null);
+      this.setLocalError(d.length > 0 ? 'Enter the full date (dd/mm/yyyy)' : null, false);
+      if (this._value()) this.emit(null);
+      return;
+    }
     const day = +d.slice(0, 2), mon = +d.slice(2, 4), yr = +d.slice(4);
     const iso = `${d.slice(4)}-${d.slice(2, 4)}-${d.slice(0, 2)}`;
     const dt = new Date(yr, mon - 1, day);
     const real = yr >= 1900 && dt.getFullYear() === yr && dt.getMonth() === mon - 1 && dt.getDate() === day;
-    if (!real) { this._dobError.set('Not a valid date (dd/mm/yyyy)'); this.emit(null); return; }
-    if (iso > this.todayIso) { this._dobError.set("Date of birth can't be in the future"); this.emit(null); return; }
+    if (!real) { this.setLocalError('Not a valid date (dd/mm/yyyy)'); this.emit(null); return; }
+    if (iso > this.todayIso) { this.setLocalError("Date of birth can't be in the future"); this.emit(null); return; }
+    this.setLocalError(null);
     this.emit(iso);
   }
   onDobBlur(): void {
+    // A half-typed date is an error once the user leaves the box.
+    const t = this._dobTyping();
+    if (t && t.replace(/\D/g, '').length < 8 && this._blocking) this._dobError.set(this._blocking);
     // Keep a half-typed date on screen only while its error explains it.
     if (!this._dobError()) this._dobTyping.set(null);
   }
   onDobPicked(v: string): void {
     this._dobTyping.set(null);
-    this._dobError.set(null);
+    this._ageText.set(null);
+    this.setLocalError(null);
     this.emit(v || null);
   }
   openDobPicker(el: HTMLInputElement): void {
     try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { el.click(); }
   }
-  /** Age as a numeric TEXT box (no spinner): digits only. */
+  /** Age as a numeric TEXT box (no spinner): digits only, capped at the
+   *  unit's width; an out-of-range age shows an error (never silently kept). */
   onAgeText(el: HTMLInputElement): void {
-    const d = el.value.replace(/\D/g, '').slice(0, 3);
+    const d = el.value.replace(/\D/g, '').slice(0, this.ageMaxLength());
     if (el.value !== d) el.value = d;
     this._dobTyping.set(null);
-    this._dobError.set(null);
+    this._ageText.set(d === '' ? null : d);
     this.onHybridAge(d === '' ? null : Number(d));
   }
+  onAgeBlur(): void {
+    // Keep an invalid age on screen (its error explains it); else show the
+    // age derived from the DOB.
+    if (!this._dobError()) this._ageText.set(null);
+  }
+  /** Max age in the active unit, and the box's character cap. */
+  ageLimit(): number { return AGE_LIMITS[this.ageUnit()]; }
+  ageMaxLength(): number { return String(this.ageLimit()).length; }
 
   /** Roving tabindex: the checked option is the Tab / Enter stop (the
    *  first one while nothing is checked). */
@@ -1142,13 +1191,17 @@ export class DynamicInputComponent {
     setTimeout(() => group?.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus());
   }
 
-  /** Yrs / Mo: arrows or Y / M switch the age unit. */
+  /** Yrs / Mo / Days: arrows or Y / M / D switch the age unit. */
   onUnitKey(e: KeyboardEvent): void {
     const k = e.key.toLowerCase();
-    let u: 'years' | 'months' | null = null;
-    if (['arrowright', 'arrowleft', 'arrowup', 'arrowdown'].includes(k)) u = this.ageUnit() === 'years' ? 'months' : 'years';
+    const order: AgeUnit[] = ['years', 'months', 'days'];
+    const at = order.indexOf(this.ageUnit());
+    let u: AgeUnit | null = null;
+    if (k === 'arrowright' || k === 'arrowdown') u = order[(at + 1) % order.length];
+    else if (k === 'arrowleft' || k === 'arrowup') u = order[(at + order.length - 1) % order.length];
     else if (k === 'y') u = 'years';
     else if (k === 'm') u = 'months';
+    else if (k === 'd') u = 'days';
     if (!u) return;
     e.preventDefault();
     this.setAgeUnit(u);
@@ -1162,6 +1215,13 @@ export class DynamicInputComponent {
   get field(): DynamicFieldConfig { return this._field()!; }
 
   @Input() set value(v: unknown) {
+    // A DIFFERENT value from outside (ABHA prefill, edit load) replaces
+    // whatever was being corrected in the DOB / age boxes.
+    if (v != null && v !== '' && v !== this._value() && (this._blocking || this._dobError())) {
+      this._dobTyping.set(null);
+      this._ageText.set(null);
+      this.setLocalError(null);
+    }
     this._value.set(v);
     if (this.isPhoneLike() && typeof v === 'string' && v.trim()) {
       const matched = COUNTRY_PHONE_RULES.find(r => v.startsWith(r.code));
@@ -1223,9 +1283,14 @@ export class DynamicInputComponent {
     }
   }
 
-  onPhoneDigitsChange(typed: string) {
+  /** Digits only, capped at the country's length — and the DOM is forced to
+   *  the cleaned digits: when an extra digit doesn't change the (capped)
+   *  model, ngModel wouldn't rewrite the box and the 11th digit would linger
+   *  on screen, unvalidated (QA #2). */
+  onPhoneDigitsChange(typed: string, el?: HTMLInputElement) {
     const rule = this.activePhoneRule();
     const cleanDigits = String(typed ?? '').replace(/\D/g, '').slice(0, rule.maxDigits);
+    if (el && el.value !== cleanDigits) el.value = cleanDigits;
     const fullValue = cleanDigits ? `${rule.code}${cleanDigits}` : '';
     this.emit(fullValue);
   }
@@ -1315,32 +1380,58 @@ export class DynamicInputComponent {
     return m < 0 || m > 1800 ? null : m;
   });
 
-  /** Age unit the user picked; null = auto (Months under 2 yrs, else Years). */
-  private readonly _ageUnit = signal<'years' | 'months' | null>(null);
-  readonly ageUnit = computed<'years' | 'months'>(() => {
+  /** Whole days implied by the current DOB value (for the Days unit). */
+  readonly daysFromValue = computed<number | null>(() => {
+    const m = String(this._value() ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    const dob = new Date(+m[1], +m[2] - 1, +m[3]);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const days = Math.round((today.getTime() - dob.getTime()) / 86_400_000);
+    return days < 0 ? null : days;
+  });
+
+  /** Age unit the user picked; null = auto (Days in the first month, Months
+   *  under 2 yrs, else Years). */
+  private readonly _ageUnit = signal<AgeUnit | null>(null);
+  readonly ageUnit = computed<AgeUnit>(() => {
     const chosen = this._ageUnit();
     if (chosen) return chosen;
     const m = this.monthsFromValue();
+    if (m === 0) return 'days';
     return m !== null && m < 24 ? 'months' : 'years';
   });
 
-  setAgeUnit(u: 'years' | 'months') { this._ageUnit.set(u); }
+  /** Switching the unit re-reads an age still being corrected (typed 300 in
+   *  Yrs → error; switch to Mo → 300 months); otherwise the box just shows
+   *  the same DOB in the new unit. */
+  setAgeUnit(u: AgeUnit) {
+    this._ageUnit.set(u);
+    const typed = this._ageText();
+    if (typed != null && this._dobError()) this.onHybridAge(Number(typed));
+  }
 
   /** The number shown in the age box, in the active unit. */
-  readonly hybridAgeDisplay = computed<number | null>(() =>
-    this.ageUnit() === 'months' ? this.monthsFromValue() : this.ageFromValue());
+  readonly hybridAgeDisplay = computed<number | null>(() => {
+    switch (this.ageUnit()) {
+      case 'months': return this.monthsFromValue();
+      case 'days': return this.daysFromValue();
+      default: return this.ageFromValue();
+    }
+  });
 
   /** Age typed in the hybrid → synthesize a DOB anchored to today (so the age
-   *  increments over time) and emit it as the field's value (a DOB). */
+   *  increments over time) and emit it as the field's value (a DOB). Out of
+   *  range (Yrs > 150, Mo > 1199, Days > 365) → an inline error and NO value
+   *  (never a silently kept stale DOB). */
   onHybridAge(raw: unknown) {
-    if (raw == null || `${raw}` === '') { this.emit(null); return; }
-    const age = Math.floor(Number(raw));
-    const months = this.ageUnit() === 'months';
-    if (!Number.isFinite(age) || age < 0 || age > (months ? 240 : 150)) return;
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    if (months) d.setMonth(d.getMonth() - age);
-    else d.setFullYear(d.getFullYear() - age);
-    this.emit(d.toISOString().slice(0, 10)); // yyyy-MM-dd for <input type=date>
+    if (raw == null || `${raw}` === '') { this.setLocalError(null); this.emit(null); return; }
+    const age = Number(raw);
+    const unit = this.ageUnit();
+    const err = validateAge(age, unit);
+    if (err) { this.setLocalError(err); this.emit(null); return; }
+    this.setLocalError(null);
+    this.emit(dobFromAge(age, unit)); // yyyy-MM-dd (local date — no UTC shift)
   }
 
   /** Normalise options to `{value,label}` regardless of whether strings or objects are passed. */
