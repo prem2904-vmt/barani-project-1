@@ -700,8 +700,11 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     // Image sections don't count: every attachments-enabled test carries an
     // Images block in its layout, and that alone must not pull a plain
     // numeric test out of the columnar table.
+    // Sentences alone don't either: next to a results table they print as
+    // full-width rows INSIDE it (owner 2026-09-28, like the Method line).
     const narrative = !t.packageTestId
-      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid' && s.type !== 'image');
+      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid' && s.type !== 'image')
+      && !sentencesFitTable(layout);
     if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
       special.push(t);
     } else if (narrative) {
@@ -765,7 +768,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // per bundle and append after the member rows (like profileNotes).
   const profileObs = new Map<string, PanelRowData[]>();
   for (const t of tabular) {
-    const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined);
+    // A test's own Sentences ride in its rows only when it was ordered on
+    // its own — a member's notes never print (see the profile merge below).
+    const g = buildPanelGroup(t, t.testId ? resolvedLayouts[t.testId] : undefined,
+      { sentences: !t.packageTestId });
     g.sampleId = t.sampleId ?? undefined;
     // The abnormal-results sheet lists validated values only.
     if (!summaryTestValidated(t)) for (const r of g.rows) r.unvalidated = true;
@@ -817,8 +823,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       // PROFILE's own notes print here. Members' notes are dropped below.
       // (Order a member on its own and it keeps its notes — the same test
       // reads differently depending on how it was ordered.)
+      // Its Sentences are among them — merged rows closing the block.
       const pkgNotes = (resolvedLayouts[pkg]
-        ? buildPanelGroup({ ...t, testId: pkg, name: pkgName ?? '' } as typeof t, resolvedLayouts[pkg]).rows
+        ? buildPanelGroup({ ...t, testId: pkg, name: pkgName ?? '' } as typeof t, resolvedLayouts[pkg],
+            { sentences: true }).rows
         : []).filter(r => r.kind === 'note');
       profileNotes.set(pkg, pkgNotes);
     }
@@ -856,10 +864,14 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     if (panel && obs.length) panel.rows.push(...obs);
   }
 
-  // The profile's own NARRATIVE notes (the "Interpretation" paragraphs the
-  // notes editor writes) render once under the profile's name, after the
-  // table — the same place a standalone test's narrative goes. Profiles have
-  // no row of their own in the snapshot, so stand one in from a member.
+  // The profile's own NARRATIVE blocks (images, charts) render once under
+  // the profile's name, after the table. Its Sentences already closed the
+  // profile's block in the table (above) — only a profile with no block
+  // there (every member printed elsewhere) keeps them in this narrative.
+  // Profiles have no row of their own in the snapshot, so stand one in from
+  // a member.
+  /** Layout a special entry renders with, when not its resolved one. */
+  const specialLayout = new Map<object, ResolvedReportLayout>();
   const benchBundles = new Map<string, (typeof tests)[number]>();
   for (const t of tests) {
     const legacy = t.packageType == null;
@@ -870,19 +882,22 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   }
   for (const [pkg, member] of benchBundles) {
     const pl = resolvedLayouts[pkg];
+    const inTable = byPkg.has(pkg);
     // Only when there is something to PRINT. A visible-but-empty paragraph
     // (the notes editor saves a blank one freely) used to sail through and
     // render the profile's name as a big lone heading after the table.
     const hasNarrative = pl?.sections.some(s =>
       s.isVisible && s.type !== 'grid' && (
-        (s.type === 'paragraph' && !!s.content?.trim()) ||
+        (s.type === 'paragraph' && !inTable && !!s.content?.trim()) ||
         (s.type === 'image' && (s.imageUrls?.length ?? 0) > 0) ||
         (s.type === 'chart' && !!s.chart)
       ));
     if (!hasNarrative) continue;
-    special.push({ ...member, testId: pkg, packageTestId: null, profileTestId: null,
+    const entry = { ...member, testId: pkg, packageTestId: null, profileTestId: null,
                    name: (member.profileTestId === pkg ? member.profileName : member.packageName)
-                         || pl.testName || '' });
+                         || pl.testName || '' };
+    if (inTable) specialLayout.set(entry, { ...pl, sections: pl.sections.filter(s => s.type !== 'paragraph') });
+    special.push(entry);
   }
 
   // Canonical typed columns (result/range/unit) across every resolved layout.
@@ -977,7 +992,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // Canonical columns (already computed above) feed any grid section embedded
   // in a narrative test.
   for (const t of special) {
-    const layout = t.testId ? resolvedLayouts[t.testId] : undefined;
+    const layout = specialLayout.get(t) ?? (t.testId ? resolvedLayouts[t.testId] : undefined);
     if (cursorY > A4.h - MARGIN_BOTTOM - 90) { cursorY = newPage(doc, practice); }
     if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
       cursorY = renderCultureSection(doc, t, cursorY, practice, layout);
@@ -2336,6 +2351,12 @@ interface PanelRowData {
   isLow?: boolean;
   abnormal?: boolean;
   note?: string;
+  /** This note row is one of the test's Sentence (paragraph) blocks — printed
+   *  as a full-width row INSIDE the results table, like the Method line. */
+  sentence?: boolean;
+  /** The admin's own name for that block ("Interpretation") — printed bold
+   *  at the start of the row. Absent for an unnamed / default-named block. */
+  sentenceLabel?: string;
   /** Admin-configured conditional row colour (engine palette hex) — painted
    *  verbatim on the result cell; NOT gated by the theme's flagStyle. */
   color?: string | null;
@@ -2432,12 +2453,45 @@ interface PanelGroup {
   rows: PanelRowData[];
 }
 
+/** Block names that are just the editor's default for a Sentence — never
+ *  printed as a label (only a name the admin chose is). */
+const DEFAULT_SENTENCE_NAMES = /^(sentence|paragraph)$/i;
+
+/** A resolved paragraph (Sentence) section → its full-width table row, or
+ *  null when there is nothing to print. The engine has already applied the
+ *  block's conditions and placeholders and dropped hidden blocks. */
+function sentenceRow(sec: ResolvedSection): PanelRowData | null {
+  if (sec.type !== 'paragraph' || !sec.isVisible) return null;
+  const text = (sec.content ?? '').replace(/\r\n?/g, '\n').replace(/^\s*\n|\s+$/g, '');
+  if (!text.trim()) return null;
+  const label = (sec.label ?? '').trim();
+  return { kind: 'note', note: text, sentence: true,
+    sentenceLabel: label && !DEFAULT_SENTENCE_NAMES.test(label) ? label : undefined };
+}
+
+/** Can this test's Sentences print as merged rows of the results table? Yes
+ *  when its layout has a results table and nothing else that needs its own
+ *  block (a chart, culture lines…). Narrative-only layouts (the values are
+ *  written out in the Sentences — histopathology) keep their narrative page. */
+function sentencesFitTable(layout: ResolvedReportLayout | undefined): boolean {
+  if (!layout || layout.valuesInNarrative) return false;
+  const vis = layout.sections.filter(s => s.isVisible);
+  return vis.some(s => s.type === 'grid')
+    && vis.every(s => s.type === 'grid' || s.type === 'image' || s.type === 'paragraph');
+}
+
 /** Extract a test's parameter rows into a panel group for the continuous
  *  table. Uses the resolved grid layout when present, else the legacy
- *  `result.values` map. */
+ *  `result.values` map.
+ *
+ *  `sentences`: also emit the layout's Sentence blocks as full-width note
+ *  rows, in print order — a Sentence above the results table lands before
+ *  the rows, one below it after them. Off for a member ordered through a
+ *  profile/package (notes follow what was ORDERED). */
 function buildPanelGroup(
   t: NonNullable<ReportSnapshot['tests']>[number],
-  layout: ResolvedReportLayout | undefined
+  layout: ResolvedReportLayout | undefined,
+  opts: { sentences?: boolean } = {}
 ): PanelGroup {
   const group: PanelGroup = {
     testName: t.name ?? reportDisplayName(layout?.testName) ?? 'Test',
@@ -2455,7 +2509,23 @@ function buildPanelGroup(
     rows: [],
   };
 
-  const gridSections = (layout?.sections ?? []).filter(s => s.isVisible && s.type === 'grid');
+  const visibleSecs = (layout?.sections ?? []).filter(s => s.isVisible);
+  const gridSections = visibleSecs.filter(s => s.type === 'grid');
+  // Sentences above the first results table print BEFORE the rows; every
+  // other one follows its position (after the table by default).
+  const firstGrid = visibleSecs.findIndex(s => s.type === 'grid');
+  const leading: PanelRowData[] = [];
+  const trailing: PanelRowData[] = [];
+  const sentenceOf = new Map<ResolvedSection, PanelRowData>();
+  if (opts.sentences) {
+    visibleSecs.forEach((sec, i) => {
+      const row = sentenceRow(sec);
+      if (!row) return;
+      sentenceOf.set(sec, row);
+      (firstGrid >= 0 && i < firstGrid ? leading : trailing).push(row);
+    });
+  }
+  group.rows.push(...leading);
   if (gridSections.length > 0) {
     // Value lookups search override ∪ department columns: a column the
     // override drops still has its cells resolved (the engine unions them),
@@ -2467,7 +2537,12 @@ function buildPanelGroup(
     const resultSrc = srcOf('result'), rangeSrc = srcOf('range'), unitSrc = srcOf('unit');
     const hiddenNames = new Set((t as { hidden?: string[] | null }).hidden ?? []);
     const savedValues = (t.result?.['values'] ?? undefined) as Record<string, SavedFlag> | undefined;
-    for (const sec of gridSections) {
+    for (const sec of visibleSecs.slice(firstGrid)) {
+      if (sec.type !== 'grid') {
+        const row = sentenceOf.get(sec);
+        if (row) group.rows.push(row);
+        continue;
+      }
       for (const r of sec.rows ?? []) {
         // Per-report picker: the tech unticked this value for THIS order.
         if (!r.isMerged && r.parameterName && hiddenNames.has(r.parameterName)) continue;
@@ -2535,6 +2610,8 @@ function buildPanelGroup(
     // values map instead of returning an empty panel that the profile
     // merge silently drops.
     if (group.rows.some(r => r.kind === 'param')) return applyValueMethods(group);
+    // Falling through: the trailing Sentences go back after the legacy rows.
+    group.rows = group.rows.filter(r => !trailing.includes(r));
   }
 
   // Legacy values map.
@@ -2560,6 +2637,7 @@ function buildPanelGroup(
       method: methodForValue(t, paramName),
     });
   }
+  group.rows.push(...trailing);
   return applyValueMethods(group);
 }
 
@@ -2824,6 +2902,102 @@ function deptColumns(groups: PanelGroup[]): ReportColumn[] {
   return effectiveColumns(src);
 }
 
+// ── Sentence rows inside the results table ──────────────────────
+// A named Sentence opens with its name in bold ("Interpretation: …"). A cell
+// has one font, so — like the superscript cells — the text autotable laid
+// out is blanked just before drawing and repainted: the label bold, the rest
+// of the line and every following line in the cell's own font. Autotable's
+// own wrapped lines are reused, so row height and page splits never shift.
+type SentenceCell = { label: string; lines: string[]; x: number; y: number; fs: number; lh: number; color: unknown };
+type SentenceHookArg = {
+  section: string; row: { index: number }; column: { index: number };
+  cell: { text: string[] | string; x: number; y: number; styles: { fontSize?: number; textColor?: unknown };
+          padding(side: string): number };
+  doc: jsPDF;
+};
+
+function stashSentenceCell(store: Map<number, SentenceCell>, d: SentenceHookArg, label: string): void {
+  const lines = Array.isArray(d.cell.text) ? [...d.cell.text] : [String(d.cell.text ?? '')];
+  const fs = typeof d.cell.styles.fontSize === 'number' ? d.cell.styles.fontSize : 8.5;
+  store.set(d.row.index, {
+    label, lines, fs, color: d.cell.styles.textColor,
+    lh: fs * (d.doc.getLineHeightFactor?.() ?? 1.15),
+    x: d.cell.x + d.cell.padding('left'),
+    // autotable's own top-aligned first baseline (autoTableText).
+    y: d.cell.y + d.cell.padding('top') + fs * (2 - 1.15),
+  });
+  d.cell.text = [];
+}
+
+function drawSentenceCell(doc: jsPDF, store: Map<number, SentenceCell>, d: SentenceHookArg): void {
+  if (d.section !== 'body') return;
+  const c = store.get(d.row.index);
+  if (!c) return;
+  store.delete(d.row.index);
+  doc.setFontSize(c.fs);
+  const color = typeof c.color === 'string' ? c.color : TEXT;
+  c.lines.forEach((line, i) => {
+    const y = c.y + i * c.lh;
+    if (i === 0 && line.startsWith(c.label)) {
+      doc.setFont(PDF_FONT, 'bold');
+      doc.setTextColor(BLACK);
+      doc.text(c.label, c.x, y);
+      const lw = doc.getTextWidth(c.label);
+      doc.setFont(PDF_FONT, 'normal');
+      doc.setTextColor(color);
+      const rest = line.slice(c.label.length).replace(/^\s+/, '');
+      if (rest) doc.text(rest, c.x + lw + doc.getTextWidth(' '), y);
+      return;
+    }
+    doc.setFont(PDF_FONT, 'normal');
+    doc.setTextColor(color);
+    doc.text(line, c.x, y);
+  });
+}
+
+/** Autotable has no keep-with-next. Just before drawing row i, look ahead: if
+ *  row i+1 is glued to row i+2 and would be the LAST thing on this page (i+2
+ *  can't start here), push i+1 to the next page too — temporarily taller than
+ *  what is left and unsplittable — and restore it once it draws there. */
+type KeepRow = { index: number; height: number; cells: Record<string, { height: number; styles: { fontSize: number }; padding(side: string): number }> };
+type KeepHookArg = {
+  row: KeepRow; cursor: { y: number } | null;
+  table: { body: KeepRow[]; settings: { rowPageBreak: string; margin: { bottom: number } } };
+};
+const KEEP_HELD = new WeakMap<object, { height: number; cells: number[]; rowPageBreak: string }>();
+
+function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>, kinds: string[]): void {
+  const held = KEEP_HELD.get(d.row);
+  if (held) {
+    KEEP_HELD.delete(d.row);
+    d.row.height = held.height;
+    Object.values(d.row.cells).forEach((c, k) => { c.height = held.cells[k]; });
+    d.table.settings.rowPageBreak = held.rowPageBreak;
+  }
+  const i = d.row.index;
+  const j = i + 1;
+  if (i < 0 || !d.cursor || !keepWithNext.has(j)) return;
+  const next = d.table.body[j], after = d.table.body[j + 1];
+  if (!next || !after) return;
+  const bottom = doc.internal.pageSize.getHeight() - d.table.settings.margin.bottom;
+  const top = d.cursor.y + d.row.height;           // where row j would start
+  const lhf = doc.getLineHeightFactor?.() ?? 1.15;
+  // A Sentence can split across pages, so one line of it is enough to keep
+  // it company; any other row has to fit whole.
+  const need = kinds[j + 1] === 'sentence'
+    ? Math.max(...Object.values(after.cells).map(c => c.padding('vertical') + c.styles.fontSize * lhf))
+    : after.height;
+  if (top + next.height > bottom || top + next.height + need <= bottom) return;
+  // Never on a page that could not hold the pair anyway.
+  if (next.height + need > bottom - 80) return;
+  const cells = Object.values(next.cells);
+  KEEP_HELD.set(next, { height: next.height, cells: cells.map(c => c.height), rowPageBreak: d.table.settings.rowPageBreak });
+  const h = bottom - top + 1;
+  next.height = h;
+  cells.forEach(c => { c.height = h; });
+  d.table.settings.rowPageBreak = 'avoid';
+}
+
 /** Render panel groups as ONE columnar autoTable against the column config
  *  `cfg`. Consecutive LINKED columns merge into a single cell ("11.4 g/dL")
  *  and keep the first column's header label. */
@@ -2908,6 +3082,13 @@ function renderColumnarTable(
   // Cells needing raised-superscript redraw, keyed section:row:col.
   const supCells = new Map<string, SupCell>();
   const qualCells = new Map<string, QualCell>();
+  /** Body row index → the bold label its Sentence row opens with. */
+  const sentenceLabels = new Map<number, string>();
+  /** Body rows that must share a page with the NEXT row: a test's last row
+   *  and the Sentence under it, or a Sentence and the row it introduces. */
+  const keepWithNext = new Set<number>();
+  /** Body row kinds, parallel to `body` (glue decisions). */
+  const bodyKind: Array<'param' | 'sentence' | 'other'> = [];
   for (const g of groups) {
     // A single-analyte test renders COMPACT: one plain row, no bold panel band
     // and no Method sub-line — the band + method treatment is reserved for
@@ -2916,7 +3097,11 @@ function renderColumnarTable(
     // This holds in an override run too (owner 2026-09-19): the run's own
     // column-header strip is the block's heading — a band would just repeat
     // the name the Investigation cell already prints.
-    const compact = g.rows.length === 1 && g.rows[0].kind === 'param' && !g.referralLab;
+    // A test's Sentences don't count: they are merged rows under (or above)
+    // the one analyte row, not parameters.
+    const coreRows = g.rows.filter(r => !r.sentence);
+    const compact = coreRows.length === 1 && coreRows[0].kind === 'param' && !g.referralLab;
+    const groupStart = body.length;
 
     if (!compact) {
       // Panel / profile header band — bold, full width.
@@ -2926,6 +3111,7 @@ function renderColumnarTable(
         styles: { fillColor: '#eef2f7', textColor: theme.primary, fontStyle: 'bold', fontSize: 9.5, halign: 'left' },
       }]);
       bodyMeta.push(null);
+      bodyKind.push('other');
 
       // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
       const sub: string[] = [];
@@ -2941,11 +3127,29 @@ function renderColumnarTable(
           styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
         }]);
         bodyMeta.push(null);
+        bodyKind.push('other');
       }
     }
 
     let firstParam = true;
     for (const r of g.rows) {
+      if (r.sentence) {
+        // The test's Sentence → ONE full-width row (every column merged),
+        // readable body text in the template's font and body colour; the
+        // admin's line breaks are kept. A named block opens with its name in
+        // bold ("Interpretation: …", like "Method: …") — drawn in the hooks.
+        const label = r.sentenceLabel;
+        if (label) sentenceLabels.set(body.length, `${label}:`);
+        body.push([{
+          content: label ? `${label}: ${r.note ?? ''}` : (r.note ?? ''),
+          colSpan: COLSPAN,
+          styles: { fillColor: '#ffffff', textColor: TEXT, fontStyle: 'normal', halign: 'left', valign: 'top',
+                    fontSize: 8.5 * theme.fontScale },
+        }]);
+        bodyMeta.push(null);
+        bodyKind.push('sentence');
+        continue;
+      }
       if (r.kind === 'note') {
         body.push([{
           content: r.note ?? '',
@@ -2953,6 +3157,7 @@ function renderColumnarTable(
           styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'left', fontSize: 8.5 },
         }]);
         bodyMeta.push(null);
+        bodyKind.push('other');
         continue;
       }
       // A 'N' (normal) flag is never abnormal — keep it plain black, never
@@ -3031,6 +3236,7 @@ function renderColumnarTable(
         return { content: txt, styles };
       });
       body.push(cells);
+      bodyKind.push('param');
       // Remember the result text so the arrow can sit right AFTER it — the
       // result cell is wide, and anchoring the glyph to the cell's far edge
       // parked it visually beside the Reference column.
@@ -3044,7 +3250,16 @@ function renderColumnarTable(
             bold: (!isNormal && theme.flagIndicator !== 'none') || r.flag === 'A' }
         : null);
     }
+    // Keep each Sentence on the page of the row it belongs to: the one it
+    // follows (a test's last row) or, above the table, the one it introduces.
+    for (let i = groupStart; i < body.length; i++) {
+      if (bodyKind[i] !== 'sentence') continue;
+      if (i > groupStart && bodyKind[i - 1] === 'param') keepWithNext.add(i - 1);
+      else if (bodyKind[i + 1] === 'param') keepWithNext.add(i);
+    }
   }
+
+  const sentenceCells = new Map<number, SentenceCell>();
 
   // When the table spills onto further pages, stamp "<DEPT> — continued" above
   // the repeated column header — otherwise a reader on page 2 can't tell which
@@ -3082,12 +3297,18 @@ function renderColumnarTable(
     // cells here — AFTER layout, so column widths are unaffected — and redraw
     // them with real raised digits in didDrawCell below.
     willDrawCell: (d: CellHookArg) => {
+      if (d.section === 'body' && d.column.index === 0) keepRowsTogether(doc, d as unknown as KeepHookArg, keepWithNext, bodyKind);
+      if (d.section === 'body' && sentenceLabels.has(d.row.index)) {
+        stashSentenceCell(sentenceCells, d as unknown as SentenceHookArg, sentenceLabels.get(d.row.index)!);
+        return;
+      }
       // Order matters: a qualified range cell is claimed here first, so the
       // superscript hook doesn't also blank it and fight over the redraw.
       stashQualifiedRangeCell(qualCells, d, rangeColIdx);
       stashSuperscriptCell(supCells, d);
     },
     didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number; styles?: Record<string, unknown> } }) => {
+      drawSentenceCell(doc, sentenceCells, d as unknown as SentenceHookArg);
       drawQualifiedRangeCell(doc, qualCells, d as CellHookArg);
       drawSuperscriptCell(doc, supCells, d as CellHookArg);
       if (d.section !== 'body' || d.column.index !== resultColIdx) return;

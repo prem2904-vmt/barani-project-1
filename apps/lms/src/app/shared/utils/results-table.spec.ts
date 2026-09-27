@@ -55,14 +55,16 @@ describe('a Sentence-only stored layout still prints the result (render safety n
     const preview = vi.fn(async () => sentenceOnly());
     const input = await prepareReportPdfInput(report([GLUCOSE_TEST]), { api, preview, apiUrl: '', trendograms: false });
     const text = pageText(buildReportPdf(input));
-    expect(text).toContain('(110 mg/dL)');
+    // In the results table like any other test (flag letter included); the
+    // Sentence is a merged row under it (report-sentence-row.spec.ts).
+    expect(text).toContain('(110 mg/dL  H)');
     expect(text).toContain(SENTENCE);
   });
 
   it('PDF built straight from resolved layouts (test-editor live preview path) — same', () => {
     const doc = buildReportPdf({ report: report([GLUCOSE_TEST]), template: null, resolvedLayouts: { glu: sentenceOnly() } });
     const text = pageText(doc);
-    expect(text).toContain('(110 mg/dL)');
+    expect(text).toContain('(110 mg/dL  H)');
     expect(text).toContain(SENTENCE);
   });
 

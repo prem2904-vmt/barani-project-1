@@ -64,8 +64,10 @@ describe("a profile's printed blocks on the real report", () => {
     const count = (t: string) => t.split('DIABETES PROFILE').length;
     const blank = render(WITH_DESC, [{ ...sentence, content: '   ' }]);
     expect(blank).not.toContain('Kindly correlate');
-    // The Sentence's block adds one profile heading; a blank one adds none.
-    expect(count(blank)).toBe(count(render(WITH_DESC, [sentence])) - 1);
+    // The Sentence is a merged row closing the profile's own block (owner
+    // 2026-09-28) — neither it nor a blank one adds a second profile heading.
+    expect(count(blank)).toBe(count(render(WITH_DESC, [sentence])));
+    expect(count(blank)).toBe(2);
   });
 
   it("prints a member's description in the Description column of the profile block", () => {
