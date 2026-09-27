@@ -402,6 +402,21 @@ group's grid. **Search results stay one per row** (section 6).
     reverses. Everything else swaps instantly.
   - Real-browser proof: `apps/lms-e2e/src/zoom-transition.rbac.spec.ts`
     (every module pair, 5 taps each).
+  - Order & Payments is a zoom destination too: a parked draft (In progress
+    row or app-bar shelf chip) zooms in, back zooms out; focus follows the
+    zoom (detail card on open, the tile on close).
+- **Loading = skeleton, never the PF logo** (the logo is sign-in branding).
+  Use the kit in `shared/primitives/skeleton-kit.component.ts`
+  (`pf-skeleton-rows | -table | -card | -detail | -form | -tiles`, inline
+  `pf-busy` for buttons): draw the shape of the area that is loading. Each
+  preset is the region (role=status, aria-busy, polite label).
+- **Load-driven states hold a minimum** (`shared/utils/min-duration.ts`:
+  `heldFlag`, `withMinDuration`, 600ms) so a fast load reads as one calm
+  motion, never a flash. Taps that load nothing stay instant.
+- **Branch switch** is in place (`BranchSwitchService`, no page reload):
+  the screen recedes, the destination skeleton rises ("Switching to X"),
+  holds until the new screen's API calls settle (>= 750ms), then the screen
+  zooms up. Reduced motion: opacity only.
 
 ## 10. Always
 
