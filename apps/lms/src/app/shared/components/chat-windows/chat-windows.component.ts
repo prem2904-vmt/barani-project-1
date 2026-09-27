@@ -7,6 +7,7 @@ import { ChatWindowsService } from '../../../core/services/chat-windows.service'
 import { ThemeService } from '../../../core/services/theme.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { SignalingService } from '../../../core/services/signaling.service';
+import { CallReachService } from '../../../core/services/call-reach.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
@@ -52,8 +53,8 @@ import { PresenceDotComponent } from '../presence-avatar/presence-avatar.compone
               <span class="pf-cw__name">{{ title(c) }}</span>
               @if (peerOf(c); as peer) {
                 <button type="button" class="pf-cw__icon press"
-                        [disabled]="!isOnline(peer) || webrtc.inCall()"
-                        [title]="!isOnline(peer) ? 'Offline' : webrtc.inCall() ? 'Already in a call' : 'Voice call'"
+                        [disabled]="webrtc.inCall()"
+                        [title]="webrtc.inCall() ? 'Already in a call' : reach.hint(peer.userId)"
                         (click)="call(c); $event.stopPropagation()" aria-label="Voice call">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -613,6 +614,7 @@ export class ChatWindowsComponent {
   private readonly entitlements = inject(TenantEntitlementsService);
   protected readonly webrtc = inject(WebrtcService);
   private readonly signaling = inject(SignalingService);
+  protected readonly reach = inject(CallReachService);
   private readonly toasts = inject(ToastService);
   private readonly api = inject(ApiService);
 
@@ -726,9 +728,9 @@ export class ChatWindowsComponent {
   protected async call(c: Conversation): Promise<void> {
     const peer = this.peerOf(c);
     if (!peer) return;
-    if (!this.isOnline(peer)) { this.toasts.info(`${peer.displayName} is offline.`); return; }
+    // Presence never blocks a call — offline peers ring by push.
     try {
-      await this.webrtc.startCall(peer.userId, 'admin_internal');
+      await this.webrtc.startCall(peer.userId, 'admin_internal', peer.displayName);
       this.toasts.info(`Ringing ${peer.displayName}…`);
     } catch (err) {
       this.toasts.error((err as Error).message ?? 'Could not start call.');

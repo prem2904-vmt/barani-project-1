@@ -5,6 +5,7 @@ import {
 } from '../../shared/models/presence.model';
 import { AuthService } from '../auth/auth.service';
 import { SessionScopeService } from '../auth/session-scope.service';
+import { CallReachService } from './call-reach.service';
 import { ApiService } from './api.service';
 import { SignalingService } from './signaling.service';
 import { ToastService } from './toast.service';
@@ -33,6 +34,7 @@ export class PresenceService {
   private readonly signaling = inject(SignalingService);
   private readonly toasts = inject(ToastService);
   private readonly scope = inject(SessionScopeService);
+  private readonly reach = inject(CallReachService);
 
   /** Namespaced per tenant + user (`pf.myPresenceStatus:<tenant>:<user>`):
    *  the old device-wide key showed the previous account's "In surgery" on
@@ -88,7 +90,10 @@ export class PresenceService {
   displayStatus(userId: string | null | undefined): DisplayPresence | null {
     if (!userId) return null;
     const conn = this.signaling.userPresences().get(userId);
-    if (!conn) return 'offline';
+    // No live connection, but a registered phone / browser the server can
+    // ring by push: honestly "away" — callable ("Will ring their devices"),
+    // never shown as online.
+    if (!conn) return this.reach.reachable().has(userId) ? 'away' : 'offline';
     if (conn === 'away' || conn === 'in-a-call') return conn;
     return this._others().get(userId) ?? (userId === this.auth.user()?.authId ? this.myStatus() : null) ?? 'active';
   }

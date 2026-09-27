@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 const labelPrinter = require('./printer');
+const calls = require('./calls');
 // Don't pull in electron-is-dev — it isn't bundled into the packaged
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
@@ -24,6 +25,15 @@ app.setAboutPanelOptions({
   website: 'https://prefrontal.in'
 });
 
+// Incoming calls must ring with no prior click in the window (the ringtone
+// plays from the renderer while the app is minimised / hidden in the tray).
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
+// One resident instance: the app lives on in the tray / dock after its window
+// is closed (so calls still ring), and launching it again just brings it back.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) app.quit();
+
 let mainWindow;
 // Latest pending Web-Bluetooth chooser callback (see select-bluetooth-device).
 let bluetoothCallback = null;
@@ -38,7 +48,13 @@ function createWindow() {
       // Sandbox the renderer — Angular code never gets Node access.
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // Keep timers + the SignalR socket at full speed while the window is
+      // minimised / hidden in the tray. Chromium otherwise throttles hidden
+      // pages (intensive throttling after 5 min aligns timers to 1/min), the
+      // hub's keep-alive starves, the server drops the connection and the
+      // desktop user silently stops receiving calls.
+      backgroundThrottling: false
     },
     // Default native macOS titlebar (with title centered + traffic
     // lights). The renderer's <html> doesn't extend under it, so
@@ -95,6 +111,18 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Close = hide (every platform): the app stays resident — socket connected,
+  // calls and messages still arrive — until the user quits from the tray /
+  // dock / Cmd+Q. Closing the window used to quit on Windows (and kill the
+  // socket on macOS), which made a desktop user unreachable.
+  mainWindow.on('close', (e) => {
+    if (calls.isQuitting()) return;
+    e.preventDefault();
+    mainWindow.hide();
+  });
+
+  calls.attach(mainWindow);
 }
 
 // ── Label printer (USB) IPC — the desktop counterpart to the iPad's BLE
@@ -160,17 +188,28 @@ ipcMain.handle('doc:printPdf', async (_e, opts = {}) => {
 });
 
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
   createWindow();
+  calls.createTray(() => mainWindow);
 
-  // macOS: re-open a window when the dock icon is clicked.
+  // macOS: re-open / re-show the window when the dock icon is clicked.
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!mainWindow) createWindow();
+    else calls.restore(mainWindow);
   });
 });
 
+// A second launch (Start menu / dock / desktop shortcut) → bring back the
+// resident window instead of starting another copy.
+app.on('second-instance', () => {
+  if (mainWindow) calls.restore(mainWindow);
+});
+
+app.on('before-quit', () => calls.setQuitting());
+
 app.on('window-all-closed', () => {
-  // Standard macOS behaviour: keep the app alive until Cmd+Q.
-  // Windows / Linux quit when the last window closes.
+  // Only reached on a real quit (close hides the window). macOS keeps the app
+  // alive until Cmd+Q as usual.
   if (process.platform !== 'darwin') app.quit();
 });
 

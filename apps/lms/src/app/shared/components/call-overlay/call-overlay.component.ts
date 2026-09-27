@@ -5,6 +5,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { SignalingService } from '../../../core/services/signaling.service';
+import { CallReachService } from '../../../core/services/call-reach.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { SrcObjectDirective } from '../../directives/src-object.directive';
@@ -108,7 +109,7 @@ interface DirectoryUser {
             @if (webrtc.outgoingPeer(); as op) { @if (!op.isGroup) { <pf-presence-dot [userId]="op.id" /> } }
           </div>
           <h2 class="pf-call-ring__name" data-testid="call-outgoing-name">{{ outgoingName() }}</h2>
-          <p class="pf-call-ring__sub" aria-live="polite">Ringing…</p>
+          <p class="pf-call-ring__sub" aria-live="polite" data-testid="call-outgoing-status">{{ webrtc.ringingDevices() ? 'Ringing their devices…' : 'Ringing…' }}</p>
           <div class="pf-call-ring__actions">
             <div class="pf-call-ctl">
               <button type="button" class="pf-call-round pf-call-round--lg pf-call-round--danger"
@@ -297,12 +298,12 @@ interface DirectoryUser {
                  (click)="$event.stopPropagation()">
               <header class="pf-call-invite__hdr">
                 <span class="pf-call-invite__title">Invite to call</span>
-                <span class="pf-call-invite__count pf-call-num">{{ availableToInvite().length }} online</span>
+                <span class="pf-call-invite__count pf-call-num">{{ availableToInvite().length }} available</span>
               </header>
               @if (loadingInvite()) {
                 <p class="pf-call-invite__empty">Loading…</p>
               } @else if (availableToInvite().length === 0) {
-                <p class="pf-call-invite__empty">No one else is online right now.</p>
+                <p class="pf-call-invite__empty">No one else can be reached right now.</p>
               } @else {
                 <ul class="pf-call-invite__list" role="listbox">
                   @for (u of availableToInvite(); track u.id) {
@@ -379,12 +380,12 @@ interface DirectoryUser {
           <div class="pf-call-invite" role="dialog" aria-label="Invite to call" (click)="$event.stopPropagation()">
             <header class="pf-call-invite__hdr">
               <span class="pf-call-invite__title">Invite to call</span>
-              <span class="pf-call-invite__count pf-call-num">{{ availableToInvite().length }} online</span>
+              <span class="pf-call-invite__count pf-call-num">{{ availableToInvite().length }} available</span>
             </header>
             @if (loadingInvite()) {
               <p class="pf-call-invite__empty">Loading…</p>
             } @else if (availableToInvite().length === 0) {
-              <p class="pf-call-invite__empty">No one else is online right now.</p>
+              <p class="pf-call-invite__empty">No one else can be reached right now.</p>
             } @else {
               <ul class="pf-call-invite__list" role="listbox">
                 @for (u of availableToInvite(); track u.id) {
@@ -699,6 +700,7 @@ export class CallOverlayComponent {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly signaling = inject(SignalingService);
+  protected readonly reach = inject(CallReachService);
 
   // ── In-call chat side panel ──────────────────────────────────────
   protected readonly chatPanelOpen = signal(false);
@@ -832,13 +834,16 @@ export class CallOverlayComponent {
       ? 'Relayed via TURN server'
       : 'Direct peer-to-peer connection');
 
-  /** Online users in my tenant who AREN'T already in the call (and aren't me). */
+  /** Colleagues I can add who AREN'T already in the call (and aren't me):
+   *  online ones first, then those reachable on their devices by push. */
   protected readonly availableToInvite = computed<DirectoryUser[]>(() => {
     const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
     const online = this.signaling.onlineUserIds();
+    const reachable = this.reach.reachable();
     const inCall = new Set<string>([me, ...this.webrtc.remoteParticipants()]);
-    return this.directoryUsers().filter(u =>
-      u.isActive && !inCall.has(u.id) && online.has(u.id));
+    const pool = this.directoryUsers().filter(u =>
+      u.isActive && !inCall.has(u.id) && (online.has(u.id) || reachable.has(u.id)));
+    return [...pool.filter(u => online.has(u.id)), ...pool.filter(u => !online.has(u.id))];
   });
 
   protected readonly audioEntries = computed(() => {
@@ -964,6 +969,7 @@ export class CallOverlayComponent {
       }
       // Make sure presence is fresh so we don't show offline users.
       void this.signaling.getOnlineUsersWithStatus().catch(() => undefined);
+      void this.reach.refresh();
     }
   }
 

@@ -24,7 +24,7 @@ function setup() {
   const micMuted = signal(false);
   const remoteParticipants = signal<string[]>([]);
   const webrtc = {
-    status, incomingCall, outgoingPeer, micMuted, remoteParticipants,
+    status, incomingCall, outgoingPeer, micMuted, remoteParticipants, ringingDevices: signal(false),
     inCall: computed(() => status() === 'active' || status() === 'connecting'),
     remoteAudio: signal(new Map()), remoteMuted: signal(new Map<string, boolean>()),
     localCallerName: signal<string | null>(null), callStartedAt: signal<number | null>(Date.now() - 27_000),
@@ -66,6 +66,15 @@ describe('Call overlay — new design', () => {
     expect(card.querySelector('pf-presence-dot')!.getAttribute('aria-label')).toBe('Online');
     expect(card.textContent).toContain('Ringing…');
     expect(card.querySelector('[data-testid="call-outgoing-name"]')!.textContent).not.toContain('Calling');
+  });
+
+  it('outgoing to someone with no live connection: "Ringing their devices…" (offline calling)', () => {
+    const t = setup();
+    t.outgoingPeer.set({ id: 'u2', name: 'Priya Sharma', isGroup: false });
+    (t.webrtc.ringingDevices as ReturnType<typeof signal<boolean>>).set(true);
+    t.status.set('outgoing');
+    t.fixture.detectChanges();
+    expect(t.el.querySelector('[data-testid="call-outgoing-status"]')!.textContent!.trim()).toBe('Ringing their devices…');
   });
 
   it('incoming: caller name, "Incoming audio call", Decline (danger) and Answer (primary)', () => {

@@ -2,6 +2,7 @@ import { Injectable, OnDestroy, effect, inject, untracked } from '@angular/core'
 import { SessionScopeService } from '../auth/session-scope.service';
 import { RingtoneService } from './ringtone.service';
 import { WebrtcService } from './webrtc.service';
+import { NativeRingState } from './native-ring.state';
 
 type RingMsg =
   | { type: 'claim'; sessionId: string; tab: string; visible: boolean }
@@ -28,6 +29,7 @@ export class CallRingService implements OnDestroy {
   private readonly webrtc = inject(WebrtcService);
   private readonly ringtone = inject(RingtoneService);
   private readonly scope = inject(SessionScopeService);
+  private readonly nativeRing = inject(NativeRingState);
 
   static readonly RING_CAP_MS = 95_000;
   static readonly HIDDEN_CLAIM_WAIT_MS = 350;
@@ -48,8 +50,12 @@ export class CallRingService implements OnDestroy {
     effect(() => {
       const incoming = this.webrtc.incomingCall();
       const status = this.webrtc.status();
+      // A call the OS is already ringing (CallKit / Android call notification)
+      // must not ring a second time from the web layer.
+      const native = !!incoming && this.nativeRing.has(incoming.sessionId);
       untracked(() => {
-        if (incoming) this.ringIncoming(incoming.sessionId);
+        if (incoming && native) this.stopAll();
+        else if (incoming) this.ringIncoming(incoming.sessionId);
         else if (status === 'outgoing') this.ringOut();
         else this.stopAll();
       });

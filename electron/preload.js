@@ -32,6 +32,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     choose: (deviceId) => ipcRenderer.send('ble:choose', deviceId),
     cancel: () => ipcRenderer.send('ble:cancel')
   },
+  // Incoming calls while the window is minimised / in the tray / behind other
+  // apps: main shows an always-on-top call window + taskbar flash / dock
+  // bounce; Answer / Decline come back through onAction.
+  calls: {
+    incoming: (info) => ipcRenderer.send('call:incoming', info),
+    dismiss: (callId) => ipcRenderer.send('call:dismiss', callId),
+    onAction: (cb) => {
+      const h = (_e, a) => cb(a);
+      ipcRenderer.on('call:action', h);
+      return () => ipcRenderer.removeListener('call:action', h);
+    }
+  },
   // Document/invoice printers = the OS-installed printers (for A4 output).
   doc: {
     listPrinters: () => ipcRenderer.invoke('doc:listPrinters'),

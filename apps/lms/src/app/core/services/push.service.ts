@@ -1,7 +1,6 @@
-import { Injectable, effect, inject, signal } from '@angular/core';
+import { Injectable, Injector, effect, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PushNotifications, type Token, type PushNotificationSchema, type ActionPerformed } from '@capacitor/push-notifications';
-import { CallKitVoip, type CallToken, type CallData } from 'capacitor-plugin-callkit-voip';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Router } from '@angular/router';
 import { PlatformService } from './platform.service';
@@ -9,6 +8,8 @@ import { ApiService } from './api.service';
 import { ToastService } from './toast.service';
 import { AuthService } from '../auth/auth.service';
 import { WebrtcService } from './webrtc.service';
+import { NativeRingState } from './native-ring.state';
+import { SignalingService } from './signaling.service';
 
 /**
  * Push notification + CallKit/VoIP orchestration for the Capacitor app.
@@ -27,9 +28,13 @@ import { WebrtcService } from './webrtc.service';
  *
  * Incoming push payload shape (sent by backend):
  *   - Message:   { kind: 'chat-message', conversationId, fromName, body }
- *   - Call ring: { kind: 'call-incoming', callId, fromName, callType } via
- *                VoIP push (iOS) so CallKit can show the system ringer
- *                before the app is even running.
+ *   - Call ring: iOS  — VoIP push { id, name, media } → CallKit (plugin);
+ *                Android — data { kind: 'call-incoming', callId, fromName,
+ *                callType } → native full-screen ringer (killed/background)
+ *                or pushNotificationReceived here (foreground).
+ *   - Ring stop: { kind: 'call-end', callId, reason } — iOS background push
+ *                (AppDelegate → CallKit plugin), Android data message
+ *                (native service cancels the ringer). Never a VoIP push.
  */
 @Injectable({ providedIn: 'root' })
 export class PushService {
@@ -39,6 +44,8 @@ export class PushService {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly webrtc = inject(WebrtcService);
+  private readonly nativeRing = inject(NativeRingState);
+  private readonly injector = inject(Injector);
 
   constructor() {
     // The APNs/VoIP tokens usually arrive at app startup BEFORE the user logs
@@ -67,26 +74,6 @@ export class PushService {
   readonly permission = signal<'prompt' | 'granted' | 'denied' | 'prompt-with-rationale'>('prompt');
 
   private _initialised = false;
-  /** Session id of a CallKit answer awaiting audio-session activation before we
-   *  join WebRTC (so mic capture routes correctly on a background answer). */
-  private _pendingAcceptId: string | null = null;
-
-  /** Join the pending answered call exactly once (whichever of
-   *  audioSessionActivated / the 1s fallback fires first). */
-  private flushPendingAccept(): void {
-    const id = this._pendingAcceptId;
-    if (!id) return;
-    this._pendingAcceptId = null;
-    void (async () => {
-      // On a cold launch the session may still be restoring — don't connect
-      // SignalR with no/expired token (the hub handshake would 401 and drop).
-      await this.auth.waitForAuth();
-      await this.webrtc.acceptBySessionId(id);
-      // Release the native background task now that the WebRTC call is up.
-      try { await CallKitVoip.callConnected(); } catch { /* ignore */ }
-    })().catch(err => console.warn('[callkit] accept failed', err));
-  }
-
   /** Wire up listeners + request permission. Safe to call multiple times. */
   async init(): Promise<void> {
     if (this._initialised) return;
@@ -190,43 +177,17 @@ export class PushService {
     }
 
     // ── (5) CallKit / VoIP / PushKit (iOS only) ─────────────────────
-    try {
-      await CallKitVoip.addListener('registration', (t: CallToken) => {
-        this.voipToken.set(t.value);
-        void this.postTokensToBackend();
-      });
-
-      await CallKitVoip.addListener('callAnswered', (call: CallData) => {
-        // Answered on the lockscreen ringer. Do NOT join WebRTC yet — wait for
-        // the CallKit audio session to activate (audioSessionActivated) so the
-        // mic capture routes correctly. The fallback is a long safety net (the
-        // app may still be foregrounding/booting on a cold launch); the real
-        // trigger is audioSessionActivated.
-        this._pendingAcceptId = call.id;
-        setTimeout(() => this.flushPendingAccept(), 4000);
-      });
-
-      await CallKitVoip.addListener('audioSessionActivated', () => {
-        this.flushPendingAccept();
-      });
-
-      await CallKitVoip.addListener('callEnded', (_call: CallData) => {
-        // With the patched plugin, the CallKit call is kept alive through the
-        // whole call, so callEnded now means a REAL end (red button or our own
-        // endCall). Tear the WebRTC call down.
-        this._pendingAcceptId = null;
-        window.dispatchEvent(new CustomEvent('pf-callkit-ended'));
-      });
-
-      // When our WebRTC call fully ends (any path), dismiss the native CallKit
-      // UI that we kept alive for background audio.
-      window.addEventListener('pf-end-callkit', () => { void CallKitVoip.endCall().catch(() => undefined); });
-
-      await CallKitVoip.register();
-    } catch (err) {
-      // Plugin only ships an iOS implementation; Android is a no-op stub.
-      // eslint-disable-next-line no-console
-      console.warn('[callkit] register skipped or failed', err);
+    // Lazy chunk (callkit.wiring.ts): the plugin buffers events until its
+    // register(), so wiring a moment after boot loses nothing.
+    if (this.detectPlatform() === 'ios') {
+      try {
+        const { wireCallKit } = await import('./callkit.wiring');
+        await wireCallKit({
+          auth: this.auth, webrtc: this.webrtc, nativeRing: this.nativeRing,
+          api: this.api, signaling: this.injector.get(SignalingService),
+          onVoipToken: token => { this.voipToken.set(token); void this.postTokensToBackend(); },
+        });
+      } catch (err) { console.warn('[callkit] wiring failed', err); }
     }
   }
 
@@ -311,7 +272,9 @@ export class PushService {
       const status = await PushNotifications.checkPermissions();
       if (status.receive !== 'granted') return;
       await PushNotifications.register();
-      try { await CallKitVoip.register(); } catch { /* iOS only */ }
+      if (this.detectPlatform() === 'ios') {
+        await import('./callkit.wiring').then(m => m.reRegisterCallKit()).catch(() => undefined);
+      }
     } catch (err) {
       console.warn('[push] reactivate failed', err);
     } finally {
@@ -324,12 +287,24 @@ export class PushService {
    *  the user's rows would silence their other devices (phone logout must
    *  not kill the tablet's pushes). */
   async unregister(): Promise<void> {
+    // Browser Web Push subscription (plain web) — no ghost rings after logout.
+    // (Lazy: the web-push service lives in the offline-calling chunk.)
+    if (!this.platform.isCapacitor() && !this.platform.isElectron()) {
+      await import('./web-push.service')
+        .then(m => this.injector.get(m.WebPushService).unsubscribe())
+        .catch(() => undefined);
+    }
     if (!this.platform.isCapacitor()) return;
     const tok = this.appToken();
+    const voip = this.voipToken();
+    // Name BOTH tokens: an iPhone's PushKit token can sit in a row of its own
+    // (it often registers before the APNs token) — deleting only by appToken
+    // left it behind, and the logged-out phone kept ringing via CallKit.
+    const q = [tok ? `appToken=${encodeURIComponent(tok)}` : '', voip ? `voipToken=${encodeURIComponent(voip)}` : '']
+      .filter(Boolean).join('&');
     try {
       await PushNotifications.unregister();
-      await firstValueFrom(this.api.delete(
-        `/api/devices/me${tok ? `?appToken=${encodeURIComponent(tok)}` : ''}`));
+      await firstValueFrom(this.api.delete(`/api/devices/me${q ? `?${q}` : ''}`));
     } catch { /* non-fatal */ }
     this.appToken.set(null);
     this.voipToken.set(null);
@@ -360,15 +335,22 @@ export class PushService {
         break;
       }
       case 'call-incoming': {
-        // For VoIP push on iOS, CallKit already showed the ringer before
-        // we got here. On Android we fall through to a high-priority
-        // notification + route into the in-app call screen on tap.
+        // Android, app in the FOREGROUND: the native service handed the ring
+        // to us instead of posting a system ringer. The live socket normally
+        // already raised the in-app ring; if it lagged, fetch it by id.
+        // (Killed / background rings are the native full-screen notification,
+        // whose Answer / Decline / tap arrive via call-push.service.)
         const callId = data['callId'] as string;
-        if (opened && callId) {
-          this.router.navigate(['/messages'], { queryParams: { acceptCall: callId } });
+        if (callId && this.webrtc.incomingCall()?.sessionId !== callId) {
+          void import('./call-push.actions')
+            .then(m => m.showRingFromPush(this.webrtc, this.injector.get(SignalingService), callId));
         }
         break;
       }
+      case 'call-end':
+        // The ring stopped server-side; the live socket's CallCancelled /
+        // CallHandledElsewhere clears the in-app ring. Nothing to show.
+        break;
       // Business notifications (now pushed to devices, not just the bell) —
       // a TAP routes to the screen where the work lives; foreground delivery
       // stays a toast.

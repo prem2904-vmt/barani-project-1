@@ -71,7 +71,7 @@ function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (.
       { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map(opts.id ? [['id', opts.id]] : []) },
         queryParams: of({}) } },
       { provide: WebrtcService, useValue: { startCall: vi.fn() } },
-      { provide: SignalingService, useValue: { onlineUserIds: signal(new Set<string>()) } },
+      { provide: SignalingService, useValue: { onlineUserIds: signal(new Set<string>()), userPresences: signal(new Map<string, string>()) } },
       { provide: PresenceService, useValue: { seedFromUsers: vi.fn() } },
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true } },
     ],

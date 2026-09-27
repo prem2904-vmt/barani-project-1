@@ -29,6 +29,27 @@
             </intent-filter>
         </activity>
 
+        <!-- Incoming calls: intercepts FCM data messages — kind=call-incoming →
+             full-screen ringing notification (Answer / Decline), kind=call-end →
+             dismiss it. Everything else defers to the Capacitor push plugin.
+             Declared here with priority so it wins over the plugin's own
+             MessagingService for MESSAGING_EVENT. -->
+        <service
+            android:name=".calls.PrefrontalMessagingService"
+            android:exported="false">
+            <intent-filter android:priority="1">
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Ongoing call: Android mutes the mic for a process with no visible
+             activity unless a microphone foreground service runs — without it
+             locking the screen mid-call silenced the far side. -->
+        <service
+            android:name=".calls.CallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <!-- Background FCM notifications (delivered while the app is killed)
              are rendered by the Firebase SDK, not our JS — these defaults stop
              them falling back to the launcher icon (a white square on API 26+)
@@ -63,6 +84,14 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Incoming-call ring: full-screen notification over the lockscreen
+         (Android 14+: Play only grants this to calling apps — declare the
+         calling use case in the Play Console), ringtone vibration, and the
+         ongoing-call microphone foreground service. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- BLE label printing (PrefrontalPrinter plugin) -->
     <!-- Android 12+ runtime permissions; neverForLocation lets us skip the

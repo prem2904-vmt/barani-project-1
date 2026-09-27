@@ -28,6 +28,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                                         object: error)
     }
 
+    // Silent background push (content-available). The only kind the backend
+    // sends is the call RING-STOP ("call-end": caller cancelled, answered or
+    // declined on another device, no answer) — hand it to the CallKit plugin,
+    // which ends that call's CallKit ring if it is still unanswered (a killed
+    // iPhone would otherwise ring on after the caller hung up). Posted by
+    // name so AppDelegate needn't import the plugin module. Never a VoIP push.
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        if (userInfo["kind"] as? String) == "call-end", let callId = userInfo["callId"] as? String {
+            NotificationCenter.default.post(name: Notification.Name("PFCallKitEndRing"), object: nil,
+                                            userInfo: ["callId": callId, "reason": (userInfo["reason"] as? String) ?? ""])
+            completionHandler(.newData)
+            return
+        }
+        completionHandler(.noData)
+    }
+
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
         // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.

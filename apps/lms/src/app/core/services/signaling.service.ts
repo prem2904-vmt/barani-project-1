@@ -348,6 +348,14 @@ export class SignalingService implements OnDestroy {
     await this.connect();
     return await this.connection!.invoke('GetTurnCredentials');
   }
+  /** The call still ringing THIS user with that id, or null once it was
+   *  cancelled / answered / timed out. The answer-from-push path: a device
+   *  opened from a ring notification looks the ring up by the id the push
+   *  carried (the hub also re-delivers pending rings on connect). */
+  async getRingingCall(sessionId: string): Promise<IncomingCallInfo | null> {
+    await this.connect();
+    return (await this.connection!.invoke<IncomingCallInfo | null>('GetRingingCall', sessionId)) ?? null;
+  }
   async getActiveSession(): Promise<ActiveSession | null> {
     await this.connect();
     return await this.connection!.invoke('GetActiveSession');

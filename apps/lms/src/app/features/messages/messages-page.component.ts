@@ -639,7 +639,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected async callBack(c: CallLog): Promise<void> {
     if (!c.peer.userId) return;
     try {
-      await this.webrtc.startCall(c.peer.userId, 'calls_tab');
+      await this.webrtc.startCall(c.peer.userId, 'calls_tab', c.peer.displayName);
       this.toasts.info(`Ringing ${c.peer.displayName}…`);
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
@@ -1443,11 +1443,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       } else {
         const other = conv.participants.find(p => p.userId !== this.me());
         if (!other) return;
-        if (!this.signaling.onlineUserIds().has(other.userId)) {
-          this.toasts.info(`${other.displayName} is offline.`);
-          return;
-        }
-        await this.webrtc.startCall(other.userId, 'messages');
+        // Presence never blocks a call — an offline peer is rung on their
+        // registered devices by push; the outgoing card says so.
+        await this.webrtc.startCall(other.userId, 'messages', other.displayName);
         this.toasts.info(`Ringing ${other.displayName}…`);
       }
     } catch (err) {

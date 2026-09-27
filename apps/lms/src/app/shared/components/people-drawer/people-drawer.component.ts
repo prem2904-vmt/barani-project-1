@@ -9,6 +9,7 @@ import { PeopleDrawerService } from '../../../core/services/people-drawer.servic
 import { PresenceService } from '../../../core/services/presence.service';
 import { isPresenceKey, presenceLabel as presetLabel } from '../../models/presence.model';
 import { SignalingService } from '../../../core/services/signaling.service';
+import { CallReachService } from '../../../core/services/call-reach.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { User, userDisplayName } from '../../models/user.model';
@@ -50,8 +51,8 @@ import { AvatarComponent } from '../../primitives/avatar.component';
               </p>
             </div>
             <button type="button" class="pf-pd__call-btn"
-                    [disabled]="!isOnline(ou.id) || webrtc.inCall()"
-                    [title]="!isOnline(ou.id) ? 'User is offline' : webrtc.inCall() ? 'You are already in a call' : 'Voice call'"
+                    [disabled]="webrtc.inCall()"
+                    [title]="webrtc.inCall() ? 'You are already in a call' : reach.hint(ou.id)"
                     (click)="callActive()" aria-label="Voice call">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -309,6 +310,7 @@ export class PeopleDrawerComponent {
   private readonly auth = inject(AuthService);
   protected readonly chat = inject(ChatService);
   protected readonly signaling = inject(SignalingService);
+  protected readonly reach = inject(CallReachService);
   private readonly presenceSvc = inject(PresenceService);
   protected readonly webrtc = inject(WebrtcService);
   private readonly drawer = inject(PeopleDrawerService);
@@ -355,6 +357,7 @@ export class PeopleDrawerComponent {
       : this.activeUsers();
 
     const presences = this.signaling.userPresences();
+    const reachable = this.reach.reachable();
     const buckets: Record<string, { key: string; label: string; rank: number; users: User[] }> = {
       'in-a-call': { key: 'in-a-call', label: 'On a call',   rank: 1, users: [] },
       'active':    { key: 'active',    label: 'Online now',  rank: 2, users: [] },
@@ -362,7 +365,8 @@ export class PeopleDrawerComponent {
       'offline':   { key: 'offline',   label: 'Offline',     rank: 4, users: [] }
     };
     for (const u of filtered) {
-      const p = presences.get(u.id) ?? 'offline';
+      // No socket but a phone / browser we can ring by push → "Away" (callable).
+      const p = presences.get(u.id) ?? (reachable.has(u.id) ? 'away' : 'offline');
       (buckets[p] ?? buckets['offline']).users.push(u);
     }
     return Object.values(buckets)
@@ -479,9 +483,9 @@ export class PeopleDrawerComponent {
   async callActive(): Promise<void> {
     const ou = this.otherUser();
     if (!ou) return;
-    if (!this.isOnline(ou.id)) { this.toasts.info(`${ou.displayName} is offline.`); return; }
+    // Presence never blocks a call — offline colleagues ring by push.
     try {
-      await this.webrtc.startCall(ou.id, 'admin_internal');
+      await this.webrtc.startCall(ou.id, 'admin_internal', ou.displayName);
       this.toasts.info(`Ringing ${ou.displayName}…`);
     } catch (err) {
       this.toasts.error((err as Error).message ?? 'Could not start call.');
@@ -495,7 +499,8 @@ export class PeopleDrawerComponent {
    *  Teams-style status (In surgery, On rounds, …) when one is known,
    *  falling back to the plain connection presence. */
   protected presence(userId: string): string {
-    const conn = this.signaling.userPresences().get(userId) ?? 'offline';
+    // Offline but reachable by push reads "away" (callable), never "online".
+    const conn = this.reach.displayConnection(userId);
     // Not connected / on a call wins over a custom status (see messages page).
     if (conn !== 'active') return conn;
     return this.presenceSvc.statusFor(userId) ?? conn;

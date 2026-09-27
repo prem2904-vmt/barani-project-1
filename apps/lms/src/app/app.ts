@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injector, OnInit, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme.service';
 import { CapacitorService } from './core/services/capacitor.service';
@@ -147,6 +147,10 @@ export class App implements OnInit {
   /** Root owner of call ringtones — alive on every screen (incl. /login),
    *  so a ring always stops on a terminal call state or account switch. */
   private readonly _ring = inject(CallRingService);
+  private readonly _injector = inject(Injector);
+  /** The URL the app was opened with, captured before the router's first
+   *  navigation can rewrite it — carries a web push's ?pfCall=action:id. */
+  private readonly _bootHref = typeof window !== 'undefined' ? window.location.href : '';
 
   async ngOnInit() {
     // Idle-lock timer for shared lab machines (arms only for PIN-enabled users).
@@ -167,5 +171,13 @@ export class App implements OnInit {
     // (token registration, payload routing) stays out of capacitor.service.
     // No-op on web/electron.
     void this._push.init();
+    // Offline calling hand-offs, lazy-loaded (off the initial bundle):
+    //  • answer / decline / show a call rung by PUSH (Android notification
+    //    intents, web notification clicks, the Electron call window);
+    //  • desktop: minimised / tray → always-on-top call window + taskbar flash;
+    //  • plain web: the Web Push subscription for the call ring.
+    void import('./core/services/offline-calling.boot')
+      .then(m => m.bootOfflineCalling(this._injector, this._bootHref))
+      .catch(err => console.warn('[calls] offline-calling boot failed', err));
   }
 }

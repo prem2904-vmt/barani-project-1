@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { SignalingService, cleanHubError } from './signaling.service';
+import { SignalingService, cleanHubError, isOnlineStatus } from './signaling.service';
 import { ToastService } from './toast.service';
 import { ChatService } from './chat.service';
 import { ApiService } from './api.service';
@@ -42,6 +42,10 @@ export class WebrtcService implements OnDestroy {
    *  because the callee's name was never recorded. Group calls carry the
    *  group name. Cleared on teardown. */
   readonly outgoingPeer = signal<{ id: string; name: string; isGroup: boolean } | null>(null);
+  /** The 1:1 callee had no live connection when we dialled: the server is
+   *  ringing their phone / browser by PUSH. The outgoing card says "Ringing
+   *  their devices…" instead of "Ringing…". Same 60 s "No answer" timeout. */
+  readonly ringingDevices = signal(false);
 
   // ── Public state ─────────────────────────────────────────────────
   readonly status = signal<CallStatus>('idle');
@@ -210,6 +214,9 @@ export class WebrtcService implements OnDestroy {
     this.callError.set(null);
     this.currentSource = source;
     this.setOutgoingPeer(targetUserId, displayName);
+    // Presence never blocks a call: an offline / away callee is rung on their
+    // registered devices by the server (VoIP / FCM / Web Push).
+    this.ringingDevices.set(!isOnlineStatus(this.signaling.userPresences().get(targetUserId)));
     this.callType.set('audio');
     this.status.set('outgoing');
     try {
@@ -349,6 +356,10 @@ export class WebrtcService implements OnDestroy {
       throw err;
     }
   }
+
+  /** Present a ring obtained out of band (looked up by id after a push —
+   *  see call-push.actions.ts). Same rules as a live IncomingCall event. */
+  receiveIncoming(info: IncomingCallInfo): void { this.onIncomingCall(info); }
 
   // ── In-call controls ─────────────────────────────────────────────
 
@@ -868,6 +879,7 @@ export class WebrtcService implements OnDestroy {
     this.callStartedAt.set(null);
     this.localCallerName.set(null);
     this.outgoingPeer.set(null);
+    this.ringingDevices.set(false);
     this.currentSource = undefined;
     this.usingTurnRelay.set(false);
     this.micMuted.set(false);

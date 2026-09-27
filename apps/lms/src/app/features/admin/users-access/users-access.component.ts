@@ -26,6 +26,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { SignalingService } from '../../../core/services/signaling.service';
+import { CallReachService } from '../../../core/services/call-reach.service';
 import { PresenceService } from '../../../core/services/presence.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -242,6 +243,7 @@ export class UsersAccessComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
   private readonly webrtc = inject(WebrtcService);
   private readonly signaling = inject(SignalingService);
+  private readonly reach = inject(CallReachService);
   private readonly presence = inject(PresenceService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(DialogService);
@@ -258,19 +260,21 @@ export class UsersAccessComponent implements OnInit {
     return this.entitlements.moduleEnabled('messages') && u.isActive && u.id !== this.auth.user()?.id;
   }
 
-  /** Online presence check — used to disable the Call button when offline. */
+  /** Online presence check (live socket). Informational only — presence
+   *  never disables the Call button (offline colleagues ring by push). */
   isOnline(userId: string): boolean {
     return this.signaling.onlineUserIds().has(userId);
   }
 
+  /** Call-button tooltip: "Voice call …" / "Will ring their devices" / … */
+  callHint(u: User): string {
+    return u.authId ? this.reach.hint(u.authId, u.displayName) : `Voice call ${u.displayName}`;
+  }
+
   async callUser(u: User): Promise<void> {
     if (!this.canCall(u) || !u.authId) return;
-    if (!this.isOnline(u.authId)) {
-      this.toasts.info(`${u.displayName} is offline.`);
-      return;
-    }
     try {
-      await this.webrtc.startCall(u.authId, 'admin_internal');
+      await this.webrtc.startCall(u.authId, 'admin_internal', u.displayName);
       this.toasts.info(`Ringing ${u.displayName}…`);
     } catch (err) {
       this.toasts.error((err as Error).message ?? 'Could not place call.');
@@ -405,7 +409,7 @@ export class UsersAccessComponent implements OnInit {
     const u = params.data;
     const ctx = params.context as {
       canCall?: (u: User) => boolean;
-      isOnline?: (authId: string) => boolean;
+      callHint?: (u: User) => string;
       callUser?: (u: User) => void;
       editUser?: (u: User) => void;
       resetPassword?: (u: User) => void;
@@ -413,10 +417,8 @@ export class UsersAccessComponent implements OnInit {
 
     const web = (params.context as { web?: () => boolean })?.web?.() ?? true;
     if (u.isActive && ctx?.canCall?.(u) && u.authId) {
-      const online = ctx?.isOnline?.(u.authId);
       const callBtn = rowAction(web, 'Call', ICON_CALL,
-        online ? `Voice call ${u.displayName}` : `${u.displayName} is offline`);
-      callBtn.disabled = !online;
+        ctx?.callHint?.(u) ?? `Voice call ${u.displayName}`);
       callBtn.addEventListener('click', (e) => { e.stopPropagation(); ctx.callUser?.(u); });
       wrap.appendChild(callBtn);
     }
@@ -623,7 +625,7 @@ export class UsersAccessComponent implements OnInit {
   readonly gridContext = {
     web: () => this.web(),
     canCall: (u: User) => this.canCall(u),
-    isOnline: (authId: string) => this.isOnline(authId),
+    callHint: (u: User) => this.callHint(u),
     callUser: (u: User) => this.callUser(u),
     editUser: (u: User) => this.editUser(u),
     resetPassword: (u: User) => this.resetPassword(u),
