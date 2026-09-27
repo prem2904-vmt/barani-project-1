@@ -5,7 +5,8 @@ import { NumpadDirective, NumpadScopeDirective } from './numpad.directive';
 import { NumpadFlag, NumpadService } from './numpad.service';
 import { NumpadPanelComponent } from './numpad-panel.component';
 import { backspaceText, insertText, parseKeySet } from './numpad-keys';
-import { navigableFields, nextField, placePopover } from './numpad-nav';
+import { navigableFields, nextField } from './numpad-nav';
+import { AuthService } from '../../../core/auth/auth.service';
 
 /**
  * The result numpad (shared/components/numpad): keys go through the field's
@@ -60,8 +61,10 @@ function touchDown(el: Element) {
   el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));
 }
 
+const USER = signal<{ id: string } | null>({ id: 'u-tech-1' });
+
 async function setup(opts: { touch?: boolean; reduced?: boolean } = {}) {
-  TestBed.configureTestingModule({});
+  TestBed.configureTestingModule({ providers: [{ provide: AuthService, useValue: { user: USER } }] });
   const svc = TestBed.inject(NumpadService);
   svc.touch.set(opts.touch ?? true);
   svc.reducedMotion.set(!!opts.reduced);
@@ -103,35 +106,6 @@ describe('numpad keys (pure edits)', () => {
     expect(mm.has('-')).toBe(false);
     expect(mm.has('<')).toBe(false);
     expect(mm.has('7')).toBe(true);
-  });
-});
-
-describe('popover placement', () => {
-  const vp = { width: 1024, height: 1366 };
-  const pad = { width: 272, height: 330 };
-  it('prefers below the field, aligned to it', () => {
-    expect(placePopover({ top: 100, left: 300, width: 120, height: 40 }, pad, vp)).toEqual({ top: 148, left: 300, placement: 'below' });
-  });
-  it('flips above when there is no room below', () => {
-    const s = placePopover({ top: 1200, left: 300, width: 120, height: 40 }, pad, vp)!;
-    expect(s.placement).toBe('above');
-    expect(s.top + pad.height).toBeLessThanOrEqual(1200);
-  });
-  it('goes to the side on a short viewport, never covering the field', () => {
-    const field = { top: 300, left: 200, width: 120, height: 40 };
-    const s = placePopover(field, pad, { width: 1366, height: 640 })!;
-    expect(s.placement).toBe('right');
-    expect(s.left).toBeGreaterThanOrEqual(field.left + field.width);
-    const l = placePopover({ ...field, left: 1100 }, pad, { width: 1366, height: 640 })!;
-    expect(l.placement).toBe('left');
-    expect(l.left + pad.width).toBeLessThanOrEqual(1100);
-  });
-  it('clamps horizontally inside the viewport', () => {
-    const s = placePopover({ top: 100, left: 900, width: 100, height: 40 }, pad, vp)!;
-    expect(s.left + pad.width).toBeLessThanOrEqual(vp.width - 8);
-  });
-  it('returns null when nothing fits (the caller docks a sheet)', () => {
-    expect(placePopover({ top: 100, left: 10, width: 360, height: 40 }, pad, { width: 390, height: 420 })).toBeNull();
   });
 });
 
@@ -297,7 +271,7 @@ describe('pfNumpad — touch', () => {
     const b = q('.b');
     tapField(b);
     expect(key('next').textContent).toContain('Done');
-    expect(key('next').getAttribute('aria-label')).toBe('Done, go to Submit');
+    expect(key('next').getAttribute('aria-label')).toBe('Enter: done, go to Submit');
     press('next');
     expect(document.activeElement).toBe(q('.cta'));
     await new Promise(r => setTimeout(r));
@@ -352,5 +326,110 @@ describe('pfNumpad — touch', () => {
     expect(pad()!.classList).toContain('pf-np--still');
     const css = ((NumpadPanelComponent as any).ɵcmp.styles as string[]).join('\n');
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce/);
+  });
+
+  it('the primary key says Enter (then Next / Done)', async () => {
+    const { q, key, tapField } = await setup();
+    tapField(q('.a'));
+    expect(key('next').querySelector('.pf-np__enter')!.textContent!.trim()).toBe('Enter');
+    expect(key('next').querySelector('.pf-np__then')!.textContent!.trim()).toBe('Next');
+    expect(key('next').getAttribute('aria-label')).toBe('Enter: next result');
+  });
+});
+
+describe('pfNumpad — docked corner (tablet) vs sheet (phone)', () => {
+  const setViewport = (w: number, h: number) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: w });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: h });
+  };
+  // An in-memory Storage (the test runner has no real localStorage).
+  const mem = new Map<string, string>();
+  const store = {
+    getItem: (k: string) => (mem.has(k) ? mem.get(k)! : null),
+    setItem: (k: string, v: string) => { mem.set(k, String(v)); },
+    removeItem: (k: string) => { mem.delete(k); },
+    clear: () => mem.clear(),
+  };
+  beforeEach(() => {
+    mem.clear();
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: store });
+    USER.set({ id: 'u-tech-1' });
+  });
+  afterEach(() => setViewport(1024, 768));
+
+  it('tablet: docked bottom-right, and it STAYS PUT (same element, same corner) as Next walks the fields', async () => {
+    setViewport(1024, 1366);
+    const { q, svc, pad, tapField, press } = await setup();
+    tapField(q('.a'));
+    svc.layoutNow();
+    const first = pad()!;
+    expect(svc.mode()).toBe('corner');
+    expect(first.classList).toContain('pf-np--corner');
+    expect(first.classList).not.toContain('pf-np--left');
+    expect(first.getAttribute('data-placement')).toBe('corner-right');
+    // No field-relative coordinates any more.
+    expect(first.style.top).toBe('');
+    expect(first.style.left).toBe('');
+    // Tap another numeric field: focus moves, the pad does not re-mount.
+    tapField(q('.mic'));
+    svc.layoutNow();
+    expect(pad()).toBe(first);
+    expect(first.getAttribute('data-placement')).toBe('corner-right');
+    press('1');
+    expect(q('.mic').value).toBe('1');
+  });
+
+  it('the grip swaps to the bottom-left corner and remembers it per user (localStorage)', async () => {
+    setViewport(1366, 1024);
+    const { q, svc, pad, tick, tapField } = await setup();
+    const a = q('.a');
+    tapField(a);
+    const grip = pad()!.querySelector('.pf-np__grip') as HTMLButtonElement;
+    expect(grip.getAttribute('aria-label')).toContain('bottom-left');
+    grip.click();
+    tick();
+    expect(svc.corner()).toBe('left');
+    expect(pad()!.classList).toContain('pf-np--left');
+    expect(document.activeElement).toBe(a);
+    expect(store.getItem('pf-numpad-corner:u-tech-1')).toBe('left');
+    // Another user on the same device keeps their own corner.
+    expect(store.getItem('pf-numpad-corner:u-tech-2')).toBeNull();
+  });
+
+  it('a remembered left corner is restored for that user', async () => {
+    store.setItem('pf-numpad-corner:u-tech-1', 'left');
+    setViewport(1024, 1366);
+    const { q, svc, pad, tapField } = await setup();
+    tapField(q('.a'));
+    expect(svc.corner()).toBe('left');
+    expect(pad()!.classList).toContain('pf-np--left');
+  });
+
+  it('storage failures never break the pad (defaults to the right corner)', async () => {
+    const spy = vi.spyOn(store, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    try {
+      const { q, svc, pad, tapField } = await setup();
+      tapField(q('.a'));
+      expect(pad()).not.toBeNull();
+      expect(svc.corner()).toBe('right');
+    } finally { spy.mockRestore(); }
+  });
+
+  it('phone: the bottom sheet, no grip', async () => {
+    setViewport(390, 844);
+    const { q, svc, pad, tick, tapField } = await setup();
+    tapField(q('.a'));
+    svc.layoutNow();
+    tick();
+    expect(svc.mode()).toBe('sheet');
+    expect(pad()!.classList).toContain('pf-np--sheet');
+    expect(pad()!.querySelector('.pf-np__grip')).toBeNull();
+  });
+
+  it('corner CSS respects the safe area and sits above the navbar', () => {
+    const css = ((NumpadPanelComponent as any).ɵcmp.styles as string[]).join('\n');
+    expect(css).toMatch(/\.pf-np--corner[^{]*\{[^}]*safe-area-inset-right/);
+    expect(css).toMatch(/\.pf-np--corner[^{]*\{[^}]*--nd-nav-h/);
+    expect(css).toMatch(/\.pf-np--left[^{]*\{[^}]*safe-area-inset-left/);
   });
 });

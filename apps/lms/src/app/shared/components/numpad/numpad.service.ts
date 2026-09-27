@@ -1,12 +1,13 @@
 import {
-  ApplicationRef, ComponentRef, DestroyRef, EnvironmentInjector, Injectable, Type,
+  ApplicationRef, ComponentRef, DestroyRef, EnvironmentInjector, Injectable, Injector, Type,
   createComponent, inject, signal,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { ImpactStyle } from '@capacitor/haptics';
 import { CapacitorService } from '../../../core/services/capacitor.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { NUMPAD_SYMBOLS, NumpadChar, backspaceText, insertText } from './numpad-keys';
-import { placePopover, PopoverSpot, scrollParentOf } from './numpad-nav';
+import { scrollParentOf } from './numpad-nav';
 
 /** The live flag hint a screen already shows for the field (L / H / CL…). */
 export interface NumpadFlag {
@@ -52,8 +53,10 @@ export const LONG_PRESS_MS = 500;
  * The ONE result numpad: a single overlay shared by every numeric result
  * field on touch devices (see docs/ND-PATTERN.md → 8. Touch → "Result numpad").
  *
- * - iPad / wide touch: a popover next to the focused field (below, above,
- *   right, left — never over it).
+ * - iPad / wide touch: a compact pad DOCKED in a bottom corner (right by
+ *   default; the grip moves it left, remembered per user). It never moves
+ *   while focus walks the fields — type, Enter, type, Enter — and the
+ *   field being edited is scrolled clear of it.
  * - Phone: a bottom-docked sheet (safe-area aware); the page scrolls so the
  *   field stays visible above it.
  * - Desktop / fine pointer: never shown; fields behave exactly as before.
@@ -64,6 +67,8 @@ export class NumpadService {
   private readonly appRef = inject(ApplicationRef);
   private readonly env = inject(EnvironmentInjector);
   private readonly capacitor = inject(CapacitorService, { optional: true });
+  private readonly injector = inject(Injector);
+  private cornerLoadedFor: string | null = null;
 
   /** Coarse (touch) primary pointer — the only place the pad exists. */
   readonly touch = signal(false);
@@ -71,8 +76,9 @@ export class NumpadService {
 
   readonly current = signal<NumpadField | null>(null);
   readonly open = signal(false);
-  readonly mode = signal<'popover' | 'sheet'>('popover');
-  readonly spot = signal<PopoverSpot | null>(null);
+  readonly mode = signal<'corner' | 'sheet'>('corner');
+  /** Which bottom corner the docked (wide-screen) pad sits in. */
+  readonly corner = signal<'right' | 'left'>('right');
   /** Mirrors the field while the pad is up (header echo). */
   readonly value = signal('');
   /** Keys this field shows. */
@@ -182,21 +188,18 @@ export class NumpadService {
   }
 
   show(f: NumpadField): void {
-    const was = this.current();
+    this.loadCorner();
     this.current.set(f);
     this.refresh();
-    if (!this.open() || was !== f) {
-      this.spot.set(null);          // measured before it becomes visible
-      this.open.set(true);
-    }
+    this.cancelUnpad();
+    this.open.set(true);            // already open → stays put, only the field changes
     this.queueLayout();
   }
 
   hide(): void {
     this.open.set(false);
     this.current.set(null);
-    this.spot.set(null);
-    this.unpad();
+    this.unpadSoon();
   }
 
   /** The Hide key: pad away, chain over, field keeps focus (tap it again). */
@@ -370,38 +373,57 @@ export class NumpadService {
     else setTimeout(run);
   }
 
-  /** Position the pad for the current field (sync; specs call it). */
+  /** Dock the pad and lift the field clear of it (sync; specs call it). */
   layoutNow(): void {
     const f = this.current();
     const view = this.doc.defaultView;
     if (!f || !this.open() || !view) return;
     const vw = view.visualViewport?.width ?? view.innerWidth;
     const vh = view.visualViewport?.height ?? view.innerHeight;
-    const wide = vw >= 700 && vh >= 500;
+    // Tablet / wide: a fixed corner. Phone: the bottom sheet.
+    this.mode.set(vw >= 700 && vh >= 500 ? 'corner' : 'sheet');
     const surface = this.panelEl;
-    const r = f.el.getBoundingClientRect();
-    if (wide && surface) {
-      this.mode.set('popover');
-      const spot = placePopover(
-        { top: r.top, left: r.left, width: r.width, height: r.height },
-        { width: surface.offsetWidth || 264, height: surface.offsetHeight || 330 },
-        { width: vw, height: vh },
-      );
-      if (spot) {
-        this.unpad();
-        this.spot.set(spot);
-        return;
-      }
-    }
-    // Phone (or nowhere to float): dock at the bottom and lift the field.
-    this.mode.set('sheet');
-    this.spot.set({ top: 0, left: 0, placement: 'below' });
-    this.reveal(f.el, surface?.offsetHeight ?? 0, vh);
+    if (!surface) return;
+    // From layout, not the (animating) rect: the entrance transform would
+    // report the pad lower than where it settles.
+    const bottom = parseFloat(view.getComputedStyle(surface).bottom) || 0;
+    const h = surface.offsetHeight || 0;
+    const padTop = vh - bottom - h;
+    this.reveal(f.el, bottom + h, padTop);
   }
 
-  /** Keep the field above the docked sheet: pad the scroller so even the
-   *  last row can scroll clear, then scroll just enough. */
-  private reveal(el: HTMLElement, sheetH: number, vh: number): void {
+  // ── Corner (per user) ───────────────────────────────────────────────
+  private cornerKey(): string {
+    let id = 'anon';
+    try {
+      const u = this.injector.get(AuthService, null)?.user?.();
+      id = u?.id || u?.authId || 'anon';
+    } catch { /* no auth in this context */ }
+    return `pf-numpad-corner:${id}`;
+  }
+
+  private loadCorner(): void {
+    const key = this.cornerKey();
+    if (this.cornerLoadedFor === key) return;
+    this.cornerLoadedFor = key;
+    try {
+      const v = this.doc.defaultView?.localStorage.getItem(key);
+      this.corner.set(v === 'left' ? 'left' : 'right');
+    } catch { this.corner.set('right'); }
+  }
+
+  /** The grip: swap bottom-right ⇄ bottom-left (left-handed techs). */
+  toggleCorner(): void {
+    const next = this.corner() === 'right' ? 'left' : 'right';
+    this.corner.set(next);
+    try { this.doc.defaultView?.localStorage.setItem(this.cornerKey(), next); } catch { /* storage off */ }
+    this.current()?.el.focus({ preventScroll: true });
+  }
+
+  /** Keep the field above the docked pad: pad the scroller so even the
+   *  last row can scroll clear, then scroll just enough. `limitY` is the
+   *  pad's top edge in viewport px. */
+  private reveal(el: HTMLElement, sheetH: number, limitY: number): void {
     if (!sheetH) return;
     const scroller = scrollParentOf(el);
     if (!this.padded || this.padded.el !== scroller) {
@@ -410,7 +432,7 @@ export class NumpadService {
       scroller.style.paddingBottom = `${sheetH + 16}px`;
     }
     const r = el.getBoundingClientRect();
-    const limit = vh - sheetH - 12;
+    const limit = limitY - 12;
     let dy = 0;
     if (r.bottom > limit) dy = r.bottom - limit;
     else if (r.top < 12) dy = r.top - 12;
@@ -424,6 +446,17 @@ export class NumpadService {
         scroller.scrollTop += dy;
       }
     }
+  }
+
+  private unpadTimer: ReturnType<typeof setTimeout> | null = null;
+  private cancelUnpad(): void {
+    if (this.unpadTimer) { clearTimeout(this.unpadTimer); this.unpadTimer = null; }
+  }
+  /** Keep the list padding across a short hop (dropdown in between) so the
+   *  page doesn't jump; drop it once the pad has really gone. */
+  private unpadSoon(): void {
+    this.cancelUnpad();
+    this.unpadTimer = setTimeout(() => { this.unpadTimer = null; if (!this.open()) this.unpad(); }, 800);
   }
 
   private unpad(): void {

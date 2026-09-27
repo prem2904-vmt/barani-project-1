@@ -370,8 +370,11 @@ group's grid. **Search results stay one per row** (section 6).
   carry `pfNumpad` (label / unit / live flag inputs) inside a
   `pfNumpadScope="<field selector>" pfNumpadCta="<submit selector>"`. On
   touch (`pointer: coarse`) the system keyboard is suppressed with
-  `inputmode="none"` (never `readonly`) and ONE shared pad appears: a
-  popover beside the field on iPad / wide screens, a bottom sheet on phones.
+  `inputmode="none"` (never `readonly`) and ONE shared pad appears: docked
+  in a bottom corner on iPad / wide screens (right by default; its grip
+  swaps to the left corner, remembered per user) so it never moves while
+  techs type → Enter → type, with the edited field scrolled clear of it;
+  a bottom sheet on phones. The primary key reads **Enter** (Next / Done).
   Keys replay through the field's own keydown validator (no new rules);
   Next walks down the list skipping `data-numpad-skip` (calculated),
   read-only, disabled and hidden fields, opens a dropdown in between, and

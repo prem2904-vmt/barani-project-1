@@ -5,6 +5,7 @@ import { CultureEntryComponent } from './culture-entry.component';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { NumpadService } from '../../../shared/components/numpad/numpad.service';
+import { AuthService } from '../../../core/auth/auth.service';
 
 /**
  * Culture bench AST × the touch numpad: zone boxes (mm) get a digits-only
@@ -21,6 +22,7 @@ function render(opts: { touch: boolean; readonly?: boolean }) {
     providers: [
       { provide: ApiService, useValue: { get: () => of([]), post: () => of({}) } },
       { provide: PlatformService, useValue: { isCapacitor: () => false, isNative: () => false } },
+      { provide: AuthService, useValue: { user: () => ({ id: 'u1' }), hasPermission: () => false } },
     ],
   });
   TestBed.inject(NumpadService).touch.set(opts.touch);

@@ -1,6 +1,6 @@
 /**
  * DOM helpers for the result numpad: the "Next" order (reading order, down
- * the list) and the popover placement. Pure functions over the DOM so specs
+ * the list) and the scroller that lifts a field clear of the docked pad. Pure functions over the DOM so specs
  * can drive them without the overlay.
  */
 
@@ -59,41 +59,6 @@ export function nextField(fields: readonly HTMLElement[], from: HTMLElement): HT
   const idx = fields.findIndex(f => f === from || f.contains(from));
   if (idx >= 0) return fields[idx + 1] ?? null;
   return fields.find(f => !!(from.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) ?? null;
-}
-
-export interface Box { top: number; left: number; width: number; height: number; }
-export type Placement = 'below' | 'above' | 'right' | 'left';
-export interface PopoverSpot { top: number; left: number; placement: Placement; }
-
-/**
- * Where the popover goes: below the field, else above, else to its right,
- * else its left — the first side where the whole pad fits inside the
- * viewport WITHOUT covering the field. `null` when no side fits (the caller
- * then docks the pad as a bottom sheet).
- */
-export function placePopover(
-  field: Box,
-  pad: { width: number; height: number },
-  viewport: { width: number; height: number },
-  gap = 8,
-  margin = 8,
-): PopoverSpot | null {
-  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-  const maxLeft = viewport.width - pad.width - margin;
-  const maxTop = viewport.height - pad.height - margin;
-  if (maxLeft < margin - 0.5 || maxTop < margin - 0.5) return null;
-  const alignX = clamp(field.left, margin, maxLeft);
-  const alignY = clamp(field.top + field.height / 2 - pad.height / 2, margin, maxTop);
-
-  const below = field.top + field.height + gap;
-  if (below + pad.height <= viewport.height - margin) return { top: below, left: alignX, placement: 'below' };
-  const above = field.top - gap - pad.height;
-  if (above >= margin) return { top: above, left: alignX, placement: 'above' };
-  const right = field.left + field.width + gap;
-  if (right + pad.width <= viewport.width - margin) return { top: alignY, left: right, placement: 'right' };
-  const left = field.left - gap - pad.width;
-  if (left >= margin) return { top: alignY, left, placement: 'left' };
-  return null;
 }
 
 /** The element that scrolls `el` (nearest overflowing ancestor, else the page). */

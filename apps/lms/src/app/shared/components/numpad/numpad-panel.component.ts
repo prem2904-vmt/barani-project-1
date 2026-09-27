@@ -20,11 +20,12 @@ const BODY: PadKey[] = [
 
 /**
  * The result numpad surface (one instance, mounted on <body> by the
- * service). Layout — a compact 4-column pad:
+ * service; docked bottom-right / bottom-left on tablets, a bottom sheet on
+ * phones). Layout — a compact 4-column pad:
  *
  *   <   >   −   ⌫
  *   7   8   9   ┐
- *   4   5   6   │ Next / Done (tall, the one violet key)
+ *   4   5   6   │ Enter (Next / Done) — tall, the one violet key
  *   1   2   3   │
  *   0 0     .   ┘
  *
@@ -40,20 +41,33 @@ const BODY: PadKey[] = [
       <div #surface class="pf-np" role="group" aria-label="Number pad"
            data-keep-keyboard
            [class.pf-np--sheet]="svc.mode() === 'sheet'"
-           [class.pf-np--pop]="svc.mode() === 'popover'"
+           [class.pf-np--corner]="svc.mode() === 'corner'"
+           [class.pf-np--left]="svc.mode() === 'corner' && svc.corner() === 'left'"
            [class.pf-np--still]="svc.reducedMotion()"
-           [class.pf-np--measuring]="!svc.spot()"
-           [attr.data-placement]="svc.mode() === 'popover' ? svc.spot()?.placement : 'sheet'"
-           [style.top.px]="svc.mode() === 'popover' ? svc.spot()?.top : null"
-           [style.left.px]="svc.mode() === 'popover' ? svc.spot()?.left : null"
+           [attr.data-placement]="svc.mode() === 'corner' ? 'corner-' + svc.corner() : 'sheet'"
            (pointerdown)="$event.preventDefault()"
            (mousedown)="$event.preventDefault()">
         <div class="pf-np__head">
-          <span class="pf-np__label">{{ f.label() }}</span>
-          <span class="pf-np__value" aria-hidden="true">{{ svc.value() || '—' }}@if (f.unit(); as u) {<span class="pf-np__unit">{{ u }}</span>}</span>
-          @if (f.flag(); as fl) {
-            <span class="pf-np__flag" [attr.data-tone]="fl.tone" role="status">{{ fl.label }}</span>
+          @if (svc.mode() === 'corner') {
+            <!-- Grip: swap corners (left-handed techs); remembered per user. -->
+            <button type="button" class="pf-np__grip" tabindex="-1"
+                    [attr.aria-label]="svc.corner() === 'right' ? 'Move number pad to the bottom-left corner' : 'Move number pad to the bottom-right corner'"
+                    [title]="svc.corner() === 'right' ? 'Move to the left corner' : 'Move to the right corner'"
+                    (click)="svc.toggleCorner()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8 3 12l4 4M17 8l4 4-4 4M3 12h18"/></svg>
+            </button>
           }
+          <!-- Two fixed rows (name, then value + flag) so the docked pad keeps
+               ONE height from field to field — it never shifts while typing. -->
+          <div class="pf-np__id">
+            <span class="pf-np__label">{{ f.label() }}</span>
+            <span class="pf-np__line">
+              <span class="pf-np__value" aria-hidden="true">{{ svc.value() || '—' }}@if (f.unit(); as u) {<span class="pf-np__unit">{{ u }}</span>}</span>
+              @if (f.flag(); as fl) {
+                <span class="pf-np__flag" [attr.data-tone]="fl.tone" role="status">{{ fl.label }}</span>
+              }
+            </span>
+          </div>
           <button type="button" class="pf-np__hide" tabindex="-1" aria-label="Hide number pad" title="Hide number pad"
                   (click)="svc.dismiss()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
@@ -93,15 +107,12 @@ const BODY: PadKey[] = [
             }
           }
           <button type="button" tabindex="-1" class="pf-np__next" data-key="next"
-                  [attr.aria-label]="svc.isLast() ? 'Done, go to Submit' : 'Next result'"
+                  [attr.aria-label]="svc.isLast() ? 'Enter: done, go to Submit' : 'Enter: next result'"
                   (click)="svc.next()">
-            @if (svc.isLast()) {
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-              <span>Done</span>
-            } @else {
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
-              <span>Next</span>
-            }
+            <!-- "Enter" is the promise; the small line says where it goes. -->
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 5v7a3 3 0 0 1-3 3H5"/><path d="m9 11-4 4 4 4"/></svg>
+            <span class="pf-np__enter">Enter</span>
+            <span class="pf-np__then">{{ svc.isLast() ? 'Done' : 'Next' }}</span>
           </button>
         </div>
       </div>
@@ -123,9 +134,17 @@ const BODY: PadKey[] = [
       -webkit-tap-highlight-color: transparent;
       animation: pf-np-in var(--nd-dur-fast, 200ms) var(--nd-spring, ease-out) both;
     }
-    .pf-np[data-placement='above'] { transform-origin: bottom left; }
-    .pf-np[data-placement='below'] { transform-origin: top left; }
-    .pf-np--measuring { visibility: hidden; animation: none; }
+    /* Tablet / wide: docked in a bottom corner, above the navbar, same spot
+       for every field (no jumping while techs type → Enter → type). */
+    .pf-np--corner {
+      right: max(16px, env(safe-area-inset-right, 0px));
+      bottom: calc(max(var(--nd-nav-h, 0px), env(safe-area-inset-bottom, 0px)) + 16px);
+      transform-origin: bottom right;
+    }
+    .pf-np--corner.pf-np--left {
+      right: auto; left: max(16px, env(safe-area-inset-left, 0px));
+      transform-origin: bottom left;
+    }
     .pf-np--sheet {
       left: 0; right: 0; bottom: 0; width: auto;
       border-radius: 18px 18px 0 0; border-bottom: 0;
@@ -135,9 +154,11 @@ const BODY: PadKey[] = [
     }
     .pf-np--sheet .pf-np__head, .pf-np--sheet .pf-np__grid { max-width: 520px; margin-left: auto; margin-right: auto; }
 
-    .pf-np__head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 0 6px 4px; }
+    .pf-np__head { display: flex; align-items: center; gap: 6px; min-height: 58px; padding: 0 0 6px 4px; }
+    .pf-np__id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .pf-np__line { display: flex; align-items: center; gap: 8px; min-height: 22px; }
     .pf-np__label {
-      flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere;
+      overflow-wrap: anywhere;
       font-size: 12px; font-weight: 500; line-height: 1.3; color: var(--text-secondary);
     }
     .pf-np__value {
@@ -158,7 +179,12 @@ const BODY: PadKey[] = [
       width: 44px; height: 44px; margin: -4px -6px -4px 0; border: 0; border-radius: var(--nd-radius, 12px);
       background: transparent; color: var(--text-secondary); cursor: pointer;
     }
-    .pf-np__hide:active { background: var(--nd-chip-bg); }
+    .pf-np__hide:active, .pf-np__grip:active { background: var(--nd-chip-bg); }
+    .pf-np__grip {
+      flex: none; display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; margin: -4px 0 -4px -8px; border: 0; border-radius: var(--nd-radius, 12px);
+      background: transparent; color: var(--text-muted, #9ca3af); cursor: grab;
+    }
 
     .pf-np__grid {
       display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -183,10 +209,12 @@ const BODY: PadKey[] = [
     .pf-np__zero { grid-column: span 2; }
     .pf-np__next {
       grid-column: 4; grid-row: 2 / span 4;
-      flex-direction: column; gap: 6px;
+      flex-direction: column; gap: 4px;
       background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #c026d3));
-      color: #fff; font-size: 15px; font-weight: 600;
+      color: #fff;
     }
+    .pf-np__enter { font-size: 17px; font-weight: 600; letter-spacing: 0.01em; line-height: 1.1; }
+    .pf-np__then { font-size: 12px; font-weight: 500; opacity: 0.85; line-height: 1.1; }
     .pf-np__next:active { transform: scale(0.97); filter: brightness(1.06); }
 
     @keyframes pf-np-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
