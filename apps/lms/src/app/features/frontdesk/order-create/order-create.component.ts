@@ -20,7 +20,7 @@ import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, taxSlabOf
 import { computeBill } from '../../../shared/utils/bill-math';
 import { cartOverlaps, overlapMessage, overlapOnAdd } from './cart-duplicates';
 import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
-import { buildOrderDraft, parseOrderDraft } from './order-draft';
+import { buildOrderDraft, parseOrderDraft, orderDraftKey, orderDraftKeysFor, orderDraftInScope, parseOrderDraftKey, DraftScope } from './order-draft';
 import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
@@ -469,7 +469,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  draft per patient so reception can resume any half-built order
    *  on the same browser. Drafts older than 7 days are dropped on
    *  restore. */
-  private readonly DRAFT_KEY_PREFIX = 'pf:order-draft:';
+  /** The branch this desk is working in. Drafts belong to it: a cart parked
+   *  in Salem is never listed or restored in Trichy (see order-draft.ts). */
+  private draftScope(): DraftScope {
+    const u = this.auth.user?.();
+    return {
+      tenantId: u?.tenantId ?? null,
+      branchId: this.auth.activeBranchId?.() ?? u?.branchId ?? null,
+      defaultBranchId: u?.branchId ?? null,
+    };
+  }
+  /** Drop this patient's draft in the current branch (never another branch's). */
+  private removeDraft(patientId: string): void {
+    for (const k of orderDraftKeysFor(this.draftScope(), patientId)) {
+      try { localStorage.removeItem(k); } catch { /* ignore */ }
+    }
+  }
   private readonly DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   /** UI signal for "draft was just saved" — drives the toast badge. */
   private readonly _hasDraft = signal<boolean>(false);
@@ -1172,8 +1187,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Persist the cart as `p`'s draft (the Draft tab / shelf read this key). */
   private writeDraft(p: Patient): boolean {
     try {
-      localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify(buildOrderDraft({
+      const scope = this.draftScope();
+      const written = orderDraftKey(scope, p.id);
+      localStorage.setItem(written, JSON.stringify(buildOrderDraft({
         savedAt: Date.now(),
+        tenantId: scope.tenantId,
+        branchId: scope.branchId,
         priority: this._priority(),
         testIds: this._selected(),
         specimens: this.specimenPayload(),
@@ -1184,6 +1203,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         discountValue: this.discountValue(),
         discountKind: this.discountKind()
       })));
+      // A legacy (branch-less) copy this save supersedes must not linger as a
+      // second Drafts row.
+      for (const k of orderDraftKeysFor(scope, p.id)) {
+        if (k !== written) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
+      }
       return true;
     } catch {
       return false;
@@ -1214,7 +1238,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   discardDraft() {
     const p = this._patient();
     if (!p) return;
-    try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
+    this.removeDraft(p.id);
     this._hasDraft.set(false);
     this.toasts.info('Draft discarded');
   }
@@ -1222,15 +1246,28 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Restore the saved draft (if any) for the supplied patient id.
    *  Returns true if a non-stale draft was applied. */
   private restoreDraftFor(patientId: string): boolean {
+    // Only THIS branch's draft (or a legacy one that belongs here) — a cart
+    // parked in another branch must never be restored into this one.
+    const scope = this.draftScope();
     let raw: string | null = null;
-    try { raw = localStorage.getItem(this.DRAFT_KEY_PREFIX + patientId); } catch { return false; }
+    let key: string | null = null;
+    try {
+      for (const k of orderDraftKeysFor(scope, patientId)) {
+        const r = localStorage.getItem(k);
+        if (!r) continue;
+        let body: { tenantId?: unknown; patient?: unknown } | null = null;
+        try { body = JSON.parse(r); } catch { /* unreadable — parseOrderDraft rejects it */ }
+        if (!orderDraftInScope(parseOrderDraftKey(k)?.branchId ?? null, body, scope)) continue;
+        raw = r; key = k; break;
+      }
+    } catch { return false; }
     const parsed = parseOrderDraft(raw, Date.now(), this.DRAFT_TTL_MS);
     if (!parsed) {
       // Stale drafts are dropped (an empty/unreadable one is left alone).
-      if (raw) {
+      if (raw && key) {
         try {
           const savedAt = (JSON.parse(raw) as { savedAt?: number })?.savedAt;
-          if (!savedAt || Date.now() - savedAt > this.DRAFT_TTL_MS) localStorage.removeItem(this.DRAFT_KEY_PREFIX + patientId);
+          if (!savedAt || Date.now() - savedAt > this.DRAFT_TTL_MS) localStorage.removeItem(key);
         } catch { /* ignore */ }
       }
       return false;
@@ -1913,7 +1950,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       // The paid summary shows the SERVER's bill as returned — the invoice is
       // the source of truth (it used to be patched up from the cart total).
       this.pendingOrder = null;
-      try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
+      this.removeDraft(p.id);
       this._hasDraft.set(false);
       this._paidBill.set(latest);
       this.paidOrderId.set(order.id);
@@ -2270,7 +2307,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         this.noteOrdered(this._selected());
         // Order persisted — drop any saved draft for this patient.
         const pid = p.id;
-        try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + pid); } catch { /* ignore */ }
+        this.removeDraft(pid);
         this._hasDraft.set(false);
         // Workflow-driven fork: when billing is NOT a separate counter
         // (front_desk), payment is part of THIS walk-in flow — jump straight

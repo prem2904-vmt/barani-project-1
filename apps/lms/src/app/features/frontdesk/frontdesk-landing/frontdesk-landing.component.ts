@@ -94,6 +94,8 @@ interface StaffMember {
  *  There's no backend for drafts — order-create writes them, the Draft tab
  *  reads them. `patient` is a snapshot so we can render without a lookup. */
 interface DraftOrder {
+  /** The localStorage key it lives under (branch-scoped or legacy). */
+  key: string;
   patientId: string;
   patient: Patient;
   testIds: string[];
@@ -102,6 +104,7 @@ interface DraftOrder {
 }
 
 import { InlinePaymentPanelComponent, InlinePaymentResult } from '../order-create/inline-payment-panel.component';
+import { DraftScope, orderDraftInScope, parseOrderDraftKey } from '../order-create/order-draft';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { savedValueRows } from '../../../shared/utils/result-flag';
@@ -370,7 +373,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // `pf:order-draft:<patientId>` so reception can resume it later. There's no
   // backend for drafts — we scan localStorage here, drop stale (>7d) and
   // malformed entries, and surface them as their own work-pane tab.
-  private static readonly DRAFT_KEY_PREFIX = 'pf:order-draft:';
   private static readonly DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   private readonly _drafts = signal<DraftOrder[]>([]);
   readonly draftOrders = this._drafts.asReadonly();
@@ -379,10 +381,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  (savedAt older than 7 days) and malformed entries. */
   private loadDrafts(): DraftOrder[] {
     const out: DraftOrder[] = [];
+    // Only the ACTIVE branch's parked carts: a Salem draft never lists (or
+    // resumes) in Trichy — the patient is shared, the half-built visit isn't.
+    const u = this.auth.user?.();
+    const scope: DraftScope = {
+      tenantId: u?.tenantId ?? null,
+      branchId: this.auth.activeBranchId?.() ?? u?.branchId ?? null,
+      defaultBranchId: u?.branchId ?? null,
+    };
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (!key || !key.startsWith(FrontdeskLandingComponent.DRAFT_KEY_PREFIX)) continue;
+        const k = parseOrderDraftKey(key);
+        if (!key || !k) continue;
         let raw: string | null;
         try { raw = localStorage.getItem(key); } catch { continue; }
         if (!raw) continue;
@@ -391,8 +402,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           const savedAt = parsed?.savedAt;
           if (typeof savedAt !== 'number' || Date.now() - savedAt > FrontdeskLandingComponent.DRAFT_TTL_MS) continue;
           if (!parsed.patient || !Array.isArray(parsed.testIds)) continue;
+          if (!orderDraftInScope(k.branchId, parsed, scope)) continue;
           out.push({
-            patientId: key.slice(FrontdeskLandingComponent.DRAFT_KEY_PREFIX.length),
+            key,
+            patientId: k.patientId,
             patient: parsed.patient,
             testIds: parsed.testIds.filter(id => typeof id === 'string'),
             savedAt,
@@ -415,7 +428,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Discard a parked draft: drop its localStorage key, reload the list, toast. */
   discardDraft(d: DraftOrder, ev?: Event) {
     ev?.stopPropagation();
-    try { localStorage.removeItem(FrontdeskLandingComponent.DRAFT_KEY_PREFIX + d.patientId); } catch { /* ignore */ }
+    try { localStorage.removeItem(d.key); } catch { /* ignore */ }
     this.refreshDrafts();
     this.toasts.success('Draft discarded');
   }
