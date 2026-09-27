@@ -65,6 +65,7 @@ import { formatPatientMeta, patientDisplayName } from "../../../shared/models/pa
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
 import { ZoomTransitionService } from "../../../core/navigation/zoom-transition";
 import { ZoomTargetDirective } from "../../../core/navigation/zoom.directive";
+import { NumpadDirective, NumpadScopeDirective } from "../../../shared/components/numpad/numpad.directive";
 import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
 import { chosenSpecimen } from "../../../shared/utils/micro-specimen";
 import { DraftShelfService } from "../../../core/services/draft-shelf.service";
@@ -130,6 +131,8 @@ function calcKey(testId: string, paramName: string): string {
     SelectComponent,
     HeroBandComponent,
     ZoomTargetDirective,
+    NumpadDirective,
+    NumpadScopeDirective,
   ],
   templateUrl: "./sample-result-entry.component.html",
   styleUrl: "./sample-result-entry.component.scss",

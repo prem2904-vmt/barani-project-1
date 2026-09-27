@@ -10,6 +10,7 @@ import { PlateReading, parsePlate, plateJsonFromCase, readingFromMeasure } from 
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
+import { NumpadDirective, NumpadScopeDirective } from '../../../shared/components/numpad/numpad.directive';
 
 interface Breakpoint {
   organismGroup: string; antibiotic: string;
@@ -27,10 +28,12 @@ interface Breakpoint {
 @Component({
   selector: 'pf-culture-entry',
   standalone: true,
-  imports: [FormsModule, PlateMeasureComponent, TouchButtonComponent, SelectComponent, LogoMarkComponent],
+  imports: [FormsModule, PlateMeasureComponent, TouchButtonComponent, SelectComponent, LogoMarkComponent, NumpadDirective, NumpadScopeDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="space-y-4 pb-6" [class.ce--ro]="readonly">
+    <!-- pfNumpadScope: the touch numpad's Next walks every organism's
+         zone / MIC boxes in reading order (same set Enter walks). -->
+    <div class="space-y-4 pb-6" [class.ce--ro]="readonly" pfNumpadScope=".ce-abx__zone">
       @if (!embedded) {
         <!-- Specimen / gram / colony — the standalone C&S form. The culture
              workbench captures these in their own stages, so embedded mode
@@ -257,11 +260,15 @@ interface Breakpoint {
                   <span class="ce-abx__zonewrap">
                     @if (mode() === 'mic') {
                       <input type="text" class="ce-abx__zone" inputmode="decimal"
+                             [pfNumpad]="!readonly" pfNumpadKeys="digits . < >" pfNumpadUnit="µg/mL"
+                             [pfNumpadLabel]="ab.name + ' MIC'"
                              [ngModel]="ab.micValue" (ngModelChange)="setMic(oi, abi, $event ?? null)"
                              (keydown.enter)="focusNextZone($event)" placeholder="MIC" />
                       <span class="ce-abx__unit">µg/mL</span>
                     } @else {
                       <input type="number" class="ce-abx__zone" inputmode="numeric"
+                             [pfNumpad]="!readonly" pfNumpadKeys="digits" pfNumpadUnit="mm"
+                             [pfNumpadLabel]="ab.name + ' zone'"
                              [ngModel]="ab.zoneSize" (ngModelChange)="setZone(oi, abi, $event ?? null)"
                              (keydown.enter)="focusNextZone($event)" placeholder="zone" />
                       <span class="ce-abx__unit">mm</span>

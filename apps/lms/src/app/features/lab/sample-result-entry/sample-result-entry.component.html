@@ -2,7 +2,11 @@
      band (back + tenant + actions, identical on every step) whose pill is
      the CONTEXT BAR → full-width RESULTS cards, one per test. Save draft /
      Submit live in the band's actions (phones: a compact bottom bar). -->
-<section class="pf-sre nd-page" [class.pf-sre--view]="viewOnly()">
+<!-- pfNumpadScope: the touch numpad's Next walks these fields down the list
+     (same set Enter walks) and ends on the visible Submit. -->
+<section class="pf-sre nd-page" [class.pf-sre--view]="viewOnly()"
+         pfNumpadScope="input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger"
+         pfNumpadCta=".pf-sre-submit">
   <input type="file" #attachInput hidden multiple accept="image/*,video/*"
          (change)="onAttachPicked($event)" />
 
@@ -548,8 +552,15 @@
       <ng-template #resultInput let-t="t" let-p="p">
         @switch (inputKindFor(p)) {
           @case ("number") {
+            <!-- Touch: the in-app numpad (keys replay through
+                 allowOnlyNumbers); Next skips calculated fields. -->
             <input type="text" inputmode="decimal"
                    class="pf-sre__ginput pf-sre__ginput--num"
+                   [pfNumpad]="!viewOnly()"
+                   [pfNumpadLabel]="p.title || p.name"
+                   [pfNumpadUnit]="p.unit ?? null"
+                   [pfNumpadFlag]="flagFor(t, p)"
+                   [attr.data-numpad-skip]="calcChip(t, p) ? '' : null"
                    [attr.aria-label]="p.title || p.name"
                    [attr.data-sre-field]="t.id + '::' + p.name"
                    [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"

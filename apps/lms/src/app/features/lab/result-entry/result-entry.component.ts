@@ -28,6 +28,8 @@ import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { NumPadComponent } from '../../../shared/primitives/num-pad.component';
 import { TileComponent, TileTone } from '../../../shared/primitives/tile.component';
 import { SelectComponent } from '../../../shared/primitives/select.component';
+import { NumpadDirective, NumpadScopeDirective } from '../../../shared/components/numpad/numpad.directive';
+import { NumpadService } from '../../../shared/components/numpad/numpad.service';
 
 interface EnterResponse {
   orderTest: OrderTest;
@@ -86,11 +88,15 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     NumPadComponent,
     TileComponent,
     SelectComponent,
-    EditResultDialogComponent
+    EditResultDialogComponent,
+    NumpadDirective,
+    NumpadScopeDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-page">
+    <!-- pfNumpadScope: the touch numpad's Next walks the parameters down the
+         list and ends on Submit. -->
+    <section class="pf-page" pfNumpadScope="[data-param]" pfNumpadCta=".pf-head__btn--primary">
       <header class="pf-page__header px-4 md:px-8 lg:px-10 pt-4">
         <div class="pf-head">
           <button type="button" class="pf-head__back press" (click)="back()" aria-label="Back">
@@ -310,6 +316,11 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                 @case ('numeric') {
                                   <input type="number" inputmode="decimal" step="any"
                                          class="pf-rg__input pf-rg__input--num"
+                                         pfNumpad
+                                         [pfNumpadLabel]="p.title || p.name"
+                                         [pfNumpadUnit]="p.unit ?? null"
+                                         [pfNumpadFlag]="flagFor(p)"
+                                         [attr.data-numpad-skip]="calcChipFor(p) ? '' : null"
                                          [class.pf-rg__input--outr]="isOutOfRange(p)"
                                          [class.pf-rg__input--crit]="isParamCritical(p)"
                                          [class.pf-rg__input--invalid]="isInvalidNumeric(p)"
@@ -610,6 +621,8 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                             <input type="text"
                                    inputmode="numeric"
                                    class="pf-param__input pf-param__input--num"
+                                   pfNumpad pfNumpadKeys="digits"
+                                   [pfNumpadLabel]="p.title || p.name"
                                    [value]="durationValueOf(p.name).value ?? ''"
                                    (focus)="setActive(p.name)"
                                    (input)="setDurationValue(p.name, { value: toNumOrNull(asInput($event)) })"
@@ -628,6 +641,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                               <input type="text"
                                      inputmode="decimal"
                                      class="pf-param__input pf-param__input--num"
+                                     pfNumpad pfNumpadKeys="digits ."
+                                     [pfNumpadLabel]="p.title || p.name"
+                                     [pfNumpadUnit]="sizeValueOf(p.name).unit"
                                      [value]="sizeValueOf(p.name).values[i] ?? ''"
                                      (focus)="setActive(p.name)"
                                      (input)="setSizeValueAt(p.name, i, toNumOrNull(asInput($event)))"
@@ -790,6 +806,11 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                             <input type="text"
                                    inputmode="decimal"
                                    class="pf-param__input pf-param__input--num"
+                                   pfNumpad
+                                   [pfNumpadLabel]="p.title || p.name"
+                                   [pfNumpadUnit]="p.unit ?? null"
+                                   [pfNumpadFlag]="flagFor(p)"
+                                   [attr.data-numpad-skip]="calcChipFor(p) ? '' : null"
                                    [class.pf-param__input--outr]="isOutOfRange(p)"
                                    [class.pf-param__input--crit]="isParamCritical(p)"
                                    [class.pf-param__input--invalid]="isInvalidNumeric(p)"
@@ -892,11 +913,17 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
             <!-- Body: swaps based on active param kind -->
             @switch (railKind()) {
               @case ('numeric') {
-                <pf-num-pad
-                  [value]="(activeParam() ? (valueOf(activeParam()!) ?? '') : '').toString()"
-                  [allowDecimal]="true"
-                  [allowNegative]="false"
-                  (valueChange)="padChange($event)"></pf-num-pad>
+                <!-- Touch devices get the shared result numpad beside the
+                     field itself (pfNumpad) — no second keypad here. -->
+                @if (!touchPad()) {
+                  <pf-num-pad
+                    [value]="(activeParam() ? (valueOf(activeParam()!) ?? '') : '').toString()"
+                    [allowDecimal]="true"
+                    [allowNegative]="false"
+                    (valueChange)="padChange($event)"></pf-num-pad>
+                } @else {
+                  <p class="pf-rail__padhint">Tap a result — the number pad opens beside it.</p>
+                }
               }
 
               @case ('choice') {
@@ -2041,6 +2068,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     }
 
     /* ── Right rail: lg+ is docked in the grid column, <lg is a bottom drawer ── */
+    .pf-rail__padhint { margin: 12px 4px 0; font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
     .pf-rail {
       display: block;
       min-height: 0;
@@ -2786,6 +2814,8 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
 })
 export class ResultEntryComponent implements OnInit, AfterViewInit {
   private readonly api = inject(ApiService);
+  /** Touch device → the shared result numpad replaces the rail keypad. */
+  readonly touchPad = inject(NumpadService).touch;
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);

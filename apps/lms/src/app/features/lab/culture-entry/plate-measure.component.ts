@@ -19,6 +19,7 @@ import {
 } from './plate-vision';
 import { DiskCandidate, drugForCode, normCode, panelCandidates } from './disk-codes';
 import { AiUsage, CodeSlot, DiskReadApi, aiFallbackMessage, buildMosaic, formatTokens, mapAiRead } from './disk-read';
+import { NumpadDirective, NumpadScopeDirective } from '../../../shared/components/numpad/numpad.directive';
 
 type Pt = { x: number; y: number };
 type Mode = 'capture' | 'calibrate' | 'measure' | 'review';
@@ -57,7 +58,7 @@ const NOT_A_DISK = '__not_a_disk';
 @Component({
   selector: 'pf-plate-measure',
   standalone: true,
-  imports: [SelectComponent, LogoMarkComponent, NgTemplateOutlet],
+  imports: [SelectComponent, LogoMarkComponent, NgTemplateOutlet, NumpadDirective, NumpadScopeDirective],
   host: { '(window:keydown)': 'onKey($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -299,7 +300,7 @@ const NOT_A_DISK = '__not_a_disk';
                   <!-- The caller's review step (e.g. organism → CLSI panel), fed the live disks. -->
                   <ng-container *ngTemplateOutlet="reviewTpl; context: { $implicit: liveDisks() }" />
                 } @else {
-                <ul class="pm-disks">
+                <ul class="pm-disks" pfNumpadScope=".pm-mm">
                   @for (d of rows(); track d.id) {
                     <li class="pm-drow" [attr.aria-selected]="d.id === selectedId()" [class.pm-drow--off]="d.notDisk" [class.pm-drow--settle]="justRead().has(d.id)"
                         [attr.data-n]="d.n" (click)="select(d.id)">
@@ -330,6 +331,8 @@ const NOT_A_DISK = '__not_a_disk';
                         @if (mode() === 'measure') {
                           <label class="pm-drow__mm" (click)="$event.stopPropagation()">
                             <input class="pm-mm nd-num" type="text" inputmode="decimal" [value]="mmOf(d)"
+                                   pfNumpad pfNumpadKeys="digits ." pfNumpadUnit="mm"
+                                   [pfNumpadLabel]="'Zone for disk ' + d.n"
                                    [attr.aria-label]="'Zone for disk ' + d.n + ' in mm'"
                                    (focus)="select(d.id)" (change)="setMm(d.id, $any($event.target).value)"
                                    (keydown.enter)="nextMm($event)" />
