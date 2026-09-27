@@ -72,6 +72,7 @@ import {
   compareTestsByCode,
 } from '../../../../shared/utils/test-code';
 import { DialogService } from '../../../../core/services/dialog.service';
+import { shownDepartmentName } from '../../../../shared/utils/package-department';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -848,7 +849,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private ensureLayoutData(): void {
     if (this._layoutLoaded) return;
     this._layoutLoaded = true;
-    if (this.deptColumnCfg().length === 0) this.loadDeptColumns(this._draft().departmentId);
+    // A package has no department — never seed from a legacy stored one.
+    const d = this._draft();
+    if (this.deptColumnCfg().length === 0) this.loadDeptColumns(d.type === 'package' ? null : d.departmentId);
     this.loadTestColumns();
   }
   readonly visibleSections = computed<Array<{ value: TestSection; label: string; desc: string }>>(() => {
@@ -953,7 +956,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const out: PreviewProfileMember[] = [];
     for (const id of this.packageItems()) {
       const t = byId.get(id);
-      if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null });
+      // Each member previews under ITS OWN department (a package has none).
+      if (t) out.push({ id, name: t.name, parameters: t.parameters ?? null, department: shownDepartmentName(t) || null });
     }
     return out;
   });
@@ -978,7 +982,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const origin = originLabel({ origin: this.origin(), catalogMode: this.catalogMode() });
     if (origin) chips.push({ k: 'Origin', v: origin, sec: 'identity' });
     chips.push({ k: 'Code', v: (d.testCode ?? '').trim() || (d.id ? '—' : 'Auto'), sec: 'identity' });
-    chips.push({ k: 'Dept', v: this.selectedDeptName() || '—', sec: 'identity' });
+    // A package carries no department (owner 2026-09-27) — no Dept chip.
+    if (d.type !== 'package') chips.push({ k: 'Dept', v: this.selectedDeptName() || '—', sec: 'identity' });
     if (d.type === 'individual') {
       const tube = this.tubeColors.find(c => c.key === d.tubeColor)?.label;
       const sample = [(d.sampleType ?? '').trim(), tube].filter(Boolean).join(' · ');
@@ -1047,7 +1052,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const d = this._draft();
     const rows: Array<{ label: string; ok: boolean; action?: TestSection }> = [];
     const idOk = !!d.name.trim() && !this.fieldError('name')
-      && !!d.departmentId && (d.price ?? 0) >= 0;
+      && (d.type === 'package' || !!d.departmentId) && (d.price ?? 0) >= 0;
     rows.push({ label: 'Identity & pricing', ok: idOk, action: idOk ? undefined : 'identity' });
     if (d.type === 'individual') {
       const kindOk = !!this.entryKind() || !this.isSingleValue();

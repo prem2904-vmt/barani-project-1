@@ -288,7 +288,7 @@
           <div class="pf-readonly-test-card">
             <div class="min-w-0">
               <p class="font-semibold text-sm truncate" [title]="testDisplayName(t)">{{ testDisplayName(t) }}</p>
-              <p class="text-xs text-muted mt-0.5">{{ t.department?.name ?? 'General' }}</p>
+              <p class="text-xs text-muted mt-0.5">{{ t.type === 'package' ? 'Package' : (deptLabel(t) || 'General') }}</p>
             </div>
             <span class="pf-readonly-test-card__price"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
           </div>
@@ -1039,7 +1039,7 @@
           <span class="pf-us__tcode">{{ shortCode(t) }}</span>
           <!-- Full name (wraps if it must, never cut off) + muted department. -->
           <span class="pf-us__tname">{{ testDisplayName(t) }}</span>
-          @if (t.department?.name) { <span class="pf-us__tdept">{{ t.department?.name }}</span> }
+          @if (deptLabel(t); as dn) { <span class="pf-us__tdept">{{ dn }}</span> }
           <span class="pf-us__tprice"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: t }"></ng-container></span>
           <span class="sr-only">{{ isSelected(t.id) ? 'In cart, tap to remove' : 'Tap to add' }}</span>
         </button>

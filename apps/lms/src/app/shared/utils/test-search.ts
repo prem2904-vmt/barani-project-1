@@ -1,4 +1,5 @@
 import { Test } from '../models/test.model';
+import { shownDepartmentName } from './package-department';
 
 /**
  * Generate US/UK spelling variants of a search string so the catalogue
@@ -42,7 +43,8 @@ export function scoreTestSearch(test: Test | any, query: string, aliases: readon
   // profile's own member list, not a tag someone had to remember to type).
   const profile = [test?.profile, ...aliases].filter(Boolean).join(' ').toLowerCase();
   const hsn = String(test?.hsnSacCode ?? '').toLowerCase();
-  const dept = String(test?.department?.name ?? '').toLowerCase();
+  // A package carries no department (a legacy stored one is never matched).
+  const dept = shownDepartmentName(test).toLowerCase();
   const hay = [name, code, short, profile, hsn, dept].join(' ');
 
   // 1) Exact / prefix / substring — the original behaviour, now ranked.

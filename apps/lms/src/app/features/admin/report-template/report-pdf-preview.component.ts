@@ -17,6 +17,9 @@ export interface PreviewProfileMember {
   /** TestEntity.Parameters JSON (wrapper or bare array) — sample values are
    *  harvested from it so member results resolve to something visible. */
   parameters?: string | null;
+  /** The member's OWN department (a package has none — its members print
+   *  under theirs). Falls back to the previewed test's department. */
+  department?: string | null;
 }
 
 /**
@@ -276,7 +279,7 @@ export class ReportPdfPreviewComponent implements OnDestroy {
         return {
           testId: m.id,
           name: m.name,
-          department: this.department() || 'Department',
+          department: m.department || this.department() || 'Department',
           packageTestId: testId,
           profileTestId: testId,
           packageType: 'profile',

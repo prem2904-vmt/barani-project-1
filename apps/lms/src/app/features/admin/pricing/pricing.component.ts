@@ -16,12 +16,19 @@ import {
   PriceWriteItem, TENANT_PRICE_SCOPE, effectivePrice, isOffered, isPriceDefault, priceListUrl,
 } from '../../../shared/utils/test-pricing';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { isPackage, shownDepartmentName } from '../../../shared/utils/package-department';
+
+/** Department-filter value for the "Packages" option (packages have no department). */
+export const PACKAGES_FILTER = '__packages__';
 
 export interface PriceRow {
   id: string;
   name: string;
   deptName: string;
   deptId: string;
+  /** A package — it carries no department (owner 2026-09-27); listed under
+   *  its own "Packages" filter, never under a department. */
+  isPackage?: boolean;
   /** Saved effective price for the viewed scope (₹1 when never priced). */
   orig: number;
   /** Still at the ₹1 default (nobody priced it for this scope). */
@@ -128,7 +135,7 @@ export interface PriceRow {
                 <div class="grow min-w-0">
                   <p class="nd-row__name pf-pricing__name">{{ r.name }}</p>
                   <p class="pf-pricing__meta">
-                    <span>{{ r.deptName || 'No department' }}</span>
+                    <span>{{ r.isPackage ? 'Package' : (r.deptName || 'No department') }}</span>
                     @if (!offeredNow(r.id)) {
                       <span class="pf-price-flag pf-price-flag--off">Not offered here</span>
                     }
@@ -302,13 +309,14 @@ export class PricingComponent implements OnInit {
   readonly deptOptions = computed<PfSelectOption[]>(() => [
     { value: '', label: 'All departments' },
     ...this.dedupeByCode(this._departments()).map(d => ({ value: d.id, label: d.name + (d.code ? ' · ' + d.code : '') })),
+    { value: PACKAGES_FILTER, label: 'Packages' },
   ]);
 
   readonly filtered = computed<PriceRow[]>(() => {
     const s = (this.bandQuery() ?? this.search()).trim().toLowerCase();
     const dept = this.selectedDeptId();
     return this._rows().filter(r =>
-      (!dept || r.deptId === dept) &&
+      (!dept || (dept === PACKAGES_FILTER ? !!r.isPackage : (!r.isPackage && r.deptId === dept))) &&
       (!s || r.name.toLowerCase().includes(s))
     );
   });
@@ -322,6 +330,7 @@ export class PricingComponent implements OnInit {
 
   scopeLabel(): string {
     const dept = this.selectedDeptId();
+    if (dept === PACKAGES_FILTER) return 'Applies to packages';
     const name = this._departments().find(d => d.id === dept)?.name;
     return dept && name ? `Applies to ${name}` : 'Applies to all departments';
   }
@@ -377,8 +386,10 @@ export class PricingComponent implements OnInit {
         const rows: PriceRow[] = (list ?? []).map(t => ({
           id: t.id,
           name: t.name,
-          deptName: t.department?.name ?? '',
-          deptId: t.department?.id ?? t.departmentId ?? '',
+          // A package carries no department — a legacy stored one is ignored.
+          deptName: shownDepartmentName(t),
+          deptId: isPackage(t) ? '' : (t.department?.id ?? t.departmentId ?? ''),
+          isPackage: isPackage(t),
           orig: effectivePrice(t),
           notPriced: isPriceDefault(t),
           offered: isOffered(t),

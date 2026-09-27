@@ -45,6 +45,7 @@ import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.c
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { MIN_LOAD_MS, heldFlag } from '../../../shared/utils/min-duration';
+import { memberDepartmentNames, shownDepartmentName } from '../../../shared/utils/package-department';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -560,7 +561,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly deptChips = computed<Array<{ name: string; code: string }>>(() => {
     const map = new Map<string, string>();
     for (const t of this._tests()) {
-      const name = t.department?.name?.trim();
+      const name = shownDepartmentName(t);   // a package carries no department
       if (name && !map.has(name)) map.set(name, (t.department?.code ?? '').trim());
     }
     return [...map.entries()].map(([name, code]) => ({ name, code })).sort((a, b) => a.name.localeCompare(b.name));
@@ -1522,8 +1523,20 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
   private matchesSearchDept(t: Test): boolean {
     const d = this.searchDept();
-    return !d || (t.department?.name?.trim() || '') === d;
+    return !d || this.searchDeptsOf(t).includes(d);
   }
+  /** Every loaded row by id (package → member departments). */
+  private readonly testById = computed(() => new Map(this._tests().map(t => [t.id, t] as const)));
+  /** Departments a row counts under for the dropdown's department chips:
+   *  its own; a PACKAGE has none of its own, so it counts under every
+   *  department its members are in (never vanishes behind a chip). */
+  private searchDeptsOf(t: Test): string[] {
+    if (t.type === 'package') return memberDepartmentNames(t, this.testById());
+    const own = shownDepartmentName(t);
+    return own ? [own] : [''];
+  }
+  /** The muted department under a row / cart card: a package shows none. */
+  deptLabel(t: Test): string { return shownDepartmentName(t); }
   /** Chip counts: each type within the current department, and each
    *  department within the current type (so the counts answer "what would
    *  I get if I tapped this"). */
@@ -1537,8 +1550,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const out: Record<string, number> = {};
     for (const t of this.searchBase()) {
       if (!this.matchesSearchType(t)) continue;
-      const d = t.department?.name?.trim() || '';
-      out[d] = (out[d] ?? 0) + 1;
+      for (const d of this.searchDeptsOf(t)) out[d] = (out[d] ?? 0) + 1;
     }
     return out;
   });

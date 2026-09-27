@@ -444,7 +444,10 @@ describe('Search focus mode — dropdown filters', () => {
     T('uket', 'Urine Ketones', 'Clinical Pathology', { department: { name: 'Clinical Pathology', code: 'CPY' } }),
     T('ualb', 'Urine Albumin', 'Biochemistry', { department: { name: 'Biochemistry', code: 'BIO' } }),
     T('uprof', 'Urine Routine Panel', 'Clinical Pathology', { type: 'profile', department: { name: 'Clinical Pathology', code: 'CPY' } }),
-    T('upkg', 'Urine Checkup Bundle', 'Biochemistry', { type: 'package', department: { name: 'Biochemistry', code: 'BIO' } }),
+    // A package has no department (owner 2026-09-27): it counts under its
+    // MEMBERS' departments (here Urine Albumin → Biochemistry).
+    T('upkg', 'Urine Checkup Bundle', '', { type: 'package', department: null,
+      parameters: JSON.stringify({ items: [{ testId: 'ualb' }] }) }),
   ];
 
   it('type chips narrow the results; counts reflect each type', () => {

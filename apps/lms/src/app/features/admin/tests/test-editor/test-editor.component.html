@@ -182,7 +182,7 @@
         <div class="pf-te2-sec__label nd-card__head">
           <span class="nd-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'identity' }"></ng-container></span>
           <h2 class="nd-card__label pf-te2-sec__title pf-te2-sec__h">Basics</h2>
-          <p class="nd-card__note pf-te2-sec__sub">The test's name, department and codes.</p>
+          <p class="nd-card__note pf-te2-sec__sub">{{ d.type === 'package' ? 'The package’s name and type. Its members keep their own departments.' : 'The test’s name, department and codes.' }}</p>
         </div>
         <div class="pf-te2-sec__body nd-card__body">
           <div class="pf-te2-grid">
@@ -201,12 +201,16 @@
               <label class="pf-uf__lbl">Flow</label>
               <pf-select [options]="flowOptions" [value]="d.flow" (valueChange)="patch({ flow: $event })"></pf-select>
             </div>
-            <div class="pf-uf">
-              <label class="pf-uf__lbl">Department</label>
-              <pf-select [options]="departmentOptions()" [value]="selectedDeptName()"
-                         placeholder="— Select department —"
-                         (valueChange)="onDeptPicked($event)"></pf-select>
-            </div>
+            <!-- A package bundles several departments' tests, so it carries
+                 no department (owner 2026-09-27); tests & profiles keep it. -->
+            @if (d.type !== 'package') {
+              <div class="pf-uf" data-field="department">
+                <label class="pf-uf__lbl">Department</label>
+                <pf-select [options]="departmentOptions()" [value]="selectedDeptName()"
+                           placeholder="— Select department —"
+                           (valueChange)="onDeptPicked($event)"></pf-select>
+              </div>
+            }
             @if (d.type === 'individual' && isMicroDept()) {
               <div class="pf-uf pf-uf--span">
                 <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="askSpecimen()"
@@ -1229,7 +1233,7 @@
           <pf-report-pdf-preview class="pf-livewrap__pdf"
             [testId]="d.id"
             [testName]="d.name"
-            [department]="selectedDeptName()"
+            [department]="d.type === 'package' ? '' : selectedDeptName()"
             [sampleType]="d.sampleType"
             [parameters]="parameterNames()"
             [profileMembers]="previewProfileMembers()"

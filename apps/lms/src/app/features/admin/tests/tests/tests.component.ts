@@ -40,6 +40,7 @@ import {
   canRevertToMaster, originLabel, restoreDefaultsMessage, restoreDefaultsSummary, revertToMasterPath,
 } from '../../../../shared/utils/test-origin';
 import { compareTestCodes } from '../../../../shared/utils/test-code';
+import { departmentKeys, shownDepartmentName } from '../../../../shared/utils/package-department';
 import { pendingProposalIds } from '../../../../shared/utils/catalog-proposals';
 import { CatalogProposal } from '../../../../shared/models/test.model';
 import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.component';
@@ -370,13 +371,24 @@ export class TestsComponent implements OnInit {
         || ((t as { shortName?: string }).shortName ?? '').toLowerCase().includes(q);
   }
 
+  /** Every loaded row by id (package → member department lookups). */
+  private readonly byId = computed(() => new Map(this._tests().map(t => [t.id, t] as const)));
+
+  /** Department keys a row counts under. A package has no department of its
+   *  own: it is listed under every department its members are in (see
+   *  shared/utils/package-department), never under "Unassigned". */
+  private deptKeys(t: Test): string[] {
+    return departmentKeys(t, this.byId(), UNASSIGNED);
+  }
+
   readonly departments = computed<DeptBucket[]>(() => {
     const countByName = new Map<string, number>();
     let unassigned = 0;
     for (const t of this.typeTests()) {
-      const name = t.department?.name?.trim();
-      if (name) countByName.set(name, (countByName.get(name) ?? 0) + 1);
-      else unassigned++;
+      for (const name of this.deptKeys(t)) {
+        if (name === UNASSIGNED) unassigned++;
+        else countByName.set(name, (countByName.get(name) ?? 0) + 1);
+      }
     }
 
     const buckets: DeptBucket[] = this._depts().map(d => ({
@@ -429,7 +441,7 @@ export class TestsComponent implements OnInit {
     const topType = this._type();
     const dep = this._selectedDept();
     let roots = all.filter(t => t.type === topType);
-    if (dep) roots = roots.filter(t => (t.department?.name?.trim() || UNASSIGNED) === dep);
+    if (dep) roots = roots.filter(t => this.deptKeys(t).includes(dep));
     if (q) {
       roots = roots.filter(t =>
         this.matchesSearch(t, q)
@@ -474,6 +486,7 @@ export class TestsComponent implements OnInit {
   readonly deptOptions = computed<PfSelectOption[]>(() => {
     const map = new Map<string, PfSelectOption>();
     for (const t of this._tests()) {
+      if (!shownDepartmentName(t)) continue;   // a package carries no department
       if (t.department?.id && !map.has(t.department.id)) {
         map.set(t.department.id, { value: t.department.id, label: t.department.name + (t.department.code ? ' · ' + t.department.code : '') });
       }
@@ -948,7 +961,11 @@ export class TestsComponent implements OnInit {
     if (!next) {
       const ok = await this.dialog.confirm({
         title: `Turn off ${d.name}?`,
-        message: `This hides the department lab-wide${d.count ? `, with its ${d.count} ${d.count === 1 ? 'test' : 'tests'}` : ''}, until you turn it back on.`,
+        message: this.type() === 'package'
+          // A package has no department: turning one off never hides a
+          // package — only the member tests of that department.
+          ? `This hides the department's tests lab-wide until you turn it back on. Packages stay listed.`
+          : `This hides the department lab-wide${d.count ? `, with its ${d.count} ${d.count === 1 ? 'test' : 'tests'}` : ''}, until you turn it back on.`,
         confirmLabel: 'Turn off',
         cancelLabel: 'Keep it on',
         tone: 'danger',
