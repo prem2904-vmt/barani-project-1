@@ -157,7 +157,11 @@ export class KeyboardService {
     if (tag === 'INPUT') {
       const input = el as HTMLInputElement;
       if (input.readOnly) return false;
-      if (input.getAttribute('inputmode') === 'none') return false;
+      // The result numpad's fields (inputmode="none" / pfNumpad): iOS raises
+      // no system keyboard for them, so focusing one is NOT "keyboard up" —
+      // the bottom bar and page layout stay as they are. Only the viewport /
+      // Capacitor keyboard signals can say otherwise.
+      if (input.getAttribute('inputmode') === 'none' || input.hasAttribute('data-pf-numpad')) return false;
       // Non-text input types don't raise a keyboard.
       const noKeyboard = new Set([
         'checkbox', 'radio', 'button', 'submit', 'reset',

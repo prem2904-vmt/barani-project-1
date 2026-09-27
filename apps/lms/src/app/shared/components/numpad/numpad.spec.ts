@@ -5,7 +5,7 @@ import { NumpadDirective, NumpadScopeDirective } from './numpad.directive';
 import { NumpadFlag, NumpadService } from './numpad.service';
 import { NumpadPanelComponent } from './numpad-panel.component';
 import { backspaceText, insertText, parseKeySet } from './numpad-keys';
-import { navigableFields, nextField } from './numpad-nav';
+import { navigableFields, nextField, scrollParentOf } from './numpad-nav';
 import { AuthService } from '../../../core/auth/auth.service';
 
 /**
@@ -436,5 +436,40 @@ describe('pfNumpad — docked corner (tablet) vs sheet (phone)', () => {
     expect(css).toMatch(/\.pf-np--corner[^{]*\{[^}]*safe-area-inset-right/);
     expect(css).toMatch(/\.pf-np--corner[^{]*\{[^}]*--nd-nav-h/);
     expect(css).toMatch(/\.pf-np--left[^{]*\{[^}]*safe-area-inset-left/);
+  });
+});
+
+describe('lifting the field never clips the results (iPad, 2026-09-28)', () => {
+  /** page scroller > card > table wrapper (overflow-x: auto) > input — the
+   *  sample-result-entry structure. */
+  function build() {
+    const page = document.createElement('div');
+    page.style.overflowY = 'auto';
+    const wrap = document.createElement('div');
+    wrap.style.overflowX = 'auto';
+    wrap.style.overflowY = 'auto';          // what overflow-x:auto computes to
+    const input = document.createElement('input');
+    wrap.appendChild(input); page.appendChild(wrap); document.body.appendChild(page);
+    const size = (el: HTMLElement, ch: number, sh: number) => {
+      Object.defineProperty(el, 'clientHeight', { configurable: true, value: ch });
+      Object.defineProperty(el, 'scrollHeight', { configurable: true, value: sh });
+    };
+    size(wrap, 120, 124);                   // a table box, a few px of vertical slack
+    size(page, 700, 1600);                  // the real page scroller
+    return { page, wrap, input };
+  }
+  afterEach(() => document.body.querySelectorAll('div').forEach(d => { if (!d.closest('pf-numpad-panel')) d.remove(); }));
+
+  it('the table wrapper is never chosen; the page-sized scroller is', () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1024 });
+    const { page, input } = build();
+    expect(scrollParentOf(input)).toBe(page);
+  });
+
+  it('with no page-sized scroller, the document scrolls (never a small inner box)', () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1024 });
+    const { page, input } = build();
+    Object.defineProperty(page, 'clientHeight', { configurable: true, value: 200 });
+    expect(scrollParentOf(input)).toBe(document.scrollingElement ?? document.documentElement);
   });
 });

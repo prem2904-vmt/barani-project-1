@@ -61,13 +61,23 @@ export function nextField(fields: readonly HTMLElement[], from: HTMLElement): HT
   return fields.find(f => !!(from.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) ?? null;
 }
 
-/** The element that scrolls `el` (nearest overflowing ancestor, else the page). */
+/**
+ * The PAGE scroller that holds `el` — the one the pad lifts the field in.
+ *
+ * Not simply the nearest overflowing ancestor: a results table sits in a
+ * horizontally scrolling wrapper (`overflow-x: auto` computes overflow-y to
+ * auto too), and padding / scrolling THAT box scrolled the rows out of their
+ * own card on the iPad — the card looked cut off under its header. So a
+ * candidate must really scroll vertically AND be page-sized (at least 40% of
+ * the viewport); otherwise the document scroller is used.
+ */
 export function scrollParentOf(el: HTMLElement): HTMLElement {
   const doc = el.ownerDocument;
   const view = doc.defaultView;
+  const minH = (view?.innerHeight ?? 0) * 0.4;
   for (let n = el.parentElement; n && n !== doc.body; n = n.parentElement) {
     const oy = view?.getComputedStyle(n).overflowY ?? '';
-    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+    if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1 && n.clientHeight >= minH) return n;
   }
   return (doc.scrollingElement as HTMLElement) ?? doc.documentElement;
 }
