@@ -38,14 +38,19 @@ function blocks(css: string, sel: RegExp): string[] {
 const count = (s: string, needle: RegExp) => (s.match(new RegExp(needle.source, 'g')) ?? []).length;
 
 describe('Safe area — bottom edge has ONE owner (the docked navbar)', () => {
-  it('<html> adds no bottom inset (padding-bottom is 0), and is border-box at 100dvh', () => {
+  it('<html> adds no bottom inset (no padding-bottom / padding shorthand), height 100dvh', () => {
     const html = blocks(g, /html/);
     expect(html.length).toBeGreaterThan(0);
     const base = html.find((b) => /height:\s*100dvh/.test(b))!;
     expect(base).toBeDefined();
-    expect(base).toMatch(/box-sizing:\s*border-box/);
-    expect(base).toMatch(/padding-bottom:\s*0\s*;/);
-    for (const b of html) expect(b).not.toMatch(/safe-area-inset-bottom/);
+    expect(base).toMatch(/padding-top:\s*env\(safe-area-inset-top\)/);
+    for (const b of html) {
+      expect(b).not.toMatch(/safe-area-inset-bottom/);
+      expect(b).not.toMatch(/padding-bottom:/);
+      expect(b).not.toMatch(/(^|[\s;])padding:/);
+      // A content-box html would ADD the top inset on top of 100dvh.
+      expect(b).not.toMatch(/box-sizing:\s*content-box/);
+    }
   });
 
   it('no ancestor of the shell (html, html.cap-*, body, app-root) pads or offsets the bottom inset', () => {
