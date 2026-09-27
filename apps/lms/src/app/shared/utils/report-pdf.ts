@@ -2971,12 +2971,12 @@ function renderColumnarTable(
       const abnColor = r.isLow ? theme.abnormalLowColor : theme.abnormalColor;
       // Letter mode appends the flag letter to the result; arrow mode draws a
       // triangle (didDrawCell). 'none' → no glyph/arrow.
-      // 'A' (qualitative abnormal — e.g. a non-normal dropdown option) gets
-      // the same ▲ treatment as a numeric High: bold + up-triangle after the
-      // result text. A critical already arrives as H / L (reportFlag) — the
-      // report never prints C / Critical.
-      const useArrow = theme.flagIndicator === 'arrow' && (r.flag === 'H' || r.flag === 'L' || r.flag === 'A');
-      const glyph = (r.flag && !useArrow && theme.flagIndicator !== 'none') ? r.flag : '';
+      // 'A' (qualitative abnormal — e.g. "Reactive" from a dropdown) is BOLD
+      // only: no ▲/▼ and no letter (owner 2026-09-27 — a direction means
+      // nothing for a text answer). A critical already arrives as H / L
+      // (reportFlag) — the report never prints C / Critical.
+      const useArrow = theme.flagIndicator === 'arrow' && (r.flag === 'H' || r.flag === 'L');
+      const glyph = (r.flag && r.flag !== 'A' && !useArrow && theme.flagIndicator !== 'none') ? r.flag : '';
       const isFirst = firstParam;
       firstParam = false;
 

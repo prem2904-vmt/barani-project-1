@@ -67,3 +67,24 @@ describe('report — a non-normal dropdown option prints bold', () => {
     expect(fontOf(pdf, 'Absent')).not.toBe(bold);
   });
 });
+
+describe('report — an abnormal dropdown answer (A) is bold only: no arrow, no letter', () => {
+  /** Filled shapes in the page streams — the ▲/▼ arrows are filled triangles. */
+  const fills = (pdf: string) => (pdf.match(/\sf\s/g) ?? []).length;
+
+  it('arrow indicator: "Reactive" (A) draws no triangle; a High value still does', () => {
+    const tpl = { flagIndicator: 'arrow' };
+    const withA = render({ HCV: { value: 'Reactive', flag: 'A' } }, tpl);
+    const plain = render({ HCV: { value: 'Reactive', flag: '' } }, tpl);
+    const high = render({ HCV: { value: 'Reactive', flag: 'H' } }, tpl);
+    expect(fills(withA)).toBe(fills(plain));
+    expect(fills(high)).toBeGreaterThan(fills(plain));
+    expect(fontOf(withA, 'Reactive')).toBe(fontOf(withA, 'HCV'));   // still bold
+  });
+
+  it('letter indicator: no "A" letter after the answer', () => {
+    const pdf = render({ HCV: { value: 'Reactive', flag: 'A' } }, null);
+    expect(pdf).not.toMatch(/\(Reactive\s+A\)/);
+    expect(fontOf(pdf, 'Reactive')).toBe(fontOf(pdf, 'HCV'));
+  });
+});
