@@ -2519,10 +2519,11 @@ html.pf-design-mode {
 :root.dark.design-new {
   /* ONE dark shade shared by the hero band (top) and the docked navbar
      (bottom). Both bars are darkest at the SCREEN EDGE (the page's dark
-     base, --bg-primary #0a0a15) and lift to the same dark violet toward
-     the content. Violet (hue ~258), never magenta. Retint here only. */
-  --pf-dark-shade: rgba(92, 64, 160, 0.30);
-  --pf-dark-shade-mid: rgba(58, 40, 104, 0.16);
+     base, --bg-primary #0a0a15) and lift to the brand's pinkish shade
+     toward the content — the fuchsia end of the primary gradient
+     (#7c3aed → #c026d3) the buttons use (owner, 2026-09-27). Retint here only. */
+  --pf-dark-shade: rgba(168, 42, 184, 0.30);
+  --pf-dark-shade-mid: rgba(104, 34, 124, 0.16);
   --pf-dark-shade-base: rgba(10, 10, 21, 0.55);
   --pf-dark-surface: #120e1c;
 
@@ -2537,13 +2538,13 @@ html.pf-design-mode {
   /* The vertical sweep carries the depth now; no extra darkening fade. */
   --pf-band-fade: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
   --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 100%);
-  --pf-band-edge: rgba(167, 139, 250, 0.18);
+  --pf-band-edge: rgba(232, 121, 249, 0.18);
   --pf-band-bg-glass: rgba(18, 14, 28, 0.84);
   /* Owner: "a subtle violet glow at the bottom". A feathered bloom that
      spills ~40px below the band's bottom edge. It is a box-shadow, so it
      paints UNDER the search pill and the page content (no hit-testing, no
      overlay), in the same violet as --pf-dark-shade. */
-  --pf-band-glow: 0 24px 40px -20px rgba(92, 64, 160, 0.28);
+  --pf-band-glow: 0 24px 40px -20px rgba(192, 38, 211, 0.26);
 }
 
 /* ══ NEW design: the docked BOTTOM navbar's own surface ════════════
@@ -2562,14 +2563,14 @@ html.pf-design-mode {
 :root.dark.design-new {
   --pf-navbar-bg: var(--pf-dark-surface);
   --pf-navbar-bg-glass: rgba(18, 14, 28, 0.84);
-  /* Violet (hue ~258), never magenta; top → bottom, darker as it falls.
+  /* The brand's pinkish shade; top → bottom, darker as it falls.
      Same stops as the hero band, reversed (--pf-dark-shade-* above). */
   --pf-navbar-wash: linear-gradient(180deg,
     var(--pf-dark-shade) 0%, var(--pf-dark-shade-mid) 45%,
     var(--pf-dark-shade-base) 100%);
-  --pf-navbar-edge: rgba(167, 139, 250, 0.18);
+  --pf-navbar-edge: rgba(232, 121, 249, 0.18);
   /* The band's glow, paired and fainter, rising off the bar's top edge. */
-  --pf-navbar-glow: 0 -10px 28px -16px rgba(92, 64, 160, 0.16);
+  --pf-navbar-glow: 0 -10px 28px -16px rgba(192, 38, 211, 0.16);
 }
 
 /* ══ NEW design: the frontdesk STATUS + ACTION vocabulary, app-wide

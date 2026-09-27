@@ -3,8 +3,9 @@ import { resolve } from 'node:path';
 
 /**
  * Hero band surface (new design). Owner: in DARK the band should read like
- * the docked navbar — near-black at the screen edge easing to the same dark
- * violet toward the content — with no magenta/pink horizontal sweep. Light
+ * the docked navbar — near-black at the screen edge easing to the brand's
+ * pinkish shade (the fuchsia end of the primary gradient, owner 2026-09-27)
+ * toward the content — never the old horizontal sweep. Light
  * stays exactly as it was.
  */
 const global = readFileSync(resolve(process.cwd(), 'apps/lms/src/styles.scss'), 'utf8');
@@ -33,8 +34,8 @@ describe('Hero band — dark surface', () => {
     expect(darkNavbar).toMatch(/--pf-navbar-bg:\s*var\(--pf-dark-surface\)/);
   });
 
-  it('the shared shade stays violet and the base is the page dark base (#0a0a15)', () => {
-    expect(dark).toMatch(/--pf-dark-shade:\s*rgba\(92, 64, 160,/);
+  it('the shared shade is the brand fuchsia (#c026d3 family) and the base is the page dark base (#0a0a15)', () => {
+    expect(dark).toMatch(/--pf-dark-shade:\s*rgba\(168, 42, 184,/);
     expect(dark).toMatch(/--pf-dark-shade-base:\s*rgba\(10, 10, 21,/);
     expect(global).toMatch(/--bg-primary:\s*#0a0a15/);
   });
@@ -50,12 +51,12 @@ describe('Dark glow — band bottom edge, paired faintly on the navbar top edge'
   const darkNavbar = block(/:root\.dark\.design-new \{\s*--pf-navbar-bg:[\s\S]*?\n\}/);
   const shell = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/layout/shell/shell.component.ts'), 'utf8');
   const glow = (css: string, name: string) => {
-    const m = css.match(new RegExp(`--${name}:\\s*0 (-?\\d+)px (\\d+)px (-?\\d+)px rgba\\(92, 64, 160, (0\\.\\d+)\\);`));
+    const m = css.match(new RegExp(`--${name}:\\s*0 (-?\\d+)px (\\d+)px (-?\\d+)px rgba\\(192, 38, 211, (0\\.\\d+)\\);`));
     expect(m).not.toBeNull();
     return { y: +m![1], blur: +m![2], alpha: +m![4] };
   };
 
-  it('the band glow is a feathered violet bloom BELOW the edge at low alpha (0.18–0.28)', () => {
+  it('the band glow is a feathered brand-pink bloom BELOW the edge at low alpha (0.18–0.28)', () => {
     const g = glow(dark, 'pf-band-glow');
     expect(g.y).toBeGreaterThan(0);
     expect(g.blur).toBeGreaterThanOrEqual(24);
