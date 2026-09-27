@@ -984,12 +984,11 @@
                       [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
           }
           <footer class="pf-rej__foot">
-            <button type="button" class="pf-btn pf-btn-ghost" (click)="cancelReject()">Cancel</button>
-            <button type="button" class="pf-btn pf-btn-danger"
+            <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="cancelReject()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn-danger nd-btn nd-btn--danger"
                     [disabled]="!canSubmitReject() || rejectBusy()"
                     (click)="submitReject()">
-              @if (rejectBusy()) { Saving… }
-              @else { Mark {{ pendingCount(r.group) }} tube<span [class.hidden]="pendingCount(r.group) === 1">s</span> not collected }
+              {{ rejectBusy() ? 'Saving…' : 'Mark ' + (pendingCount(r.group) === 1 ? 'tube' : pendingCount(r.group) + ' tubes') + ' not collected' }}
             </button>
           </footer>
         </div>
