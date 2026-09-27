@@ -24,6 +24,19 @@ export const PATIENT_REGISTER_ND_STYLES = `
     .pf-reg-form { flex: 1 1 auto; min-height: 0; }
   }
 
+  /* Tablets — pf-workflow-renderer's TWO-column tier (768–1199px; phones
+     are 1 column below 768, desktop 3 columns from 1200): Patient identity
+     holds the left column; Contact & IDs sits top-right with Additional
+     details directly under it, so the right column isn't left empty.
+     Placement only (no markup moved): DOM, focus and Enter order stay
+     identity → contact → additional. Row 2 is 1fr so a taller identity
+     card leaves its slack BELOW Additional details, never between cards. */
+  @media (min-width: 768px) and (max-width: 1199px) {
+    .pf-reg-form ::ng-deep .pf-wr-cards:has(> [data-step$="__identity"]) { grid-template-rows: auto 1fr; }
+    .pf-reg-form ::ng-deep .pf-wr-cards > [data-step$="__identity"] { grid-column: 1; grid-row: 1 / span 2; }
+    .pf-reg-form ::ng-deep .pf-wr-cards > [data-step$="__contact"] { grid-column: 2; grid-row: 1; }
+  }
+
   /* Phones: one column that scrolls naturally under the pinned band;
      Cancel goes (the back chevron is the same move); the save state keeps
      only its mark; the band's actions are 44px icons (pf-hero-band). */

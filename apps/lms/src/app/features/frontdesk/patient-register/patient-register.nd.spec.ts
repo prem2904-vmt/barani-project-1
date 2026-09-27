@@ -180,6 +180,55 @@ describe('Patient registration — new design: ONE form', () => {
     expect(PATIENT_REGISTER_ND_STYLES).toMatch(/@media \(min-width: 1200px\)[^@]*\.pf-reg-body \{[^}]*overflow: hidden/);
   });
 
+  it('tablet (2-column tier only): Additional details sits in the RIGHT column under Contact & IDs; desktop + phone untouched', () => {
+    // Split every @media block of a stylesheet into { min, max, body } so the
+    // test can ask "which placement rules apply at width W?".
+    const blocks = (css: string) => {
+      const out: Array<{ min: number; max: number; body: string }> = [];
+      const re = /@media ([^{]+)\{/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(css))) {
+        let depth = 1, i = re.lastIndex;
+        for (; i < css.length && depth; i++) depth += css[i] === '{' ? 1 : css[i] === '}' ? -1 : 0;
+        const q = m[1];
+        const min = Number(/min-width:\s*(\d+)px/.exec(q)?.[1] ?? 0);
+        const max = Number(/max-width:\s*(\d+)px/.exec(q)?.[1] ?? Infinity);
+        out.push({ min, max, body: css.slice(re.lastIndex, i - 1) });
+      }
+      return out;
+    };
+    const at = (w: number) => blocks(PATIENT_REGISTER_ND_STYLES).filter(b => w >= b.min && w <= b.max).map(b => b.body).join('\n');
+    const placed = (w: number) => /data-step\$="__(identity|contact)"/.test(at(w));
+
+    // Tablet widths (iPad portrait 768/820, iPad 11" landscape 1180): the
+    // renderer is 2 columns there, and the cards are placed.
+    for (const w of [768, 820, 1024, 1180, 1199]) {
+      const css = at(w);
+      expect(placed(w), `placed @${w}`).toBe(true);
+      expect(css).toMatch(/\[data-step\$="__identity"\] \{ grid-column: 1; grid-row: 1 \/ span 2; \}/);
+      expect(css).toMatch(/\[data-step\$="__contact"\] \{ grid-column: 2; grid-row: 1; \}/);
+      // Additional details is NOT pinned: auto-placement drops it into the
+      // one free cell — column 2, row 2 — directly under Contact & IDs.
+      expect(css).toMatch(/grid-template-rows: auto 1fr/);
+      expect(css).not.toMatch(/additional/i);
+    }
+    // Desktop (3 columns from 1200px, incl. iPad 13" landscape at 1366) and
+    // phones (1 column below 768px) get NO placement rules at all.
+    for (const w of [390, 640, 767, 1200, 1366, 1440, 1920]) expect(placed(w), `untouched @${w}`).toBe(false);
+    // The tier matches the renderer's own 2-column breakpoints exactly.
+    const r = ((WorkflowRendererComponent as any).ɵcmp.styles as string[]).join('\n').replace(/\s+/g, ' ');
+    expect(r).toMatch(/@media \(min-width: ?768px\) ?\{ ?\.pf-wr-cards/);
+    expect(r).toMatch(/@media \(min-width: ?1200px\) ?\{ ?\.pf-wr-cards[^{]*\{ ?grid-template-columns: ?repeat\(3/);
+    // Placement only: the DOM (= focus, Tab and Enter order) is identity →
+    // contact → additional, and the compiled rule reaches the renderer's cards.
+    const { el, txt } = render();
+    const cards = Array.from(el.querySelectorAll('.pf-reg-form .pf-wr-cards > .pf-wr-card'));
+    expect(cards.map(c => c.getAttribute('data-step'))).toEqual(['st1__identity', 'st1__contact', 'st2']);
+    expect(txt(cards[2].querySelector('.nd-card__label'))).toBe('Additional details');
+    const compiled = ((PatientRegisterComponent as any).ɵcmp.styles as string[]).join('\n');
+    expect(compiled).toMatch(/\.pf-reg-form\[[^\]]+\]\s+\.pf-wr-cards\s*>\s*\[data-step\$="?__contact"?\]/);
+  });
+
   it('kit fields: nd-input, the amber required dot, tabular numbers; NO ABHA buttons in the card headers', () => {
     const { el } = render();
     const first = el.querySelector('[data-field="first_name"]')!;
