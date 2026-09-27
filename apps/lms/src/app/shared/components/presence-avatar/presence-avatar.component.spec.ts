@@ -46,7 +46,7 @@ function setup() {
 }
 
 describe('pf-presence-avatar / pf-presence-dot', () => {
-  it('online: violet tone + "Online" label; initials from the name', () => {
+  it('online: green tone + "Online" label; initials from the name', () => {
     const t = setup();
     expect(t.el.querySelector('#a .pf-pav__face')!.textContent!.trim()).toBe('PS');
     expect(t.dot().getAttribute('data-tone')).toBe('on');
@@ -86,9 +86,22 @@ describe('pf-presence-avatar / pf-presence-dot', () => {
     expect(t.el.querySelector('#a pf-presence-dot')).toBeNull();
   });
 
-  it('dot styles: ring in the surface colour, neutral away/offline', () => {
+  it('dot styles: ring in the surface colour; green only for online, neutral away/offline', () => {
     const css = (PresenceDotComponent as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles.join('\n');
     expect(css).toContain('--pf-pdot-ring');
-    expect(/#(22c55e|16a34a|10b981|34d399)/i.test(css)).toBe(false);
+    // Green appears only on the online tone (owner, 2026-09-27).
+    const greens = css.match(/#(22c55e|16a34a|10b981|34d399|4ade80)/gi) ?? [];
+    expect(greens.length).toBeGreaterThan(0);
+    expect(css).not.toMatch(/data-tone='(away|off|busy)'[^}]*#(22c55e|16a34a|4ade80)/i);
   });
 });
+
+describe('pf-presence-dot colour (owner: online = green)', () => {
+  it('uses green for online in light and dark, never violet', () => {
+    const src = require('node:fs').readFileSync('apps/lms/src/app/shared/components/presence-avatar/presence-avatar.component.ts', 'utf8');
+    expect(src).toMatch(/data-tone='on'\]\) \{ background: var\(--pf-presence-on, #16a34a\)/);
+    expect(src).toMatch(/--pf-presence-on: #4ade80/);
+    expect(src).not.toMatch(/--pf-presence-on: #a78bfa/);
+  });
+});
+

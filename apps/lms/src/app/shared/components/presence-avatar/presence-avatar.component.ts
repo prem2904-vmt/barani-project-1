@@ -34,8 +34,9 @@ import { presenceText, presenceTone } from '../../models/presence.model';
       pointer-events: none;
     }
     :host([hidden]) { display: none; }
-    /* Online = the app's reachable token (violet in the new design). */
-    :host([data-tone='on']) { background: var(--pf-presence-on, var(--color-violet-600, #7c3aed)); }
+    /* Online = GREEN (owner, 2026-09-27: the universal "available" colour;
+       violet read as too much). Light #16a34a, dark #4ade80 — AA on the ring. */
+    :host([data-tone='on']) { background: var(--pf-presence-on, #16a34a); }
     :host([data-tone='busy']) { background: var(--nd-toggle-on, #aeb8c2); }
     :host([data-tone='away']) { background: var(--nd-sel-border, #9aa4ae); }
     :host([data-tone='dnd']) { background: var(--nd-toggle-urgent, #d0706f); }
@@ -43,7 +44,7 @@ import { presenceText, presenceTone } from '../../models/presence.model';
       background: var(--pf-pdot-ring, var(--nd-card-bg, #fff));
       box-shadow: inset 0 0 0 1.5px var(--nd-sel-border, #9aa4ae);
     }
-    :host-context(.dark), :host-context([data-theme='dark']) { --pf-presence-on: #a78bfa; }
+    :host-context(.dark), :host-context([data-theme='dark']) { --pf-presence-on: #4ade80; }
   `],
 })
 export class PresenceDotComponent {
