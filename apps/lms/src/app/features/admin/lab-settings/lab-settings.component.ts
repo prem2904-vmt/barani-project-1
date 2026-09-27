@@ -400,6 +400,8 @@ interface AutoAssignConfig {
           routed to the person (or least-loaded member of a role) set for its department.
           <strong>Validators</strong> — when a tech submits a result, it is routed to the least-loaded
           validator the same way. Departments with nothing set fall into the shared queue.
+          A consultant listed as a department's validator (here or in Users &amp; roles) sees and signs
+          only their departments' results; consultants listed nowhere see every department.
         </p>
 
         <!-- Master toggles for this branch: one per leg -->
@@ -416,7 +418,7 @@ interface AutoAssignConfig {
         <div class="flex items-start justify-between gap-4 pf-ls__autoassign-master">
           <div class="min-w-0">
             <p class="pf-ls__dept-name">Auto-assign validators</p>
-            <p class="pf-ls__hint">On submit, route the result to its department's validator pool. Their Pending-validation screen lists it first; anyone can still validate it.</p>
+            <p class="pf-ls__hint">On submit, route the result to its department's validator pool. Their Pending-validation screen lists it first; any validator of that department can still validate it.</p>
           </div>
           <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignValidatorsEnabled()" aria-label="Auto-assign validators"
                   (click)="setAutoAssignValidatorsEnabled(!autoAssignValidatorsEnabled())">
@@ -462,14 +464,15 @@ interface AutoAssignConfig {
                   <p class="pf-ls__warn">No one set — this department's tests go to the shared queue.</p>
                 }
 
-                <p class="pf-ls__pool" [class.pf-ls__pool--off]="!autoAssignValidatorsEnabled()">Validators — review submitted results</p>
+                <!-- Always editable: the pool also decides which departments a
+                     consultant sees (the switch above only controls routing). -->
+                <p class="pf-ls__pool">Validators — review and sign this department's results</p>
                 <label class="pf-ls__label">People</label>
                 <pf-select
                   [multiple]="true"
                   [options]="allUserOptions()"
                   [values]="validatorsFor(d.id)"
                   placeholder="Select people…"
-                  [disabled]="!autoAssignValidatorsEnabled()"
                   (valuesChange)="setValidators(d.id, $any($event))">
                 </pf-select>
 
@@ -479,7 +482,6 @@ interface AutoAssignConfig {
                   [options]="allRoleOptions()"
                   [values]="validatorRolesFor(d.id)"
                   placeholder="Select roles…"
-                  [disabled]="!autoAssignValidatorsEnabled()"
                   (valuesChange)="setValidatorRoles(d.id, $any($event))">
                 </pf-select>
 

@@ -31,6 +31,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ROLE_INFO } from './permission-catalog';
 import { UserBranchScope, branchScopeChips } from './branch-scope';
+import { UserDepartmentsRow, departmentNames } from './consultant-departments';
+import { Department } from '../../../shared/models/tenant.model';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -287,6 +289,13 @@ export class UsersAccessComponent implements OnInit {
   private readonly _search = signal('');
   /** Each user's branch scope (the Branches column), keyed by user id. */
   private readonly _scopes = signal<Map<string, UserBranchScope>>(new Map());
+  /** Each consultant's departments (the Departments column), keyed by user id. */
+  private readonly _depts = signal<Map<string, UserDepartmentsRow>>(new Map());
+  private readonly _deptNames = signal<Map<string, string>>(new Map());
+  /** A user's department names for the Departments column (empty = none assigned). */
+  userDepartments(userId: string | undefined): string[] {
+    return userId ? departmentNames(this._depts().get(userId), this._deptNames()) : [];
+  }
 
   readonly users = this._users.asReadonly();
   readonly roles = this._roles.asReadonly();
@@ -342,6 +351,21 @@ export class UsersAccessComponent implements OnInit {
     for (const label of branchScopeChips(params.data?.branchScope)) {
       const chip = document.createElement('span');
       chip.className = 'nd-chip nd-chip--static pf-ua-branch';
+      chip.style.cssText = 'cursor:default;height:24px;white-space:nowrap;';
+      chip.textContent = label;
+      wrap.appendChild(chip);
+    }
+    return wrap;
+  };
+
+  /** Departments column: one static chip per department the consultant covers. */
+  private userDepartmentsCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pf-ua-depts';
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:100%;padding:6px 0;';
+    for (const label of this.userDepartments(params.data?.id)) {
+      const chip = document.createElement('span');
+      chip.className = 'nd-chip nd-chip--static pf-ua-dept';
       chip.style.cssText = 'cursor:default;height:24px;white-space:nowrap;';
       chip.textContent = label;
       wrap.appendChild(chip);
@@ -469,7 +493,10 @@ export class UsersAccessComponent implements OnInit {
     return wrap;
   };
 
-  readonly userColDefs = computed<ColDef<User>[]>(() => { const web = this.web(); return [
+  readonly userColDefs = computed<ColDef<User>[]>(() => { const web = this.web();
+    // Re-render the Departments column once the pools / names land.
+    this._depts(); this._deptNames();
+    return [
     {
       headerName: 'User',
       colId: 'displayName',
@@ -496,6 +523,18 @@ export class UsersAccessComponent implements OnInit {
       cellRenderer: this.userBranchesCellRenderer,
       flex: 1.2,
       minWidth: 200,
+      autoHeight: true,
+      sortable: true,
+      filter: true,
+    },
+    {
+      // Consultants' departments (validator pools). Empty = every department.
+      headerName: 'Departments',
+      colId: 'departments',
+      valueGetter: p => this.userDepartments(p.data?.id).join(', '),
+      cellRenderer: this.userDepartmentsCellRenderer,
+      flex: 1,
+      minWidth: 180,
       autoHeight: true,
       sortable: true,
       filter: true,
@@ -610,6 +649,14 @@ export class UsersAccessComponent implements OnInit {
     this.api.get<UserBranchScope[]>('/api/users/branch-scopes').subscribe({
       next: l => this._scopes.set(new Map((l ?? []).map(s => [s.userId, s]))),
       error: () => { /* older server: the column stays empty */ },
+    });
+    this.api.get<UserDepartmentsRow[]>('/api/users/departments').subscribe({
+      next: l => this._depts.set(new Map((l ?? []).map(r => [r.userId, r]))),
+      error: () => { /* older server: the column stays empty */ },
+    });
+    this.api.get<Department[]>('/api/tenants/departments').subscribe({
+      next: l => this._deptNames.set(new Map((l ?? []).map(d => [d.id, d.name]))),
+      error: () => {},
     });
   }
 

@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { Branch } from '../../../shared/models/tenant.model';
+import { Branch, Department } from '../../../shared/models/tenant.model';
 import { Role, User } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
@@ -21,6 +21,7 @@ import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
 import { UserAccountActionsService } from './user-account-actions.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { rolePickerRows } from './role-assignability';
+import { DEPARTMENTS_HINT, UserDepartmentsRow, sameIds, viaRoleLabels } from './consultant-departments';
 import { SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, scopeValuesFromRoles, soleScope } from './branch-scope';
 
 interface EditForm {
@@ -202,6 +203,29 @@ interface EditForm {
               @if (hasLocked()) { <p class="nd-field__hint pf-uf-lock-note">{{ lockedHint }}</p> }
             </div>
           </section>
+
+          <!-- DEPARTMENTS — a consultant's departments (owner 2026-09-27: a
+               pathologist / microbiologist sees only their departments).
+               Stored in each department's validator pool (Lab settings). -->
+          <section class="nd-card pf-uf-card pf-ue-depts">
+            <div class="nd-card__head">
+              <span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7"/></svg></span>
+              <h2 class="nd-card__label pf-uf-h">Departments</h2>
+              <span class="nd-card__note">For consultants who validate results</span>
+            </div>
+            <div class="nd-card__body">
+              <div class="nd-field">
+                <span class="nd-field__lbl">Validates for</span>
+                <pf-select class="pf-ue-deptsel" [multiple]="true" [searchable]="true"
+                           [options]="departmentOptions()" [values]="deptIds()" placeholder="All departments"
+                           (valuesChange)="setDepts($any($event))"></pf-select>
+                <p class="nd-field__hint">{{ deptHint }}</p>
+                @if (viaRoles().length) {
+                  <p class="nd-field__hint pf-ue-via">Also through a role (Lab settings): {{ viaRoles().join(', ') }}</p>
+                }
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </section>
@@ -294,6 +318,22 @@ export class UserEditComponent implements OnInit {
   readonly scopeOptions = computed<PfSelectOption<string>[]>(() => buildScopeOptions(this._branches()));
   readonly scopeHint = SCOPE_HINT;
 
+  // ── Departments (consultant scope) ──
+  private readonly _departments = signal<Department[]>([]);
+  private readonly _deptRow = signal<UserDepartmentsRow | null>(null);
+  readonly deptIds = signal<string[]>([]);
+  readonly deptHint = DEPARTMENTS_HINT;
+  readonly departmentOptions = computed<PfSelectOption<string>[]>(() =>
+    this._departments()
+      .filter(d => d.isActive !== false)
+      .map(d => ({ value: d.id, label: d.name }))
+      .sort((a, b) => a.label.localeCompare(b.label)));
+  readonly viaRoles = computed(() => viaRoleLabels(
+    this._deptRow(),
+    new Map(this._departments().map(d => [d.id, d.name])),
+    new Map(this._roles().map(r => [r.id, r.name]))));
+  setDepts(ids: string[]) { this.deptIds.set(ids ?? []); }
+
   readonly canSave = computed(() => this._form().roleIds.length > 0 && this._form().scope.length > 0);
 
   ngOnInit() {
@@ -306,6 +346,11 @@ export class UserEditComponent implements OnInit {
         const sole = soleScope(branches);
         if (sole && this.rolesLoaded() && !this._form().scope.length) this.patch({ scope: [sole] });
       }
+    });
+    this.api.get<Department[]>('/api/tenants/departments').subscribe({ next: l => this._departments.set(l ?? []), error: () => {} });
+    this.api.get<UserDepartmentsRow>(`/api/users/${this.id}/departments`).subscribe({
+      next: r => { this._deptRow.set(r ?? null); this.deptIds.set(r?.departmentIds ?? []); },
+      error: () => { /* older server: the card stays empty */ },
     });
     // No single-user GET endpoint — read the list + this user's role assignments.
     forkJoin({
@@ -393,10 +438,21 @@ export class UserEditComponent implements OnInit {
         this.api.put(`/api/users/${this.id}/roles`, {
           roleIds: i.roleIds, ...scopePayload(i.scope, this._branches()),
         }).subscribe({
-          next: () => { this._saving.set(false); this.toasts.success('User updated'); this.back(); },
+          next: () => this.saveDepartments(),
           error: e => { this._saving.set(false); this.showError(e); },
         });
       },
+      error: e => { this._saving.set(false); this.showError(e); },
+    });
+  }
+
+  /** Last leg of Save: the consultant's departments, only when changed. */
+  private saveDepartments() {
+    const done = () => { this._saving.set(false); this.toasts.success('User updated'); this.back(); };
+    const next = this.deptIds();
+    if (sameIds(next, this._deptRow()?.departmentIds ?? [])) { done(); return; }
+    this.api.put<UserDepartmentsRow>(`/api/users/${this.id}/departments`, { departmentIds: next }).subscribe({
+      next: done,
       error: e => { this._saving.set(false); this.showError(e); },
     });
   }
