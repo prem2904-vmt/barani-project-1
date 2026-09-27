@@ -18,10 +18,10 @@ describe('abnormal summary — collector', () => {
   const p = (name: string, flag: string, extra: Record<string, unknown> = {}) =>
     ({ kind: 'param' as const, name, result: '5', unit: 'u', range: '1 - 4', flag, abnormal: !!flag, isLow: flag === 'L', ...extra });
 
-  it('takes only values the report prints as H / L (criticals arrive as H / L); never A / N / normal', () => {
+  it('takes values the report prints as H / L (criticals arrive as H / L) and abnormal options (A); never N / normal', () => {
     expect(isSummaryRow(p('a', 'H'))).toBe(true);
     expect(isSummaryRow(p('b', 'L'))).toBe(true);
-    expect(isSummaryRow(p('c', 'A'))).toBe(false);          // qualitative option — not a high / low
+    expect(isSummaryRow(p('c', 'A'))).toBe(true);           // qualitative abnormal option — listed, no letter
     expect(isSummaryRow(p('d', 'N', { abnormal: false }))).toBe(false);
     expect(isSummaryRow(p('e', ''))).toBe(false);           // normal
     // Legacy direction-less critical: the report prints it bold, no letter.
@@ -154,14 +154,14 @@ const has = (runs: string[], s: string) => runs.some(r => r.includes(s));
 const imageDraws = (stream: string) => (stream.match(/\/I\d+ Do/g) ?? []).length;
 
 describe('abnormal summary — PDF', () => {
-  it('enabled: page 1 is the sheet — H / L incl. criticals, report order, no hidden / unvalidated / option / normal rows, no C', () => {
+  it('enabled: page 1 is the sheet — H / L incl. criticals + abnormal options, report order, no hidden / unvalidated / normal rows, no C', () => {
     const r = render(tpl());
     const p1 = r.text(0);
     expect(has(p1, SUMMARY_TITLE)).toBe(true);
     expect(has(p1, 'Gandhi Road')).toBe(true);                   // letterhead
     expect(has(p1, 'Sita Raman')).toBe(true);                    // patient block as on page 1
-    for (const name of ['Hemoglobin', 'MCV', 'Glucose Random', 'Creatinine']) expect(has(p1, name)).toBe(true);
-    for (const name of ['Platelets', 'Urea', 'WBC Count', 'Colour']) expect(has(p1, name)).toBe(false);
+    for (const name of ['Hemoglobin', 'MCV', 'Glucose Random', 'Creatinine', 'Colour']) expect(has(p1, name)).toBe(true);
+    for (const name of ['Platelets', 'Urea', 'WBC Count']) expect(has(p1, name)).toBe(false);
     // Report order: Haematology (Hb, MCV) → Biochemistry (Glucose, Creatinine).
     const at = (s: string) => p1.findIndex(x => x.includes(s));
     expect(at('HAEMATOLOGY')).toBeLessThan(at('Hemoglobin'));
@@ -173,7 +173,8 @@ describe('abnormal summary — PDF', () => {
     expect(has(p1, '600 mg/dL  H')).toBe(true);
     expect(has(p1, '9.1 mg/dL  H')).toBe(true);
     expect(p1.some(x => /(^|\s)C$/.test(x.trim()) || /critical/i.test(x))).toBe(false);
-    expect(has(p1, '4 results outside the reference range')).toBe(true);
+    expect(has(p1, '5 results outside the reference range')).toBe(true);
+    expect(at('Creatinine')).toBeLessThan(at('Colour'));        // Clinical Pathology after Biochemistry
     // Signatures stay on the department pages, not on the summary.
     expect(has(p1, 'Dr. Kavya Signer')).toBe(false);
     expect(r.pages.slice(1).some(s => has(drawn(s), 'Dr. Kavya Signer'))).toBe(true);

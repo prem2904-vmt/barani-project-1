@@ -17,7 +17,8 @@ import autoTable from 'jspdf-autotable';
  *    exactly as the report marks them (bold + H / L / arrow). Never "C";
  *  - a legacy direction-less critical the report prints bold with no letter
  *    (abnormal, no letter) — still abnormal, so it is listed too;
- *  - NOT a qualitative 'A' option (not a high / low) and not a normal 'N';
+ *  - a qualitative abnormal option ('A', e.g. Urine colour "Red") — owner
+ *    2026-09-27: listed too, bold with no H / L letter; a normal 'N' is not;
  *  - only VALIDATED results (a row from a test not yet validated is skipped);
  *  - only what the report PRINTS: hidden rows are already gone from the
  *    groups this reads, and the groups are the ones the report renders.
@@ -92,7 +93,7 @@ export function isSummaryRow(r: SummarySourceRow): boolean {
   if (r.kind !== 'param' || r.unvalidated) return false;
   if (!String(r.result ?? '').trim() || String(r.result).trim() === '—') return false;
   const f = String(r.flag ?? '').trim().toUpperCase();
-  if (f === 'H' || f === 'L') return true;
+  if (f === 'H' || f === 'L' || f === 'A') return true;
   // A critical whose direction can't be read prints bold with no letter.
   return f === '' && r.abnormal === true;
 }
