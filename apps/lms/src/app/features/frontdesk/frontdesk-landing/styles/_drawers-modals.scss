@@ -318,11 +318,19 @@
   min-height: 40px;
   height: 40px;
   padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
 }
 
 .pf-drawer__actions .pf-drawer__act > svg {
-  display: none;
-  flex: none;
+  display: block;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
 }
 
 .pf-drawer__actions .pf-drawer__act:focus-visible {
@@ -730,6 +738,49 @@
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
+
+.pf-vtl__sample-toggle {
+  width: fit-content; max-width: 100%; min-height: 32px; padding: 2px 4px; margin: 0;
+  display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px;
+  border: 0; border-radius: var(--nd-radius-sm, 8px);
+  background: transparent; color: inherit; text-align: left; cursor: pointer;
+}
+.pf-vtl__sample-toggle:hover { background: var(--nd-chip-bg); }
+.pf-vtl__sample-toggle:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.pf-vtl__sample-toggle > svg { width: 18px; height: 18px; transition: transform 150ms ease; }
+.pf-vtl__sample-toggle--open > svg { transform: rotate(180deg); }
+.pf-vtl__sample-count { min-width: 0; white-space: nowrap; }
+.pf-vtl__samples {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 12px;
+  max-height: 130px;
+  overflow-y: auto;
+  padding: 5px 8px;
+  margin: 2px 0 0;
+  border-left: 2px solid color-mix(in srgb, var(--color-violet-600, #7c3aed) 30%, var(--nd-line));
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--nd-chip-bg) 55%, transparent);
+  list-style: none;
+}
+.pf-vtl__sample {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--nd-line) 70%, transparent);
+}
+.pf-vtl__sample-id {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+}
+.pf-vtl__sample-state { flex: none; color: var(--text-muted); font-size: 11px; }
+.pf-vtl__sample[data-state='collected'] .pf-vtl__sample-state { color: var(--violet-text, #7c3aed); }
+.pf-vtl__sample[data-state='not-collected'] .pf-vtl__sample-state { color: var(--red-text, #dc2626); }
 
 /* Stopped step ("Sample — not collected (reason)", QA #6): rose node with an
    ✕, rose caption. Never reads as done or as the live step. */

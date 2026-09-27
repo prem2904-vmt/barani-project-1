@@ -3,649 +3,646 @@
      where connectivity drops matter — so a banner here never rendered. -->
 <div class="pf-topstrip-bar relative flex items-center gap-2">
 
-    <!-- Brand lockup — PF glyph · pulse · PREFRONTAL · LMS subtitle.
+  <!-- Brand lockup — PF glyph · pulse · PREFRONTAL · LMS subtitle.
          Goes to /admin landing. Branch switching lives on the tenant
          brand pill (right side). -->
-    <a [routerLink]="pickLanding()" class="pf-brand-lockup press flex-shrink-0"
-      aria-label="Prefrontal · Lab Management System · Home">
-      <svg class="pf-brand-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true">
-        <defs>
-          <linearGradient id="pfBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="#7c3aed" />
-            <stop offset="25%" stop-color="#8b5cf6" />
-            <stop offset="50%" stop-color="#a855f7" />
-            <stop offset="75%" stop-color="#d946ef" />
-            <stop offset="100%" stop-color="#ec4899" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
-          fill="url(#pfBrandGradient)" />
-        <path
-          d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
-          fill="url(#pfBrandGradient)" />
-      </svg>
+  <a [routerLink]="pickLanding()" class="pf-brand-lockup press flex-shrink-0"
+    aria-label="Prefrontal · Lab Management System · Home">
+    <svg class="pf-brand-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <linearGradient id="pfBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#7c3aed" />
+          <stop offset="25%" stop-color="#8b5cf6" />
+          <stop offset="50%" stop-color="#a855f7" />
+          <stop offset="75%" stop-color="#d946ef" />
+          <stop offset="100%" stop-color="#ec4899" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
+        fill="url(#pfBrandGradient)" />
+      <path
+        d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
+        fill="url(#pfBrandGradient)" />
+    </svg>
 
-      <!-- Designer navbar (Figma 446-113): glyph + heartbeat + wordmark —
+    <!-- Designer navbar (Figma 446-113): glyph + heartbeat + wordmark —
            the LMS subtitle stays gone, and the tenant no longer rides the
            bar (it lives in each screen's hero band). -->
-      <svg class="pf-brand-pulse" viewBox="0 0 56 24" fill="none" aria-hidden="true">
-        <path class="pf-brand-pulse-path" d="M0,12 L8,12 L16,3 L24,21 L32,8 L38,16 L44,12 L56,12" />
-      </svg>
+    <svg class="pf-brand-pulse" viewBox="0 0 56 24" fill="none" aria-hidden="true">
+      <path class="pf-brand-pulse-path" d="M0,12 L8,12 L16,3 L24,21 L32,8 L38,16 L44,12 L56,12" />
+    </svg>
 
-      <span class="pf-brand-text">
-        <span class="pf-brand-name">PREFRONTAL</span>
-        @if (!themeService.isNewDesign()) {
-        <span class="pf-brand-sub">Lab Management System</span>
-        }
-      </span>
-    </a>
+    <span class="pf-brand-text">
+      <span class="pf-brand-name">PREFRONTAL</span>
+      @if (!themeService.isNewDesign()) {
+      <span class="pf-brand-sub">Lab Management System</span>
+      }
+    </span>
+  </a>
 
-    @if (!themeService.isNewDesign() && tenantLoaded()) {
-      <!-- CLASSIC: pipe separator + tenant chip right after the PF brand —
+  @if (!themeService.isNewDesign() && tenantLoaded()) {
+  <!-- CLASSIC: pipe separator + tenant chip right after the PF brand —
            "PREFRONTAL | Micro World". New design carries the tenant on each
            screen's hero band instead. -->
-      <span class="pf-ts-sep hidden sm:inline-block" aria-hidden="true"></span>
-      @if (showAdmin()) {
-        <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex"
-           [class.pf-ts-tenant--empty]="!hasBrand()"
-           [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
-          @if (showLogo() && tenantLogo()) {
-            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
-          } @else {
-            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
-          }
-          @if (showName()) {
-            <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
-          }
-        </a>
-      } @else {
-        <div class="pf-ts-tenant hidden sm:inline-flex cursor-default select-none"
-             [class.pf-ts-tenant--empty]="!hasBrand()"
-             [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
-          @if (showLogo() && tenantLogo()) {
-            <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
-          } @else {
-            <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
-          }
-          @if (showName()) {
-            <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
-          }
-        </div>
-      }
+  <span class="pf-ts-sep hidden sm:inline-block" aria-hidden="true"></span>
+  @if (showAdmin()) {
+  <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex" [class.pf-ts-tenant--empty]="!hasBrand()"
+    [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
+    @if (showLogo() && tenantLogo()) {
+    <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+    } @else {
+    <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
     }
+    @if (showName()) {
+    <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
+    }
+  </a>
+  } @else {
+  <div class="pf-ts-tenant hidden sm:inline-flex cursor-default select-none" [class.pf-ts-tenant--empty]="!hasBrand()"
+    [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
+    @if (showLogo() && tenantLogo()) {
+    <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
+    } @else {
+    <span class="pf-ts-tenant__init" aria-hidden="true">{{ tenantInitial() }}</span>
+    }
+    @if (showName()) {
+    <span class="pf-ts-tenant__name">{{ brandingName() || tenantName() }}</span>
+    }
+  </div>
+  }
+  }
 
-    <!-- Work areas — STATIC, centered in the bar (owner: every page link
+  <!-- Work areas — STATIC, centered in the bar (owner: every page link
          always visible, not tucked into the avatar menu). Quiet text pills
          in the designer vocabulary; active = violet on soft violet.
          New design only — classic keeps its icon-first auto-hide nav in
          the right cluster below. -->
-    @if (themeService.isNewDesign()) {
-    <nav class="pf-topnav-center hidden xl:flex" aria-label="Work areas">
-      @for (n of primary(); track n.id) {
-        <a [routerLink]="n.href" routerLinkActive="pf-topnav-link--on"
-           [routerLinkActiveOptions]="{ exact: !!n.exact }"
-           class="pf-topnav-link press">
-          @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
-            <span class="pf-collect-nav-icon w-3.5 h-3.5" aria-hidden="true"></span>
-          } @else {
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              @for (p of n.iconPath; track p) { <path [attr.d]="p" /> }
-            </svg>
-          }
-          <span class="pf-topnav-link__lbl">{{ n.label }}</span>
+  @if (themeService.isNewDesign()) {
+  <nav class="pf-topnav-center hidden xl:flex" aria-label="Work areas">
+    @for (n of primary(); track n.id) {
+    <a [routerLink]="n.href" routerLinkActive="pf-topnav-link--on" [routerLinkActiveOptions]="{ exact: !!n.exact }"
+      class="pf-topnav-link press">
+      @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
+      <span class="pf-collect-nav-icon w-3.5 h-3.5" aria-hidden="true"></span>
+      } @else {
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        @for (p of n.iconPath; track p) {
+        <path [attr.d]="p" /> }
+      </svg>
+      }
+      <span class="pf-topnav-link__lbl">{{ n.label }}</span>
+    </a>
+    }
+    @if (showAdmin()) {
+    <a routerLink="/admin" routerLinkActive="pf-topnav-link--on" class="pf-topnav-link press">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
+      </svg>
+      <span class="pf-topnav-link__lbl">Settings</span>
+    </a>
+    }
+  </nav>
+  }
+
+  @if (themeService.isNewDesign() && themeService.bottomNav() && draftShelf.items().length) {
+  <!-- Draft shelf (owner): pages | divider | the current work area's
+         unfinished drafts, one click to resume. Tablet + web only —
+         phones have no room (hidden <768px via CSS). Capped at 3 chips;
+         the rest live in an upward "+N" popover. -->
+  <div class="pf-draftshelf" role="group" aria-label="Drafts">
+    <span class="pf-draftshelf__rule" aria-hidden="true"></span>
+    <!-- Chips scroll in their own container; the +N button/popover sits
+           OUTSIDE it — an overflow scroller clips its children vertically,
+           which was swallowing the upward dropdown. -->
+    <div class="pf-draftshelf__scroll">
+      <!-- The chip whose screen is on stage is SELECTED (aria-current) —
+             however you got there. Its link is dropped (routerLink null =
+             no href, no navigation), so tapping the draft you're already on
+             is a true no-op: no reload, no lost typing. -->
+      @for (d of draftShelf.items().slice(0, 3); track d.id) {
+      @let on = draftShelf.activeId() === d.id;
+      <a class="pf-draftshelf__chip press" [class.pf-draftshelf__chip--on]="on"
+        [pfZoomSource]="on ? null : chipZoomKeys(d)" [routerLink]="on ? null : d.link"
+        [queryParams]="d.queryParams ?? null" [state]="draftShelf.swapState(d)" [attr.aria-current]="on ? 'page' : null"
+        [attr.tabindex]="on ? 0 : null"
+        [title]="(on ? 'Open now — ' : 'Resume draft — ') + d.label + (d.sub ? ' · ' + d.sub : '')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+        <span class="pf-draftshelf__lbl">{{ d.label }}</span>
+        @if (d.sub) { <span class="pf-draftshelf__sub">{{ d.sub }}</span> }
+      </a>
+      }
+    </div>
+    <div class="relative">
+      <!-- Web/tablet: "+N" for the drafts beyond the three chips. -->
+      @if (draftShelf.items().length > 3) {
+      <!-- Carries the selected look when the on-stage draft is one of
+               the overflow drafts, so the highlight never goes missing. -->
+      <button type="button" class="pf-draftshelf__more press" (click)="draftsOpen.set(!draftsOpen())"
+        [class.pf-draftshelf__more--on]="activeDraftInOverflow()" [attr.aria-expanded]="draftsOpen()">+{{
+        draftShelf.items().length - 3 }}</button>
+      }
+      @if (draftsOpen()) {
+      <div class="pf-draftshelf__bd" (click)="draftsOpen.set(false)" aria-hidden="true"></div>
+      <div class="pf-draftshelf__pop" role="menu">
+        @for (d of draftShelf.items(); track d.id) {
+        @let on = draftShelf.activeId() === d.id;
+        <a class="pf-draftshelf__pop-item press" role="menuitem" [class.pf-draftshelf__pop-item--on]="on"
+          [pfZoomSource]="on ? null : chipZoomKeys(d)"
+          [routerLink]="on ? null : d.link" [queryParams]="d.queryParams ?? null" [state]="draftShelf.swapState(d)"
+          [attr.aria-current]="on ? 'page' : null" [attr.tabindex]="on ? 0 : null" (click)="draftsOpen.set(false)">
+          <span class="pf-draftshelf__lbl">{{ d.label }}</span>
+          @if (d.sub) { <span class="pf-draftshelf__sub">{{ d.sub }}</span> }
         </a>
+        }
+      </div>
+      }
+    </div>
+  </div>
+  }
+
+  <!-- Spacer pushes the nav + right cluster to the far edge -->
+  <div class="pf-ts-spacer flex-1 min-w-0"></div>
+
+  <!-- Right cluster — flex-shrink-0 so bell + avatar never overflow the pill.
+         Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
+  <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
+
+    @if (!themeService.isNewDesign()) {
+    <!-- CLASSIC primary nav — icon-first hybrid on the right: the active
+           item shows its label, the others slide theirs out on hover. -->
+    <nav class="pf-topnav-classic hidden xl:flex" aria-label="Work areas">
+      @for (n of primary(); track n.id) {
+      <a [routerLink]="n.href" routerLinkActive="pf-topnav-active" [routerLinkActiveOptions]="{ exact: !!n.exact }"
+        class="pf-topnav-btn press" [title]="n.label" [attr.aria-label]="n.label">
+        @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
+        <span class="pf-collect-nav-icon w-4 h-4" aria-hidden="true"></span>
+        } @else {
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          @for (p of n.iconPath; track p) {
+          <path [attr.d]="p" />
+          }
+        </svg>
+        }
+        <span>{{ n.label }}</span>
+      </a>
       }
       @if (showAdmin()) {
-        <a routerLink="/admin" routerLinkActive="pf-topnav-link--on"
-           class="pf-topnav-link press">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
-          </svg>
-          <span class="pf-topnav-link__lbl">Settings</span>
-        </a>
+      <a routerLink="/admin" routerLinkActive="pf-topnav-active" class="pf-topnav-btn press" title="Settings"
+        aria-label="Settings">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
+        </svg>
+        <span>Settings</span>
+      </a>
       }
     </nav>
     }
 
-    @if (themeService.isNewDesign() && themeService.bottomNav() && draftShelf.items().length) {
-    <!-- Draft shelf (owner): pages | divider | the current work area's
-         unfinished drafts, one click to resume. Tablet + web only —
-         phones have no room (hidden <768px via CSS). Capped at 3 chips;
-         the rest live in an upward "+N" popover. -->
-    <div class="pf-draftshelf" role="group" aria-label="Drafts">
-      <span class="pf-draftshelf__rule" aria-hidden="true"></span>
-      <!-- Chips scroll in their own container; the +N button/popover sits
-           OUTSIDE it — an overflow scroller clips its children vertically,
-           which was swallowing the upward dropdown. -->
-      <div class="pf-draftshelf__scroll">
-        <!-- The chip whose screen is on stage is SELECTED (aria-current) —
-             however you got there. Its link is dropped (routerLink null =
-             no href, no navigation), so tapping the draft you're already on
-             is a true no-op: no reload, no lost typing. -->
-        @for (d of draftShelf.items().slice(0, 3); track d.id) {
-          @let on = draftShelf.activeId() === d.id;
-          <a class="pf-draftshelf__chip press" [class.pf-draftshelf__chip--on]="on" [pfZoomSource]="on ? null : chipZoomKeys(d)"
-             [routerLink]="on ? null : d.link" [queryParams]="d.queryParams ?? null"
-             [state]="draftShelf.swapState(d)"
-             [attr.aria-current]="on ? 'page' : null" [attr.tabindex]="on ? 0 : null"
-             [title]="(on ? 'Open now — ' : 'Resume draft — ') + d.label + (d.sub ? ' · ' + d.sub : '')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-            </svg>
-            <span class="pf-draftshelf__lbl">{{ d.label }}</span>
-            @if (d.sub) { <span class="pf-draftshelf__sub">{{ d.sub }}</span> }
-          </a>
+    <!-- Designer navbar (Figma 446-113): the bar carries ONLY branch pill,
+           bell and avatar. The work-area nav moved into the avatar menu
+           (below) until the designer draws a navigation treatment. -->
+    @if (tenantLoaded()) {
+    <!-- Branch selector — CLASSIC keeps it on the bar; in the NEW design
+             branch switching lives inside the user badge menu (owner: branch
+             changes are infrequent). Hidden for single-branch tenants. -->
+    @if (canSwitchBranch() && !themeService.isNewDesign()) {
+    <div class="relative hidden md:block">
+      <button type="button" class="pf-ts-branch press" [class.pf-ts-branch--open]="branchOpen()"
+        [class.pf-ts-branch--switching]="branchSwitch.busy()"
+        [disabled]="!canSwitchBranch() || branchSwitch.busy()" [attr.aria-expanded]="branchOpen()"
+        [attr.aria-label]="'Switch branch — currently ' + branch()" (click)="toggleBranch()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 21s-7-4.5-7-12a7 7 0 0 1 14 0c0 7.5-7 12-7 12Z" />
+          <circle cx="12" cy="9" r="2.5" />
+        </svg>
+        <!-- Keyed on the name: a switch re-renders it, so the new
+             branch slides in (motion in top-strip.component.scss). -->
+        @for (n of [branch()]; track n) {
+          <span class="pf-ts-branch__name">{{ n }}</span>
+        }
+        <svg class="pf-ts-branch__chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+
+      @if (branchOpen()) {
+      <div class="pf-ts-branch__pop" role="menu">
+        <div class="pf-ts-branch__pop-head">
+          <p class="pf-ts-branch__pop-eyebrow">Active branch</p>
+          <p class="pf-ts-branch__pop-current">{{ branch() }}</p>
+        </div>
+        <div class="pf-ts-branch__pop-divider"></div>
+        @for (b of branches(); track b.id) {
+        <button type="button" class="pf-ts-branch__pop-item"
+          [class.pf-ts-branch__pop-item--active]="b.id === activeBranchId()" (click)="selectBranch(b)" role="menuitem">
+          <span class="truncate">{{ b.name }}</span>
+          @if (b.id === activeBranchId()) {
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="m5 12 4 4L19 6" />
+          </svg>
+          }
+        </button>
         }
       </div>
-      <div class="relative">
-        <!-- Web/tablet: "+N" for the drafts beyond the three chips. -->
-        @if (draftShelf.items().length > 3) {
-          <!-- Carries the selected look when the on-stage draft is one of
-               the overflow drafts, so the highlight never goes missing. -->
-          <button type="button" class="pf-draftshelf__more press" (click)="draftsOpen.set(!draftsOpen())"
-                  [class.pf-draftshelf__more--on]="activeDraftInOverflow()"
-                  [attr.aria-expanded]="draftsOpen()">+{{ draftShelf.items().length - 3 }}</button>
+      }
+    </div>
+    }
+    }
+
+    @if (themeService.isNewDesign() && messagesModuleOn()) {
+    <!-- Messages, Facebook-style (owner): BEFORE the bell; click opens a
+           seamless conversations DROPDOWN. Picking one opens the chat
+           window and pins its chip on the bar (like the drafts). -->
+    <div class="relative">
+      <button type="button" class="pf-strip-btn pf-chat-btn press relative"
+        [class.pf-chat-btn--active]="chatSurfaceActive()" (click)="toggleMsgs()" [attr.aria-expanded]="msgsPanel.open()"
+        [attr.aria-pressed]="chatSurfaceActive()" aria-label="Messages">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path
+            d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+        </svg>
+        @if (chat.totalUnread() > 0) {
+        <span class="pf-chat-btn__badge">{{ chat.totalUnread() > 99 ? '99+' : chat.totalUnread() }}</span>
         }
-        @if (draftsOpen()) {
-          <div class="pf-draftshelf__bd" (click)="draftsOpen.set(false)" aria-hidden="true"></div>
-          <div class="pf-draftshelf__pop" role="menu">
-            @for (d of draftShelf.items(); track d.id) {
-              @let on = draftShelf.activeId() === d.id;
-              <a class="pf-draftshelf__pop-item press" role="menuitem" [class.pf-draftshelf__pop-item--on]="on" [pfZoomSource]="on ? null : chipZoomKeys(d)"
-                 [routerLink]="on ? null : d.link" [queryParams]="d.queryParams ?? null"
-                 [state]="draftShelf.swapState(d)"
-                 [attr.aria-current]="on ? 'page' : null" [attr.tabindex]="on ? 0 : null"
-                 (click)="draftsOpen.set(false)">
-                <span class="pf-draftshelf__lbl">{{ d.label }}</span>
-                @if (d.sub) { <span class="pf-draftshelf__sub">{{ d.sub }}</span> }
-              </a>
+      </button>
+      @if (msgsPanel.open()) {
+      <div class="pf-msgs-bd" (click)="msgsPanel.close()" aria-hidden="true"></div>
+      <div class="pf-msgs-pop" role="menu" aria-label="Messages">
+        <div class="pf-msgs-pop__head">Messages</div>
+        <label class="pf-msgs-pop__search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input type="text" placeholder="Search people…" [value]="msgQuery()"
+            (input)="msgQuery.set($any($event.target).value)" aria-label="Search people" />
+        </label>
+
+        @if (msgConversations().length) {
+        <p class="pf-msgs-pop__sect">Recent</p>
+        @for (c of msgConversations(); track c.id) {
+        <button type="button" class="pf-msgs-pop__item press" role="menuitem" (click)="openConvo(c)">
+          <pf-presence-avatar size="xs" [initials]="convoInitials(c)" [userId]="convoPeerId(c)" [group]="c.isGroup" />
+          <span class="pf-msgs-pop__body">
+            <span class="pf-msgs-pop__name">{{ convoTitle(c) }}@if (convoDisambiguator(c); as d) {<span
+                class="pf-msgs-pop__disamb"> · {{ d }}</span>}</span>
+            @if (c.lastMessage) {
+            <span class="pf-msgs-pop__last">{{ c.lastMessage.body }}</span>
             }
-          </div>
+          </span>
+          @if (c.unreadCount > 0) {
+          <span class="pf-msgs-pop__unread">{{ c.unreadCount }}</span>
+          }
+        </button>
+        }
+        }
+
+        <!-- Every person in the tenant — messaging is open to all of
+                 them, not just people you've already talked to. -->
+        @if (msgPeople().length) {
+        <p class="pf-msgs-pop__sect">People</p>
+        @for (u of msgPeople(); track u.id) {
+        <button type="button" class="pf-msgs-pop__item press" role="menuitem" (click)="openPerson(u)">
+          <pf-presence-avatar size="xs" [initials]="personInitials(u)" [userId]="u.id" />
+          <span class="pf-msgs-pop__body">
+            <span class="pf-msgs-pop__name">{{ u.displayName }}</span>
+            <span class="pf-msgs-pop__last">{{ u.email }}</span>
+          </span>
+        </button>
+        }
+        }
+
+        @if (!msgConversations().length && !msgPeople().length) {
+        <p class="pf-msgs-pop__empty">Nobody matches that search.</p>
         }
       </div>
+      }
     </div>
     }
 
-    <!-- Spacer pushes the nav + right cluster to the far edge -->
-    <div class="pf-ts-spacer flex-1 min-w-0"></div>
+    <pf-notification-bell></pf-notification-bell>
 
-    <!-- Right cluster — flex-shrink-0 so bell + avatar never overflow the pill.
-         Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
-    <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
-
-      @if (!themeService.isNewDesign()) {
-      <!-- CLASSIC primary nav — icon-first hybrid on the right: the active
-           item shows its label, the others slide theirs out on hover. -->
-      <nav class="pf-topnav-classic hidden xl:flex" aria-label="Work areas">
-        @for (n of primary(); track n.id) {
-        <a [routerLink]="n.href" routerLinkActive="pf-topnav-active" [routerLinkActiveOptions]="{ exact: !!n.exact }"
-          class="pf-topnav-btn press" [title]="n.label" [attr.aria-label]="n.label">
-          @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
-            <span class="pf-collect-nav-icon w-4 h-4" aria-hidden="true"></span>
-          } @else {
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
-              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              @for (p of n.iconPath; track p) {
-                <path [attr.d]="p" />
-              }
-            </svg>
-          }
-          <span>{{ n.label }}</span>
-        </a>
-        }
-        @if (showAdmin()) {
-        <a routerLink="/admin" routerLinkActive="pf-topnav-active"
-          class="pf-topnav-btn press" title="Settings" aria-label="Settings">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"
-            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
-          </svg>
-          <span>Settings</span>
-        </a>
-        }
-      </nav>
-      }
-
-      <!-- Designer navbar (Figma 446-113): the bar carries ONLY branch pill,
-           bell and avatar. The work-area nav moved into the avatar menu
-           (below) until the designer draws a navigation treatment. -->
-      @if (tenantLoaded()) {
-        <!-- Branch selector — CLASSIC keeps it on the bar; in the NEW design
-             branch switching lives inside the user badge menu (owner: branch
-             changes are infrequent). Hidden for single-branch tenants. -->
-        @if (canSwitchBranch() && !themeService.isNewDesign()) {
-        <div class="relative hidden md:block">
-          <button type="button" class="pf-ts-branch press"
-                  [class.pf-ts-branch--open]="branchOpen()"
-                  [class.pf-ts-branch--switching]="branchSwitch.busy()"
-                  [disabled]="!canSwitchBranch() || branchSwitch.busy()"
-                  [attr.aria-expanded]="branchOpen()"
-                  [attr.aria-label]="'Switch branch — currently ' + branch()"
-                  (click)="toggleBranch()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 21s-7-4.5-7-12a7 7 0 0 1 14 0c0 7.5-7 12-7 12Z" />
-              <circle cx="12" cy="9" r="2.5" />
-            </svg>
-            <!-- Keyed on the name: a switch re-renders it, so the new
-                 branch slides in (motion in top-strip.component.scss). -->
-            @for (n of [branch()]; track n) {
-              <span class="pf-ts-branch__name">{{ n }}</span>
-            }
-            <svg class="pf-ts-branch__chev" width="10" height="10" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
-                 aria-hidden="true">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-
-          @if (branchOpen()) {
-            <div class="pf-ts-branch__pop" role="menu">
-              <div class="pf-ts-branch__pop-head">
-                <p class="pf-ts-branch__pop-eyebrow">Active branch</p>
-                <p class="pf-ts-branch__pop-current">{{ branch() }}</p>
-              </div>
-              <div class="pf-ts-branch__pop-divider"></div>
-              @for (b of branches(); track b.id) {
-                <button type="button" class="pf-ts-branch__pop-item"
-                        [class.pf-ts-branch__pop-item--active]="b.id === activeBranchId()"
-                        (click)="selectBranch(b)" role="menuitem">
-                  <span class="truncate">{{ b.name }}</span>
-                  @if (b.id === activeBranchId()) {
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="m5 12 4 4L19 6" />
-                    </svg>
-                  }
-                </button>
-              }
-            </div>
-          }
-        </div>
-        }
-      }
-
-      @if (themeService.isNewDesign() && messagesModuleOn()) {
-      <!-- Messages, Facebook-style (owner): BEFORE the bell; click opens a
-           seamless conversations DROPDOWN. Picking one opens the chat
-           window and pins its chip on the bar (like the drafts). -->
-      <div class="relative">
-        <button type="button" class="pf-strip-btn pf-chat-btn press relative" (click)="toggleMsgs()"
-                [attr.aria-expanded]="msgsPanel.open()" aria-label="Messages">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-          </svg>
-          @if (chat.totalUnread() > 0) {
-          <span class="pf-chat-btn__badge">{{ chat.totalUnread() > 99 ? '99+' : chat.totalUnread() }}</span>
-          }
-        </button>
-        @if (msgsPanel.open()) {
-          <div class="pf-msgs-bd" (click)="msgsPanel.close()" aria-hidden="true"></div>
-          <div class="pf-msgs-pop" role="menu" aria-label="Messages">
-            <div class="pf-msgs-pop__head">Messages</div>
-            <label class="pf-msgs-pop__search">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
-              </svg>
-              <input type="text" placeholder="Search people…" [value]="msgQuery()"
-                     (input)="msgQuery.set($any($event.target).value)" aria-label="Search people" />
-            </label>
-
-            @if (msgConversations().length) {
-              <p class="pf-msgs-pop__sect">Recent</p>
-              @for (c of msgConversations(); track c.id) {
-                <button type="button" class="pf-msgs-pop__item press" role="menuitem" (click)="openConvo(c)">
-                  <pf-presence-avatar size="xs" [initials]="convoInitials(c)" [userId]="convoPeerId(c)" [group]="c.isGroup" />
-                  <span class="pf-msgs-pop__body">
-                    <span class="pf-msgs-pop__name">{{ convoTitle(c) }}@if (convoDisambiguator(c); as d) {<span class="pf-msgs-pop__disamb"> · {{ d }}</span>}</span>
-                    @if (c.lastMessage) {
-                      <span class="pf-msgs-pop__last">{{ c.lastMessage.body }}</span>
-                    }
-                  </span>
-                  @if (c.unreadCount > 0) {
-                    <span class="pf-msgs-pop__unread">{{ c.unreadCount }}</span>
-                  }
-                </button>
-              }
-            }
-
-            <!-- Every person in the tenant — messaging is open to all of
-                 them, not just people you've already talked to. -->
-            @if (msgPeople().length) {
-              <p class="pf-msgs-pop__sect">People</p>
-              @for (u of msgPeople(); track u.id) {
-                <button type="button" class="pf-msgs-pop__item press" role="menuitem" (click)="openPerson(u)">
-                  <pf-presence-avatar size="xs" [initials]="personInitials(u)" [userId]="u.id" />
-                  <span class="pf-msgs-pop__body">
-                    <span class="pf-msgs-pop__name">{{ u.displayName }}</span>
-                    <span class="pf-msgs-pop__last">{{ u.email }}</span>
-                  </span>
-                </button>
-              }
-            }
-
-            @if (!msgConversations().length && !msgPeople().length) {
-              <p class="pf-msgs-pop__empty">Nobody matches that search.</p>
-            }
-          </div>
-        }
-      </div>
-      }
-
-      <pf-notification-bell></pf-notification-bell>
-
-      <!-- Profile avatar — click to open name / role / logout -->
-      <div class="relative">
-        <button type="button" class="pf-avatar-btn press" (click)="toggleProfile()" [attr.aria-expanded]="profileOpen()"
-          [attr.aria-label]="'Profile menu — ' + userName()">
-          <span class="pf-avatar-circle">{{ initials() }}</span>
-          <!-- Shrink + bottom bar: the pf glyph IS the user badge — it swaps
+    <!-- Profile avatar — click to open name / role / logout -->
+    <div class="relative">
+      <button type="button" class="pf-avatar-btn press" (click)="toggleProfile()" [attr.aria-expanded]="profileOpen()"
+        [attr.aria-label]="'Profile menu — ' + userName()">
+        <span class="pf-avatar-circle">{{ initials() }}</span>
+        <!-- Shrink + bottom bar: the pf glyph IS the user badge — it swaps
                in for the initials disc (CSS toggles which one shows). -->
-          <svg class="pf-avatar-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true">
-            <defs>
-              <linearGradient id="pfAvatarGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#7c3aed" />
-                <stop offset="50%" stop-color="#a855f7" />
-                <stop offset="100%" stop-color="#ec4899" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
-              fill="url(#pfAvatarGradient)" />
-            <path
-              d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
-              fill="url(#pfAvatarGradient)" />
-          </svg>
-          <!-- My presence status — small colored dot pinned bottom-right of
+        <svg class="pf-avatar-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true">
+          <defs>
+            <linearGradient id="pfAvatarGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#7c3aed" />
+              <stop offset="50%" stop-color="#a855f7" />
+              <stop offset="100%" stop-color="#ec4899" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z"
+            fill="url(#pfAvatarGradient)" />
+          <path
+            d="M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z"
+            fill="url(#pfAvatarGradient)" />
+        </svg>
+        <!-- My presence status — small colored dot pinned bottom-right of
                the avatar (solid / white-dash for DND-grade / hollow for Away). -->
-          <span class="pf-status-dot pf-avatar-status"
-                [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
-          @if (profileOpen()) { <span class="pf-avatar-ring" aria-hidden="true"></span> }
-        </button>
+        <span class="pf-status-dot pf-avatar-status" [attr.data-presence]="presence.myStatus()"
+          aria-hidden="true"></span>
+        @if (profileOpen()) { <span class="pf-avatar-ring" aria-hidden="true"></span> }
+      </button>
 
-        @if (profileOpen()) {
-        <div class="pf-profile-pop" role="menu">
-          <span class="pf-profile-accent" aria-hidden="true"></span>
+      @if (profileOpen()) {
+      <div class="pf-profile-pop" role="menu">
+        <span class="pf-profile-accent" aria-hidden="true"></span>
 
-          <header class="pf-profile-head">
-            <span class="pf-profile-bigcircle pf-profile-bigcircle--presence">
-              {{ initials() }}
-              <span class="pf-status-dot pf-avatar-status pf-avatar-status--big"
-                    [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-[14px] font-semibold truncate" style="color: var(--text-primary);">{{ userName() }}</p>
-              <p class="text-[11px] font-mono uppercase tracking-[0.16em] mt-0.5 truncate" style="color: var(--text-muted);">
-                {{ userRoleLabel() }}</p>
-            </div>
-          </header>
+        <header class="pf-profile-head">
+          <span class="pf-profile-bigcircle pf-profile-bigcircle--presence">
+            {{ initials() }}
+            <span class="pf-status-dot pf-avatar-status pf-avatar-status--big"
+              [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="text-[14px] font-semibold truncate" style="color: var(--text-primary);">{{ userName() }}</p>
+            <p class="text-[11px] font-mono uppercase tracking-[0.16em] mt-0.5 truncate"
+              style="color: var(--text-muted);">
+              {{ userRoleLabel() }}</p>
+          </div>
+        </header>
 
-          <div class="pf-profile-divider"></div>
+        <div class="pf-profile-divider"></div>
 
-          <!-- Presence status — current status row; tap to expand the 7
+        <!-- Presence status — current status row; tap to expand the 7
                presets (Teams-style). DND-grade statuses note that calls +
                pushes are silenced while set. -->
-          <button type="button" class="pf-profile-item pf-status-row press"
-                  (click)="toggleStatusList()" [attr.aria-expanded]="statusListOpen()"
-                  aria-label="Change status">
-            <span class="pf-status-dot" [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
-            <span class="pf-status-row__txt min-w-0 flex-1">
-              <span class="pf-status-row__lbl truncate">{{ myStatusLabel() }}</span>
-              @if (presence.myStatusIsDnd()) {
-                <span class="pf-status-row__sub">Calls &amp; alerts silenced</span>
-              }
-            </span>
-            <svg class="pf-status-row__chev" [class.pf-status-row__chev--open]="statusListOpen()"
-                 width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="m6 9 6 6 6-6" />
+        <button type="button" class="pf-profile-item pf-status-row press" (click)="toggleStatusList()"
+          [attr.aria-expanded]="statusListOpen()" aria-label="Change status">
+          <span class="pf-status-dot" [attr.data-presence]="presence.myStatus()" aria-hidden="true"></span>
+          <span class="pf-status-row__txt min-w-0 flex-1">
+            <span class="pf-status-row__lbl truncate">{{ myStatusLabel() }}</span>
+            @if (presence.myStatusIsDnd()) {
+            <span class="pf-status-row__sub">Calls &amp; alerts silenced</span>
+            }
+          </span>
+          <svg class="pf-status-row__chev" [class.pf-status-row__chev--open]="statusListOpen()" width="12" height="12"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+
+        @if (statusListOpen()) {
+        <div class="pf-status-list" role="menu" aria-label="Set status">
+          @for (o of statusOptions; track o.key) {
+          <button type="button" role="menuitemradio" class="pf-status-opt press"
+            [attr.aria-checked]="o.key === presence.myStatus()"
+            [class.pf-status-opt--on]="o.key === presence.myStatus()" (click)="pickStatus(o)">
+            <span class="pf-status-dot" [attr.data-presence]="o.key" aria-hidden="true"></span>
+            <span class="flex-1 truncate">{{ o.label }}</span>
+            @if (o.key === presence.myStatus()) {
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m5 12 4 4L19 6" />
             </svg>
-          </button>
-
-          @if (statusListOpen()) {
-            <div class="pf-status-list" role="menu" aria-label="Set status">
-              @for (o of statusOptions; track o.key) {
-                <button type="button" role="menuitemradio" class="pf-status-opt press"
-                        [attr.aria-checked]="o.key === presence.myStatus()"
-                        [class.pf-status-opt--on]="o.key === presence.myStatus()"
-                        (click)="pickStatus(o)">
-                  <span class="pf-status-dot" [attr.data-presence]="o.key" aria-hidden="true"></span>
-                  <span class="flex-1 truncate">{{ o.label }}</span>
-                  @if (o.key === presence.myStatus()) {
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="m5 12 4 4L19 6" />
-                    </svg>
-                  }
-                </button>
-              }
-              <p class="pf-status-note">“In surgery” &amp; “Do not disturb” block incoming calls and silence push alerts.</p>
-            </div>
-          }
-
-          <div class="pf-profile-divider"></div>
-
-          @if (showAdmin()) {
-            <a routerLink="/setup" class="pf-profile-item press" (click)="closeProfile()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z" />
-              </svg>
-              <span>Tenant branding</span>
-            </a>
-          }
-
-          @if (themeService.isNewDesign() && tenantLoaded() && canSwitchBranch()) {
-          <!-- Branch switching, moved off the bar (owner): infrequent, so it
-               lives here. Active branch is highlighted; tap to switch. -->
-          <div class="pf-profile-divider"></div>
-          <p class="pf-profile-eyebrow">Branch</p>
-          @for (b of branches(); track b.id) {
-            <button type="button" class="pf-profile-item press"
-                    [class.pf-profile-item--active]="b.id === activeBranchId()"
-                    [disabled]="branchSwitch.busy()"
-                    (click)="selectBranch(b)">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 21s-7-4.5-7-12a7 7 0 0 1 14 0c0 7.5-7 12-7 12Z"/>
-                <circle cx="12" cy="9" r="2.5"/>
-              </svg>
-              <span class="flex-1 text-left truncate">{{ b.name }}</span>
-              @if (b.id === activeBranchId()) {
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="m5 12 4 4L19 6"/>
-                </svg>
-              }
-            </button>
-          }
-          <div class="pf-profile-divider"></div>
-          }
-
-          <button type="button" class="pf-profile-item press" (click)="themeService.toggle(); closeProfile()">
-            @if (isDark()) {
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="4" />
-              <path
-                d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-            </svg>
-            <span>Switch to light</span>
-            } @else {
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 14.5A8 8 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" />
-            </svg>
-            <span>Switch to dark</span>
             }
           </button>
+          }
+          <p class="pf-status-note">“In surgery” &amp; “Do not disturb” block incoming calls and silence push alerts.
+          </p>
+        </div>
+        }
 
-          <!-- Design version: New = the designer redesign, Classic = the
+        <div class="pf-profile-divider"></div>
+
+        @if (showAdmin()) {
+        <a routerLink="/setup" class="pf-profile-item press" (click)="closeProfile()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z" />
+          </svg>
+          <span>Tenant branding</span>
+        </a>
+        }
+
+        @if (themeService.isNewDesign() && tenantLoaded() && canSwitchBranch()) {
+        <!-- Branch switching, moved off the bar (owner): infrequent, so it
+               lives here. Active branch is highlighted; tap to switch. -->
+        <div class="pf-profile-divider"></div>
+        <p class="pf-profile-eyebrow">Branch</p>
+        @for (b of branches(); track b.id) {
+        <button type="button" class="pf-profile-item press" [class.pf-profile-item--active]="b.id === activeBranchId()"
+          [disabled]="branchSwitch.busy()" (click)="selectBranch(b)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 21s-7-4.5-7-12a7 7 0 0 1 14 0c0 7.5-7 12-7 12Z" />
+            <circle cx="12" cy="9" r="2.5" />
+          </svg>
+          <span class="flex-1 text-left truncate">{{ b.name }}</span>
+          @if (b.id === activeBranchId()) {
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m5 12 4 4L19 6" />
+          </svg>
+          }
+        </button>
+        }
+        <div class="pf-profile-divider"></div>
+        }
+
+        <button type="button" class="pf-profile-item press" (click)="themeService.toggle(); closeProfile()">
+          @if (isDark()) {
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4" />
+            <path
+              d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+          </svg>
+          <span>Switch to light</span>
+          } @else {
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 14.5A8 8 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" />
+          </svg>
+          <span>Switch to dark</span>
+          }
+        </button>
+
+        <!-- Design version: New = the designer redesign, Classic = the
                previous look for people who don't want the change yet.
                Menu stays open so the switch reads as a setting. -->
-          @if (themeService.switchesEnabled) {
-          <button type="button" class="pf-profile-item press" (click)="themeService.toggleDesign()"
-                  [attr.aria-pressed]="themeService.isNewDesign()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>
-              <path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z"/>
-            </svg>
-            <span class="flex-1 text-left">Design</span>
-            <span class="pf-dm-pill" [class.pf-dm-pill--on]="themeService.isNewDesign()">
-              {{ themeService.isNewDesign() ? 'New' : 'Classic' }}
-            </span>
-          </button>
+        @if (themeService.switchesEnabled) {
+        <button type="button" class="pf-profile-item press" (click)="themeService.toggleDesign()"
+          [attr.aria-pressed]="themeService.isNewDesign()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
+            <path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z" />
+          </svg>
+          <span class="flex-1 text-left">Design</span>
+          <span class="pf-dm-pill" [class.pf-dm-pill--on]="themeService.isNewDesign()">
+            {{ themeService.isNewDesign() ? 'New' : 'Classic' }}
+          </span>
+        </button>
 
-          @if (themeService.isNewDesign()) {
-          <!-- EXPERIMENT: bottom navbar preview — pages left, chat dock
+        @if (themeService.isNewDesign()) {
+        <!-- EXPERIMENT: bottom navbar preview — pages left, chat dock
                right. Lets the owner feel the layout before committing. -->
-          <button type="button" class="pf-profile-item press" (click)="themeService.toggleBottomNav()"
-                  [attr.aria-pressed]="themeService.bottomNav()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="16" rx="2"/>
-              <path d="M3 15h18"/>
-            </svg>
-            <span class="flex-1 text-left">Bottom bar</span>
-            <span class="pf-dm-pill" [class.pf-dm-pill--on]="themeService.bottomNav()">
-              {{ themeService.bottomNav() ? 'On' : 'Off' }}
-            </span>
-          </button>
-          }
+        <button type="button" class="pf-profile-item press" (click)="themeService.toggleBottomNav()"
+          [attr.aria-pressed]="themeService.bottomNav()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M3 15h18" />
+          </svg>
+          <span class="flex-1 text-left">Bottom bar</span>
+          <span class="pf-dm-pill" [class.pf-dm-pill--on]="themeService.bottomNav()">
+            {{ themeService.bottomNav() ? 'On' : 'Off' }}
+          </span>
+        </button>
+        }
 
-          }
-          @if (designMode.available()) {
-            <!-- Designer capture prep for the Figma pipeline (design_mode
+        }
+        @if (designMode.available()) {
+        <!-- Designer capture prep for the Figma pipeline (design_mode
                  permission). Menu stays open so the switch reads as a setting. -->
-            <button type="button" class="pf-profile-item press" (click)="designMode.toggle()"
-                    [attr.aria-pressed]="designMode.enabled()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 19l7-7 3 3-7 7-3-3z"/>
-                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
-                <path d="M2 2l7.586 7.586"/>
-                <circle cx="11" cy="11" r="2"/>
-              </svg>
-              <span class="flex-1 text-left">Design mode</span>
-              <span class="pf-dm-pill" [class.pf-dm-pill--on]="designMode.enabled()">
-                {{ designMode.enabled() ? 'On' : 'Off' }}
-              </span>
-            </button>
-          }
+        <button type="button" class="pf-profile-item press" (click)="designMode.toggle()"
+          [attr.aria-pressed]="designMode.enabled()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19l7-7 3 3-7 7-3-3z" />
+            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+            <path d="M2 2l7.586 7.586" />
+            <circle cx="11" cy="11" r="2" />
+          </svg>
+          <span class="flex-1 text-left">Design mode</span>
+          <span class="pf-dm-pill" [class.pf-dm-pill--on]="designMode.enabled()">
+            {{ designMode.enabled() ? 'On' : 'Off' }}
+          </span>
+        </button>
+        }
 
-          <div class="pf-profile-divider"></div>
+        <div class="pf-profile-divider"></div>
 
-          <!-- Multi-account (shared lab machines): tapping a profile leaves this
+        <!-- Multi-account (shared lab machines): tapping a profile leaves this
                account and opens the full-screen switch (target's PIN gates it;
                PIN-less profiles open directly). Scrolls past ~4 profiles so the
                popover never outgrows the screen. -->
-          <div class="pf-acct-list">
-            @for (a of otherAccounts(); track a.userId) {
-              <button type="button" class="pf-profile-item press" (click)="openSwitch(a)">
-                <span class="pf-acct-circle">{{ accountInitials(a) }}</span>
-                <span class="min-w-0 flex-1 text-left">
-                  <span class="block truncate">{{ a.displayName }}</span>
-                  <span class="block text-[10.5px] truncate" style="color: var(--text-muted);">{{ a.expired ? 'Sign in again' : a.org }}</span>
-                </span>
-              </button>
-            }
-          </div>
-          <button type="button" class="pf-profile-item press" (click)="addAccount()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="9" cy="7" r="4" />
-              <path d="M2 21v-2a4 4 0 0 1 4-4h6" />
-              <line x1="19" y1="8" x2="19" y2="14" /><line x1="16" y1="11" x2="22" y2="11" />
-            </svg>
-            <span>Add account</span>
+        <div class="pf-acct-list">
+          @for (a of otherAccounts(); track a.userId) {
+          <button type="button" class="pf-profile-item press" (click)="openSwitch(a)">
+            <span class="pf-acct-circle">{{ accountInitials(a) }}</span>
+            <span class="min-w-0 flex-1 text-left">
+              <span class="block truncate">{{ a.displayName }}</span>
+              <span class="block text-[10.5px] truncate" style="color: var(--text-muted);">{{ a.expired ? 'Sign in
+                again' : a.org }}</span>
+            </span>
           </button>
-
-          @if (pinFormOpen()) {
-            <div class="pf-switch-form">
-              <p class="pf-switch-lbl">{{ hasPin() ? 'Change PIN' : 'Set a 4-digit PIN' }}</p>
-              @if (hasPin()) {
-                <input class="pf-pin-input pf-pin-wide" type="password" inputmode="numeric" autocomplete="off"
-                       maxlength="4" placeholder="Current PIN"
-                       [ngModel]="pinCurrent" (ngModelChange)="pinCurrent = sanitizePin($event)" [disabled]="pinBusy()" />
-              }
-              <div class="pf-switch-row">
-                <input class="pf-pin-input" type="password" inputmode="numeric" autocomplete="off"
-                       maxlength="4" placeholder="New PIN"
-                       [ngModel]="pinNew" (ngModelChange)="pinNew = sanitizePin($event)"
-                       (keydown.enter)="savePin()" [disabled]="pinBusy()" />
-                <button type="button" class="pf-pin-go press" (click)="savePin()" [disabled]="pinBusy()">
-                  {{ pinBusy() ? '…' : (pinSaved() ? '✓' : 'Save') }}
-                </button>
-                <button type="button" class="pf-pin-cancel press" (click)="closePinForm()">✕</button>
-              </div>
-              @if (pinError()) { <p class="pf-pin-error">{{ pinError() }}</p> }
-            </div>
-          } @else {
-            <button type="button" class="pf-profile-item press" (click)="openPinForm()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              <span>{{ hasPin() ? 'Change PIN' : 'Set switch/unlock PIN' }}</span>
-            </button>
           }
-
-          @if (canPrint()) {
-            <button type="button" class="pf-profile-item press" (click)="goPrinting()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M8 14h8v6H8z" />
-              </svg>
-              <span>Print settings</span>
-            </button>
-          }
-
-          <button type="button" class="pf-profile-item press" (click)="goSignature()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 19c3-1 5-4 7-7s3-5 4-5 1 3-1 7-1 5 1 5 3-2 4-3M3 21h18" />
-            </svg>
-            <span>My signature</span>
-          </button>
-
-          @if (hasPin()) {
-            <button type="button" class="pf-profile-item press" (click)="lockNow()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                <circle cx="12" cy="16" r="1.6" />
-              </svg>
-              <span class="flex-1">Lock screen</span>
-              <span class="pf-kbd-hint">⌘⇧L · Ctrl+L</span>
-            </button>
-          }
-
-          <button type="button" class="pf-profile-item pf-profile-danger press" (click)="logout()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <path d="m16 17 5-5-5-5" />
-              <path d="M21 12H9" />
-            </svg>
-            <span>Sign out</span>
-          </button>
         </div>
+        <button type="button" class="pf-profile-item press" (click)="addAccount()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="7" r="4" />
+            <path d="M2 21v-2a4 4 0 0 1 4-4h6" />
+            <line x1="19" y1="8" x2="19" y2="14" />
+            <line x1="16" y1="11" x2="22" y2="11" />
+          </svg>
+          <span>Add account</span>
+        </button>
+
+        @if (pinFormOpen()) {
+        <div class="pf-switch-form">
+          <p class="pf-switch-lbl">{{ hasPin() ? 'Change PIN' : 'Set a 4-digit PIN' }}</p>
+          @if (hasPin()) {
+          <input class="pf-pin-input pf-pin-wide" type="password" inputmode="numeric" autocomplete="off" maxlength="4"
+            placeholder="Current PIN" [ngModel]="pinCurrent" (ngModelChange)="pinCurrent = sanitizePin($event)"
+            [disabled]="pinBusy()" />
+          }
+          <div class="pf-switch-row">
+            <input class="pf-pin-input" type="password" inputmode="numeric" autocomplete="off" maxlength="4"
+              placeholder="New PIN" [ngModel]="pinNew" (ngModelChange)="pinNew = sanitizePin($event)"
+              (keydown.enter)="savePin()" [disabled]="pinBusy()" />
+            <button type="button" class="pf-pin-go press" (click)="savePin()" [disabled]="pinBusy()">
+              {{ pinBusy() ? '…' : (pinSaved() ? '✓' : 'Save') }}
+            </button>
+            <button type="button" class="pf-pin-cancel press" (click)="closePinForm()">✕</button>
+          </div>
+          @if (pinError()) { <p class="pf-pin-error">{{ pinError() }}</p> }
+        </div>
+        } @else {
+        <button type="button" class="pf-profile-item press" (click)="openPinForm()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span>{{ hasPin() ? 'Change PIN' : 'Set switch/unlock PIN' }}</span>
+        </button>
         }
+
+        @if (canPrint()) {
+        <button type="button" class="pf-profile-item press" (click)="goPrinting()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path
+              d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M8 14h8v6H8z" />
+          </svg>
+          <span>Print settings</span>
+        </button>
+        }
+
+        <button type="button" class="pf-profile-item press" (click)="goSignature()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 19c3-1 5-4 7-7s3-5 4-5 1 3-1 7-1 5 1 5 3-2 4-3M3 21h18" />
+          </svg>
+          <span>My signature</span>
+        </button>
+
+        @if (hasPin()) {
+        <button type="button" class="pf-profile-item press" (click)="lockNow()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            <circle cx="12" cy="16" r="1.6" />
+          </svg>
+          <span class="flex-1">Lock screen</span>
+          <span class="pf-kbd-hint">⌘⇧L · Ctrl+L</span>
+        </button>
+        }
+
+        <button type="button" class="pf-profile-item pf-profile-danger press" (click)="logout()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <path d="m16 17 5-5-5-5" />
+            <path d="M21 12H9" />
+          </svg>
+          <span>Sign out</span>
+        </button>
       </div>
-    </div><!-- /right cluster -->
+      }
+    </div>
+  </div><!-- /right cluster -->
 </div>
 
 <!-- The global order-QR scanner modal is rendered by the shell (root level),
