@@ -1,5 +1,5 @@
 import { Location } from '@angular/common';
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -15,6 +15,7 @@ import { Test } from '../../../shared/models/test.model';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from './invoice-pdf';
 import { environment } from '../../../../environments/environment';
 import { waLink } from '../../../shared/utils/whatsapp';
+import { upiLink, upiQrDataUrl } from '../../../shared/utils/upi';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -293,12 +294,18 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                       <p class="pf-eyebrow mb-0.5">Scan to pay</p>
                       <p class="pf-big-amount">{{ effectivePayable() | inr }}</p>
                     </div>
-                    <div class="pf-qr">
-                      <img class="pf-qr__img" [src]="upiQrUrl()"
-                           alt="Scan to pay via UPI"/>
-                    </div>
+                    @if (upiVpa()) {
+                      <div class="pf-qr">
+                        @if (upiQrUrl()) {
+                          <img class="pf-qr__img" [src]="upiQrUrl()"
+                               alt="Scan to pay via UPI" data-testid="upi-qr"/>
+                        }
+                      </div>
+                    } @else {
+                      <p class="pf-qr__hint" data-testid="upi-missing">No UPI address is set, so no QR is shown. An admin can add it in Admin, Billing.</p>
+                    }
                     <div class="flex flex-col items-center gap-1">
-                      <p class="pf-qr__hint">prefrontal&#64;upi · Chennai Main</p>
+                      @if (upiVpa()) { <p class="pf-qr__hint">{{ upiVpa() }}</p> }
                       <div class="pf-live-badge">
                         <span class="pf-live__dot"></span>
                         <span>Listening for payment…</span>
@@ -1803,22 +1810,25 @@ export class BillingComponent implements OnInit, OnChanges {
     return `≈ ${days} day${days === 1 ? '' : 's'} to report`;
   });
 
-  /** UPI deep-link encoded into a real QR (rendered via api.qrserver.com).
-   *  Amount + invoice id are baked in so the patient's UPI app prefills
-   *  everything. payee VPA + name are placeholder constants for now. */
-  readonly upiQrUrl = computed<string>(() => {
-    const amt = this.effectivePayable();
-    const inv = this.invoiceNumber();
-    const params = new URLSearchParams({
-      pa: 'prefrontal@upi',
-      pn: 'Prefrontal Lab',
-      tn: inv,
-      am: String(amt),
-      cu: 'INR'
-    });
-    const upi = `upi://pay?${params.toString()}`;
-    const enc = encodeURIComponent(upi);
-    return `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${enc}`;
+  /** UPI QR for the payable amount — payee from Admin → Billing (the
+   *  reception-readable visibility slice), invoice no. as the note,
+   *  rendered in the app (no third-party QR service). */
+  private readonly _upiPayee = signal<{ upiVpa?: string | null; upiPayeeName?: string | null } | null>(null);
+  readonly upiVpa = computed(() => (this._upiPayee()?.upiVpa ?? '').trim());
+  readonly upiLink = computed<string | null>(() => {
+    const vpa = this.upiVpa();
+    return vpa ? upiLink(vpa, this._upiPayee()?.upiPayeeName, this.effectivePayable(), this.invoiceNumber()) : null;
+  });
+  readonly upiQrUrl = signal<string | null>(null);
+  private _upiQrSeq = 0;
+  private readonly _upiQrEffect = effect(() => {
+    const link = this.upiLink();
+    const seq = ++this._upiQrSeq;
+    if (!link) { this.upiQrUrl.set(null); return; }
+    upiQrDataUrl(link).then(
+      url => { if (seq === this._upiQrSeq) this.upiQrUrl.set(url); },
+      () => { if (seq === this._upiQrSeq) this.upiQrUrl.set(null); },
+    );
   });
 
   // ── Per-role discount cap (notify rather than silently clamp) ──
@@ -1894,10 +1904,12 @@ export class BillingComponent implements OnInit, OnChanges {
     // Per-role discount caps (Level-1 give_discount / Level-2 override_discount).
     // Slim endpoint: the full config GET is admin-gated, so a receptionist's
     // fetch 403'd and the caps silently fell back to 100%.
-    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number }>('/api/config/billing/visibility').subscribe({
+    // Same slice carries the UPI payee for the pay-now QR.
+    this.api.get<{ maxDiscountPct?: number; overrideDiscountPct?: number; upiVpa?: string | null; upiPayeeName?: string | null }>('/api/config/billing/visibility').subscribe({
       next: c => {
         if (typeof c?.maxDiscountPct === 'number') this._maxDiscountPct.set(c.maxDiscountPct);
         if (typeof c?.overrideDiscountPct === 'number') this._overrideDiscountPct.set(c.overrideDiscountPct);
+        this._upiPayee.set(c ? { upiVpa: c.upiVpa, upiPayeeName: c.upiPayeeName } : null);
       },
       error: () => { /* default 100% cap */ }
     });

@@ -6,8 +6,10 @@ import { ApiService } from '../../../core/services/api.service';
 
 /** Designer payment panel: Pay now (UPI/Card/Cash/Split) · Bill to vendor
  *  (Credit Wallet) · Pay later — same PayMode result contract as before. */
-function make(amount = 500, vendors: any[] = []) {
-  const api = { get: vi.fn(() => of(vendors)) };
+function make(amount = 500, vendors: any[] = [], visibility: any = null) {
+  const api = {
+    get: vi.fn((path: string) => of(path === '/api/config/billing/visibility' ? visibility : vendors)),
+  };
   TestBed.configureTestingModule({
     providers: [{ provide: ApiService, useValue: api }],
   });
@@ -122,5 +124,41 @@ describe('InlinePaymentPanel — due-settlement drawer (payment only)', () => {
     expect(el.querySelector('.pf-oc-phase, .pf-oc-sum, .pf-crt')).toBeNull();
     btn.click();
     expect(emitted[0]).toEqual({ mode: 'upi' });
+  });
+});
+
+describe('InlinePaymentPanel — UPI QR uses the lab payee from Admin → Billing', () => {
+  it('builds the upi://pay link from the configured VPA, payee name and amount', () => {
+    const { c, fixture } = make(171.5, [], { upiVpa: 'lab.counter@okaxis', upiPayeeName: 'Micro World Lab' });
+    c.setMode('upi');
+    fixture.detectChanges();
+    const link = c.upiLink()!;
+    expect(link.startsWith('upi://pay?')).toBe(true);
+    const q = new URLSearchParams(link.slice('upi://pay?'.length));
+    expect(q.get('pa')).toBe('lab.counter@okaxis');
+    expect(q.get('pn')).toBe('Micro World Lab');
+    expect(q.get('am')).toBe('171.50');
+    expect(q.get('cu')).toBe('INR');
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('lab.counter@okaxis');
+    expect(el.textContent).not.toContain('prefrontal@upi');
+    expect(el.querySelector('[data-testid="upi-missing"]')).toBeNull();
+  });
+
+  it('the link follows the amount', () => {
+    const { c, fixture } = make(100, [], { upiVpa: 'lab@upi' });
+    fixture.componentRef.setInput('amount', 250);
+    expect(new URLSearchParams(c.upiLink()!.split('?')[1]).get('am')).toBe('250.00');
+  });
+
+  it('no VPA configured → no QR, a clear hint instead (never a placeholder payee)', () => {
+    const { c, fixture } = make(300, [], { gstEnabled: true });
+    c.setMode('upi');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(c.upiLink()).toBeNull();
+    expect(el.querySelector('[data-testid="upi-qr"]')).toBeNull();
+    expect(el.querySelector('[data-testid="upi-missing"]')).not.toBeNull();
+    expect(el.textContent).not.toContain('prefrontal@upi');
   });
 });

@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   output,
@@ -9,6 +10,7 @@ import {
 } from "@angular/core";
 import { ApiService } from "../../../core/services/api.service";
 import { CurrencyInrPipe } from "../../../shared/pipes/currency-inr.pipe";
+import { UpiPayee, upiLink, upiQrDataUrl } from "../../../shared/utils/upi";
 
 export type PayMode = "upi" | "card" | "cash" | "wallet" | "split" | "later";
 
@@ -90,16 +92,25 @@ interface MethodDef {
           <div class="pf-ipp__detail">
             @switch (method()) {
               @case ("upi") {
-                <div class="pf-ipp__upi">
-                  <div class="pf-ipp__qr">
-                    <img [src]="upiQrUrl()" alt="UPI QR code to pay" width="84" height="84" />
+                @if (upiVpa()) {
+                  <div class="pf-ipp__upi">
+                    <div class="pf-ipp__qr">
+                      @if (upiQr()) {
+                        <img [src]="upiQr()" alt="UPI QR code to pay" width="84" height="84" data-testid="upi-qr" />
+                      }
+                    </div>
+                    <div class="pf-ipp__upi-text">
+                      <span>Scan with any UPI app</span>
+                      <strong>{{ amount() | inr }}</strong>
+                      <span class="pf-ipp__mono">{{ upiVpa() }}</span>
+                    </div>
                   </div>
-                  <div class="pf-ipp__upi-text">
-                    <span>Scan with any UPI app</span>
-                    <strong>{{ amount() | inr }}</strong>
-                    <span class="pf-ipp__mono">prefrontal&#64;upi</span>
+                } @else {
+                  <div class="pf-ipp__stack" data-testid="upi-missing">
+                    <span>Collect <strong>{{ amount() | inr }}</strong> by UPI.</span>
+                    <span>No UPI address is set, so no QR is shown. An admin can add it in Admin, Billing.</span>
                   </div>
-                </div>
+                }
               }
               @case ("card") {
                 <div class="pf-ipp__stack">
@@ -556,16 +567,32 @@ export class InlinePaymentPanelComponent {
     this.splitAmounts.update((a) => ({ ...a, [m]: isFinite(n) && n > 0 ? n : 0 }));
   }
 
-  // UPI QR (same generator as before, driven by the amount).
-  readonly upiQrUrl = computed<string>(() => {
-    const params = new URLSearchParams({
-      pa: "prefrontal@upi",
-      pn: "Prefrontal Lab",
-      am: String(this.amount()),
-      cu: "INR",
-    });
-    return `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=${encodeURIComponent("upi://pay?" + params.toString())}`;
+  // UPI QR — the lab's payee from Admin → Billing (reception-readable
+  // visibility slice), the amount fixed, rendered in the app.
+  readonly upiPayee = signal<UpiPayee | null>(null);
+  readonly upiVpa = computed(() => (this.upiPayee()?.upiVpa ?? "").trim());
+  readonly upiLink = computed<string | null>(() => {
+    const vpa = this.upiVpa();
+    return vpa ? upiLink(vpa, this.upiPayee()?.upiPayeeName, this.amount()) : null;
   });
+  readonly upiQr = signal<string | null>(null);
+  private upiQrSeq = 0;
+
+  constructor() {
+    this.api.get<UpiPayee>("/api/config/billing/visibility").subscribe({
+      next: (c) => this.upiPayee.set(c && !Array.isArray(c) ? c : null),
+      error: () => this.upiPayee.set(null),
+    });
+    effect(() => {
+      const link = this.upiLink();
+      const seq = ++this.upiQrSeq;
+      if (!link) { this.upiQr.set(null); return; }
+      upiQrDataUrl(link).then(
+        (url) => { if (seq === this.upiQrSeq) this.upiQr.set(url); },
+        () => { if (seq === this.upiQrSeq) this.upiQr.set(null); },
+      );
+    });
+  }
 
   readonly canConfirm = computed(() => {
     switch (this.mode()) {
