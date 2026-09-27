@@ -20,6 +20,7 @@ import { RingtoneService } from '../../core/services/ringtone.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { UploadsService } from '../../core/services/uploads.service';
 import { ChatMessage, Conversation } from '../../shared/models/chat.model';
 
 /**
@@ -108,7 +109,21 @@ function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
     openNotesToSelf: vi.fn(async () => 'n1'),
     // The page registers itself as the surface showing the active thread.
     registerViewer: vi.fn(() => () => undefined),
+    // On-device history (relay model). A synchronous fake: the page reads
+    // attachment srcs / states and the "stored on this device" note from it,
+    // and must never touch IndexedDB or the network in this spec.
+    history: {
+      mediaSrc: vi.fn(() => ''),
+      mediaState: vi.fn(() => 'ready'),
+      openMedia: vi.fn(async () => true),
+      persistent: signal(true),
+      freshStore: signal(false),
+    },
   };
+  // Private uploads go through UploadsService (real HttpClient → a real XHR
+  // in jsdom that keeps the fixture unstable until it errors). Stubbed so
+  // whenStable() never waits on the network.
+  const uploads = { src: vi.fn(() => ''), open: vi.fn(async () => {}), blob: vi.fn(async () => null), signed: vi.fn(async () => ({})) };
   const api = { get: vi.fn((url: string) => of(url.startsWith('/api/directory/users') ? [
     { id: 'u5', displayName: 'Meera Nair', email: 'meera@lab.test', isActive: true },
     { id: 'u2', displayName: 'Dr. Meenakshi Sundaravadivelu Ramanathan', email: 'meena@lab.test', isActive: true },
@@ -127,6 +142,7 @@ function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true } },
       { provide: PresenceService, useValue: { statusFor: () => null, displayStatus: (id: string | null) => (id ? 'active' : null) } },
       { provide: ApiService, useValue: api },
+      { provide: UploadsService, useValue: uploads },
       { provide: ToastService, useValue: { info: vi.fn(), error: vi.fn(), success: vi.fn() } },
       { provide: ChatNotifyService, useValue: { ensurePermission: vi.fn(async () => {}) } },
       { provide: RingtoneService, useValue: { muted: signal(false), toggleMute: vi.fn() } },
@@ -142,7 +158,7 @@ function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
   const c = f.componentInstance as any;
-  return { f, el, c, chat, api, navBack };
+  return { f, el, c, chat, api, navBack, uploads };
 }
 
 const flush = () => new Promise(r => setTimeout(r, 0));
@@ -267,6 +283,8 @@ describe('Messages — new design (ND-PATTERN §17)', () => {
     expect(q(thread, '.pf-mnd-voice .pf-mnd-voice__play')).toBeTruthy();
     expect(q(thread, 'audio[controls]')).toBeNull();
     expect(q(thread, '.pf-mnd-voice__t')!.textContent!.trim()).toBe('0:07');
+    // Attachment bytes come from the device history, never a direct fetch.
+    expect(chat.history.mediaSrc).toHaveBeenCalledWith('/uploads/a.webm');
     // History never animates in.
     expect(qa(thread, '.pf-mnd-msg--fresh').length).toBe(0);
   });
