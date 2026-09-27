@@ -6,6 +6,7 @@ import { PushService } from './core/services/push.service';
 import { PlatformService } from './core/services/platform.service';
 import { VersionService } from './core/services/version.service';
 import { LockService } from './core/auth/lock.service';
+import { CallRingService } from './core/services/call-ring.service';
 import { LockScreenComponent } from './shared/components/lock-screen.component';
 import { SwitchScreenComponent } from './shared/components/switch-screen.component';
 
@@ -143,6 +144,9 @@ export class App implements OnInit {
   private readonly _platform = inject(PlatformService);
   protected readonly version = inject(VersionService);
   private readonly _lock = inject(LockService);
+  /** Root owner of call ringtones — alive on every screen (incl. /login),
+   *  so a ring always stops on a terminal call state or account switch. */
+  private readonly _ring = inject(CallRingService);
 
   async ngOnInit() {
     // Idle-lock timer for shared lab machines (arms only for PIN-enabled users).

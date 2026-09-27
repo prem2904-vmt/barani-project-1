@@ -1,8 +1,10 @@
 import { Injectable, OnDestroy, computed, effect, inject, signal } from '@angular/core';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { SignalingService } from './signaling.service';
 import { ToastService } from './toast.service';
+import { ChatService } from './chat.service';
+import { ApiService } from './api.service';
 import {
   CallStatus, CallType, IceServer, IncomingCallInfo
 } from '../../shared/models/call.model';
@@ -32,6 +34,13 @@ export class WebrtcService implements OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly signaling = inject(SignalingService);
   private readonly toast = inject(ToastService);
+  private readonly chat = inject(ChatService);
+  private readonly api = inject(ApiService);
+
+  /** Who the OUTGOING call is to — the ringing card showed "Calling" / "C"
+   *  because the callee's name was never recorded. Group calls carry the
+   *  group name. Cleared on teardown. */
+  readonly outgoingPeer = signal<{ id: string; name: string; isGroup: boolean } | null>(null);
 
   // ── Public state ─────────────────────────────────────────────────
   readonly status = signal<CallStatus>('idle');
@@ -193,10 +202,11 @@ export class WebrtcService implements OnDestroy {
   // ── Initiator side ───────────────────────────────────────────────
 
   /** Place an outgoing call to `targetUserId`. Resolves with sessionId. */
-  async startCall(targetUserId: string, source?: string): Promise<string> {
+  async startCall(targetUserId: string, source?: string, displayName?: string): Promise<string> {
     this.assertIdle();
     this.callError.set(null);
     this.currentSource = source;
+    this.setOutgoingPeer(targetUserId, displayName);
     this.callType.set('audio');
     this.status.set('outgoing');
     try {
@@ -222,6 +232,8 @@ export class WebrtcService implements OnDestroy {
     this.assertIdle();
     this.callError.set(null);
     this.currentSource = source ?? 'messages_group';
+    const conv = this.chat.conversations().find(c => c.id === conversationId);
+    this.outgoingPeer.set({ id: conversationId, name: conv?.name || 'Group call', isGroup: true });
     this.callType.set('audio');
     this.status.set('outgoing');
     try {
@@ -235,6 +247,24 @@ export class WebrtcService implements OnDestroy {
       this.handleFatal(err, 'startGroupCall');
       throw err;
     }
+  }
+
+  /** Resolve the callee's display name: caller-supplied → a conversation
+   *  participant → the tenant directory (async). */
+  private setOutgoingPeer(userId: string, displayName?: string): void {
+    const fromConv = this.chat.conversations()
+      .flatMap(c => c.participants ?? [])
+      .find(p => p.userId === userId)?.displayName;
+    const name = displayName || fromConv || '';
+    this.outgoingPeer.set({ id: userId, name, isGroup: false });
+    if (name) return;
+    void firstValueFrom(this.api.get<Array<{ id: string; displayName: string }>>('/api/directory/users'))
+      .then(list => {
+        const hit = (list ?? []).find(u => u.id === userId)?.displayName;
+        const cur = this.outgoingPeer();
+        if (hit && cur?.id === userId) this.outgoingPeer.set({ ...cur, name: hit });
+      })
+      .catch(() => undefined);
   }
 
   /** Add a third party to an in-flight call (e.g. interpreter). */
@@ -276,8 +306,15 @@ export class WebrtcService implements OnDestroy {
   async rejectIncoming(): Promise<void> {
     const info = this.incomingCall();
     if (!info) return;
+    // Clear locally FIRST so the ring stops instantly even if the hub is slow.
+    this.incomingCall.set(null);
+    this.clearIncomingRingTimer();
     try { await this.signaling.rejectCall(info.sessionId); }
-    finally { this.incomingCall.set(null); }
+    finally {
+      // Status used to stay 'incoming' (and its 90s timer armed) after a
+      // decline; only reset when no other call started meanwhile.
+      if (this.status() === 'incoming' && !this.incomingCall()) this.teardown('idle');
+    }
   }
 
   /** Accept a call identified ONLY by its session id — the path taken when the
@@ -343,7 +380,15 @@ export class WebrtcService implements OnDestroy {
       this.signaling.sessionAnswer.subscribe(p => this.onSessionAnswer(p)),
       this.signaling.sessionIceCandidate.subscribe(p => this.onIceCandidate(p)),
       this.signaling.remoteMuteChanged.subscribe(p => this.onRemoteMuteChanged(p)),
-      this.signaling.reconnected$.subscribe(() => this.onReconnected())
+      this.signaling.reconnected$.subscribe(() => this.onReconnected()),
+      // Account switch / logout: every call, ring and timer belonged to the
+      // previous account.
+      this.signaling.sessionReset$.subscribe(() => {
+        const busy = this.status() !== 'idle' || !!this.incomingCall() || !!this.sessionId();
+        this.incomingCall.set(null);
+        this.callError.set(null);
+        if (busy) this.teardown('idle');
+      })
     );
   }
 
@@ -784,6 +829,7 @@ export class WebrtcService implements OnDestroy {
     this._maxParticipantsSeen.set(0);
     this.callStartedAt.set(null);
     this.localCallerName.set(null);
+    this.outgoingPeer.set(null);
     this.currentSource = undefined;
     this.usingTurnRelay.set(false);
     this.micMuted.set(false);

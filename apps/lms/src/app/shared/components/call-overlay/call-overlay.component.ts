@@ -4,7 +4,6 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
-import { RingtoneService } from '../../../core/services/ringtone.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -1366,7 +1365,6 @@ export class CallOverlayComponent {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly signaling = inject(SignalingService);
-  private readonly ringtone = inject(RingtoneService);
 
   // ── In-call chat side panel ──────────────────────────────────────
   protected readonly chatPanelOpen = signal(false);
@@ -1541,21 +1539,8 @@ export class CallOverlayComponent {
       }
     });
 
-    // Audio cues — synthesised tones via Web Audio API, no asset files.
-    // ringback while outgoing (caller hears it before pickup); ringtone
-    // while an incoming call is pending. Stops the moment status leaves
-    // those states (answered / rejected / cancelled).
-    effect(() => {
-      const status = this.webrtc.status();
-      const incoming = this.webrtc.incomingCall();
-      if (incoming) {
-        this.ringtone.play('ringtone');
-      } else if (status === 'outgoing') {
-        this.ringtone.play('ringback');
-      } else {
-        this.ringtone.stop();
-      }
-    });
+    // Audio cues (ringtone / ringback) are owned by the root CallRingService
+    // — an effect here died with the shell and left rings looping.
 
     // Voice playback runs via SrcObjectDirective on the <audio> elements —
     // see template above. The directive handles property-assignment +

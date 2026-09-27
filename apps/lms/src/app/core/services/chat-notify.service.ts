@@ -51,14 +51,16 @@ export class ChatNotifyService implements OnDestroy {
    * skip the OS notification (it would be redundant) but still bump
    * the title flash for peripheral awareness in tiled-window setups.
    */
-  notify(title: string, body: string, conversationId: string): void {
+  notify(title: string, body: string, conversationId: string): boolean {
     const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
     this.unreadCountForTitle += 1;
     this.startFlashing();
 
-    if (!tabHidden) return;                                      // focused → ping is enough
-    if (typeof Notification === 'undefined') return;
-    if (Notification.permission !== 'granted') return;
+    // Visible tab → the in-app pop-up is the visual (ChatService shows it
+    // when this returns false). Hidden → the OS notification, if allowed.
+    if (!tabHidden) return false;
+    if (typeof Notification === 'undefined') return false;
+    if (Notification.permission !== 'granted') return false;
 
     try {
       const n = new Notification(title, {
@@ -69,10 +71,12 @@ export class ChatNotifyService implements OnDestroy {
       });
       n.onclick = () => {
         try { window.focus(); } catch { /* ignore */ }
-        void this.router.navigate(['/messages']);
+        // Land IN the conversation, not on the list.
+        void this.router.navigate(['/messages'], { queryParams: { c: conversationId } });
         try { n.close(); } catch { /* ignore */ }
       };
-    } catch { /* swallow — Notification ctor can throw on Safari iOS */ }
+      return true;
+    } catch { return false; /* Notification ctor can throw on Safari iOS */ }
   }
 
   /**

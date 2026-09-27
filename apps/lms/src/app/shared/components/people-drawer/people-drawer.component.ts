@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -379,6 +379,11 @@ export class PeopleDrawerComponent {
   });
 
   constructor() {
+    // The open drawer shows the active thread (classic design): reads +
+    // alert suppression follow it; closing / destroying unregisters.
+    const unregister = this.chat.registerViewer('reader', () => this.open() ? [this.chat.activeConversationId()] : []);
+    inject(DestroyRef).onDestroy(unregister);
+
     // Auto-scroll the chat pane to bottom whenever messages change.
     effect(() => {
       const _ = this.chat.activeMessages().length; // dependency
@@ -491,12 +496,13 @@ export class PeopleDrawerComponent {
    *  falling back to the plain connection presence. */
   protected presence(userId: string): string {
     const conn = this.signaling.userPresences().get(userId) ?? 'offline';
-    if (conn === 'offline' || conn === 'in-a-call') return conn;
+    // Not connected / on a call wins over a custom status (see messages page).
+    if (conn !== 'active') return conn;
     return this.presenceSvc.statusFor(userId) ?? conn;
   }
   protected presenceLabel(p: string): string {
     if (isPresenceKey(p)) return presetLabel(p);
-    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : 'Offline';
+    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : p === 'away' ? 'Away' : 'Offline';
   }
   protected isOnline(userId: string): boolean {
     return this.signaling.onlineUserIds().has(userId);

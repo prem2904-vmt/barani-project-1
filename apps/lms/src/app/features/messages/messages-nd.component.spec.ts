@@ -106,6 +106,8 @@ function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
     openDirectConversation: vi.fn(async () => 'c9'),
     setTyping: vi.fn(async () => {}),
     openNotesToSelf: vi.fn(async () => 'n1'),
+    // The page registers itself as the surface showing the active thread.
+    registerViewer: vi.fn(() => () => undefined),
   };
   const api = { get: vi.fn((url: string) => of(url.startsWith('/api/directory/users') ? [
     { id: 'u5', displayName: 'Meera Nair', email: 'meera@lab.test', isActive: true },

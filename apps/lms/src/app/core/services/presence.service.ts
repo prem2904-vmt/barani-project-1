@@ -4,6 +4,7 @@ import {
   PresenceKey, isPresenceKey, presenceIsDnd, presenceLabel
 } from '../../shared/models/presence.model';
 import { AuthService } from '../auth/auth.service';
+import { SessionScopeService } from '../auth/session-scope.service';
 import { ApiService } from './api.service';
 import { SignalingService } from './signaling.service';
 import { ToastService } from './toast.service';
@@ -31,11 +32,15 @@ export class PresenceService {
   private readonly auth = inject(AuthService);
   private readonly signaling = inject(SignalingService);
   private readonly toasts = inject(ToastService);
+  private readonly scope = inject(SessionScopeService);
 
+  /** Namespaced per tenant + user (`pf.myPresenceStatus:<tenant>:<user>`):
+   *  the old device-wide key showed the previous account's "In surgery" on
+   *  the next person's avatar. */
   private static readonly STORE_KEY = 'pf.myPresenceStatus';
 
-  /** My own status. Seeded from the last value this device set. */
-  readonly myStatus = signal<PresenceKey>(PresenceService.readStored());
+  /** My own status. Seeded from the last value this device set for ME. */
+  readonly myStatus = signal<PresenceKey>(this.readStored());
   /** True while my status is DND-grade (calls blocked, pushes silenced). */
   readonly myStatusIsDnd = computed(() => presenceIsDnd(this.myStatus()));
   readonly saving = signal(false);
@@ -45,16 +50,27 @@ export class PresenceService {
   readonly others = this._others.asReadonly();
 
   constructor() {
+    // New account: its own last-known status, nobody else's cache.
+    this.scope.onChange(() => {
+      this.myStatus.set(this.readStored());
+      this._others.set(new Map());
+      this.saving.set(false);
+    });
     // Live updates — the PATCH endpoint broadcasts UserPresenceChanged with
     // the custom key to the whole tenant (including my other devices).
     // Non-custom statuses ('active'/'in-a-call'/…) are connection presence
     // and stay in SignalingService; ignore them here.
-    this.signaling.userPresenceChanged.subscribe(({ userId, status }) => {
+    this.signaling.userPresenceChanged.subscribe(({ userId, status, custom }) => {
       if (!isPresenceKey(status) || !userId) return;
+      // Hub CONNECTION "away" (last tab closed) shares its word with the
+      // custom "Away" preset. Only a flagged custom event may set it —
+      // otherwise a reconnecting user stayed "Away" forever (the 'active'
+      // that follows isn't a preset, so nothing ever cleared it).
+      if (status === 'away' && custom !== true) return;
       const myAuthId = this.auth.user()?.authId ?? '';
       if (myAuthId && userId === myAuthId) {
         this.myStatus.set(status);
-        PresenceService.persist(status);
+        this.persist(status);
       }
       const m = new Map(this._others());
       m.set(userId, status);
@@ -72,14 +88,14 @@ export class PresenceService {
     const prev = this.myStatus();
     if (key === prev) return;
     this.myStatus.set(key);
-    PresenceService.persist(key);
+    this.persist(key);
     this.saving.set(true);
     try {
       await firstValueFrom(this.api.patch<{ status: string }>('/api/auth/me/status', { status: key }));
       this.toasts.info(`Status set to ${presenceLabel(key)}`, 2500);
     } catch {
       this.myStatus.set(prev);
-      PresenceService.persist(prev);
+      this.persist(prev);
       this.toasts.error('Could not update your status.');
     } finally {
       this.saving.set(false);
@@ -96,7 +112,7 @@ export class PresenceService {
       if (myAuthId && u.authId === myAuthId) {
         if (this.myStatus() !== u.presenceStatus) {
           this.myStatus.set(u.presenceStatus);
-          PresenceService.persist(u.presenceStatus);
+          this.persist(u.presenceStatus);
         }
         continue;
       }
@@ -106,13 +122,15 @@ export class PresenceService {
     if (next) this._others.set(next);
   }
 
-  private static readStored(): PresenceKey {
+  private readStored(): PresenceKey {
+    if (!this.scope.identity()) return 'available';
     try {
-      const v = localStorage.getItem(PresenceService.STORE_KEY);
+      const v = localStorage.getItem(this.scope.storageKey(PresenceService.STORE_KEY));
       return isPresenceKey(v) ? v : 'available';
     } catch { return 'available'; }
   }
-  private static persist(key: PresenceKey): void {
-    try { localStorage.setItem(PresenceService.STORE_KEY, key); } catch { /* private mode */ }
+  private persist(key: PresenceKey): void {
+    if (!this.scope.identity()) return;
+    try { localStorage.setItem(this.scope.storageKey(PresenceService.STORE_KEY), key); } catch { /* private mode */ }
   }
 }

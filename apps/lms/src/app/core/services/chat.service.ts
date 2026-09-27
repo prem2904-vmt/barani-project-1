@@ -10,6 +10,16 @@ import { RingtoneService } from './ringtone.service';
 import { ChatNotifyService } from './chat-notify.service';
 import { PlatformService } from './platform.service';
 import { ToastService } from './toast.service';
+import { SessionScopeService } from '../auth/session-scope.service';
+import { FOREVER_RETRY, HUB_FACTORY } from './hub-factory';
+import { ChatPopupService } from './chat-popup.service';
+import { ChatWindowsService } from './chat-windows.service';
+
+/** Kinds of surface that can be "showing" a conversation. `reader` = the
+ *  messages page / people drawer (drives read state + unread); `window` =
+ *  a docked floating window (alerts only — windows keep their own unread
+ *  semantics). */
+export type ChatViewerKind = 'reader' | 'window';
 
 /**
  * Conversation-based chat (1:1 + group). One persistent SignalR
@@ -35,9 +45,22 @@ export class ChatService implements OnDestroy {
   private readonly notify = inject(ChatNotifyService);
   private readonly platform = inject(PlatformService);
   private readonly toasts = inject(ToastService);
+  private readonly scope = inject(SessionScopeService);
+  private readonly popups = inject(ChatPopupService);
+  private readonly windows = inject(ChatWindowsService);
+  private readonly hubFactory = inject(HUB_FACTORY);
   private connection: signalR.HubConnection | null = null;
   private connecting: Promise<void> | null = null;
+  /** The chat identity (sub) whose token opened `connection`. The server
+   *  stamps every send with the socket's user, so a socket opened by another
+   *  account must never be reused (Messages RCA §1). */
+  private connectedAs: string | null = null;
+  /** Someone asked for the hub this session → keep it alive (reconnect on
+   *  close / foreground / network back). Cleared on reset/logout. */
+  private wantConnected = false;
   private typingClearTimers = new Map<string, number>(); // convId|userId → setTimeout id
+  private readonly viewers = new Map<symbol, { kind: ChatViewerKind; ids: () => readonly (string | null)[] }>();
+  private lifecycleWired = false;
 
   readonly isConnected = signal(false);
   readonly conversations = signal<Conversation[]>([]);
@@ -76,65 +99,221 @@ export class ChatService implements OnDestroy {
     this.conversations().reduce((sum, c) => sum + c.unreadCount, 0)
   );
 
+  constructor() {
+    // Account switch / add account / sign-out: nothing from the previous
+    // account may survive — socket, stores, windows, timers.
+    this.scope.onChange(() => this.resetForSession());
+  }
+
+  /** Chat identity of the signed-in user (Supabase sub, fallback app id). */
+  private identity(): string {
+    return this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+  }
+
   // ── Connection lifecycle ────────────────────────────────────────────
 
   async connect(): Promise<void> {
+    const me = this.identity();
+    // A live socket opened by ANOTHER account (Add account swaps the user
+    // in place) must be torn down, not reused — the server would stamp our
+    // sends with that account and keep delivering its messages to us.
+    if (this.connection && this.connectedAs !== me) await this.resetForSession();
     if (this.connection?.state === signalR.HubConnectionState.Connected) return;
     if (this.connecting) return this.connecting;
-    this.connecting = this._connect();
+    this.wantConnected = true;
+    this.wireLifecycle();
+    this.connecting = this._connect(me);
     try { await this.connecting; } finally { this.connecting = null; }
   }
 
-  private async _connect(): Promise<void> {
-    this.connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${environment.apiUrl}/hubs/chat`, {
-        accessTokenFactory: async () => (await this.auth.getAccessToken()) ?? '',
-        transport: signalR.HttpTransportType.WebSockets,
-        skipNegotiation: true
-      })
-      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-      .configureLogging(signalR.LogLevel.Warning)
-      .build();
+  private async _connect(me: string): Promise<void> {
+    // A previous connection that closed for good is replaced, not restarted.
+    if (this.connection && this.connection.state === signalR.HubConnectionState.Disconnected) {
+      this.connection = null;
+    }
+    if (!this.connection) {
+      const conn = this.hubFactory(
+        `${environment.apiUrl}/hubs/chat`,
+        async () => (await this.auth.getAccessToken()) ?? '',
+        FOREVER_RETRY);
+      this.connection = conn;
+      this.connectedAs = me;
 
-    this.connection.on('MessageReceived', (m: ChatMessage) => this.onMessageReceived(m));
-    // Work-queue invalidations ride this same pipe (see LiveQueueService).
-    this.connection.on('QueueChanged', (e: { area?: string }) => this.liveQueues.push(e?.area ?? ''));
-    // Business (bell-catalog) events ride the chat connection — see
-    // onBusinessNotification for why this lives here and how each platform
-    // surfaces it.
-    this.connection.on('BusinessNotification',
-      (p: { kind: string; title: string; body?: string | null; critical?: boolean }) =>
-        this.onBusinessNotification(p));
-    this.connection.on('MessageRead', (p: { conversationId: string; userId: string; readAt: string }) =>
-      this.onMessageRead(p));
-    this.connection.on('MessageEdited', (p: { id: string; conversationId: string; body: string; editedAt: string }) =>
-      this.onMessageEdited(p));
-    this.connection.on('MessageDeleted', (p: { id: string; conversationId: string }) =>
-      this.onMessageDeleted(p));
-    this.connection.on('MessagePinChanged',
-      (p: { id: string; conversationId: string; isPinned: boolean }) => this.onMessagePinChanged(p));
-    this.connection.on('MessageReactionChanged',
-      (p: { id: string; conversationId: string; reactions: Array<{ emoji: string; userIds: string[] }> }) =>
-        this.onMessageReactionChanged(p));
-    this.connection.on('ConversationMuteChanged',
-      (p: { conversationId: string; isMuted: boolean }) => this.onConversationMuteChanged(p));
-    this.connection.on('Typing', (p: { conversationId: string; fromUserId: string; isTyping: boolean }) =>
-      this.onTyping(p));
-    this.connection.on('ConversationCreated', (_p: { conversationId: string }) =>
-      void this.loadConversations());
-    this.connection.on('ConversationUpdated',
-      (p: { conversationId: string; lastMessage: any; lastMessageAt: string }) =>
-        this.onConversationUpdated(p));
+      // Every handler is bound to THIS connection instance: an event from a
+      // stale socket (previous account, replaced connection) is dropped.
+      const on = <A extends unknown[]>(name: string, fn: (...a: A) => void) =>
+        conn.on(name, (...a: unknown[]) => { if (this.connection === conn) fn(...(a as A)); });
 
-    this.connection.onreconnected(async () => {
-      this.isConnected.set(true);
-      try { await this.loadConversations(); } catch { /* best-effort */ }
-    });
-    this.connection.onclose(() => this.isConnected.set(false));
+      on('MessageReceived', (m: ChatMessage) => this.onMessageReceived(m));
+      // Work-queue invalidations ride this same pipe (see LiveQueueService).
+      on('QueueChanged', (e: { area?: string }) => this.liveQueues.push(e?.area ?? ''));
+      // Business (bell-catalog) events ride the chat connection — see
+      // onBusinessNotification for why this lives here and how each platform
+      // surfaces it.
+      on('BusinessNotification',
+        (p: { kind: string; title: string; body?: string | null; critical?: boolean }) =>
+          this.onBusinessNotification(p));
+      on('MessageRead', (p: { conversationId: string; userId: string; readAt: string }) =>
+        this.onMessageRead(p));
+      on('MessageEdited', (p: { id: string; conversationId: string; body: string; editedAt: string }) =>
+        this.onMessageEdited(p));
+      on('MessageDeleted', (p: { id: string; conversationId: string }) =>
+        this.onMessageDeleted(p));
+      on('MessagePinChanged',
+        (p: { id: string; conversationId: string; isPinned: boolean }) => this.onMessagePinChanged(p));
+      on('MessageReactionChanged',
+        (p: { id: string; conversationId: string; reactions: Array<{ emoji: string; userIds: string[] }> }) =>
+          this.onMessageReactionChanged(p));
+      on('ConversationMuteChanged',
+        (p: { conversationId: string; isMuted: boolean }) => this.onConversationMuteChanged(p));
+      on('Typing', (p: { conversationId: string; fromUserId: string; isTyping: boolean }) =>
+        this.onTyping(p));
+      on('ConversationCreated', (_p: { conversationId: string }) =>
+        void this.loadConversations());
+      on('ConversationUpdated',
+        (p: { conversationId: string; lastMessage: any; lastMessageAt: string }) =>
+          this.onConversationUpdated(p));
 
-    await this.connection.start();
+      conn.onreconnected(async () => {
+        if (this.connection !== conn) return;
+        this.isConnected.set(true);
+        // Messages that arrived while we were away: the list (unread counts,
+        // last message, read receipts) is re-read from the server.
+        try { await this.loadConversations(); } catch { /* best-effort */ }
+      });
+      conn.onreconnecting(() => { if (this.connection === conn) this.isConnected.set(false); });
+      conn.onclose(() => {
+        if (this.connection !== conn) return;
+        this.isConnected.set(false);
+        this.scheduleRevive();
+      });
+    }
+
+    try {
+      await this.connection.start();
+    } catch (err) {
+      this.scheduleRevive();
+      throw err;
+    }
     this.isConnected.set(true);
     try { await this.loadConversations(); } catch { /* user has no chats yet */ }
+  }
+
+  private reviveTimer: ReturnType<typeof setTimeout> | null = null;
+  private reviveAttempt = 0;
+  /** A socket that closed for good (start failed, or the server dropped us
+   *  outside auto-reconnect) is revived with a capped backoff while we still
+   *  want it and are signed in. */
+  private scheduleRevive(): void {
+    if (!this.wantConnected || this.reviveTimer || !this.identity()) return;
+    const delay = Math.min(30000, 2000 * 2 ** Math.min(this.reviveAttempt++, 4));
+    this.reviveTimer = setTimeout(() => {
+      this.reviveTimer = null;
+      if (!this.wantConnected || !this.identity()) return;
+      void this.connect().then(() => { this.reviveAttempt = 0; }).catch(() => undefined);
+    }, delay);
+  }
+
+  /** Foreground / network-back: revive a dead socket and re-sync the list
+   *  (unread counts drift while a phone sleeps or a tab is frozen). Also
+   *  catches up reads for the conversation on screen. */
+  private wireLifecycle(): void {
+    if (this.lifecycleWired || typeof window === 'undefined') return;
+    this.lifecycleWired = true;
+    const wake = () => {
+      if (!this.wantConnected || !this.identity()) return;
+      const st = this.connection?.state;
+      if (!this.connection || st === signalR.HubConnectionState.Disconnected) {
+        void this.connect().catch(() => undefined);
+      } else if (st === signalR.HubConnectionState.Connected) {
+        void this.loadConversations().catch(() => undefined);
+      }
+      this.catchUpReads();
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') wake();
+    });
+    window.addEventListener('online', wake);
+    window.addEventListener('pageshow', wake);
+  }
+
+  /**
+   * Clean slate for a new account (or sign-out): stop + drop the socket
+   * (its handlers die with it), forget every store, typing timer, open
+   * window and pop-up. Safe to call when nothing is connected.
+   */
+  async resetForSession(): Promise<void> {
+    const old = this.connection;
+    this.connection = null;
+    this.connectedAs = null;
+    this.connecting = null;
+    this.wantConnected = false;
+    if (this.reviveTimer) { clearTimeout(this.reviveTimer); this.reviveTimer = null; }
+    this.reviveAttempt = 0;
+    this.isConnected.set(false);
+
+    this.conversations.set([]);
+    this.activeConversationId.set(null);
+    this.activeMessages.set([]);
+    this.threads.set(new Map());
+    this.typingByConversation.set(new Map());
+    this.readReceipts.set(new Map());
+    this.loadingHistory.set(false);
+    this.loadingOlder.set(false);
+    this.hasMoreHistory.set(true);
+    for (const t of this.typingClearTimers.values()) clearTimeout(t);
+    this.typingClearTimers.clear();
+    this.windows.reset();
+    this.popups.clear();
+    this.notify.restore();
+
+    if (old) { try { await old.stop(); } catch { /* already down */ } }
+  }
+
+  // ── Who is looking at what ──────────────────────────────────────────
+
+  /**
+   * A surface (messages page, people drawer, floating windows) declares the
+   * conversation(s) it is SHOWING. "Viewing" = registered AND the document
+   * is visible. Drives read-marking, unread counting, the pop-up and the
+   * tone — instead of the sticky `activeConversationId`, which outlived the
+   * messages page and silently swallowed notifications (RCA §3).
+   */
+  registerViewer(kind: ChatViewerKind, ids: () => readonly (string | null)[]): () => void {
+    const key = Symbol(kind);
+    this.viewers.set(key, { kind, ids });
+    queueMicrotask(() => this.catchUpReads());
+    return () => { this.viewers.delete(key); };
+  }
+
+  private static docVisible(): boolean {
+    return typeof document === 'undefined' || document.visibilityState !== 'hidden';
+  }
+
+  /** True when a surface of the given kinds shows this conversation on a
+   *  visible page. */
+  isViewing(conversationId: string, kinds: readonly ChatViewerKind[] = ['reader', 'window']): boolean {
+    if (!ChatService.docVisible()) return false;
+    for (const v of this.viewers.values()) {
+      if (!kinds.includes(v.kind)) continue;
+      if (v.ids().includes(conversationId)) return true;
+    }
+    // Docked windows (web/iPad) count as showing their thread.
+    if (kinds.includes('window') && !this.windows.isPhone() && this.windows.open().includes(conversationId)) return true;
+    return false;
+  }
+
+  /** Mark read whatever a READER surface shows that still has unread —
+   *  on mount, on tab-visible, on reconnect. Nothing is marked read while
+   *  the page is hidden. */
+  private catchUpReads(): void {
+    if (!ChatService.docVisible()) return;
+    for (const c of this.conversations()) {
+      if (c.unreadCount > 0 && this.isViewing(c.id, ['reader'])) {
+        void this.connection?.invoke('MarkConversationRead', c.id).catch(() => undefined);
+        this.conversations.update(list => list.map(x => x.id === c.id ? { ...x, unreadCount: 0 } : x));
+      }
+    }
   }
 
   // ── REST actions ────────────────────────────────────────────────────
@@ -216,10 +395,35 @@ export class ChatService implements OnDestroy {
   }
 
   async loadConversations(): Promise<void> {
+    const asOf = this.identity();
     const res = await firstValueFrom(this.api.get<Conversation[]>(
       '/api/chat/conversations'
     ));
-    this.conversations.set(res ?? []);
+    // The account changed while the request was in flight — this list
+    // belongs to the previous person; drop it.
+    if (this.identity() !== asOf) return;
+    const list = res ?? [];
+    this.conversations.set(list);
+    this.seedReadReceipts(list);
+    this.catchUpReads();
+  }
+
+  /** Seed "Seen / Seen by X" from the server's per-participant lastReadAt,
+   *  so receipts survive reloads and reconnects (live MessageRead events
+   *  only cover what happens while connected). Only ever advances. */
+  private seedReadReceipts(list: Conversation[]): void {
+    let next: Map<string, Map<string, string>> | null = null;
+    for (const c of list) {
+      for (const p of c.participants ?? []) {
+        if (!p.lastReadAt) continue;
+        next ??= new Map(this.readReceipts());
+        const inner = new Map(next.get(c.id) ?? []);
+        const cur = inner.get(p.userId);
+        if (!cur || cur < p.lastReadAt) inner.set(p.userId, p.lastReadAt);
+        next.set(c.id, inner);
+      }
+    }
+    if (next) this.readReceipts.set(next);
   }
 
   // ── Group member management ─────────────────────────────────────────
@@ -238,7 +442,7 @@ export class ChatService implements OnDestroy {
       `/api/chat/conversations/${conversationId}/members/${userId}`
     ));
     // If I just left, drop the conversation from view.
-    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+    const me = this.identity();
     if (userId === me) {
       this.conversations.update(list => list.filter(c => c.id !== conversationId));
       if (this.activeConversationId() === conversationId) this.closeConversation();
@@ -373,8 +577,12 @@ export class ChatService implements OnDestroy {
     if (!trimmed && !attachment) return;
     await this.connect();
 
+    // The socket must belong to the account on screen — the server stamps
+    // the sender from it. connect() rebuilt it if not; refuse otherwise.
+    const me = this.identity();
+    if (!me || this.connectedAs !== me) throw new Error('Reconnecting as the current account — try again.');
+
     // Optimistic append — instant feedback, replaced when server echoes back.
-    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
     const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     // Resolve the quoted preview locally so the optimistic bubble already
     // shows the reply chip — server echo will overwrite with authoritative data.
@@ -537,10 +745,15 @@ export class ChatService implements OnDestroy {
   }
 
   private onMessageReceived(m: ChatMessage) {
-    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
+    const me = this.identity();
+    const fromMe = m.fromUserId === me;
+    const isUserKind = !m.kind || m.kind === 'user';
+    // "Reading" = the messages page / drawer shows this thread on a VISIBLE
+    // page. Only then is it marked read and kept out of the unread count.
+    const reading = !fromMe && this.isViewing(m.conversationId, ['reader']);
 
     // Reconcile optimistic pending row if this is my echoed message.
-    if (m.fromUserId === me && this.activeConversationId() === m.conversationId) {
+    if (fromMe && this.activeConversationId() === m.conversationId) {
       let replaced = false;
       this.activeMessages.update(list => {
         const idx = list.findIndex(x => x.pending && x.body === m.body && x.fromUserId === me);
@@ -550,16 +763,14 @@ export class ChatService implements OnDestroy {
         }
         return list;
       });
-      if (replaced) {
-        // Conversation summary still needs the last-message bump below.
-      } else if (this.activeConversationId() === m.conversationId) {
-        this.activeMessages.update(list => [...list, m]);
-      }
+      if (!replaced) this.activeMessages.update(list => [...list, m]);
     } else if (this.activeConversationId() === m.conversationId) {
       this.activeMessages.update(list => [...list, m]);
-      // I'm reading this conversation — mark read so badge stays at 0.
-      void this.connection?.invoke('MarkConversationRead', m.conversationId);
     }
+    if (reading) void this.connection?.invoke('MarkConversationRead', m.conversationId).catch(() => undefined);
+
+    // The sender stopped typing the moment their message landed.
+    if (!fromMe) this.clearTyping(m.conversationId, m.fromUserId);
 
     // Mirror into the per-conversation store (floating chat windows).
     this.pushToThread(m.conversationId, m, me);
@@ -567,9 +778,7 @@ export class ChatService implements OnDestroy {
     // Update / insert conversation summary.
     this.conversations.update(list => {
       const idx = list.findIndex(c => c.id === m.conversationId);
-      const isToMe = m.fromUserId !== me;
-      const isUserKindSummary = !m.kind || m.kind === 'user';
-      const incUnread = isToMe && isUserKindSummary && this.activeConversationId() !== m.conversationId ? 1 : 0;
+      const incUnread = !fromMe && isUserKind && !reading ? 1 : 0;
       if (idx >= 0) {
         const current = list[idx];
         const updated: Conversation = {
@@ -586,23 +795,52 @@ export class ChatService implements OnDestroy {
       return list;
     });
 
-    // Notification side-effect. Skipped for:
-    //   - my own echoed sends
-    //   - non-'user' kinds (system / call rows)
-    //   - the conversation I'm currently reading
-    //   - per-conversation mute, UNLESS I was @mentioned (mentions override)
+    this.alert(m, me);
+  }
+
+  /**
+   * One alert per incoming message (sound + pop-up fire together):
+   *  - never for my own sends, system/call rows, or a muted conversation
+   *    (an @mention overrides the mute);
+   *  - the thread is ON SCREEN (page/drawer/open window, visible tab) →
+   *    only a soft tick, no pop-up (Messenger-style);
+   *  - otherwise → the ping + the in-app pop-up; a hidden tab gets the OS
+   *    notification instead of the pop-up (no double);
+   *  - iOS app: the OS already presents the push banner + sound in the
+   *    foreground (capacitor presentationOptions), so nothing in-app.
+   */
+  private alert(m: ChatMessage, me: string): void {
     const isUserKind = !m.kind || m.kind === 'user';
+    if (!isUserKind || !me || m.fromUserId === me) return;
     const conv = this.conversations().find(c => c.id === m.conversationId);
-    const iAmMentioned = !!m.mentions && m.mentions.includes(me);
-    const muted = !!conv?.isMuted && !iAmMentioned;
-    if (isUserKind && m.fromUserId !== me
-        && this.activeConversationId() !== m.conversationId
-        && !muted) {
-      this.ringtone.playPing();
-      const senderName = conv?.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'New message';
-      const title = conv?.isGroup && conv.name ? `${senderName} · ${conv.name}` : senderName;
-      this.notify.notify(title, m.body, m.conversationId);
+    const mentioned = !!m.mentions && m.mentions.includes(me);
+    if (conv?.isMuted && !mentioned) return;
+
+    if (this.isViewing(m.conversationId)) { this.ringtone.playSoft(); return; }
+    if (this.isNativeIos()) return;
+
+    this.ringtone.playPing();
+    const sender = conv?.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'New message';
+    const title = conv?.isGroup && conv.name ? `${sender} · ${conv.name}` : sender;
+    const preview = messagePreview(m);
+    const osShown = this.notify.notify(title, preview, m.conversationId);
+    if (!osShown) {
+      this.popups.push({
+        conversationId: m.conversationId,
+        messageId: m.id,
+        senderId: m.fromUserId,
+        senderName: sender,
+        groupName: conv?.isGroup ? (conv.name ?? null) : null,
+        preview,
+        sentAt: m.sentAt,
+      });
     }
+  }
+
+  private isNativeIos(): boolean {
+    if (!this.platform.isCapacitor()) return false;
+    const w = window as unknown as { Capacitor?: { getPlatform?: () => string } };
+    return w.Capacitor?.getPlatform?.() === 'ios';
   }
 
   private onMessagePinChanged(p: { id: string; conversationId: string; isPinned: boolean }) {
@@ -651,6 +889,12 @@ export class ChatService implements OnDestroy {
   }
 
   private onMessageRead(p: { conversationId: string; userId: string; readAt: string }) {
+    // My OWN read from another tab/device: that thread is read everywhere.
+    if (p.userId && p.userId === this.identity()) {
+      this.conversations.update(list =>
+        list.map(c => c.id === p.conversationId && c.unreadCount ? { ...c, unreadCount: 0 } : c));
+      return;
+    }
     // Update the per-conv per-user lastRead timestamp. Bubble templates
     // compare this against m.sentAt to decide whether to show "Seen".
     this.readReceipts.update(map => {
@@ -692,6 +936,19 @@ export class ChatService implements OnDestroy {
     this.typingByConversation.set(map);
   }
 
+  /** Drop one user's typing marker (their message arrived). */
+  private clearTyping(conversationId: string, userId: string): void {
+    const key = `${conversationId}|${userId}`;
+    const t = this.typingClearTimers.get(key);
+    if (t) { clearTimeout(t); this.typingClearTimers.delete(key); }
+    const cur = this.typingByConversation().get(conversationId);
+    if (!cur?.has(userId)) return;
+    const map = new Map(this.typingByConversation());
+    const set = new Set(cur); set.delete(userId);
+    if (set.size === 0) map.delete(conversationId); else map.set(conversationId, set);
+    this.typingByConversation.set(map);
+  }
+
   private onConversationUpdated(p: { conversationId: string; lastMessage: any; lastMessageAt: string }) {
     // ConversationUpdated is a lightweight refresh hint; MessageReceived
     // already does the heavy lifting (last-message + unread). Used today
@@ -706,29 +963,26 @@ export class ChatService implements OnDestroy {
     });
   }
 
+  /** Logout: same clean slate as an account switch. */
   async disconnect(): Promise<void> {
-    if (!this.connection) return;
-    try { await this.connection.stop(); } catch { /* ignore */ }
-    this.connection = null;
-    this.isConnected.set(false);
-
-    // Clear all stateful signals on disconnect (logout)
-    this.conversations.set([]);
-    this.activeConversationId.set(null);
-    this.activeMessages.set([]);
-    this.typingByConversation.set(new Map());
-    this.readReceipts.set(new Map());
-    this.loadingHistory.set(false);
-    this.loadingOlder.set(false);
-    this.hasMoreHistory.set(true);
-
-    for (const t of this.typingClearTimers.values()) clearTimeout(t);
-    this.typingClearTimers.clear();
+    await this.resetForSession();
   }
 
   ngOnDestroy(): void {
-    for (const t of this.typingClearTimers.values()) clearTimeout(t);
-    this.typingClearTimers.clear();
-    void this.disconnect();
+    void this.resetForSession();
   }
+}
+
+/** One-line preview for alerts — never emoji (icons are SVG in the UI). */
+export function messagePreview(m: Pick<ChatMessage, 'body' | 'attachmentMime' | 'attachmentUrl' | 'sharedRecordTitle'>): string {
+  const body = (m.body ?? '').replace(/\s+/g, ' ').trim();
+  if (body) return body.length > 140 ? body.slice(0, 140) + '…' : body;
+  if (m.attachmentUrl) {
+    const mime = m.attachmentMime ?? '';
+    if (mime.startsWith('audio/')) return 'Voice note';
+    if (mime.startsWith('image/')) return 'Photo';
+    return 'Attachment';
+  }
+  if (m.sharedRecordTitle) return `Shared: ${m.sharedRecordTitle}`;
+  return 'New message';
 }

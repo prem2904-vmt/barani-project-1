@@ -297,7 +297,10 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     const other = c.participants.find(p => p.userId !== this.me());
     if (!other) return null;
     const conn = this.signaling.userPresences().get(other.userId) ?? 'offline';
-    if (conn === 'offline' || conn === 'in-a-call') return conn;
+    // Not connected (away = last tab closed, inside the server grace) or on
+    // a call: that wins over a custom status — a disconnected user with
+    // "Available" used to show green for 2 minutes.
+    if (conn !== 'active') return conn;
     return this.presenceSvc.statusFor(other.userId) ?? conn;
   }
 
@@ -305,7 +308,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  then the connection-presence vocabulary. */
   protected presenceText(p: string): string {
     if (isPresenceKey(p)) return presenceLabel(p);
-    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : 'Offline';
+    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : p === 'away' ? 'Away' : 'Offline';
   }
 
   /** Subline beneath name — last message preview or "No messages yet". */
@@ -428,7 +431,15 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  /** Unregisters this page as the surface showing the active thread. */
+  private readonly unregisterViewer: () => void;
+
   constructor() {
+    // While mounted, the page is what shows the active thread: messages that
+    // land in it are read (only while the tab is visible) and don't alert.
+    // Leaving /messages unregisters — the thread no longer swallows
+    // notifications (RCA §3: the sticky activeConversationId did).
+    this.unregisterViewer = this.chat.registerViewer('reader', () => [this.chat.activeConversationId()]);
     // Auto-scroll to bottom whenever messages change or active thread switches —
     // EXCEPT when the change came from a prepend (load-older). In that case
     // onScroll captured the offset and will restore it manually.
@@ -531,6 +542,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unregisterViewer();
     this.stopRecording(false);
     this.discardVoiceDraft();
     if (typeof document !== 'undefined') {
@@ -580,7 +592,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       this.chat.connect().catch(() => undefined),
       this.signaling.connect().catch(() => undefined)
     ]);
-    const wanted = this.route.snapshot.queryParamMap.get('c');
+    // `?c=` (in-app links) and `?open=` (older native push payloads).
+    const wanted = this.route.snapshot.queryParamMap.get('c') ?? this.route.snapshot.queryParamMap.get('open');
     await Promise.all([
       this.chat.loadConversations().catch(() => undefined),
       this.signaling.getOnlineUsersWithStatus().catch(() => undefined),

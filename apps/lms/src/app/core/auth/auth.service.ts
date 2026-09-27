@@ -4,6 +4,7 @@ import { environment } from '../../../environments/environment';
 import { BranchLabConfigService } from '../services/branch-lab-config.service';
 import { AccountsService, StoredAccount } from './accounts.service';
 import { BranchRef, CurrentUser } from './mock-user';
+import { SessionScopeService } from './session-scope.service';
 import { supabase } from './supabase.client';
 
 interface MeResponse {
@@ -37,6 +38,9 @@ export class AuthService {
   private readonly labCfg = inject(BranchLabConfigService);
   /** Gmail-style multi-account registry (shared lab machines). */
   readonly accounts = inject(AccountsService);
+  /** One "session changed" event for every user-scoped service — fired
+   *  BEFORE a different person's profile is published (see loadProfile). */
+  private readonly scope = inject(SessionScopeService);
 
   private readonly _session = signal<Session | null>(null);
   private readonly _user = signal<CurrentUser | null>(null);
@@ -75,7 +79,36 @@ export class AuthService {
       }
     } catch { /* private mode */ }
   }
+  // Per-TAB account pin (sessionStorage: survives this tab's reloads, never
+  // shared with other tabs). Two tabs showing two accounts used to share the
+  // single `pf.session` key, so a reload of either tab came back as whichever
+  // account wrote last — and a token refresh in one tab was filed under the
+  // OTHER tab's registry row (Messages RCA §1 "two tabs").
+  private static readonly TAB_ACCOUNT_KEY = 'pf.tabAccount';
+  private static readTabAccount(): string | null {
+    try { return sessionStorage.getItem(AuthService.TAB_ACCOUNT_KEY); } catch { return null; }
+  }
+  private static writeTabAccount(userId: string | null): void {
+    try {
+      if (userId) sessionStorage.setItem(AuthService.TAB_ACCOUNT_KEY, userId);
+      else sessionStorage.removeItem(AuthService.TAB_ACCOUNT_KEY);
+    } catch { /* private mode */ }
+  }
+  /** The registry row whose tokens THIS tab holds. */
+  private ownAccountId(): string | null {
+    return this._user()?.id ?? AuthService.readTabAccount() ?? this.accounts.activeUserId();
+  }
+
   private restorePersistedSession(): Session | null {
+    // This tab was showing a specific account → resume THAT account from the
+    // registry (freshest rotated tokens), not the device-wide last writer.
+    const pinned = AuthService.readTabAccount();
+    if (pinned) {
+      const acc = this.accounts.accounts().find(a => a.userId === pinned);
+      if (acc?.accessToken && acc.refreshToken) {
+        return { access_token: acc.accessToken, refresh_token: acc.refreshToken } as Session;
+      }
+    }
     try {
       const raw = localStorage.getItem(AuthService.SESSION_KEY);
       if (!raw) return null;
@@ -137,8 +170,10 @@ export class AuthService {
       this.persistSession(s);
       // Keep the multi-account registry's copy fresh — Supabase rotates the
       // refresh token on every exchange, so a stale registry copy goes dead.
-      const activeId = this.accounts.activeUserId();
-      if (activeId) this.accounts.updateTokens(activeId, s.access_token, s.refresh_token!);
+      // File them under the account THIS tab holds — not the device-wide
+      // "active" id, which another tab may have switched to someone else.
+      const ownId = this.ownAccountId();
+      if (ownId) this.accounts.updateTokens(ownId, s.access_token, s.refresh_token!);
       return true;
     } catch { return false; }
     finally { clearTimeout(killer); }
@@ -432,8 +467,12 @@ export class AuthService {
   async signOut(): Promise<void> {
     // Remove ONLY the active profile from the device registry — other signed-in
     // accounts stay so their owners can still switch in with their PIN.
-    const activeId = this.accounts.activeUserId();
+    const activeId = this._user()?.id ?? this.accounts.activeUserId();
     if (activeId) this.accounts.remove(activeId);
+    // Tear down every user-scoped realtime service (hubs, stores, windows,
+    // pop-ups, rings) before anything else can react to the sign-out.
+    this.scope.changed(null);
+    AuthService.writeTabAccount(null);
     this.persistSession(null);   // clear our stored tokens
     this._session.set(null);
     this._user.set(null);
@@ -612,6 +651,13 @@ export class AuthService {
       const json = await res.json();
       const data: MeResponse | undefined = json?.data;
       if (!data) { this._user.set(null); return; }
+
+      // A DIFFERENT person is about to become the active user (Add account
+      // signs in without a reload): reset every user-scoped service FIRST so
+      // nothing — hub sockets, message stores, windows, rings — survives
+      // from the previous account. No-op for the same person.
+      this.scope.changed({ userId: data.id, tenantId: data.tenantId, authId: data.authId ?? null });
+      AuthService.writeTabAccount(data.id);
 
       this._user.set({
         id: data.id,
