@@ -271,7 +271,13 @@
      owner's iPad read the old bar as far too tall — 56 content + the
      1px hairline + the home-indicator inset is the whole budget. */
   --pf-navbar-h: 56px;
-  --pf-botbar-h: calc(var(--pf-navbar-h) + 1px + env(safe-area-inset-bottom, 0px));
+  /* How much of the home-indicator inset the bar reserves under its icons.
+     The full inset left a tall empty strip on iPad (owner, 2026-09-28);
+     like Apple's own tab bars the indicator may overlap part of it:
+     inset − 12px, but never less than half the inset (iPad 20 → 10,
+     iPhone 34 → 22, no indicator → 0). */
+  --pf-home-inset: max(calc(env(safe-area-inset-bottom) - 12px), calc(env(safe-area-inset-bottom) / 2));
+  --pf-botbar-h: calc(var(--pf-navbar-h) + 1px + var(--pf-home-inset));
 }
 
 /* NEW design: elements that belong to the CLASSIC layout only (duplicate

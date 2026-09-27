@@ -74,15 +74,16 @@ describe('Safe area — bottom edge has ONE owner (the docked navbar)', () => {
     expect(body).not.toMatch(/100d?vh/);
   });
 
-  it('the shell applies env(safe-area-inset-bottom) exactly once — on the docked bar, as padding', () => {
-    expect(count(sh, /safe-area-inset-bottom/)).toBe(1);
+  it('the shell applies the bottom inset exactly once — on the docked bar, as padding (--pf-home-inset)', () => {
+    expect(count(sh, /pf-home-inset/)).toBe(1);
     const rule = [...sh.matchAll(/:host-context\(\.design-new\.nav-bottom\) \.pf-chrome \{([^}]*)\}/g)]
       .map((m) => m[1])
-      .find((b) => /safe-area-inset-bottom/.test(b))!;
+      .find((b) => /pf-home-inset/.test(b))!;
     expect(rule).toBeDefined();
     expect(rule).toMatch(/position:\s*fixed/);
     expect(rule).toMatch(/bottom:\s*0\s*;/);
-    expect(rule).toMatch(/padding-bottom:\s*env\(safe-area-inset-bottom, 0px\)/);
+    // The bar reserves the (reduced) home-indicator inset once, via the token.
+    expect(rule).toMatch(/padding-bottom:\s*var\(--pf-home-inset\);/);
     // Flush: no margin, no min-height, no inset added as an offset.
     expect(rule).toMatch(/margin:\s*0/);
     expect(rule).not.toMatch(/min-height/);
@@ -91,10 +92,11 @@ describe('Safe area — bottom edge has ONE owner (the docked navbar)', () => {
 
   it('the bar content height is the token only — the inset is never baked into the inner bar', () => {
     expect(noComments(topStrip)).not.toMatch(/safe-area-inset-bottom/);
-    expect(g).toMatch(/--pf-botbar-h:\s*calc\(var\(--pf-navbar-h\) \+ 1px \+ env\(safe-area-inset-bottom, 0px\)\)/);
-    // The clearance token counts the inset once, not twice.
+    expect(g).toMatch(/--pf-botbar-h:\s*calc\(var\(--pf-navbar-h\) \+ 1px \+ var\(--pf-home-inset\)\)/);
+    // The clearance token counts the inset once (through --pf-home-inset).
     const botbar = g.match(/--pf-botbar-h:[^;]*;/)![0];
-    expect(count(botbar, /safe-area-inset-bottom/)).toBe(1);
+    expect(count(botbar, /pf-home-inset/)).toBe(1);
+    expect(botbar).not.toMatch(/safe-area-inset-bottom/);
   });
 
   it('page content clears the bar through the token (no second raw inset on shell-main)', () => {
@@ -140,5 +142,15 @@ describe('Safe area — native shells', () => {
     expect(kbPatch).toMatch(/^\+\s*\[self onKeyboardWillHide:notification\];$/m);
     // The guard sits BEFORE the iPad stage-manager branch caches an offset.
     expect(kbPatch.indexOf('rect.size.height < 100')).toBeLessThan(kbPatch.indexOf('UIUserInterfaceIdiomPad'));
+  });
+});
+
+describe('Safe area — the bar reserves a reduced home-indicator inset (owner 2026-09-28)', () => {
+  it('--pf-home-inset = max(inset − 12px, half the inset): iPad 20→10, iPhone 34→22, none → 0', () => {
+    expect(g).toMatch(/--pf-home-inset:\s*max\(calc\(env\(safe-area-inset-bottom\) - 12px\), calc\(env\(safe-area-inset-bottom\) \/ 2\)\)/);
+    const reserve = (inset: number) => Math.max(inset - 12, inset * 0.5);
+    expect(reserve(20)).toBe(10);
+    expect(reserve(34)).toBe(22);
+    expect(reserve(0)).toBe(0);
   });
 });

@@ -563,7 +563,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         border-radius: 0;
         border: none;
         border-top: 1px solid var(--header-border);
-        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-bottom: var(--pf-home-inset);
         z-index: 40;
         /* The bar's surface lives in styles.scss as --pf-navbar-* (light
            = the band's wash; dark = its own VERTICAL violet fade, owner).

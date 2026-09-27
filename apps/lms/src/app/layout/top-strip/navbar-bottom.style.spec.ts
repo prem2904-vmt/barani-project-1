@@ -28,11 +28,11 @@ describe('Docked bottom navbar — height', () => {
     expect(navbarBlock).toMatch(/\.pf-topstrip-bar \{[^}]*padding-top:\s*0/);
   });
 
-  it('total bar height = content + hairline + iOS home-indicator inset, used by the shell', () => {
+  it('total bar height = content + hairline + the reserved home-indicator inset, used by the shell', () => {
     expect(global).toMatch(
-      /--pf-botbar-h:\s*calc\(var\(--pf-navbar-h\) \+ 1px \+ env\(safe-area-inset-bottom, 0px\)\)/,
+      /--pf-botbar-h:\s*calc\(var\(--pf-navbar-h\) \+ 1px \+ var\(--pf-home-inset\)\)/,
     );
-    expect(shell).toMatch(/padding-bottom:\s*env\(safe-area-inset-bottom, 0px\)/);
+    expect(shell).toMatch(/padding-bottom:\s*var\(--pf-home-inset\);/);
     expect(shell).not.toMatch(/padding-bottom:\s*70px/);
   });
 });
