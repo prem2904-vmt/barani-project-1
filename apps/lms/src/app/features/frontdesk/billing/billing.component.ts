@@ -24,6 +24,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
+import { previewBillForDiscount } from '../../../shared/utils/bill-math';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -180,10 +181,10 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                   <span>Subtotal</span>
                   <span class="tabular-nums">{{ b.subTotal | inr }}</span>
                 </div>
-                @if (b.totalTax > 0) {
+                @if (shownTax() > 0) {
                   <div class="pf-bill-line">
                     <span>GST</span>
-                    <span class="tabular-nums">{{ b.totalTax | inr }}</span>
+                    <span class="tabular-nums">{{ shownTax() | inr }}</span>
                   </div>
                 }
                 <div class="pf-bill-line pf-bill-line--discount">
@@ -1714,12 +1715,22 @@ export class BillingComponent implements OnInit, OnChanges {
     // whole rupee — that pushed small bills over the cap).
     return percentDiscountAmount(this.preDiscountGross(), raw);
   });
-  /** The full invoice total after the reception discount (no payments applied). */
+  /** What the bill becomes once the typed discount is applied — the server's
+   *  own recompute (POST /discount re-splits the lines: discount off the
+   *  taxable value, GST on the rest). Null when no discount is typed. */
+  readonly discountPreview = computed(() => {
+    const d = this.discountNum();
+    return d > 0 ? previewBillForDiscount(this._bill(), d) : null;
+  });
+  /** The full invoice total after the reception discount (no payments applied)
+   *  — exactly the payable the server will hold (never payable − discount). */
   readonly fullTotal = computed(() => {
     const b = this._bill();
     if (!b) return 0;
-    return Math.max(0, b.totalPayable - this.discountNum());
+    return this.discountPreview()?.payable ?? b.totalPayable;
   });
+  /** GST as the bill will carry it (post-discount when a discount is typed). */
+  readonly shownTax = computed(() => this.discountPreview()?.tax ?? this._bill()?.totalTax ?? 0);
   /** Amount already collected (payments − refunds), from the loaded bill. */
   readonly alreadyPaid = computed(() => this._bill()?.totalPaid ?? 0);
   /** Outstanding to collect — the difference after prior payments. */
@@ -2109,7 +2120,8 @@ export class BillingComponent implements OnInit, OnChanges {
         // anytime before report delivery).
         const collectAdvance = (bill: Bill) => {
           this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount: adv,
+            // Never above what the (recomputed) server bill owes.
+            amount: Math.min(adv, Math.max(0, bill.balance)),
             mode: this._advanceMode(),
             referenceNo: this._referenceNo() || undefined
           }).subscribe({
@@ -2141,12 +2153,26 @@ export class BillingComponent implements OnInit, OnChanges {
         }
         return;
       }
-      this._saving.set(false);
-      this._paid.set(true);
-      this.clearDraft();
-      this.toasts.warning('Marked as Pay later — outstanding balance recorded');
-      this.billingEvents.notifyPayLater();
-      this._paymentDoneOpen.set(true);
+      const markLater = () => {
+        this._saving.set(false);
+        this._paid.set(true);
+        this.clearDraft();
+        this.toasts.warning('Marked as Pay later — outstanding balance recorded');
+        this.billingEvents.notifyPayLater();
+        this._paymentDoneOpen.set(true);
+      };
+      // A typed discount must reach the money on pay-later too (it was
+      // dropped here: the outstanding stayed at the full price).
+      const dLater = this.discountNum();
+      if (dLater > 0) {
+        this.api.post<Bill>(`/api/billing/${b.id}/discount`, { amount: dLater, reason: 'Reception discount' })
+          .subscribe({
+            next: updated => { this._bill.set(updated); markLater(); },
+            error: e => { this._saving.set(false); this.showDiscountError(e); }
+          });
+      } else {
+        markLater();
+      }
       return;
     }
     // 'wallet' mode charges the selected vendor's credit BEFORE
@@ -2156,8 +2182,9 @@ export class BillingComponent implements OnInit, OnChanges {
     if (this._mode() === 'wallet') {
       const vendor = this.selectedVendor();
       if (!vendor) { this._saving.set(false); this.toasts.warning('Pick a vendor first'); return; }
-      const amount = this.effectivePayable();
       const applyAndPay = (currentBill: Bill) => {
+        // Charge the SERVER's outstanding on the (recomputed) bill.
+        const amount = Math.max(0, currentBill.balance);
         this.api.post<VendorWallet>(`/api/vendors/${vendor.id}/charge`, {
           amount, billId: currentBill.id,
           reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`
@@ -2213,7 +2240,10 @@ export class BillingComponent implements OnInit, OnChanges {
       // reopening billing for that patient collects only what's left instead
       // of double-charging (which would push the bill into an overpaid /
       // refund-owed state).
-      const amountDue = this.alreadyPaid() > 0 ? this.effectivePayable() : bill.totalPayable;
+      // The bill passed in is the server's — after POST /discount it is the
+      // RECOMPUTED bill — so its balance is exactly what is owed (it used to
+      // post bill.totalPayable, the pre-discount figure).
+      const amountDue = Math.max(0, bill.balance);
       this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
         amount: amountDue,
         mode: this._mode(),
@@ -2312,7 +2342,8 @@ export class BillingComponent implements OnInit, OnChanges {
         bill: b,
         order: this._order(),
         invoiceNumber: this.invoiceNumber(),
-        effectivePayable: this.effectivePayable(),
+        // The invoice prints the server bill's payable (source of truth).
+        effectivePayable: b.totalPayable,
         tatLabel: this.tatLabel(),
         qrDataUrl, orderQrDataUrl, logoDataUrl,
         cashierName: this.auth.user()?.displayName || undefined,

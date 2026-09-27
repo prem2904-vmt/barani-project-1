@@ -1,4 +1,5 @@
-import { STAFF_ORDER_QR_ENABLED, invoiceTemplateFieldsFrom } from './invoice-pdf';
+import { STAFF_ORDER_QR_ENABLED, buildCashBillModel, invoiceTemplateFieldsFrom } from './invoice-pdf';
+import type { Bill } from '../../../shared/models/bill.model';
 import { readFileSync } from 'node:fs';
 
 describe('invoiceTemplateFieldsFrom', () => {
@@ -178,5 +179,35 @@ describe('staff order QR on invoices (owner 2026-09-26: disabled for now)', () =
     expect(STAFF_ORDER_QR_ENABLED).toBe(false);
     const src = readFileSync('apps/lms/src/app/features/frontdesk/billing/invoice-pdf.ts', 'utf8');
     expect(src).toMatch(/STAFF_ORDER_QR_ENABLED \? rawInput : \{ \.\.\.rawInput, orderQrDataUrl: undefined \}/);
+  });
+});
+
+describe('buildCashBillModel — the receipt shows the invoice\'s own numbers', () => {
+  // The server bill for ₹1000 @18% with ₹295 off: taxable 705, GST 126.90, payable 831.90.
+  const bill = (over: Partial<Bill> = {}): Bill => ({
+    id: 'b', orderId: 'o', patientId: 'p', branchId: 'x', type: 'tax_invoice', isInterstate: false,
+    subTotal: 1000, overrideDiscount: 0, totalDiscount: 295, totalTaxable: 705, totalCgst: 63.45, totalSgst: 63.45, totalIgst: 0,
+    totalTax: 126.9, totalPayable: 831.9, totalPaid: 0, balance: 831.9, status: 'pending', createdAt: new Date().toISOString(),
+    items: [{ id: 'i', billId: 'b', testId: 't', testName: 'CBC', price: 1000, discount: 295, taxableAmount: 705, taxSlab: 18,
+      cgstRate: 9, sgstRate: 9, igstRate: 0, cgstAmount: 63.45, sgstAmount: 63.45, igstAmount: 0, total: 831.9 }],
+    payments: [],
+    ...over,
+  } as Bill);
+  const input = (b: Bill) => ({ bill: b, order: null, invoiceNumber: 'INV-1', effectivePayable: b.totalPayable } as never);
+
+  it('GST bill: Total 1000 − Discount 295 + GST 126.90 = Net Payable 831.90 (discount is the bill\'s, not gross − payable = 168.10)', () => {
+    const m = buildCashBillModel(input(bill()));
+    expect(m.grossTotal).toBe('1,000');
+    expect(m.discount).toBe('295');
+    expect(m.hasTax).toBe(true);
+    expect(m.tax).toBe('126.90');
+    expect(m.netPayable).toBe('831.90');
+  });
+
+  it('GST-off bill is unchanged: Total − Discount = Net Payable, no GST row', () => {
+    const m = buildCashBillModel(input(bill({ totalTax: 0, totalCgst: 0, totalSgst: 0, totalTaxable: 705, totalPayable: 705, balance: 705 })));
+    expect(m.discount).toBe('295');
+    expect(m.hasTax).toBe(false);
+    expect(m.netPayable).toBe('705');
   });
 });

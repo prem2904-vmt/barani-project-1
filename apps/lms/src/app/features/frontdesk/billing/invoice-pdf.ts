@@ -378,18 +378,21 @@ const CB_RULE = '#333333';
 /** Computed, presentation-ready Cash Bill values — shared by the A4 and thermal
  *  renderers so both obey the same rules (no Sample ID, bill number in the head,
  *  no per-test discount, gross Total → Discount → adjusted Net Payable). */
-interface CashBillModel {
+export interface CashBillModel {
   patientName: string; ptId: string; mobile: string; dateStr: string;
   invoiceNo: string; referredBy: string;
   items: { sno: string; name: string; amount: string }[];
   payments: { label: string; amount: string; ref: string }[];
   grossTotal: string; discount: string; hasDiscount: boolean;
+  /** GST on the discounted taxable value (the bill's), so the stack adds up:
+   *  Total − Discount + GST = Net Payable. */
+  tax: string; hasTax: boolean;
   netPayable: string; collected: string; isCredit: boolean;
   isPaid: boolean; paidOrDueLabel: string; paidOrDueAmount: string;
   amountWords: string;
 }
 
-function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
+export function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
   const { bill, order, invoiceNumber, effectivePayable } = input;
   const patient = order?.patient;
   const ageSex = [patient?.age != null ? String(patient.age) : '', patient?.sex ?? ''].filter(Boolean).join(' / ');
@@ -399,8 +402,12 @@ function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
   // Requirement: keep the Total as-is (gross, before any discount) and apply the
   // discount once at the bill level. Items therefore show the un-discounted price
   // (it.price), the Total is the gross sum, and Net Payable is the adjusted figure.
+  // The invoice is the source of truth: the discount is the bill's own
+  // (totalDiscount), never "gross − payable" — on a GST bill that mixed the tax
+  // in (₹1000 @18% − ₹295 printed a ₹168.10 discount).
   const grossTotalNum = bill.items.reduce((s, it) => s + (it.price ?? 0), 0) || bill.subTotal || 0;
-  const discountNum = Math.max(0, grossTotalNum - effectivePayable);
+  const discountNum = Math.max(0, Number(bill.totalDiscount) || 0);
+  const taxNum = Math.max(0, Number(bill.totalTax) || 0);
 
   const payments = (bill.payments ?? []).map(p => ({
     // A wallet payment is drawn from the patient's prepaid credit — label it "Credit".
@@ -432,6 +439,8 @@ function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
     grossTotal: plain(grossTotalNum),
     discount: plain(discountNum),
     hasDiscount: discountNum > 0,
+    tax: plain(taxNum),
+    hasTax: taxNum > 0,
     netPayable: plain(effectivePayable),
     collected: plain(bill.totalPaid),
     isCredit,
@@ -567,6 +576,7 @@ function drawCashBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boolean)
   // keep the full stack.
   tot('Total', m.grossTotal);
   if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
+  if (m.hasTax) tot('GST', m.tax);
   if (!m.isCredit) {
     tot('Net Payable', m.netPayable, true);
     tot('Collected Amount', m.collected);
@@ -775,6 +785,7 @@ function drawThermalBill(doc: jsPDF, input: InvoicePdfInput, isTaxInvoice: boole
   };
   tot('Total', m.grossTotal);
   if (m.hasDiscount) tot('Discount', `- ${m.discount}`, false, '#166534');
+  if (m.hasTax) tot('GST', m.tax);
   if (!m.isCredit) {
     tot('Net Payable', m.netPayable, true);
     tot('Collected Amount', m.collected);

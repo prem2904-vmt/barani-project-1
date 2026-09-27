@@ -16,7 +16,10 @@ import { Patient, formatPatientInfo, patientDisplayName } from '../../../shared/
 import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList, filterTestListStrict } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
-import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, taxSlabOf } from '../../../shared/utils/test-pricing';
+import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, taxSlabOf } from '../../../shared/utils/test-pricing';
+import { computeBill } from '../../../shared/utils/bill-math';
+import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
+import { buildOrderDraft, parseOrderDraft } from './order-draft';
 import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
@@ -453,6 +456,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
     switch (err.field) {
+      case 'discount':        this.discountServerError.set(err.message); this.toasts.error(err.message); return;
       case 'refHospitalName': this.refHospitalError.set(err.message); return;
       case 'refDoctorName':   this.refDoctorError.set(err.message);   return;
       case 'specimen':        if (this.requireSpecimens()) return; this.toasts.error(err.message); return;
@@ -771,13 +775,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Tenant GST master switch — when off, the cart shows no tax (mirrors the
    *  backend bill, which bills at a zero slab → Bill of Supply). */
   readonly gstEnabled = signal(true);
-  /** GST preview = Σ per line at that test's own `taxSlab` (the bill's rule),
-   *  not a flat rate. */
-  readonly gst = computed(() => {
-    if (!this.gstEnabled()) return 0;
-    const sum = this.billedLines().reduce((a, t) => a + lineGst(effectivePrice(t), taxSlabOf(t)), 0);
-    return Math.round(sum * 100) / 100;
+  /** The cart as the bill's units: each billed line at its own `taxSlab`
+   *  (0 when GST is off → Bill of Supply). */
+  private readonly billUnits = computed(() => {
+    const gstOn = this.gstEnabled();
+    return this.billedLines().map(t => ({ price: effectivePrice(t), slab: gstOn ? taxSlabOf(t) : 0 }));
   });
+  /** PRE-discount gross = subtotal + GST at full price — the total the patient
+   *  sees before a discount and the ONE base every discount % / cap is measured
+   *  on (server: BillingService.PreDiscountGross). */
+  readonly grossTotal = computed(() => computeBill(this.billUnits(), 0).gross);
+  /** The bill the server WILL raise (BillMath mirror): the discount comes off
+   *  the taxable value, GST on the rest, split per line in whole paise. Drives
+   *  the shown GST, the Total and the amount the payment panel charges. */
+  readonly billPreview = computed(() => computeBill(this.billUnits(), this.discountAmount()));
+  /** GST on the DISCOUNTED taxable value — exactly the invoice's GST. */
+  readonly gst = computed(() => this.billPreview().tax);
   /** "GST · 5%" when every taxed line shares one slab, else plain "GST". */
   readonly gstLabel = computed(() => {
     const slabs = new Set(this.billedLines().map(t => taxSlabOf(t)).filter(x => x > 0));
@@ -794,8 +807,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** The discount is frozen once the order is read-only or its payment is
    *  recorded (QA #3a) — the server rejects a change on a settled bill too. */
   readonly discountLocked = computed(() => this.orderLocked() || this.isPaymentSettled());
-  setDiscountKind(k: 'flat' | 'percent') { if (this.discountLocked()) return; this.discountKind.set(k); }
-  setDiscountValue(v: string) { if (this.discountLocked()) return; this.discountValue.set(v); }
+  setDiscountKind(k: 'flat' | 'percent') { if (this.discountLocked()) return; this.discountServerError.set(null); this.discountKind.set(k); }
+  setDiscountValue(v: string) { if (this.discountLocked()) return; this.discountServerError.set(null); this.discountValue.set(v); }
 
   /** The discount % this user may grant, by their role's permission tier:
    *  override_discount → Level-2 cap, else give_discount → Level-1 cap, else 0. */
@@ -810,7 +823,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!this.allowDiscounts()) return 0;
     const raw = parseFloat(this.discountValue() || '0');
     if (!isFinite(raw) || raw <= 0) return 0;
-    const base = this.subtotal() + this.gst();
+    const base = this.grossTotal();
     // Percent → ₹ rounded DOWN to the paisa, never up to whole rupees: on a
     // small cart (₹3) 17% rounded to ₹1 = 33% and tripped the 25% cap.
     const amt = this.discountKind() === 'percent' ? percentDiscountAmount(base, raw) : raw;
@@ -818,11 +831,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   });
   /** Entered discount as a % of the pre-discount gross (subtotal + GST) — the
    *  same base the server's cap check uses (BillingService.PreDiscountGross). */
-  readonly discountPct = computed(() => discountPctOf(this.discountAmount(), this.subtotal() + this.gst()));
+  readonly discountPct = computed(() => discountPctOf(this.discountAmount(), this.grossTotal()));
   /** True when the entered discount exceeds this user's cap → block + notify. */
   readonly discountOverCap = computed(() =>
     this.allowDiscounts() && this.discountAmount() > 0 && this.discountPct() > this.discountCapPct() + 0.01);
-  readonly total = computed(() => Math.max(0, this.subtotal() + this.gst() - this.discountAmount()));
+  /** Discount the bill will actually carry (≤ subtotal). */
+  readonly discountApplied = computed(() => this.billPreview().discount);
+  /** Total = the server bill's payable to the paisa (never gross − discount:
+   *  ₹1000 @18% − ₹295 is 705 + 126.90 = ₹831.90, not 1180 − 295 = ₹885). */
+  readonly total = computed(() => this.billPreview().payable);
+  /** Server-side discount rejection (e.g. cap) shown under the discount input;
+   *  cleared on edit. */
+  readonly discountServerError = signal<string | null>(null);
 
   /** Slowest test in the cart drives the report ETA. Packages count as
    *  the max of their member tests' tatHours. */
@@ -1131,15 +1151,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Persist the cart as `p`'s draft (the Draft tab / shelf read this key). */
   private writeDraft(p: Patient): boolean {
     try {
-      localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify({
+      localStorage.setItem(this.DRAFT_KEY_PREFIX + p.id, JSON.stringify(buildOrderDraft({
         savedAt: Date.now(),
         priority: this._priority(),
         testIds: this._selected(),
         specimens: this.specimenPayload(),
         // Snapshot the patient so the front-desk Draft tab can list it without
         // a lookup (the key only carries the id).
-        patient: p
-      }));
+        patient: p,
+        // The discount AS TYPED (₹ or %) — it was dropped from drafts.
+        discountValue: this.discountValue(),
+        discountKind: this.discountKind()
+      })));
       return true;
     } catch {
       return false;
@@ -1180,23 +1203,31 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private restoreDraftFor(patientId: string): boolean {
     let raw: string | null = null;
     try { raw = localStorage.getItem(this.DRAFT_KEY_PREFIX + patientId); } catch { return false; }
-    if (!raw) return false;
-    try {
-      const parsed = JSON.parse(raw) as { savedAt?: number; priority?: Priority; testIds?: string[]; specimens?: Record<string, string> | null };
-      if (!parsed?.savedAt || Date.now() - parsed.savedAt > this.DRAFT_TTL_MS) {
-        try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + patientId); } catch { /* ignore */ }
-        return false;
+    const parsed = parseOrderDraft(raw, Date.now(), this.DRAFT_TTL_MS);
+    if (!parsed) {
+      // Stale drafts are dropped (an empty/unreadable one is left alone).
+      if (raw) {
+        try {
+          const savedAt = (JSON.parse(raw) as { savedAt?: number })?.savedAt;
+          if (!savedAt || Date.now() - savedAt > this.DRAFT_TTL_MS) localStorage.removeItem(this.DRAFT_KEY_PREFIX + patientId);
+        } catch { /* ignore */ }
       }
-      const ids = (parsed.testIds ?? []).filter(id => typeof id === 'string');
-      if (ids.length === 0) return false;
+      return false;
+    }
+    try {
+      const ids = parsed.testIds;
       this._selected.set(ids);
       // The draft's specimen picks come back too (a pick is a pick: never
       // overwritten by a mapping default).
-      const sp = parsed.specimens && typeof parsed.specimens === 'object' ? parsed.specimens : {};
-      const picks = Object.fromEntries(Object.entries(sp).filter(([k, v]) => ids.includes(k) && typeof v === 'string' && v));
+      const picks = parsed.specimens;
       Object.keys(picks).forEach(k => this._defaultApplied.add(k));
       this._specimens.set(picks);
-      if (parsed.priority) this._priority.set(parsed.priority);
+      if (parsed.priority === 'Normal' || parsed.priority === 'Urgent') this._priority.set(parsed.priority as Priority);
+      // The discount comes back exactly as typed, so the over-cap check and the
+      // totals rebuild the same; an old draft without one restores with none.
+      this.discountServerError.set(null);
+      this.discountKind.set(parsed.discount?.kind ?? 'flat');
+      this.discountValue.set(parsed.discount?.value ?? '');
       this._hasDraft.set(true);
       this.toasts.info('Draft restored');
       return true;
@@ -1666,6 +1697,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly confirming = signal(false);
   /** Set once payment is taken → the pane swaps to Print / Show invoice. */
   readonly paidOrderId = signal<string | null>(null);
+  /** An order this Confirm created whose billing / payment hasn't completed —
+   *  a retry reuses it (see planConfirmOrder). */
+  private pendingOrder: PendingOrder | null = null;
   /** The bill in its post-payment state (has totalPayable / totalPaid /
    *  balance). A signal so the paid summary can render Total, Paid/Advance
    *  and Balance Due — including after a partial (advance) payment. */
@@ -1764,26 +1798,53 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this.confirming.set(true);
     try {
       const appointmentId = this.route.snapshot.queryParamMap.get('appointmentId');
-      const order = await firstValueFrom(this.api.post<Order>('/api/orders/', {
-        patientId: p.id,
-        refDoctorName: this.refDoctorName().trim() || null,
-        refHospitalName: this.refHospitalName().trim() || null,
-        priority: this._priority(),
-        source: appointmentId ? 'appointment' : 'walkin',
-        collectionType: 'walkin',
-        testIds: this._selected(),
-        specimens: this.specimenPayload(),
-        // Same metadata as submit(): the appointment link AND the Trendogram
-        // choice from the billing card (it was dropped on this path before).
-        metadataJson: this.buildOrderMetadata(appointmentId)
-      }));
-      this.noteOrdered(this._selected());
+      const discount = this.discountAmount();
+      // Bug 3: a Confirm whose billing failed left its order behind. Retry
+      // bills THAT order (tests re-synced if the cart changed) — never a
+      // duplicate. A fresh order carries the discount so the server rejects an
+      // over-cap discount BEFORE the order exists.
+      const key = cartKey(this._selected(), this.specimenPayload());
+      const plan = planConfirmOrder(this.pendingOrder, p.id, key);
+      let order: { id: string };
+      if (plan.action === 'create') {
+        order = await firstValueFrom(this.api.post<Order>('/api/orders/', {
+          patientId: p.id,
+          refDoctorName: this.refDoctorName().trim() || null,
+          refHospitalName: this.refHospitalName().trim() || null,
+          priority: this._priority(),
+          source: appointmentId ? 'appointment' : 'walkin',
+          collectionType: 'walkin',
+          testIds: this._selected(),
+          specimens: this.specimenPayload(),
+          // Same metadata as submit(): the appointment link AND the Trendogram
+          // choice from the billing card (it was dropped on this path before).
+          metadataJson: this.buildOrderMetadata(appointmentId),
+          ...(discount > 0 ? { discount } : {})
+        }));
+        this.pendingOrder = { id: order.id, patientId: p.id, key };
+        this.noteOrdered(this._selected());
+      } else {
+        if (plan.action === 'patch') {
+          await firstValueFrom(this.api.patch<unknown>(`/api/orders/${plan.orderId}/tests`, {
+            testIds: this._selected(), specimens: this.specimenPayload(), reason: 'reception edit'
+          }));
+          this.pendingOrder = { id: plan.orderId, patientId: p.id, key };
+        }
+        order = { id: plan.orderId };
+      }
       const targetAmount = this.total();
-      const bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', {
+      let bill = await firstValueFrom(this.api.post<Bill>('/api/billing/', {
         orderId: order.id,
-        discount: this.discountAmount(),
-        tax: this.gst()
+        discount
       }));
+      // Retrying an order whose bill already exists: POST /api/billing returns
+      // that bill as-is, so bring its discount in line with the cart (the
+      // server recomputes the money).
+      if (discountNeedsSync(bill, discount)) {
+        bill = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/discount`, {
+          amount: discount, reason: 'Order & Payments'
+        }));
+      }
       // Track the latest bill state so the paid summary reflects the actual
       // amount paid / balance due (the payment endpoint returns the updated bill).
       let latest = bill;
@@ -1822,17 +1883,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         }));
       }
 
-      if (latest) {
-        const finalPayable = Math.max(latest.totalPayable ?? 0, latest.totalPaid ?? 0, targetAmount);
-        const finalPaid = Math.max(latest.totalPaid ?? 0, (d.mode !== 'later' ? targetAmount : (d.advanceAmount ?? 0)));
-        latest = {
-          ...latest,
-          totalPayable: finalPayable,
-          totalPaid: finalPaid,
-          balance: Math.max(0, finalPayable - finalPaid)
-        };
-      }
-
+      // The paid summary shows the SERVER's bill as returned — the invoice is
+      // the source of truth (it used to be patched up from the cart total).
+      this.pendingOrder = null;
       try { localStorage.removeItem(this.DRAFT_KEY_PREFIX + p.id); } catch { /* ignore */ }
       this._hasDraft.set(false);
       this._paidBill.set(latest);
@@ -2176,7 +2229,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       testIds: this._selected(),
       // The desk's specimen choices (dropped on this path before).
       specimens: this.specimenPayload(),
-      metadataJson: this.buildOrderMetadata(appointmentId)
+      metadataJson: this.buildOrderMetadata(appointmentId),
+      // Validated against the cap BEFORE the order exists (no orphan order).
+      ...(this.discountAmount() > 0 ? { discount: this.discountAmount() } : {})
     }).subscribe({
       next: order => {
         this._saving.set(false);
