@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { NavigationEnd, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
@@ -13,6 +14,10 @@ import { Conversation } from '../../models/chat.model';
 import { ApiError } from '../../models/api-response.model';
 import { ApiService } from '../../../core/services/api.service';
 import { firstValueFrom } from 'rxjs';
+import { SessionScopeService } from '../../../core/auth/session-scope.service';
+import {
+  Box, CONTROL_SELECTOR, Hit, PRIMARY_SELECTOR, RailPosition, clampLift, parseRailPosition, planRailLift,
+} from './chat-rail-placement';
 
 /** Just enough of a patient to list and share one. */
 interface PatientLite { id: string; displayName?: string | null; mrn?: string | null; }
@@ -36,6 +41,7 @@ import { PresenceDotComponent } from '../presence-avatar/presence-avatar.compone
   standalone: true,
   imports: [DatePipe, PresenceDotComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[style.--pf-cw-lift]': "(railLift() + railAvoid()) + 'px'" },
   template: `
     @if (theme.isNewDesign() && messagesOn()) {
       <div class="pf-cw" [class.pf-cw--railed]="heads().length > 0">
@@ -260,11 +266,16 @@ import { PresenceDotComponent } from '../presence-avatar/presence-avatar.compone
 
       <!-- Head rail — minimized chats stacked VERTICALLY at the right
            edge (the owner's Facebook reference). NO compose button here:
-           new messages start from the navbar's Messages icon only. -->
+           new messages start from the navbar's Messages icon only.
+           It never sits on the page's own controls: it lifts itself clear
+           of whatever is underneath (primary actions first), and it can be
+           DRAGGED (up/down, either edge) — remembered per user. -->
       @if (heads().length) {
-        <div class="pf-cw__rail">
+        <div #rail class="pf-cw__rail" [class.pf-cw__rail--left]="railSide() === 'left'"
+             [class.pf-cw__rail--dragging]="dragging()"
+             [style.bottom]="railBottom()" (pointerdown)="onRailDown($event)">
           @for (c of heads(); track c.id) {
-            <button type="button" class="pf-cw__head press" (click)="windowsSvc.openWindow(c.id)"
+            <button type="button" class="pf-cw__head press" (click)="openHead(c.id)"
                     [title]="title(c)" [attr.aria-label]="'Open chat with ' + title(c)">
               <span class="pf-cw__init">{{ initials(c) }}<pf-presence-dot [userId]="peerOf(c)?.userId" /></span>
               @if (c.unreadCount > 0) {
@@ -309,14 +320,16 @@ import { PresenceDotComponent } from '../presence-avatar/presence-avatar.compone
        edge would sit on top of the conversation. Lay the heads out as a
        horizontal strip docked to the bar and float the sheet above it. */
     @media (max-width: 640px) {
+      /* Shrink-wrapped to its heads (a full-width strip used to swallow
+         taps across the whole row, e.g. a phone's full-width CTA). */
       .pf-cw__rail {
-        left: 8px; right: 8px;
+        left: auto; right: 8px; max-width: calc(100vw - 16px);
         flex-direction: row; justify-content: flex-end; align-items: center;
         gap: 8px;
         overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
       }
       .pf-cw__rail::-webkit-scrollbar { display: none; }
-      .pf-cw--railed { bottom: calc(var(--pf-botbar-h, 0px) + 12px + 56px); }
+      .pf-cw--railed { bottom: calc(var(--pf-botbar-h, 0px) + 12px + 56px + var(--pf-cw-lift, 0px)); }
       .pf-cw--railed .pf-cw__win { height: min(64dvh, 420px); }
       /* Composer input at 16px or iOS zooms the page when it focuses. */
       .pf-cw__input { font-size: 16px; }
@@ -551,7 +564,18 @@ import { PresenceDotComponent } from '../presence-avatar/presence-avatar.compone
       display: flex;
       flex-direction: column;
       gap: 10px;
+      /* Only the heads take taps — the gaps between them never block the page. */
+      pointer-events: none;
+      transition: bottom 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
     }
+    .pf-cw__rail > * { pointer-events: auto; }
+    .pf-cw__rail--left { right: auto; left: 14px; }
+    .pf-cw__rail--dragging { transition: none; }
+    .pf-cw__rail--dragging .pf-cw__head { cursor: grabbing; }
+    @media (max-width: 640px) {
+      .pf-cw__rail--left { left: 8px; right: auto; justify-content: flex-start; }
+    }
+    @media (prefers-reduced-motion: reduce) { .pf-cw__rail { transition: none; } }
     .pf-cw__head {
       position: relative;
       width: 44px; height: 44px; border-radius: 9999px;
@@ -560,7 +584,9 @@ import { PresenceDotComponent } from '../presence-avatar/presence-avatar.compone
       border: 1px solid var(--glass-border);
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
       cursor: pointer;
+      touch-action: none;          /* a head is also the drag handle */
     }
+    @media (max-width: 640px) { .pf-cw__head { touch-action: pan-x; } }
     .pf-cw__head .pf-cw__init { width: 34px; height: 34px; font-size: 12px; }
     /* Unread: a neutral chip with a small violet dot, never a loud badge. */
     .pf-cw__head-badge {
@@ -614,7 +640,64 @@ export class ChatWindowsComponent {
     return this.resolve([...mini, ...favs]);
   });
 
+  // ── Rail placement: auto-clear + drag, remembered per user ────────────
+  private readonly scope = inject(SessionScopeService);
+  private readonly router = inject(Router, { optional: true });
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly railRef = viewChild<ElementRef<HTMLElement>>('rail');
+  /** Which edge the rail hugs (user's choice, by drag). */
+  protected readonly railSide = signal<'left' | 'right'>('right');
+  /** User's drag offset above the dock (px). */
+  protected readonly railLift = signal(0);
+  /** Automatic lift that clears the controls underneath (px). */
+  protected readonly railAvoid = signal(0);
+  protected readonly dragging = signal(false);
+  protected readonly railBottom = computed(() =>
+    `calc(var(--pf-botbar-h, 0px) + 12px + ${this.railLift() + this.railAvoid()}px)`);
+  private drag: { x0: number; y0: number; lift0: number; moved: boolean } | null = null;
+  private suppressClick = false;
+  private measureTimer: ReturnType<typeof setTimeout> | null = null;
+  private observer: MutationObserver | null = null;
+  private settleTimer: ReturnType<typeof setInterval> | null = null;
+  /** Top chrome the rail must never slide under (navbar + band air). */
+  private static readonly TOP_CLEARANCE = 72;
+
+  private railKey(): string { return this.scope.storageKey('pf.chatRail'); }
+
   constructor() {
+    // Per-user rail position: re-read whenever the signed-in account changes.
+    effect(() => {
+      this.scope.identity();
+      untracked(() => {
+        let raw: string | null = null;
+        try { raw = localStorage.getItem(this.railKey()); } catch { /* private mode */ }
+        const pos = parseRailPosition(raw);
+        this.railSide.set(pos.side);
+        this.railLift.set(pos.lift);
+        this.railAvoid.set(0);
+        this.scheduleMeasure();
+      });
+    });
+    // Watch the page only while there is a rail to place.
+    effect(() => {
+      const el = this.railRef()?.nativeElement;
+      untracked(() => (el ? this.watchPage() : this.unwatchPage()));
+    });
+    if (typeof window !== 'undefined') {
+      const onLayout = () => this.scheduleMeasure();
+      window.addEventListener('resize', onLayout);
+      document.addEventListener('scroll', onLayout, { capture: true, passive: true });
+      const nav = this.router?.events.subscribe(e => { if (e instanceof NavigationEnd) this.scheduleMeasure(400); });
+      this.destroyRef.onDestroy(() => {
+        window.removeEventListener('resize', onLayout);
+        document.removeEventListener('scroll', onLayout, { capture: true });
+        nav?.unsubscribe();
+        this.unwatchPage();
+        this.endDrag();
+        if (this.measureTimer) clearTimeout(this.measureTimer);
+      });
+    }
+
     // Keep every open thread pinned to its newest message.
     effect(() => {
       this.chat.threads();                    // re-run on any thread change
@@ -888,6 +971,149 @@ export class ChatWindowsComponent {
     if (this.voiceDraft()?.convId === conversationId) this.discardDraft();
     this.windowsSvc.close(conversationId);
     this.chat.forgetThread(conversationId);
+  }
+
+  // ── Rail: open / drag / auto-clear ─────────────────────────────────────
+
+  /** Tap a head → its window; a tap that ended a drag is not a tap. */
+  protected openHead(id: string): void {
+    if (this.suppressClick) { this.suppressClick = false; return; }
+    this.windowsSvc.openWindow(id);
+  }
+
+  /** Room above the dock: the rail may rise until its top meets the chrome. */
+  private maxLift(): number {
+    const rail = this.railRef()?.nativeElement;
+    if (!rail || typeof window === 'undefined') return 0;
+    const r = rail.getBoundingClientRect();
+    const now = this.railLift() + this.railAvoid();
+    const topAtZero = r.top + now;
+    return Math.max(0, topAtZero - ChatWindowsComponent.TOP_CLEARANCE);
+  }
+
+  protected onRailDown(e: PointerEvent): void {
+    if (e.button !== 0 || typeof window === 'undefined') return;
+    this.drag = { x0: e.clientX, y0: e.clientY, lift0: this.railLift() + this.railAvoid(), moved: false };
+    window.addEventListener('pointermove', this.onDragMove);
+    window.addEventListener('pointerup', this.onDragEnd);
+    window.addEventListener('pointercancel', this.onDragEnd);
+  }
+
+  private readonly onDragMove = (e: PointerEvent): void => {
+    const d = this.drag;
+    if (!d) return;
+    const dx = e.clientX - d.x0;
+    const dy = d.y0 - e.clientY;
+    if (!d.moved && Math.hypot(dx, dy) < 6) return;
+    if (!d.moved) { d.moved = true; this.dragging.set(true); }
+    e.preventDefault();
+    const max = this.maxLift();
+    this.railAvoid.set(0);
+    this.railLift.set(clampLift(d.lift0 + dy, max));
+  };
+
+  private readonly onDragEnd = (e: PointerEvent): void => {
+    const d = this.drag;
+    this.endDrag();
+    if (!d?.moved) return;
+    // The click that follows this pointerup must not open the chat.
+    this.suppressClick = true;
+    setTimeout(() => { this.suppressClick = false; }, 0);
+    const side: RailPosition['side'] =
+      typeof window !== 'undefined' && e.clientX < window.innerWidth / 2 ? 'left' : 'right';
+    this.railSide.set(side);
+    this.saveRail();
+    this.scheduleMeasure(0);
+  };
+
+  private endDrag(): void {
+    this.drag = null;
+    this.dragging.set(false);
+    if (typeof window === 'undefined') return;
+    window.removeEventListener('pointermove', this.onDragMove);
+    window.removeEventListener('pointerup', this.onDragEnd);
+    window.removeEventListener('pointercancel', this.onDragEnd);
+  }
+
+  private saveRail(): void {
+    const pos: RailPosition = { side: this.railSide(), lift: this.railLift() };
+    try { localStorage.setItem(this.railKey(), JSON.stringify(pos)); } catch { /* private mode */ }
+  }
+
+  private scheduleMeasure(delay = 150): void {
+    if (this.measureTimer) clearTimeout(this.measureTimer);
+    this.measureTimer = setTimeout(() => { this.measureTimer = null; this.measure(); }, delay);
+  }
+
+  /** Lift the rail clear of the control underneath it (primary actions are
+   *  never covered; any control is avoided when there is room). */
+  measure(): void {
+    const rail = this.railRef()?.nativeElement;
+    if (!rail || this.drag || typeof document === 'undefined' || !document.elementsFromPoint) return;
+    const avoid = this.railAvoid();
+    const heads: Box[] = Array.from(rail.querySelectorAll<HTMLElement>('.pf-cw__head')).map(h => {
+      const r = h.getBoundingClientRect();
+      return { left: r.left, right: r.right, top: r.top + avoid, bottom: r.bottom + avoid };
+    }).filter(b => b.right > b.left && b.bottom > b.top);
+    if (!heads.length) return;
+    const topAtZero = Math.min(...heads.map(h => h.top));
+    const max = Math.max(0, topAtZero - ChatWindowsComponent.TOP_CLEARANCE);
+    // Primary actions by GEOMETRY too: one behind a transient overlay (a
+    // search dropdown's backdrop) is still the page's CTA — the rail must
+    // not be sitting on it the moment the overlay closes.
+    const host = this.host.nativeElement;
+    const primaries: Box[] = Array.from(document.querySelectorAll<HTMLElement>(PRIMARY_SELECTOR))
+      .filter(el => !host.contains(el))
+      .map(el => this.primaryZone(el))
+      .filter(r => r.width > 0 && r.height > 0)
+      .map(r => ({ left: r.left, right: r.right, top: r.top, bottom: r.bottom }));
+    const next = planRailLift(heads, (x, y) => this.hitAt(x, y), max, 8, primaries);
+    if (next !== avoid) this.railAvoid.set(next);
+  }
+
+  /** A primary's keep-out zone: the whole sticky / fixed action bar (or
+   *  footer) it lives in — its total, its secondary button — not just the
+   *  button; a bar taller than 40% of the screen is a layout, not a bar. */
+  private primaryZone(el: HTMLElement): DOMRect {
+    const own = el.getBoundingClientRect();
+    if (own.width === 0 || own.height === 0 || typeof getComputedStyle === 'undefined') return own;
+    let node: HTMLElement | null = el.parentElement;
+    for (let i = 0; node && i < 6 && node !== document.body; i++, node = node.parentElement) {
+      const pos = getComputedStyle(node).position;
+      if (node.tagName === 'FOOTER' || pos === 'sticky' || pos === 'fixed') {
+        const r = node.getBoundingClientRect();
+        return r.height > 0 && r.height <= window.innerHeight * 0.4 ? r : own;
+      }
+    }
+    return own;
+  }
+
+  /** What the page shows at (x, y) under the rail — its own heads skipped. */
+  private hitAt(x: number, y: number): Hit {
+    if (typeof window !== 'undefined' && (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight)) return null;
+    const host = this.host.nativeElement;
+    const top = document.elementsFromPoint(x, y).find(el => !host.contains(el));
+    if (!top) return null;
+    const ctl = top.closest(CONTROL_SELECTOR);
+    if (!ctl || host.contains(ctl)) return null;
+    return ctl.closest(PRIMARY_SELECTOR) ? 'primary' : 'control';
+  }
+
+  private watchPage(): void {
+    if (this.observer || typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
+    this.observer = new MutationObserver(() => this.scheduleMeasure(200));
+    this.observer.observe(document.body, { childList: true, subtree: true });
+    // Bars that slide / fade in change no DOM — a slow re-check settles them.
+    this.settleTimer = setInterval(() => {
+      if (document.visibilityState !== 'hidden') this.measure();
+    }, 1500);
+    this.scheduleMeasure(0);
+  }
+
+  private unwatchPage(): void {
+    this.observer?.disconnect();
+    this.observer = null;
+    if (this.settleTimer) { clearInterval(this.settleTimer); this.settleTimer = null; }
   }
 
   private resolve(ids: readonly string[]): Conversation[] {
