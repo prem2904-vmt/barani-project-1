@@ -318,7 +318,7 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       }
       /* Content clears the docked bar; the band now starts at the very top. */
       :host-context(.design-new.nav-bottom) .shell-main {
-        padding-bottom: 70px !important;
+        padding-bottom: calc(var(--pf-botbar-h, 57px) + 12px) !important;
       }
 
       /* NEW design (Figma 446-113): a FLUSH full-width bar — no
@@ -516,14 +516,13 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
         border-top: 1px solid var(--header-border);
         padding-bottom: env(safe-area-inset-bottom, 0px);
         z-index: 40;
-        /* Same --pf-band-* wash as the hero band, with the fade mirrored
-           so it darkens toward the floor. One source of truth in
-           styles.scss — the two bars cannot drift apart. */
-        /* Glassmorphism (owner): translucent base + a blur of whatever is
+        /* The bar's surface lives in styles.scss as --pf-navbar-* (light
+           = the band's wash; dark = its own VERTICAL violet fade, owner).
+           Glassmorphism (owner): translucent base + a blur of whatever is
            scrolling underneath, so the bar frosts the page instead of
            capping it. The wash rides on top of the frost. */
-        background-color: var(--pf-band-bg-glass);
-        background-image: var(--pf-band-fade-up), var(--pf-band-sweep);
+        background-color: var(--pf-navbar-bg-glass);
+        background-image: var(--pf-navbar-wash);
         backdrop-filter: blur(18px) saturate(1.3);
         -webkit-backdrop-filter: blur(18px) saturate(1.3);
       }
@@ -538,11 +537,11 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
          than a see-through one with unreadable icons. */
       @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
         :host-context(.design-new.nav-bottom) .pf-chrome {
-          background-color: var(--pf-band-bg);
+          background-color: var(--pf-navbar-bg);
         }
       }
       :host-context(.dark.design-new.nav-bottom) .pf-chrome {
-        border-top-color: var(--pf-band-edge);
+        border-top-color: var(--pf-navbar-edge);
       }
       /* One bottom surface only: the phone pill / iPad rail steps aside. */
       :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }

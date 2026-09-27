@@ -258,7 +258,12 @@
 /* Bottom-navbar experiment: one source of truth for the docked bar's
    height so every surface can clear it (pages, toasts, drawers...). */
 :root.design-new.nav-bottom {
-  --pf-botbar-h: calc(58px + env(safe-area-inset-bottom, 0px));
+  /* CONTENT height of the docked bar, identical at every width (phone,
+     iPad, desktop): a 44px tap target + 6px air above and below. The
+     owner's iPad read the old bar as far too tall — 56 content + the
+     1px hairline + the home-indicator inset is the whole budget. */
+  --pf-navbar-h: 56px;
+  --pf-botbar-h: calc(var(--pf-navbar-h) + 1px + env(safe-area-inset-bottom, 0px));
 }
 
 /* NEW design: elements that belong to the CLASSIC layout only (duplicate
@@ -2520,6 +2525,28 @@ html.pf-design-mode {
   --pf-band-fade-up: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(10, 8, 16, 0.38) 100%);
   --pf-band-edge: rgba(168, 85, 247, 0.22);
   --pf-band-bg-glass: rgba(26, 20, 36, 0.72);
+}
+
+/* ══ NEW design: the docked BOTTOM navbar's own surface ════════════
+   It used to borrow the band's horizontal violet→magenta sweep. Light
+   still does (the owner is happy with it there), but in DARK the owner
+   asked for the bar alone to lose the pink and run VERTICALLY: a lifted
+   dark violet at its top edge, sinking toward the page's dark base at
+   the floor. Navbar-only variables so the hero band is untouched. ══ */
+:root.design-new {
+  --pf-navbar-bg: var(--pf-band-bg);
+  --pf-navbar-bg-glass: var(--pf-band-bg-glass);
+  --pf-navbar-wash: var(--pf-band-fade-up), var(--pf-band-sweep);
+  --pf-navbar-edge: var(--header-border);
+}
+:root.dark.design-new {
+  --pf-navbar-bg: #120e1c;
+  --pf-navbar-bg-glass: rgba(18, 14, 28, 0.84);
+  /* Violet (hue ~258), never magenta; top → bottom, darker as it falls. */
+  --pf-navbar-wash: linear-gradient(180deg,
+    rgba(92, 64, 160, 0.30) 0%, rgba(58, 40, 104, 0.16) 45%,
+    rgba(10, 10, 21, 0.55) 100%);
+  --pf-navbar-edge: rgba(167, 139, 250, 0.18);
 }
 
 /* ══ NEW design: the frontdesk STATUS + ACTION vocabulary, app-wide
