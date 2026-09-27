@@ -493,6 +493,10 @@
   transition: transform 0.08s ease;
 }
 
+.pf-cartbar--skel .pf-cartbar__inner { border-color: var(--glass-border); box-shadow: none; cursor: default; }
+.pf-cartbar:not(.pf-cartbar--skel) { animation: pf-oc-row-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) { .pf-cartbar:not(.pf-cartbar--skel) { animation: none; } }
+
 .pf-cartbar__inner:active {
   transform: scale(0.99);
 }

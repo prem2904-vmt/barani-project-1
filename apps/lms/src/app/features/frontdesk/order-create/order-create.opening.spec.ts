@@ -35,8 +35,8 @@ class MemStorage {
   get length() { return this.m.size; }
 }
 
-function render(q: Array<[string, string]>, patient$: Subject<unknown>) {
-  (window as any).matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+function render(q: Array<[string, string]>, patient$: Subject<unknown>, wide = true) {
+  (window as any).matchMedia = () => ({ matches: wide, addEventListener() {}, removeEventListener() {} });
   const get = vi.fn((url: string) => {
     if (url.startsWith('/api/tests/')) return of(CATALOGUE);
     if (/^\/api\/patients\/\w+$/.test(url)) return patient$;
@@ -99,6 +99,19 @@ describe('Order & Payments — opening a draft shows a skeleton, not a flash', (
     expect(body.getAttribute('aria-busy')).toBeNull();
     expect(el.querySelector('.pf-cart-skel')).toBeNull();
     expect(el.querySelector('.pf-us__tile-skel')).toBeNull();
+  });
+
+  it('phone / tablet: the patient chip and the sticky cart bar hold their place as skeletons', () => {
+    const patient$ = new Subject<unknown>();
+    const { f, el } = render([['patientId', 'pA']], patient$, false);
+    f.detectChanges();
+    expect(el.querySelector('.pf-oc-picks pf-skeleton')).not.toBeNull();
+    expect(el.querySelector('.pf-cartbar--skel')).not.toBeNull();
+    patient$.next({ patient: { id: 'pA', displayName: 'Mr. Arun' }, history: [] });
+    vi.advanceTimersByTime(MIN_LOAD_MS);
+    TestBed.tick();
+    f.detectChanges();
+    expect(el.querySelector('.pf-cartbar--skel')).toBeNull();
   });
 
   it('a plain "New order" (no record to open) never shows the skeleton', () => {

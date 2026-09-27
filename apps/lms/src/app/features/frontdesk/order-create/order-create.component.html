@@ -55,8 +55,8 @@
       <div class="pf-us__tiles" role="group" aria-label="What to search">
         @for (k of scopes; track k) {
         <div class="pf-us__tile" [class.pf-us__tile--on]="scope() === k" [class.pf-us__tile--filled]="!!tilePick(k)"
-          [class.pf-us__tile--req]="k === 'patient' && patientMissing()"
-          [class.pf-us__tile--nudge]="k === 'patient' && patientNudge()"
+          [class.pf-us__tile--req]="k === 'patient' && patientMissing() && !opening()"
+          [class.pf-us__tile--nudge]="k === 'patient' && patientNudge() && !opening()"
           [class.pf-us__tile--err]="(k === 'doctor' && !!refDoctorError()) || (k === 'hospital' && !!refHospitalError())">
           <button type="button" class="pf-us__tile-btn" [disabled]="!scopeEnabled(k)" (click)="selectScope(k)"
             [attr.aria-pressed]="scope() === k" [title]="tileTitle(k)" [attr.aria-label]="tileTitle(k)">
@@ -510,8 +510,18 @@
     }
   </div>
 
-  <!-- Sticky cart BAR: phone + iPad-portrait. Opens the checkout drawer. -->
-  @if (!isLg() && selected().length > 0 && !cartOpen() && !isPaymentSettled()) {
+  <!-- Sticky cart BAR: phone + iPad-portrait. Opens the checkout drawer.
+       While a draft / order opens, its skeleton holds the bar's place so the
+       cart lands where the placeholder was (no pop-in). -->
+  @if (!isLg() && opening() && selected().length === 0) {
+  <div class="pf-cartbar pf-cartbar--skel" aria-hidden="true">
+    <div class="pf-cartbar__inner">
+      <pf-skeleton variant="block" width="36px" height="36px"></pf-skeleton>
+      <span class="pf-cartbar__info"><pf-skeleton variant="line" width="60%"></pf-skeleton></span>
+      <pf-skeleton variant="pill" width="84px" height="30px"></pf-skeleton>
+    </div>
+  </div>
+  } @else if (!isLg() && selected().length > 0 && !cartOpen() && !isPaymentSettled()) {
   <div class="pf-cartbar">
     <button type="button" class="pf-cartbar__inner press" (click)="toggleCart()"
       [attr.aria-label]="'Review and pay, ' + selected().length + ' tests'">
