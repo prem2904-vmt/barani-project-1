@@ -1,4 +1,5 @@
-import { Injectable, effect, inject, untracked } from '@angular/core';
+import { Injectable, Injector, effect, inject, untracked } from '@angular/core';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from './api.service';
 import { AuthService } from '../auth/auth.service';
@@ -14,6 +15,8 @@ export function vapidKeyToBytes(base64url: string): Uint8Array<ArrayBuffer> {
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function toBase64Url(buf: ArrayBuffer | null): string {
   if (!buf) return '';
@@ -43,6 +46,7 @@ export class WebPushService {
   private readonly auth = inject(AuthService);
   private readonly platform = inject(PlatformService);
   private readonly scope = inject(SessionScopeService);
+  private readonly injector = inject(Injector);
 
   /** The worker ships in public/ → served next to index.html; resolve it
    *  against <base href> so a sub-path deployment works too. */
@@ -55,6 +59,9 @@ export class WebPushService {
 
   constructor() {
     if (!this.supported()) return;
+    // Chat notifications (pf-push-sw.js) hand their clicks to an open tab:
+    // open the thread, send an inline reply, or mark it read.
+    navigator.serviceWorker.addEventListener('message', (ev: MessageEvent) => void this.onChatAction(ev.data));
     effect(() => {
       const signedIn = !!this.auth.user();
       untracked(() => { if (signedIn) void this.sync(); });
@@ -69,6 +76,23 @@ export class WebPushService {
         .then(st => { st.onchange = () => void this.sync(); })
         .catch(() => undefined);
     } catch { /* older browsers */ }
+  }
+
+  private async onChatAction(d: unknown): Promise<void> {
+    const m = d as { type?: string; conversationId?: string; text?: string } | null;
+    if (!m?.type?.startsWith('pf-chat-') || !m.conversationId || !UUID.test(m.conversationId)) return;
+    if (!this.auth.user()) return;
+    if (m.type === 'pf-chat-open') {
+      void this.injector.get(Router).navigate(['/messages'], { queryParams: { c: m.conversationId } });
+      return;
+    }
+    const { ChatService } = await import('./chat.service');
+    const chat = this.injector.get(ChatService);
+    if (m.type === 'pf-chat-read') { await chat.markRead(m.conversationId).catch(() => undefined); return; }
+    if (m.type === 'pf-chat-reply' && typeof m.text === 'string' && m.text.trim()) {
+      await chat.sendMessage(m.conversationId, m.text.slice(0, 4000)).catch(err => console.warn('[web-push] reply failed', err));
+      await chat.markRead(m.conversationId).catch(() => undefined);
+    }
   }
 
   supported(): boolean {

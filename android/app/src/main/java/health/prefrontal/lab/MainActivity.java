@@ -10,6 +10,7 @@ import com.getcapacitor.BridgeActivity;
 
 import health.prefrontal.lab.calls.CallRingPlugin;
 import health.prefrontal.lab.calls.PrefrontalMessagingService;
+import health.prefrontal.lab.chat.PfChatReplyPlugin;
 import health.prefrontal.lab.printer.PrefrontalPrinterPlugin;
 
 public class MainActivity extends BridgeActivity {
@@ -26,6 +27,7 @@ public class MainActivity extends BridgeActivity {
         // starts so the WebView can see them.
         registerPlugin(PrefrontalPrinterPlugin.class);
         registerPlugin(CallRingPlugin.class);
+        registerPlugin(PfChatReplyPlugin.class);
         handleCallIntent(getIntent());
         super.onCreate(savedInstanceState);
     }

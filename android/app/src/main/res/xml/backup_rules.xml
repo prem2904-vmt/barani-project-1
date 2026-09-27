@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto Backup (Android 6–11): everything as before, EXCEPT the encrypted
+     reply-from-notification credentials — a device-bound token must never be
+     restored onto another phone (its Keystore key doesn't travel anyway). -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="pf_chat_reply.xml" />
+    <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs__.xml" />
+</full-backup-content>

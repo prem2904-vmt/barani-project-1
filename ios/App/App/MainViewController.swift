@@ -10,5 +10,12 @@ import Capacitor
 class MainViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(PrefrontalPrinterPlugin())
+        bridge?.registerPluginInstance(PfChatReplyPlugin())
+        // The bridge just made Capacitor's NotificationRouter the delegate —
+        // wrap it so chat Reply / Mark as read stay native and everything
+        // else (taps, other pushes, local notifications) reaches the plugins.
+        if let router = bridge?.notificationRouter {
+            ChatNotificationCenter.shared.adopt(router: router)
+        }
     }
 }

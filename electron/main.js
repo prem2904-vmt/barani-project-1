@@ -2,6 +2,7 @@ const { app, BrowserWindow, shell, ipcMain, nativeTheme } = require('electron');
 const path = require('path');
 const labelPrinter = require('./printer');
 const calls = require('./calls');
+const chatNotify = require('./chat-notify');
 // Don't pull in electron-is-dev — it isn't bundled into the packaged
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
@@ -128,6 +129,9 @@ function createWindow() {
 // ── Label printer (USB) IPC — the desktop counterpart to the iPad's BLE
 //    plugin. The renderer sends a packed 1-bpp bitmap; main streams it to the
 //    Detonger/Dothantech printer over USB. ────────────────────────────────
+// Chat notifications with inline Reply (macOS) — see chat-notify.js.
+chatNotify.register(() => mainWindow);
+
 ipcMain.handle('printer:status', async () => labelPrinter.status());
 ipcMain.handle('printer:print', async (_e, payload) => labelPrinter.print(payload));
 
