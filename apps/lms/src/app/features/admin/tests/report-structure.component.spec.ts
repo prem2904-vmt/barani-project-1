@@ -120,3 +120,21 @@ describe('ReportStructure — flag conditions (critical ⊂ high made explicit)'
     expect(c.rowIssues(c.rows()[2]).map((i: any) => i.message)).toEqual(['Never used — these ranges never produce Critical low.']);
   });
 });
+
+/** Owner bug 2026-09-27: the print order's autosave posted the grid rows as
+ *  they were when it loaded, erasing descriptions saved since. */
+describe('ReportStructure — saves on top of the latest stored layout', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('description rows stored since load survive a print-order autosave', async () => {
+    const { c, layout } = await make({ testId: 't1', parameters: ['hb'] });
+    layout.getTestLayout.mockResolvedValueOnce({ sections: [
+      { id: 'g', type: 'grid', order: 1, rows: [{ id: 'r', row_merge: false, parameter_name: 'hb', cells: { description: 'Low in anaemia' } }] },
+    ], configured: true } as never);
+    c.addSection('paragraph');
+    await vi.advanceTimersByTimeAsync(200);
+    const secs = (layout.saveTestLayout.mock.calls.at(-1) as any[])[1];
+    expect(secs.map((s: any) => s.type)).toEqual(['grid', 'paragraph']);
+    expect(secs[0].rows[0].cells.description).toBe('Low in anaemia');
+  });
+});

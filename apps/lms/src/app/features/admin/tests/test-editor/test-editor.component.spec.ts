@@ -673,3 +673,41 @@ describe('TestEditor reference-range validation (range-insight.ts)', () => {
     expect(c.paramDefMap().sodium.referenceRanges[0]).toMatchObject({ min: 135, max: 145 });
   });
 });
+
+describe('TestEditor — Printed report tab (owner bug 2026-09-27)', () => {
+  it('a saved print-order / description edit refreshes the preview WITHOUT flagging "Unsaved changes"', () => {
+    vi.useFakeTimers();
+    try {
+      const { c } = make();
+      expect(c.dirty()).toBe(false);
+      const before = c.previewToken();
+      c.refreshPreview();
+      vi.advanceTimersByTime(800);
+      expect(c.previewToken()).toBeGreaterThan(before);
+      expect(c.dirty()).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("a profile's print-order surface talks about its MEMBERS' values (mini table + Prints only when…)", () => {
+    const members = [
+      { id: 'fbs', type: 'individual', name: 'Fasting Blood Sugar', department: { name: 'Biochemistry' },
+        parameters: JSON.stringify({ parameters: [{ name: 'fasting_blood_sugar', title: 'Glucose' }] }) },
+      { id: 'hba1c', type: 'individual', name: 'Glycated Hemoglobin', department: { name: 'Biochemistry' },
+        parameters: JSON.stringify({ parameters: [{ name: 'hba1c' }, { name: 'eag', title: 'Estimated average glucose' }] }) },
+    ];
+    const { c } = make({ individuals: members,
+      test: baseTest({ type: 'profile', parameters: JSON.stringify({ items: [{ testId: 'fbs' }, { testId: 'hba1c' }] }) }) });
+    expect(c.reportParamNames()).toEqual(['fasting_blood_sugar', 'hba1c', 'eag']);
+    expect(c.reportParamTitles()).toEqual({
+      fasting_blood_sugar: 'Fasting Blood Sugar', hba1c: 'hba1c', eag: 'Estimated average glucose' });
+  });
+
+  it('warns when the printed table has no Description column (descriptions would never print)', () => {
+    const { c } = make();
+    expect(c.descriptionColumnPrints()).toBeNull();            // not loaded: engine defaults include one
+    c.deptColumnCfg.set([{ name: 'result', type: 'result' }, { name: 'methodology', type: 'method' }]);
+    expect(c.descriptionColumnPrints()).toBe(false);
+    c.testColumnsOverride.set([{ name: 'result', type: 'result' }, { name: 'description', type: 'text' }]);
+    expect(c.descriptionColumnPrints()).toBe(true);
+  });
+});

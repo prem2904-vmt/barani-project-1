@@ -86,9 +86,12 @@ export async function resolveReportLayouts<T>(
     }),
   );
 
-  // Then every DISTINCT profile the members came through. Values are empty:
-  // a profile has no results of its own, only the notes that qualify its
-  // members' results.
+  // Then every DISTINCT profile the members came through. A profile has no
+  // results of its own — its blocks (Sentences, notes) qualify its MEMBERS'
+  // results, so it resolves against their values: "Prints only when
+  // Glycated Hemoglobin is above 6.5" on a Diabetes profile must see the
+  // member's HbA1c, in the preview and the printed report alike. (With empty
+  // values every conditional profile block silently never printed.)
   const profileIds = [...new Set(
     tests.flatMap(t => [t.packageTestId, t.profileTestId])
       .filter((id): id is string => !!id),
@@ -96,8 +99,15 @@ export async function resolveReportLayouts<T>(
   await Promise.all(
     profileIds.map(async id => {
       if (layouts[id]) return;               // already resolved as a test
+      const memberValues: Record<string, unknown> = {};
+      for (const t of tests) {
+        if (t.packageTestId !== id && t.profileTestId !== id) continue;
+        for (const [k, v] of Object.entries(scalarValues(t.result?.values ?? {}))) {
+          if (!(k in memberValues)) memberValues[k] = v;   // first member wins a shared name
+        }
+      }
       try {
-        layouts[id] = await preview(id, {}, [], patient) as T;
+        layouts[id] = await preview(id, memberValues, [], patient) as T;
       } catch (e) {
         if (isAccessFailure(e)) throw e;
         /* profile without notes — nothing extra prints */

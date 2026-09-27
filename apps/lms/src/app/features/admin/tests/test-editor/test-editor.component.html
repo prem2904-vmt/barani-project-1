@@ -1134,8 +1134,8 @@
                 [testId]="d.id || ''"
                 [culture]="cultureBench()"
                 [attachments]="attachmentsEnabled()"
-                [parameters]="parameterNames()"
-                [parameterTitles]="parameterTitleMap()"
+                [parameters]="reportParamNames()"
+                [parameterTitles]="reportParamTitles()"
                 [hiddenParams]="unprintedParamNames()"
                 [columnsSummary]="testColumnsOverride() ? columnsLabel(testColumnsOverride()!) : (deptColumnsLabel() || '')"
                 [reloadToken]="structureReload()"
@@ -1145,7 +1145,8 @@
                 <div descriptionEditor>
                   <pf-test-notes-editor class="block" [slim]="true" [fixedTestId]="d.id || ''" [hidePreview]="true"
                 [parameters]="parameterNames()" [parameterTitles]="parameterTitleMap()" [profileMembers]="previewProfileMembers()"
-                [columnsOverride]="liveColumnsOverride()" [paramDefs]="$any(paramDefMap())" (saved)="refreshPreview()"></pf-test-notes-editor>
+                [columnsOverride]="liveColumnsOverride()" [paramDefs]="$any(paramDefMap())"
+                [descriptionColumn]="descriptionColumnPrints()" (saved)="refreshPreview()"></pf-test-notes-editor>
                 </div>
               </pf-report-structure>
             }

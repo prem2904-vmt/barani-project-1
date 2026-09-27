@@ -148,16 +148,17 @@ describe('resolveReportLayouts', () => {
     expect(layouts['PKG_PROFILE_001']).toBeDefined();
     expect(layouts['PROFILE_002']).toBeDefined();
 
-    // Profiles are called with empty values
+    // A profile resolves against ITS members' values (its blocks qualify
+    // their results) — never another profile's.
     expect(layouts['PKG_PROFILE_001']).toEqual({
       testId: 'PKG_PROFILE_001',
-      values: {},
+      values: { BIO153: 200 },
       conditions: [],
       patient: undefined,
     });
     expect(layouts['PROFILE_002']).toEqual({
       testId: 'PROFILE_002',
-      values: {},
+      values: { HEM011: 15 },
       conditions: [],
       patient: undefined,
     });
@@ -392,5 +393,17 @@ describe('resolveReportLayouts', () => {
     }]);
     expect(seen[0]['Fasting Blood Sugar']).toBe('80');
     expect(seen[0]['Plain Scalar']).toBe('42');
+  });
+});
+describe('resolveReportLayouts — a profile sees its members\' results', () => {
+  it('merges every member\'s scalar values (flag wrappers unwrapped) into the profile\'s preview', async () => {
+    const calls: Record<string, Record<string, unknown>> = {};
+    const preview: PreviewFn = async (id, values) => { calls[id] = values; return { id }; };
+    await resolveReportLayouts(preview, [
+      { testId: 'fbs', profileTestId: 'dia', result: { values: { fbs: { value: 132, flag: 'H' } } } },
+      { testId: 'hba1c', profileTestId: 'dia', result: { values: { hba1c: 7.1 } } },
+      { testId: 'tsh', result: { values: { tsh: 2 } } },
+    ]);
+    expect(calls['dia']).toEqual({ fbs: 132, hba1c: 7.1 });
   });
 });

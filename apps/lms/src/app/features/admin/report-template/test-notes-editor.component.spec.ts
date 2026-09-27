@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
+import { of } from 'rxjs';
 import { TestNotesEditorComponent } from './test-notes-editor.component';
 import { ApiService } from '../../../core/services/api.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
@@ -20,7 +21,7 @@ function make(params: string[]) {
   };
   TestBed.configureTestingModule({
     providers: [
-      { provide: ApiService, useValue: { get: vi.fn() } },
+      { provide: ApiService, useValue: { get: vi.fn(() => of(null)) } },
       { provide: ReportLayoutService, useValue: layout },
       { provide: ToastService, useValue: { error: vi.fn(), success: vi.fn() } },
     ],
@@ -29,7 +30,7 @@ function make(params: string[]) {
   f.componentRef.setInput('parameters', params);
   const c = f.componentInstance as any;
   c.selectedTestId.set('t1');
-  return { c, layout };
+  return { c, layout, f };
 }
 
 describe('TestNotesEditor — description rows (Phase 0: overrides only)', () => {
@@ -85,5 +86,41 @@ describe('TestNotesEditor — description rows (Phase 0: overrides only)', () =>
     await c.save();
     const rows = (layout.saveTestLayout.mock.calls[0] as any[])[1][0].rows;
     expect(rows.map((r: any) => r.parameter_name)).toEqual(['wbc']);
+  });
+});
+
+/**
+ * Owner bug 2026-09-27 ("the desc are not coming in preview"): the Description
+ * column's Save posted the WHOLE layout as loaded — so a Sentence typed on the
+ * print order after this editor loaded was written back blank, and the live
+ * preview (which reads the stored layout) lost it.
+ */
+describe('TestNotesEditor — saves on top of the latest stored layout', () => {
+  it('a Sentence typed on the print order since load survives a Description save', async () => {
+    const { c, layout, f } = make(['hb']);
+    f.componentRef.setInput('slim', true);
+    c.sections.set([{ id: 'p', type: 'paragraph', order: 1, template: '' }]);   // loaded: blank
+    layout.getTestLayout.mockResolvedValueOnce({
+      sections: [{ id: 'p', type: 'paragraph', order: 1, template: 'Kindly correlate clinically.' }],
+      configured: true,
+    } as never);
+    c.setDescription('hb', 'Low in anaemia');
+    await c.save();
+    const payload = (layout.saveTestLayout.mock.calls.at(-1) as any[])[1];
+    expect(payload.find((s: any) => s.type === 'paragraph').template).toBe('Kindly correlate clinically.');
+    expect(payload.find((s: any) => s.type === 'grid').rows[0].cells.description).toBe('Low in anaemia');
+  });
+
+  it('slim (test editor): a description edit saves itself so the live preview shows it', async () => {
+    vi.useFakeTimers();
+    try {
+      const { c, layout, f } = make(['hb']);
+      f.componentRef.setInput('fixedTestId', 't1');   // embedded: no catalogue fetch
+      f.componentRef.setInput('slim', true);
+      f.componentRef.setInput('hidePreview', true);
+      c.setDescription('hb', 'Low in anaemia');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(layout.saveTestLayout).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
   });
 });

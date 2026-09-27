@@ -22,6 +22,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { mergeDescriptionsOntoLatest, type LooseSection } from '../../../shared/utils/layout-section-merge';
 
 /**
  * Per-test report LAYOUT editor. Lives inside the Report Template tile as a
@@ -87,6 +88,12 @@ import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.c
               Printed in the report's <strong>Description</strong> column beside each
               parameter — e.g. what a high or low value means. Leave blank for none.
             </p>
+            @if (descriptionColumn() === false) {
+              <p class="pf-tl-desc-warn pf-tl-desc-warn--err" role="note">
+                This report's table has no Description column, so nothing written here prints.
+                Add one with “Change the columns” above.
+              </p>
+            }
             @for (name of paramNames(); track name) {
               <div class="pf-tl-desc-row">
                 <span class="pf-tl-desc-name">{{ titleFor(name) }}</span>
@@ -148,7 +155,23 @@ import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.c
                 </div>
               }
             } @empty {
-              <p class="text-[12px] py-1" style="color: var(--text-tertiary);">This test has no parameters.</p>
+              @if (profileMembers().length > 0) {
+                <!-- A profile has no values of its own. Each member's
+                     description is a cell of THAT member's row, so it prints
+                     wherever the member prints — in this profile's block too.
+                     (Notes are different: the profile's replace its
+                     members' — see the profile-notes rule.) -->
+                <p class="pf-tl-profile-note">
+                  A profile prints each member's own description beside its result.
+                  Write it on the member test —
+                  @for (m of profileMembers(); track m.id; let last = $last) {
+                    <strong>{{ m.name }}</strong>{{ last ? '.' : ', ' }}
+                  }
+                  For wording that belongs to the whole profile, add a Sentence below the table.
+                </p>
+              } @else {
+                <p class="text-[12px] py-1" style="color: var(--text-tertiary);">This test has no parameters.</p>
+              }
             }
           </div>
 
@@ -293,12 +316,19 @@ import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.c
 
           <!-- Save footer -->
           <div class="flex items-center justify-end gap-3 mt-4">
-            <!-- Embedded (slim) in the test editor, whose band owns the ONE
-                 primary (Save): this section's own save is secondary there. -->
-            <pf-touch-btn size="sm" [variant]="slim() ? 'secondary' : 'primary'"
-                          [disabled]="saving()" (pressed)="save()">
-              @if (saving()) { Saving… } @else { Save }
-            </pf-touch-btn>
+            @if (slim()) {
+              <!-- Embedded in the test editor: every change saves itself (like
+                   the print-order blocks around it), so the live preview shows
+                   it — no second Save button beside the band's. -->
+              <span class="pf-tl-savestate" aria-live="polite">
+                @if (saving()) { Saving… } @else if (savedTick()) { Saved }
+              </span>
+            } @else {
+              <pf-touch-btn size="sm" variant="primary"
+                            [disabled]="saving()" (pressed)="save()">
+                @if (saving()) { Saving… } @else { Save }
+              </pf-touch-btn>
+            }
           </div>
 
         } @else {
@@ -355,6 +385,9 @@ import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.c
     .pf-tl-desc-x:disabled { opacity: .3; cursor: default; }
     .pf-tl-desc-x:disabled:hover { color: var(--text-tertiary, #64748b); background: transparent; }
     .pf-tl-desc-warn--err { color: #dc2626; border-left-color: #dc2626; }
+    .pf-tl-profile-note { margin: 2px 0 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
+    .pf-tl-profile-note strong { color: var(--text-primary); font-weight: 600; }
+    .pf-tl-savestate { min-height: 16px; font-size: 11.5px; font-weight: 600; color: var(--text-tertiary); }
     .pf-tl-desc-warn { margin: -4px 0 8px; padding: 4px 10px 4px 12px; font-size: 11.5px; color: var(--text-secondary);
       border-left: 2px solid var(--nd-sel-border); }
     .pf-tnotes-card { border: 1px solid var(--glass-border); border-radius: 16px;
@@ -490,6 +523,10 @@ export class TestNotesEditorComponent implements OnInit {
   /** LIVE per-test column override from the host's columns editor, previewed
    *  before it is saved. */
   readonly columnsOverride = input<ReportColumn[] | null>(null);
+  /** Whether the table this test prints in has a Description column (host
+   *  knows the effective columns). false → warn: descriptions can't print.
+   *  null = unknown / engine defaults (which include one). */
+  readonly descriptionColumn = input<boolean | null>(null);
 
   private readonly api = inject(ApiService);
   private readonly layout = inject(ReportLayoutService);
@@ -731,6 +768,9 @@ export class TestNotesEditorComponent implements OnInit {
    *  stores only the rows the admin overrode (keyed by param), never a
    *  snapshot of every parameter (single source: parameters[] are the rows). */
   private mutateDescRow(name: string, fn: (row: GridRowParameter) => void): void {
+    this.touched.add(name);
+    this.editSeq++;
+    this.scheduleAutosave();
     this.sections.update(arr => {
       const next = [...arr];
       let gi = next.findIndex(sec => sec.type === 'grid');
@@ -920,15 +960,49 @@ export class TestNotesEditorComponent implements OnInit {
   // ── Save ────────────────────────────────────────────────
   /** Fires after a successful save — hosts refresh their live preview. */
   readonly saved = output<void>();
+  protected readonly savedTick = signal(false);
+  /** Values whose Description row this editor changed since the last save. */
+  private readonly touched = new Set<string>();
+  private editSeq = 0;
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Slim (test editor): the print order beside this editor autosaves the
+   *  SAME layout, so descriptions save themselves too — debounced, like a
+   *  Sentence — and the live preview (which reads the stored layout) follows. */
+  private scheduleAutosave() {
+    if (!this.slim()) return;
+    if (this.autosaveTimer) clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = setTimeout(() => void this.save(), 700);
+  }
+
   async save() {
     const testId = this.selectedTestId();
     if (!testId) return;
+    if (this.autosaveTimer) { clearTimeout(this.autosaveTimer); this.autosaveTimer = null; }
+    const slim = this.slim();
+    const seq = this.editSeq;
+    const touched = [...this.touched];
     this.saving.set(true);
+    this.savedTick.set(false);
     try {
-      const payload = this.stripDerivedCells(this.reindex(this.sections()));
+      // Slim: another editor (the print order) writes this layout too — save
+      // ON TOP OF the latest stored copy and replace only the description
+      // rows touched here (layout-section-merge.ts). Posting the copy loaded
+      // when the tab opened erased Sentences typed since (owner bug 2026-09-27).
+      const base = slim
+        ? mergeDescriptionsOntoLatest(
+            ((await this.layout.getTestLayout(testId))?.sections ?? []) as unknown as LooseSection[],
+            this.sections() as unknown as LooseSection[], touched) as unknown as ReportSection[]
+        : this.sections();
+      const payload = this.stripDerivedCells(this.reindex(base));
       await this.layout.saveTestLayout(testId, payload);
+      if (seq === this.editSeq) this.touched.clear();
       this.configured.set(true);
-      this.toasts.success('Layout saved');
+      if (slim) {
+        this.savedTick.set(true);
+        setTimeout(() => this.savedTick.set(false), 2200);
+      } else {
+        this.toasts.success('Layout saved');
+      }
       this.saved.emit();
       this.refreshPreview();
     } catch (e: unknown) {

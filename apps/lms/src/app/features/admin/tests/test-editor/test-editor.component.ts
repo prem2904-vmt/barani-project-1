@@ -31,7 +31,7 @@ import { SegmentedOption } from '../../../../shared/primitives/segmented.compone
 import { ThemeService } from '../../../../core/services/theme.service';
 import { RangeTableComponent, blankGroup, liftParamCriticals } from './range-table.component';
 import { validateRanges, type RangeIssue } from '../../../../shared/utils/range-insight';
-import { hasLegacyFields, loadEditorFields, newFieldId, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
+import { hasLegacyFields, loadEditorFields, newFieldId, parseParametersBlob, readParameters, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
 
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { methodologyChoices } from '../../../../shared/utils/methodology';
@@ -1431,6 +1431,39 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     for (const fld of this._fields()) m[fld.name] = fld.label || fld.name;
     return m;
   });
+  /** A profile's printed-report blocks talk about its MEMBERS' values (it has
+   *  none of its own): the miniature table lists them and a Sentence's
+   *  "Prints only when…" picks from them — the report resolves the profile
+   *  against its members' results (report-layouts.ts). */
+  private readonly memberReportParams = computed<Array<{ name: string; title: string }>>(() => {
+    const out: Array<{ name: string; title: string }> = [];
+    const seen = new Set<string>();
+    for (const m of this.previewProfileMembers()) {
+      const params = readParameters(parseParametersBlob(m.parameters ?? null));
+      for (const p of params) {
+        const name = (p.name ?? '').trim();
+        if (!name || seen.has(name.toLowerCase()) || (p as { printOnReport?: boolean }).printOnReport === false) continue;
+        seen.add(name.toLowerCase());
+        const title = ((p as { title?: string }).title || (p as { label?: string }).label || '').trim();
+        out.push({ name, title: params.length === 1 ? m.name : (title || name) });
+      }
+    }
+    return out;
+  });
+  readonly reportParamNames = computed<string[]>(() =>
+    this._draft().type === 'individual' ? this.parameterNames() : this.memberReportParams().map(p => p.name));
+  readonly reportParamTitles = computed<Record<string, string>>(() =>
+    this._draft().type === 'individual' ? this.parameterTitleMap()
+      : Object.fromEntries(this.memberReportParams().map(p => [p.name, p.title])));
+  /** Does the table this test prints in carry a Description column? The
+   *  descriptions are cells of that column — without it they never print.
+   *  Null = columns not loaded / engine defaults (which include it). */
+  readonly descriptionColumnPrints = computed<boolean | null>(() => {
+    const cols = this.liveColumnsOverride() ?? this.testColumnsOverride() ?? this.deptColumnCfg();
+    if (!cols || cols.length === 0) return null;
+    return cols.some(c => (c.name ?? '').trim().toLowerCase() === 'description');
+  });
+
   /** Values with "Prints on the report" switched off. */
   readonly unprintedParamNames = computed<string[]>(() =>
     this._fields().filter(fld => fld.printOnReport === false).map(fld => fld.name));
@@ -1964,8 +1997,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Any saved edit outside the draft (report structure, notes) lands in
-   *  the live preview through the same debounced token. */
-  refreshPreview(): void { this.bumpPreview(); }
+   *  the live preview through the same debounced token. Those edits are
+   *  ALREADY stored (they autosave), so they never mark the draft dirty —
+   *  the band's "Unsaved changes" used to light up for work that was saved. */
+  refreshPreview(): void {
+    if (this._previewTimer) clearTimeout(this._previewTimer);
+    this._previewTimer = setTimeout(() => this._previewToken.update(v => v + 1), 700);
+  }
 
   patch(p: Partial<DraftTest>) {
     this._draft.update(d => ({ ...d, ...p }));

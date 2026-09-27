@@ -7,6 +7,7 @@ import {
   FLAG_CONDITIONS, FLAG_OPERATOR, analyzeLines, lineReach, reachWords, type CondIssue, type CondLine,
 } from '../../../shared/utils/flag-conditions';
 import type { InsightParam } from '../../../shared/utils/range-insight';
+import { mergeStructureOntoLatest, type LooseSection } from '../../../shared/utils/layout-section-merge';
 
 /** One raw layout section as stored — kept as-is so fields this surface
  *  doesn't understand (grid rows, templates, complex conditions…) survive
@@ -713,7 +714,14 @@ export class ReportStructureComponent {
     if (!id || !secs) return;
     this.saving.set(true); this.savedTick.set(false);
     try {
-      await this.layout.saveTestLayout(id, secs as never);
+      // The Description column (projected into the results-table block)
+      // writes this SAME layout's grid rows. Save on top of the latest stored
+      // copy so its descriptions are never erased by this surface's copy
+      // (layout-section-merge.ts; owner bug 2026-09-27).
+      const latest = ((await this.layout.getTestLayout(id))?.sections ?? []) as unknown as LooseSection[];
+      const merged = mergeStructureOntoLatest(latest, secs as LooseSection[])
+        .map((s, i) => ({ ...s, order: i + 1 }));
+      await this.layout.saveTestLayout(id, merged as never);
       this.savedTick.set(true);
       setTimeout(() => this.savedTick.set(false), 2200);
       this.changed.emit();

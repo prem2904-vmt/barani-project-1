@@ -4,7 +4,8 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ReportTemplate } from '../../../shared/models/report.model';
 import { ReportColumn, ResolvedReportLayout } from '../../../shared/models/report-layout.model';
-import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
+import { firstValueFrom } from 'rxjs';
+import { ReportPdfInput, preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { resolveReportLayouts } from '../../../shared/utils/report-layouts';
 
 /** A profile member fed to the preview so a PROFILE previews exactly as it
@@ -142,6 +143,10 @@ export class ReportPdfPreviewComponent implements OnDestroy {
   private readonly tpl = signal<ReportTemplate | null>(null);
 
   private renderTimer: ReturnType<typeof setTimeout> | null = null;
+  /** id → the tenant's EFFECTIVE row id (see effectiveId). Cleared on every
+   *  refreshToken bump — a save is what can move a test to a new row. */
+  private readonly effIds = new Map<string, Promise<string>>();
+  private effToken = -1;
   /** Guards against an older async render finishing after a newer one. */
   private renderSeq = 0;
 
@@ -205,102 +210,40 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     } catch { return []; }
   }
 
+  /**
+   * The row whose layout the editor's saves actually reach. Reference-mode
+   * labs edit a MASTER test copy-on-write: the first layout save materialises
+   * the lab's (or branch's) own row under a NEW id and writes there, while the
+   * open editor keeps the master id it was opened with. Every editor read maps
+   * a lineage id to that effective row server-side — except the engine's
+   * preview, which must render the EXACT row a real report points at. So the
+   * preview asked for the master's layout and every Sentence / description the
+   * admin had just saved was missing (owner bug 2026-09-27, Diabetes Profile).
+   * GET /api/tests/{id} resolves any lineage id to the effective row — the
+   * same row a new order stamps, so the preview is the report it will print.
+   */
+  private effectiveId(id: string): Promise<string> {
+    const token = this.refreshToken();
+    if (token !== this.effToken) { this.effIds.clear(); this.effToken = token; }
+    let p = this.effIds.get(id);
+    if (!p) {
+      p = firstValueFrom(this.api.get<{ id?: string } | null>(`/api/tests/${id}`))
+        .then(t => (t?.id && typeof t.id === 'string') ? t.id : id)
+        .catch(() => id);
+      this.effIds.set(id, p);
+    }
+    return p;
+  }
+
   private async render(): Promise<void> {
     const seq = ++this.renderSeq;
     const testId = this.testId();
     if (!testId) { this.rendering.set(false); return; }
     this.error.set('');
     try {
-      const patient = { sex: 'Female', age: 35 };
-      const members = this.profileMembers();
-      let layouts: Record<string, ResolvedReportLayout> = {};
-      let snapshotTests: Array<Record<string, unknown>>;
-
-      if (members.length > 0) {
-        // PROFILE: one fabricated row per member, resolved through the same
-        // helper the real report uses — so the profile merge, notes rule and
-        // the profile's own column override all exercise the true path.
-        snapshotTests = members.map(m => {
-          const vals = ReportPdfPreviewComponent.valuesFor(
-            ReportPdfPreviewComponent.namesFromParametersJson(m.parameters));
-          return {
-            testId: m.id,
-            name: m.name,
-            department: this.department() || 'Department',
-            packageTestId: testId,
-            profileTestId: testId,
-            packageType: 'profile',
-            packageName: this.testName(),
-            profileName: this.testName(),
-            sampleType: this.sampleType() || undefined,
-            result: { values: vals },
-          };
-        });
-        layouts = await resolveReportLayouts<ResolvedReportLayout>(
-          (id, vals, _c, p) => this.layout.preview(id, vals, [], p,
-            id === this.testId() ? this.parametersJson() : null),
-          snapshotTests as never,
-          patient,
-        );
-      } else {
-        // INDIVIDUAL test: one row from typed or generated sample values.
-        const vals = this.values() && Object.keys(this.values()!).length > 0
-          ? this.values()!
-          : ReportPdfPreviewComponent.valuesFor(this.parameters());
-        const resolved = await this.layout.preview(testId, vals, [], patient, this.parametersJson());
-        layouts = { [testId]: resolved };
-        snapshotTests = [{
-          testId,
-          name: this.testName() || resolved.testName,
-          department: this.department() || resolved.departmentName || 'Department',
-          sampleType: this.sampleType() || resolved.sampleType || undefined,
-          result: this.culture() ? ReportPdfPreviewComponent.SAMPLE_CULTURE : { values: vals },
-        }];
-      }
-      if (seq !== this.renderSeq) return;   // superseded by a newer render
-
-      // Live unsaved column edits: patch the TARGET layout so the preview is
-      // what Save would produce. departmentColumns keeps the pre-override set
-      // for the renderer's profile-block fallback.
-      const override = this.columnsOverride();
-      const target = layouts[testId];
-      if (override && override.length > 0 && target) {
-        layouts[testId] = {
-          ...target,
-          columns: override,
-          hasColumnOverride: true,
-          departmentColumns: target.hasColumnOverride
-            ? (target.departmentColumns ?? null)
-            : target.columns,
-        };
-      }
-
-      const snapshot = {
-        patient: { displayName: 'Sita Raman', age: 35, sex: 'Female', phone: '9080706050' },
-        order: {
-          id: 'preview-order',
-          orderNumber: 'LAB-2608-000042',
-          createdAt: new Date().toISOString(),
-          refDoctorName: 'Dr. A. Sharma',
-          branchName: 'Preview',
-        },
-        type: 'final',
-        tests: snapshotTests,
-      };
-      const baseInput = {
-        report: {
-          id: 'preview-' + testId,
-          type: 'final',
-          createdAt: new Date().toISOString(),
-          data: JSON.stringify(snapshot),
-        },
-        template: this.tpl(),
-        resolvedLayouts: layouts,
-        previewKeepEmptyColumns: true,
-      };
-      const imageCache = await preloadReportImages(baseInput, this.platform.getApiUrl());
-      if (seq !== this.renderSeq) return;
-      const url = renderReportPdfBlobUrl({ ...baseInput, imageCache });
+      const input = await this.buildPreviewInput(() => seq !== this.renderSeq);
+      if (!input) return;   // superseded by a newer render
+      const url = renderReportPdfBlobUrl(input);
       this.setUrl(url);
     } catch (e) {
       console.error('report preview render failed', e);
@@ -308,5 +251,104 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     } finally {
       if (seq === this.renderSeq) this.rendering.set(false);
     }
+  }
+
+  /** The fabricated report + resolved layouts, exactly as buildReportPdf will
+   *  receive them. Null when `superseded()` turns true mid-way. */
+  async buildPreviewInput(superseded: () => boolean = () => false): Promise<ReportPdfInput | null> {
+    const testId = this.testId();
+    const preview = async (id: string, vals: Record<string, unknown>, imgs: string[] = [],
+                           p?: { sex?: string | null; age?: number | null }) =>
+      this.layout.preview(await this.effectiveId(id), vals, imgs, p,
+        id === testId ? this.parametersJson() : null);
+    const patient = { sex: 'Female', age: 35 };
+    const members = this.profileMembers();
+    let layouts: Record<string, ResolvedReportLayout> = {};
+    let snapshotTests: Array<Record<string, unknown>>;
+
+    if (members.length > 0) {
+      // PROFILE: one fabricated row per member, resolved through the same
+      // helper the real report uses — so the profile merge, notes rule and
+      // the profile's own column override all exercise the true path.
+      snapshotTests = members.map(m => {
+        const vals = ReportPdfPreviewComponent.valuesFor(
+          ReportPdfPreviewComponent.namesFromParametersJson(m.parameters));
+        return {
+          testId: m.id,
+          name: m.name,
+          department: this.department() || 'Department',
+          packageTestId: testId,
+          profileTestId: testId,
+          packageType: 'profile',
+          packageName: this.testName(),
+          profileName: this.testName(),
+          sampleType: this.sampleType() || undefined,
+          result: { values: vals },
+        };
+      });
+      layouts = await resolveReportLayouts<ResolvedReportLayout>(
+        (id, vals, _c, p) => preview(id, vals, [], p),
+        snapshotTests as never,
+        patient,
+      );
+    } else {
+      // INDIVIDUAL test: one row from typed or generated sample values.
+      const vals = this.values() && Object.keys(this.values()!).length > 0
+        ? this.values()!
+        : ReportPdfPreviewComponent.valuesFor(this.parameters());
+      const resolved = await preview(testId, vals, [], patient);
+      layouts = { [testId]: resolved };
+      snapshotTests = [{
+        testId,
+        name: this.testName() || resolved.testName,
+        department: this.department() || resolved.departmentName || 'Department',
+        sampleType: this.sampleType() || resolved.sampleType || undefined,
+        result: this.culture() ? ReportPdfPreviewComponent.SAMPLE_CULTURE : { values: vals },
+      }];
+    }
+    if (superseded()) return null;
+
+    // Live unsaved column edits: patch the TARGET layout so the preview is
+    // what Save would produce. departmentColumns keeps the pre-override set
+    // for the renderer's profile-block fallback.
+    const override = this.columnsOverride();
+    const target = layouts[testId];
+    if (override && override.length > 0 && target) {
+      layouts[testId] = {
+        ...target,
+        columns: override,
+        hasColumnOverride: true,
+        departmentColumns: target.hasColumnOverride
+          ? (target.departmentColumns ?? null)
+          : target.columns,
+      };
+    }
+
+    const snapshot = {
+      patient: { displayName: 'Sita Raman', age: 35, sex: 'Female', phone: '9080706050' },
+      order: {
+        id: 'preview-order',
+        orderNumber: 'LAB-2608-000042',
+        createdAt: new Date().toISOString(),
+        refDoctorName: 'Dr. A. Sharma',
+        branchName: 'Preview',
+      },
+      type: 'final',
+      tests: snapshotTests,
+    };
+    const baseInput = {
+      report: {
+        id: 'preview-' + testId,
+        type: 'final',
+        createdAt: new Date().toISOString(),
+        data: JSON.stringify(snapshot),
+      },
+      template: this.tpl(),
+      resolvedLayouts: layouts,
+      previewKeepEmptyColumns: true,
+    };
+    const imageCache = await preloadReportImages(baseInput as ReportPdfInput, this.platform.getApiUrl());
+    if (superseded()) return null;
+    return { ...baseInput, imageCache } as ReportPdfInput;
   }
 }
