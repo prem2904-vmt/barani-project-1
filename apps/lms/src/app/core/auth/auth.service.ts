@@ -151,8 +151,24 @@ export class AuthService {
   }
 
   private async doRefreshAccessToken(): Promise<boolean> {
-    const refresh = this._session()?.refresh_token;
+    let refresh = this._session()?.refresh_token;
     if (!refresh) return false;
+    // Another tab holding the SAME account may already have rotated the
+    // refresh token (Supabase revokes the old one, and re-using it outside
+    // the reuse window revokes the whole session). Prefer the registry's
+    // newer copy: adopt it outright if its access token is still good,
+    // otherwise refresh with the newest refresh token.
+    const ownId = this.ownAccountId();
+    const row = ownId ? this.accounts.fresh(ownId) : null;
+    if (row?.refreshToken && row.refreshToken !== refresh) {
+      if (row.accessToken && !this.isExpiringSoon(row.accessToken)) {
+        const adopted = { access_token: row.accessToken, refresh_token: row.refreshToken } as Session;
+        this._session.set(adopted);
+        this.persistSession(adopted);
+        return true;
+      }
+      refresh = row.refreshToken;
+    }
     const ctrl = new AbortController();
     const killer = setTimeout(() => ctrl.abort(), 4000);
     try {
@@ -180,10 +196,14 @@ export class AuthService {
   }
 
   /** Exchange ANY refresh token for a fresh session (used when switching to a
-   *  non-active profile — proves this device holds that account's session). */
-  private async exchangeRefreshToken(refresh: string): Promise<Session | null> {
+   *  non-active profile — proves this device holds that account's session).
+   *  `dead` = the auth server REJECTED the token (400/401: revoked, reused,
+   *  not found) — only then is the profile's saved sign-in really over. A
+   *  timeout / network error / 5xx is transient and must not kill the
+   *  profile (it used to be removed from the device on any failure). */
+  private async exchangeRefreshToken(refresh: string): Promise<{ session: Session | null; dead: boolean }> {
     const ctrl = new AbortController();
-    const killer = setTimeout(() => ctrl.abort(), 6000);
+    const killer = setTimeout(() => ctrl.abort(), 8000);
     try {
       const res = await fetch(`${environment.auth.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
         method: 'POST',
@@ -192,11 +212,27 @@ export class AuthService {
         cache: 'no-store',
         signal: ctrl.signal,
       });
-      if (!res.ok) return null;
+      if (!res.ok) return { session: null, dead: res.status === 400 || res.status === 401 };
       const s = await res.json() as Session;
-      return s?.access_token ? s : null;
-    } catch { return null; }
+      return s?.access_token ? { session: s, dead: false } : { session: null, dead: false };
+    } catch { return { session: null, dead: false }; }
     finally { clearTimeout(killer); }
+  }
+
+  /** Who a token belongs to (app user id) — read-only /api/auth/me. */
+  private async profileIdFor(token: string): Promise<string | null> {
+    try {
+      const res = await fetch(`${environment.apiUrl}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+      });
+      if (!res.ok) return null;
+      const json = await res.json().catch(() => null);
+      return json?.data?.id ?? null;
+    } catch { return null; }
+  }
+
+  private static switchError(code: string, message: string): Error {
+    return Object.assign(new Error(message), { code });
   }
 
   // Remembered organizations for the login dropdown (most-recent first).
@@ -494,16 +530,45 @@ export class AuthService {
    *  exchanges), AND the person must know that account's PIN (verified
    *  server-side, rate-limited). Throws with a user-readable message. */
   async switchAccount(acc: StoredAccount, pin: string): Promise<void> {
-    if (!acc.refreshToken) throw new Error('This profile’s session has expired — sign in again.');
-    const sess = await this.exchangeRefreshToken(acc.refreshToken);
-    if (!sess) {
-      // Dead session: drop the stale profile so the switcher stops offering it.
-      this.accounts.remove(acc.userId);
-      throw new Error('This profile’s session has expired — sign in again.');
+    const first = (acc.displayName || 'this profile').split(' ')[0];
+    const expired = () => AuthService.switchError('session_expired',
+      `${first}’s saved sign-in has ended on this device — sign in again to switch.`);
+    // Always work from the FRESHEST stored tokens (another tab may have
+    // rotated them since this list was rendered).
+    const row = this.accounts.fresh(acc.userId) ?? acc;
+    if (!row.refreshToken) { this.accounts.markExpired(acc.userId); throw expired(); }
+
+    // A still-valid access token needs no exchange (no rotation, nothing to
+    // lose); otherwise — or if the server no longer accepts it — exchange
+    // the refresh token.
+    let sess: Session | null = null;
+    let who: string | null = null;
+    if (row.accessToken && !this.isExpiringSoon(row.accessToken)) {
+      who = await this.profileIdFor(row.accessToken);
+      if (who) sess = { access_token: row.accessToken, refresh_token: row.refreshToken } as Session;
     }
-    // Supabase rotated the refresh token — save it even if the PIN fails,
-    // otherwise the stored one is dead and the profile bricks.
-    this.accounts.updateTokens(acc.userId, sess.access_token, sess.refresh_token!);
+    if (!sess) {
+      const ex = await this.exchangeRefreshToken(row.refreshToken);
+      if (!ex.session) {
+        if (ex.dead) { this.accounts.markExpired(acc.userId); throw expired(); }
+        throw AuthService.switchError('network', 'Couldn’t reach the sign-in server — check the connection and try again.');
+      }
+      sess = ex.session;
+      // Supabase rotated the refresh token — save it even if the PIN fails,
+      // otherwise the stored one is dead and the profile bricks.
+      this.accounts.updateTokens(acc.userId, sess.access_token, sess.refresh_token!);
+      who = await this.profileIdFor(sess.access_token);
+      if (!who) throw AuthService.switchError('network', 'Couldn’t reach the server — check the connection and try again.');
+    }
+
+    // Never half-switch: the saved session must really be THIS profile
+    // (a cross-tab write used to file one account's tokens under another's
+    // row). Checked read-only, before any state changes.
+    if (who !== acc.userId) {
+      this.accounts.markExpired(acc.userId);
+      throw AuthService.switchError('session_mismatch',
+        `The saved sign-in for ${first} belongs to a different account — sign in again to switch.`);
+    }
 
     const res = await fetch(`${environment.apiUrl}/api/auth/pin/verify`, {
       method: 'POST',

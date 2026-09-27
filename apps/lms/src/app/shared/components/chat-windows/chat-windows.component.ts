@@ -17,6 +17,7 @@ import { firstValueFrom } from 'rxjs';
 /** Just enough of a patient to list and share one. */
 interface PatientLite { id: string; displayName?: string | null; mrn?: string | null; }
 import { conversationInitials, conversationTitle } from '../../models/conversation-name';
+import { PresenceDotComponent } from '../presence-avatar/presence-avatar.component';
 
 /**
  * Floating chat windows — the Messenger model the owner asked for:
@@ -33,7 +34,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
 @Component({
   selector: 'pf-chat-windows',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, PresenceDotComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (theme.isNewDesign() && messagesOn()) {
@@ -41,7 +42,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
         @for (c of windows(); track c.id) {
           <section class="pf-cw__win" (click)="windowsSvc.focus(c.id)">
             <header class="pf-cw__hdr">
-              <span class="pf-cw__init">{{ initials(c) }}</span>
+              <span class="pf-cw__init">{{ initials(c) }}<pf-presence-dot [userId]="peerOf(c)?.userId" /></span>
               <span class="pf-cw__name">{{ title(c) }}</span>
               @if (peerOf(c); as peer) {
                 <button type="button" class="pf-cw__icon press"
@@ -265,7 +266,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
           @for (c of heads(); track c.id) {
             <button type="button" class="pf-cw__head press" (click)="windowsSvc.openWindow(c.id)"
                     [title]="title(c)" [attr.aria-label]="'Open chat with ' + title(c)">
-              <span class="pf-cw__init">{{ initials(c) }}</span>
+              <span class="pf-cw__init">{{ initials(c) }}<pf-presence-dot [userId]="peerOf(c)?.userId" /></span>
               @if (c.unreadCount > 0) {
                 <span class="pf-cw__head-badge">{{ c.unreadCount > 9 ? '9+' : c.unreadCount }}</span>
               }
@@ -359,6 +360,7 @@ import { conversationInitials, conversationTitle } from '../../models/conversati
 
     /* Neutral avatar — the same anatomy as the Messages screen (nd-kit). */
     .pf-cw__init {
+      position: relative;                          /* anchors the presence dot */
       display: inline-flex; align-items: center; justify-content: center;
       width: 26px; height: 26px; border-radius: 9999px; flex-shrink: 0;
       background: var(--nd-chip-bg, #f3f4f6); color: var(--text-secondary);

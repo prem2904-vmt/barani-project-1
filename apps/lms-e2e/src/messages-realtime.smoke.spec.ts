@@ -24,6 +24,7 @@ import { test, expect, type Page, type WebSocketRoute } from '@playwright/test';
 
 const SHOTS = process.env['SHOTS_DIR'] || '';
 const POPUP_SHOTS = process.env['POPUP_SHOTS_DIR'] || '';
+const POPOVER_SHOTS = process.env['POPOVER_SHOTS_DIR'] || '';
 
 test.use({
   launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
@@ -36,6 +37,10 @@ type Who = { id: string; authId: string; first: string; last: string; username: 
 const ADMIN: Who = { id: 'app-admin', authId: 'sub-admin', first: 'Admin', last: 'User', username: 'admin' };
 const PRIYA: Who = { id: 'app-priya', authId: 'sub-priya', first: 'Priya', last: 'Sharma', username: 'priya' };
 const RAVI = { authId: 'sub-ravi', name: 'Ravi Kumar' };
+// Two DIFFERENT colleagues who share the display name "Front Desk" (owner's
+// duplicate) + a patient-anchored thread with the first one.
+const FD1 = { authId: 'sub-fd1', name: 'Front Desk', email: 'frontdesk.main@t-demo.tenant.prefrontal' };
+const FD2 = { authId: 'sub-fd2', name: 'Front Desk', email: 'frontdesk.annex@t-demo.tenant.prefrontal' };
 const PEOPLE = [ADMIN, PRIYA];
 const name = (w: Who) => `${w.first} ${w.last}`;
 
@@ -49,7 +54,17 @@ function conversationsFor(sub: string) {
   const me = PEOPLE.find(p => p.authId === sub)!;
   const self = { userId: me.authId, displayName: name(me), email: '' };
   const other = me === ADMIN ? PRIYA : ADMIN;
+  const extra = me === PRIYA ? [
+    { id: 'c-fd1', isGroup: false, name: null, createdById: me.authId, lastMessageAt: new Date().toISOString(), unreadCount: 0,
+      participants: [self, { userId: FD1.authId, displayName: FD1.name, email: FD1.email }], lastMessage: { id: 'x1', fromUserId: FD1.authId, body: 'Hi', sentAt: new Date().toISOString() }, isMuted: false },
+    { id: 'c-fd1-patient', isGroup: false, name: null, createdById: me.authId, lastMessageAt: new Date().toISOString(), unreadCount: 0,
+      contextType: 'patient', contextId: 'p1', contextLabel: 'Meena Iyer · 26117',
+      participants: [self, { userId: FD1.authId, displayName: FD1.name, email: FD1.email }], lastMessage: null, isMuted: false },
+    { id: 'c-fd2', isGroup: false, name: null, createdById: me.authId, lastMessageAt: new Date().toISOString(), unreadCount: 0,
+      participants: [self, { userId: FD2.authId, displayName: FD2.name, email: FD2.email }], lastMessage: null, isMuted: false },
+  ] : [];
   return [
+    ...extra,
     { id: `c-${me.username}-ravi`, isGroup: false, name: null, createdById: me.authId, lastMessageAt: new Date().toISOString(), unreadCount: 0,
       participants: [self, { userId: RAVI.authId, displayName: RAVI.name, email: '' }], lastMessage: null, isMuted: false },
     { id: 'c-admin-priya', isGroup: false, name: null, createdById: ADMIN.authId, lastMessageAt: new Date().toISOString(), unreadCount: 0,
@@ -129,7 +144,7 @@ async function offlineBackend(page: Page) {
         hub.invocations.push({ target: msg.target, args: msg.arguments ?? [] });
         if (msg.invocationId === undefined) continue;
         let result: unknown = null;
-        if (msg.target === 'GetOnlineUsersWithStatus') result = { [RAVI.authId]: 'active', [ADMIN.authId]: 'active', [PRIYA.authId]: 'active' };
+        if (msg.target === 'GetOnlineUsersWithStatus') result = { [RAVI.authId]: 'active', [ADMIN.authId]: 'active', [PRIYA.authId]: 'active', [FD1.authId]: 'active', [FD2.authId]: 'away' };
         if (msg.target === 'GetOnlineUsers') result = [RAVI.authId];
         if (msg.target === 'GetTurnCredentials') result = { iceServers: [], ttl: 3600, provider: 'none' };
         if (msg.target === 'StartCall') result = { sessionId: 's-out' };
@@ -202,6 +217,34 @@ test.describe('Messages realtime — offline', () => {
     const priyaChat = hubs.find(h => h.kind === 'chat' && h.sub === PRIYA.authId && !h.closed)!;
     for (const h of hubs.filter(x => x.sub === ADMIN.authId)) expect(h.closed).toBe(true);
 
+    // ── Navbar Messages popover: presence dots + no ambiguous duplicates ──
+    await page.getByRole('button', { name: 'Messages', exact: true }).click();
+    const pop = page.locator('.pf-msgs-pop');
+    await expect(pop).toBeVisible();
+    await expect.poll(async () => pop.locator('pf-presence-dot').count(), { timeout: 10_000 }).toBeGreaterThan(3);
+    const labels = await pop.locator('pf-presence-dot:not([hidden])').evaluateAll(els => els.map(e => e.getAttribute('aria-label')));
+    expect(labels).toContain('Online');
+    expect(labels).toContain('Away');
+    // The three "Front Desk" rows are told apart.
+    const fdRows = pop.locator('.pf-msgs-pop__name', { hasText: 'Front Desk' });
+    await expect(fdRows).toHaveCount(3);
+    const fdText = (await fdRows.allInnerTexts()).map(t => t.trim());
+    expect(new Set(fdText).size).toBe(3);
+    expect(fdText.join('|')).toContain('Meena Iyer · 26117');
+    expect(fdText.join('|')).toContain('@frontdesk.annex');
+    // Live delta while the popover is open: the second Front Desk comes online.
+    const priyaSigHub = () => hubs.find(h => h.kind === 'signaling' && h.sub === PRIYA.authId && !h.closed);
+    await expect.poll(() => !!priyaSigHub(), { timeout: 30_000 }).toBe(true);
+    const annexDot = pop.locator('.pf-msgs-pop__item', { hasText: '@frontdesk.annex' }).locator('pf-presence-dot');
+    await expect(annexDot).toHaveAttribute('data-tone', 'away');
+    send(priyaSigHub()!, 'UserPresenceChanged', { userId: FD2.authId, status: 'active' });
+    await expect(annexDot).toHaveAttribute('data-tone', 'on');
+    await page.waitForTimeout(300);
+    await shoot(page, POPOVER_SHOTS, 'messages-popover', [1440]);
+    // Picking a row closes the popover (opens that thread's window).
+    await pop.locator('.pf-msgs-pop__item', { hasText: '@frontdesk.annex' }).click();
+    await expect(pop).toHaveCount(0);
+
     // ── Pop-up for a message Priya isn't looking at ──────────────────────
     send(priyaChat, 'MessageReceived', { id: 'm-live-1', conversationId: 'c-priya-ravi', fromUserId: RAVI.authId,
       body: 'Sample 26117 looks haemolysed — can you redraw?', sentAt: new Date().toISOString(), kind: 'user' });
@@ -226,7 +269,8 @@ test.describe('Messages realtime — offline', () => {
     // Click → opens the thread as a docked window; send goes over PRIYA's socket.
     await popup.first().locator('.pf-cpop__main').click();
     await expect(page.locator('[data-testid="chat-popup"]')).toHaveCount(0);
-    const box = page.locator('pf-chat-windows input.pf-cw__input').first();
+    const raviWin = page.locator('pf-chat-windows section.pf-cw__win', { hasText: 'Ravi Kumar' });
+    const box = raviWin.locator('input.pf-cw__input');
     await expect(box).toBeVisible({ timeout: 10_000 });
     await box.fill('On it — sending the phlebotomist.');
     await box.press('Enter');
@@ -238,7 +282,7 @@ test.describe('Messages realtime — offline', () => {
     await expect.poll(() => !!priyaSig(), { timeout: 30_000 }).toBe(true);
 
     // Outgoing from the docked window's call button → the callee's NAME.
-    await page.locator('pf-chat-windows button[aria-label="Voice call"]').first().click();
+    await raviWin.locator('button[aria-label="Voice call"]').click();
     const out = page.locator('[data-testid="call-outgoing"]');
     await expect(out).toBeVisible({ timeout: 15_000 });
     await expect(out.locator('[data-testid="call-outgoing-name"]')).toHaveText('Ravi Kumar');

@@ -18,7 +18,7 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { NavBackService } from '../../core/services/nav-back.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
-import { isPresenceKey, presenceLabel } from '../../shared/models/presence.model';
+import { presenceText as presenceDisplayText } from '../../shared/models/presence.model';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiError } from '../../shared/models/api-response.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
@@ -293,22 +293,22 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  otherwise the other user's custom Teams-style status (In surgery,
    *  On rounds, …) when known, falling back to online/away. */
   protected presenceFor(c: Conversation): string | null {
-    if (c.isGroup) return null;
-    const other = c.participants.find(p => p.userId !== this.me());
-    if (!other) return null;
-    const conn = this.signaling.userPresences().get(other.userId) ?? 'offline';
-    // Not connected (away = last tab closed, inside the server grace) or on
-    // a call: that wins over a custom status — a disconnected user with
-    // "Available" used to show green for 2 minutes.
-    if (conn !== 'active') return conn;
-    return this.presenceSvc.statusFor(other.userId) ?? conn;
+    // One resolver for every avatar (PresenceService.displayStatus): not
+    // connected (away / offline) or on a call wins over a custom status — a
+    // disconnected user with "Available" used to show green for 2 minutes.
+    return this.presenceSvc.displayStatus(this.peerId(c));
+  }
+
+  /** The 1:1 peer's AuthId (presence dot); null for groups / notes. */
+  protected peerId(c: Conversation): string | null {
+    if (c.isGroup || c.contextType === 'self') return null;
+    return c.participants.find(p => p.userId !== this.me())?.userId ?? null;
   }
 
   /** Human label for a presence value — custom preset labels first,
    *  then the connection-presence vocabulary. */
   protected presenceText(p: string): string {
-    if (isPresenceKey(p)) return presenceLabel(p);
-    return p === 'active' ? 'Online' : p === 'in-a-call' ? 'On a call' : p === 'away' ? 'Away' : 'Offline';
+    return presenceDisplayText(p);
   }
 
   /** Subline beneath name — last message preview or "No messages yet". */

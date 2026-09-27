@@ -8,6 +8,7 @@ import { SignalingService } from '../../../core/services/signaling.service';
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { SrcObjectDirective } from '../../directives/src-object.directive';
+import { PresenceAvatarComponent, PresenceDotComponent } from '../presence-avatar/presence-avatar.component';
 
 interface DirectoryUser {
   id: string;          // Supabase sub (== AuthId)
@@ -36,7 +37,7 @@ interface DirectoryUser {
 @Component({
   selector: 'pf-call-overlay',
   standalone: true,
-  imports: [SrcObjectDirective, DatePipe],
+  imports: [SrcObjectDirective, DatePipe, PresenceAvatarComponent, PresenceDotComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Hidden audio sinks for each remote peer's stream. The SrcObjectDirective
@@ -59,6 +60,7 @@ interface DirectoryUser {
             <span class="pf-call-avatar pf-call-avatar--xl" aria-hidden="true">
               {{ initials(ic.isGroup ? (ic.conversationName ?? 'Group') : ic.callerName) }}
             </span>
+            @if (!ic.isGroup) { <pf-presence-dot [userId]="ic.callerId" /> }
           </div>
           <h2 class="pf-call-ring__name">{{ ic.isGroup ? (ic.conversationName ?? 'Group call') : ic.callerName }}</h2>
           <p class="pf-call-ring__sub">
@@ -103,6 +105,7 @@ interface DirectoryUser {
             <span class="pf-call-ring__pulse" aria-hidden="true"></span>
             <span class="pf-call-ring__pulse pf-call-ring__pulse--late" aria-hidden="true"></span>
             <span class="pf-call-avatar pf-call-avatar--xl" aria-hidden="true">{{ initials(outgoingName()) }}</span>
+            @if (webrtc.outgoingPeer(); as op) { @if (!op.isGroup) { <pf-presence-dot [userId]="op.id" /> } }
           </div>
           <h2 class="pf-call-ring__name" data-testid="call-outgoing-name">{{ outgoingName() }}</h2>
           <p class="pf-call-ring__sub" aria-live="polite">Ringing…</p>
@@ -172,7 +175,7 @@ interface DirectoryUser {
             <div class="pf-call-screen__participants" [attr.data-count]="participants().length">
               @for (p of participants(); track p.id) {
                 <div class="pf-call-tile" data-testid="call-tile">
-                  <span class="pf-call-avatar pf-call-avatar--lg" aria-hidden="true">{{ initials(p.name) }}</span>
+                  <pf-presence-avatar size="lg" [name]="p.name" [userId]="p.id" />
                   <p class="pf-call-tile__name">{{ p.name }}</p>
                   <p class="pf-call-tile__meta">
                     @if (p.isMe) { <span class="pf-call-tile__you">You</span> }
@@ -305,7 +308,7 @@ interface DirectoryUser {
                   @for (u of availableToInvite(); track u.id) {
                     <li>
                       <button type="button" class="pf-call-invite__item" (click)="inviteUser(u)">
-                        <span class="pf-call-avatar pf-call-avatar--sm" aria-hidden="true">{{ initials(u.displayName) }}</span>
+                        <pf-presence-avatar size="sm" [name]="u.displayName" [userId]="u.id" />
                         <span class="pf-call-invite__name">{{ u.displayName }}</span>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -387,7 +390,7 @@ interface DirectoryUser {
                 @for (u of availableToInvite(); track u.id) {
                   <li>
                     <button type="button" class="pf-call-invite__item" (click)="inviteUser(u)">
-                      <span class="pf-call-avatar pf-call-avatar--sm" aria-hidden="true">{{ initials(u.displayName) }}</span>
+                      <pf-presence-avatar size="sm" [name]="u.displayName" [userId]="u.id" />
                       <span class="pf-call-invite__name">{{ u.displayName }}</span>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -523,7 +526,9 @@ interface DirectoryUser {
     .pf-call-ring__avatar-wrap {
       position: relative; width: 88px; height: 88px; margin-bottom: 18px;
       display: flex; align-items: center; justify-content: center;
+      --pf-pdot-size: 18px; --pf-pdot-ring: var(--nd-card-bg, #fff);
     }
+    .pf-call-ring__avatar-wrap pf-presence-dot { right: 3px; bottom: 3px; z-index: 2; }
     /* Gentle pulse ring (violet hairline) — no glow. */
     .pf-call-ring__pulse {
       position: absolute; inset: 0; border-radius: 9999px;
@@ -573,6 +578,7 @@ interface DirectoryUser {
       align-content: center;
     }
     .pf-call-tile {
+      --pf-pdot-ring: var(--nd-chip-bg, #f3f4f6);
       display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
       padding: 22px 14px 18px; border-radius: var(--nd-radius, 12px);
       background: var(--nd-chip-bg, #f3f4f6);

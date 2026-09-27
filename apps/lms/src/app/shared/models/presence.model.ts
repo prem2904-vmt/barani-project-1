@@ -61,3 +61,29 @@ export function presenceColor(key: string | null | undefined): string {
 export function presenceIsDnd(key: string | null | undefined): boolean {
   return !!key && (BY_KEY.get(key)?.dnd ?? false);
 }
+
+// ── Display presence (one resolver for every avatar) ─────────────────────
+/** What an avatar dot shows: hub connection presence where it decides
+ *  reachability ('offline' / 'away' / 'in-a-call'), otherwise the person's
+ *  custom status, otherwise plain 'active'. */
+export type DisplayPresence = PresenceKey | 'active' | 'in-a-call' | 'offline';
+
+/** Dot tone (ND palette): violet = reachable, slate = busy / on a call /
+ *  away, muted red = calls blocked, hollow = offline. */
+export type PresenceTone = 'on' | 'busy' | 'away' | 'dnd' | 'off';
+
+export function presenceTone(p: DisplayPresence | string | null | undefined): PresenceTone {
+  if (p === 'active' || p === 'available') return 'on';
+  if (!p || p === 'offline') return 'off';
+  if (p === 'away') return 'away';
+  if (p === 'dnd' || p === 'surgery') return 'dnd';
+  return 'busy';
+}
+
+/** Human label for any display presence ("Online", "In surgery", …). */
+export function presenceText(p: DisplayPresence | string | null | undefined): string {
+  if (p === 'active') return 'Online';
+  if (p === 'in-a-call') return 'On a call';
+  if (!p || p === 'offline') return 'Offline';
+  return presenceLabel(p) || 'Offline';
+}

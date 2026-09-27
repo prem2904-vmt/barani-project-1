@@ -9,6 +9,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MessagesPageComponent } from './messages-page.component';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { PresenceDotComponent } from '../../shared/components/presence-avatar/presence-avatar.component';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiError } from '../../shared/models/api-response.model';
@@ -54,7 +55,7 @@ function readFlag(key: string): boolean {
 @Component({
   selector: 'pf-messages-nd',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, HeroBandComponent, ZoomSourceDirective],
+  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, HeroBandComponent, ZoomSourceDirective, PresenceDotComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-nd.component.html',
   styleUrls: ['./messages-nd.component.scss']

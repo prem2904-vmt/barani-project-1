@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
-  PresenceKey, isPresenceKey, presenceIsDnd, presenceLabel
+  DisplayPresence, PresenceKey, isPresenceKey, presenceIsDnd, presenceLabel
 } from '../../shared/models/presence.model';
 import { AuthService } from '../auth/auth.service';
 import { SessionScopeService } from '../auth/session-scope.service';
@@ -76,6 +76,21 @@ export class PresenceService {
       m.set(userId, status);
       this._others.set(m);
     });
+  }
+
+  /**
+   * THE presence every avatar shows (messages list, thread header, people
+   * search, new-chat picker, navbar popover, chat windows, call tiles).
+   * Reads the live hub maps (snapshot + deltas) and the custom statuses, so
+   * any caller in a template/computed updates in real time. Not connected
+   * (offline / away) or on a call wins over a custom status.
+   */
+  displayStatus(userId: string | null | undefined): DisplayPresence | null {
+    if (!userId) return null;
+    const conn = this.signaling.userPresences().get(userId);
+    if (!conn) return 'offline';
+    if (conn === 'away' || conn === 'in-a-call') return conn;
+    return this._others().get(userId) ?? (userId === this.auth.user()?.authId ? this.myStatus() : null) ?? 'active';
   }
 
   /** Custom status for a user (AuthId), or null when none is known. */

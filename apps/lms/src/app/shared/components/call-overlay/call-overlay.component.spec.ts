@@ -8,6 +8,7 @@ import { ChatService } from '../../../core/services/chat.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
+import { PresenceService } from '../../../core/services/presence.service';
 import { IncomingCallInfo } from '../../models/call.model';
 
 /**
@@ -41,6 +42,7 @@ function setup() {
       { provide: SignalingService, useValue: { onlineUserIds: signal(new Set()), getOnlineUsersWithStatus: vi.fn(async () => ({})) } },
       { provide: AuthService, useValue: { user: signal({ id: 'a', authId: 'me', displayName: 'Admin User' }) } },
       { provide: ApiService, useValue: { get: () => of([{ id: 'u2', displayName: 'Priya Sharma', email: '', isActive: true }]) } },
+      { provide: PresenceService, useValue: { displayStatus: (id: string | null) => (id ? 'active' : null) } },
     ],
   });
   const fixture = TestBed.createComponent(CallOverlayComponent);
@@ -60,6 +62,8 @@ describe('Call overlay — new design', () => {
     const card = t.el.querySelector('[data-testid="call-outgoing"]')!;
     expect(card.querySelector('[data-testid="call-outgoing-name"]')!.textContent!.trim()).toBe('Priya Sharma');
     expect(card.querySelector('.pf-call-avatar')!.textContent!.trim()).toBe('PS');
+    // Presence dot on the callee's avatar (shared pf-presence-dot).
+    expect(card.querySelector('pf-presence-dot')!.getAttribute('aria-label')).toBe('Online');
     expect(card.textContent).toContain('Ringing…');
     expect(card.querySelector('[data-testid="call-outgoing-name"]')!.textContent).not.toContain('Calling');
   });

@@ -291,9 +291,9 @@
               <p class="pf-msgs-pop__sect">Recent</p>
               @for (c of msgConversations(); track c.id) {
                 <button type="button" class="pf-msgs-pop__item press" role="menuitem" (click)="openConvo(c)">
-                  <span class="pf-msgs-pop__init">{{ convoInitials(c) }}</span>
+                  <pf-presence-avatar size="xs" [initials]="convoInitials(c)" [userId]="convoPeerId(c)" [group]="c.isGroup" />
                   <span class="pf-msgs-pop__body">
-                    <span class="pf-msgs-pop__name">{{ convoTitle(c) }}</span>
+                    <span class="pf-msgs-pop__name">{{ convoTitle(c) }}@if (convoDisambiguator(c); as d) {<span class="pf-msgs-pop__disamb"> · {{ d }}</span>}</span>
                     @if (c.lastMessage) {
                       <span class="pf-msgs-pop__last">{{ c.lastMessage.body }}</span>
                     }
@@ -311,7 +311,7 @@
               <p class="pf-msgs-pop__sect">People</p>
               @for (u of msgPeople(); track u.id) {
                 <button type="button" class="pf-msgs-pop__item press" role="menuitem" (click)="openPerson(u)">
-                  <span class="pf-msgs-pop__init">{{ personInitials(u) }}</span>
+                  <pf-presence-avatar size="xs" [initials]="personInitials(u)" [userId]="u.id" />
                   <span class="pf-msgs-pop__body">
                     <span class="pf-msgs-pop__name">{{ u.displayName }}</span>
                     <span class="pf-msgs-pop__last">{{ u.email }}</span>
@@ -542,7 +542,7 @@
                 <span class="pf-acct-circle">{{ accountInitials(a) }}</span>
                 <span class="min-w-0 flex-1 text-left">
                   <span class="block truncate">{{ a.displayName }}</span>
-                  <span class="block text-[10.5px] truncate" style="color: var(--text-muted);">{{ a.org }}</span>
+                  <span class="block text-[10.5px] truncate" style="color: var(--text-muted);">{{ a.expired ? 'Sign in again' : a.org }}</span>
                 </span>
               </button>
             }

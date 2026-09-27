@@ -125,7 +125,7 @@ function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
       { provide: WebrtcService, useValue: { inCall: signal(false), startCall: vi.fn(async () => 'r1'), startGroupCall: vi.fn(async () => 'r2') } },
       { provide: AuthService, useValue: { user: () => ({ id: 'user-1', authId: ME }) } },
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true } },
-      { provide: PresenceService, useValue: { statusFor: () => null } },
+      { provide: PresenceService, useValue: { statusFor: () => null, displayStatus: (id: string | null) => (id ? 'active' : null) } },
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: { info: vi.fn(), error: vi.fn(), success: vi.fn() } },
       { provide: ChatNotifyService, useValue: { ensurePermission: vi.fn(async () => {}) } },

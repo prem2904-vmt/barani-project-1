@@ -3,7 +3,8 @@ import { PeopleDrawerService } from '../../core/services/people-drawer.service';
 import { ChatWindowsService } from '../../core/services/chat-windows.service';
 import { DirectoryService, DirectoryUser } from '../../core/services/directory.service';
 import { MessagesPanelService } from '../../core/services/messages-panel.service';
-import { conversationInitials, conversationTitle } from '../../shared/models/conversation-name';
+import { conversationDisambiguator, conversationInitials, conversationPeerId, conversationTitle } from '../../shared/models/conversation-name';
+import { PresenceAvatarComponent } from '../../shared/components/presence-avatar/presence-avatar.component';
 import { Conversation } from '../../shared/models/chat.model';
 import { DraftShelfService } from '../../core/services/draft-shelf.service';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
@@ -37,7 +38,7 @@ import { pickLanding } from '../../core/auth/landing.guard';
 @Component({
   selector: 'pf-top-strip',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, FormsModule, NotificationBellComponent],
+  imports: [RouterLink, RouterLinkActive, FormsModule, NotificationBellComponent, PresenceAvatarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './top-strip.component.html',
   styleUrl: './top-strip.component.scss'
@@ -75,11 +76,14 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  already have a 1:1 thread with (those show under Recent). */
   readonly msgPeople = computed(() => {
     const q = this.msgQuery().trim().toLowerCase();
+    // By id, not display name: two colleagues can share a name ("Front
+    // Desk"), and a name match hid the second one from People.
+    const me = this.meId();
     const inThreads = new Set(this.chat.conversations()
       .filter(c => !c.isGroup)
-      .flatMap(c => c.participants?.map(p => p.displayName.toLowerCase()) ?? []));
+      .flatMap(c => c.participants?.map(p => p.userId).filter(id => id !== me) ?? []));
     return this.directory.others()
-      .filter(u => !inThreads.has(u.displayName.toLowerCase()))
+      .filter(u => !inThreads.has(u.id))
       .filter(u => !q || u.displayName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   });
 
@@ -135,6 +139,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Shared with the floating windows so both label a thread identically. */
   convoTitle(c: Conversation): string { return conversationTitle(c, this.meId()); }
   convoInitials(c: Conversation): string { return conversationInitials(c, this.meId()); }
+  /** 1:1 peer (AuthId) for the presence dot; null for groups. */
+  convoPeerId(c: Conversation): string | null { return conversationPeerId(c, this.meId()); }
+  /** Second label when two rows would read the same (context thread,
+   *  same-name colleague, group vs person). */
+  convoDisambiguator(c: Conversation): string | null {
+    return conversationDisambiguator(c, this.meId(), this.chat.conversations());
+  }
 
   /**
    * Open a conversation. Desktop/tablet in the new design get a floating
