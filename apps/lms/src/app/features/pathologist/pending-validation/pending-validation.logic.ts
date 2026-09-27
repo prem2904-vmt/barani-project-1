@@ -1,5 +1,6 @@
 import { OrderTest } from '../../../shared/models/order.model';
 import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
+import { lineDepartment } from '../../../shared/utils/shared-tube';
 
 /**
  * Pathologist queue (/pathologist) — the pure model behind the screen, so the
@@ -70,9 +71,12 @@ export function isMine(t: OrderTest, myId: string | null | undefined): boolean {
   return !!myId && (t.validatorAssignedTo === myId || t.assignedTo === myId);
 }
 
+/** The department a result belongs to: on an in-house tube, its own test's
+ *  department — a SHARED tube (integrated lab: CBC + HbA1c on one EDTA)
+ *  holds several departments' tests; an outsourced tube, the tube's. */
 export function deptOf(t: OrderTest): { id: string | null; name: string } {
-  const d = t.subOrder?.department ?? t.test?.department;
-  return { id: t.subOrder?.departmentId ?? d?.id ?? null, name: d?.name ?? 'Department' };
+  const d = lineDepartment(t as never);
+  return { id: d.id, name: d.name ?? 'Department' };
 }
 
 /** One tile per TUBE: a tube with N tests is reviewed as one unit. Mine
@@ -80,7 +84,9 @@ export function deptOf(t: OrderTest): { id: string | null; name: string } {
 export function groupBySample(items: Enriched[], myId: string | null | undefined): QueueTile[] {
   const bySample = new Map<string, Enriched[]>();
   for (const t of items) {
-    const key = t.subOrder?.id ?? `${t.subOrder?.order?.id ?? t.id}|${deptOf(t).id ?? ''}`;
+    // One tile per tube PER DEPARTMENT: each department reviews its own
+    // lines of a shared tube.
+    const key = `${t.subOrder?.id ?? t.subOrder?.order?.id ?? t.id}|${deptOf(t).id ?? ''}`;
     const list = bySample.get(key);
     if (list) list.push(t); else bySample.set(key, [t]);
   }

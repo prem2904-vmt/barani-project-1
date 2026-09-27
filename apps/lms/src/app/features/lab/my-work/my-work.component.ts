@@ -43,6 +43,14 @@ import { TileGridDirective } from '../../../shared/directives/tile-grid.directiv
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { plural } from '../../../shared/utils/plural';
+import { lineDepartment } from '../../../shared/utils/shared-tube';
+
+/** The departments of a tube's lines, "Haematology · Biochemistry" — a
+ *  shared tube (integrated lab) carries several. */
+function linesDeptLabel(tests: Array<{ test?: unknown; subOrder?: unknown }>): string {
+  const names = tests.map(t => lineDepartment(t as never).name ?? '').filter(Boolean);
+  return [...new Set(names)].join(' · ');
+}
 
 const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 /** Sticky "keep Lab Intake open" choice (new design only). */
@@ -3228,7 +3236,7 @@ export class MyWorkComponent implements OnInit {
         sampleId,
         tests,
         barcode: first.subOrder?.barcode ?? '',
-        deptName: first.subOrder?.department?.name ?? first.test?.department?.name ?? '',
+        deptName: linesDeptLabel(tests),
         patientName: patient?.displayName ?? 'Patient',
         patientMeta: patient ? formatPatientMeta(patient) : '',
         testNames: tests.map(t => t.test?.name ?? 'Test').join(' · '),
@@ -3661,7 +3669,7 @@ export class MyWorkComponent implements OnInit {
     }
     return Array.from(bySample.entries()).map(([sampleId, tests]) => {
       const first = tests[0];
-      const deptName = first.subOrder?.department?.name ?? first.test?.department?.name ?? '';
+      const deptName = linesDeptLabel(tests);
       const barcode = first.subOrder?.barcode ?? '';
       const allDone = tests.every(x => x.status === 'entered' || x.status === 'validated');
       // A half-finished tube: partial values saved (draft keeps CurrentResult

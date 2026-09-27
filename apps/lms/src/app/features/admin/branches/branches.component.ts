@@ -155,7 +155,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                     </p>
                   } @else if (structureOf(b) === 'standalone') {
                     <p class="text-[11px] mb-2" style="color: var(--text-secondary);">
-                      This branch runs <strong>Standalone</strong> — every department is its own space with its own sample-ID prefix.
+                      This branch runs <strong>Standalone</strong> — every department keeps its own sample-ID prefix; tubes are still shared across departments.
                       Space arrangement below only applies after switching the branch to <strong>Auto</strong> in Lab settings.
                     </p>
                   }

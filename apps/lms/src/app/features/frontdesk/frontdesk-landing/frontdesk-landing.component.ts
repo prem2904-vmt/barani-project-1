@@ -115,6 +115,7 @@ import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { drawerAgeSex, drawerName, drawerPipeline, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
 import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
 import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
+import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -2409,8 +2410,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       if (!this.isSampleValidated(s)) continue;
       const sampleRow = {
         id: s.id,
-        deptName: s.department?.name ?? '',
-        deptCode: s.department?.code ?? '',
+        deptName: tubeDepartmentLabel(s, ''),
+        deptCode: tubeDepartmentCodes(s),
         tests: [] as Array<any>
       };
       for (const t of (s.tests ?? [])) {

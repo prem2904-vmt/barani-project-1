@@ -68,6 +68,7 @@ import {
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /**
@@ -934,6 +935,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.router.navigate(['/frontdesk/patients', id]);
   }
 
+  /** Every department on the tube — a shared tube (CBC + HbA1c on one EDTA)
+   *  names them all. */
+  tubeDeptLabel(s: OrderSample): string {
+    return tubeDepartmentLabel(s);
+  }
+
   orderedSamples(g: OrderGroup): OrderSample[] {
     return sortForCollection(g.samples);
   }
@@ -1511,7 +1518,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
             patientName: (p && patientDisplayName(p)) || g.patientName,
             ageSex: this.labelAgeSex(p),
             mrn,
-            deptCode: (s.department?.code ?? "").toUpperCase(),
+            deptCode: tubeDepartmentCodes(s),
             tube: labelTubeLine(s),
             outsourced: !!s.outsourcedVendorId,
           },

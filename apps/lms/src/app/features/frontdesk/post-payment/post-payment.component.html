@@ -229,7 +229,7 @@
             @for (s of o.samples; track s.id) {
             <li class="pf-sb-tubes__row">
               <span class="pf-sb-tubes__dot" [attr.data-color]="tubeColor(s)"></span>
-              <span class="pf-sb-tubes__dept">{{ s.department?.name ?? 'Sample' }}</span>
+              <span class="pf-sb-tubes__dept">{{ tubeDeptLabel(s) }}</span>
               <span class="pf-sb-tubes__vol">{{ tubeVol(s) }}</span>
             </li>
             }

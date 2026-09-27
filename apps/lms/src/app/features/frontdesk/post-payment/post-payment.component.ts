@@ -17,6 +17,7 @@ import { LabelCardComponent, labelTubeLine, tubeSpec } from './label-card.compon
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { waLink } from '../../../shared/utils/whatsapp';
+import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 
@@ -195,7 +196,7 @@ export class PostPaymentComponent implements OnInit {
         patientName: patient?.displayName ?? 'Patient',
         ageSex: this.ageSex(patient),
         mrn: mrn ?? undefined,
-        deptCode: (s.department?.code ?? '').toUpperCase(),
+        deptCode: tubeDepartmentCodes(s),
         tube: labelTubeLine(s),
         outsourced: !!s.outsourcedVendorId,
       }, opts).catch(e => ({ ok: false, direct: true, error: e?.message }));
@@ -254,6 +255,8 @@ export class PostPaymentComponent implements OnInit {
   }
 
   tubeColor(s: OrderSample): string { return tubeSpec(s).color; }
+  /** Every department on the tube (a shared tube spans several). */
+  tubeDeptLabel(s: OrderSample): string { return tubeDepartmentLabel(s); }
   tubeVol(s: OrderSample): string   { return tubeSpec(s).volume; }
 
   private calcAge(dob: string): number {

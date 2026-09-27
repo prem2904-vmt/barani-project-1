@@ -18,6 +18,7 @@ import { Patient } from '../../../shared/models/patient.model';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { tubeColor } from '../../../shared/utils/tube-colors';
 import { tubeChosenSpecimen } from '../../../shared/utils/micro-specimen';
+import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 
 export interface TubeSpec {
   label: string;
@@ -592,8 +593,9 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   get specimen(): string | null { return labelSpecimen(this.sample); }
   get tubeLine(): string { return labelTubeLine(this.sample); }
   get num(): string { return String(this.index + 1).padStart(2, '0'); }
-  get deptName(): string { return (this.sample.department?.name ?? 'Sample').toUpperCase(); }
-  get deptCode(): string { return (this.sample.department?.code ?? '').toUpperCase(); }
+  /** Every department on the tube — one label for a shared tube names them all. */
+  get deptName(): string { return tubeDepartmentLabel(this.sample).toUpperCase(); }
+  get deptCode(): string { return tubeDepartmentCodes(this.sample); }
   /** The Sample ID (e.g. MIC-2607-00001) — what the 1D barcode encodes. */
   get barcode(): string { return this.sample.barcode ?? this.sample.id; }
   /** QR payload = MRN + Sample ID (the 2D code carries both; the 1D barcode

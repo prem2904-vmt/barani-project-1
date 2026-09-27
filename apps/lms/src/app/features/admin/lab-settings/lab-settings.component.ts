@@ -174,8 +174,10 @@ interface AutoAssignConfig {
           placed departments follow their space, the rest share the default "Lab".
           <strong>Integrated</strong> = one lab, ONE space — everything shares the
           default "Lab" space.
-          <strong>Standalone</strong> = every department is its own space with its
-          own sample-ID prefix.
+          <strong>Standalone</strong> = every department keeps its own sample-ID
+          prefix. In every structure one tube per tube type is drawn per visit,
+          whatever the department (CBC + HbA1c share one EDTA); only a separate
+          space draws its own tube.
         </p>
         <div class="pf-ls__gate" role="radiogroup">
           @for (opt of labStructureOptions; track opt.value) {
@@ -827,8 +829,8 @@ export class LabSettingsComponent implements OnInit {
   protected readonly labStructure = signal<'auto' | 'integrated' | 'standalone'>('auto');
   protected readonly labStructureOptions: Array<{ value: 'auto' | 'integrated' | 'standalone'; label: string; desc: string }> = [
     { value: 'auto', label: 'Auto (default)', desc: 'You arrange it: drag departments between spaces on the Branches board. A placed department follows its space (code + shared vials); unplaced departments share the default "Lab" space.' },
-    { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared vial with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
-    { value: 'standalone', label: 'Standalone', desc: 'Every department is split into its own space — its own sample-ID prefix (the department code), and a separate vial per department even for the same tube colour.' },
+    { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared tube with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
+    { value: 'standalone', label: 'Standalone', desc: 'Every department keeps its own sample-ID prefix (the department code). Tubes are still shared: one tube per tube type per visit, whatever the department.' },
   ];
   // ── Sample ID — running-number width of the short sample barcode ──
   /** Editable number width (1–9). Seeded from the tenant once it loads. */

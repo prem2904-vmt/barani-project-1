@@ -589,7 +589,7 @@
                     }
                   </p>
                   @if (showTubeDept()) {
-                    <p class="pf-tube__dept">{{ s.department?.name ?? 'Sample' }}</p>
+                    <p class="pf-tube__dept">{{ tubeDeptLabel(s) }}</p>
                   }
 
                   <!-- Test list stays hidden so a many-test tube doesn't blow

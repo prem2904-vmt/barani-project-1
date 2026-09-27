@@ -86,15 +86,31 @@ export interface OrderSample {
   metadata?: string | null;
   createdAt: string;
   department?: Department;
+  /** Every department whose tests ride on this tube, the representative
+   *  (`department`) first — a SHARED tube (integrated lab: CBC + HbA1c on one
+   *  EDTA) spans several. Annotated by the order / collection endpoints;
+   *  absent on older payloads (fall back to `department`). */
+  departments?: TubeDepartment[] | null;
   tests: OrderTest[];
   order?: Order;  /** Other tubes of the same order (see SampleSibling). */
   siblings?: SampleSibling[] | null;
 
 }
 
+/** A department on a (possibly shared) tube — display only. */
+export interface TubeDepartment {
+  id: string;
+  name: string;
+  code?: string | null;
+}
+
 export interface OrderTest {
   id: string;
   subOrderId: string;
+  /** The department this line routes to — its own test's, in the tenant's
+   *  terms (a SHARED tube spans several departments). Annotated by the queue
+   *  / My Work / sample endpoints; absent on older payloads. */
+  routingDepartment?: TubeDepartment | null;
   testId: string;
   name: string;
   packageTestId?: string;
