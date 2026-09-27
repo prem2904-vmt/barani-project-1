@@ -36,6 +36,8 @@ describe('flag condition semantics — critical is the more severe part of high 
     expect(normalizeFlagCond('h')).toBe('high_only');
     expect(normalizeFlagCond('L')).toBe('low_only');
     expect(normalizeFlagCond('C')).toBe('critical_any');
+    expect(normalizeFlagCond('CL')).toBe('critical_low');
+    expect(normalizeFlagCond('ch')).toBe('critical_high');
     expect(normalizeFlagCond('N')).toBe('normal');
     expect(normalizeFlagCond('A')).toBe('abnormal');
     expect(flagCondLabel('H')).toBe('is High (not critical) — stored as flag H');
