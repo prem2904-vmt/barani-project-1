@@ -124,6 +124,8 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
     :host-context(.dark) .pf-hb__band,
     :host-context([data-theme='dark']) .pf-hb__band {
       border-bottom: 1px solid var(--pf-band-edge);
+      /* Soft violet bloom below the bottom edge (dark only; styles.scss). */
+      box-shadow: var(--pf-band-glow, none);
     }
 
     .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }

@@ -542,6 +542,8 @@ import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
       }
       :host-context(.dark.design-new.nav-bottom) .pf-chrome {
         border-top-color: var(--pf-navbar-edge);
+        /* Faint violet glow off the top edge, paired with the band's. */
+        box-shadow: var(--pf-navbar-glow, none);
       }
       /* One bottom surface only: the phone pill / iPad rail steps aside. */
       :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }
