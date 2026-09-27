@@ -7,15 +7,10 @@
   padding: 6px 20px;
   gap: 12px;
 }
-
 @media (max-width: 639px) {
   /* On mobile, reduce padding and gap so brand + tenant + bell + avatar
    * all fit without overflow on 360px+ screens. */
-  .pf-topstrip-bar {
-    padding: 8px 10px;
-    min-height: 58px;
-    gap: 4px;
-  }
+  .pf-topstrip-bar { padding: 8px 10px; min-height: 58px; gap: 4px; }
 }
 
 /* Brand lockup — PF glyph + ECG pulse + PREFRONTAL + branch switcher */
@@ -31,37 +26,20 @@
   border: none;
   cursor: pointer;
   color: inherit;
-  transition:
-    background 0.15s ease,
-    opacity 0.2s ease;
+  transition: background 0.15s ease, opacity 0.2s ease;
 }
-
 @media (max-width: 639px) {
-  .pf-brand-lockup {
-    gap: 4px;
-    padding: 4px 6px 4px 2px;
-  }
+  .pf-brand-lockup { gap: 4px; padding: 4px 6px 4px 2px; }
 }
-
-.pf-brand-lockup:hover {
-  background: var(--bg-hover);
-  opacity: 0.96;
-}
-
-.pf-brand-lockup--open {
-  background: var(--bg-hover);
-}
+.pf-brand-lockup:hover { background: var(--bg-hover); opacity: 0.96; }
+.pf-brand-lockup--open { background: var(--bg-hover); }
 
 .pf-brand-chev {
   color: var(--text-muted);
   transition: transform 0.2s ease;
   flex-shrink: 0;
 }
-
-.pf-brand-lockup--open .pf-brand-chev {
-  transform: rotate(180deg);
-  color: var(--text-primary);
-}
+.pf-brand-lockup--open .pf-brand-chev { transform: rotate(180deg); color: var(--text-primary); }
 
 .pf-brand-branch-icon {
   display: inline-block;
@@ -76,11 +54,8 @@
   flex-shrink: 0;
   filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.35));
 }
-
 @media (max-width: 639px) {
-  .pf-brand-glyph {
-    width: 24px;
-  }
+  .pf-brand-glyph { width: 24px; }
 }
 
 .pf-brand-pulse {
@@ -90,7 +65,6 @@
   display: none;
   flex-shrink: 0;
 }
-
 .pf-brand-pulse-path {
   fill: none;
   stroke: #a855f7;
@@ -100,14 +74,13 @@
   stroke-dasharray: 100;
   stroke-dashoffset: 100;
   animation:
-    pf-brand-pd 2.5s ease-in-out infinite,
+    pf-brand-pd   2.5s ease-in-out infinite,
     pf-brand-glow 2.5s ease-in-out infinite;
 }
-
 :root.light .pf-brand-pulse-path {
   stroke: #7c3aed;
   animation:
-    pf-brand-pd 2.5s ease-in-out infinite,
+    pf-brand-pd         2.5s ease-in-out infinite,
     pf-brand-glow-light 2.5s ease-in-out infinite;
 }
 
@@ -120,7 +93,6 @@
   gap: 3px;
   margin-left: -2px;
 }
-
 .pf-brand-name {
   /* Designer wordmark (Figma 446-113): 18px regular, pink→violet sweep. */
   font-size: 18px;
@@ -133,13 +105,9 @@
   color: transparent;
   animation: pf-brand-name-beat 2.5s ease-in-out infinite;
 }
-
 @media (min-width: 640px) {
-  .pf-brand-name {
-    font-size: 15px;
-  }
+  .pf-brand-name { font-size: 15px; }
 }
-
 .pf-brand-sub {
   display: inline-flex;
   align-items: center;
@@ -149,16 +117,10 @@
   white-space: nowrap;
   color: var(--text-secondary);
 }
-
 @media (min-width: 640px) {
-  .pf-brand-sub {
-    font-size: 10px;
-  }
+  .pf-brand-sub { font-size: 10px; }
 }
-
-:root.light .pf-brand-sub {
-  color: #7c3aed;
-}
+:root.light .pf-brand-sub { color: #7c3aed; }
 
 /* Branch popover hanging off the brand lockup ------------- */
 .pf-brand-pop {
@@ -177,33 +139,26 @@
   overflow: hidden;
   animation: pf-pop-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-
-.pf-brand-pop__head {
-  padding: 10px 12px 6px;
-}
-
+.pf-brand-pop__head { padding: 10px 12px 6px; }
 .pf-brand-pop__eyebrow {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
-
 .pf-brand-pop__current {
   margin: 4px 0 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
-
 .pf-brand-pop__divider {
   height: 1px;
   margin: 4px 8px;
   background: var(--border-muted);
 }
-
 .pf-brand-pop__item {
   display: flex;
   align-items: center;
@@ -217,22 +172,17 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease;
   text-align: left;
 }
-
 .pf-brand-pop__item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-
 .pf-brand-pop__item--active {
   background: var(--gradient-primary);
   color: #ffffff;
 }
-
 .pf-brand-pop__item--active:hover {
   background: var(--gradient-primary);
   color: #ffffff;
@@ -240,105 +190,33 @@
 
 /* ECG pulse appears at sm+ — keeps mobile bar compact. */
 @media (min-width: 640px) {
-  .pf-brand-pulse {
-    display: block;
-  }
+  .pf-brand-pulse { display: block; }
 }
 
 @keyframes pf-brand-pd {
-  0% {
-    stroke-dashoffset: 100;
-    opacity: 0.3;
-  }
-
-  40%,
-  60% {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-
-  100% {
-    stroke-dashoffset: -100;
-    opacity: 0.3;
-  }
+  0%           { stroke-dashoffset:  100; opacity: 0.3; }
+  40%, 60%     { stroke-dashoffset:    0; opacity: 1; }
+  100%         { stroke-dashoffset: -100; opacity: 0.3; }
 }
-
 @keyframes pf-brand-glow {
-  0%,
-  35%,
-  100% {
-    filter: drop-shadow(0 0 2px rgba(168, 85, 247, 0.3));
-    stroke-width: 1.6;
-    stroke: #a855f7;
-  }
-
-  45% {
-    filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.9));
-    stroke-width: 2.2;
-    stroke: #ec4899;
-  }
-
-  55% {
-    filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.4));
-    stroke-width: 1.6;
-    stroke: #a855f7;
-  }
+  0%, 35%, 100% { filter: drop-shadow(0 0 2px rgba(168, 85, 247, 0.3)); stroke-width: 1.6; stroke: #a855f7; }
+  45%           { filter: drop-shadow(0 0 10px rgba(236, 72, 153, 0.9)); stroke-width: 2.2; stroke: #ec4899; }
+  55%           { filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.4));  stroke-width: 1.6; stroke: #a855f7; }
 }
-
 @keyframes pf-brand-glow-light {
-  0%,
-  35%,
-  100% {
-    filter: drop-shadow(0 0 2px rgba(124, 58, 237, 0.3));
-    stroke-width: 1.6;
-    stroke: #7c3aed;
-  }
-
-  45% {
-    filter: drop-shadow(0 0 8px rgba(219, 39, 119, 0.8));
-    stroke-width: 2.2;
-    stroke: #db2777;
-  }
-
-  55% {
-    filter: drop-shadow(0 0 3px rgba(124, 58, 237, 0.3));
-    stroke-width: 1.6;
-    stroke: #7c3aed;
-  }
+  0%, 35%, 100% { filter: drop-shadow(0 0 2px rgba(124, 58, 237, 0.3)); stroke-width: 1.6; stroke: #7c3aed; }
+  45%           { filter: drop-shadow(0 0 8px rgba(219, 39, 119, 0.8));  stroke-width: 2.2; stroke: #db2777; }
+  55%           { filter: drop-shadow(0 0 3px rgba(124, 58, 237, 0.3));  stroke-width: 1.6; stroke: #7c3aed; }
 }
-
 @keyframes pf-brand-name-beat {
-  0%,
-  35%,
-  100% {
-    opacity: 0.9;
-    transform: scale(1);
-    filter: none;
-  }
-
-  45% {
-    opacity: 1;
-    transform: scale(1.03);
-    filter: drop-shadow(0 0 6px rgba(236, 72, 153, 0.55));
-  }
-
-  55% {
-    opacity: 1;
-    transform: scale(1.01);
-    filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.35));
-  }
+  0%, 35%, 100% { opacity: 0.9; transform: scale(1);    filter: none; }
+  45%           { opacity: 1;   transform: scale(1.03); filter: drop-shadow(0 0 6px rgba(236, 72, 153, 0.55)); }
+  55%           { opacity: 1;   transform: scale(1.01); filter: drop-shadow(0 0 3px rgba(168, 85, 247, 0.35)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pf-brand-pulse-path,
-  .pf-brand-name {
-    animation: none;
-  }
-
-  .pf-brand-pulse-path {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
+  .pf-brand-pulse-path, .pf-brand-name { animation: none; }
+  .pf-brand-pulse-path { stroke-dashoffset: 0; opacity: 1; }
 }
 
 .pf-strip-btn {
@@ -351,33 +229,23 @@
   color: var(--text-secondary);
   transition: all 0.15s ease;
 }
-
 .pf-strip-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-
 .pf-strip-chip {
   background: var(--glass-bg);
   color: var(--text-primary);
   border: 1px solid var(--glass-border);
   transition: all 0.15s ease;
 }
-
 .pf-strip-chip:hover {
   background: var(--glass-bg-hover);
   border-color: var(--glass-border-hover);
 }
 
-.pf-branch-item {
-  color: var(--text-secondary);
-}
-
-.pf-branch-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
+.pf-branch-item  { color: var(--text-secondary); }
+.pf-branch-item:hover { background: var(--bg-hover); color: var(--text-primary); }
 .pf-branch-active {
   background: var(--gradient-primary);
   color: #ffffff;
@@ -395,7 +263,6 @@
   gap: 4px;
   flex-shrink: 0;
 }
-
 .pf-topnav-btn {
   display: inline-flex;
   align-items: center;
@@ -410,25 +277,18 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-
 .pf-topnav-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-
 .pf-topnav-active {
   background: var(--gradient-primary);
   color: #ffffff;
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
 }
-
-.pf-topnav-active svg {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
-}
+.pf-topnav-active svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25)); }
 
 /* ── Hybrid icon-first nav ──────────────────────────────────────
  * Inactive items render as icon-only and slide their label out on hover;
@@ -442,25 +302,16 @@
   overflow: hidden;
   opacity: 0;
   white-space: nowrap;
-  transition:
-    max-width 0.22s ease,
-    opacity 0.18s ease,
-    margin-left 0.22s ease;
+  transition: max-width 0.22s ease, opacity 0.18s ease, margin-left 0.22s ease;
 }
-
 .pf-topnav-btn:hover > span,
 .pf-topnav-active > span {
   max-width: 9rem;
   margin-left: 0;
   opacity: 1;
 }
-
 @media (hover: none) {
-  .pf-topnav-btn > span {
-    max-width: 9rem;
-    margin-left: 0;
-    opacity: 1;
-  }
+  .pf-topnav-btn > span { max-width: 9rem; margin-left: 0; opacity: 1; }
 }
 
 /* More popover -------------------------------------------- */
@@ -479,21 +330,14 @@
   overflow: hidden;
   animation: pf-pop-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-
 .pf-more-accent {
   position: absolute;
   top: 0;
   left: 12%;
   right: 12%;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(168, 85, 247, 0.7) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg, transparent 0%, rgba(168, 85, 247, 0.7) 50%, transparent 100%);
 }
-
 .pf-more-pop-item {
   display: flex;
   flex-direction: column;
@@ -503,23 +347,14 @@
   color: var(--text-secondary);
   background: var(--glass-bg);
   border: 1px solid transparent;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.08s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
 }
-
 .pf-more-pop-item:hover {
   color: var(--text-primary);
   background: var(--glass-bg-hover);
   border-color: var(--glass-border-hover);
 }
-
-.pf-more-pop-item:active {
-  transform: scale(0.97);
-}
-
+.pf-more-pop-item:active { transform: scale(0.97); }
 .pf-more-pop-active {
   background: var(--gradient-primary) !important;
   color: #ffffff !important;
@@ -528,15 +363,8 @@
 }
 
 @keyframes pf-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Generic icon-only chip used in the right cluster (Admin, future
@@ -545,27 +373,20 @@
 .pf-icon-btn {
   width: 36px;
   height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-flex; align-items: center; justify-content: center;
   border-radius: 10px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   color: var(--text-secondary);
   cursor: pointer;
   text-decoration: none;
-  transition:
-    background 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-
 .pf-icon-btn:hover {
   background: rgba(168, 85, 247, 0.12);
   color: var(--text-primary);
-  border-color: rgba(168, 85, 247, 0.4);
+  border-color: rgba(168, 85, 247, 0.40);
 }
-
 .pf-icon-btn--active {
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
   color: #ffffff !important;
@@ -576,32 +397,21 @@
 /* Desktop-only variant — used by the top-strip Admin icon. Hidden
    below 1280px (mobile + iPad) because the floating bottom-nav
    already has an Admin tab there; showing both would duplicate. */
-.pf-icon-btn--xl-only {
-  display: none;
-}
-
+.pf-icon-btn--xl-only { display: none; }
 @media (min-width: 1280px) {
-  .pf-icon-btn--xl-only {
-    display: inline-flex;
-  }
+  .pf-icon-btn--xl-only { display: inline-flex; }
 }
 
 /* Unread badge on the People icon — small numeric pill, top-right. */
 .pf-icon-btn__badge {
   position: absolute;
-  top: -3px;
-  right: -3px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  top: -3px; right: -3px;
+  min-width: 16px; height: 16px; padding: 0 4px;
   border-radius: 999px;
   background: #ef4444;
   color: #fff;
-  font-size: 9.5px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 9.5px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
   border: 2px solid var(--bg-card-solid, #14142a);
   line-height: 1;
 }
@@ -621,14 +431,9 @@
   justify-content: center;
   flex-shrink: 0;
 }
-
 @media (min-width: 640px) {
-  .pf-avatar-btn {
-    width: 2.75rem;
-    height: 2.75rem;
-  }
+  .pf-avatar-btn { width: 2.75rem; height: 2.75rem; }
 }
-
 .pf-avatar-circle {
   display: inline-flex;
   align-items: center;
@@ -643,27 +448,13 @@
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-
 @media (min-width: 640px) {
-  .pf-avatar-circle {
-    width: 2.4rem;
-    height: 2.4rem;
-    font-size: 12px;
-  }
+  .pf-avatar-circle { width: 2.4rem; height: 2.4rem; font-size: 12px; }
 }
-
-.pf-avatar-btn:hover .pf-avatar-circle {
-  transform: scale(1.05);
-  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45);
-}
-
-.pf-avatar-btn:active .pf-avatar-circle {
-  transform: scale(0.96);
-}
+.pf-avatar-btn:hover .pf-avatar-circle { transform: scale(1.05); box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45); }
+.pf-avatar-btn:active .pf-avatar-circle { transform: scale(0.96); }
 
 /* Gradient ring that appears while the popover is open. */
 .pf-avatar-ring {
@@ -676,18 +467,9 @@
   opacity: 0.55;
   animation: pf-avatar-ring-pulse 1.6s ease-in-out infinite;
 }
-
 @keyframes pf-avatar-ring-pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 0.7;
-    transform: scale(1.08);
-  }
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%      { opacity: 0.7;  transform: scale(1.08); }
 }
 
 .pf-profile-pop {
@@ -706,19 +488,13 @@
   padding: 6px;
   animation: pf-pop-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-
 .pf-profile-accent {
   position: absolute;
   top: 0;
   left: 14%;
   right: 14%;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(168, 85, 247, 0.75) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg, transparent 0%, rgba(168, 85, 247, 0.75) 50%, transparent 100%);
 }
 
 .pf-profile-head {
@@ -727,7 +503,6 @@
   gap: 12px;
   padding: 14px 12px 12px;
 }
-
 .pf-profile-bigcircle {
   display: inline-flex;
   align-items: center;
@@ -762,28 +537,15 @@
   flex-shrink: 0;
   background: #9ca3af;
 }
-
-.pf-status-dot[data-presence="available"] {
-  background: #34d399;
-}
-
-.pf-status-dot[data-presence="busy"],
-.pf-status-dot[data-presence="with_patient"] {
-  background: #f87171;
-}
-
-.pf-status-dot[data-presence="rounds"] {
-  background: #fbbf24;
-}
-
-.pf-status-dot[data-presence="surgery"],
-.pf-status-dot[data-presence="dnd"] {
-  background: #dc2626;
-}
-
-.pf-status-dot[data-presence="surgery"]::after,
-.pf-status-dot[data-presence="dnd"]::after {
-  content: "";
+.pf-status-dot[data-presence='available'] { background: #34d399; }
+.pf-status-dot[data-presence='busy'],
+.pf-status-dot[data-presence='with_patient'] { background: #f87171; }
+.pf-status-dot[data-presence='rounds'] { background: #fbbf24; }
+.pf-status-dot[data-presence='surgery'],
+.pf-status-dot[data-presence='dnd'] { background: #dc2626; }
+.pf-status-dot[data-presence='surgery']::after,
+.pf-status-dot[data-presence='dnd']::after {
+  content: '';
   position: absolute;
   left: 22%;
   right: 22%;
@@ -793,8 +555,7 @@
   border-radius: 2px;
   background: #fff;
 }
-
-.pf-status-dot[data-presence="away"] {
+.pf-status-dot[data-presence='away'] {
   background: transparent;
   box-shadow: inset 0 0 0 2px #9ca3af;
 }
@@ -811,15 +572,10 @@
   box-sizing: content-box;
   z-index: 1;
 }
-
-.pf-avatar-status[data-presence="away"] {
+.pf-avatar-status[data-presence='away'] {
   background: var(--bg-card-solid, #14142a);
 }
-
-.pf-profile-bigcircle--presence {
-  position: relative;
-}
-
+.pf-profile-bigcircle--presence { position: relative; }
 .pf-avatar-status--big {
   width: 12px;
   height: 12px;
@@ -828,36 +584,21 @@
 }
 
 /* Status row inside the profile popover. */
-.pf-status-row {
-  min-height: 44px;
-}
-
-.pf-status-row__txt {
-  display: flex;
-  flex-direction: column;
-}
-
-.pf-status-row__lbl {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
+.pf-status-row { min-height: 44px; }
+.pf-status-row__txt { display: flex; flex-direction: column; }
+.pf-status-row__lbl { color: var(--text-primary); font-weight: 600; }
 .pf-status-row__sub {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 1px;
 }
-
 .pf-status-row__chev {
   margin-left: auto;
   flex-shrink: 0;
   color: var(--text-muted);
   transition: transform 0.16s ease;
 }
-
-.pf-status-row__chev--open {
-  transform: rotate(180deg);
-}
+.pf-status-row__chev--open { transform: rotate(180deg); }
 
 /* Expanded preset list. */
 .pf-status-list {
@@ -867,7 +608,6 @@
   padding: 2px 4px 4px;
   animation: pf-pop-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
-
 .pf-status-opt {
   display: flex;
   align-items: center;
@@ -883,25 +623,17 @@
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-
 .pf-status-opt:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-
 .pf-status-opt--on {
   color: var(--text-primary);
   background: var(--glass-bg, rgba(255, 255, 255, 0.04));
 }
-
-.pf-status-opt svg {
-  color: var(--color-violet-300, #c4b5fd);
-}
-
+.pf-status-opt svg { color: var(--color-violet-300, #c4b5fd); }
 .pf-status-note {
   margin: 4px 2px 2px;
   padding: 0 10px;
@@ -909,11 +641,8 @@
   line-height: 1.45;
   color: var(--text-muted);
 }
-
 @media (pointer: coarse) {
-  .pf-status-opt {
-    min-height: 44px;
-  }
+  .pf-status-opt { min-height: 44px; }
 }
 
 .pf-profile-item {
@@ -929,9 +658,7 @@
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease;
   text-align: left;
   text-decoration: none;
 
@@ -941,20 +668,13 @@
     background: var(--bg-active, rgba(124, 58, 237, 0.11));
   }
 }
-
 .pf-profile-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+.pf-profile-item svg { flex-shrink: 0; }
 
-.pf-profile-item svg {
-  flex-shrink: 0;
-}
-
-.pf-profile-danger {
-  color: var(--red-text);
-}
-
+.pf-profile-danger { color: var(--red-text); }
 .pf-profile-danger:hover {
   background: rgba(239, 68, 68, 0.14);
   color: var(--red-text);
@@ -972,12 +692,8 @@
   flex-shrink: 0;
   min-width: 0;
 }
-
 @media (max-width: 639px) {
-  .pf-tenant-cluster {
-    border-radius: 10px;
-    padding: 2px;
-  }
+  .pf-tenant-cluster { border-radius: 10px; padding: 2px; }
 }
 
 /* Tenant identity: icon + name */
@@ -992,11 +708,7 @@
   flex-shrink: 0;
   transition: background 0.15s ease;
 }
-
-.pf-tenant-id:hover {
-  background: var(--bg-hover);
-}
-
+.pf-tenant-id:hover { background: var(--bg-hover); }
 .pf-tenant-id--empty .pf-tenant-icon {
   background: rgba(236, 72, 153, 0.15);
   border: 1px dashed rgba(236, 72, 153, 0.6);
@@ -1019,7 +731,6 @@
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
 }
-
 .pf-tenant-img {
   width: 26px;
   height: 26px;
@@ -1039,18 +750,11 @@
   max-width: 90px;
   display: none;
 }
-
 @media (min-width: 480px) {
-  .pf-tenant-name {
-    display: block;
-    max-width: 100px;
-  }
+  .pf-tenant-name { display: block; max-width: 100px; }
 }
-
 @media (min-width: 640px) {
-  .pf-tenant-name {
-    max-width: 440px;
-  }
+  .pf-tenant-name { max-width: 440px; }
 }
 
 /* Separator between tenant identity and branch picker */
@@ -1077,14 +781,8 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-
-.pf-branch-btn:hover {
-  background: var(--bg-hover);
-}
-
-.pf-branch-btn--open {
-  background: var(--bg-hover);
-}
+.pf-branch-btn:hover { background: var(--bg-hover); }
+.pf-branch-btn--open { background: var(--bg-hover); }
 
 .pf-branch-label {
   font-size: 11px;
@@ -1092,16 +790,9 @@
   color: var(--text-muted);
   display: none;
 }
-
 @media (min-width: 640px) {
-  .pf-branch-label {
-    display: inline;
-  }
-
-  .pf-branch-btn {
-    gap: 5px;
-    padding: 0 8px 0 10px;
-  }
+  .pf-branch-label { display: inline; }
+  .pf-branch-btn { gap: 5px; padding: 0 8px 0 10px; }
 }
 
 .pf-branch-value {
@@ -1109,17 +800,16 @@
   font-weight: 600;
   color: var(--text-secondary);
 }
-
 .pf-branch-chev {
   color: var(--text-muted);
   transition: transform 0.2s ease;
   flex-shrink: 0;
 }
-
 .pf-branch-btn--open .pf-branch-chev {
   transform: rotate(180deg);
   color: var(--text-primary);
 }
+
 
 /* ── Tenant pill (right cluster) ──────────────────────────────
  * Logo + name pill that lives in the top strip's right cluster.
@@ -1147,42 +837,31 @@
   max-width: 280px;
   transition: background 0.15s ease;
 }
-
 a.pf-ts-tenant:hover {
   background: var(--bg-hover);
 }
-
 .pf-ts-tenant--empty {
   border-style: dashed;
   color: var(--text-muted);
 }
-
 .pf-ts-tenant__logo {
-  width: 34px;
-  height: 34px;
+  width: 34px; height: 34px;
   border-radius: 9px;
   object-fit: cover;
   flex-shrink: 0;
 }
-
 .pf-ts-tenant__init {
-  width: 34px;
-  height: 34px;
+  width: 34px; height: 34px;
   border-radius: 9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(
-    135deg,
-    rgba(168, 85, 247, 0.45),
-    rgba(236, 72, 153, 0.45)
-  );
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.45), rgba(236, 72, 153, 0.45));
   color: #fff;
   font-weight: 700;
   font-size: 16px;
   flex-shrink: 0;
 }
-
 .pf-ts-tenant__name {
   /* Always visible — the client's brand is the prominent identity (their
      software), so it reads larger/bolder than the PF platform wordmark. */
@@ -1209,18 +888,13 @@ a.pf-ts-tenant:hover {
   border: 1px solid var(--glass-border);
   color: var(--text-secondary);
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-
 .pf-ts-branch:hover {
   color: var(--text-primary);
   background: var(--glass-bg-hover);
   border-color: rgba(168, 85, 247, 0.45);
 }
-
 .pf-ts-branch__name {
   /* Always visible — no auto-hide. */
   font-size: 12.5px;
@@ -1233,47 +907,25 @@ a.pf-ts-tenant:hover {
 }
 /* Branch switch: the new name slides up into the pill and the pin pulses
    while the screen re-scopes (BranchSwitchService). */
-.pf-ts-branch__name {
-  animation: pf-ts-branch-swap 360ms cubic-bezier(0.34, 1.36, 0.64, 1) both;
-}
+.pf-ts-branch__name { animation: pf-ts-branch-swap 360ms cubic-bezier(0.34, 1.36, 0.64, 1) both; }
 @keyframes pf-ts-branch-swap {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
-.pf-ts-branch--switching {
-  border-color: rgba(168, 85, 247, 0.45);
-  color: var(--text-primary);
-}
-.pf-ts-branch--switching > svg:first-child {
-  animation: pf-ts-branch-pin 900ms cubic-bezier(0.32, 0.72, 0, 1) infinite;
-}
+.pf-ts-branch--switching { border-color: rgba(168, 85, 247, 0.45); color: var(--text-primary); }
+.pf-ts-branch--switching > svg:first-child { animation: pf-ts-branch-pin 900ms cubic-bezier(0.32, 0.72, 0, 1) infinite; }
 @keyframes pf-ts-branch-pin {
-  0%,
-  100% {
-    transform: none;
-  }
-  45% {
-    transform: translateY(-2px) scale(1.08);
-  }
+  0%, 100% { transform: none; }
+  45% { transform: translateY(-2px) scale(1.08); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pf-ts-branch__name,
-  .pf-ts-branch--switching > svg:first-child {
-    animation: none;
-  }
+  .pf-ts-branch__name, .pf-ts-branch--switching > svg:first-child { animation: none; }
 }
 .pf-ts-branch__chev {
   color: var(--text-muted);
   transition: transform 0.2s ease;
   flex-shrink: 0;
 }
-
 .pf-ts-branch--open .pf-ts-branch__chev {
   transform: rotate(180deg);
   color: var(--text-primary);
@@ -1293,11 +945,7 @@ a.pf-ts-tenant:hover {
   -webkit-backdrop-filter: blur(20px);
   z-index: 50;
 }
-
-.pf-ts-branch__pop-head {
-  padding: 8px 10px 6px;
-}
-
+.pf-ts-branch__pop-head { padding: 8px 10px 6px; }
 .pf-ts-branch__pop-eyebrow {
   margin: 0;
   font-size: 9.5px;
@@ -1306,20 +954,17 @@ a.pf-ts-tenant:hover {
   text-transform: uppercase;
   color: var(--text-muted);
 }
-
 .pf-ts-branch__pop-current {
   margin: 2px 0 0;
   font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
 }
-
 .pf-ts-branch__pop-divider {
   height: 1px;
   margin: 6px 4px;
   background: var(--glass-border);
 }
-
 .pf-ts-branch__pop-item {
   width: 100%;
   display: flex;
@@ -1334,31 +979,20 @@ a.pf-ts-tenant:hover {
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-
 .pf-ts-branch__pop-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
-
 .pf-ts-branch__pop-item--active {
   background: rgba(168, 85, 247, 0.16);
   color: var(--text-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pf-more-pop,
-  .pf-profile-pop,
-  .pf-ts-branch__pop {
-    animation: none;
-  }
-
-  .pf-avatar-ring {
-    animation: none;
-  }
+  .pf-more-pop, .pf-profile-pop, .pf-ts-branch__pop { animation: none; }
+  .pf-avatar-ring { animation: none; }
 }
 
 /* ═════════════════════════════════════════════════════════════════
@@ -1370,44 +1004,17 @@ a.pf-ts-tenant:hover {
 @media (max-width: 640px) {
   /* Keep the PF glyph + the wordmark "PREFRONTAL"; drop the small
      "Lab Management System" sub-label so the brand lockup shrinks. */
-  .pf-brand-sub {
-    display: none !important;
-  }
-
-  .pf-brand-text {
-    gap: 0 !important;
-  }
-
-  .pf-brand-name {
-    font-size: 13px !important;
-    letter-spacing: 0.02em;
-  }
-
-  .pf-brand-glyph {
-    width: 28px !important;
-    height: 32px !important;
-  }
-
-  .pf-brand-pulse {
-    display: none !important;
-  }
-
-  .pf-brand-chev {
-    display: none !important;
-  }
+  .pf-brand-sub { display: none !important; }
+  .pf-brand-text { gap: 0 !important; }
+  .pf-brand-name { font-size: 13px !important; letter-spacing: 0.02em; }
+  .pf-brand-glyph { width: 28px !important; height: 32px !important; }
+  .pf-brand-pulse { display: none !important; }
+  .pf-brand-chev { display: none !important; }
 
   /* Vendor pill stays visible — that's the tenant identity for the
      current user. Tighten its padding so it doesn't dominate. */
-  .pf-ts-tenant {
-    padding-inline: 6px !important;
-  }
-
-  .pf-ts-tenant__name {
-    font-size: 12.5px !important;
-    max-width: 14ch !important;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  .pf-ts-tenant { padding-inline: 6px !important; }
+  .pf-ts-tenant__name { font-size: 12.5px !important; max-width: 14ch !important; overflow: hidden; text-overflow: ellipsis; }
 
   /* Branch picker, people icon, bell, profile avatar — hide on phone.
      Users get to /more, notifications and profile via the bottom-nav.
@@ -1433,114 +1040,47 @@ a.pf-ts-tenant:hover {
   }
 }
 
+
 /* ── Multi-account switcher + PIN forms (profile popover) ────────── */
 .pf-acct-circle {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--violet-text);
-  background: linear-gradient(
-    135deg,
-    rgba(168, 85, 247, 0.22),
-    rgba(236, 72, 153, 0.12)
-  );
+  width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 700; color: var(--violet-text);
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.12));
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
-
 .pf-acct-nopin {
   flex: 0 0 auto;
-  font-size: 9.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--text-muted);
-  border: 1px solid var(--glass-border);
-  border-radius: 6px;
-  padding: 2px 5px;
+  border: 1px solid var(--glass-border); border-radius: 6px; padding: 2px 5px;
 }
-
-.pf-switch-form {
-  padding: 8px 12px 10px;
-}
-
-.pf-switch-lbl {
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.pf-switch-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
+.pf-switch-form { padding: 8px 12px 10px; }
+.pf-switch-lbl { margin: 0 0 6px; font-size: 12px; color: var(--text-secondary); }
+.pf-switch-row { display: flex; align-items: center; gap: 6px; }
 .pf-pin-input {
-  flex: 1;
-  min-width: 0;
-  width: 90px;
-  text-align: center;
-  font-size: 15px;
-  letter-spacing: 5px;
-  padding: 8px 6px;
-  border-radius: 10px;
+  flex: 1; min-width: 0; width: 90px;
+  text-align: center; font-size: 15px; letter-spacing: 5px;
+  padding: 8px 6px; border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--glass-border);
-  color: var(--text-primary);
-  outline: none;
+  color: var(--text-primary); outline: none;
 }
-
-.pf-pin-input:focus {
-  border-color: rgba(168, 85, 247, 0.5);
-}
-
-.pf-pin-wide {
-  display: block;
-  width: 100%;
-  margin-bottom: 6px;
-  letter-spacing: 5px;
-}
-
+.pf-pin-input:focus { border-color: rgba(168, 85, 247, 0.5); }
+.pf-pin-wide { display: block; width: 100%; margin-bottom: 6px; letter-spacing: 5px; }
 .pf-pin-go {
-  flex: 0 0 auto;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  flex: 0 0 auto; min-height: 36px; padding: 0 12px; border-radius: 10px;
+  border: none; cursor: pointer; font-size: 12.5px; font-weight: 600;
+  color: #fff; background: linear-gradient(135deg, #7c3aed, #a855f7);
 }
-
-.pf-pin-go:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
+.pf-pin-go:disabled { opacity: 0.55; cursor: default; }
 .pf-pin-cancel {
-  flex: 0 0 auto;
-  min-height: 36px;
-  min-width: 32px;
-  border-radius: 10px;
-  border: 1px solid var(--glass-border);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
+  flex: 0 0 auto; min-height: 36px; min-width: 32px; border-radius: 10px;
+  border: 1px solid var(--glass-border); background: transparent;
+  color: var(--text-muted); cursor: pointer;
 }
-
-.pf-pin-error {
-  margin: 6px 0 0;
-  font-size: 11.5px;
-  color: var(--red-text);
-}
+.pf-pin-error { margin: 6px 0 0; font-size: 11.5px; color: var(--red-text); }
 
 .pf-kbd-hint {
   flex: 0 0 auto;
@@ -1560,11 +1100,7 @@ a.pf-ts-tenant:hover {
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
-
-.pf-acct-list::-webkit-scrollbar {
-  width: 5px;
-}
-
+.pf-acct-list::-webkit-scrollbar { width: 5px; }
 .pf-acct-list::-webkit-scrollbar-thumb {
   background: var(--glass-border);
   border-radius: 3px;
@@ -1579,16 +1115,12 @@ a.pf-ts-tenant:hover {
 
 /* Design-mode state pill in the profile menu */
 .pf-dm-pill {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 2px 8px; border-radius: 999px;
   color: var(--text-tertiary);
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
 }
-
 .pf-dm-pill--on {
   color: var(--color-violet-300, #c4b5fd);
   background: rgba(124, 58, 237, 0.16);
@@ -1604,7 +1136,6 @@ a.pf-ts-tenant:hover {
   align-items: center;
   gap: 2px;
 }
-
 .pf-topnav-link {
   display: inline-flex;
   align-items: center;
@@ -1616,15 +1147,10 @@ a.pf-ts-tenant:hover {
   color: var(--text-secondary);
   text-decoration: none;
   white-space: nowrap;
-  transition:
-    background 140ms ease,
-    color 140ms ease;
+  transition: background 140ms ease, color 140ms ease;
 }
+.pf-topnav-link svg { flex-shrink: 0; opacity: 0.85; }
 
-.pf-topnav-link svg {
-  flex-shrink: 0;
-  opacity: 0.85;
-}
 
 /* NEW design light: designer avatar anatomy on the bar's profile button
    (Figma 452-3) — soft violet disc, violet initials, no glow. */
@@ -1634,7 +1160,6 @@ a.pf-ts-tenant:hover {
   border: 1px solid #ecd8ff;
   box-shadow: none;
 }
-
 :host-context(.light.design-new) .pf-avatar-btn:hover .pf-avatar-circle {
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.18);
 }
@@ -1663,36 +1188,21 @@ a.pf-ts-tenant:hover {
   -webkit-background-clip: text;
   background-clip: text;
 }
-
 @media (min-width: 640px) {
-  :host-context(.design-classic) .pf-brand-name {
-    font-size: 15px;
-  }
+  :host-context(.design-classic) .pf-brand-name { font-size: 15px; }
 }
-
-.pf-topnav-link:hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
-.pf-topnav-link--on {
-  color: #7c3aed;
-  background: rgba(124, 58, 237, 0.1);
-}
-
+.pf-topnav-link:hover { color: var(--text-primary); background: var(--bg-hover); }
+.pf-topnav-link--on { color: #7c3aed; background: rgba(124, 58, 237, 0.10); }
 :root.dark .pf-topnav-link--on,
-:root:not(.light) .pf-topnav-link--on {
-  color: var(--color-primary, #a855f7);
-  background: rgba(168, 85, 247, 0.16);
-}
+:root:not(.light) .pf-topnav-link--on { color: var(--color-primary, #a855f7); background: rgba(168, 85, 247, 0.16); }
 
 /* ── Bottom-navbar experiment: every popover that hangs BELOW the bar
    flips to open UPWARD when the bar docks at the bottom edge. ── */
 :host-context(.design-new.nav-bottom) .pf-brand-pop,
 :host-context(.design-new.nav-bottom) .pf-profile-pop,
 :host-context(.design-new.nav-bottom) .pf-ts-branch__pop,
-:host-context(.design-new.nav-bottom) [class*="-pop"],
-:host-context(.design-new.nav-bottom) [class*="__pop"] {
+:host-context(.design-new.nav-bottom) [class*='-pop'],
+:host-context(.design-new.nav-bottom) [class*='__pop'] {
   top: auto !important;
   bottom: calc(100% + 10px) !important;
 }
@@ -1716,21 +1226,15 @@ a.pf-ts-tenant:hover {
     overflow-x: auto;
     scrollbar-width: none;
   }
-
-  :host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar {
-    display: none;
-  }
-
+  :host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
   /* iPad AND phone: the work areas are the only thing allowed to scroll.
      The right cluster (chat · bell · user badge) is pinned so the profile
      menu — branch switching, Classic/New, design mode — is always one tap
      away, on every width where the bar is docked (owner: those options
      were missing on mobile AND iPad). */
   :host-context(.design-new.nav-bottom) .pf-ts-right {
-    margin-left: auto;
-    flex-shrink: 0;
+    margin-left: auto; flex-shrink: 0;
   }
-
   /* Flipped upward, the menu only has the space ABOVE the bar to live in.
      Cap it there and let it scroll, so the entries at the far end of the
      list (design mode, sign out) can still be reached. */
@@ -1763,10 +1267,7 @@ a.pf-ts-tenant:hover {
   overflow-x: auto;
   scrollbar-width: none;
 }
-
-:host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar {
-  display: none;
-}
+:host-context(.design-new.nav-bottom) .pf-topnav-center::-webkit-scrollbar { display: none; }
 
 /* On shrink (iPad AND phone, <1280px): ICONS ONLY across the whole bar —
    pf glyph without wordmark/heartbeat, page links without labels, branch
@@ -1781,97 +1282,42 @@ a.pf-ts-tenant:hover {
      on the same point (see the navbar block at the end of this file). */
   :host-context(.design-new.nav-bottom) .pf-topnav-link {
     flex: 0 0 44px;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0;
-    gap: 0;
+    width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+    padding: 0; gap: 0;
   }
-
-  :host-context(.design-new.nav-bottom) .pf-topnav-link__lbl {
-    display: none;
-  }
+  :host-context(.design-new.nav-bottom) .pf-topnav-link__lbl { display: none; }
   /* One optical scale for the docked bar on iPad + phone (owner,
      2026-09-28: the pf logo and the avatar towered over the icons).
      Icons 22 · logo 30 tall · avatar 30 — anchors a touch larger, in
      proportion; every tap target stays 44px. */
-  :host-context(.design-new.nav-bottom) .pf-topnav-link svg {
-    width: 22px;
-    height: 22px;
-  }
-  :host-context(.design-new.nav-bottom) .pf-brand-glyph {
-    width: auto;
-    height: 30px;
-  }
+  :host-context(.design-new.nav-bottom) .pf-topnav-link svg { width: 22px; height: 22px; }
+  :host-context(.design-new.nav-bottom) .pf-brand-glyph { width: auto; height: 30px; }
   /* The pf mark sits in the SAME 44px box as every icon button, and the
      whole row shares one 6px rhythm — no pill padding, no extra margin
      before the icons (owner: the logo floated apart from the icons). */
   :host-context(.design-new.nav-bottom) .pf-brand-lockup {
-    flex: 0 0 44px;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    gap: 0;
-    justify-content: center;
+    flex: 0 0 44px; width: 44px; height: 44px; padding: 0; gap: 0; justify-content: center;
   }
-  :host-context(.design-new.nav-bottom) .pf-brand-chev {
-    display: none;
-  }
-  :host-context(.design-new.nav-bottom) .pf-topnav-center {
-    margin-left: 0;
-    gap: 6px;
-  }
+  :host-context(.design-new.nav-bottom) .pf-brand-chev { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-topnav-center { margin-left: 0; gap: 6px; }
   /* Right cluster on the same scale as the work-area icons (owner). */
-  :host-context(.design-new.nav-bottom) .pf-chat-btn svg {
-    width: 22px;
-    height: 22px;
-  }
-  :host-context(.design-new.nav-bottom)
-    pf-notification-bell
-    ::ng-deep
-    .pf-bell-btn
-    > svg {
-    width: 22px;
-    height: 22px;
-  }
-  :host-context(.design-new.nav-bottom) .pf-avatar-circle {
-    width: 30px;
-    height: 30px;
-    font-size: 11px;
-  }
-
+  :host-context(.design-new.nav-bottom) .pf-chat-btn svg { width: 22px; height: 22px; }
+  :host-context(.design-new.nav-bottom) pf-notification-bell ::ng-deep .pf-bell-btn > svg { width: 22px; height: 22px; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-circle { width: 30px; height: 30px; font-size: 11px; }
   :host-context(.design-new.nav-bottom) .pf-brand-text,
-  :host-context(.design-new.nav-bottom) .pf-brand-pulse {
-    display: none !important;
-  }
-
+  :host-context(.design-new.nav-bottom) .pf-brand-pulse { display: none !important; }
   :host-context(.design-new.nav-bottom) .pf-ts-branch__name,
-  :host-context(.design-new.nav-bottom) .pf-ts-branch__chev {
-    display: none;
-  }
+  :host-context(.design-new.nav-bottom) .pf-ts-branch__chev { display: none; }
 }
 
 /* Phone only (<768): tighter still — the pf glyph BECOMES the user badge
    (same button, same profile menu; brand lockup + initials disc go) and
    the whole bar centers as one group. iPad keeps the web layout. */
 @media (max-width: 767px) {
-  :host-context(.design-new.nav-bottom) .pf-brand-lockup {
-    display: none !important;
-  }
-
-  :host-context(.design-new.nav-bottom) .pf-avatar-circle {
-    display: none;
-  }
-
-  :host-context(.design-new.nav-bottom) .pf-avatar-glyph {
-    display: block;
-  }
-
-  :host-context(.design-new.nav-bottom) .pf-ts-spacer {
-    display: none;
-  }
-
+  :host-context(.design-new.nav-bottom) .pf-brand-lockup { display: none !important; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-circle { display: none; }
+  :host-context(.design-new.nav-bottom) .pf-avatar-glyph { display: block; }
+  :host-context(.design-new.nav-bottom) .pf-ts-spacer { display: none; }
   /* The bar used to CENTER its whole group. Once the work areas, the draft
      chip, chat, the bell and the user badge were all in it, the group was
      wider than a 390px phone — and a centred overflow spills off BOTH
@@ -1885,53 +1331,32 @@ a.pf-ts-tenant:hover {
     gap: 6px;
     padding-inline: 8px;
   }
-
   :host-context(.design-new.nav-bottom) .pf-topnav-center {
-    flex: 1 1 0;
-    min-width: 0;
-    margin-left: 0;
-    justify-content: flex-start;
+    flex: 1 1 0; min-width: 0; margin-left: 0; justify-content: flex-start;
   }
-
   :host-context(.design-new.nav-bottom) .pf-ts-right {
-    margin-left: auto;
-    flex-shrink: 0;
+    margin-left: auto; flex-shrink: 0;
   }
-
   /* The draft chip yields before the badge does. */
-  :host-context(.design-new.nav-bottom) .pf-draftshelf {
-    flex: 0 1 auto;
-    min-width: 0;
-  }
-
+  :host-context(.design-new.nav-bottom) .pf-draftshelf { flex: 0 1 auto; min-width: 0; }
   /* Comfortable thumb target for the badge itself. */
   :host-context(.design-new.nav-bottom) .pf-avatar-btn {
-    flex-shrink: 0;
-    min-width: 44px;
-    min-height: 44px;
+    flex-shrink: 0; min-width: 44px; min-height: 44px;
     padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-flex; align-items: center; justify-content: center;
   }
-
   /* The glyph is a tall mark (228x292), so the default width:30px/height:auto
      draws it ~38px high — towering over the 18px work-area icons beside it
      (owner: the logo isn't shrinking to the bar). Drive it from HEIGHT so
      the aspect ratio sets the width, and match the icon row optically.
      The 44px tap target is on the button, not the mark. */
   :host-context(.design-new.nav-bottom) .pf-avatar-glyph {
-    height: 30px;
-    width: auto;
+    height: 30px; width: auto;
   }
 }
 
 /* The glyph-as-avatar: hidden by default, shown on shrink (rule above). */
-.pf-avatar-glyph {
-  display: none;
-  width: 30px;
-  height: auto;
-}
+.pf-avatar-glyph { display: none; width: 30px; height: auto; }
 
 /* Dark-new: the bar avatar matches the soft-violet disc language. */
 :host-context(.dark.design-new) .pf-avatar-circle {
@@ -1943,14 +1368,12 @@ a.pf-ts-tenant:hover {
 
 /* ── Draft shelf (bottom bar): divider + resume chips ─────────────── */
 .pf-draftshelf {
-  display: none;
-  /* only meaningful when the bar is docked (rule below) */
+  display: none; /* only meaningful when the bar is docked (rule below) */
   align-items: center;
   gap: 6px;
   min-width: 0;
   flex: 0 1 auto;
 }
-
 /* Chips scroll here; the +N popover lives OUTSIDE this clipper so the
    upward dropdown isn't swallowed by the scroll container. */
 .pf-draftshelf__scroll {
@@ -1961,135 +1384,59 @@ a.pf-ts-tenant:hover {
   overflow-x: auto;
   scrollbar-width: none;
 }
-
-.pf-draftshelf__scroll::-webkit-scrollbar {
-  display: none;
-}
-
-:host-context(.design-new.nav-bottom) .pf-draftshelf {
-  display: flex;
-}
-
+.pf-draftshelf__scroll::-webkit-scrollbar { display: none; }
+:host-context(.design-new.nav-bottom) .pf-draftshelf { display: flex; }
 /* Phones: no room — the shelf is a tablet/web affordance (owner: on a
    phone bar it just gets clumsy). It briefly had a compact phone chip;
    that was removed at the owner's call. */
 @media (max-width: 767px) {
-  :host-context(.design-new.nav-bottom) .pf-draftshelf {
-    display: none;
-  }
+  :host-context(.design-new.nav-bottom) .pf-draftshelf { display: none; }
 }
 
 .pf-draftshelf__rule {
-  width: 1px;
-  height: 22px;
-  flex-shrink: 0;
+  width: 1px; height: 22px; flex-shrink: 0;
   background: var(--border-muted, #e5e7eb);
   margin: 0 4px 0 8px;
 }
-
 .pf-draftshelf__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 9999px;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 10px; border-radius: 9999px;
   background: var(--bg-card-solid, #fff);
   border: 1px dashed rgba(124, 58, 237, 0.45);
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  text-decoration: none;
-  white-space: nowrap;
-  transition:
-    background 140ms ease,
-    border-color 140ms ease;
+  font-size: 12px; font-weight: 500;
+  text-decoration: none; white-space: nowrap;
+  transition: background 140ms ease, border-color 140ms ease;
 }
-
-.pf-draftshelf__chip:hover {
-  background: rgba(124, 58, 237, 0.08);
-  border-color: #7c3aed;
-}
-
-.pf-draftshelf__chip svg {
-  color: #7c3aed;
-  flex-shrink: 0;
-}
-
-.pf-draftshelf__lbl {
-  color: var(--text-primary);
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pf-draftshelf__sub {
-  color: var(--text-muted);
-  font-size: 11px;
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+.pf-draftshelf__chip:hover { background: rgba(124, 58, 237, 0.08); border-color: #7c3aed; }
+.pf-draftshelf__chip svg { color: #7c3aed; flex-shrink: 0; }
+.pf-draftshelf__lbl { color: var(--text-primary); max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.pf-draftshelf__sub { color: var(--text-muted); font-size: 11px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 .pf-draftshelf__more {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  min-width: 34px;
-  padding: 0 8px;
-  border-radius: 9999px;
-  background: transparent;
-  border: 1px dashed var(--border-muted, #d1d5db);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; min-width: 34px; padding: 0 8px; border-radius: 9999px;
+  background: transparent; border: 1px dashed var(--border-muted, #d1d5db);
+  color: var(--text-secondary); font-size: 12px; font-weight: 600; cursor: pointer;
 }
-
-.pf-draftshelf__more:hover {
-  border-color: #7c3aed;
-  color: #7c3aed;
-}
-
-.pf-draftshelf__bd {
-  position: fixed;
-  inset: 0;
-  z-index: 39;
-}
-
+.pf-draftshelf__more:hover { border-color: #7c3aed; color: #7c3aed; }
+.pf-draftshelf__bd { position: fixed; inset: 0; z-index: 39; }
 .pf-draftshelf__pop {
   position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 220px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 6px;
-  border-radius: 14px;
+  bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  min-width: 220px; max-height: 320px; overflow-y: auto;
+  padding: 6px; border-radius: 14px;
   background: var(--bg-card-solid);
   border: 1px solid var(--glass-border);
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25);
   z-index: 40;
 }
-
 .pf-draftshelf__pop-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 9px;
-  font-size: 12.5px;
-  text-decoration: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border-radius: 9px;
+  font-size: 12.5px; text-decoration: none;
   color: var(--text-secondary);
 }
-
-.pf-draftshelf__pop-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
+.pf-draftshelf__pop-item:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 /* SELECTED draft — the draft whose screen is on stage (DraftShelfService
    .activeId: path + identifying query, updated on every navigation). The
@@ -2100,82 +1447,35 @@ a.pf-ts-tenant:hover {
    rule can't know: the dashed "unfinished" border goes solid (ring), the
    label/sub inks, and no pointer (the selected chip is not a link). */
 .pf-draftshelf__chip--on,
-.pf-draftshelf__pop-item--on {
-  font-weight: 600;
-  cursor: default;
-}
-
-.pf-draftshelf__chip--on {
-  border-style: solid;
-}
-
+.pf-draftshelf__pop-item--on { font-weight: 600; cursor: default; }
+.pf-draftshelf__chip--on { border-style: solid; }
 .pf-draftshelf__chip--on .pf-draftshelf__lbl,
-.pf-draftshelf__pop-item--on .pf-draftshelf__lbl {
-  color: #6d28d9;
-}
-
+.pf-draftshelf__pop-item--on .pf-draftshelf__lbl { color: #6d28d9; }
 .pf-draftshelf__chip--on .pf-draftshelf__sub,
-.pf-draftshelf__pop-item--on .pf-draftshelf__sub {
-  color: #7c3aed;
-  opacity: 0.8;
-}
-
+.pf-draftshelf__pop-item--on .pf-draftshelf__sub { color: #7c3aed; opacity: 0.8; }
 :host-context(.dark) .pf-draftshelf__chip--on .pf-draftshelf__lbl,
-:host-context(.dark) .pf-draftshelf__pop-item--on .pf-draftshelf__lbl {
-  color: #ede9fe;
-}
-
+:host-context(.dark) .pf-draftshelf__pop-item--on .pf-draftshelf__lbl { color: #ede9fe; }
 :host-context(.dark) .pf-draftshelf__chip--on .pf-draftshelf__sub,
-:host-context(.dark) .pf-draftshelf__pop-item--on .pf-draftshelf__sub {
-  color: #c4b5fd;
-  opacity: 1;
-}
-
-:host-context(.dark) .pf-draftshelf__chip--on svg {
-  color: #c4b5fd;
-}
-
+:host-context(.dark) .pf-draftshelf__pop-item--on .pf-draftshelf__sub { color: #c4b5fd; opacity: 1; }
+:host-context(.dark) .pf-draftshelf__chip--on svg { color: #c4b5fd; }
 .pf-draftshelf__chip:focus-visible,
 .pf-draftshelf__more:focus-visible,
-.pf-draftshelf__pop-item:focus-visible {
-  outline: 2px solid #7c3aed;
-  outline-offset: 2px;
-}
+.pf-draftshelf__pop-item:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
 
 /* Touch devices: 44px hit area without growing the 30px pill (the bar's
    height is fixed) — an invisible, taller hit box around each chip. */
 @media (pointer: coarse) {
-  .pf-draftshelf__chip,
-  .pf-draftshelf__more {
-    position: relative;
+  .pf-draftshelf__chip, .pf-draftshelf__more { position: relative; }
+  .pf-draftshelf__chip::after, .pf-draftshelf__more::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 50%;
+    height: 44px; transform: translateY(-50%);
   }
-
-  .pf-draftshelf__chip::after,
-  .pf-draftshelf__more::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    height: 44px;
-    transform: translateY(-50%);
-  }
-
-  .pf-draftshelf__more {
-    min-width: 44px;
-  }
-
-  .pf-draftshelf__pop-item {
-    min-height: 44px;
-  }
+  .pf-draftshelf__more { min-width: 44px; }
+  .pf-draftshelf__pop-item { min-height: 44px; }
 }
 
 /* Chat entry (new design): messenger icon after the bell + unread badge. */
-.pf-chat-btn.pf-chat-btn--active {
-  background: var(--bg-hover);
-  color: var(--violet-text, #7c3aed);
-}
-
+.pf-chat-btn.pf-chat-btn--active { background: var(--bg-hover); color: var(--violet-text, #7c3aed); }
 .pf-chat-btn__badge {
   position: absolute;
   top: 4px;
@@ -2190,9 +1490,7 @@ a.pf-ts-tenant:hover {
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-  box-shadow:
-    0 2px 6px rgba(124, 58, 237, 0.45),
-    0 0 0 2px var(--header-bg);
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.45), 0 0 0 2px var(--header-bg);
 }
 
 /* Avatar-menu section label (Branch, ...). */
@@ -2203,17 +1501,12 @@ a.pf-ts-tenant:hover {
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 /* ── Messages dropdown (bell-style panel; auto-flips upward when the
    bar is docked via the -pop catch-all). ── */
-.pf-msgs-bd {
-  position: fixed;
-  inset: 0;
-  z-index: 39;
-}
-
+.pf-msgs-bd { position: fixed; inset: 0; z-index: 39; }
 .pf-msgs-pop {
   position: absolute;
   top: calc(100% + 10px);
@@ -2230,162 +1523,69 @@ a.pf-ts-tenant:hover {
   -webkit-backdrop-filter: blur(22px);
   z-index: 40;
 }
-
 .pf-msgs-pop__head {
   padding: 8px 12px 6px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--text-muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
-
-.pf-msgs-pop__empty {
-  padding: 12px;
-  font-size: 12.5px;
-  color: var(--text-muted);
-}
-
+.pf-msgs-pop__empty { padding: 12px; font-size: 12.5px; color: var(--text-muted); }
 .pf-msgs-pop__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 10px; border-radius: 10px;
+  background: transparent; border: none; cursor: pointer; text-align: left;
 }
-
-.pf-msgs-pop__item:hover {
-  background: var(--bg-hover);
-}
-
+.pf-msgs-pop__item:hover { background: var(--bg-hover); }
 .pf-msgs-pop__init {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 9999px;
-  flex-shrink: 0;
-  background: #eee1fd;
-  color: #7c3aed;
-  border: 1px solid #ecd8ff;
-  font-size: 11px;
-  font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9999px; flex-shrink: 0;
+  background: #eee1fd; color: #7c3aed; border: 1px solid #ecd8ff;
+  font-size: 11px; font-weight: 600;
 }
-
 :root.dark .pf-msgs-pop__init {
-  background: rgba(139, 92, 246, 0.18);
-  color: #c4b5fd;
-  border-color: rgba(168, 85, 247, 0.3);
+  background: rgba(139, 92, 246, 0.18); color: #c4b5fd; border-color: rgba(168, 85, 247, 0.3);
 }
-
-.pf-msgs-pop__body {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.pf-msgs-pop__name {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+.pf-msgs-pop__body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.pf-msgs-pop__name { font-size: 12.5px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Disambiguator (context thread / same-name colleague / group) — quiet. */
-.pf-msgs-pop__disamb {
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.pf-msgs-pop__item {
-  --pf-pdot-ring: var(--pf-msgs-pop-bg, var(--nd-card-bg, #fff));
-}
-
-.pf-msgs-pop__last {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+.pf-msgs-pop__disamb { font-weight: 400; color: var(--text-muted); }
+.pf-msgs-pop__item { --pf-pdot-ring: var(--pf-msgs-pop-bg, var(--nd-card-bg, #fff)); }
+.pf-msgs-pop__last { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pf-msgs-pop__unread {
-  flex-shrink: 0;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9999px;
-  background: var(--gradient-primary);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 18px;
-  text-align: center;
+  flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9999px; background: var(--gradient-primary); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 18px; text-align: center;
 }
-
 .pf-msgs-pop__all {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-  padding: 8px;
-  border: none;
-  border-top: 1px solid var(--border-muted);
-  background: transparent;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  color: #7c3aed;
-  text-align: center;
+  display: block; width: 100%; margin-top: 4px; padding: 8px;
+  border: none; border-top: 1px solid var(--border-muted);
+  background: transparent; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: #7c3aed; text-align: center;
 }
-
-:root.dark .pf-msgs-pop__all {
-  color: #c4b5fd;
-}
+:root.dark .pf-msgs-pop__all { color: #c4b5fd; }
 
 /* Messages panel: search + section labels for the people list. */
 .pf-msgs-pop__search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: flex; align-items: center; gap: 8px;
   margin: 2px 6px 6px;
-  padding: 0 10px;
-  height: 32px;
+  padding: 0 10px; height: 32px;
   border-radius: 9999px;
   background: var(--bg-input, transparent);
   border: 1px solid var(--input-border, var(--border-muted));
   color: var(--text-muted);
 }
-
 .pf-msgs-pop__search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 12.5px;
-  font-family: inherit;
-  color: var(--text-primary);
+  flex: 1; min-width: 0;
+  border: none; outline: none; background: transparent;
+  font-size: 12.5px; font-family: inherit; color: var(--text-primary);
 }
-
 .pf-msgs-pop__sect {
   margin: 6px 12px 2px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--text-muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 /* ── Phone: there is no Messages POPOVER ──────────────────────────────
@@ -2395,9 +1595,7 @@ a.pf-ts-tenant:hover {
    dropdown floating over a phone screen (owner). */
 @media (max-width: 767px) {
   :host-context(.design-new) .pf-msgs-pop,
-  :host-context(.design-new) .pf-msgs-bd {
-    display: none !important;
-  }
+  :host-context(.design-new) .pf-msgs-bd { display: none !important; }
 }
 
 /* ══ Docked BOTTOM navbar: height + selected indicator (owner, iPad) ══
@@ -2417,7 +1615,6 @@ a.pf-ts-tenant:hover {
   padding-top: 0;
   padding-bottom: 0;
 }
-
 :host-context(.design-new.nav-bottom) .pf-topnav-link {
   position: relative;
   isolation: isolate;
@@ -2425,9 +1622,8 @@ a.pf-ts-tenant:hover {
   background: transparent;
   box-shadow: none;
 }
-
 :host-context(.design-new.nav-bottom) .pf-topnav-link::before {
-  content: "";
+  content: '';
   position: absolute;
   z-index: -1;
   top: 50%;
@@ -2438,23 +1634,15 @@ a.pf-ts-tenant:hover {
   border-radius: 9999px;
   background: transparent;
   box-shadow: none;
-  transition:
-    background 140ms ease,
-    box-shadow 140ms ease;
+  transition: background 140ms ease, box-shadow 140ms ease;
   pointer-events: none;
 }
-
-:host-context(.design-new.nav-bottom) .pf-topnav-link:hover {
-  background: transparent;
-}
-
+:host-context(.design-new.nav-bottom) .pf-topnav-link:hover { background: transparent; }
 @media (hover: hover) {
-  :host-context(.design-new.nav-bottom)
-    .pf-topnav-link:not(.pf-topnav-link--on):hover::before {
+  :host-context(.design-new.nav-bottom) .pf-topnav-link:not(.pf-topnav-link--on):hover::before {
     background: var(--nd-chip-bg, rgba(15, 23, 42, 0.05));
   }
 }
-
 :host-context(.design-new.nav-bottom) .pf-topnav-link--on {
   background: transparent;
   background-image: none;
@@ -2462,29 +1650,18 @@ a.pf-ts-tenant:hover {
   color: var(--text-primary);
   font-weight: 600;
 }
-
-:host-context(.design-new.nav-bottom) .pf-topnav-link--on svg {
-  opacity: 1;
-}
-
+:host-context(.design-new.nav-bottom) .pf-topnav-link--on svg { opacity: 1; }
 :host-context(.design-new.nav-bottom) .pf-topnav-link--on::before {
   background: var(--nd-card-bg, #ffffff);
-  box-shadow:
-    0 0 0 1px var(--nd-line, #e5e7eb),
-    0 1px 2px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 0 0 1px var(--nd-line, #e5e7eb), 0 1px 2px rgba(15, 23, 42, 0.10);
 }
-
 :host-context(.dark.design-new.nav-bottom) .pf-topnav-link--on {
   color: #f5f3ff;
 }
-
 :host-context(.dark.design-new.nav-bottom) .pf-topnav-link--on::before {
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
-    0 1px 2px rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(0, 0, 0, 0.35);
 }
-
 /* Icon-only widths: the pill is a fixed 40x32 capsule centred on BOTH
    axes of the 44px square (after the base rule so it wins the cascade). */
 @media (max-width: 1279px) {

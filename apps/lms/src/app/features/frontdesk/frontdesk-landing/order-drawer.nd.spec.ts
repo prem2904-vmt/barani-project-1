@@ -71,10 +71,10 @@ describe('Frontdesk order drawer — header', () => {
     expect(body).toMatch(/white-space: normal/);
   });
 
-  it('age/sex ride the quiet meta line (no "|" separators) with the MRN and order', () => {
+  // PR #70 (2026-09-28): MRN + Order # left the header meta line; age/sex stays.
+  it('age/sex ride the quiet meta line (no "|" separators)', () => {
     const meta = root.querySelector('.pf-drawer__hdr-meta.nd-num')!;
     expect(meta.textContent).toMatch(/drawerAgeSex/);
-    expect(meta.textContent).toMatch(/Order #/);
     const literal = meta.textContent!.replace(/\{\{[\s\S]*?\}\}|@if \([^)]*\)/g, '');
     expect(literal).not.toMatch(/\|/); // no "Name | 22/M | MRN" joins
   });
