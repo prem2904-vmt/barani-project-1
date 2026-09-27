@@ -17,8 +17,6 @@ interface MeResponse {
   tenantName: string;
   branchId: string;
   branchName: string;
-  subBranchId?: string | null;
-  subBranchName?: string | null;
   roles: string[];
   permissions: string[];
   branches?: BranchRef[];
@@ -736,8 +734,6 @@ export class AuthService {
         tenantName: data.tenantName,
         branchId: data.branchId,
         branchName: data.branchName,
-        subBranchId: data.subBranchId ?? null,
-        subBranchName: data.subBranchName ?? null,
         roles: data.roles ?? [],
         permissions: data.permissions ?? [],
         branches: data.branches ?? [],

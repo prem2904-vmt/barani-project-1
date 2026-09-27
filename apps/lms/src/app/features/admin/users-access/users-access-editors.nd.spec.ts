@@ -48,7 +48,7 @@ function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (.
       if (url.startsWith('/api/roles/') && url.endsWith('/permissions')) return of(['p1']);
       if (url.startsWith('/api/roles')) return of(roles);
       if (url.startsWith('/api/permissions')) return of(perms);
-      if (url.startsWith('/api/tenants/branches')) return of([{ id: 'b1', name: 'Main Lab', subBranches: [] }, { id: 'b2', name: 'Annex' }]);
+      if (url.startsWith('/api/tenants/branches')) return of([{ id: 'b1', name: 'Main Lab' }, { id: 'b2', name: 'Annex' }]);
       if (url.startsWith('/api/users/u1/roles')) return of([{ roleId: 'r1', branchId: 'b1' }]);
       if (url.startsWith('/api/users')) return of(users);
       return of([]);

@@ -173,12 +173,11 @@ describe('ND audit D — Overview (/admin) and settings hub (/admin/manage)', ()
 
 describe('ND audit D — Branches', () => {
   const branches = [
-    { id: 'b1', name: 'Main Lab — Anna Nagar Collection Centre', code: 'MAIN', city: 'Chennai', isActive: true, hasPfBox: true,
-      subBranches: [{ id: 's1', branchId: 'b1', name: 'Kilpauk Satellite', code: 'KIL', type: 'satellite', isActive: true }] },
+    { id: 'b1', name: 'Main Lab — Anna Nagar Collection Centre', code: 'MAIN', city: 'Chennai', isActive: true, hasPfBox: true },
   ];
   const render = () => renderBandPage(BranchesComponent, {
     getFor: (url) => url.startsWith('/api/tenants/branches') ? branches
-      : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Haematology', code: 'HEM', isActive: true, subBranchId: 's1' }] : [],
+      : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Haematology', code: 'HEM', isActive: true }] : [],
   });
 
   it('ONE primary: "Add branch" in the band; while the form is open the band turns Cancel and "Create branch" is the primary', () => {
@@ -193,7 +192,7 @@ describe('ND audit D — Branches', () => {
     expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
   });
 
-  it('branch cards are kit cards; names never truncated; no gradient badge / pink sub-branch; no × / → glyphs', () => {
+  it('branch cards are kit cards; names never truncated; no sub-branch section; no × / → glyphs', () => {
     const p = render();
     const card = p.el.querySelector('.pf-br-card.nd-card')!;
     expect(card).not.toBeNull();
@@ -201,10 +200,12 @@ describe('ND audit D — Branches', () => {
     expect(card.querySelector('.pf-br-name')!.textContent).toContain('Anna Nagar Collection Centre');
     p.cmp.toggle('b1'); p.f.detectChanges();
     expect(card.textContent).not.toMatch(/[×→]/);
-    expect(p.el.querySelector('.pf-dot-on')).not.toBeNull();
-    const act = card.querySelector('.nd-rowact')!;
-    expect(act.textContent).toContain('Deactivate');
-    expect(act.querySelector('svg')).not.toBeNull();
+    // Sub-branches were removed (owner, 2026-09-27): the open card is the
+    // departments board only, every department on it.
+    expect(card.textContent).not.toMatch(/sub-branch/i);
+    expect(card.querySelector('.pf-br-count')!.textContent).not.toContain('sub');
+    expect(card.querySelector('.pf-board')).not.toBeNull();
+    expect(card.querySelector('.pf-dcard-name')!.textContent).toContain('Haematology');
     hygiene(p.el);
   });
 });

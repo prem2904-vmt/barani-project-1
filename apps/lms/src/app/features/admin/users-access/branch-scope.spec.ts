@@ -25,63 +25,55 @@ import { UsersAccessComponent } from './users-access.component';
 /**
  * Multi-branch user scope (owner, 2026-09-27): "A user can belong to two or
  * three branches, but we have only single-select in that area." The Branch
- * Scope card is a multi-select (All branches, or one or more branches / labs)
- * and saves one assignment per role × branch; the Users list shows the
- * branches as chips.
+ * Scope card is a multi-select (All branches, or one or more branches) and
+ * saves one assignment per role × branch; the Users list shows the branches
+ * as chips. Sub-branches ("labs") were removed the same day — a branch is the
+ * only scope below All branches.
  */
-const B = (id: string, name: string, subs: { id: string; name: string }[] = []) =>
-  ({ id, name, subBranches: subs } as unknown as Branch);
+const B = (id: string, name: string) => ({ id, name } as unknown as Branch);
 const branches: Branch[] = [
-  B('chn', 'Chennai Main', [{ id: 'micro', name: 'Micro lab' }, { id: 'histo', name: 'Histo lab' }]),
+  B('chn', 'Chennai Main'),
   B('slm', 'Salem'),
   B('mdu', 'Madurai'),
 ];
 
 describe('branch-scope rules', () => {
-  it('options: All branches first, then each branch with its labs indented', () => {
+  it('options: All branches first, then each branch (no sub-branch rows)', () => {
     const o = scopeOptions(branches);
     expect(o[0]).toEqual({ value: ALL_BRANCHES, label: 'All branches (tenant-wide)' });
-    expect(o.map(x => x.value)).toEqual(['all', 'b:chn', 'sb:micro', 'sb:histo', 'b:slm', 'b:mdu']);
-    expect(o[2].label).toContain('→ Micro lab');
+    expect(o.map(x => x.value)).toEqual(['all', 'b:chn', 'b:slm', 'b:mdu']);
+    // A stale API payload that still carries subBranches adds no options.
+    const stale = [{ id: 'chn', name: 'Chennai Main', subBranches: [{ id: 'micro', name: 'Micro lab' }] }] as unknown as Branch[];
+    expect(scopeOptions(stale).map(x => x.value)).toEqual(['all', 'b:chn']);
   });
 
-  it('All branches is exclusive both ways', () => {
+  it('All branches is exclusive both ways; branches are otherwise independent', () => {
     expect(applyScopePick(['b:chn', 'b:slm'], ['b:chn', 'b:slm', 'all'], branches)).toEqual(['all']);
     expect(applyScopePick(['all'], ['all', 'b:slm'], branches)).toEqual(['b:slm']);
-  });
-
-  it('a branch covers its labs; a lab narrows its branch; one lab per branch', () => {
-    // Picking the parent does NOT add labs — it drops the lab already picked.
-    expect(applyScopePick(['sb:micro', 'b:slm'], ['sb:micro', 'b:slm', 'b:chn'], branches)).toEqual(['b:slm', 'b:chn']);
-    // Picking a lab replaces its whole branch.
-    expect(applyScopePick(['b:chn', 'b:slm'], ['b:chn', 'b:slm', 'sb:micro'], branches)).toEqual(['b:slm', 'sb:micro']);
-    // A second lab of the same branch replaces the first.
-    expect(applyScopePick(['sb:micro'], ['sb:micro', 'sb:histo'], branches)).toEqual(['sb:histo']);
-    // Other branches are untouched.
     expect(applyScopePick(['b:slm'], ['b:slm', 'b:mdu'], branches)).toEqual(['b:slm', 'b:mdu']);
   });
 
-  it('role rows → values: a branch-less row is All branches; else distinct in order', () => {
+  it('role rows → values: a branch-less row is All branches; else distinct branches in order', () => {
     expect(scopeValuesFromRoles([{ branchId: null }])).toEqual(['all']);
-    expect(scopeValuesFromRoles([
-      { branchId: 'slm' }, { branchId: 'chn', subBranchId: 'micro' }, { branchId: 'slm' },
-    ])).toEqual(['b:slm', 'sb:micro']);
+    // A legacy row once scoped to a sub-branch reads as its (parent) branch.
+    const legacy = { branchId: 'chn', subBranchId: 'micro' } as { branchId: string };
+    expect(scopeValuesFromRoles([{ branchId: 'slm' }, legacy, { branchId: 'slm' }])).toEqual(['b:slm', 'b:chn']);
     expect(scopeValuesFromRoles([])).toEqual([]);
   });
 
   it('payload: All → allBranches; else branches in list order (first = default)', () => {
     expect(scopePayload(['all'], branches)).toEqual({ allBranches: true });
-    expect(scopePayload(['b:mdu', 'sb:micro'], branches)).toEqual({
-      branches: [{ branchId: 'chn', subBranchId: 'micro' }, { branchId: 'mdu' }],
+    expect(scopePayload(['b:mdu', 'b:chn'], branches)).toEqual({
+      branches: [{ branchId: 'chn' }, { branchId: 'mdu' }],
     });
   });
 
-  it('list chips: "All branches", or each branch / lab', () => {
+  it('list chips: "All branches", or each branch', () => {
     expect(branchScopeChips({ userId: 'u', allBranches: true, branches: [] })).toEqual(['All branches']);
     expect(branchScopeChips({ userId: 'u', allBranches: false, branches: [
       { branchId: 'chn', branchName: 'Chennai Main' },
-      { branchId: 'chn', branchName: 'Chennai Main', subBranchId: 'micro', subBranchName: 'Micro lab' },
-    ] })).toEqual(['Chennai Main', 'Chennai Main → Micro lab']);
+      { branchId: 'slm', branchName: 'Salem' },
+    ] })).toEqual(['Chennai Main', 'Salem']);
     expect(branchScopeChips(undefined)).toEqual([]);
   });
 });
@@ -186,11 +178,11 @@ describe('Create user — Branch scope multi-select', () => {
     const { c, api } = render(UserInviteComponent, []);
     c.patch({ username: 'newuser', password: 'longenough1' });
     c.toggleRole('r1');
-    c.onScopeChange(['all', 'sb:micro']);          // picking a lab clears All
-    c.onScopeChange(['sb:micro', 'b:mdu']);
+    c.onScopeChange(['all', 'b:chn']);            // picking a branch clears All
+    c.onScopeChange(['b:chn', 'b:mdu']);
     c.submit();
     const body = (api.post.mock.calls as unknown as unknown[][])[0][1] as Record<string, unknown>;
-    expect(body['branches']).toEqual([{ branchId: 'chn', subBranchId: 'micro' }, { branchId: 'mdu' }]);
+    expect(body['branches']).toEqual([{ branchId: 'chn' }, { branchId: 'mdu' }]);
     expect(body['allBranches']).toBeUndefined();
     expect(body['branchId']).toBeUndefined();
   });

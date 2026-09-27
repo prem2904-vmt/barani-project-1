@@ -1195,9 +1195,8 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   readonly remaining = computed(() => Math.min(PAGE_SIZE, this._total() - this._results().length));
 
   readonly branchOptions = computed<PfSelectOption<string>[]>(() => {
-    // De-dupe defensively by branch id — the API can return the same
-    // branch via multiple sub-branch joins which made the dropdown
-    // grow on every re-open.
+    // De-dupe defensively by branch id — a duplicated branch row made the
+    // dropdown grow on every re-open.
     const seen = new Set<string>();
     const opts: PfSelectOption<string>[] = [{ value: '', label: 'Any branch' }];
     for (const b of this._branches()) {

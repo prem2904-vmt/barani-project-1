@@ -298,7 +298,7 @@ export class UserEditComponent implements OnInit {
 
   ngOnInit() {
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
-    this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({
+    this.api.get<Branch[]>('/api/tenants/branches').subscribe({
       next: l => {
         const branches = l ?? [];
         this._branches.set(branches);
@@ -310,7 +310,7 @@ export class UserEditComponent implements OnInit {
     // No single-user GET endpoint — read the list + this user's role assignments.
     forkJoin({
       users: this.api.get<User[]>('/api/users/'),
-      roles: this.api.get<{ roleId: string; branchId?: string; subBranchId?: string }[]>(`/api/users/${this.id}/roles`),
+      roles: this.api.get<{ roleId: string; branchId?: string }[]>(`/api/users/${this.id}/roles`),
     }).subscribe({
       next: ({ users, roles }) => {
         const u = (users ?? []).find(x => x.id === this.id);

@@ -349,7 +349,7 @@ export class UserInviteComponent implements OnInit {
 
   ngOnInit() {
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
-    this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({
+    this.api.get<Branch[]>('/api/tenants/branches').subscribe({
       next: l => {
         const branches = l ?? [];
         this._branches.set(branches);

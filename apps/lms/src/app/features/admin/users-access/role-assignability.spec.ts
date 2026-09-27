@@ -65,7 +65,7 @@ function render<T>(cmp: Type<T>, opts: { id?: string; me?: string; held?: string
   const api = {
     get: vi.fn((url: string) => {
       if (url.startsWith('/api/roles')) return of(ROLES);
-      if (url.startsWith('/api/tenants/branches')) return of([{ id: 'b1', name: 'Main Lab', subBranches: [] }]);
+      if (url.startsWith('/api/tenants/branches')) return of([{ id: 'b1', name: 'Main Lab' }]);
       if (url.startsWith(`/api/users/${id}/roles`)) return of((opts.held ?? []).map(r => ({ roleId: r, branchId: 'b1' })));
       if (url.startsWith('/api/users')) return of([{ id, firstName: 'Prem', fathersName: 'K', displayName: 'Prem K', username: 'prem', isActive: true }]);
       return of([]);

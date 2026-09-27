@@ -17,8 +17,7 @@ const text = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/g, ' '
 describe('Admin band — Branches', () => {
   const branches = [
     { id: 'b1', name: 'Main Lab', code: 'MAIN', city: 'Chennai', isActive: true, hasPfBox: false },
-    { id: 'b2', name: 'Anna Nagar', code: 'ANN', city: 'Chennai', isActive: true, hasPfBox: false,
-      subBranches: [{ id: 's1', branchId: 'b2', name: 'Kilpauk Satellite', code: 'KIL', type: 'satellite', isActive: true }] },
+    { id: 'b2', name: 'Anna Nagar', code: 'ANN', city: 'Chennai', isActive: true, hasPfBox: false },
     { id: 'b3', name: 'Madurai Centre', code: 'MDU', city: 'Madurai', isActive: true, hasPfBox: false },
   ];
   const render = () => renderBandPage(BranchesComponent, {
@@ -44,12 +43,12 @@ describe('Admin band — Branches', () => {
     expect(p.actions()[0].textContent).toContain('Cancel');
   });
 
-  it('pill search matches branch fields, and a sub-branch keeps its parent', () => {
+  it('pill search matches branch fields', () => {
     const p = render();
     p.type('madurai');
     expect(names(p.el).length).toBe(1);
     expect(names(p.el)[0]).toContain('Madurai Centre');
-    p.type('kilpauk');
+    p.type('ann');
     expect(names(p.el).length).toBe(1);
     expect(names(p.el)[0]).toContain('Anna Nagar');
   });

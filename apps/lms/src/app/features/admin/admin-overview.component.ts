@@ -1202,7 +1202,7 @@ export class AdminOverviewComponent implements OnInit {
       g: "org",
       hint: "Branches, departments, lab spaces",
       icon: "M4 21V7l8-4 8 4v14M9 21v-5h6v5",
-      kw: "branch sub-branch region department lab space spaces integrated individual tube colour container sample code barcode prefix department catalog drag drop location building",
+      kw: "branch region department lab space spaces integrated individual tube colour container sample code barcode prefix department catalog drag drop location building",
     },
     {
       label: "Organization & Identity",

@@ -5,8 +5,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { DEPARTMENTS_FROM_MASTER } from '../../../shared/utils/test-origin';
-import { Branch, Department, SubBranch } from '../../../shared/models/tenant.model';
-import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { Branch, Department } from '../../../shared/models/tenant.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -29,7 +28,6 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     CdkDropList,
     CdkDrag,
     CdkDragHandle,
-    SelectComponent,
     ScreenHeaderComponent,
     TouchButtonComponent,
     HeroBandComponent
@@ -38,9 +36,9 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band pill (owner): search branches, sub-branches and departments;
+        <!-- Band pill (owner): search branches and departments;
              "Add branch" rides the band's actions. -->
-        <pf-hero-band [back]="true" placeholder="Search branches, sub-branches, departments…"
+        <pf-hero-band [back]="true" placeholder="Search branches, departments…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!newBranchOpen()"
@@ -61,7 +59,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Branches & Departments"
-        subtitle="Manage collection sites, sub-branches, and their lab departments.">
+        subtitle="Manage collection sites and their lab departments.">
         <pf-touch-btn actions size="sm" variant="primary" (pressed)="toggleNewBranch()">
           <span icon-left aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -120,7 +118,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                   @if (b.hasPfBox) {
                     <span class="nd-chip nd-chip--static pf-br-chip">PF Box</span>
                   }
-                  <span class="pf-br-count"><span class="nd-num">{{ subBranchesFor(b.id).length }}</span> sub · <span class="nd-num">{{ allDeptsFor(b.id).length }}</span> depts</span>
+                  <span class="pf-br-count"><span class="nd-num">{{ allDeptsFor(b.id).length }}</span> depts</span>
                   <span class="pf-chevron" [class.pf-chevron-open]="isOpen(b.id)" aria-hidden="true">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="m6 9 6 6 6-6"/>
@@ -131,133 +129,6 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
 
               @if (isOpen(b.id)) {
                 <div class="pf-branch-body">
-                  <!-- SUB-BRANCHES -->
-                  <div class="flex items-center justify-between mb-3">
-                    <h4 class="pf-br-sec">Sub-branches</h4>
-                    <pf-touch-btn size="sm" variant="ghost" (pressed)="beginAddSubBranch(b.id)">
-                      <span icon-left aria-hidden="true">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M12 5v14"/>
-                          <path d="M5 12h14"/>
-                        </svg>
-                      </span>
-                      Add sub-branch
-                    </pf-touch-btn>
-                  </div>
-
-                  @if (subBranchesFor(b.id).length === 0) {
-                    <p class="text-[13px] mb-3" style="color: var(--text-tertiary);">
-                      No sub-branches.
-                    </p>
-                  } @else {
-                    <div class="space-y-2 mb-3">
-                      @for (sb of subBranchesFor(b.id); track sb.id) {
-                        <div class="pf-sub-card">
-                          <div class="flex items-center justify-between pf-sub-row">
-                            <div class="flex items-center gap-2 pf-sub-titlewrap">
-                              <span class="pf-sub-badge">{{ codeInitials(sb.code) }}</span>
-                              <div class="pf-sub-titlecol">
-                                <p class="pf-br-subname">{{ sb.name }}</p>
-                                <p class="pf-br-meta"><span class="nd-num">{{ sb.code }}</span> · {{ sb.type }}</p>
-                              </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              @if (sb.isActive) {
-                                <span class="nd-chip nd-chip--static pf-br-chip"><span class="pf-dot-on" aria-hidden="true"></span>Active</span>
-                                <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="deactivateSubBranch(sb)"
-                                        aria-label="Deactivate sub-branch" title="Deactivate"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="nd-rowact__t">Deactivate</span></button>
-                              } @else {
-                                <span class="nd-chip nd-chip--static pf-br-chip">Inactive</span>
-                              }
-                            </div>
-                          </div>
-                          <div class="pf-sub-deps">
-                            <span class="pf-br-sec">Departments</span>
-                            @if (deptsForSubBranch(sb.id).length === 0) {
-                              <span class="text-[12px]" style="color: var(--text-tertiary);">None assigned</span>
-                            } @else {
-                              @for (d of deptsForSubBranch(sb.id); track d.id) {
-                                <div class="pf-dept-pill" [class.pf-dept-pill--inactive]="!d.isActive">
-                                  <span>{{ d.name }}</span>
-                                  @if (!d.isActive) {
-                                    <span class="nd-chip nd-chip--static pf-br-chip">Inactive</span>
-                                  }
-                                  <input type="number" inputmode="numeric" min="1" max="99"
-                                         class="nd-input nd-num pf-sample-input pf-sample-input--pill" placeholder="01" aria-label="Sample code"
-                                         title="Sample # — 2-digit code (01–99) prefixing the short sample barcode"
-                                         [class.pf-input-error]="!!sampleCodeError()[d.id]"
-                                         [value]="d.sampleCode ?? ''"
-                                         (input)="clearSampleCodeError(d.id)"
-                                         (change)="saveSampleCode(d, $any($event.target).value)" />
-                                  @if (sampleCodeError()[d.id]) {
-                                    <p class="pf-field-error">{{ sampleCodeError()[d.id] }}</p>
-                                  }
-                                  <button type="button" class="pf-unassign pf-dept-power"
-                                          (click)="toggleDeptActive(d)"
-                                          [attr.aria-label]="d.isActive ? 'Deactivate department' : 'Reactivate department'"
-                                          [title]="d.isActive ? 'Deactivate department' : 'Reactivate department'">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                      <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
-                                      <line x1="12" y1="2" x2="12" y2="12"/>
-                                    </svg>
-                                  </button>
-                                  <button type="button" class="pf-unassign"
-                                          (click)="unassignDepartment(sb.id, d.id)"
-                                          aria-label="Unassign from sub-branch" title="Unassign from sub-branch">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                                  </button>
-                                </div>
-                              }
-                            }
-                            @if (unassignedDeptsFor(b.id).length > 0) {
-                              <pf-select
-                                class="pf-br-assign"
-                                size="sm"
-                                [options]="deptsAsOpts(unassignedDeptsFor(b.id))"
-                                [value]="''"
-                                placeholder="+ Assign dept"
-                                (valueChange)="assignDepartment(sb.id, $event)">
-                              </pf-select>
-                            }
-                          </div>
-                          @if (deptsForSubBranch(sb.id).length > 0) {
-                            <!-- Routing explainer (Vignesh 2026-09-27): assigning a
-                                 department here sends its tubes to this sub-branch's
-                                 staff only; with nobody assigned, the branch lab
-                                 works them (they are never dropped from the queue). -->
-                            <p class="pf-sub-hint">
-                              Tubes of these departments go to the work queue of staff assigned to {{ sb.name }}.
-                              Until someone is assigned there, the {{ b.name }} lab works them.
-                            </p>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
-
-                  @if (addingSubBranchFor() === b.id) {
-                    <div class="pf-sub-form">
-                      <div class="grid grid-cols-2 gap-2 pf-branch-grid">
-                        <input type="text" class="nd-input" placeholder="Sub-branch name" aria-label="Sub-branch name"
-                               [ngModel]="subBranchDraft().name" (ngModelChange)="patchSubBranchDraft({ name: $event })" />
-                        <input type="text" class="nd-input nd-num uppercase" placeholder="CODE" aria-label="Sub-branch code"
-                               [ngModel]="subBranchDraft().code" (ngModelChange)="patchSubBranchDraft({ code: $event.toUpperCase() })" />
-                        <pf-select
-                          [options]="subBranchTypeOpts"
-                          [value]="subBranchDraft().type"
-                          (valueChange)="patchSubBranchDraft({ type: $any($event) })">
-                        </pf-select>
-                        <input type="text" class="nd-input" placeholder="City" aria-label="City"
-                               [ngModel]="subBranchDraft().city" (ngModelChange)="patchSubBranchDraft({ city: $event })" />
-                      </div>
-                      <div class="flex gap-2 justify-end mt-3">
-                        <button type="button" class="nd-btn nd-btn--tertiary press" (click)="cancelAddSubBranch()">Cancel</button>
-                        <!-- Secondary: "Add branch" in the band is this view's one primary. -->
-                        <button type="button" class="nd-btn nd-btn--secondary press" (click)="createSubBranch(b.id)">Save sub-branch</button>
-                      </div>
-                    </div>
-                  }
-
                   <!-- LAB SPACES BOARD — workflow-style: drag departments between
                        spaces. Tubes are counted per (space, colour): departments
                        in one space whose tests share a colour share one vial. -->
@@ -369,7 +240,6 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     .pf-br-new__body { padding: 16px 18px; }
     .pf-br-card { overflow: visible; }
     .pf-br-name { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
-    .pf-br-subname { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-br-meta { margin: 2px 0 0; font-size: 12px; color: var(--text-tertiary); }
     .pf-br-count { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
     .pf-br-chip { height: 24px; font-size: 11.5px; }
@@ -377,9 +247,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     .pf-br-hint { margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
     .pf-br-note { margin: 0 0 10px; padding: 8px 12px; border-radius: var(--nd-radius-sm); font-size: 12px; line-height: 1.5;
       color: var(--text-secondary); background: var(--nd-chip-bg); border: 1px solid var(--nd-line); }
-    .pf-br-assign { width: 170px; }
     .pf-sample-input.nd-input { min-height: 30px; }
-    .pf-unassign svg { display: block; }
 
     .pf-branch-toggle {
       width: 100%;
@@ -410,19 +278,6 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       font-weight: 600;
       letter-spacing: 0.02em;
     }
-    .pf-sub-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      background: var(--nd-chip-bg);
-      color: var(--text-secondary);
-      font-size: 11px;
-      font-weight: 600;
-      border: 1px solid var(--nd-line);
-    }
 
     .pf-chevron { display: inline-flex; color: var(--text-muted); transition: transform 0.2s ease; }
     .pf-chevron-open { transform: rotate(180deg); }
@@ -432,56 +287,6 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       border-top: 1px solid var(--nd-line);
     }
 
-    .pf-sub-card {
-      padding: 12px 14px;
-      border-radius: 12px;
-      background: var(--bg-card-solid);
-      border: 1px solid var(--border-muted);
-
-    }
-    .pf-sub-deps {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px dashed var(--border-muted);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .pf-sub-hint {
-      margin: 8px 0 0;
-      font-size: 12px;
-      line-height: 1.45;
-      color: var(--text-tertiary);
-    }
-    .pf-dept-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 4px 4px 10px;
-      border-radius: 9999px;
-      background: var(--nd-chip-bg);
-      border: 1px solid var(--nd-line);
-      font-size: 12px;
-      color: var(--text-primary);
-    }
-    .pf-unassign {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 18px;
-      height: 18px;
-      border-radius: 9999px;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      font-size: 14px;
-      line-height: 1;
-      cursor: pointer;
-    }
-    @media (hover: hover) {
-      .pf-unassign:hover { background: var(--bg-hover); color: var(--text-primary); }
-    }
 
     /* ── Per-department sample code (2-digit prefix) ── */
     .pf-sample-field {
@@ -544,13 +349,6 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       cursor: pointer;
     }
 
-    .pf-sub-form {
-      padding: 12px;
-      border-radius: 10px;
-      background: var(--bg-card-solid);
-      border: 1px dashed var(--border-muted);
-      margin-bottom: 12px;
-    }
 
     .pf-branch-deps-header {
       display: flex;
@@ -650,40 +448,15 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
 
     /* ── Inactive departments: greyed but still operable (the toggle must
        stay clickable so an admin can reactivate). ── */
-    .pf-dept-row--inactive > div:first-child,
-    .pf-dept-pill--inactive > span:first-child,
-    .pf-dept-pill--inactive .pf-sample-input { opacity: 0.5; }
-    .pf-dept-row--inactive,
-    .pf-dept-pill--inactive { border-style: dashed; }
+    .pf-dept-row--inactive > div:first-child { opacity: 0.5; }
+    .pf-dept-row--inactive { border-style: dashed; }
 
-    /* ── Touch sizing: larger tap target for the inline unassign control ── */
-    @media (pointer: coarse) {
-      .pf-unassign {
-        position: relative;
-        width: 28px;
-        height: 28px;
-        font-size: 16px;
-      }
-      /* Extend the tappable region to >=44px without changing visual size */
-      .pf-unassign::before {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 44px;
-        height: 44px;
-        transform: translate(-50%, -50%);
-      }
-    }
-
-    /* ── Below desktop (<1280): keep long branch/sub-branch names from
+    /* ── Below desktop (<1280): keep long branch names from
        overflowing the header row; truncate with ellipsis. Desktop >=1280
        stays byte-identical. ── */
     @media (max-width: 1279px) {
       .pf-branch-titlewrap { min-width: 0; flex: 1 1 auto; }
       .pf-branch-titlecol { min-width: 0; }
-      .pf-sub-titlewrap { min-width: 0; flex: 1 1 auto; }
-      .pf-sub-titlecol { min-width: 0; }
       .pf-trunc {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -692,18 +465,16 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
       }
       /* Keep badges/chevron from being squished by the flexible title column */
       .pf-branch-badge,
-      .pf-sub-badge,
       .pf-chevron { flex-shrink: 0; }
 
       /* Keep the right-hand meta cluster (PF Box chip + count + chevron) on a
          single line beside the truncating title instead of wrapping/crowding */
       .pf-branch-toggle > div:last-child { flex-shrink: 0; white-space: nowrap; }
-      .pf-sub-row > div:last-child { flex-shrink: 0; }
     }
 
     /* ── Phone (<=640): single-column forms, no horizontal overflow ── */
     @media (max-width: 640px) {
-      /* New-branch + sub-branch forms: stack fields */
+      /* New-branch form: stack fields */
       .pf-branch-grid { grid-template-columns: 1fr !important; }
 
       /* Lift every text box on this page to >=16px so iOS doesn't auto-zoom the
@@ -738,13 +509,9 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
 
       .pf-branch-body { padding: 14px 14px 16px; }
 
-      /* Sub-branch dept assignment + branch dept assignment selects:
-         stop fixed pixel widths from forcing overflow */
-      .pf-sub-deps pf-select,
+      /* Branch dept assignment selects: stop fixed pixel widths from
+         forcing overflow */
       .pf-dept-row pf-select { width: 100% !important; }
-
-      /* Sub-branch card inner header: allow controls to wrap */
-      .pf-sub-card .pf-sub-row { flex-wrap: wrap; gap: 8px; }
 
       /* Department rows: stack name above the assign/status controls */
       .pf-dept-row {
@@ -766,8 +533,8 @@ export class BranchesComponent implements OnInit {
   /** Row actions: text on web, icon on touch (ND-PATTERN). */
   protected readonly web = webPointerSignal();
 
-  /** Band pill search. A branch shows when it — or one of its sub-branches,
-   *  or a department on its board — matches. Departments are tenant-global,
+  /** Band pill search. A branch shows when it — or a department on its
+   *  board — matches. Departments are tenant-global,
    *  so a department hit keeps every branch (each board shows it). */
   readonly q = signal('');
   readonly visibleBranches = computed(() => {
@@ -776,13 +543,10 @@ export class BranchesComponent implements OnInit {
     if (!q.trim()) return all;
     const deptHit = this._departments().some(d => bandMatch(q, d.name, d.code));
     if (deptHit) return all;
-    return all.filter(b =>
-      bandMatch(q, b.name, b.code, b.city, b.state)
-      || this._subBranches().some(sb => sb.branchId === b.id && bandMatch(q, sb.name, sb.code, sb.city, sb.type)));
+    return all.filter(b => bandMatch(q, b.name, b.code, b.city, b.state));
   });
 
   private readonly _branches = signal<Branch[]>([]);
-  private readonly _subBranches = signal<SubBranch[]>([]);
   private readonly _departments = signal<Department[]>([]);
   private readonly _spaces = signal<LabSpace[]>([]);
   /** Per-branch department→space placements. Departments are tenant-global —
@@ -793,31 +557,12 @@ export class BranchesComponent implements OnInit {
   private readonly _openIds = signal<Set<string>>(new Set());
 
   readonly branches = this._branches.asReadonly();
-  readonly subBranches = this._subBranches.asReadonly();
   readonly departments = this._departments.asReadonly();
-
-  readonly subBranchTypeOpts: PfSelectOption[] = [
-    { value: 'lab', label: 'Lab (in-house)' },
-    { value: 'collection-center', label: 'Collection center' },
-    { value: 'satellite', label: 'Satellite' }
-  ];
-
-  deptsAsOpts(depts: Department[]): PfSelectOption[] {
-    return depts.map(d => ({ value: d.id, label: d.name }));
-  }
-
-  subBranchesAsOpts(sbs: SubBranch[]): PfSelectOption[] {
-    return sbs.map(s => ({ value: s.id, label: s.name }));
-  }
 
   protected readonly newBranchOpen = signal(false);
   private readonly _newBranch = signal({ name: '', code: '', type: 'lab', city: '', state: '', hasPfBox: false });
   readonly newBranch = this._newBranch.asReadonly();
 
-
-  protected readonly addingSubBranchFor = signal<string | null>(null);
-  private readonly _subBranchDraft = signal({ name: '', code: '', type: 'lab', city: '' });
-  readonly subBranchDraft = this._subBranchDraft.asReadonly();
 
   /** Per-department inline sample-code error (deptId → message), routed from
    *  the shared ApiError contract (field "sampleCode" / code "sample_code_taken"). */
@@ -829,16 +574,7 @@ export class BranchesComponent implements OnInit {
   }
 
   ngOnInit() {
-    // Hierarchical fetch pulls branches with their sub-branches+departments eagerly
-    this.api.get<Branch[]>('/api/tenants/branches?includeSubBranches=true').subscribe({
-      next: list => {
-        const branches = list ?? [];
-        this._branches.set(branches);
-        const subs: SubBranch[] = [];
-        branches.forEach(b => { (b.subBranches ?? []).forEach(sb => subs.push(sb)); });
-        this._subBranches.set(subs);
-      }
-    });
+    this.api.get<Branch[]>('/api/tenants/branches').subscribe({ next: l => this._branches.set(l ?? []) });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({ next: l => this._departments.set(l ?? []) });
     this.api.get<LabSpace[]>('/api/tenants/lab-spaces').subscribe({ next: l => this._spaces.set(l ?? []) });
     this.api.get<DeptSpaceLink[]>('/api/tenants/department-space-links').subscribe({ next: l => this._links.set(l ?? []) });
@@ -858,7 +594,7 @@ export class BranchesComponent implements OnInit {
   /** Departments in this branch's default "Lab" lane = every department this
    *  branch hasn't placed into one of its own spaces. */
   branchDeptsNoSpace(branchId: string): Department[] {
-    return this.unassignedDeptsFor(branchId).filter(d => !this.linkFor(branchId, d.id));
+    return this._departments().filter(d => !this.linkFor(branchId, d.id));
   }
   /** Departments this branch has placed into the given space (space ids are
    *  branch-unique, so no extra branch filter is needed). */
@@ -953,21 +689,12 @@ export class BranchesComponent implements OnInit {
   }
   isOpen(id: string) { return this._openIds().has(id); }
 
-  subBranchesFor(branchId: string): SubBranch[] {
-    return this._subBranches().filter(sb => sb.branchId === branchId);
-  }
   // Departments come from the Test Master and are TENANT-GLOBAL — they are not
   // mapped to any branch. Every branch board shows the same full set; what
   // differs per branch is only the placement into that branch's spaces (the
   // link rows). A department's legacy branchId is ignored here.
   allDeptsFor(_branchId: string): Department[] {
     return this._departments();
-  }
-  unassignedDeptsFor(_branchId: string): Department[] {
-    return this._departments().filter(d => !d.subBranchId);
-  }
-  deptsForSubBranch(subBranchId: string): Department[] {
-    return this._departments().filter(d => d.subBranchId === subBranchId);
   }
 
   // ── Branch ─────────────────────────────────────
@@ -984,37 +711,6 @@ export class BranchesComponent implements OnInit {
     this.api.post<Branch>('/api/tenants/branches', b).subscribe({
       next: saved => { this._branches.update(list => [...list, saved]); this.toasts.success('Branch added'); this.toggleNewBranch(); },
       error: e => this.toasts.error(ApiError.from(e).message)
-    });
-  }
-
-  // ── Sub-branch ─────────────────────────────────
-  beginAddSubBranch(branchId: string) {
-    this.addingSubBranchFor.set(branchId);
-    this._subBranchDraft.set({ name: '', code: '', type: 'lab', city: '' });
-  }
-  patchSubBranchDraft(p: Partial<{ name: string; code: string; type: string; city: string }>) {
-    this._subBranchDraft.update(v => ({ ...v, ...p }));
-  }
-  cancelAddSubBranch() { this.addingSubBranchFor.set(null); }
-  createSubBranch(branchId: string) {
-    const d = this._subBranchDraft();
-    if (!d.name.trim() || !d.code.trim()) { this.toasts.warning('Name and code required'); return; }
-    this.api.post<SubBranch>(`/api/tenants/branches/${branchId}/sub-branches`, d).subscribe({
-      next: saved => {
-        this._subBranches.update(list => [...list, saved]);
-        this.toasts.success('Sub-branch added');
-        this.cancelAddSubBranch();
-      },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
-  }
-  deactivateSubBranch(sb: SubBranch) {
-    if (!sb.isActive) return;
-    this.api.delete(`/api/tenants/sub-branches/${sb.id}`).subscribe({
-      next: () => {
-        this._subBranches.update(list => list.map(x => x.id === sb.id ? { ...x, isActive: false } : x));
-        this.toasts.success('Sub-branch deactivated');
-      }
     });
   }
 
@@ -1095,25 +791,6 @@ export class BranchesComponent implements OnInit {
         this.toasts.success(isActive ? `${dept.name} reactivated` : `${dept.name} deactivated`);
       },
       error: e => this.toasts.error(ApiError.from(e).message)
-    });
-  }
-
-  // ── Assignment ─────────────────────────────────
-  assignDepartment(subBranchId: string, departmentId: string) {
-    if (!subBranchId || !departmentId) return;
-    this.api.post(`/api/tenants/sub-branches/${subBranchId}/departments/${departmentId}`, {}).subscribe({
-      next: () => {
-        this._departments.update(list => list.map(d => d.id === departmentId ? { ...d, subBranchId } : d));
-        this.toasts.success('Department assigned');
-      }
-    });
-  }
-  unassignDepartment(subBranchId: string, departmentId: string) {
-    this.api.delete(`/api/tenants/sub-branches/${subBranchId}/departments/${departmentId}`).subscribe({
-      next: () => {
-        this._departments.update(list => list.map(d => d.id === departmentId ? { ...d, subBranchId: undefined } : d));
-        this.toasts.success('Department unassigned');
-      }
     });
   }
 }

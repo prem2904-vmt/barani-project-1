@@ -16,7 +16,7 @@ function render() {
   // Always install the stub (never 'only if missing'): another spec in the same
   // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
   (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
-  const branch = { id: 'b1', name: 'Main', code: 'MAIN', city: 'Chennai', isActive: true, subBranches: [], departments: [] };
+  const branch = { id: 'b1', name: 'Main', code: 'MAIN', city: 'Chennai', isActive: true, departments: [] };
   const api = {
     get: vi.fn((url: string) => of(
       url.startsWith('/api/tenants/branches') ? [branch]

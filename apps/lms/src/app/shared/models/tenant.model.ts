@@ -66,26 +66,6 @@ export interface Branch {
   timezone: string;
   isActive: boolean;
   createdAt: string;
-  subBranches?: SubBranch[];
-  departments?: Department[];
-}
-
-export interface SubBranch {
-  id: string;
-  tenantId: string;
-  branchId: string;
-  name: string;
-  code: string;
-  type: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  stateCode?: string;
-  phone?: string;
-  email?: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt?: string;
   departments?: Department[];
 }
 
@@ -102,7 +82,6 @@ export interface Department {
   id: string;
   tenantId: string;
   branchId?: string;
-  subBranchId?: string;
   /** The lab space this department is assigned to (null = unassigned). */
   spaceId?: string | null;
   name: string;
