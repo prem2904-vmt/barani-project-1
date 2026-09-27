@@ -23,6 +23,7 @@ import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -200,7 +201,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                            inputmode="numeric"
                            min="0"
                            step="1"
-                           [attr.max]="discountKind() === 'percent' ? 100 : (b.subTotal + b.totalTax)"
+                           [attr.max]="discountKind() === 'percent' ? 100 : preDiscountGross()"
                            [class.pf-discount__input--err]="discountOverCap() || !!discountError()"
                            [value]="discount()"
                            (input)="setDiscount(asInput($event))"
@@ -1709,8 +1710,9 @@ export class BillingComponent implements OnInit, OnChanges {
     if (this._discountKind() === 'flat') return raw;
     const b = this._bill();
     if (!b) return 0;
-    const base = b.subTotal + b.totalTax;
-    return Math.max(0, Math.min(base, Math.round((base * raw) / 100)));
+    // % of the pre-discount gross, rounded DOWN to the paisa (never up to a
+    // whole rupee — that pushed small bills over the cap).
+    return percentDiscountAmount(this.preDiscountGross(), raw);
   });
   /** The full invoice total after the reception discount (no payments applied). */
   readonly fullTotal = computed(() => {
@@ -1840,11 +1842,10 @@ export class BillingComponent implements OnInit, OnChanges {
     : this.auth.hasPermission('give_discount') ? this._maxDiscountPct()
     : 0);
   /** Entered discount as a % of the bill's pre-discount total. */
-  readonly discountPct = computed(() => {
-    const b = this._bill();
-    const base = b ? b.subTotal + b.totalTax : 0;
-    return base > 0 ? (this.discountNum() / base) * 100 : 0;
-  });
+  /** The bill's pre-discount gross (price + full-price GST) — the base of
+   *  every discount % here and of the server's cap check. */
+  readonly preDiscountGross = computed(() => billPreDiscountGross(this._bill()));
+  readonly discountPct = computed(() => discountPctOf(this.discountNum(), this.preDiscountGross()));
   /** True when the entered discount exceeds the user's cap → block + notify. */
   readonly discountOverCap = computed(() =>
     this.discountNum() > 0 && this.discountPct() > this.discountCapPct() + 0.01);
@@ -2058,7 +2059,7 @@ export class BillingComponent implements OnInit, OnChanges {
       return;
     }
     const b = this._bill();
-    const cap = b ? b.subTotal + b.totalTax : Number.POSITIVE_INFINITY;
+    const cap = b ? billPreDiscountGross(b) : Number.POSITIVE_INFINITY;
     const n = Math.min(raw, cap);
     this._discount.set(n === 0 ? '' : String(n));
   }

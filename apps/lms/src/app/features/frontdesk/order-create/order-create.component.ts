@@ -17,6 +17,7 @@ import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList, filterTestListStrict } from '../../../shared/utils/test-search';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, taxSlabOf } from '../../../shared/utils/test-pricing';
+import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -810,14 +811,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const raw = parseFloat(this.discountValue() || '0');
     if (!isFinite(raw) || raw <= 0) return 0;
     const base = this.subtotal() + this.gst();
-    const amt = this.discountKind() === 'percent' ? Math.round(base * raw / 100) : raw;
+    // Percent → ₹ rounded DOWN to the paisa, never up to whole rupees: on a
+    // small cart (₹3) 17% rounded to ₹1 = 33% and tripped the 25% cap.
+    const amt = this.discountKind() === 'percent' ? percentDiscountAmount(base, raw) : raw;
     return Math.max(0, Math.min(amt, base));
   });
-  /** Entered discount as a % of the pre-discount total. */
-  readonly discountPct = computed(() => {
-    const base = this.subtotal() + this.gst();
-    return base > 0 ? (this.discountAmount() / base) * 100 : 0;
-  });
+  /** Entered discount as a % of the pre-discount gross (subtotal + GST) — the
+   *  same base the server's cap check uses (BillingService.PreDiscountGross). */
+  readonly discountPct = computed(() => discountPctOf(this.discountAmount(), this.subtotal() + this.gst()));
   /** True when the entered discount exceeds this user's cap → block + notify. */
   readonly discountOverCap = computed(() =>
     this.allowDiscounts() && this.discountAmount() > 0 && this.discountPct() > this.discountCapPct() + 0.01);
@@ -1757,7 +1758,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!p || this.confirming() || this._selected().length === 0) return;
     if (this.requireSpecimens()) return;
     if (this.discountOverCap()) {
-      this.toasts.error(`Discount ${this.discountPct().toFixed(0)}% exceeds your limit of ${this.discountCapPct()}%. Reduce it to continue.`);
+      this.toasts.error(`Discount ${fmtPct(this.discountPct())} exceeds your limit of ${fmtPct(this.discountCapPct())}. Reduce it to continue.`);
       return;
     }
     this.confirming.set(true);
