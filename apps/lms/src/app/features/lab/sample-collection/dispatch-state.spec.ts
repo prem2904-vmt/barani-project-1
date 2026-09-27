@@ -32,6 +32,25 @@ describe('isOrderDispatched', () => {
   });
 });
 
+describe('isOrderDispatched — not-collected tubes (QA #6)', () => {
+  it('an order whose every tube was not collected is NOT dispatched', () => {
+    expect(isOrderDispatched([{ status: 'rejected' }])).toBe(false);
+    expect(isOrderDispatched([{ status: 'rejected' }, { status: 'rejected' }])).toBe(false);
+  });
+
+  it('ignores a not-collected tube beside a dispatched one', () => {
+    expect(isOrderDispatched([{ status: 'dispatched' }, { status: 'rejected' }])).toBe(true);
+  });
+
+  it('a not-collected tube never lets a collected sibling read as dispatched', () => {
+    expect(isOrderDispatched([{ status: 'collected' }, { status: 'rejected' }])).toBe(false);
+  });
+
+  it('a drawn tube the lab rejected (collectedAt set) still counts as past the counter', () => {
+    expect(isOrderDispatched([{ status: 'rejected', collectedAt: '2026-09-27T08:00:00Z' }])).toBe(true);
+  });
+});
+
 describe('countCollected', () => {
   it('counts only tubes awaiting dispatch', () => {
     expect(countCollected(s('collected', 'collected', 'dispatched', 'pending'))).toBe(2);

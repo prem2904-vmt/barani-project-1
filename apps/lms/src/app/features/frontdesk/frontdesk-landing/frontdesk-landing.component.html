@@ -888,7 +888,17 @@
                         <span class="nd-rowact__t">Bill</span>
                       </button>
                       }
-                      @if (sampleStatus(o) === 'partially_collected' || showCollectOn(o)) {
+                      @if (showRecollectOn(o)) {
+                      <!-- A tube was marked "Can't collect": the patient came back →
+                           Recollect (reopens it to pending). Never Collect / Dispatch
+                           as if nothing happened (QA #6). -->
+                      <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        [disabled]="recollecting() === o.id" (click)="recollectOrder(o)" aria-label="Recollect">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
+                        <span class="nd-rowact__t">@if (recollecting() === o.id) { Reopening… } @else { Recollect }</span>
+                      </button>
+                      } @else if (sampleStatus(o) === 'partially_collected' || showCollectOn(o)) {
                       <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
                         (click)="collectSample(o)" aria-label="Collect">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -1222,6 +1232,11 @@
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="2 6 5 9 10 3" />
+              </svg>
+              } @else if (step.state === 'stopped') {
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3l6 6M9 3l-6 6" />
               </svg>
               }
             </span>

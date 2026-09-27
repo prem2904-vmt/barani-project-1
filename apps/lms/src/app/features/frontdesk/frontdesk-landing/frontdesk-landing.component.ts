@@ -107,8 +107,9 @@ import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { drawerAgeSex, drawerName, orderStatusState } from './order-drawer';
-import { canBulkDispatch, createWorkSelection, workRowTone } from './work-selection';
+import { drawerAgeSex, drawerName, drawerPipeline, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
+import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
+import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -1986,6 +1987,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  have actually been dispatched / received, show the further-along state.
    *  Past the lab (validated/delivered/etc.) the raw status wins. */
   effectiveStatusLabel(o: Order): string {
+    // "Can't collect" (QA #6): the tube was never drawn — say so, with the
+    // reason, instead of the raw rollup ('Rejected' / 'Partially Rejected',
+    // or worse a stale 'Dispatched').
+    if (o.status !== 'cancelled' && o.status !== 'delivered') {
+      const nc = notCollectedLabel(o.samples);
+      if (nc) return nc;
+    }
     // A live repeat series (some tubes drawn, timed points still pending)
     // reads as its own state — the raw order status ('billed'/'collected')
     // under-describes an OGTT mid-run.
@@ -2020,6 +2028,34 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/lab/collect'], { queryParams: { orderId: o.id } });
   }
 
+  /** Row "Recollect" — a tube on this order was marked not collected and the
+   *  patient is back. Takes the Collect slot (never Collect / Dispatch for a
+   *  not-collected order). Needs collect_sample, like the endpoint. */
+  showRecollectOn(o: Order): boolean {
+    return this.auth.hasPermission('collect_sample') && canRecollect(o);
+  }
+  private readonly _recollecting = signal<string | null>(null);
+  readonly recollecting = this._recollecting.asReadonly();
+  /** Reopen every not-collected tube (PATCH /api/samples/{id}/recollect → back
+   *  to pending, back in the collection queue), then go draw them when the
+   *  desk collects here, else leave them in the queue for the collector. */
+  async recollectOrder(o: Order) {
+    const tubes = notCollectedSamples(o.samples);
+    if (tubes.length === 0 || this._recollecting()) return;
+    this._recollecting.set(o.id);
+    const res = await Promise.all(tubes.map(s =>
+      firstValueFrom(this.api.patch(`/api/samples/${s.id}/recollect`, {}))
+        .then(() => null).catch((e: unknown) => ApiError.from(e))));
+    this._recollecting.set(null);
+    const failed = res.filter((e): e is ApiError => e !== null);
+    const ok = tubes.length - failed.length;
+    if (failed.length) this.toasts.error(failed[0].message);
+    if (ok === 0) return;
+    this.toasts.success(`${ok} tube${ok === 1 ? '' : 's'} back in the collection queue`);
+    if (this.labCfg.collectsAtFrontdesk()) this.collectSample(o);
+    else this.fetchOrdersWithEtag();
+  }
+
   // Dispatch button: visible when every tube on the order has been
   // collected but none has left for the lab yet. The FD/courier desk taps
   // it to mark all collected tubes 'dispatched' in one go.
@@ -2049,7 +2085,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Per-tube status in 5 buckets — finer than order.status. Drives the
       FD slim card's per-dept badge + the action button gating. */
   sampleStatus(o: Order): 'pending' | 'partially_collected' | 'fully_collected' | 'dispatched' | 'received' {
-    const samples = o.samples ?? [];
+    // Not-collected tubes are a sink — they never make an order look
+    // (partially) collected or dispatched (QA #6: collected + not-collected
+    // used to read 'partially_collected' and re-offer Collect).
+    const samples = (o.samples ?? []).filter(s => !isNotCollected(s));
     if (samples.length === 0) return 'pending';
     const isAtOrPast = (s: string, target: string) => {
       const order = ['pending', 'collected', 'dispatched', 'in_transit', 'received', 'processing'];
@@ -2867,56 +2906,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       default: return 'default';
     }
   }
-  pipeline(o: Order): Array<{ label: string; state: 'done' | 'active' | 'pending' }> {
-    const billDone = o.status !== 'draft' && o.status !== 'created';
-    const collected = o.samples.some(s => s.status && s.status !== 'pending');
-    const dispatched = o.samples.some(s => s.status === 'dispatched' || s.status === 'in_transit'
-      || s.status === 'received' || s.status === 'processing');
-    const received = o.samples.some(s => s.status === 'received' || s.status === 'processing');
-    // "Report" step is done once the order has reached validated /
-    // partially_validated / delivered / completed — those all mean
-    // the lab work is signed off and the report is generated.
-    const reportDone = o.status === 'validated' || o.status === 'partially_validated'
-                    || o.status === 'delivered'  || o.status === 'completed';
-    // "Result" step is done as soon as every test has a value entered
-    // or already validated. Differs from reportDone — entered values
-    // still need a pathologist's signature before the report exists.
-    const allTests = o.samples.flatMap(s => s.tests ?? []);
-    const allTestsResulted = allTests.length > 0
-      && allTests.every(t => t.status === 'validated' || t.status === 'entered');
-    const anyResult = allTests.some(t => t.status === 'validated' || t.status === 'entered');
-    return [
-      { label: 'Billing', state: billDone ? 'done' : 'active' },
-      { label: 'Sample', state: collected ? 'done' : billDone ? 'active' : 'pending' },
-      { label: 'Dispatch', state: received ? 'done' : dispatched ? 'done' : collected ? 'active' : 'pending' },
-      { label: 'Result', state: allTestsResulted ? 'done' : anyResult ? 'active' : received ? 'active' : 'pending' },
-      { label: 'Report', state: reportDone ? 'done' : anyResult ? 'active' : 'pending' }
-    ];
+  /** Drawer timeline — see order-drawer.ts drawerPipeline (not-collected aware). */
+  pipeline(o: Order): PipelineStep[] {
+    return drawerPipeline(o);
   }
-  stepCaption(o: Order, step: { label: string; state: 'done' | 'active' | 'pending' }): string {
-    if (step.state === 'pending') return 'Pending';
-    switch (step.label) {
-      case 'Billing': return step.state === 'done' ? 'Billed' : 'Billing in progress';
-      case 'Sample': {
-        const total = o.samples.length;
-        const collected = o.samples.filter(s => s.status && s.status !== 'pending').length;
-        const received = o.samples.filter(s => s.status === 'received' || s.status === 'processing').length;
-        return step.state === 'done' ? `${received}/${total} received at lab` : `${collected}/${total} collected`;
-      }
-      case 'Result': {
-        const all = o.samples.flatMap(s => s.tests ?? []);
-        const validated = all.filter(t => t.status === 'validated' || t.status === 'entered').length;
-        return `${validated}/${all.length} tests resulted`;
-      }
-      case 'Report': {
-        if (step.state !== 'done') return 'Awaiting validation';
-        if (o.status === 'delivered') return 'Report delivered';
-        if (o.status === 'partially_validated') return 'Partial ready · awaiting full sign-off';
-        // 'validated' / 'completed' → ready for handover at the desk.
-        return 'Ready for delivery';
-      }
-      default: return '';
-    }
+  stepCaption(o: Order, step: PipelineStep): string {
+    return drawerStepCaption(o, step);
   }
   readonly patientTokens = computed(() => {
     const tokens = new Map<string, number>();
