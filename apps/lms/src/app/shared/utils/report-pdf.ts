@@ -1041,7 +1041,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     cursorY = renderTrendogramSection(doc, input.trendograms, cursorY, practice);
   }
 
-  // ── "Thanks for Reference  ...  ****End of Report****" line ────
+  // ── "****End of Report****" line ────
   if (cursorY > A4.h - MARGIN_BOTTOM - 26) { cursorY = newPage(doc, practice); }
   cursorY = drawEndOfReport(doc, snap, cursorY);
 
@@ -4033,7 +4033,7 @@ function renderCultureSection(
 }
 
 // ──────────────────────────────────────────────────────────────
-// "Thanks for Reference  ...  ****End of Report****"
+// "****End of Report****"
 // ──────────────────────────────────────────────────────────────
 
 /**
@@ -4085,7 +4085,7 @@ function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number): numb
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(BLACK);
-  doc.text('Thanks for Reference', MARGIN_X, y);
+  // No "Thanks for Reference" line (owner, 2026-09-28) — only the marker.
   // Admin-configurable marker — defaults to "****End of Report****".
   // Preliminary reports get an explicit "PRELIMINARY" wrapper.
   const marker = snap.isPartial
