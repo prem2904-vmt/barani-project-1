@@ -2651,7 +2651,7 @@ const COUNTERS: CounterSpec[] = [
        16.5px / 600 / normal text colour, Noto tabular — the biggest thing
        on the tile. Patient name 13/500 secondary, meta 12 muted. */
     :host-context(.design-new) .pf-tq__id {
-      font-family: inherit !important; font-size: 16.5px !important; font-weight: 600 !important;
+      font-family: inherit !important; font-size: 15px !important; font-weight: 600 !important;
       color: var(--text-primary) !important; font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
     }
     :host-context(.design-new) .pf-tq__who { font-size: 13px !important; font-weight: 500 !important; color: var(--text-secondary) !important; }

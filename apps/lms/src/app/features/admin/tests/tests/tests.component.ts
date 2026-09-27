@@ -557,7 +557,7 @@ export class TestsComponent implements OnInit {
       {
         headerName: 'Name', colId: 'treeName', flex: 3, minWidth: 260, pinned: 'left',
         sortable: false, filter: false, editable: false, sort: null,
-        ...WRAP2, tooltipValueGetter: p => p.data?.name,
+        tooltipValueGetter: p => p.data?.name,
         cellRenderer: this.nameCellRenderer,
         valueGetter: p => p.data?.name,
       },
@@ -820,7 +820,7 @@ export class TestsComponent implements OnInit {
     }
 
     const label = document.createElement('span');
-    label.className = 'pf-tm-tree-name pf-tm-clamp2' + (data?._hasChildren ? ' pf-tm-tree-name--bundle' : '');
+    label.className = 'pf-tm-tree-name' + (data?._hasChildren ? ' pf-tm-tree-name--bundle' : '');
     label.textContent = data?.name ?? '';
     wrap.appendChild(label);
     if (data && !isOffered(data)) wrap.appendChild(notOfferedElement());
