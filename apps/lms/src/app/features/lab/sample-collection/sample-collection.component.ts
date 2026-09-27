@@ -1811,8 +1811,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (failed.length) this.toasts.error(failed[0].error!.message);
     this._rejectModal.set(null);
     this.sampleCollected.emit();
-    // Back to the Frontdesk (deep link) or the queue — never a dead page.
-    this.close();
+    // All marked → back to the Frontdesk (deep link) or the queue — never a
+    // dead page. Some failed → stay and refresh so the desk sees what's left.
+    if (failed.length === 0) this.close();
+    else this.refresh();
   }
 
   /** Recollect a "Can't collect" tube — the patient is back. The tube returns

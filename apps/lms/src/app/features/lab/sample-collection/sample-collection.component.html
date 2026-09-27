@@ -963,26 +963,28 @@
             <h2 class="pf-rej__title">Can't collect for {{ r.group.patientName }}</h2>
             <p class="pf-rej__sub">Pick a reason. The {{ pendingCount(r.group) === 1 ? 'tube is' : pendingCount(r.group) + ' pending tubes are' }} marked <b>Not collected</b> with it — use <b>Recollect</b> on the Frontdesk when the patient is back.</p>
           </header>
-          <div class="pf-rej__chips">
-            @for (opt of REJECT_REASONS; track opt.code) {
-              <button type="button" class="pf-rej__chip"
-                      [class.pf-rej__chip--on]="r.reason === opt.code"
-                      (click)="setRejectReason(opt.code)">
-                {{ opt.label }}
-              </button>
+          <div class="pf-rej__body">
+            <div class="pf-rej__chips">
+              @for (opt of REJECT_REASONS; track opt.code) {
+                <button type="button" class="pf-rej__chip"
+                        [class.pf-rej__chip--on]="r.reason === opt.code"
+                        (click)="setRejectReason(opt.code)">
+                  {{ opt.label }}
+                </button>
+              }
+            </div>
+            @if (r.reason === 'other') {
+              <label class="pf-rej__label">Reason</label>
+              <textarea class="pf-input pf-rej__note" rows="2"
+                        placeholder="Describe what happened…"
+                        [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
+            } @else if (r.reason) {
+              <label class="pf-rej__label">Notes (optional)</label>
+              <textarea class="pf-input pf-rej__note" rows="2"
+                        placeholder="Anything the lab should know…"
+                        [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
             }
           </div>
-          @if (r.reason === 'other') {
-            <label class="pf-rej__label">Reason</label>
-            <textarea class="pf-input pf-rej__note" rows="2"
-                      placeholder="Describe what happened…"
-                      [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
-          } @else if (r.reason) {
-            <label class="pf-rej__label">Notes (optional)</label>
-            <textarea class="pf-input pf-rej__note" rows="2"
-                      placeholder="Anything the lab should know…"
-                      [ngModel]="r.note" (ngModelChange)="setRejectNote($event)"></textarea>
-          }
           <footer class="pf-rej__foot">
             <button type="button" class="pf-btn pf-btn-ghost nd-btn nd-btn--secondary" (click)="cancelReject()">Cancel</button>
             <button type="button" class="pf-btn pf-btn-danger nd-btn nd-btn--danger"

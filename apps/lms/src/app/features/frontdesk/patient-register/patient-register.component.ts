@@ -68,12 +68,12 @@ import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-order press" [disabled]="saving() || !config()"
                     (click)="submit('create_order')" aria-label="Save & book test" title="Register, then book a test">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.4A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.4-2.6L14 9.5V3"/><path d="M7.5 15h9"/></svg>
-              Save &amp; book test
+              Save &amp; Book test
             </button>
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-appt press" [disabled]="saving() || !config()"
                     (click)="submit('create_appointment')" aria-label="Save & book appointment" title="Register, then book an appointment">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-              Save &amp; book appointment
+              Save &amp; Book appointment
             </button>
           }
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-reg-primary press" [disabled]="saving() || !config()"

@@ -2726,7 +2726,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** "Urgent" switch in the billing card — the same order-priority field the
    *  old Normal/Urgent switch set. Locked on a read-only order. */
   toggleUrgent(): void {
-    if (this.isReadOnly()) return;
+    if (this.orderLocked()) return;
     this.setPriority(this._priority() === 'Urgent' ? 'Normal' : 'Urgent');
   }
 

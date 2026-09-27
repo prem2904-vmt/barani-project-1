@@ -131,7 +131,7 @@ describe('Patient registration — new design: ONE form', () => {
     expect(txt(primaries[0])).toBe('Register patient');
     expect(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary, .pf-btn-primary').length).toBe(1);
     const ghosts = Array.from(el.querySelectorAll('pf-hero-band .pf-hb-btn--ghost')).map(b => txt(b));
-    expect(ghosts).toEqual(['Cancel', 'Save & book test', 'Save & book appointment']);
+    expect(ghosts).toEqual(['Cancel', 'Save & Book test', 'Save & Book appointment']);
     expect(el.querySelector('pf-screen-header, h1')).toBeNull();
     const p = el.querySelector('.pf-reg-primary')!;
     expect(p.querySelector('svg')).not.toBeNull();

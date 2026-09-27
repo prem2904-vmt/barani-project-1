@@ -112,8 +112,8 @@ describe('My Work — round 5 (owner): headers, counts, row actions, dots', () =
 
 describe('My Work — round 6 (owner): sample ID is the primary line', () => {
   const css = () => ((MyWorkComponent as any).ɵcmp.styles as string[]).join('\n');
-  it('tile ID is 16.5px / 600 / primary text colour; name 13px secondary', () => {
-    expect(css()).toMatch(/\.design-new[^{]*\.pf-tq__id[^{]*\{[^}]*font-size:\s*16\.5px\s*!important;\s*font-weight:\s*600\s*!important;[^}]*color:\s*var\(--text-primary\)/);
+  it('tile ID is 15px / 600 / primary text colour; name 13px secondary', () => {
+    expect(css()).toMatch(/\.design-new[^{]*\.pf-tq__id[^{]*\{[^}]*font-size:\s*15px\s*!important;\s*font-weight:\s*600\s*!important;[^}]*color:\s*var\(--text-primary\)/);
     expect(css()).toMatch(/\.design-new[^{]*\.pf-tq__who[^{]*\{[^}]*font-size:\s*13px/);
   });
   it('normal-priority tiles lose the stripe (urgent / high keep theirs)', () => {

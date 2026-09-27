@@ -604,7 +604,7 @@ export class InlinePaymentPanelComponent {
       case "split":
         return this.splitOk();
       case "later":
-        return !this.advanceOver();
+        return !this.advanceOver() && this.amount() > 0;
       default:
         return this.amount() > 0;
     }

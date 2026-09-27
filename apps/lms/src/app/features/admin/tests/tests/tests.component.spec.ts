@@ -367,11 +367,14 @@ describe('Test Master grid — column sizing: slim actions, wrap instead of crop
     expect(col(c, 'name').minWidth).toBeGreaterThanOrEqual(200);
   });
 
-  it('profiles / packages: the tree name wraps too', () => {
+  it('profiles / packages: the tree name stays on one line with its full name in the tooltip', () => {
     const { c } = make([hb({ id: 'p', type: 'profile', name: 'Liver Function Test with a long name' })]);
     c.setType('profile');
     const d = col(c, 'treeName');
-    expect(d.wrapText).toBe(true);
-    expect(d.autoHeight).toBe(true);
+    expect(d.wrapText).not.toBe(true);
+    expect(d.autoHeight).not.toBe(true);
+    expect(d.tooltipValueGetter).toBeTruthy();
+    const name = d.cellRenderer({ value: 'Liver Function Test with a long name', data: hb({ id: 'p', type: 'profile' }) });
+    expect(name.querySelector('.pf-tm-tree-name')!.classList.contains('pf-tm-clamp2')).toBe(false);
   });
 });
