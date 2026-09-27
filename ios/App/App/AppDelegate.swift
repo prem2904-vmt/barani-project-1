@@ -7,7 +7,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Chat notifications: register the CHAT_MESSAGE category (Reply /
+        // Mark as read) and own the notification delegate BEFORE launch ends —
+        // a Reply typed on the lock screen may be what launched us, and it is
+        // handled natively (ChatReply.swift) without the web UI.
+        ChatNotificationCenter.shared.install()
         return true
     }
 

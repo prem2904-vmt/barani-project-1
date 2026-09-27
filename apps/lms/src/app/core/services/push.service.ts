@@ -10,6 +10,8 @@ import { AuthService } from '../auth/auth.service';
 import { WebrtcService } from './webrtc.service';
 import { NativeRingState } from './native-ring.state';
 import { SignalingService } from './signaling.service';
+import { SessionScopeService } from '../auth/session-scope.service';
+import { environment } from '../../../environments/environment';
 
 /**
  * Push notification + CallKit/VoIP orchestration for the Capacitor app.
@@ -46,8 +48,26 @@ export class PushService {
   private readonly webrtc = inject(WebrtcService);
   private readonly nativeRing = inject(NativeRingState);
   private readonly injector = inject(Injector);
+  private readonly scope = inject(SessionScopeService);
 
   constructor() {
+    // Account switch / sign-out: the reply-from-notification token of the
+    // previous account is wiped from native storage at once (the server has
+    // revoked it too — the device row is re-homed or deleted). The next
+    // account's registration issues its own.
+    // (prev == null is just boot / first sign-in — nothing of another account to wipe.)
+    this.scope.onChange(c => {
+      if (!c.prev) return;
+      this.replyTokenFor = null;
+      void this.clearNativeReply();
+    });
+    // Back in the foreground → re-issue if the stored token is a day old.
+    try {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') void this.syncNativeReply();
+      });
+    } catch { /* SSR */ }
+
     // The APNs/VoIP tokens usually arrive at app startup BEFORE the user logs
     // in, so the first POST /api/devices/register returns 401 and the backend
     // never gets the token. Re-post whenever we're authenticated AND hold a
@@ -119,17 +139,17 @@ export class PushService {
       this.handleIncomingPayload(data, /*opened=*/ true, a.notification?.title, a.notification?.body);
     });
 
-    // Register the chat-message notification category so iOS shows an inline
-    // "Reply" text field on the lockscreen/banner. Shares the system
-    // UNUserNotificationCenter, so it matches the APNs aps.category we send.
-    try {
-      await LocalNotifications.registerActionTypes({
-        types: [{
-          id: 'CHAT_MESSAGE',
-          actions: [{ id: 'REPLY', title: 'Reply', input: true, inputButtonTitle: 'Send', inputPlaceholder: 'Message…' }],
-        }],
-      });
-    } catch (err) { console.warn('[push] registerActionTypes failed', err); }
+    // The CHAT_MESSAGE category (Reply / Mark as read) is registered NATIVELY
+    // at launch (ios/App/App/ChatReply.swift) and its actions are handled
+    // there without the web UI. Registering it from JS as well would REPLACE
+    // the native set (setNotificationCategories is all-or-nothing). The
+    // REPLY branch above stays as a fallback for an older native shell.
+
+    // Taps on native chat notifications (Android) and on "Couldn't send — tap
+    // to open" notices arrive as prefrontal-chat://open?c=<id>.
+    void import('./chat-native-reply')
+      .then(m => m.wireChatOpenLinks(id => void this.router.navigate(['/messages'], { queryParams: { c: id } })))
+      .catch(() => undefined);
 
     // Android 8+ requires the notification channel to EXIST before a push
     // referencing it can display. The FCM payload hardcodes
@@ -221,6 +241,40 @@ export class PushService {
     }
   }
 
+  /** `${userId}|${appToken}` the native reply token was last issued for, and when. */
+  private replyTokenFor: string | null = null;
+  private replyTokenAt = 0;
+
+  /** Hand this device's reply-from-notification token to the native layer
+   *  (Keychain / EncryptedSharedPreferences). Re-issued when the account or
+   *  push token changes, or daily; the server token lives 30 days. */
+  private async syncNativeReply(): Promise<void> {
+    const appToken = this.appToken();
+    const user = this.auth.user();
+    if (!appToken || !user || !this.platform.isCapacitor()) return;
+    const key = `${user.id}|${appToken}`;
+    if (this.replyTokenFor === key && Date.now() - this.replyTokenAt < 24 * 3600_000) return;
+    this.replyTokenFor = key;
+    this.replyTokenAt = Date.now();
+    try {
+      const [m, { ChatHistoryService }] = await Promise.all([
+        import('./chat-native-reply'), import('./chat-history.service'),
+      ]);
+      let deviceId: string | null = null;
+      try { deviceId = await this.injector.get(ChatHistoryService).deviceId(); } catch { /* memory store */ }
+      if (this.auth.user()?.id !== user.id) return; // switched meanwhile
+      const ok = await m.syncReplyCredentials({
+        api: this.api, apiUrl: environment.apiUrl, appToken, deviceId, userId: user.id,
+      });
+      if (!ok) this.replyTokenFor = null;
+    } catch { this.replyTokenFor = null; }
+  }
+
+  private async clearNativeReply(): Promise<void> {
+    if (!this.platform.isCapacitor()) return;
+    try { await (await import('./chat-native-reply')).clearReplyCredentials(); } catch { /* old shell */ }
+  }
+
   /** Guards against overlapping registration runs (the auth effect can fire
    *  several times in quick succession on boot/login). */
   private _registering = false;
@@ -251,6 +305,7 @@ export class PushService {
             voipToken: this.voipToken(),
             appVersion: this.appVersion()
           }));
+          void this.syncNativeReply();
           return; // landed
         } catch (err) {
           // eslint-disable-next-line no-console
@@ -295,6 +350,9 @@ export class PushService {
         .catch(() => undefined);
     }
     if (!this.platform.isCapacitor()) return;
+    // The reply-from-notification token goes BEFORE anything else.
+    this.replyTokenFor = null;
+    await this.clearNativeReply();
     const tok = this.appToken();
     const voip = this.voipToken();
     // Name BOTH tokens: an iPhone's PushKit token can sit in a row of its own
@@ -397,7 +455,9 @@ export class PushService {
   private appVersion(): string {
     // App version is bumped in package.json — we report it so the
     // backend can target pushes to specific app versions if needed
-    // (e.g. for a forced upgrade prompt).
-    return '0.1.0';
+    // (e.g. for a forced upgrade prompt). 0.2.0 = this build renders chat
+    // pushes natively (Android data messages with inline Reply) — the server
+    // keeps sending older builds the plain notification message.
+    return '0.2.0';
   }
 }

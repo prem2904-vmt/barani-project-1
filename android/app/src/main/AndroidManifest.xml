@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -41,6 +43,13 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Chat notification actions (Reply via RemoteInput / Mark as read):
+             POSTs natively with the reply token, never opens the app. Only our
+             own PendingIntents reach it (not exported). -->
+        <receiver
+            android:name=".chat.ChatReplyReceiver"
+            android:exported="false" />
 
         <!-- Ongoing call: Android mutes the mic for a process with no visible
              activity unless a microphone foreground service runs — without it

@@ -48,6 +48,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('call:action', h);
     }
   },
+  // Chat notifications with an inline Reply on macOS; Reply / click come
+  // back through onAction as { type: 'reply' | 'open', conversationId, text }.
+  chatNotify: {
+    show: (info) => ipcRenderer.send('chat:notify', info),
+    onAction: (cb) => {
+      const h = (_e, a) => cb(a);
+      ipcRenderer.on('chat:action', h);
+      return () => ipcRenderer.removeListener('chat:action', h);
+    }
+  },
   // Document/invoice printers = the OS-installed printers (for A4 output).
   doc: {
     listPrinters: () => ipcRenderer.invoke('doc:listPrinters'),

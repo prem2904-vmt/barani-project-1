@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Injectable, Injector, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -6,7 +6,8 @@ import { AuthService } from '../auth/auth.service';
 import { ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiService } from './api.service';
 import { RingtoneService } from './ringtone.service';
-import { ChatNotifyService } from './chat-notify.service';
+import { ChatNotifyService, electronChatNotify } from './chat-notify.service';
+import { Router } from '@angular/router';
 import { PlatformService } from './platform.service';
 import { ToastService } from './toast.service';
 import { SessionScopeService } from '../auth/session-scope.service';
@@ -49,6 +50,7 @@ export class ChatService implements OnDestroy {
   private readonly popups = inject(ChatPopupService);
   private readonly windows = inject(ChatWindowsService);
   private readonly hubFactory = inject(HUB_FACTORY);
+  private readonly injector = inject(Injector);
   /** On-device history + relay sync/ack (the server only relays). */
   readonly history = inject(ChatHistoryService);
   private connection: signalR.HubConnection | null = null;
@@ -63,6 +65,13 @@ export class ChatService implements OnDestroy {
   private typingClearTimers = new Map<string, number>(); // convId|userId → setTimeout id
   private readonly viewers = new Map<symbol, { kind: ChatViewerKind; ids: () => readonly (string | null)[] }>();
   private lifecycleWired = false;
+  /** Reports this device's foreground thread(s) to the hub so the server
+   *  skips pushing a device that is showing the thread (lazy chunk). */
+  private foreground: { poke(): void; resend(): void; stop(): void } | null = null;
+  /** Bumped when a viewer registers / leaves, so effects re-track its ids(). */
+  private readonly viewersVersion = signal(0);
+  private foregroundFor: signalR.HubConnection | null = null;
+  private webPushHandle: { at: number; value: string | null } | null = null;
 
   readonly isConnected = signal(false);
   readonly conversations = signal<Conversation[]>([]);
@@ -105,6 +114,14 @@ export class ChatService implements OnDestroy {
     // Account switch / add account / sign-out: nothing from the previous
     // account may survive — socket, stores, windows, timers.
     this.scope.onChange(() => this.resetForSession());
+    // Desktop app: Reply / click on a native chat notification.
+    electronChatNotify()?.onAction(a => void this.onDesktopNotificationAction(a));
+    // The on-screen thread(s) changed (thread opened / switched / window
+    // docked) → tell the hub soon, so pushes for it stop / resume.
+    effect(() => {
+      this.viewedConversationIds();
+      untracked(() => this.foreground?.poke());
+    });
   }
 
   /** Chat identity of the signed-in user (Supabase sub, fallback app id). */
@@ -184,6 +201,7 @@ export class ChatService implements OnDestroy {
       conn.onreconnected(async () => {
         if (this.connection !== conn) return;
         this.isConnected.set(true);
+        this.attachForeground(conn); // new server connection → resend the state
         // Messages that arrived while we were away: the list (unread counts,
         // last message, read receipts) is re-read from the server, and
         // everything pending for this device is pulled into the local store.
@@ -205,6 +223,7 @@ export class ChatService implements OnDestroy {
       throw err;
     }
     this.isConnected.set(true);
+    this.attachForeground(this.connection);
     try { await this.loadConversations(); } catch { /* user has no chats yet */ }
     void this.syncHistory();
   }
@@ -343,6 +362,10 @@ export class ChatService implements OnDestroy {
    * window and pop-up. Safe to call when nothing is connected.
    */
   async resetForSession(): Promise<void> {
+    this.foreground?.stop();
+    this.foreground = null;
+    this.foregroundFor = null;
+    this.webPushHandle = null;
     const old = this.connection;
     this.connection = null;
     this.connectedAs = null;
@@ -383,7 +406,8 @@ export class ChatService implements OnDestroy {
     const key = Symbol(kind);
     this.viewers.set(key, { kind, ids });
     queueMicrotask(() => this.catchUpReads());
-    return () => { this.viewers.delete(key); };
+    this.viewersVersion.update(v => v + 1);
+    return () => { this.viewers.delete(key); this.viewersVersion.update(v => v + 1); };
   }
 
   private static docVisible(): boolean {
@@ -401,6 +425,60 @@ export class ChatService implements OnDestroy {
     // Docked windows (web/iPad) count as showing their thread.
     if (kinds.includes('window') && !this.windows.isPhone() && this.windows.open().includes(conversationId)) return true;
     return false;
+  }
+
+  /** Every conversation a reader surface or docked window shows on a visible
+   *  page — what the push fan-out must skip for THIS device. */
+  viewedConversationIds(): string[] {
+    this.viewersVersion();
+    const out = new Set<string>();
+    for (const v of this.viewers.values()) for (const id of v.ids()) if (id) out.add(id);
+    if (!this.windows.isPhone()) for (const id of this.windows.open()) out.add(id);
+    return ChatService.docVisible() ? [...out] : [];
+  }
+
+  private attachForeground(conn: signalR.HubConnection): void {
+    if (this.foregroundFor === conn) { this.foreground?.resend(); return; }
+    this.foreground?.stop();
+    this.foreground = null;
+    this.foregroundFor = conn;
+    void import('./chat-foreground.reporter').then(m => {
+      if (this.connection !== conn || this.foregroundFor !== conn) return;
+      this.foreground = new m.ForegroundReporter({
+        send: (visible, ids, handle) => conn.invoke('ReportForeground', visible, ids, handle),
+        viewed: () => this.viewedConversationIds(),
+        visible: () => ChatService.docVisible(),
+        handle: () => this.pushHandle(),
+        onViewed: ids => this.onThreadsOnScreen(ids),
+      }).start();
+    }).catch(() => undefined);
+  }
+
+  /** The handle the server pushes THIS device through: the native APNs / FCM
+   *  token, or this browser's Web Push endpoint. Null = nothing to suppress. */
+  private async pushHandle(): Promise<string | null> {
+    if (this.platform.isCapacitor()) {
+      const { PushService } = await import('./push.service');
+      return this.injector.get(PushService).appToken();
+    }
+    if (this.platform.isElectron() || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
+    const cached = this.webPushHandle;
+    if (cached && Date.now() - cached.at < 60_000) return cached.value;
+    let value: string | null = null;
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      value = (await reg?.pushManager?.getSubscription())?.endpoint ?? null;
+    } catch { value = null; }
+    this.webPushHandle = { at: Date.now(), value };
+    return value;
+  }
+
+  /** Native: a thread just came on screen — its notifications are stale. */
+  private onThreadsOnScreen(ids: string[]): void {
+    if (!this.platform.isCapacitor()) return;
+    void import('./chat-native-reply').then(m => {
+      for (const id of ids) void m.PfChatReply.dismissConversation({ conversationId: id }).catch(() => undefined);
+    }).catch(() => undefined);
   }
 
   /** Mark read whatever a READER surface shows that still has unread —
@@ -613,6 +691,32 @@ export class ChatService implements OnDestroy {
       const rows = await this.history.recent(conversationId, this.pageSize);
       this.setThread(conversationId, mergeMessages(rows, this.threads().get(conversationId) ?? [], this.identity()));
     }
+    try { await this.connection!.invoke('MarkConversationRead', conversationId); } catch { /* offline ok */ }
+    this.conversations.update(list =>
+      list.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c)
+    );
+  }
+
+  private async onDesktopNotificationAction(a: { type: 'reply' | 'open'; conversationId: string; text?: string }): Promise<void> {
+    if (!a?.conversationId || !this.identity()) return;
+    if (a.type === 'open') {
+      void this.injector.get(Router).navigate(['/messages'], { queryParams: { c: a.conversationId } });
+      return;
+    }
+    if (a.type === 'reply' && a.text?.trim()) {
+      try {
+        await this.sendMessage(a.conversationId, a.text);
+        await this.markRead(a.conversationId);
+      } catch (err) {
+        console.warn('[chat] notification reply failed', err);
+        this.toasts.error('Your reply couldn’t be sent — open the conversation to retry.');
+      }
+    }
+  }
+
+  /** Mark a thread read without opening it (a notification's "Mark as read"). */
+  async markRead(conversationId: string): Promise<void> {
+    await this.connect();
     try { await this.connection!.invoke('MarkConversationRead', conversationId); } catch { /* offline ok */ }
     this.conversations.update(list =>
       list.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c)

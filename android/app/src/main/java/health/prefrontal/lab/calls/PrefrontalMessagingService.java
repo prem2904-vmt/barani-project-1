@@ -26,6 +26,7 @@ import java.util.Map;
 
 import health.prefrontal.lab.MainActivity;
 import health.prefrontal.lab.R;
+import health.prefrontal.lab.chat.ChatNotifications;
 
 /**
  * FCM entry point that adds a native incoming-call ringer on top of the
@@ -40,6 +41,10 @@ import health.prefrontal.lab.R;
  *   { kind: "call-end", callId, reason }
  *     → cancel that call's notification (caller cancelled, answered or
  *       declined on another device, no answer)
+ *   { kind: "chat-message", conversationId, messageId, title, body, … }
+ *     (data-only, app build ≥ 0.2.0) → the native chat notification with
+ *       inline Reply / Mark as read (ChatNotifications) — works with the app
+ *       killed; in the foreground it goes to JS (the in-app pop-up) instead
  *
  * While the app is in the FOREGROUND the ring is handed to JS instead (the
  * in-app ring card already shows via the live socket; a system ringer on top
@@ -70,6 +75,15 @@ public class PrefrontalMessagingService extends MessagingService {
         }
         if ("call-incoming".equals(kind) && !MainActivity.isInForeground()) {
             showCallNotification(data);
+            return;
+        }
+        // Native chat push: a DATA message (no notification block) the OS won't
+        // draw itself. Background / killed → our MessagingStyle notification;
+        // foreground → JS, where the live socket already raised the in-app
+        // pop-up (a system banner on top would be a duplicate).
+        if ("chat-message".equals(kind) && remoteMessage.getNotification() == null
+                && !MainActivity.isInForeground()) {
+            ChatNotifications.show(this, data);
             return;
         }
         super.onMessageReceived(remoteMessage); // regular pushes + foreground ring → JS

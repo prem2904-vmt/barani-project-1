@@ -59,6 +59,15 @@ export class ChatNotifyService implements OnDestroy {
     // Visible tab → the in-app pop-up is the visual (ChatService shows it
     // when this returns false). Hidden → the OS notification, if allowed.
     if (!tabHidden) return false;
+    // Desktop app: a native notification with an inline Reply (macOS); the
+    // reply / click come back to ChatService through chatNotify.onAction.
+    const desktop = electronChatNotify();
+    if (desktop) {
+      try {
+        desktop.show({ conversationId, title, body: body.length > 140 ? body.slice(0, 140) + '…' : body });
+        return true;
+      } catch { /* fall back to the web Notification */ }
+    }
     if (typeof Notification === 'undefined') return false;
     if (Notification.permission !== 'granted') return false;
 
@@ -139,4 +148,14 @@ export class ChatNotifyService implements OnDestroy {
     }
     this.restore();
   }
+}
+
+/** Electron preload bridge for native chat notifications (null elsewhere). */
+export function electronChatNotify(): {
+  show(info: { conversationId: string; title: string; body: string }): void;
+  onAction(cb: (a: { type: 'reply' | 'open'; conversationId: string; text?: string }) => void): () => void;
+} | null {
+  if (typeof window === 'undefined') return null;
+  const api = (window as unknown as { electronAPI?: { chatNotify?: ReturnType<typeof electronChatNotify> } }).electronAPI;
+  return api?.chatNotify ?? null;
 }
