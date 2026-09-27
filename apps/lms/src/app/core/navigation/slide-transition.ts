@@ -12,6 +12,9 @@ export function slideDirection(from: string, to: string): 'forward' | 'back' | n
   const isFrontdesk = (u: string) => u === '/frontdesk' || u.startsWith('/frontdesk/');
   if (isFrontdesk(f) && isCollect(t)) return 'forward';
   if (isCollect(f) && isFrontdesk(t)) return 'back';
+  // Appointments: the calendar's next step is booking (and back).
+  if (f === '/frontdesk/appointments' && t === '/frontdesk/appointments/new') return 'forward';
+  if (f === '/frontdesk/appointments/new' && t === '/frontdesk/appointments') return 'back';
   return null;
 }
 

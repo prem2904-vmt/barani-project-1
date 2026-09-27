@@ -1271,6 +1271,83 @@ the Report view (§19). The New design only; classic is unchanged.
 - **Empty:** `.nd-empty`. **Specs:** `report-queue.nd.spec.ts`; real layout
   `apps/lms-e2e/src/reports-list-layout.rbac.spec.ts` (read only).
 
+## 21. Appointments
+
+`/frontdesk/appointments` (`features/frontdesk/appointments-calendar/`) and
+`/frontdesk/appointments/new` (`features/frontdesk/book-appointment/`). A
+visual redesign only: the same APIs (`GET /api/appointments?from&to`, the
+queue transitions, `/api/appointments/config`, `/api/tests/`,
+`/api/patients?q=`, `POST /api/appointments`), guards and actions. Classic
+keeps its own templates; the new design lives in `*.nd.ts` (helpers +
+styles scoped under `.pf-apc` / `.pf-bka`).
+
+- **Calendar band:** back (`/frontdesk`) · tenant · ONE primary **New
+  appointment**. The pill: search "patient, phone or MRN" (filters what is
+  loaded: name / MRN substring, phone digits 3+ — the grid, the counts and
+  the day list) · the neutral **Day · Week · Month** `.nd-seg` radiogroup
+  (one Tab stop, arrows move) · ‹ **Today** › · a jump icon over a hidden
+  native date picker. Web default = Month (as before); ≤900px opens on Day.
+- **CALENDAR = main card** (the range in the header, "N appointments" /
+  "N matches"). Day / Week = ONE scroller with sticky day headers and a
+  sticky hour rail (128px an hour, half-hour slot buttons; a free future slot
+  books that time, a past one keeps the warning). Appointments are neutral
+  cards: the FULL name, a quiet "10:30 · 22/M · AA0006" (Noto tabular), and
+  the status as a 7px dot + coloured word (booked violet, checked in / in
+  progress amber, completed green, cancelled / no-show red). Same start =
+  side-by-side lanes; in a week those lanes are `--tight` (name + dot; meta
+  and word in the tooltip / aria-label and the day list). Today = a light
+  violet disc on the date, a 3% column tint and a thin violet now-line with a
+  time chip — never a gradient. A day header opens that day. Month: a day
+  books on it; its neutral "N appointments" chip opens the day.
+- **DAY = the right companion** (billing-style, 400px / 360px ≤1280,
+  collapses to a strip on the RIGHT edge, remembered per user
+  `pf:appt:side-collapsed:<uid>`): a 7-day strip (picks the day without
+  changing the view) and one row per appointment (full name + meta +
+  status). A row or a calendar card **zooms** into the APPOINTMENT detail
+  in the same card (`[pfZoomSource]` → `[pfZoomTarget]`, `zoom.runLocal`):
+  name, meta, status, When / Type / Collection / Token / Phone / Tests /
+  Address / Notes, then every original action as secondaries — Open
+  profile · Check in · Reschedule · No-show (booked) · Complete · Mark
+  urgent · No-show (checked in) · **Cancel appointment** (`.nd-btn--danger`).
+  **Reschedule is a step** that slides in (`pf-nd-date` + a searchable
+  `pf-select` of half-hours; Back slides back). Esc steps back.
+- **New appointment:** ONE page, no tabs. Band: back (the calendar) · Cancel
+  (ghost) · ONE primary **Book appointment** (Ctrl / ⌘ + Enter anywhere).
+  The pill = the context bar: Date · Slot ("Not picked") · the patient's
+  full name + "44/F · AA0007" once chosen. Cards in reading order (3
+  columns ≥1200px filling the body, card bodies scroll; 2 on tablets; 1 on
+  phones): **PATIENT** (a kit combobox over the same patient lookup, one row
+  per result; picked = a kit row + Change) and **DATE** (`pf-nd-date`, min
+  today, + 7 one-tap days) · **TIME SLOT** (Morning / Afternoon / Evening /
+  Night radiogroup with counts, a chip grid: available = neutral outline,
+  taken = dashed + struck + "Full" (`aria-disabled`), selected = violet
+  border + light tint + check) · **DETAILS** (tests: search, ↑/↓ + Enter
+  adds, rows code · name · price, the total; Walk-in / Home collection
+  `.nd-seg` with address · pincode · latitude · longitude as text fields;
+  notes).
+- **Keyboard-first:** the patient search has focus on arrival (web). Enter
+  = the next field: patient (Enter picks) → date → the slot grid (one Tab
+  stop; arrows move, Enter / Space picks) → tests (Enter adds; empty = next)
+  → collection → the home fields → notes (a textarea keeps Enter).
+- **Validation is inline:** Book with something missing outlines the
+  patient field / the slot grid with "Pick the patient to book for." /
+  "Pick a time slot." and focuses the first; a server error is one alert
+  line above the cards. Nothing is sent until it is complete.
+- **Phones (≤640px):** calendar = the day list first with a full-width
+  **New appointment** at the card foot; the pill's tools are two rows (the
+  switch, then ‹ Today › · jump); Week scrolls sideways to today; the detail
+  is a sheet above the navbar (tablets: a side sheet). Booking = one column,
+  2-column slot chips (≥48px), 44px targets, 16px inputs, and **Book
+  appointment** full width in the bottom bar above the navbar.
+- **Motion:** calendar → New appointment slides forward, back reverses
+  (`slideDirection`); list / card → detail zooms; Reschedule slides; rows
+  stagger in 18ms. All off under reduced motion.
+- **Specs:** `appointments-calendar.nd.spec.ts`,
+  `book-appointment.nd.spec.ts`; real layout
+  `apps/lms-e2e/src/appointments-layout.rbac.spec.ts` (read only — writes
+  aborted; the calendar GET gets made-up appointments for today on top of
+  the real list; `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`).
+
 ## API summary
 
 ```
