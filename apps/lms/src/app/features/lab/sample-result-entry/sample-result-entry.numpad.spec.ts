@@ -56,8 +56,9 @@ function sampleFixture(): any {
   };
 }
 
-async function render(opts: { touch: boolean; view?: boolean }) {
+async function render(opts: { touch: boolean; view?: boolean; extra?: any[] }) {
   const sample = sampleFixture();
+  if (opts.extra) sample.tests = [...sample.tests, ...opts.extra];
   const api = {
     get: vi.fn((url: string) => {
       if (url.endsWith('/tests')) return of(sample);
@@ -175,6 +176,25 @@ describe('Sample result entry — touch numpad', () => {
     press('9', '0', 'next');
     expect(c.getValue('ot5', 'result')).toBe('90');
     expect((document.activeElement as HTMLElement).classList).toContain('pf-sre-submit');
+  });
+
+  it('iPad field report (2026-09-28): a test with NO result schema (Bacterial Identification) is a free-text Result — system keyboard by design, no pad; the numeric tests on the tube still get it', async () => {
+    // What the owner tapped on the device: organism identification carries
+    // `parameters: []`, so entry falls back to one free-text "Result" box.
+    const ident = test('ot9', 'MIC-ID', 'Bacterial Identification', JSON.stringify({
+      tatHours: 24, parameters: [], sampleType: 'Isolated bacterial growth', microFormat: 'organism_identification',
+    }));
+    const { el, field, pad, tap } = await render({ touch: true, extra: [ident] });
+    const free = el.querySelector('textarea[data-sre-field="ot9::result"]') as HTMLTextAreaElement;
+    expect(free).not.toBeNull();
+    expect(free.hasAttribute('data-pf-numpad')).toBe(false);
+    expect(free.getAttribute('inputmode')).toBeNull();          // the system keyboard, as specified
+    tap(free);
+    expect(pad()).toBeNull();
+    // Same tube, numeric result: the pad (verified on the real iPad too).
+    tap(field('ot1'));
+    expect(field('ot1').getAttribute('inputmode')).toBe('none');
+    expect(pad()).not.toBeNull();
   });
 
   it('read-only view: no pad on the (untouchable) fields', async () => {
