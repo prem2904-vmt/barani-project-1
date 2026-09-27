@@ -36,7 +36,6 @@ import {
   patientDisplayName,
 } from "../../../shared/models/patient.model";
 import { BarcodeScannerModalComponent } from "../../../shared/components/barcode-scanner/barcode-scanner-modal.component";
-import { LoadingLogoComponent } from "../../../shared/components/loading-logo/loading-logo.component";
 import { AvatarComponent } from "../../../shared/primitives/avatar.component";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
 import { ScreenHeaderComponent } from "../../../shared/primitives/screen-header.component";
@@ -69,6 +68,7 @@ import {
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -371,7 +371,7 @@ interface OrderGroup {
 @Component({
   selector: "pf-sample-collection",
   standalone: true,
-  imports: [
+  imports: [SkeletonDetailComponent,
     ZoomSourceDirective,
     ZoomTargetDirective,
     FormsModule,
@@ -379,7 +379,6 @@ interface OrderGroup {
     AvatarComponent,
     HeroBandComponent,
     BarcodeScannerModalComponent,
-    LoadingLogoComponent,
     ScreenHeaderComponent,
     TouchButtonComponent,
     KpiStripComponent,

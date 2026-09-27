@@ -312,7 +312,7 @@
                          placeholder="Search vendor by name or code…"/>
                   @if (vendors() === null) {
                     <p class="pf-wallet-empty">
-                      <pf-loading-logo size="xs" color="purple" [inline]="true"></pf-loading-logo>
+                      <pf-busy></pf-busy>
                       Loading vendors…
                     </p>
                   } @else if (filteredVendors().length === 0) {
@@ -424,8 +424,7 @@
   } @else {
     <pf-tile tone="default" padding="xl" class="block">
       <div class="flex justify-center py-8">
-        <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                         [showText]="true" text="Generating bill…"></pf-loading-logo>
+        <pf-skeleton-table [rows]="5" [cols]="3" label="Generating bill…"></pf-skeleton-table>
       </div>
     </pf-tile>
   }

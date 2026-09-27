@@ -14,6 +14,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type InvTab = 'items' | 'bom';
 
@@ -33,7 +34,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 @Component({
   selector: 'pf-inventory',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
+  imports: [SkeletonTableComponent, FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10 max-w-6xl">
@@ -144,7 +145,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
       }
 
       <!-- Items -->
-      @if (loading()) { <p class="text-sm" style="color:var(--text-tertiary)">Loading…</p> }
+      @if (loading()) { <div class="nd-card inv-table-wrap"><pf-skeleton-table [rows]="8" [cols]="5" label="Loading inventory…"></pf-skeleton-table></div> }
       @else {
         <div class="nd-card inv-table-wrap">
           <table class="w-full text-sm">

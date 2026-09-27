@@ -10,12 +10,13 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { heldFlag } from '../../../shared/utils/min-duration';
 
 type VendorStatus = 'all' | 'active' | 'inactive';
 
@@ -72,10 +73,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
 @Component({
   selector: 'pf-vendors',
   standalone: true,
-  imports: [
+  imports: [SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
-    LoadingLogoComponent, HeroBandComponent
+    HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -175,8 +176,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
       @if (loading()) {
         <div class="flex justify-center py-6">
-          <pf-loading-logo size="lg" color="purple" [showDna]="true"
-                           [showText]="true" text="Loading vendors…"></pf-loading-logo>
+          <pf-skeleton-rows [rows]="5" label="Loading vendors…"></pf-skeleton-rows>
         </div>
       } @else if (vendors().length === 0) {
         <p class="pf-band-empty">No vendors yet. Add your first partner hospital or aggregator to start tracking B2B credit.</p>
@@ -296,10 +296,9 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
               @if (openTxnsId() === v.id) {
                 <div class="pf-txns">
-                  @if (loadingTxns()) {
+                  @if (loadingTxnsShown()) {
                     <div class="flex justify-center py-3">
-                      <pf-loading-logo size="sm" color="purple"
-                                       [showText]="true" text="Loading…"></pf-loading-logo>
+                      <pf-skeleton-table [rows]="3" [cols]="4" [header]="false" label="Loading transactions…"></pf-skeleton-table>
                     </div>
                   } @else if ((txns()[v.id] ?? []).length === 0) {
                     <p class="pf-band-empty">No transactions yet.</p>
@@ -585,6 +584,9 @@ export class VendorsComponent implements OnInit {
   protected readonly openTxnsId = signal<string | null>(null);
   protected readonly txns = signal<Record<string, VendorTxn[] | undefined>>({});
   protected readonly loadingTxns = signal<boolean>(false);
+  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
+   *  load never flashes it. */
+  readonly loadingTxnsShown = heldFlag(this.loadingTxns);
 
   // Record-payment panel state
   protected readonly paymentVendorId = signal<string | null>(null);

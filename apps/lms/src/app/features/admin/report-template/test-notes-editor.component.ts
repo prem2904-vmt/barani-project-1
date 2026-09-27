@@ -21,7 +21,7 @@ import { Test } from '../../../shared/models/test.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /**
  * Per-test report LAYOUT editor. Lives inside the Report Template tile as a
@@ -40,7 +40,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 @Component({
   selector: 'pf-test-notes-editor',
   standalone: true,
-  imports: [SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, ReportPdfPreviewComponent],
+  imports: [SkeletonCardComponent, SelectComponent, TileComponent, TouchButtonComponent, ReportPdfPreviewComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="grid gap-5 {{ hidePreview() ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-[1.3fr_1fr]' }}">
@@ -74,8 +74,7 @@ import { LoadingLogoComponent } from '../../../shared/components/loading-logo/lo
 
         @if (loading()) {
           <div class="flex justify-center py-8">
-            <pf-loading-logo size="md" color="purple" [showDna]="true"
-                             [showText]="true" text="Loading layout…"></pf-loading-logo>
+            <pf-skeleton-card [lines]="5" label="Loading layout…"></pf-skeleton-card>
           </div>
         } @else if (selectedTestId()) {
 

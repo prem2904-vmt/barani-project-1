@@ -6,13 +6,13 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 @Component({
   selector: 'pf-home-collection-assign',
   standalone: true,
-  imports: [ScreenHeaderComponent, TileComponent, TouchButtonComponent, SelectComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto w-full">
@@ -26,7 +26,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
       @if (loading() && items().length === 0) {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="flex justify-center py-6">
-            <pf-loading-logo size="lg" color="purple" [showDna]="true" [showText]="true" text="Loading…"></pf-loading-logo>
+            <pf-skeleton-rows [rows]="4" label="Loading visits…"></pf-skeleton-rows>
           </div>
         </pf-tile>
       } @else if (items().length === 0) {

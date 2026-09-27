@@ -5,6 +5,7 @@ import { map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { ActionCatalogEntry, catalogFor } from '../../shared/models/process-workflow.model';
+import { SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
 
 /**
  * Menu hub. Shows the ACTIONS the admin placed inside a menu (resolved from
@@ -14,6 +15,7 @@ import { ActionCatalogEntry, catalogFor } from '../../shared/models/process-work
 @Component({
   selector: 'pf-menu-hub',
   standalone: true,
+  imports: [SkeletonTilesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="mh px-4 md:px-8 lg:px-10 pt-6 pb-12">
@@ -40,7 +42,7 @@ import { ActionCatalogEntry, catalogFor } from '../../shared/models/process-work
           </div>
         }
       } @else {
-        <p class="mh-empty">Loading…</p>
+        <pf-skeleton-tiles [count]="6" min="200px" height="118px" label="Loading menu…"></pf-skeleton-tiles>
       }
     </section>
   `,

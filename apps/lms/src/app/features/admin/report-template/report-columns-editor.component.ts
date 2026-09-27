@@ -12,7 +12,7 @@ import {
 import { Department } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /** Emitted to the parent so the live preview reflects the columns being edited
  *  for the selected department before they're even saved. */
@@ -37,7 +37,7 @@ export interface ColumnsEditorState {
 @Component({
   selector: 'pf-report-columns-editor',
   standalone: true,
-  imports: [SelectComponent, TouchButtonComponent, LoadingLogoComponent, DragDropModule],
+  imports: [SkeletonTableComponent, SelectComponent, TouchButtonComponent, DragDropModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-ce-root">
@@ -74,7 +74,7 @@ export interface ColumnsEditorState {
 
       @if (loading()) {
         <div class="flex justify-center py-8">
-          <pf-loading-logo size="md" color="purple" [showDna]="true" [showText]="true" text="Loading…"></pf-loading-logo>
+          <pf-skeleton-table [rows]="6" [cols]="5" label="Loading report columns…"></pf-skeleton-table>
         </div>
       } @else if (selectedDeptId() || hostManaged()) {
 

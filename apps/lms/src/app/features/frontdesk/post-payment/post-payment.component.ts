@@ -14,21 +14,20 @@ import { Order, OrderSample } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { LabelCardComponent, labelTubeLine, tubeSpec } from './label-card.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { NavBackService } from '../../../core/services/nav-back.service';
+import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 @Component({
   selector: 'pf-post-payment',
   standalone: true,
-  imports: [
+  imports: [BusyComponent,
     DatePipe,
     TitleCasePipe,
     CurrencyInrPipe,
     LabelCardComponent,
-    LoadingLogoComponent,
     ScreenHeaderComponent,
     TouchButtonComponent
   ],

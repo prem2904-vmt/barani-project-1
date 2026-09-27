@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonDetailComponent } from '../../shared/primitives/skeleton-kit.component';
 
 /**
  * Landing for a scanned patient ID-card QR (`/p/:id`). Mirrors OrderOpenComponent
@@ -11,11 +11,11 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
 @Component({
   selector: 'pf-patient-open',
   standalone: true,
-  imports: [LoadingLogoComponent],
+  imports: [SkeletonDetailComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col items-center justify-center" style="min-height: 60vh;">
-      <pf-loading-logo size="xl" color="purple" [showDna]="true" [showText]="true" text="Opening patient…"></pf-loading-logo>
+      <pf-skeleton-detail [fields]="6" [sections]="2" label="Opening patient…"></pf-skeleton-detail>
     </div>
   `
 })

@@ -7,7 +7,7 @@ import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { AuthService } from '../../../core/auth/auth.service';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 export interface Consultation {
   id: string;
@@ -40,7 +40,7 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
 @Component({
   selector: 'pf-doctor-queue',
   standalone: true,
-  imports: [DatePipe, LoadingLogoComponent, HeroBandComponent],
+  imports: [SkeletonRowsComponent, DatePipe, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page dq-page">
@@ -100,7 +100,7 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
 
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-16">
         @if (loading()) {
-          <div class="dq-empty"><pf-loading-logo size="lg" color="purple" [showText]="true" text="Loading queue…"></pf-loading-logo></div>
+          <div class="dq-empty"><pf-skeleton-rows [rows]="6" label="Loading queue…"></pf-skeleton-rows></div>
         } @else if (visible().length === 0) {
           <div class="dq-empty">
             <p class="dq-empty__big">No patients {{ filter() === 'all' ? 'in the queue yet' : 'here' }}.</p>

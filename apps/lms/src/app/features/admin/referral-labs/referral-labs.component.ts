@@ -7,11 +7,11 @@ import { ReferralLab } from '../../../shared/models/referral-lab.model';
 import { Department } from '../../../shared/models/tenant.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 interface LabDraft {
   id?: string;
@@ -36,7 +36,7 @@ const EMPTY: LabDraft = {
 @Component({
   selector: 'pf-referral-labs',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TouchButtonComponent, LoadingLogoComponent, HeroBandComponent],
+  imports: [SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -120,7 +120,7 @@ const EMPTY: LabDraft = {
 
       @if (loading()) {
         <div class="flex justify-center py-6">
-          <pf-loading-logo size="lg" color="purple" [showDna]="true" [showText]="true" text="Loading referral labs…"></pf-loading-logo>
+          <pf-skeleton-rows [rows]="4" label="Loading referral labs…"></pf-skeleton-rows>
         </div>
       } @else if (labs().length === 0) {
         <p class="pf-band-empty">No referral labs yet. Add one to start outsourcing tests.</p>

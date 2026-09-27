@@ -52,7 +52,7 @@
           } @else if (order()?.patient?.displayName) {
             <h2 class="pf-pp-pay__amount">{{ order()!.patient!.displayName }}</h2>
             <p class="pf-pp-pay__meta">
-              <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
+              <pf-busy></pf-busy>
               Loading payment details…
             </p>
           }

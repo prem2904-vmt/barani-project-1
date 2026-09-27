@@ -31,7 +31,8 @@ import { filterTestList, matchTestSearch } from "../../utils/test-search";
 import { isOffered } from "../../utils/test-pricing";
 import { AvatarComponent } from "../../primitives/avatar.component";
 import { PatientSearchComponent } from "../patient-search/patient-search.component";
-import { LoadingLogoComponent } from "../loading-logo/loading-logo.component";
+import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { heldFlag } from '../../../shared/utils/min-duration';
 
 interface AppointmentConfigDto {
   branchId: string;
@@ -53,7 +54,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 @Component({
   selector: "pf-appointment-booking-modal",
   standalone: true,
-  imports: [CommonModule, AvatarComponent, PatientSearchComponent, LoadingLogoComponent],
+  imports: [SkeletonTilesComponent, CommonModule, AvatarComponent, PatientSearchComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
@@ -215,9 +216,9 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                 <span class="text-xs font-bold tracking-wider uppercase text-[var(--text-tertiary)]">Time slot</span>
               </div>
 
-              @if (loadingSlots()) {
+              @if (loadingSlotsShown()) {
                 <div class="flex flex-col items-center justify-center py-10 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl flex-1">
-                  <pf-loading-logo size="md" color="purple" [showDna]="true" [showText]="true" text="Loading slots…"></pf-loading-logo>
+                  <pf-skeleton-tiles [count]="12" min="92px" height="40px" [lines]="1" label="Loading slots…"></pf-skeleton-tiles>
                 </div>
               } @else if (slots().length === 0) {
                 <div class="flex items-center justify-center p-8 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl text-sm text-[var(--text-muted)] flex-1">
@@ -570,6 +571,9 @@ export class AppointmentBookingModalComponent {
   /** Loading == "haven't fetched the branch config yet" or "still fetching the appointments".
    *  Derived directly from _config and _loadingAppointments so we never end up with a stale loading flag. */
   readonly loadingSlots = computed(() => this._config() === null || this._loadingAppointments());
+  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
+   *  load never flashes it. */
+  readonly loadingSlotsShown = heldFlag(this.loadingSlots);
   readonly saving = this._saving.asReadonly();
   readonly errorMsg = this._errorMsg.asReadonly();
 

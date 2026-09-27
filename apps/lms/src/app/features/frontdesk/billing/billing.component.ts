@@ -21,10 +21,10 @@ import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
 import { billRoundOff, maxDiscountWithinPaid, previewBillForDiscount } from '../../../shared/utils/bill-math';
+import { SkeletonTableComponent, BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -72,12 +72,11 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   // page (:host:not(.pf-embedded)) without affecting the inline/embedded use
   // inside the order screen, which must keep flowing in normal document flow.
   host: { '[class.pf-embedded]': 'embedded' },
-  imports: [
+  imports: [SkeletonTableComponent, BusyComponent,
     CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent,
     TileComponent,
     TouchButtonComponent,
-    LoadingLogoComponent,
     BarcodeDisplayComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -397,7 +396,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                              placeholder="Search vendor by name or code…"/>
                       @if (vendors() === null) {
                         <p class="pf-wallet-empty">
-                          <pf-loading-logo size="xs" color="purple" [inline]="true"></pf-loading-logo>
+                          <pf-busy></pf-busy>
                           Loading vendors…
                         </p>
                       } @else if (filteredVendors().length === 0) {
@@ -509,8 +508,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
       } @else {
         <pf-tile tone="default" padding="xl" class="block">
           <div class="flex justify-center py-8">
-            <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                             [showText]="true" text="Generating bill…"></pf-loading-logo>
+            <pf-skeleton-table [rows]="5" [cols]="3" label="Generating bill…"></pf-skeleton-table>
           </div>
         </pf-tile>
       }

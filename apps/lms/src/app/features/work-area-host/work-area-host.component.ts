@@ -8,6 +8,7 @@ import { ProcessWorkflowService } from '../../core/services/process-workflow.ser
 import { catalogFor } from '../../shared/models/process-workflow.model';
 import { portablePanel } from '../../shared/workflow/portable-panels';
 import { CollectBandButtonComponent } from '../../shared/components/collect-band-button/collect-band-button.component';
+import { SkeletonCardComponent } from '../../shared/primitives/skeleton-kit.component';
 
 interface HostItem { type: string; label: string; hint?: string; iconPath: string[]; route: string; cmp: Type<unknown> | null; }
 
@@ -20,7 +21,7 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
 @Component({
   selector: 'pf-work-area-host',
   standalone: true,
-  imports: [NgComponentOutlet, CollectBandButtonComponent],
+  imports: [SkeletonCardComponent, NgComponentOutlet, CollectBandButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wah px-4 md:px-8 lg:px-10 pt-6 pb-12">
@@ -53,7 +54,7 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
           }
         }
       } @else {
-        <p class="wah-empty">Loading…</p>
+        <pf-skeleton-card [lines]="3" label="Loading work area…"></pf-skeleton-card>
       }
     </section>
   `,

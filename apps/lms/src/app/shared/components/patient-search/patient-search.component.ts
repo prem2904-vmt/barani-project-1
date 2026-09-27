@@ -2,17 +2,17 @@ import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Ou
 import { ApiService } from '../../../core/services/api.service';
 import { Patient, patientDisplayName } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
-import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
 import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner-modal.component';
 import { extractAbhaNumber } from '../abha-wizard/abha-prefill.component';
 import { ScanIconComponent } from '../icons/scan-icon.component';
+import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
 @Component({
   selector: 'pf-patient-search',
   standalone: true,
-  imports: [AvatarComponent, LoadingLogoComponent, BarcodeScannerModalComponent, ScanIconComponent],
+  imports: [BusyComponent, AvatarComponent, BarcodeScannerModalComponent, ScanIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (scanning()) {
@@ -51,7 +51,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
         }
         @if (state() === 'loading') {
           <span class="field-spinner">
-            <pf-loading-logo size="micro" color="purple" [inline]="true"></pf-loading-logo>
+            <pf-busy label="Searching"></pf-busy>
           </span>
         }
         @if (enableScan) {
@@ -83,7 +83,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
             }
             @case ('loading') {
               <div class="panel-state">
-                <pf-loading-logo size="xs" color="purple" [inline]="true"></pf-loading-logo>
+                <pf-busy></pf-busy>
                 <span>Searching for "<strong>{{ query() }}</strong>"…</span>
               </div>
             }

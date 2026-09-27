@@ -7,11 +7,12 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { heldFlag } from '../../../shared/utils/min-duration';
 
 interface Hospital {
   id: string;
@@ -56,7 +57,7 @@ interface Doctor {
 @Component({
   selector: 'pf-referring-network',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TouchButtonComponent, LoadingLogoComponent, HeroBandComponent],
+  imports: [SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-screen-2xl mx-auto w-full">
@@ -108,10 +109,9 @@ interface Doctor {
                  [value]="hospitalSearch()"
                  (input)="setHospitalSearch(asInput($event))" />
 
-          @if (loadingHospitals()) {
+          @if (loadingHospitalsShown()) {
             <div class="flex justify-center py-10">
-              <pf-loading-logo size="lg" color="purple" [showDna]="true"
-                               [showText]="true" text="Loading hospitals…"></pf-loading-logo>
+              <pf-skeleton-rows [rows]="6" label="Loading hospitals…"></pf-skeleton-rows>
             </div>
           } @else if (filteredHospitals().length === 0) {
             <p class="pf-rn-empty">
@@ -171,10 +171,9 @@ interface Doctor {
               </button>
             </header>
 
-            @if (loadingDoctors()) {
+            @if (loadingDoctorsShown()) {
               <div class="flex justify-center py-10">
-                <pf-loading-logo size="lg" color="purple" [showDna]="true"
-                                 [showText]="true" text="Loading doctors…"></pf-loading-logo>
+                <pf-skeleton-rows [rows]="6" label="Loading doctors…"></pf-skeleton-rows>
               </div>
             } @else if (doctorsForSelected().length === 0) {
               <p class="pf-rn-empty">No doctors yet at this hospital. Click <b>Add doctor</b>.</p>
@@ -527,11 +526,17 @@ export class ReferringNetworkComponent implements OnInit {
   // ── State ───────────────────────────────────────────────────────
   readonly hospitals = signal<Hospital[]>([]);
   readonly loadingHospitals = signal(false);
+  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
+   *  load never flashes it. */
+  readonly loadingHospitalsShown = heldFlag(this.loadingHospitals);
   readonly hospitalSearch = signal('');
   readonly selectedHospitalId = signal<string | null>(null);
 
   readonly doctorsAll = signal<Doctor[]>([]);
   readonly loadingDoctors = signal(false);
+  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
+   *  load never flashes it. */
+  readonly loadingDoctorsShown = heldFlag(this.loadingDoctors);
 
   readonly hospitalEditor = signal<Partial<Hospital> | null>(null);
   readonly savingHospital = signal(false);

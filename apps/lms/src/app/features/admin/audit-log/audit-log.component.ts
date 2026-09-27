@@ -6,11 +6,11 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AUDIT_ENTITY_TYPES, AuditLog, AuditLogPage } from '../../../shared/models/audit.model';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /** Quick date windows for the band pill ('' = any time). */
 type RangeKey = '' | 'today' | '7d' | '30d' | 'custom';
@@ -36,7 +36,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
 @Component({
   selector: 'pf-audit-log',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent, HeroBandComponent, SelectComponent],
+  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Phone (<=640): the log-row header packs 5 children in one non-wrapping
@@ -199,8 +199,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
       @if (loading()) {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="flex justify-center py-6">
-            <pf-loading-logo size="lg" color="purple" [showDna]="true"
-                             [showText]="true" text="Loading audit trail…"></pf-loading-logo>
+            <pf-skeleton-table [rows]="8" [cols]="5" label="Loading audit trail…"></pf-skeleton-table>
           </div>
         </pf-tile>
       } @else if (logs().length === 0) {

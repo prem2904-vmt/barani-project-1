@@ -6,6 +6,7 @@ import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 interface InvItem { id: string; name: string; uom: string; }
 
@@ -18,7 +19,7 @@ interface InvItem { id: string; name: string; uom: string; }
 @Component({
   selector: 'pf-test-consumables',
   standalone: true,
-  imports: [FormsModule, SelectComponent],
+  imports: [SkeletonRowsComponent, FormsModule, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-tc">
@@ -29,7 +30,7 @@ interface InvItem { id: string; name: string; uom: string; }
       @if (!testId()) {
         <p class="pf-tc__hint">Save the test first, then add its consumables.</p>
       } @else if (loading()) {
-        <p class="pf-tc__hint">Loading…</p>
+        <pf-skeleton-rows [rows]="3" [dense]="true" [avatar]="false" label="Loading consumables…"></pf-skeleton-rows>
       } @else {
         <div class="pf-tc__list">
           @for (line of lines(); track $index) {

@@ -10,7 +10,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -67,7 +67,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'pf-advanced-patient-search',
   standalone: true,
-  imports: [DatePipe, AvatarComponent, SelectComponent, LoadingLogoComponent],
+  imports: [BusyComponent, DatePipe, AvatarComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open) {
@@ -268,7 +268,7 @@ const PAGE_SIZE = 20;
                       [disabled]="loading() || !hasAnyFilter()"
                       (click)="runSearch()">
                 @if (loading()) {
-                  <pf-loading-logo size="micro" color="white" [inline]="true"></pf-loading-logo>
+                  <pf-busy></pf-busy>
                   Searching…
                 } @else {
                   Search
@@ -401,7 +401,7 @@ const PAGE_SIZE = 20;
                               [disabled]="loadingMore()"
                               (click)="loadMore()">
                         @if (loadingMore()) {
-                          <pf-loading-logo size="micro" color="purple" [inline]="true"></pf-loading-logo>
+                          <pf-busy></pf-busy>
                           Loading…
                         } @else {
                           Load {{ remaining() }} more

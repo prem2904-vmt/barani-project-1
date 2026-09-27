@@ -10,12 +10,12 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TestPricingService } from '../../../core/services/test-pricing.service';
 import {
   PriceWriteItem, TENANT_PRICE_SCOPE, effectivePrice, isOffered, isPriceDefault, priceListUrl,
 } from '../../../shared/utils/test-pricing';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 export interface PriceRow {
   id: string;
@@ -49,7 +49,7 @@ export interface PriceRow {
 @Component({
   selector: 'pf-pricing',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-pricing" [class.pf-pricing--embedded]="embedded()">
@@ -109,7 +109,7 @@ export interface PriceRow {
       <div class="pf-pricing__scroll px-4 md:px-8">
         @if (loading()) {
           <div class="flex justify-center py-10">
-            <pf-loading-logo size="md" color="purple" [showDna]="true" [showText]="true" text="Loading prices…"></pf-loading-logo>
+            <pf-skeleton-table [rows]="10" [cols]="4" [header]="false" label="Loading prices…"></pf-skeleton-table>
           </div>
         } @else if (!filtered().length) {
           <pf-tile tone="default" padding="lg" class="block">

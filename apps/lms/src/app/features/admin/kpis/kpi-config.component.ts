@@ -6,10 +6,10 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Branch } from '../../../shared/models/tenant.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 interface KpiCatalogItem {
   id: string;
@@ -67,7 +67,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-kpi-config',
   standalone: true,
-  imports: [CommonModule, SelectComponent, LoadingLogoComponent, HeroBandComponent],
+  imports: [SkeletonTilesComponent, CommonModule, SelectComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-kpi-page pf-band-page">
@@ -143,8 +143,7 @@ const CATEGORY_LABELS: Record<string, string> = {
       <div class="pf-band-body pf-band-body--fill pf-kpi-body">
       @if (loading()) {
         <div class="pf-kpi-loading flex justify-center py-12">
-          <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                           [showText]="true" text="Loading KPI configuration…"></pf-loading-logo>
+          <pf-skeleton-tiles [count]="6" min="260px" label="Loading KPI configuration…"></pf-skeleton-tiles>
         </div>
       } @else {
         <section class="pf-kpi-workshop">

@@ -1,3 +1,4 @@
+import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { Location, DatePipe } from "@angular/common";
 import {
   ChangeDetectionStrategy,
@@ -35,7 +36,6 @@ import {
 } from "../../../shared/utils/test-search";
 import { AvatarComponent } from "../../../shared/primitives/avatar.component";
 import { ScreenHeaderComponent } from "../../../shared/primitives/screen-header.component";
-import { LoadingLogoComponent } from "../../../shared/components/loading-logo/loading-logo.component";
 import { PatientSearchComponent } from "../../../shared/components/patient-search/patient-search.component";
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -78,12 +78,11 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 @Component({
   selector: "pf-book-appointment",
   standalone: true,
-  imports: [
+  imports: [SkeletonTilesComponent,
     FormsModule,
     DatePipe,
     AvatarComponent,
     ScreenHeaderComponent,
-    LoadingLogoComponent,
     PatientSearchComponent,
     CurrencyInrPipe,
     HeroBandComponent,
@@ -553,13 +552,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
               <div
                 class="flex flex-col items-center justify-center py-6 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl"
               >
-                <pf-loading-logo
-                  size="sm"
-                  color="purple"
-                  [showDna]="false"
-                  [showText]="true"
-                  text="Loading slots…"
-                ></pf-loading-logo>
+                <pf-skeleton-tiles [count]="8" min="92px" height="40px" [lines]="1" label="Loading slots…"></pf-skeleton-tiles>
               </div>
             } @else if (slots().length === 0) {
               <div

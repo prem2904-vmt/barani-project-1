@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
-import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
+import { BusyComponent } from '../../shared/primitives/skeleton-kit.component';
 
 /**
  * Forced-password-change gate. Reached when a user signs in with a temporary
@@ -20,7 +20,7 @@ import { LoadingLogoComponent } from '../../shared/components/loading-logo/loadi
 @Component({
   selector: 'pf-set-password',
   standalone: true,
-  imports: [FormsModule, LogoMarkComponent, LoadingLogoComponent],
+  imports: [BusyComponent, FormsModule, LogoMarkComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './set-password.component.html',
   styleUrls: ['../login/login.component.scss', './set-password.component.scss'],

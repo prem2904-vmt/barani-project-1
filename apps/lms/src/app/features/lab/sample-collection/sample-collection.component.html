@@ -184,10 +184,7 @@
                "prepare loading" — used here so collection deep-links
                feel like the same waiting-room treatment as other
                long-running screens. -->
-          <pf-loading-logo size="xl" color="purple"
-                           [showDna]="true"
-                           [showText]="true"
-                           text="Opening collection…"></pf-loading-logo>
+          <pf-skeleton-detail [fields]="4" [sections]="2" label="Opening collection…"></pf-skeleton-detail>
         </div>
       }
     </section>

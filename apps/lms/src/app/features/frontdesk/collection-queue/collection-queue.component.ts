@@ -12,7 +12,7 @@ import { PatientSearchComponent } from '../../../shared/components/patient-searc
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 const MODE_LABEL: Record<QueueMode, string> = {
   token_queue: 'Token queue — patients called by priority',
@@ -28,7 +28,7 @@ const TYPE_COLOR: Record<string, string> = {
 @Component({
   selector: 'pf-collection-queue',
   standalone: true,
-  imports: [NgTemplateOutlet, PatientSearchComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, NgTemplateOutlet, PatientSearchComponent, ScreenHeaderComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page px-4 md:px-8 pt-6">
@@ -63,7 +63,7 @@ const TYPE_COLOR: Record<string, string> = {
       @if (loading() && items().length === 0) {
         <pf-tile tone="default" padding="lg" class="block">
           <div class="flex justify-center py-6">
-            <pf-loading-logo size="lg" color="purple" [showDna]="true" [showText]="true" text="Loading queue…"></pf-loading-logo>
+            <pf-skeleton-rows [rows]="5" label="Loading queue…"></pf-skeleton-rows>
           </div>
         </pf-tile>
       } @else {

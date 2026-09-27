@@ -5,7 +5,8 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../models/api-response.model';
 import { TouchButtonComponent } from '../../primitives/touch-button.component';
-import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { heldFlag } from '../../../shared/utils/min-duration';
 
 /** One department of the order, as the backend's edit-plan describes it. */
 export interface EditPlanDept {
@@ -45,7 +46,7 @@ export interface EditPlan {
 @Component({
   selector: 'pf-edit-result-dialog',
   standalone: true,
-  imports: [TouchButtonComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-erd-root" role="dialog" aria-modal="true" [attr.aria-label]="title()">
@@ -81,9 +82,9 @@ export interface EditPlan {
         </header>
 
         <div class="pf-erd-body">
-          @if (loading()) {
+          @if (loadingShown()) {
             <div class="pf-erd-loading">
-              <pf-loading-logo size="md" color="purple" [showText]="true" text="Loading departments…"></pf-loading-logo>
+              <pf-skeleton-rows [rows]="4" [dense]="true" [avatar]="false" label="Loading departments…"></pf-skeleton-rows>
             </div>
           } @else if (loadError()) {
             <p class="pf-erd-empty">{{ loadError() }}</p>
@@ -332,6 +333,9 @@ export class EditResultDialogComponent {
   readonly plan = this._plan.asReadonly();
   private readonly _loading = signal(true);
   readonly loading = this._loading.asReadonly();
+  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
+   *  load never flashes it. */
+  readonly loadingShown = heldFlag(this.loading);
   private readonly _loadError = signal<string | null>(null);
   readonly loadError = this._loadError.asReadonly();
   private readonly _saving = signal(false);

@@ -16,7 +16,6 @@ import { PatientProfileService } from '../../../core/services/patient-profile.se
 import { ToastService } from '../../../core/services/toast.service';
 import { Appointment } from '../../../shared/models/appointment.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
@@ -30,6 +29,7 @@ import {
   APPOINTMENTS_CALENDAR_ND_STYLES, ND_HOUR, apptStatusTone, apptStatusWord, apptTypeWord,
   matchesAppointment, placeLanes
 } from './appointments-calendar.nd';
+import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type CalView = 'day' | 'week' | 'month';
 
@@ -57,8 +57,8 @@ const STATUS_CLASS: Record<string, string> = {
 @Component({
   selector: 'pf-appointments-calendar',
   standalone: true,
-  imports: [
-    CommonModule, FormsModule, LoadingLogoComponent, HeroBandComponent, NdDateComponent, SelectComponent,
+  imports: [BusyComponent,
+    CommonModule, FormsModule, HeroBandComponent, NdDateComponent, SelectComponent,
     ZoomSourceDirective, ZoomTargetDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -494,9 +494,8 @@ const STATUS_CLASS: Record<string, string> = {
       </div>
 
       @if (loading()) {
-        <div class="pf-cal-loading">
-          <pf-loading-logo size="lg" color="purple" [showDna]="true"
-                           [showText]="true" text="Loading appointments…"></pf-loading-logo>
+        <div class="pf-cal-loading" role="status" aria-live="polite">
+          <pf-busy></pf-busy><span>Loading appointments…</span>
         </div>
       }
     </section>
@@ -833,9 +832,15 @@ const STATUS_CLASS: Record<string, string> = {
       /* Float over the frame instead of taking flow space, so the
        * non-scroll page height stays exact while loading. */
       position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
-      padding: 12px; text-align: center; font-size: 12.5px; color: var(--text-tertiary);
+      display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+      padding: 8px 14px; border-radius: 999px; font-size: 12.5px; color: var(--text-secondary);
+      background: var(--glass-bg-hover, var(--glass-bg)); border: 1px solid var(--glass-border);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
       pointer-events: none; z-index: 4;
+      animation: pf-cal-pill 320ms cubic-bezier(0.34, 1.36, 0.64, 1) both;
     }
+    @keyframes pf-cal-pill { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translateX(-50%); } }
+    @media (prefers-reduced-motion: reduce) { .pf-cal-loading { animation: none; } }
     .pf-cal-past { opacity: 0.5; filter: saturate(0.6); }
 
     /* ── Time grid (Day / Week) ──────────────────────────────── */

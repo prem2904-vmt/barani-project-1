@@ -13,7 +13,6 @@ import { Patient } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
 import { AbhaPrefillComponent, AbhaPrefillData } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { WorkflowConfig, WorkflowConfigRecord, WorkflowContext, WorkflowFormValues } from '../../../shared/models/workflow.model';
@@ -24,15 +23,15 @@ import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
+import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 @Component({
   selector: 'pf-patient-register',
   standalone: true,
-  imports: [
+  imports: [SkeletonFormComponent,
     WorkflowRendererComponent,
     ScreenHeaderComponent,
     TileComponent,
-    LoadingLogoComponent,
     AbhaWizardComponent,
     AbhaPrefillComponent,
     HeroBandComponent
@@ -142,8 +141,7 @@ import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
           <section class="nd-card pf-reg-loading" aria-busy="true">
             <div class="nd-card__body">
               <div class="flex justify-center py-10">
-                <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                                 [showText]="true" text="Loading the form…"></pf-loading-logo>
+                <pf-skeleton-form [fields]="8" label="Loading the form…"></pf-skeleton-form>
               </div>
             </div>
           </section>
@@ -213,8 +211,7 @@ import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
             (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
         } @else {
           <div class="flex justify-center py-10">
-            <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                             [showText]="true" text="Loading workflow…"></pf-loading-logo>
+            <pf-skeleton-form [fields]="8" label="Loading workflow…"></pf-skeleton-form>
           </div>
         }
       </pf-tile>

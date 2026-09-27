@@ -13,6 +13,7 @@ import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.c
 import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
 import { ThemeService } from '../../core/services/theme.service';
 import { bandFilter } from '../../shared/utils/band-search';
+import { SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
 
 type Module = 'overall' | 'lab' | 'credit' | 'ipd' | 'opd' | 'pharmacy';
 
@@ -50,7 +51,7 @@ interface FinanceSummary {
 @Component({
   selector: 'pf-finance-hub',
   standalone: true,
-  imports: [FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
+  imports: [SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-fin pf-band-page">
@@ -136,7 +137,7 @@ interface FinanceSummary {
         </div>
 
         @if (loading()) {
-          <p class="pf-fin__loading">Loading…</p>
+          <pf-skeleton-tiles [count]="4" min="200px" label="Loading finance summary…"></pf-skeleton-tiles>
         } @else if (summary(); as s) {
           <!-- Headline: net position -->
           <div class="pf-fin__grid">
@@ -233,7 +234,7 @@ interface FinanceSummary {
                 @if (expandedVendor() === v.id) {
                   <div class="pf-fin__vledger">
                     @if (txnsLoading()) {
-                      <p class="pf-fin__loading">Loading…</p>
+                      <pf-skeleton-table [rows]="3" [cols]="4" [header]="false" label="Loading transactions…"></pf-skeleton-table>
                     } @else if ((vendorTxns()[v.id] ?? []).length === 0) {
                       <p class="pf-fin__empty">No transactions.</p>
                     } @else {

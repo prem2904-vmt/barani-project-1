@@ -20,13 +20,13 @@ import { ChipTone } from '../../../shared/primitives/chip.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
 import { ConditionBuilderComponent } from './condition-builder.component';
 import { WorkflowBuilderService } from './workflow-builder.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 interface HistoryRow {
   id: string;
@@ -39,7 +39,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-workflow-builder',
   standalone: true,
-  imports: [
+  imports: [SkeletonRowsComponent,
     FormsModule,
     DragDropModule,
     DatePipe,
@@ -48,7 +48,6 @@ interface HistoryRow {
     ScreenHeaderComponent,
     SelectComponent,
     TouchButtonComponent,
-    LoadingLogoComponent,
     HeroBandComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -464,7 +463,7 @@ interface HistoryRow {
             <section class="nd-card__body">
               @if (historyLoading()) {
                 <div class="flex justify-center py-3">
-                  <pf-loading-logo size="sm" color="purple" [showText]="true" text="Loading…"></pf-loading-logo>
+                  <pf-skeleton-rows [rows]="3" [dense]="true" [avatar]="false" label="Loading history…"></pf-skeleton-rows>
                 </div>
               } @else if (historyRows().length === 0) {
                 <p class="pf-wfe-hint">No prior versions yet. Save or publish to create one.</p>

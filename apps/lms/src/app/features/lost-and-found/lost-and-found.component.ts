@@ -10,7 +10,7 @@ import { patientDisplayName } from '../../shared/models/patient.model';
 import { AvatarComponent } from '../../shared/primitives/avatar.component';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
-import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
 
 /** GET /api/lost-and-found — one disabled workflow stage + its orphaned tubes. */
 interface StrandedStage {
@@ -29,7 +29,7 @@ interface StrandedStage {
 @Component({
   selector: 'pf-lost-and-found',
   standalone: true,
-  imports: [DatePipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent, LoadingLogoComponent],
+  imports: [SkeletonRowsComponent, DatePipe, AvatarComponent, ScreenHeaderComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -52,7 +52,7 @@ interface StrandedStage {
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pb-10">
         @if (loading()) {
           <div class="flex justify-center py-10">
-            <pf-loading-logo size="lg" color="purple" [showText]="true" text="Finding stranded records…"></pf-loading-logo>
+            <pf-skeleton-rows [rows]="5" label="Finding stranded records…"></pf-skeleton-rows>
           </div>
         } @else if (totalCount() === 0) {
           <div class="pf-empty">

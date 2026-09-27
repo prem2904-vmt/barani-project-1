@@ -12,8 +12,9 @@ import { ToastService } from '../../../core/services/toast.service';
 import { Patient, patientDisplayName, patientMrnLabel, formatPatientInfo } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
-import { LoadingLogoComponent } from '../loading-logo/loading-logo.component';
 import { AbhaWizardComponent } from '../abha-wizard/abha-wizard.component';
+import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { heldFlag } from '../../../shared/utils/min-duration';
 
 interface HistoryRow {
   id: string;
@@ -60,17 +61,16 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 @Component({
   selector: 'pf-patient-profile-modal',
   standalone: true,
-  imports: [CommonModule, AvatarComponent, SelectComponent, LoadingLogoComponent, AbhaWizardComponent],
+  imports: [SkeletonDetailComponent, CommonModule, AvatarComponent, SelectComponent, AbhaWizardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-pp-root pf-sheet" [class.pf-pp-hidden]="!open()" role="dialog" aria-modal="true" [attr.aria-hidden]="!open()" aria-label="Patient profile">
       <div class="pf-pp-backdrop" (click)="close()"></div>
 
         <div class="pf-pp-shell pf-sheet__panel">
-          @if (loading()) {
+          @if (loadingShown()) {
             <div class="pf-pp-loading flex justify-center py-10">
-              <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                               [showText]="true" text="Loading patient…"></pf-loading-logo>
+              <pf-skeleton-detail [fields]="6" [sections]="2" label="Loading patient…"></pf-skeleton-detail>
             </div>
           } @else if (!patient()) {
             <div class="pf-pp-loading">Patient not found.</div>
@@ -1003,6 +1003,9 @@ export class PatientProfileModalComponent {
   readonly patient = this._patient.asReadonly();
   readonly history = this._history.asReadonly();
   readonly loading = this._loading.asReadonly();
+  /** Skeleton held >= MIN_LOAD_MS (shared/utils/min-duration) so a fast
+   *  load never flashes it. */
+  readonly loadingShown = heldFlag(this.loading);
   readonly saving = this._saving.asReadonly();
   readonly editMode = this._editMode.asReadonly();
   readonly draft = this._draft.asReadonly();

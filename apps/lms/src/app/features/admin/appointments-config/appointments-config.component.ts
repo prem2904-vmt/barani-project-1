@@ -10,6 +10,7 @@ import { NumberInputComponent } from '../../../shared/primitives/number-input.co
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
+import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /** Band pill tabs — one per section card. */
 export type AppointmentsTab = 'mode' | 'slots' | 'priority';
@@ -25,7 +26,7 @@ const MODES: ModeOption[] = [
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent],
+  imports: [SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
@@ -109,7 +110,7 @@ const MODES: ModeOption[] = [
 
       <div class="pf-band-body">
       @if (!cfg()) {
-        <p class="pf-band-empty">Loading…</p>
+        <pf-skeleton-form [fields]="6" label="Loading appointment settings…"></pf-skeleton-form>
       } @else {
         @if (showSec('mode')) {
         <!-- Queue mode -->
