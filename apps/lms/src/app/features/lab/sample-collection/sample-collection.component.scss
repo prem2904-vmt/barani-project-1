@@ -757,6 +757,10 @@
     .pf-rej__sub { margin: 4px 0 14px; font-size: 12.5px; color: var(--text-tertiary); }
     .pf-rej__chips {
       display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; margin-bottom: 14px;
+      /* The global status-chip rule ([class*='__chip'] → height: 24px, nowrap)
+         also matches this CONTAINER ("__chips"): wrapped rows then spilled
+         over the Notes field. Undo it for the row. */
+      height: auto; padding: 0; border-radius: 0; white-space: normal; letter-spacing: normal;
     }
     .pf-rej__chip {
       all: unset; cursor: pointer;

@@ -55,6 +55,12 @@ describe('Frontdesk row — not-collected status (QA #6)', () => {
     expect(fd().effectiveStatusLabel(o)).toBe('1 of 2 not collected — Patient refused');
   });
 
+  it('the drawer header chip stays short (the timeline carries count + reason)', () => {
+    const c = fd();
+    expect(c.drawerStatusLabel(order('partially_rejected', [drawn('a'), notCollected('b')]))).toBe('Not collected');
+    expect(c.drawerStatusLabel(order('sample_collected', [drawn('a')]))).toBe('Sample Collected');
+  });
+
   it('the row offers Recollect — never Collect or Dispatch', () => {
     const c = fd();
     const all = order('rejected', [notCollected('a')]);

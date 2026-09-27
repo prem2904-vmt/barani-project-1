@@ -1987,6 +1987,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  until the lab receives), so when the order reads collected but the tubes
    *  have actually been dispatched / received, show the further-along state.
    *  Past the lab (validated/delivered/etc.) the raw status wins. */
+  /** Drawer header chip: the short state ("Not collected") — the timeline
+   *  carries the count and the reason, and a long chip squeezed the name. */
+  drawerStatusLabel(o: Order): string {
+    if (o.status !== 'cancelled' && o.status !== 'delivered' && notCollectedSamples(o.samples).length > 0) return 'Not collected';
+    return this.effectiveStatusLabel(o);
+  }
   effectiveStatusLabel(o: Order): string {
     // "Can't collect" (QA #6): the tube was never drawn — say so, with the
     // reason, instead of the raw rollup ('Rejected' / 'Partially Rejected',
