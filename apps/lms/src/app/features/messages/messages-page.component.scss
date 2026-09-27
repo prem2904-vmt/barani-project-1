@@ -1363,6 +1363,7 @@
   }
 }
 
+.pf-msgs__attach-card.pf-msgs__attach-card--gone { opacity: 0.75; border-style: dashed; cursor: default; }
 .pf-msgs__attach-card {
   display: flex;
   align-items: center;

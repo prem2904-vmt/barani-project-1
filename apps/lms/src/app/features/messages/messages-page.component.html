@@ -371,7 +371,14 @@
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" class="pf-msgs__rec-card-go"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </a>
                   }
-                  @if (m.attachmentUrl) {
+                  @if (m.attachmentUrl && attachmentGone(m.attachmentUrl)) {
+                    <div class="pf-msgs__attach-card pf-msgs__attach-card--gone" role="note">
+                      <div class="pf-msgs__attach-meta">
+                        <span class="pf-msgs__attach-name">{{ m.attachmentName ?? 'Attachment' }}</span>
+                        <span class="pf-msgs__attach-size">No longer available on the server</span>
+                      </div>
+                    </div>
+                  } @else if (m.attachmentUrl) {
                     @if (isImage(m.attachmentMime)) {
                       <a class="pf-msgs__attach-image-link"
                          [href]="resolveAttachmentUrl(m.attachmentUrl)" target="_blank" rel="noopener">

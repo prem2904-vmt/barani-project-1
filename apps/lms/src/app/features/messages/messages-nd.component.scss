@@ -214,6 +214,7 @@
 .pf-mnd-scroller { padding: 12px 18px 16px; gap: 0; overscroll-behavior: contain; }
 .pf-mnd-note { margin: 8px auto; font-size: 12px; color: var(--text-tertiary); text-align: center; }
 .pf-mnd-note--empty { margin-top: auto; margin-bottom: auto; font-size: 13px; }
+.pf-mnd-note__sub { display: block; margin-top: 4px; font-size: 12px; }
 
 .pf-mnd-day { display: flex; align-items: center; gap: 12px; margin: 16px 0 6px; }
 .pf-mnd-day::before, .pf-mnd-day::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--nd-line); }
@@ -281,6 +282,9 @@
 .pf-mnd-rec__t, .pf-mnd-file__n { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
 .pf-mnd-rec__s, .pf-mnd-file__s { font-size: 12px; color: var(--text-secondary); }
 .pf-mnd-rec__go { flex: none; color: var(--text-tertiary); }
+// An attachment the server removed (relay retention) that this device never kept.
+.pf-mnd-file--gone { color: var(--text-secondary); border-style: dashed; cursor: default; }
+.pf-mnd-file--gone:hover { border-color: var(--nd-line); }
 .pf-mnd-img { display: block; }
 .pf-mnd-img img { display: block; max-width: min(300px, 100%); max-height: 320px; border-radius: 12px; object-fit: cover; }
 

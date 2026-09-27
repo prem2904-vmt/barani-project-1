@@ -13,6 +13,8 @@ import { SessionScopeService } from '../auth/session-scope.service';
 import { FOREVER_RETRY, HUB_FACTORY } from './hub-factory';
 import { ChatPopupService } from './chat-popup.service';
 import { ChatWindowsService } from './chat-windows.service';
+import { ChatHistoryService } from './chat-history.service';
+import { applyReaction } from './chat-local-store';
 
 /** Kinds of surface that can be "showing" a conversation. `reader` = the
  *  messages page / people drawer (drives read state + unread); `window` =
@@ -47,6 +49,8 @@ export class ChatService implements OnDestroy {
   private readonly popups = inject(ChatPopupService);
   private readonly windows = inject(ChatWindowsService);
   private readonly hubFactory = inject(HUB_FACTORY);
+  /** On-device history + relay sync/ack (the server only relays). */
+  readonly history = inject(ChatHistoryService);
   private connection: signalR.HubConnection | null = null;
   private connecting: Promise<void> | null = null;
   /** The chat identity (sub) whose token opened `connection`. The server
@@ -130,8 +134,13 @@ export class ChatService implements OnDestroy {
       this.connection = null;
     }
     if (!this.connection) {
+      // The device id rides the socket so the server can ack THIS device for
+      // what it sends and deliver the rest to the user's other devices.
+      let device = '';
+      try { device = await this.history.deviceId(); } catch { /* memory store */ }
+      const qs = device ? `?deviceId=${encodeURIComponent(device)}&platform=${this.history.platformName()}` : '';
       const conn = this.hubFactory(
-        `${environment.apiUrl}/hubs/chat`,
+        `${environment.apiUrl}/hubs/chat${qs}`,
         async () => (await this.auth.getAccessToken()) ?? '',
         FOREVER_RETRY);
       this.connection = conn;
@@ -176,8 +185,10 @@ export class ChatService implements OnDestroy {
         if (this.connection !== conn) return;
         this.isConnected.set(true);
         // Messages that arrived while we were away: the list (unread counts,
-        // last message, read receipts) is re-read from the server.
+        // last message, read receipts) is re-read from the server, and
+        // everything pending for this device is pulled into the local store.
         try { await this.loadConversations(); } catch { /* best-effort */ }
+        void this.syncHistory();
       });
       conn.onreconnecting(() => { if (this.connection === conn) this.isConnected.set(false); });
       conn.onclose(() => {
@@ -195,6 +206,96 @@ export class ChatService implements OnDestroy {
     }
     this.isConnected.set(true);
     try { await this.loadConversations(); } catch { /* user has no chats yet */ }
+    void this.syncHistory();
+  }
+
+  // ── Relay sync (history lives on this device) ───────────────────────
+
+  /**
+   * Pull everything the server holds for THIS device into the local store
+   * (acked only after it is stored), fold it into whatever is on screen,
+   * refresh list previews/unread from the local history, then (once per
+   * conversation per device) import pre-relay history still on the server.
+   */
+  private async syncHistory(): Promise<void> {
+    const asOf = this.identity();
+    if (!asOf) return;
+    try {
+      const res = await this.history.sync();
+      if (this.identity() !== asOf) return;
+      this.mergeIntoViews(res.messages, res.updated);
+    } catch { /* offline — next connect retries */ }
+    if (this.identity() !== asOf) return;
+    await this.overlayLocal(asOf);
+    void this.importLegacyAll(asOf);
+  }
+
+  private legacyRunning = false;
+  private async importLegacyAll(asOf: string): Promise<void> {
+    if (this.legacyRunning) return;
+    this.legacyRunning = true;
+    try {
+      let any = false;
+      for (const c of this.conversations()) {
+        if (this.identity() !== asOf) return;
+        const n = await this.history.importLegacy(c.id).catch(() => 0);
+        if (n > 0) {
+          any = true;
+          if (this.activeConversationId() === c.id || this.threads().has(c.id)) {
+            this.mergeIntoViews(await this.history.recent(c.id, this.pageSize), []);
+          }
+        }
+      }
+      if (any && this.identity() === asOf) await this.overlayLocal(asOf);
+    } finally { this.legacyRunning = false; }
+  }
+
+  /** Fold stored / updated rows into the active thread + open windows. */
+  private mergeIntoViews(added: ChatMessage[], updated: ChatMessage[]): void {
+    const all = [...added, ...updated];
+    if (!all.length) return;
+    const active = this.activeConversationId();
+    if (active && all.some(m => m.conversationId === active)) {
+      this.activeMessages.update(list => mergeMessages(list, all.filter(m => m.conversationId === active), this.identity()));
+    }
+    const threads = this.threads();
+    let next: Map<string, ChatMessage[]> | null = null;
+    for (const [id, rows] of threads) {
+      const mine = all.filter(m => m.conversationId === id);
+      if (!mine.length) continue;
+      next ??= new Map(threads);
+      next.set(id, mergeMessages(rows, mine, this.identity()));
+    }
+    if (next) this.threads.set(next);
+  }
+
+  /**
+   * The server no longer holds history, so the list's last-message preview
+   * and unread count come from THIS device's store (the server's unread
+   * still counts what it holds but hasn't delivered — the larger wins).
+   */
+  private async overlayLocal(asOf: string): Promise<void> {
+    const me = this.identity();
+    const list = this.conversations();
+    const found = new Map<string, { last: ChatMessage | null; unread: number }>();
+    for (const c of list) {
+      try {
+        const myRead = c.participants?.find(p => p.userId === me)?.lastReadAt ?? null;
+        const sum = await this.history.summary(c.id, me, myRead);
+        if (sum.last) found.set(c.id, sum);
+      } catch { /* store unavailable */ }
+    }
+    if (this.identity() !== asOf || !found.size) return;
+    this.conversations.update(cur => cur.map(c => {
+      const sum = found.get(c.id);
+      if (!sum?.last) return c;
+      const l = sum.last;
+      const lastMessage = !c.lastMessage || (l.sentAt ?? '') >= (c.lastMessage.sentAt ?? '')
+        ? { id: l.id, fromUserId: l.fromUserId, body: l.deleted ? '' : (l.body ?? ''), sentAt: l.sentAt }
+        : c.lastMessage;
+      const unreadCount = this.isViewing(c.id, ['reader']) ? 0 : Math.max(c.unreadCount, sum.unread);
+      return { ...c, lastMessage, unreadCount };
+    }));
   }
 
   private reviveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -225,6 +326,7 @@ export class ChatService implements OnDestroy {
         void this.connect().catch(() => undefined);
       } else if (st === signalR.HubConnectionState.Connected) {
         void this.loadConversations().catch(() => undefined);
+        void this.syncHistory();
       }
       this.catchUpReads();
     };
@@ -458,10 +560,13 @@ export class ChatService implements OnDestroy {
     this.hasMoreHistory.set(true);
     this.loadingHistory.set(true);
     try {
-      const rows = await firstValueFrom(this.api.get<ChatMessage[]>(
-        `/api/chat/conversations/${conversationId}/messages?skip=0&take=${this.pageSize}`
-      )) ?? [];
-      this.activeMessages.set(rows);
+      // History is on this device. The first open of a conversation on this
+      // device also imports whatever pre-relay history the server still has.
+      await this.history.importLegacy(conversationId).catch(() => 0);
+      const rows = await this.history.recent(conversationId, this.pageSize);
+      if (this.activeConversationId() !== conversationId) return;
+      // Keep anything that arrived live while we were reading the store.
+      this.activeMessages.update(live => mergeMessages(rows, live, this.identity()));
       // Fewer than a full page back = nothing older to fetch.
       if (rows.length < this.pageSize) this.hasMoreHistory.set(false);
 
@@ -488,7 +593,8 @@ export class ChatService implements OnDestroy {
     const map = this.threads();
     const rows = map.get(conversationId);
     if (!rows) return;                       // thread not open in a window
-    const idx = msg.fromUserId === me
+    const byId = rows.findIndex(x => x.id === msg.id);
+    const idx = byId >= 0 ? byId : msg.fromUserId === me
       ? rows.findIndex(x => x.pending && x.body === msg.body && x.fromUserId === me)
       : -1;
     const next = idx >= 0 ? rows.map((x, i) => i === idx ? msg : x) : [...rows, msg];
@@ -503,10 +609,9 @@ export class ChatService implements OnDestroy {
   async loadThread(conversationId: string): Promise<void> {
     await this.connect();
     if (!this.threads().has(conversationId)) {
-      const rows = await firstValueFrom(this.api.get<ChatMessage[]>(
-        `/api/chat/conversations/${conversationId}/messages?skip=0&take=${this.pageSize}`
-      )) ?? [];
-      this.setThread(conversationId, rows);
+      await this.history.importLegacy(conversationId).catch(() => 0);
+      const rows = await this.history.recent(conversationId, this.pageSize);
+      this.setThread(conversationId, mergeMessages(rows, this.threads().get(conversationId) ?? [], this.identity()));
     }
     try { await this.connection!.invoke('MarkConversationRead', conversationId); } catch { /* offline ok */ }
     this.conversations.update(list =>
@@ -532,15 +637,15 @@ export class ChatService implements OnDestroy {
     if (this.activeConversationId() !== conversationId) return 0;
     this.loadingOlder.set(true);
     try {
-      const skip = this.activeMessages().length;
-      const rows = await firstValueFrom(this.api.get<ChatMessage[]>(
-        `/api/chat/conversations/${conversationId}/messages?skip=${skip}&take=${this.pageSize}`
-      )) ?? [];
+      // Scrollback comes from this device's store: the page before the
+      // oldest message on screen.
+      const oldest = this.activeMessages().find(m => !m.pending)?.sentAt ?? null;
+      const rows = await this.history.recent(conversationId, this.pageSize, oldest);
       if (rows.length === 0) { this.hasMoreHistory.set(false); return 0; }
       if (rows.length < this.pageSize) this.hasMoreHistory.set(false);
-      // API returns newest-last (chronological) for the requested page;
-      // they're older than what's onscreen, so prepend.
-      this.activeMessages.update(list => [...rows, ...list]);
+      // Chronological and older than what's onscreen, so prepend.
+      const seen = new Set(this.activeMessages().map(m => m.id));
+      this.activeMessages.update(list => [...rows.filter(r => !seen.has(r.id)), ...list]);
       return rows.length;
     } finally {
       this.loadingOlder.set(false);
@@ -618,7 +723,7 @@ export class ChatService implements OnDestroy {
     }
 
     try {
-      await this.connection!.invoke(
+      const echo = await this.connection!.invoke<ChatMessage | null>(
         'SendMessage',
         conversationId,
         trimmed,
@@ -628,6 +733,8 @@ export class ChatService implements OnDestroy {
         attachment?.contentType ?? null,
         attachment?.size ?? null
       );
+      // Keep my own copy (this device is already acked server-side).
+      if (echo && typeof echo === 'object' && echo.id) void this.history.storeOwn(echo);
     } catch (err) {
       this.activeMessages.update(list =>
         list.map(m => m.id === tempId ? { ...m, pending: false, body: m.body + ' (failed)' } : m)
@@ -636,26 +743,48 @@ export class ChatService implements OnDestroy {
     }
   }
 
+  // Edits / deletes / pins / reactions are RELAYED events: the server may no
+  // longer hold the message (it lives on the devices), so each event names
+  // its conversation and every device applies it to its own copy.
+
+  /** The message as this device knows it (screen first, then the store). */
+  private async findMessage(messageId: string): Promise<ChatMessage | undefined> {
+    const onScreen = this.activeMessages().find(m => m.id === messageId);
+    if (onScreen) return onScreen;
+    for (const rows of this.threads().values()) {
+      const hit = rows.find(m => m.id === messageId);
+      if (hit) return hit;
+    }
+    try { return await (await this.history.store()).getMessage(messageId); } catch { return undefined; }
+  }
+
+  private async relay(messageId: string, type: 'edit' | 'delete' | 'pin' | 'reaction', payload: object): Promise<void> {
+    const m = await this.findMessage(messageId);
+    const conversationId = m?.conversationId ?? this.activeConversationId();
+    if (!conversationId) throw new Error('Message not found.');
+    await this.connect();
+    await this.connection!.invoke('RelayEvent', conversationId, messageId, type, JSON.stringify(payload));
+  }
+
   async editMessage(messageId: string, newBody: string): Promise<void> {
     const trimmed = newBody.trim();
     if (!trimmed) return;
-    await this.connect();
-    await this.connection!.invoke('EditMessage', messageId, trimmed);
+    await this.relay(messageId, 'edit', { body: trimmed });
   }
 
   async deleteMessage(messageId: string): Promise<void> {
-    await this.connect();
-    await this.connection!.invoke('DeleteMessage', messageId);
+    await this.relay(messageId, 'delete', {});
   }
 
   async setPinned(messageId: string, pinned: boolean): Promise<void> {
-    await this.connect();
-    await this.connection!.invoke('SetPinned', messageId, pinned);
+    await this.relay(messageId, 'pin', { pinned });
   }
 
   async toggleReaction(messageId: string, emoji: string): Promise<void> {
-    await this.connect();
-    await this.connection!.invoke('ToggleReaction', messageId, emoji);
+    const m = await this.findMessage(messageId);
+    const me = this.identity();
+    const has = !!m?.reactions?.some(r => r.emoji === emoji && r.userIds.includes(me));
+    await this.relay(messageId, 'reaction', { emoji, op: has ? 'remove' : 'add' });
   }
 
   /** Per-conversation mute. Updates local state immediately + persists
@@ -681,31 +810,30 @@ export class ChatService implements OnDestroy {
   /** Server-side search inside a single conversation. Substring match. */
   async searchConversation(conversationId: string, q: string): Promise<ChatMessage[]> {
     if (!q.trim()) return [];
-    const res = await firstValueFrom(this.api.get<ChatMessage[]>(
-      `/api/chat/conversations/${conversationId}/search?q=${encodeURIComponent(q.trim())}`
-    ));
-    return res ?? [];
+    // Search runs over this device's history (the server doesn't keep it).
+    try { return await this.history.search(conversationId, q); } catch { return []; }
   }
 
   /** Fetch the pinned-strip messages for a conversation. */
   async getPinned(conversationId: string): Promise<ChatMessage[]> {
-    const res = await firstValueFrom(this.api.get<ChatMessage[]>(
-      `/api/chat/conversations/${conversationId}/pinned`
-    ));
-    return res ?? [];
+    try { return await this.history.pinned(conversationId); } catch { return []; }
   }
 
   /** Forward an existing message into another conversation. */
   async forwardMessage(toConversationId: string, original: ChatMessage): Promise<void> {
-    // Forward = re-send the body + attachment metadata. We don't carry
-    // reactions/edits/replies forward — fresh send in the new thread.
-    await this.sendMessage(toConversationId, original.body || '', null,
-      original.attachmentUrl ? {
-        url: original.attachmentUrl,
-        name: original.attachmentName ?? 'forwarded',
-        contentType: original.attachmentMime ?? 'application/octet-stream',
-        size: original.attachmentSize ?? 0
-      } : null);
+    // Forward = re-send the body + attachment. We don't carry
+    // reactions/edits/replies forward — fresh send in the new thread. The
+    // file is re-uploaded from this device's copy: the original's server file
+    // is removed once ITS recipients have it, independent of this send.
+    let attachment: { url: string; name: string; contentType: string; size: number } | null = null;
+    if (original.attachmentUrl) {
+      const blob = await this.history.mediaBlob(original.attachmentUrl, original.sentAt).catch(() => null);
+      if (!blob) throw new Error('This attachment is no longer available.');
+      const name = original.attachmentName ?? 'forwarded';
+      attachment = await this.uploadAttachment(new File([blob], name,
+        { type: original.attachmentMime ?? blob.type ?? 'application/octet-stream' }));
+    }
+    await this.sendMessage(toConversationId, original.body || '', null, attachment);
   }
 
   /** Throttled typing broadcast. Caller should debounce to ~1Hz. */
@@ -750,6 +878,15 @@ export class ChatService implements OnDestroy {
     // page. Only then is it marked read and kept out of the unread count.
     const reading = !fromMe && this.isViewing(m.conversationId, ['reader']);
 
+    // Keep it on this device (then ack) — the server forgets it once delivered.
+    void this.history.storeLive(m);
+
+    // Already on screen (a sync delivered it first) → replace, don't duplicate.
+    const dup = this.activeConversationId() === m.conversationId
+      && this.activeMessages().some(x => x.id === m.id);
+    if (dup) {
+      this.activeMessages.update(list => list.map(x => x.id === m.id ? { ...x, ...m } : x));
+    } else
     // Reconcile optimistic pending row if this is my echoed message.
     if (fromMe && this.activeConversationId() === m.conversationId) {
       let replaced = false;
@@ -841,18 +978,39 @@ export class ChatService implements OnDestroy {
     return w.Capacitor?.getPlatform?.() === 'ios';
   }
 
-  private onMessagePinChanged(p: { id: string; conversationId: string; isPinned: boolean }) {
-    if (this.activeConversationId() === p.conversationId) {
-      this.activeMessages.update(list =>
-        list.map(m => m.id === p.id ? { ...m, isPinned: p.isPinned } : m));
+  /** Apply a change to one message wherever it is shown (thread + windows). */
+  private patchMessage(conversationId: string, id: string, fn: (m: ChatMessage) => ChatMessage): void {
+    if (this.activeConversationId() === conversationId) {
+      this.activeMessages.update(list => list.map(m => m.id === id ? fn(m) : m));
     }
+    const rows = this.threads().get(conversationId);
+    if (rows?.some(m => m.id === id)) this.setThread(conversationId, rows.map(m => m.id === id ? fn(m) : m));
   }
 
-  private onMessageReactionChanged(p: { id: string; conversationId: string; reactions: Array<{ emoji: string; userIds: string[] }> }) {
-    if (this.activeConversationId() === p.conversationId) {
-      this.activeMessages.update(list =>
-        list.map(m => m.id === p.id ? { ...m, reactions: p.reactions } : m));
-    }
+  private onMessagePinChanged(p: { id: string; conversationId: string; isPinned: boolean; eventId?: string; fromUserId?: string }) {
+    this.patchMessage(p.conversationId, p.id, m => ({ ...m, isPinned: p.isPinned }));
+    void this.history.applyLiveEvent({
+      id: p.eventId ?? '', eventId: p.eventId, conversationId: p.conversationId, messageId: p.id,
+      fromUserId: p.fromUserId ?? '', type: 'pin', payload: { pinned: p.isPinned }, createdAt: new Date().toISOString(),
+    });
+  }
+
+  private onMessageReactionChanged(p: {
+    id: string; conversationId: string; reactions?: Array<{ emoji: string; userIds: string[] }> | null;
+    emoji?: string; op?: 'add' | 'remove'; eventId?: string; fromUserId?: string;
+  }) {
+    // Older servers / the legacy table send the full set; relayed events an op.
+    this.patchMessage(p.conversationId, p.id, m => ({
+      ...m,
+      reactions: Array.isArray(p.reactions) ? p.reactions
+        : applyReaction(m.reactions ?? [], p.emoji, p.op, p.fromUserId ?? ''),
+    }));
+    void this.history.applyLiveEvent({
+      id: p.eventId ?? '', eventId: p.eventId, conversationId: p.conversationId, messageId: p.id,
+      fromUserId: p.fromUserId ?? '', type: 'reaction',
+      payload: Array.isArray(p.reactions) ? { reactions: p.reactions } : { emoji: p.emoji, op: p.op },
+      createdAt: new Date().toISOString(),
+    });
   }
 
   private onConversationMuteChanged(p: { conversationId: string; isMuted: boolean }) {
@@ -860,12 +1018,15 @@ export class ChatService implements OnDestroy {
       list.map(c => c.id === p.conversationId ? { ...c, isMuted: p.isMuted } : c));
   }
 
-  private onMessageEdited(p: { id: string; conversationId: string; body: string; editedAt: string }) {
-    if (this.activeConversationId() === p.conversationId) {
-      this.activeMessages.update(list =>
-        list.map(m => m.id === p.id ? { ...m, body: p.body, editedAt: p.editedAt } : m)
-      );
-    }
+  private onMessageEdited(p: { id: string; conversationId: string; body: string; editedAt: string; eventId?: string; fromUserId?: string }) {
+    // Only the message's own sender may edit it (the server can't check once
+    // the row is gone — the device holding the message does).
+    this.patchMessage(p.conversationId, p.id, m =>
+      p.fromUserId && m.fromUserId !== p.fromUserId ? m : { ...m, body: p.body, editedAt: p.editedAt });
+    void this.history.applyLiveEvent({
+      id: p.eventId ?? '', eventId: p.eventId, conversationId: p.conversationId, messageId: p.id,
+      fromUserId: p.fromUserId ?? '', type: 'edit', payload: { body: p.body }, createdAt: p.editedAt,
+    });
     this.conversations.update(list => list.map(c =>
       c.id === p.conversationId && c.lastMessage?.id === p.id
         ? { ...c, lastMessage: { ...c.lastMessage!, body: p.body } }
@@ -873,12 +1034,14 @@ export class ChatService implements OnDestroy {
     ));
   }
 
-  private onMessageDeleted(p: { id: string; conversationId: string }) {
-    if (this.activeConversationId() === p.conversationId) {
-      this.activeMessages.update(list =>
-        list.map(m => m.id === p.id ? { ...m, deleted: true, body: '', replyPreview: null, replyFromName: null } : m)
-      );
-    }
+  private onMessageDeleted(p: { id: string; conversationId: string; eventId?: string; fromUserId?: string }) {
+    this.patchMessage(p.conversationId, p.id, m =>
+      p.fromUserId && m.fromUserId !== p.fromUserId ? m
+        : { ...m, deleted: true, body: '', replyPreview: null, replyFromName: null, attachmentUrl: null });
+    void this.history.applyLiveEvent({
+      id: p.eventId ?? '', eventId: p.eventId, conversationId: p.conversationId, messageId: p.id,
+      fromUserId: p.fromUserId ?? '', type: 'delete', payload: {}, createdAt: new Date().toISOString(),
+    });
     this.conversations.update(list => list.map(c =>
       c.id === p.conversationId && c.lastMessage?.id === p.id
         ? { ...c, lastMessage: { ...c.lastMessage!, body: '(message deleted)' } }
@@ -983,4 +1146,20 @@ export function messagePreview(m: Pick<ChatMessage, 'body' | 'attachmentMime' | 
   }
   if (m.sharedRecordTitle) return `Shared: ${m.sharedRecordTitle}`;
   return 'New message';
+}
+
+/**
+ * Merge rows into a chronological list: dedupe by id (the newer copy's
+ * fields win), an echoed own message replaces its optimistic `pending` twin,
+ * ordered by server send time.
+ */
+export function mergeMessages(base: ChatMessage[], add: ChatMessage[], me: string): ChatMessage[] {
+  const out = [...base];
+  for (const m of add) {
+    const i = out.findIndex(x => x.id === m.id);
+    if (i >= 0) { out[i] = { ...out[i], ...m }; continue; }
+    const p = m.fromUserId === me ? out.findIndex(x => x.pending && x.fromUserId === me && x.body === m.body) : -1;
+    if (p >= 0) out[p] = m; else out.push(m);
+  }
+  return out.sort((a, b) => (a.sentAt < b.sentAt ? -1 : a.sentAt > b.sentAt ? 1 : 0));
 }

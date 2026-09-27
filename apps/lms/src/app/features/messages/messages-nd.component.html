@@ -402,7 +402,8 @@
                   <p class="pf-mnd-note">Start of conversation</p>
                 }
                 @if (chat.activeMessages().length === 0) {
-                  <p class="pf-mnd-note pf-mnd-note--empty">No messages yet. Say hello.</p>
+                  <p class="pf-mnd-note pf-mnd-note--empty">No messages yet. Say hello.
+                    <span class="pf-mnd-note__sub">{{ historyNote() }}</span></p>
                 }
               }
               @for (m of chat.activeMessages(); track m.id; let i = $index) {
@@ -469,7 +470,17 @@
                               <svg class="pf-mnd-rec__go" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                             </a>
                           }
-                          @if (m.attachmentUrl) {
+                          @if (m.attachmentUrl && attachmentGone(m.attachmentUrl)) {
+                            <span class="pf-mnd-file pf-mnd-file--gone" role="note">
+                              <span class="nd-card__icon" aria-hidden="true">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9.5 12.5l5 5M14.5 12.5l-5 5"/></svg>
+                              </span>
+                              <span class="pf-mnd-file__meta">
+                                <span class="pf-mnd-file__n">{{ m.attachmentName ?? 'Attachment' }}</span>
+                                <span class="pf-mnd-file__s">No longer available on the server</span>
+                              </span>
+                            </span>
+                          } @else if (m.attachmentUrl) {
                             @if (isImage(m.attachmentMime)) {
                               <a class="pf-mnd-img" [href]="resolveAttachmentUrl(m.attachmentUrl)" target="_blank" rel="noopener">
                                 <img [src]="resolveAttachmentUrl(m.attachmentUrl)" [alt]="m.attachmentName ?? 'Image'" loading="lazy" />

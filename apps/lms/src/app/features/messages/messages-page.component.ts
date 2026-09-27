@@ -944,7 +944,22 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  blob: URL fetched with the session ('' until it lands — the signal read
    *  re-renders the bubble). Absolute URLs (rare) pass through. */
   protected resolveAttachmentUrl(url: string | null | undefined): string {
-    return this.uploads.src(url);
+    // Relay model: the file is kept on this device after the first download
+    // (the server deletes it once every recipient has it).
+    return this.chat.history?.mediaSrc(url) ?? this.uploads.src(url);
+  }
+
+  /** The server no longer has this file and this device never kept a copy. */
+  protected attachmentGone(url: string | null | undefined): boolean {
+    return this.chat.history?.mediaState(url) === 'unavailable';
+  }
+
+  /** The one-line "where is my history" note under an empty thread. */
+  protected historyNote(): string {
+    const h = this.chat.history;
+    if (h && !h.persistent()) return 'Messages are kept on this device for this session only.';
+    if (h?.freshStore()) return 'Messages are stored on each device. Earlier ones stay on the devices that received them.';
+    return 'Messages are stored on this device.';
   }
 
   /** href for a file card: private files open via a signed URL on click
@@ -957,7 +972,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected openAttachment(ev: Event, url: string | null | undefined): void {
     if (!isPrivateUploadPath(url)) return;   // plain link — let the anchor navigate
     ev.preventDefault();
-    void this.uploads.open(url);
+    if (this.chat.history) void this.chat.history.openMedia(url);
+    else void this.uploads.open(url);
   }
 
   /** True for audio MIME types — drives voice-message bubble render. */
