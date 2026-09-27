@@ -13,6 +13,7 @@ import { ReportSignature, ReportTemplate } from '../models/report.model';
 import { savedFlagOf, type SavedFlag } from './result-flag';
 import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
+import { reportDisplayName } from './report-name';
 
 /**
  * Render an A4 lab report PDF in the Drlogy template style — blue
@@ -539,7 +540,9 @@ function applyTheme(t: ResolvedTheme) {
  *  flow and the live admin preview (which wraps the doc as a blob URL). */
 export function buildReportPdf(input: ReportPdfInput): jsPDF {
   const { report, practice: rawPractice = {}, resolvedLayouts = {}, template = null, imageCache = {} } = input;
-  const snap = parseSnapshot(report.data);
+  // Calculated values print like any other value — no "(Calculated)"
+  // marker on a test / profile name (see report-name.ts).
+  const snap = cleanSnapshotNames(parseSnapshot(report.data));
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   // Built-in PDF fonts are cp1252-only: superscripts (×10⁹/L), subscripts
   // (CO₂) and Greek (β-hCG) would otherwise print as garbage. One wrapper on
@@ -2007,7 +2010,7 @@ function buildPanelGroup(
   layout: ResolvedReportLayout | undefined
 ): PanelGroup {
   const group: PanelGroup = {
-    testName: t.name ?? layout?.testName ?? 'Test',
+    testName: t.name ?? reportDisplayName(layout?.testName) ?? 'Test',
     department: (t.department ?? '').trim() || undefined,
     columns: layout?.columns ?? [],
     columnsOverridden: layout?.hasColumnOverride || undefined,
@@ -2078,7 +2081,7 @@ function buildPanelGroup(
         }
         group.rows.push({
           kind: 'param',
-          name: r.title || humanize(r.parameterName ?? ''),
+          name: reportDisplayName(r.title) || humanize(r.parameterName ?? ''),
           result: resultText,
           range: rangeText,
           // Prefer the Unit column when present; otherwise fall back to the
@@ -2699,7 +2702,7 @@ function renderResolvedTest(
   let y = startY;
   if (y > A4.h - MARGIN_BOTTOM - 70) { y = newPage(doc, practice); }
 
-  drawTestHeading(doc, t.name ?? layout.testName ?? 'Test', y);
+  drawTestHeading(doc, t.name ?? reportDisplayName(layout.testName) ?? 'Test', y);
   y += 26;
 
   for (const sec of layout.sections) {
@@ -2830,7 +2833,7 @@ function renderGridSection(
       }];
     }
     const isFirstBodyRow = bodyRows.length > 0 && bodyRows[0].id === r.id;
-    const paramTitle = r.title || humanize(r.parameterName ?? '');
+    const paramTitle = reportDisplayName(r.title) || humanize(r.parameterName ?? '');
     const resultCol = cfgCols.find(c => c.type === 'result');
     const resultText = resultCol ? coerceCellText(r.cells[resultCol.name]) : '';
     // Engine condition colour: red/orange abnormal paints the row; green is an
@@ -3754,14 +3757,31 @@ function zoneHexForPdf(token: string): string {
   return token.startsWith('#') ? token : '#e2e8f0';
 }
 
-/** "hemoglobin_a1c" → "Hemoglobin A1c". */
+/** "hemoglobin_a1c" → "Hemoglobin A1c". Report-facing, so a
+ *  "(Calculated)" marker is dropped too (see report-name.ts). */
 function humanize(s: string): string {
   if (!s) return '—';
-  if (/\s/.test(s) || /^[A-Z]/.test(s)) return s;
-  return s
+  if (/\s/.test(s) || /^[A-Z]/.test(s)) return reportDisplayName(s);
+  return reportDisplayName(s
     .replace(/[_-]+/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/^\w/, c => c.toUpperCase());
+    .replace(/^\w/, c => c.toUpperCase()));
+}
+
+/** Report copy of the snapshot with patient-facing names cleaned: a
+ *  calculated test prints as "LDL Cholesterol", never "LDL Cholesterol
+ *  (Calculated)". Keys (testId, parameter names, hidden[]) are untouched. */
+function cleanSnapshotNames(snap: ReportSnapshot): ReportSnapshot {
+  if (!Array.isArray(snap.tests)) return snap;
+  return {
+    ...snap,
+    tests: snap.tests.map(t => t ? {
+      ...t,
+      name: reportDisplayName(t.name),
+      packageName: reportDisplayName(t.packageName),
+      profileName: reportDisplayName(t.profileName),
+    } : t),
+  };
 }
 
 function parseSnapshot(raw: string | null | undefined): ReportSnapshot {

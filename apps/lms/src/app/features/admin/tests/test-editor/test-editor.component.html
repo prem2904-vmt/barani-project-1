@@ -254,9 +254,18 @@
               </div>
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Methodology</label>
-                <input type="text" class="nd-input" [ngModel]="d.methodology"
-                       (ngModelChange)="patch({ methodology: $event })"
-                       placeholder="e.g. Photometry" />
+                @if (methodTyping()) {
+                  <input type="text" class="nd-input" [ngModel]="d.methodology"
+                         (ngModelChange)="patch({ methodology: $event })"
+                         (blur)="methodTyping.set(false)"
+                         aria-label="Methodology" placeholder="Type the method" />
+                } @else {
+                  <pf-select class="pf-uf__in" [searchable]="true"
+                             [options]="methodologyOptions()"
+                             [value]="d.methodology || ''"
+                             placeholder="— Select methodology —"
+                             (valueChange)="onMethodologyPicked($any($event))"></pf-select>
+                }
               </div>
             }
           </div>

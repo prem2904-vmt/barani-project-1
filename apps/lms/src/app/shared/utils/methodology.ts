@@ -39,3 +39,45 @@ export function stripRedundantMethodology<T extends { methodology?: string | nul
   });
   return changed ? out : params;
 }
+
+/** The methodology a lab picks to say a value is computed by a formula
+ *  (LDL, INR, A/G ratio, eGFR…). Opt-in per test — never auto-filled; the
+ *  report prints it wherever methodology prints and adds no marker itself. */
+export const CALCULATED_METHODOLOGY = 'Calculated';
+
+/** Common methods offered in Test Master's Methodology picker. */
+export const STANDARD_METHODOLOGIES: readonly string[] = [
+  CALCULATED_METHODOLOGY,
+  'Photometry', 'Colorimetry', 'Enzymatic', 'Hexokinase', 'GOD-POD',
+  'Immunoturbidimetry', 'Nephelometry', 'ISE (Indirect)', 'ISE (Direct)',
+  'CLIA', 'ECLIA', 'ELISA', 'Immunochromatography', 'Agglutination',
+  'HPLC', 'Electrophoresis', 'Impedance', 'Flow cytometry',
+  'Microscopy', 'Westergren', 'Coagulometry', 'PCR', 'RT-PCR', 'Culture',
+];
+
+/**
+ * Picker list for the Methodology field: the current value first when it is
+ * not already offered (a hand-entered or legacy method survives untouched),
+ * then the standard methods, then the tenant's own methods from its
+ * catalogue — de-duplicated case-insensitively, first spelling wins.
+ */
+export function methodologyChoices(
+  current: string | null | undefined,
+  tenantMethods: Iterable<string | null | undefined> = [],
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (m: string | null | undefined) => {
+    const v = clean(m);
+    if (!v || seen.has(v.toLowerCase())) return;
+    seen.add(v.toLowerCase());
+    out.push(v);
+  };
+  const cur = clean(current);
+  const offered = [...STANDARD_METHODOLOGIES, ...tenantMethods];
+  if (cur && !offered.some(m => clean(m).toLowerCase() === cur.toLowerCase())) add(cur);
+  STANDARD_METHODOLOGIES.forEach(add);
+  const extra = [...tenantMethods].map(clean).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  extra.forEach(add);
+  return out;
+}

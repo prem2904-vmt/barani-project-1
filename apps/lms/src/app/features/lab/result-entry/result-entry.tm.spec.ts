@@ -97,3 +97,23 @@ describe('ResultEntry — methodology (Phase 0: hybrid)', () => {
     expect(P.methodologyFor.call({ _ot: signal({ test: {} }) }, { name: 'a' })).toBe('—');
   });
 });
+
+describe('ResultEntry.calcChipFor — result entry still marks auto-calculated values', () => {
+  const def = { kind: 'expr', expr: 'TC - HDL - TG/5', inputs: ['TC', 'HDL', 'TG'] };
+  const vals: Record<string, number> = { TC: 210, HDL: 45, TG: 150 };
+  const c = (over: Record<string, unknown> = {}) => ({
+    _calcDef: () => def,
+    calcTargetParam: () => ({ name: 'LDL Cholesterol' }),
+    _calcOverridden: () => false,
+    calcContext: () => ({ value: (r: string) => vals[r] ?? null }),
+    ...over,
+  });
+  it('the formula target shows the Calculated chip; other fields show none', () => {
+    expect(P.calcChipFor.call(c(), { name: 'LDL Cholesterol' })).toEqual({ kind: 'auto', label: 'Calculated' });
+    expect(P.calcChipFor.call(c(), { name: 'HDL' })).toBeNull();
+  });
+  it('a tech override reads Manual', () => {
+    expect(P.calcChipFor.call(c({ _calcOverridden: () => true }), { name: 'LDL Cholesterol' }))
+      .toEqual({ kind: 'manual', label: 'Manual' });
+  });
+});

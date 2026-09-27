@@ -34,6 +34,7 @@ import { validateRanges, type RangeIssue } from '../../../../shared/utils/range-
 import { hasLegacyFields, loadEditorFields, newFieldId, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
 
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
+import { methodologyChoices } from '../../../../shared/utils/methodology';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from '../test-layout-editor.component';
 import { ReportStructureComponent } from '../report-structure.component';
@@ -330,6 +331,27 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       ...(cur && !base.includes(cur) ? [{ value: cur, label: cur }] : []),
       ...base.map(u => ({ value: u, label: u })),
     ];
+  }
+
+  // ── Methodology: searchable picker (never a bare text box) ──────────
+  /** Sentinel option that switches the picker to a typed method. */
+  readonly METHOD_OTHER = '\u0000other';
+  /** True while the admin types a method not in the list. */
+  readonly methodTyping = signal(false);
+  /** Standard methods (incl. "Calculated") + the tenant's own + the current
+   *  value, then "Type another…". Picking "Calculated" is the lab's choice —
+   *  it is never auto-filled for formula tests. */
+  readonly methodologyOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: '— no methodology —' },
+    ...methodologyChoices(this._draft().methodology,
+      this._allIndividualTests().map(t => t.methodology ?? ''))
+      .map(m => ({ value: m, label: m })),
+    { value: this.METHOD_OTHER, label: 'Type another method…' },
+  ]);
+  onMethodologyPicked(v: string | null) {
+    if (v === this.METHOD_OTHER) { this.methodTyping.set(true); return; }
+    this.methodTyping.set(false);
+    this.patch({ methodology: v ?? '' });
   }
 
   // ── Creating a NAMED shared list from inside the test ───────────────
