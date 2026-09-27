@@ -86,12 +86,15 @@ import { mergeDescriptionsOntoLatest, type LooseSection } from '../../../shared/
             <h4 class="pf-tl-h">Description column</h4>
             <p class="pf-tl-hint">
               Printed in the report's <strong>Description</strong> column beside each
-              parameter — e.g. what a high or low value means. Leave blank for none.
+              parameter — or, with no such column, as a line under its result — e.g.
+              what a high or low value means. Leave blank for none.
             </p>
             @if (descriptionColumn() === false) {
-              <p class="pf-tl-desc-warn pf-tl-desc-warn--err" role="note">
-                This report's table has no Description column, so nothing written here prints.
-                Add one with “Change the columns” above.
+              <!-- No column: the report prints each description as a full-width
+                   row right under its value (report-pdf.ts, owner 2026-09-28). -->
+              <p class="pf-tl-desc-warn" role="note" data-testid="desc-no-column-hint">
+                No Description column in this report — it prints as a line under the result.
+                Prefer a column? Use “Change the columns” above.
               </p>
             }
             @for (name of paramNames(); track name) {
@@ -524,7 +527,8 @@ export class TestNotesEditorComponent implements OnInit {
    *  before it is saved. */
   readonly columnsOverride = input<ReportColumn[] | null>(null);
   /** Whether the table this test prints in has a Description column (host
-   *  knows the effective columns). false → warn: descriptions can't print.
+   *  knows the effective columns). false → hint: each description prints as
+   *  a line under its result instead of in a column.
    *  null = unknown / engine defaults (which include one). */
   readonly descriptionColumn = input<boolean | null>(null);
 

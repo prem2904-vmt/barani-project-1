@@ -76,8 +76,12 @@ describe("a profile's printed blocks on the real report", () => {
     expect(text).toContain('Raised in diabetes');
   });
 
-  it('no Description column in the table → the description cannot print (the editor warns)', () => {
+  it('no Description column in the table → the description prints as a line under its member (owner 2026-09-28)', () => {
     const text = render(NO_DESC, [sentence]);
-    expect(text).not.toContain('Raised in diabetes');
+    expect(text).toContain('Raised in diabetes');
+    // Under Fasting Blood Sugar's row, before the next member and the profile's Sentence.
+    expect(text.indexOf('Raised in diabetes')).toBeGreaterThan(text.indexOf('Fasting Blood Sugar'));
+    expect(text.indexOf('Raised in diabetes')).toBeLessThan(text.indexOf('Postprandial Blood Sugar'));
+    expect(text.indexOf('Raised in diabetes')).toBeLessThan(text.indexOf('Kindly correlate'));
   });
 });

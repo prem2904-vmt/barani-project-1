@@ -1460,8 +1460,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly reportParamTitles = computed<Record<string, string>>(() =>
     this._draft().type === 'individual' ? this.parameterTitleMap()
       : Object.fromEntries(this.memberReportParams().map(p => [p.name, p.title])));
-  /** Does the table this test prints in carry a Description column? The
-   *  descriptions are cells of that column — without it they never print.
+  /** Does the table this test prints in carry a Description column? With
+   *  it, descriptions print in that column; without it, each prints as a
+   *  full-width line under its result (the editor says so).
    *  Null = columns not loaded / engine defaults (which include it). */
   readonly descriptionColumnPrints = computed<boolean | null>(() => {
     const cols = this.liveColumnsOverride() ?? this.testColumnsOverride() ?? this.deptColumnCfg();
