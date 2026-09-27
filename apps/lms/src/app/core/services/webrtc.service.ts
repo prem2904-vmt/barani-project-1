@@ -1,10 +1,11 @@
 import { Injectable, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
-import { SignalingService } from './signaling.service';
+import { SignalingService, cleanHubError } from './signaling.service';
 import { ToastService } from './toast.service';
 import { ChatService } from './chat.service';
 import { ApiService } from './api.service';
+import { environment } from '../../../environments/environment';
 import {
   CallStatus, CallType, IceServer, IncomingCallInfo
 } from '../../shared/models/call.model';
@@ -152,7 +153,9 @@ export class WebrtcService implements OnDestroy {
         if (sid) {
           try {
             const blob = new Blob([JSON.stringify({ sessionId: sid })], { type: 'application/json' });
-            navigator.sendBeacon(`${(window as any).__apiUrl__ ?? ''}/api/call-cleanup`, blob);
+            // The API host — `window.__apiUrl__` was never defined, so the
+            // beacon went to the UI's own origin and never reached the server.
+            navigator.sendBeacon(`${environment.apiUrl}/api/call-cleanup`, blob);
           } catch { /* best-effort */ }
         }
       });
@@ -288,6 +291,7 @@ export class WebrtcService implements OnDestroy {
     const info = this.incomingCall();
     if (!info) return;
     this.clearIncomingRingTimer();
+    this.callError.set(null); // a previous call's "Call declined." must not show on this one
     this.status.set('connecting');
     try {
       await this.acquireLocalStream();
@@ -400,8 +404,21 @@ export class WebrtcService implements OnDestroy {
   }
 
   private onIncomingCall(info: IncomingCallInfo) {
-    // Ignore if we're already in a call — server should never do this but be defensive.
-    if (this.inCall()) return;
+    // Busy here (on a call, ringing out, or already ringing for ANOTHER call):
+    // decline the new one so its caller is told at once. It used to be
+    // accepted as the incoming call even while ringing out — clobbering the
+    // outgoing call's state (and its no-answer timer) — or silently ignored
+    // while the caller rang into the 60s timeout.
+    const cur = this.incomingCall();
+    if (cur?.sessionId === info.sessionId) return;
+    // Mid-answer from CallKit (session id not known yet) — this ring may be
+    // the very call being answered; never decline it.
+    if (this.status() === 'connecting' && !this.sessionId()) return;
+    if (this.inCall() || this.status() === 'outgoing' || this.status() === 'ending' || cur) {
+      void this.signaling.rejectCall(info.sessionId).catch(() => undefined);
+      return;
+    }
+    this.callError.set(null);
     this.incomingCall.set(info);
     this.status.set('incoming');
     this.callType.set(info.callType);
@@ -420,11 +437,28 @@ export class WebrtcService implements OnDestroy {
     }
   }
 
-  private onCallRejected(p: { sessionId: string; userId: string }) {
-    if (p.sessionId === this.sessionId()) {
-      this.callError.set('Call declined.');
-      this.teardown('idle');
+  private onCallRejected(p: { sessionId: string; userId: string; sessionEnded?: boolean }) {
+    if (p.sessionId !== this.sessionId()) return;
+    // One group member / a mid-call invitee declining is not the end of the
+    // call — it used to tear down the caller's live call with everyone else.
+    const ended = p.sessionEnded ?? this.remoteParticipants().length === 0;
+    if (!ended) {
+      this.toast.info(`${this.nameOf(p.userId) ?? 'They'} declined.`);
+      return;
     }
+    this.callError.set('Call declined.');
+    // The call screens are gone after teardown — say it where it's seen.
+    this.toast.info(`${this.outgoingPeer()?.isGroup ? 'Everyone' : (this.nameOf(p.userId) ?? 'They')} declined the call.`);
+    this.teardown('idle');
+  }
+
+  /** Display name of a user we share a conversation with (best effort). */
+  private nameOf(userId: string): string | null {
+    const op = this.outgoingPeer();
+    if (op && !op.isGroup && op.id === userId && op.name) return op.name;
+    return this.chat.conversations()
+      .flatMap(c => c.participants ?? [])
+      .find(p => p.userId === userId)?.displayName ?? null;
   }
 
   private onCallCancelled(p: { sessionId: string }) {
@@ -450,7 +484,10 @@ export class WebrtcService implements OnDestroy {
     if (p.sessionId !== this.sessionId()) return;
     this.tearDownPeer(p.userId);
     this.remoteParticipants.update(list => list.filter(u => u !== p.userId));
-    if (this.remoteParticipants().length === 0) this.teardown('idle');
+    // Alone now: LEAVE on the server too. A local-only teardown left us in
+    // the server session (shown "in a call", reported busy) while members
+    // still ringing could "accept" into a call nobody was on.
+    if (this.remoteParticipants().length === 0) void this.leaveCall().catch(() => this.teardown('idle'));
   }
 
   /**
@@ -777,6 +814,7 @@ export class WebrtcService implements OnDestroy {
     this.outgoingRingTimer = setTimeout(() => {
       if (this.status() === 'outgoing') {
         this.callError.set('No answer.');
+        this.toast.info('No answer.');
         void this.cancelOutgoing();
       }
     }, 60_000);
@@ -844,7 +882,7 @@ export class WebrtcService implements OnDestroy {
 
   private handleFatal(err: unknown, where: string) {
     console.error(`[webrtc] ${where} failed`, err);
-    this.callError.set((err as Error)?.message ?? 'Call failed.');
+    this.callError.set(cleanHubError(err).message);
     this.teardown('idle');
   }
 

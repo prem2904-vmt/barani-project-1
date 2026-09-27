@@ -18,6 +18,16 @@ const isConnectionStatus = (s: string): boolean => (CONNECTION_STATUSES as reado
 export const isOnlineStatus = (s: string | undefined | null): boolean => s === 'active' || s === 'in-a-call';
 
 
+/** A HubException reaches the browser as "An unexpected error occurred
+ *  invoking 'StartCall' on the server. HubException: They're on another call
+ *  right now." — and that whole string was toasted. Keep only the server's
+ *  own sentence. */
+export function cleanHubError(err: unknown): Error {
+  const msg = (err as Error)?.message ?? String(err ?? '');
+  const m = /HubException:\s*(.+)$/s.exec(msg);
+  return m ? new Error(m[1].trim()) : (err instanceof Error ? err : new Error(msg || 'Call failed.'));
+}
+
 /** SDP / ICE payload exchanged via SendSessionOffer/Answer/IceCandidate. */
 export interface SessionSignal {
   sessionId: string;
@@ -78,7 +88,10 @@ export class SignalingService implements OnDestroy {
 
   // Call lifecycle ────────────────────────────────────────────────────
   readonly incomingCall = new Subject<IncomingCallInfo>();
-  readonly callRejected = new Subject<{ sessionId: string; userId: string }>();
+  /** `sessionEnded` (server ≥ 2026-09-27): false when others are still in /
+   *  ringing on the call — one group member or a mid-call invitee declining
+   *  must not end it for the caller. Absent on older servers. */
+  readonly callRejected = new Subject<{ sessionId: string; userId: string; sessionEnded?: boolean }>();
   readonly callCancelled = new Subject<{ sessionId: string }>();
   /** This user accepted/declined the call on ANOTHER device — dismiss the
    *  ring here (multi-device). */
@@ -270,7 +283,7 @@ export class SignalingService implements OnDestroy {
     });
 
     on('IncomingCall', (info: IncomingCallInfo) => this.incomingCall.next(info));
-    on('CallRejected',  (p: { sessionId: string; userId: string }) => this.callRejected.next(p));
+    on('CallRejected',  (p: { sessionId: string; userId: string; sessionEnded?: boolean }) => this.callRejected.next(p));
     on('CallCancelled', (p: { sessionId: string }) => this.callCancelled.next(p));
     on('CallHandledElsewhere', (p: { sessionId: string }) => this.callHandledElsewhere.next(p));
     on('ParticipantJoined', (p: { sessionId: string; userId: string }) => this.participantJoined.next(p));
@@ -286,18 +299,21 @@ export class SignalingService implements OnDestroy {
 
   async startCall(targetUserId: string, callType: CallType = 'audio', source?: string): Promise<{ sessionId: string }> {
     await this.connect();
-    return await this.connection!.invoke('StartCall', targetUserId, callType, source ?? null);
+    try { return await this.connection!.invoke('StartCall', targetUserId, callType, source ?? null); }
+    catch (err) { throw cleanHubError(err); }
   }
   /** Rings every active group member at once. Backend resolves the
    *  conversation, filters to online members, and pushes IncomingCall
    *  with conversationId + conversationName attached. */
   async startGroupCall(conversationId: string, callType: CallType = 'audio', source?: string): Promise<{ sessionId: string; ringing?: string[] }> {
     await this.connect();
-    return await this.connection!.invoke('StartGroupCall', conversationId, callType, source ?? null);
+    try { return await this.connection!.invoke('StartGroupCall', conversationId, callType, source ?? null); }
+    catch (err) { throw cleanHubError(err); }
   }
   async acceptCall(sessionId: string): Promise<{ sessionId: string; participants: string[] }> {
     await this.connect();
-    return await this.connection!.invoke('AcceptCall', sessionId);
+    try { return await this.connection!.invoke('AcceptCall', sessionId); }
+    catch (err) { throw cleanHubError(err); }
   }
   async rejectCall(sessionId: string): Promise<void> {
     await this.connect();
@@ -309,7 +325,8 @@ export class SignalingService implements OnDestroy {
   }
   async inviteToCall(sessionId: string, targetUserId: string): Promise<void> {
     await this.connect();
-    return await this.connection!.invoke('InviteToCall', sessionId, targetUserId);
+    try { return await this.connection!.invoke('InviteToCall', sessionId, targetUserId); }
+    catch (err) { throw cleanHubError(err); }
   }
   async leaveCall(sessionId: string): Promise<void> {
     await this.connect();
