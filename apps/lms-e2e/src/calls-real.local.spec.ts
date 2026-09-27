@@ -408,6 +408,92 @@ test('network drop — the signaling socket dies for ~10s mid-call: it reconnect
   } finally { await closeAll(asha, bala); }
 });
 
+// ── OFFLINE CALLING ─────────────────────────────────────────────────────
+// The callee has no open tab. The call still starts and rings their devices
+// by push (the E2E host records pushes; nothing leaves the machine); the
+// callee opens the app from the ring within the window and is connected.
+
+/** The ringing call's id, as the ring push carried it (the callee's history). */
+async function ringingCallId(callee: Person, caller: Person): Promise<string> {
+  let id = '';
+  await expect.poll(async () => {
+    const rows = await api<Array<{ roomId: string; status: string; direction: string; peer: { userId: string } }>>(callee, 'GET', '/api/calls/recent');
+    id = rows.find(r => r.direction === 'incoming' && r.status === 'initiated' && r.peer.userId === caller.authId)?.roomId ?? '';
+    return id;
+  }, { timeout: 10_000, message: 'ringing call in the callee history' }).not.toBe('');
+  return id;
+}
+
+test('offline — callee\'s tab is closed: the call still rings their devices; they open the app from the push within 60 s and are connected', async ({ browser }) => {
+  // Bala had the app open, then closed the tab (no live socket any more).
+  const gone = await openAs(browser, BALA);
+  await closeAll(gone);
+  const asha = await openAs(browser, ASHA);
+  let bala: Who | null = null;
+  try {
+    await callFromThread(asha.page, BALA.name);
+    // Not refused as "offline": the caller rings, and is told how.
+    await expect(asha.page.getByTestId('call-outgoing')).toBeVisible();
+    await expect(asha.page.getByTestId('call-outgoing-status')).toHaveText('Ringing their devices…');
+    await shot(asha.page, 'offline-01-ringing-devices');
+
+    // The push woke Bala's device; he taps Answer → the app cold-starts with
+    // the call id, signs in, connects and joins the session the server kept.
+    const sid = await ringingCallId(BALA, ASHA);
+    await asha.page.waitForTimeout(3_000); // a realistic cold-start gap inside the ring window
+    bala = await openAs(browser, BALA, `/messages?pfCall=answer:${sid}`);
+
+    for (const w of [asha, bala]) {
+      await expect(w.page.getByTestId('call-status')).toContainText('On call', { timeout: 25_000 });
+      await expectConnectedPeers(w.page, 1);
+    }
+    await expectAudioFlowing(asha.page);
+    await expectAudioFlowing(bala.page);
+    await shot(bala.page, 'offline-02-connected-from-push');
+
+    await asha.page.getByTestId('call-end').click();
+    await expect(bala.page.getByTestId('call-screen')).toHaveCount(0, { timeout: 10_000 });
+  } finally { await closeAll(asha, ...(bala ? [bala] : [])); }
+});
+
+test('offline — opening the app from the ring (no choice yet) shows the still-ringing call; answering connects', async ({ browser }) => {
+  const asha = await openAs(browser, ASHA);
+  let chitra: Who | null = null;
+  try {
+    // Chitra has never opened the app in this run → no live socket.
+    await callFromThread(asha.page, CHITRA.name);
+    await expect(asha.page.getByTestId('call-outgoing-status')).toHaveText('Ringing their devices…');
+    const sid = await ringingCallId(CHITRA, ASHA);
+    chitra = await openAs(browser, CHITRA, `/messages?pfCall=show:${sid}`);
+    const ring = chitra.page.getByTestId('call-incoming');
+    await expect(ring).toBeVisible({ timeout: 15_000 });
+    await expect(ring).toContainText(ASHA.name);
+    await chitra.page.getByTestId('call-answer').click();
+    for (const w of [asha, chitra]) {
+      await expect(w.page.getByTestId('call-status')).toContainText('On call', { timeout: 20_000 });
+      await expectConnectedPeers(w.page, 1);
+    }
+    await asha.page.getByTestId('call-end').click();
+  } finally { await closeAll(asha, ...(chitra ? [chitra] : [])); }
+});
+
+test('offline — nobody picks up: the caller hears "No answer" at 60 s and the call ends as missed', async ({ browser }) => {
+  const asha = await openAs(browser, ASHA);
+  try {
+    await callFromThread(asha.page, DEV.name); // Dev never opens the app
+    await expect(asha.page.getByTestId('call-outgoing-status')).toHaveText('Ringing their devices…');
+    await expect(asha.page.getByTestId('call-outgoing')).toBeVisible();
+    await asha.page.waitForTimeout(50_000);
+    await expect(asha.page.getByTestId('call-outgoing'), 'still ringing inside the window').toBeVisible();
+    await expect(asha.page.getByTestId('call-outgoing')).toHaveCount(0, { timeout: 15_000 });
+    await expect(asha.page.locator('.pf-toasts')).toContainText(/No answer/i);
+    await expect.poll(async () => {
+      const rows = await api<Array<{ status: string; peer: { userId: string } }>>(DEV, 'GET', '/api/calls/recent');
+      return rows.find(r => r.peer.userId === ASHA.authId)?.status ?? '';
+    }, { timeout: 10_000 }).toBe('missed');
+  } finally { await closeAll(asha); }
+});
+
 test('tenant isolation — another tenant never sees our people to call', async ({ browser }) => {
   const xavier = await openAs(browser, XAVIER);
   try {
