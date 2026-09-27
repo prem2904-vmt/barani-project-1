@@ -64,18 +64,18 @@ export class ThemeService {
   }
 
   /** Status bar / Android nav bar / Electron window → the resolved theme.
-   *  The bridge is a lazy chunk, loaded once; calls land in order, so a quick
+   *  Native / Electron only (a plain browser never loads the bridge). The
+   *  bridge is a lazy chunk, loaded once; calls land in order, so a quick
    *  light→dark→light ends on light. On resume it re-resolves (a 'system'
-   *  scheme may have flipped while suspended) and re-asserts. Never throws. */
+   *  scheme may have flipped while suspended) and re-applies. Never throws. */
   private syncBars(theme: ResolvedTheme): void {
-    void (this.barsSync ??= import('./system-bars')
-      .then((m) => m.connectSystemBars(this.barsHost, () => {
-        const next = this.resolve(this._mode());
-        if (next !== this._resolved()) this.apply(next);
-        else this.syncBars(next);
-      }))
-      .catch(() => null))
-      .then((sync) => sync?.(theme));
+    const w = this.win as { Capacitor?: { isNativePlatform?: () => boolean }; electronAPI?: unknown } | null;
+    if (this.barsHost || w?.Capacitor?.isNativePlatform?.() || w?.electronAPI) {
+      (this.barsSync ??= import('./system-bars')
+        .then((m) => m.connectSystemBars(this.barsHost, () => this.apply(this.resolve(this._mode()))))
+        .catch(() => null))
+        .then((sync) => sync?.(theme));
+    }
   }
 
   setMode(mode: ThemeMode): void {

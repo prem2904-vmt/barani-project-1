@@ -84,10 +84,8 @@ export class CapacitorService {
     // Status bar (style, colour, Android overlay) and the Android navigation
     // bar are NOT set here: they follow the ACTIVE theme from ThemeService
     // (system-bars.ts) — a fixed Style.Dark at boot left white clock text over
-    // the light theme's top band. Only the platform class stays here.
-    if (Capacitor.getPlatform() === 'android') {
-      document.documentElement.classList.add('cap-android');
-    }
+    // the light theme's top band. (`cap-android` comes from the platform class
+    // added above.)
 
     try {
       await LocalNotifications.requestPermissions();

@@ -65,7 +65,13 @@ for (const w of [window, document.defaultView]) {
 }
 
 /** The bridge is a lazy chunk: let the import + the queued syncs settle. */
-const flush = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 5)); };
+let current: ThemeService | null = null;
+const flush = async () => {
+  // Wait for the lazy chunk itself (never leave a load in flight past the
+  // test — the runner tears the environment down under it), then the syncs.
+  await (current as unknown as { barsSync?: Promise<unknown> } | null)?.barsSync;
+  for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 5));
+};
 const lastStatus = (calls: Call[]) => [...calls].reverse().find((c) => c[0] === 'status')?.[1];
 
 function boot(kind: BarsHostKind, stored: 'light' | 'dark' | 'system', systemLight = false) {
@@ -75,12 +81,13 @@ function boot(kind: BarsHostKind, stored: 'light' | 'dark' | 'system', systemLig
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({ providers: [{ provide: NATIVE_BARS_HOST, useValue: fake.host }] });
   const theme = TestBed.inject(ThemeService);
+  current = theme;
   return { theme, scheme, ...fake };
 }
 
 describe('System bars follow the active theme', () => {
   let restore: (() => void) | null = null;
-  afterEach(() => { restore?.(); restore = null; localStorage.removeItem('pf-theme'); });
+  afterEach(async () => { await flush(); current = null; restore?.(); restore = null; localStorage.removeItem('pf-theme'); });
 
   it('maps light → dark bar content (LIGHT) and dark → light content (DARK)', () => {
     expect(barStyleFor('light')).toBe('LIGHT');
@@ -184,6 +191,15 @@ describe('System bars follow the active theme', () => {
     t.resume();
     await flush();
     expect(t.calls).toEqual([]);
+  });
+
+  it('plain web without an override never loads the bridge (no plugin import in browsers)', async () => {
+    localStorage.setItem('pf-theme', 'light');
+    TestBed.resetTestingModule();
+    const theme = TestBed.inject(ThemeService);
+    theme.setMode('dark');
+    await flush();
+    expect((theme as unknown as { barsSync?: unknown }).barsSync).toBeUndefined();
   });
 
   it('the real host resolves to web in a browser and never throws', async () => {
