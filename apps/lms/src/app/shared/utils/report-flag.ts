@@ -6,14 +6,16 @@
  * "Critical is for internal lab use." A critical-high value prints as H and a
  * critical-low value as L, with the SAME styling as H / L (letter / arrow /
  * none indicator and the high / low colours). Internal screens (result entry,
- * validate, alerts, worklists) keep reading the stored 'C' — this is applied
- * at the report-rendering layer only; stored flags are never rewritten.
+ * validate, alerts, worklists) badge the stored CL / CH (legacy: C) — this is
+ * applied at the report-rendering layer only; stored flags are never rewritten.
  *
- * mw stores only 'C' for a critical (ResultFlaggingService.CodeOf — the level
- * critical_low / critical_high is not persisted), so the direction comes from:
+ * Owner 2026-09-27: mw stores the critical WITH its direction — 'CL' / 'CH'
+ * (ResultFlaggingService.CodeOf). The report reads that direction directly:
+ * CL → L, CH → H, no range guessing. Only a LEGACY direction-less 'C' (rows
+ * saved before the change — no migration) falls back to the range:
  *  1. a stored code that already carries it (CH / CL / HH / LL /
- *     critical_high / critical_low), else
- *  2. the numeric value against the row's printed reference bounds
+ *     critical_high / critical_low) — every new row, else
+ *  2. legacy 'C': the numeric value against the row's printed reference bounds
  *     (below the low bound → L, above the high bound → H), else
  *  3. with both bounds known and the value inside them, H only when the
  *     value is above their midpoint;

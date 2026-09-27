@@ -2386,7 +2386,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   /** All validated samples on the order — feeds the Preliminary report
       panel in the order drawer. */
-  validatedSamples(o: Order): Array<{ id: string; deptName: string; deptCode: string; tests: Array<{ id: string; name: string; values: Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical' }> }> }> {
+  validatedSamples(o: Order): Array<{ id: string; deptName: string; deptCode: string; tests: Array<{ id: string; name: string; values: Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; code?: string }> }> }> {
     const out: Array<any> = [];
     for (const s of (o.samples ?? [])) {
       if (!this.isSampleValidated(s)) continue;
@@ -2411,10 +2411,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Parse the OrderTest's currentResult JSON into per-parameter rows with
       the flag + range mw SAVED with the result (never a browser recompute). */
   private extractValuesFor(t: { currentResult?: string; test?: { parameters?: string } }):
-    Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical' }> {
+    Array<{ name: string; title: string; value: unknown; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; code?: string }> {
     if (!t.currentResult || !t.test?.parameters) return [];
     return savedValueRows(t.currentResult, t.test.parameters).map(r => ({
-      name: r.name, title: r.title, value: r.value ?? '—', unit: r.unit, range: r.range, flag: r.flag,
+      name: r.name, title: r.title, value: r.value ?? '—', unit: r.unit, range: r.range, flag: r.flag, code: r.code,
     }));
   }
   isDispatched(o: Order): boolean {

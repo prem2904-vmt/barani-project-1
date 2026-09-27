@@ -45,7 +45,8 @@ describe('ResultEntry.flagFor — live bench flag (CURRENT)', () => {
 
   it('prefers BAND criticals over the parameter-level pair', () => {
     expect(flag('6.6')?.tone).toBe('critical');          // band 6.5 wins over param 8
-    expect(flag('2.4')?.label).toBe('Critical low · below 2.5');
+    expect(flag('2.4')?.label).toBe('CL · below 2.5');
+    expect(flag('6.6')?.label).toBe('CH · above 6.5');
   });
   it('falls back to parameter criticals when the band has none', () => {
     const p = { ...k, referenceRanges: [{ min: 3.5, max: 5 }] };
@@ -62,7 +63,10 @@ describe('ResultEntry.flagFor — live bench flag (CURRENT)', () => {
     const c = ctx({ k: '4' });
     c._ot = signal({ subOrder: { order: { patient: { sex: 'F', age: 30 } } },
       currentResult: JSON.stringify({ values: { k: '4' }, flagged: { k: { value: '4', flag: 'C' } } }) });
-    expect(P.flagFor.call(c, k)?.tone).toBe('critical');
+    expect(P.flagFor.call(c, k)).toEqual({ tone: 'critical', label: 'C' });   // legacy C badges as C
+    c._ot = signal({ subOrder: { order: { patient: { sex: 'F', age: 30 } } },
+      currentResult: JSON.stringify({ values: { k: '4' }, flagged: { k: { value: '4', flag: 'CL' } } }) });
+    expect(P.flagFor.call(c, k)).toEqual({ tone: 'critical', label: 'CL' });  // new rows keep the direction
     c._values = signal({ k: '4.5' });          // retyped → live hint again
     expect(P.flagFor.call(c, k)?.tone).toBe('normal');
   });

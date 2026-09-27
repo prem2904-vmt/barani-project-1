@@ -15,7 +15,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
-import { flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
+import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
 import { effectiveMethodology } from '../../../shared/utils/methodology';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
 import { choiceOptionsFor, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
@@ -3397,7 +3397,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const saved = savedFlagOf(parseResultSnapshot(ot?.currentResult), p.name);
     if (saved && saved.flag != null && String(saved.value ?? '') === String(raw)) {
       const code = flagCodeOf(saved.flag);
-      if (code === 'C') return { tone: 'critical', label: 'Critical' };
+      // Lab badge keeps the direction: CL / CH (legacy rows: C).
+      const crit = criticalBadge(code);
+      if (crit) return { tone: 'critical', label: crit };
       if (code === 'L') return { tone: 'low', label: 'Low' };
       if (code === 'H') return { tone: 'high', label: 'High' };
       if (code === 'A') return { tone: 'high', label: 'Abnormal' };
@@ -3409,7 +3411,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const lf = liveFlag(p, v, normalizeSex(ot?.subOrder?.order?.patient?.sex),
       typeof ageRaw === 'number' ? ageRaw : null, ot?.profileCode);
     if (!lf) return null;
-    if (lf.code === 'C') return { tone: 'critical', label: `Critical ${lf.critical === 'low' ? 'low · below' : 'high · above'} ${lf.limit}` };
+    if (lf.code === 'CL' || lf.code === 'CH') return { tone: 'critical', label: `${lf.code} · ${lf.code === 'CL' ? 'below' : 'above'} ${lf.limit}` };
     if (lf.code === 'L') return { tone: 'low',  label: 'Low' };
     if (lf.code === 'H') return { tone: 'high', label: 'High' };
     return { tone: 'normal', label: 'Normal' };

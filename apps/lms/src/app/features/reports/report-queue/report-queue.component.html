@@ -313,7 +313,7 @@
                       <span class="pf-rq-value__range nd-num">{{ v.range || '—' }}</span>
                       <span class="pf-rq-value__flag" [attr.data-flag]="v.flag">
                         @switch (v.flag) {
-                          @case ('critical') { Critical }
+                          @case ('critical') { {{ v.code || 'C' }} }
                           @case ('abnormal') { {{ v.code === 'H' ? 'High' : v.code === 'L' ? 'Low' : 'Abnormal' }} }
                         }
                       </span>

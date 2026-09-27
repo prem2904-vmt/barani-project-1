@@ -8,7 +8,8 @@ import { liveFlag } from './result-flag';
 function prodLevel(p: InsightParam, v: number, sex: 'M' | 'F' | 'O' | null = null, age: number | null = null): FlagLevel | null {
   const f = liveFlag(p as never, v, sex, age);
   if (!f) return null;
-  if (f.code === 'C') return f.critical === 'low' ? 'critical_low' : 'critical_high';
+  if (f.code === 'CL') return 'critical_low';
+  if (f.code === 'CH') return 'critical_high';
   return f.code === 'L' ? 'low' : f.code === 'H' ? 'high' : 'normal';
 }
 
@@ -68,7 +69,7 @@ describe('try a value — same group + flag as result entry', () => {
     expect(w.bandIndex).toBe(1);
     expect(w.onMerit).toBe(true);
     expect(w.level).toBe('low');
-    expect(tryValue(hb, 6.4, 'F', 30)).toMatchObject({ level: 'critical_low', code: 'C' });
+    expect(tryValue(hb, 6.4, 'F', 30)).toMatchObject({ level: 'critical_low', code: 'CL' });
     expect(tryValue(hb, 25, null, null).onMerit).toBe(false);
   });
 

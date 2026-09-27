@@ -34,8 +34,8 @@ export const LEVEL_LABEL: Record<FlagLevel, string> = {
 };
 
 /** The code mw stores for each level (result snapshot `flagged[p].flag`). */
-export const LEVEL_CODE: Record<FlagLevel, 'C' | 'L' | 'N' | 'H'> = {
-  critical_low: 'C', low: 'L', normal: 'N', high: 'H', critical_high: 'C',
+export const LEVEL_CODE: Record<FlagLevel, 'CL' | 'L' | 'N' | 'H' | 'CH'> = {
+  critical_low: 'CL', low: 'L', normal: 'N', high: 'H', critical_high: 'CH',
 };
 
 /** A band as the editor holds it (ReferenceRange + band criticals). */
@@ -66,7 +66,8 @@ export function bandLevel(
 ): FlagLevel | null {
   const hit = flagBand(band, value, param ?? null);
   if (!hit) return null;
-  if (hit.code === 'C') return hit.critical === 'low' ? 'critical_low' : 'critical_high';
+  if (hit.code === 'CL') return 'critical_low';
+  if (hit.code === 'CH') return 'critical_high';
   return hit.code === 'L' ? 'low' : hit.code === 'H' ? 'high' : 'normal';
 }
 
@@ -111,7 +112,7 @@ export interface TryResult {
   onMerit: boolean;
   level: FlagLevel | null;
   /** The mw code a save would store. */
-  code: 'C' | 'L' | 'N' | 'H' | '';
+  code: 'CL' | 'L' | 'N' | 'H' | 'CH' | '';
 }
 
 /**
@@ -130,7 +131,7 @@ export function tryValue(
   const m = matchReferenceRange(pool, sex, ageYears);
   const live = param ? liveFlag(param as never, value, sex, ageYears, profileCode) : null;
   const level: FlagLevel | null = !live ? null
-    : live.code === 'C' ? (live.critical === 'low' ? 'critical_low' : 'critical_high')
+    : live.code === 'CL' ? 'critical_low' : live.code === 'CH' ? 'critical_high'
     : live.code === 'L' ? 'low' : live.code === 'H' ? 'high' : 'normal';
   const band = (live?.band ?? m.range ?? null) as InsightBand | null;
   const idx = band ? bands.indexOf(band) : -1;

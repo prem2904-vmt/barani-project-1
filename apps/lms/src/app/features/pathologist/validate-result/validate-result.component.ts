@@ -21,7 +21,7 @@ import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
-import { flagTone, rangeWithUnit, savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
+import { criticalBadge, flagTone, rangeWithUnit, savedFlagOf, type CriticalCode, type SavedFlag } from '../../../shared/utils/result-flag';
 import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
@@ -60,6 +60,8 @@ interface ValueRow {
   critHigh?: number;
   isNumeric: boolean;
   flag: Flag;
+  /** The critical badge mw saved: CL / CH (legacy rows: C); '' otherwise. */
+  crit?: CriticalCode | '';
   /** True when the parameter has a reference (range or critical bounds) —
    *  only then does a "Normal" verdict mean anything. Referenceless
    *  categorical values are shown as recorded, not judged. */
@@ -216,7 +218,7 @@ interface ValueRow {
                               @if (r.flag !== 'normal' || r.hasRef) {
                                 <span class="pf-vcard__chip" [attr.data-flag]="r.flag" [attr.title]="flagExplanation(r) || null">
                                   <span class="pf-vcard__chip-dot"></span>
-                                  {{ flagLabel(r.flag) }}
+                                  {{ flagLabel(r.flag, r.crit) }}
                                 </span>
                               } @else { <span class="pf-prow__dash">—</span> }
                             </span>
@@ -448,7 +450,7 @@ interface ValueRow {
             @if (r.flag !== 'normal' || r.hasRef) {
               <span class="pf-vcard__chip pf-vcard__chip--lg" [attr.data-flag]="r.flag">
                 <span class="pf-vcard__chip-dot"></span>
-                {{ flagLabel(r.flag) }}
+                {{ flagLabel(r.flag, r.crit) }}
               </span>
             }
             <button type="button" class="pf-drawer__close press" (click)="closeDetail()" aria-label="Close">
@@ -1186,6 +1188,7 @@ export class ValidateResultComponent implements OnInit {
         critHigh,
         isNumeric: isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),
         flag: flagTone(saved?.flag),
+        crit: criticalBadge(saved?.flag),
         hasRef: !!rangeText || critLow != null || critHigh != null
       };
     });
@@ -1272,8 +1275,10 @@ export class ValidateResultComponent implements OnInit {
     return ticks;
   }
 
-  flagLabel(f: Flag): string {
-    return f === 'critical' ? 'CRITICAL' : f === 'abnormal' ? 'ABNORMAL' : 'NORMAL';
+  /** Chip text. A critical shows its direction badge — CL / CH (legacy: C). */
+  flagLabel(f: Flag, crit?: CriticalCode | ''): string {
+    if (f === 'critical') return crit || 'C';
+    return f === 'abnormal' ? 'ABNORMAL' : 'NORMAL';
   }
 
   flagExplanation(r: ValueRow): string {

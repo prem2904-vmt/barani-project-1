@@ -1637,7 +1637,8 @@ export class DynamicInputComponent {
     const age = this.context?.patientAge;
     const lf = liveFlag(f, v, normalizeSex(this.context?.patientSex), typeof age === 'number' ? age : null);
     switch (lf?.code) {
-      case 'C': return lf.critical === 'low' ? 'critical_low' : 'critical_high';
+      case 'CL': return 'critical_low';
+      case 'CH': return 'critical_high';
       case 'L': return 'low';
       case 'H': return 'high';
       case 'N': return 'normal';

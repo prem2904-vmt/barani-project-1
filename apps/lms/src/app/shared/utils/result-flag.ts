@@ -19,8 +19,16 @@ import type { TestParameter } from '../models/test.model';
 import { describeAllRanges, flagAgainst, selectReferenceRange, type RangeLike } from './reference-range';
 import { parseParametersBlob, readParameters } from './test-parameters';
 
-/** mw flag codes: H high, L low, C critical, A abnormal (qualitative), N normal, '' not flaggable. */
-export type FlagCode = 'H' | 'L' | 'C' | 'A' | 'N' | '';
+/**
+ * mw flag codes: H high, L low, CL critical low, CH critical high, A abnormal
+ * (qualitative), N normal, '' not flaggable. 'C' is the LEGACY direction-less
+ * critical (results saved before 2026-09-27) — still critical, shown as "C".
+ * Lab screens badge CL / CH; the patient report prints H / L only
+ * ({@link ../utils/report-flag reportFlag}).
+ */
+export type FlagCode = 'H' | 'L' | 'CL' | 'CH' | 'C' | 'A' | 'N' | '';
+/** The critical codes: CL, CH and legacy C. */
+export type CriticalCode = 'CL' | 'CH' | 'C';
 /** The three-state tone the review screens colour by. */
 export type FlagTone = 'normal' | 'abnormal' | 'critical';
 
@@ -72,7 +80,21 @@ export function savedFlagOf(snap: ResultSnapshotLike | null | undefined, name: s
 /** Normalise a stored flag string to an mw code. */
 export function flagCodeOf(flag: string | null | undefined): FlagCode {
   const f = String(flag ?? '').trim().toUpperCase();
-  return (f === 'H' || f === 'L' || f === 'C' || f === 'A' || f === 'N') ? f : '';
+  return (f === 'H' || f === 'L' || f === 'CL' || f === 'CH' || f === 'C' || f === 'A' || f === 'N') ? f : '';
+}
+
+/** Is a stored flag critical — CL, CH or legacy C? Every "is it critical?"
+ *  check goes through here (never `=== 'C'`). */
+export function isCriticalFlag(flag: string | null | undefined): boolean {
+  const c = flagCodeOf(flag);
+  return c === 'CL' || c === 'CH' || c === 'C';
+}
+
+/** The lab badge for a critical flag: "CL" / "CH", legacy "C"; '' when the
+ *  flag isn't critical. */
+export function criticalBadge(flag: string | null | undefined): CriticalCode | '' {
+  const c = flagCodeOf(flag);
+  return c === 'CL' || c === 'CH' || c === 'C' ? c : '';
 }
 
 /** What a flag code MEANS, in plain words — chip tooltips and legends
@@ -81,7 +103,9 @@ export function flagMeaning(flag: string | null | undefined): string {
   switch (flagCodeOf(flag)) {
     case 'H': return 'H = High — above the reference range';
     case 'L': return 'L = Low — below the reference range';
-    case 'C': return 'C = Critical — past a critical (panic) limit';
+    case 'CL': return 'CL = Critical low — below the critical (panic) limit';
+    case 'CH': return 'CH = Critical high — above the critical (panic) limit';
+    case 'C': return 'C = Critical — past a critical (panic) limit (saved before direction was recorded)';
     case 'A': return 'A = Abnormal — not an expected (normal) answer';
     case 'N': return 'N = Normal — within the reference range';
     default: return '';
@@ -94,6 +118,8 @@ export function flagChipTitle(chip: { tone: string; label: string } | null | und
   if (!chip) return '';
   const label = chip.label.toLowerCase();
   if (chip.tone === 'critical') {
+    if (label === 'cl' || label.startsWith('cl ')) return flagMeaning('CL');
+    if (label === 'ch' || label.startsWith('ch ')) return flagMeaning('CH');
     if (label.includes('low') || label.includes('below')) return 'Critical low — below the critical (panic) limit';
     if (label.includes('high') || label.includes('above')) return 'Critical high — above the critical (panic) limit';
     return flagMeaning('C');
@@ -105,10 +131,10 @@ export function flagChipTitle(chip: { tone: string; label: string } | null | und
   return '';
 }
 
-/** mw code → review tone: C critical; H/L/A abnormal; N / '' normal. */
+/** mw code → review tone: CL / CH / legacy C critical; H/L/A abnormal; N / '' normal. */
 export function flagTone(flag: string | null | undefined): FlagTone {
   const c = flagCodeOf(flag);
-  if (c === 'C') return 'critical';
+  if (isCriticalFlag(c)) return 'critical';
   if (c === 'H' || c === 'L' || c === 'A') return 'abnormal';
   return 'normal';
 }
@@ -182,8 +208,9 @@ export function bandsForProfile<T extends RangeLike & { profileCode?: string | n
 }
 
 export interface LiveFlag {
-  code: 'L' | 'H' | 'N' | 'C';
-  /** Which critical limit tripped (only when code === 'C'). */
+  /** Mirrors the code mw will store: CL / CH for a critical. */
+  code: 'L' | 'H' | 'N' | 'CL' | 'CH';
+  /** Which critical limit tripped (only for CL / CH). */
   critical?: 'low' | 'high';
   /** The limit value that tripped. */
   limit?: number;
@@ -228,8 +255,8 @@ export function flagBand(
   if (!Number.isFinite(value)) return null;
   const critLow = band?.criticalLow ?? fallback?.criticalLow;
   const critHigh = band?.criticalHigh ?? fallback?.criticalHigh;
-  if (critLow != null && value < critLow) return { code: 'C', critical: 'low', limit: critLow };
-  if (critHigh != null && value > critHigh) return { code: 'C', critical: 'high', limit: critHigh };
+  if (critLow != null && value < critLow) return { code: 'CL', critical: 'low', limit: critLow };
+  if (critHigh != null && value > critHigh) return { code: 'CH', critical: 'high', limit: critHigh };
   const fl = flagAgainst(band, value);
   return fl ? { code: fl } : null;
 }

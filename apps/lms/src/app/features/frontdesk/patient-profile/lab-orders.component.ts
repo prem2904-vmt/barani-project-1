@@ -16,7 +16,7 @@ import {
   filterOrders, orderStatusLabel, orderTests, orderTitle, orderTone, testStatusLabel, testTone,
 } from './patient-profile.nd';
 
-interface ResultRow { title: string; value: string; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; }
+interface ResultRow { title: string; value: string; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; /** mw code — a critical badges CL / CH (legacy C). */ code?: string; }
 
 /**
  * Lab orders — the patient's orders as ND list rows (docs/ND-PATTERN.md →
@@ -90,7 +90,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
                           @if (r.flag !== 'normal') {
                             <span class="pf-lo-res__flag">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4"/><path d="M4 4h12l-2 4 2 4H4"/></svg>
-                              {{ r.flag === 'critical' ? 'Critical' : 'Abnormal' }}
+                              {{ r.flag === 'critical' ? (r.code || 'C') : 'Abnormal' }}
                             </span>
                           }
                         </span>
@@ -340,7 +340,7 @@ export class LabOrdersComponent implements OnDestroy {
     const show = (v: unknown) => v === undefined || v === null || v === '' ? '—' : String(v);
     const rows = savedValueRows(t.currentResult, t.test?.parameters);
     if (rows.length) {
-      return rows.map(r => ({ title: r.title, value: show(r.value), unit: r.unit, range: r.range, flag: r.flag }));
+      return rows.map(r => ({ title: r.title, value: show(r.value), unit: r.unit, range: r.range, flag: r.flag, code: r.code }));
     }
     // Fallback: no parameter defs available — show the raw entered values.
     return Object.entries(snap.values).map(([k, v]) => ({

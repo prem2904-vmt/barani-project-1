@@ -22,7 +22,7 @@ import {
   isLegacyGroup,
   summarizeRanges,
 } from "../../../shared/utils/reference-range";
-import { flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
+import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
 import { effectiveMethodology } from "../../../shared/utils/methodology";
 import { choiceOptionsFor, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
 import { readParameters } from "../../../shared/utils/test-parameters";
@@ -460,7 +460,9 @@ export class SampleResultEntryComponent {
     const saved = savedFlagOf(parseResultSnapshot(t.currentResult), p.name);
     if (saved && saved.flag != null && String(saved.value ?? "") === String(raw)) {
       const code = flagCodeOf(saved.flag);
-      if (code === "C") return { tone: "critical", label: "Critical" };
+      // Lab badge keeps the direction: CL / CH (legacy rows: C).
+      const crit = criticalBadge(code);
+      if (crit) return { tone: "critical", label: crit };
       if (code === "L") return { tone: "low", label: "Low" };
       if (code === "H") return { tone: "high", label: "High" };
       if (code === "A") return { tone: "high", label: "Abnormal" };
@@ -471,8 +473,8 @@ export class SampleResultEntryComponent {
     if (Number.isNaN(v)) return null;
     const { sex, age } = this.patientSexAge();
     const lf = liveFlag(p, v, sex, age, t.profileCode);
-    if (lf?.code === "C")
-      return { tone: "critical", label: `Critical ${lf.critical === "low" ? "low · below" : "high · above"} ${lf.limit}` };
+    if (lf?.code === "CL" || lf?.code === "CH")
+      return { tone: "critical", label: `${lf.code} · ${lf.code === "CL" ? "below" : "above"} ${lf.limit}` };
     if (lf?.code === "L") return { tone: "low", label: "Low" };
     if (lf?.code === "H") return { tone: "high", label: "High" };
     return null;

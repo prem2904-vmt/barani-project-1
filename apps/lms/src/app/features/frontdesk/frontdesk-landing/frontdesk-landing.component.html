@@ -1206,7 +1206,7 @@
                 <span class="pf-prelim__row-range">{{ v.range || '—' }}</span>
                 <span class="pf-prelim__row-flag" [attr.data-flag]="v.flag">
                   @switch (v.flag) {
-                  @case ('critical') { Critical }
+                  @case ('critical') { {{ v.code || 'C' }} }
                   @case ('abnormal') { Abnormal }
                   @default { Normal }
                   }

@@ -389,7 +389,7 @@ describe('Reports list (nd) — Partial tab, truthful per department', () => {
     expect(api.post).toHaveBeenCalledWith('/api/reports/generate/partial', { orderId: PARTIAL_ORDER.id, sampleIds: ['s-mic-1'] });
   });
 
-  it('plain results: value rows with words for flags (High / Critical), no glyphs', async () => {
+  it('plain results: value rows with words for flags (High) and the critical badge (C / CL / CH), no glyphs', async () => {
     const r = await render();
     r.tab('partial');
     r.c.toggle(VALUES_ORDER.id); r.f.detectChanges();
@@ -397,7 +397,7 @@ describe('Reports list (nd) — Partial tab, truthful per department', () => {
     expect(card.querySelector('.pf-rq-card__meta')!.textContent).toContain('44/F · AA0007 · Order #AAAA1111');
     expect(card.querySelector('.pf-rq-card__count')!.textContent!.trim()).toBe('1 of 2 departments ready');
     const flags = [...card.querySelectorAll('.pf-rq-value__flag')].map(x => x.textContent!.trim());
-    expect(flags).toEqual(['High', 'Critical']);
+    expect(flags).toEqual(['High', 'C']);   // legacy saved 'C' shows as C; new rows badge CL / CH
     expect(card.textContent).not.toMatch(/[⚠⚑✓]/);
     expect(card.querySelector('.pf-rq-pending')!.textContent).toContain('Microbiology');
   });

@@ -57,10 +57,10 @@ describe('saved flags — the flag mw stored is the flag every screen shows', ()
 describe('liveFlag — pre-save hint mirrors mw FlagOne', () => {
   const k = { criticalLow: 2, criticalHigh: 8, referenceRanges: [{ segment: '', min: 3.5, max: 5, criticalLow: 2.5, criticalHigh: 6.5 }] };
   it('band criticals win over the parameter pair; strict limits', () => {
-    expect(liveFlag(k, 6.6, null, null)).toMatchObject({ code: 'C', critical: 'high', limit: 6.5 });
+    expect(liveFlag(k, 6.6, null, null)).toMatchObject({ code: 'CH', critical: 'high', limit: 6.5 });
     expect(liveFlag(k, 6.5, null, null)?.code).toBe('H');
     expect(liveFlag({ ...k, referenceRanges: [{ segment: '', min: 3.5, max: 5 }] }, 7, null, null)?.code).toBe('H');
-    expect(liveFlag({ ...k, referenceRanges: [{ segment: '', min: 3.5, max: 5 }] }, 8.1, null, null)?.code).toBe('C');
+    expect(liveFlag({ ...k, referenceRanges: [{ segment: '', min: 3.5, max: 5 }] }, 8.1, null, null)?.code).toBe('CH');
   });
   it('picks the band for the patient sex (not the first band)', () => {
     const hb = { referenceRanges: [{ segment: '', min: 13, max: 17, sex: 'M' as const }, { segment: '', min: 12, max: 15, sex: 'F' as const }] };
