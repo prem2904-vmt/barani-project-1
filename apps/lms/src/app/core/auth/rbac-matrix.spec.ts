@@ -36,9 +36,14 @@ const ROLES: Record<string, string[]> = {
   'super-admin': ['*'],
 };
 
-/** A user holding exactly one seeded role (roles drive the Receptionist
- *  collect_sample suppression in dedicated-counter mode). */
-interface Who { role: string; perms: string[]; dedicated: boolean }
+/** A user holding one OR MORE seeded roles; perms = the union (what the backend
+ *  puts in the token). Roles drive the Receptionist collect_sample suppression
+ *  in dedicated-counter mode. */
+interface Who { roles: string[]; perms: string[]; dedicated: boolean }
+
+/** Roles that keep collect_sample even at a dedicated collection counter
+ *  (mirrors AuthService.hasEffectivePermission). */
+const OTHER_COLLECTOR_ROLES = ['Sample Collector', 'Lab Technician', 'Lab Admin'];
 
 const has = (w: Who) => (codes: readonly string[]) => w.perms.includes('*') || codes.some(c => w.perms.includes(c));
 /** Mirrors AuthService.hasEffectivePermission: a Receptionist (and no other
@@ -46,7 +51,8 @@ const has = (w: Who) => (codes: readonly string[]) => w.perms.includes('*') || c
  *  counter and not also at the front desk. */
 const hasEffective = (w: Who) => (codes: readonly string[]) =>
   w.perms.includes('*') || codes.some(c =>
-    !(c === 'collect_sample' && w.dedicated && w.role === 'Receptionist') && w.perms.includes(c));
+    !(c === 'collect_sample' && w.dedicated && w.roles.includes('Receptionist')
+      && !w.roles.some(r => OTHER_COLLECTOR_ROLES.includes(r))) && w.perms.includes(c));
 
 // ── Guard evaluation straight off appRoutes ──────────────────────────────
 type Meta = { requiredPerms?: string[]; effective?: boolean; workflowActions?: string[] };
@@ -103,13 +109,35 @@ function navCtx(w: Who, over: Partial<NavVisibilityCtx> = {}): NavVisibilityCtx 
 }
 
 const wfCtx = (w: Who): WorkflowNavCtx => ({
-  roles: [w.role],
+  roles: w.roles,
   hasAnyPermission: p => hasEffective(w)(p),
   hasAnyRawPermission: p => has(w)(p),
   isSuper: w.perms.includes('*'),
 });
 
-const who = (role: string, dedicated = false): Who => ({ role, perms: ROLES[role], dedicated });
+const who = (role: string, dedicated = false): Who => ({ roles: [role], perms: ROLES[role], dedicated });
+/** A multi-role user: permissions are the UNION of every role's set. */
+const whoMulti = (roles: string[], dedicated = false): Who => ({
+  roles,
+  perms: [...new Set(roles.flatMap(r => ROLES[r]))],
+  dedicated,
+});
+
+/** Realistic multi-role combinations seen on tenants (small labs double-hat). */
+const COMBOS: string[][] = [
+  ['Billing Counter', 'Receptionist'],            // QA #1: Micro World "frontdesk"
+  ['Receptionist', 'Sample Collector'],
+  ['Billing Counter', 'Sample Collector'],
+  ['Billing Counter', 'Receptionist', 'Sample Collector'],
+  ['Receptionist', 'Home Collection Agent'],
+  ['Receptionist', 'Lab Technician'],
+  ['Sample Collector', 'Lab Technician'],
+  ['Lab Technician', 'Pathologist'],
+  ['Receptionist', 'Pathologist'],
+  ['Receptionist', 'Branch Manager'],
+  ['Receptionist', 'Store Keeper'],
+  ['Billing Counter', 'Quality Manager'],
+];
 
 // Nav items with a mode gate only show in their mode; the matrix sets the modes
 // so every item is eligible (dedicated_counter for Collect, separate_counter for
@@ -263,4 +291,61 @@ describe('canOpenRoute', () => {
   it('super-admin passes every permission gate', () => {
     expect(Object.keys(ROUTE_ACCESS).every(r => canOpenRoute(r, { hasAny: () => false, isSuper: true }))).toBe(true);
   });
+});
+
+describe('RBAC matrix — MULTI-role users (permission union + live Micro World workflow)', () => {
+  const areasFor = (w: Who) => (menusFromWorkflow(MICRO_WORLD, wfCtx(w)) ?? []).map(i => i.id);
+
+  it('QA #1: Billing Counter + Receptionist does NOT see "Lab" (union has no enter_result/receive_sample)', () => {
+    for (const dedicated of [false, true]) {
+      const w = whoMulti(['Billing Counter', 'Receptionist'], dedicated);
+      const areas = areasFor(w);
+      expect(areas).not.toContain('lab');
+      expect(guardAllows('/lab/my-work', w)).toBe(false);
+      expect(areas).toEqual(expect.arrayContaining(['frontdesk', 'results']));
+      // The no-workflow fallback nav must not show Lab either.
+      expect(PRIMARY_NAV.filter(i => navItemVisible(i, navCtx(w))).map(i => i.href)).not.toContain('/lab/my-work');
+    }
+  });
+
+  it('Receptionist + Sample Collector keeps Collect (even at a dedicated counter) but not Lab', () => {
+    for (const dedicated of [false, true]) {
+      const areas = areasFor(whoMulti(['Receptionist', 'Sample Collector'], dedicated));
+      expect(areas).toContain('collect');
+      expect(areas).not.toContain('lab');
+    }
+  });
+
+  it('Receptionist + Lab Technician DOES see Lab (enter_result/receive_sample via Lab Tech)', () => {
+    expect(areasFor(whoMulti(['Receptionist', 'Lab Technician']))).toEqual(expect.arrayContaining(['frontdesk', 'lab']));
+  });
+
+  for (const combo of COMBOS) {
+    for (const dedicated of [false, true]) {
+      const label = `${combo.join(' + ')}${dedicated ? ' (dedicated)' : ''}`;
+      it(`${label}: nav visible ⇔ guard allows`, () => {
+        const w = whoMulti(combo, dedicated);
+        const ctx = navCtx(w);
+        const modeHidden = (i: NavItem) =>
+          (!!i.collectionModes && !i.collectionModes.includes(ctx.collectionMode)) ||
+          (!!i.billingModes && !i.billingModes.includes(ctx.billingMode));
+        const mismatches = ALL_NAV
+          .map(i => ({ href: i.href, nav: navItemVisible(i, ctx), guard: guardAllows(i.href, w), modeHidden: modeHidden(i) }))
+          .filter(r => r.modeHidden ? (r.nav && !r.guard) : r.nav !== r.guard);
+        expect(mismatches).toEqual([]);
+      });
+      it(`${label}: every workflow work area it sees opens`, () => {
+        const w = whoMulti(combo, dedicated);
+        const items = menusFromWorkflow(MICRO_WORLD, wfCtx(w)) ?? [];
+        expect(items.filter(i => !i.href.startsWith('/w/') && !guardAllows(i.href, w)).map(i => i.href)).toEqual([]);
+        expect(items.filter(i => !navItemVisible(i, navCtx(w)))).toEqual([]);
+      });
+    }
+    it(`${combo.join(' + ')}: lands on a screen its guards admit`, () => {
+      const w = whoMulti(combo);
+      const landing = pickLanding({ hasAny: p => has(w)(p), hasAnyEffective: p => hasEffective(w)(p), isEnabled: () => true });
+      expect(landing).not.toBe('/403');
+      expect(guardAllows(landing, w)).toBe(true);
+    });
+  }
 });
