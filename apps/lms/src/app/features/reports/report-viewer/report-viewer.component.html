@@ -39,14 +39,18 @@
             <span class="pf-rv-act__t">Share with…</span>
           </button>
         }
-        <!-- Phones: everything but the primary lives in the More sheet. -->
-        @if (hasMoreActions()) {
-        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--icon pf-rv-act--more pf-rv-in" style="--i: 5"
-                aria-label="More actions" title="More actions" aria-haspopup="dialog"
-                [attr.aria-expanded]="moreOpen()" (click)="moreOpen.set(true)">
-          <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-          <span class="pf-rv-act__t">More</span>
-        </button>
+        <!-- ⋮ — EVERY action for this report in one place (share, download,
+             print, workflow steps, go-to), filtered by permission + state.
+             Popover on web / iPad, a bottom sheet on phones. -->
+        @if (menuActions().length) {
+        <pf-actions-menu class="pf-rv-more" style="--i: 5" [actions]="menuActions()" label="Report actions"
+                         [heading]="patientName()" (opened)="onMenuOpened()" (action)="runAction($event)">
+          <button pfActionsTrigger type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--icon pf-rv-act--more pf-rv-in"
+                  aria-label="Report actions" title="Report actions">
+            <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            <span class="pf-rv-act__t">More</span>
+          </button>
+        </pf-actions-menu>
         }
         <!-- THE primary: deliver to the patient (deliver_report only; a
              view_report-only viewer gets a view-only page). -->
@@ -225,44 +229,6 @@
       <ng-container *ngTemplateOutlet="sideHead; context: { collapsible: false }"></ng-container>
       <ng-container *ngTemplateOutlet="sideBody"></ng-container>
     </aside>
-  }
-
-  <!-- Phones: the More sheet (everything but the primary). -->
-  @if (moreOpen() && report()) {
-    <div class="pf-rv-scrim" (click)="moreOpen.set(false)" aria-hidden="true"></div>
-    <div class="nd-card pf-rv-sheet pf-rv-sheet--more" role="dialog" aria-modal="true" aria-label="More actions"
-         (keydown.escape)="moreOpen.set(false)">
-      <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
-      <ul class="pf-rv-menu" role="list">
-        @if (canPrint()) {
-        <li>
-          <button type="button" class="pf-rv-menu__row pf-rv-menu__row--print" (click)="moreOpen.set(false); print()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            Print
-          </button>
-        </li>
-        }
-        @if (canDeliver() && entitlements.moduleEnabled('messages')) {
-          <li>
-            <button type="button" class="pf-rv-menu__row pf-rv-menu__row--share" (click)="moreOpen.set(false); openSharePicker()">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              Share with a colleague
-            </button>
-          </li>
-        }
-        @if (canEditResult()) {
-          <li>
-            <button type="button" class="pf-rv-menu__row pf-rv-menu__row--edit" (click)="moreOpen.set(false); openEditDialog()">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-              Edit results
-            </button>
-          </li>
-        }
-      </ul>
-      <div class="pf-rv-sheet__foot">
-        <button type="button" class="nd-btn nd-btn--secondary pf-rv-sheet__cancel" (click)="moreOpen.set(false)">Cancel</button>
-      </div>
-    </div>
   }
 
   <!-- Share with a colleague: nd-card modal on web, a sheet on phones. -->

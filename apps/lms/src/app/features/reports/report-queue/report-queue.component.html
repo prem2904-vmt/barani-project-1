@@ -450,33 +450,21 @@
               }
             </span>
             }
-            @if (hasMore(r)) {
-            <span class="pf-rq-split pf-rq-split--nd">
-              <button type="button" class="nd-rowact pf-rq-more" [class.nd-rowact--icon]="!web()" (click)="toggleMore(r.id, $event)"
-                      [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions" title="More actions">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+            <!-- ⋮ — EVERY action for this report in one place (share, the PDF,
+                 workflow steps, go-to), by permission + state. Popover on
+                 web / iPad, a bottom sheet on phones. -->
+            @if (rowActions().get(r.id)?.length) {
+            <pf-actions-menu class="pf-rq-kebab" [actions]="rowActions().get(r.id) ?? []" label="Report actions"
+                             [heading]="reportPatientName(r)" (opened)="onRowMenuOpened(r)" (action)="runRowAction(r, $event)">
+              <button pfActionsTrigger type="button" class="nd-rowact pf-rq-more" [class.nd-rowact--icon]="!web()"
+                      aria-label="Report actions" title="Report actions">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/>
                 </svg>
                 <span class="nd-rowact__t">More</span>
               </button>
-              @if (moreFor() === r.id) {
-                <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleMore(r.id)"></div>
-                <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                  @if (canOpenLabResults() && r.orderId) {
-                    <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                            (click)="viewLabResults(r); toggleMore(r.id)">Open lab results</button>
-                  }
-                  @if (canEditResult() && r.orderId) {
-                    <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                            (click)="openEditDialog(r); toggleMore(r.id)">Edit results</button>
-                  }
-                  @if (canGenerate() && r.orderId) {
-                    <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                            (click)="regenerate(r); toggleMore(r.id)">Regenerate</button>
-                  }
-                </div>
-              }
-            </span>
+            </pf-actions-menu>
             }
           </div>
         </div>
@@ -606,33 +594,17 @@
           </div>
           }
 
-          @if (hasMore(r)) {
-          <!-- Everything that changes the report rather than sends it. -->
-          <div class="pf-rq-split">
-            <button type="button" class="pf-rq-act pf-rq-act--more press" (click)="toggleMore(r.id, $event)"
-                    [attr.aria-expanded]="moreFor() === r.id" aria-label="More actions">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+          @if (rowActions().get(r.id)?.length) {
+          <!-- ⋮ — every action for this report in one place. -->
+          <pf-actions-menu class="pf-rq-split" [actions]="rowActions().get(r.id) ?? []" label="Report actions"
+                           [heading]="reportPatientName(r)" (opened)="onRowMenuOpened(r)" (action)="runRowAction(r, $event)">
+            <button pfActionsTrigger type="button" class="pf-rq-act pf-rq-act--more press" aria-label="Report actions" title="Report actions">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/>
               </svg>
             </button>
-            @if (moreFor() === r.id) {
-              <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleMore(r.id)"></div>
-              <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                @if (canOpenLabResults() && r.orderId) {
-                  <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                          (click)="viewLabResults(r); toggleMore(r.id)">Open lab results</button>
-                }
-                @if (canEditResult() && r.orderId) {
-                  <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                          (click)="openEditDialog(r); toggleMore(r.id)">Edit results</button>
-                }
-                @if (canGenerate() && r.orderId) {
-                  <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                          (click)="regenerate(r); toggleMore(r.id)">Regenerate</button>
-                }
-              </div>
-            }
-          </div>
+          </pf-actions-menu>
           }
         </div>
       </div>
