@@ -120,6 +120,10 @@ describe('WORKAREA_ICONS', () => {
       expect(icon.path.length).toBeGreaterThan(0);
     });
   });
+
+  it('Collect has its own icon distinct from the generic Test tube icon', () => {
+    expect(workAreaIconPath('collect')).not.toEqual(workAreaIconPath('tube'));
+  });
 });
 
 describe('workAreaIconPath', () => {

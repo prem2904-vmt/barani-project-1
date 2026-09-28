@@ -120,6 +120,7 @@ export const WORKAREA_ICONS: WorkAreaIcon[] = [
   { key: 'calendar',   label: 'Calendar',    path: ['M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'] },
   { key: 'billing',    label: 'Billing',     path: ['M3 5h18v14H3zM3 10h18M7 15h3'] },
   { key: 'tube',       label: 'Test tube',   path: ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4'] },
+  { key: 'collect',    label: 'Collect',     path: ['M9 3h6v4a3 3 0 0 1-1 2.2l-.5.4v8.4A2 2 0 0 1 11.5 20h-3A2 2 0 0 1 6.5 18V9.6L6 9.2A3 3 0 0 1 5 7V3h4', 'M19 12s3 3 3 5a3 3 0 0 1-6 0c0-2 3-5 3-5Z'] },
   { key: 'droplet',    label: 'Blood drop',  path: ['M12 2.7 6.34 8.36a8 8 0 1 0 11.32 0z'] },
   { key: 'dispatch',   label: 'Dispatch',    path: ['M3 7h11v8H3z', 'M14 10h4l3 3v2h-7z', 'M7 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z'] },
   { key: 'flask',      label: 'Lab flask',   path: ['M3 12h5l2 3h4l2-3h5', 'M5 12 8 4h8l3 8v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6Z'] },
@@ -391,9 +392,13 @@ function ensureCollectArea<T extends ProcessWorkflowConfig>(cfg: T): T {
   }
 
   if (cfg.categories.some(c => c.id === COLLECT_AREA_ID)) {
-    if (hasHomeCopy(actions)) return cfg;
+    const categories = cfg.categories.map(c => c.id === COLLECT_AREA_ID && c.icon === 'tube'
+      ? { ...c, icon: 'collect' }
+      : c);
+    const iconChanged = categories.some((c, i) => c !== cfg.categories[i]);
+    if (hasHomeCopy(actions)) return iconChanged ? { ...cfg, categories } as T : cfg;
     const n = actions.filter(a => a.categoryId === COLLECT_AREA_ID).length;
-    return { ...cfg, actions: [...actions, homeCopy(n)] } as T;
+    return { ...cfg, categories, actions: [...actions, homeCopy(n)] } as T;
   }
 
   const sorted = [...cfg.categories].sort((a, b) => a.order - b.order);
@@ -418,7 +423,7 @@ function ensureCollectArea<T extends ProcessWorkflowConfig>(cfg: T): T {
   const fdId = sorted.some(c => c.id === 'frontdesk') ? 'frontdesk' : frontdeskMenu(cfg);
   const fdIdx = fdId ? sorted.findIndex(c => c.id === fdId) : -1;
   const collect: ProcessCategory = {
-    id: COLLECT_AREA_ID, name: 'Collect', icon: 'tube', color: '#7c3aed', order: 0,
+    id: COLLECT_AREA_ID, name: 'Collect', icon: 'collect', color: '#7c3aed', order: 0,
     roles: [...COLLECT_AREA_DEFAULT_ROLES],
   };
   sorted.splice(fdIdx + 1, 0, collect);
