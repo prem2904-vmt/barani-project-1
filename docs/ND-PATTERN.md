@@ -440,6 +440,28 @@ in portrait). The page above it resizes; nothing overlaps.
   highlighted row (the row shows a neutral "↵ Add" chip while the keys
   are up). Patient search opens or selects the highlighted patient. The
   band searches submit. Primary colour is used only on this key.
+  - The label follows what Enter will DO. Order create binds
+    `[pfKeysEnter]` / `[pfKeysEnterAria]` / `[pfKeysEnterTone]` to its
+    highlight: **Add ↵** when the highlighted test is not in the order,
+    **Remove ↵** when it is (Enter toggles). Remove is destructive-neutral:
+    the neutral key colour with a muted-red outline and text (ND danger),
+    never the violet gradient and never a filled red. Fields that don't
+    bind them keep their fixed label (Open / Select / Receive / Search).
+- **Fast typing (`key-tap.ts`, shared with the result numpad):**
+  - Typing keys (letters, digits, space, ⌫, ↑/↓) act on `pointerdown`, once
+    per pointerId, so rolled-over multi-finger taps all land in order.
+    Never `(click)` alone: a click waits for the lift, and touch browsers
+    drop the clicks of overlapping taps.
+  - Commit keys (Enter, 123/ABC, hide, system keyboard, department
+    prefixes) act on `pointerup` of the same finger on the same key; a
+    `pointercancel` (scroll) does nothing.
+  - The click that follows a press is swallowed (document capture, matched
+    by position and time), so nothing doubles and nothing clicks through
+    to the page after the keys close. A click with no press before it
+    (Enter / Space on a key, a screen reader) still acts.
+  - Keys are `touch-action: none` and unselectable (no double-tap zoom; a
+    pinch can't cancel two rolled-over fingers). ⌫ deletes on touch-down;
+    held, it clears the field.
 - **The engine is the result numpad's, not a fork.**
   - It uses the same `NumpadService`, also exported as `PfKeysService`.
   - `inputmode="none"` is set on pointerdown and `readonly` is never used.

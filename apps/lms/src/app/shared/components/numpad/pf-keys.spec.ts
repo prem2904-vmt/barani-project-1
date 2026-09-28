@@ -26,6 +26,7 @@ import { PlatformService } from '../../../core/services/platform.service';
   imports: [PfKeysDirective],
   template: `
     <input class="tests" type="text" [pfKeys]="kind()" [pfKeysArrows]="true" [pfKeysPrefixes]="prefixes()"
+           [pfKeysEnter]="enterLabel()" [pfKeysEnterAria]="enterAria()" [pfKeysEnterTone]="enterTone()"
            (input)="onInput($any($event.target).value)"
            (keydown.enter)="enters = enters + 1" (keydown.arrowDown)="downs = downs + 1" (keydown.arrowUp)="ups = ups + 1" />
     <input class="patient" type="text" pfKeys="patient" (keydown.enter)="patientEnters = patientEnters + 1" />
@@ -37,6 +38,9 @@ import { PlatformService } from '../../../core/services/platform.service';
 class HostComponent {
   readonly kind = signal<PfKeysKind | null>('test');
   readonly prefixes = signal<PfKeysPrefix[] | null>([{ label: 'HEM', name: 'Haematology' }, { label: 'BIO', name: 'Biochemistry' }]);
+  readonly enterLabel = signal<string | null>(null);
+  readonly enterAria = signal<string | null>(null);
+  readonly enterTone = signal<'primary' | 'remove' | null>(null);
   enters = 0; downs = 0; ups = 0; patientEnters = 0;
   searches: string[] = [];
   private t?: ReturnType<typeof setTimeout>;
@@ -256,6 +260,243 @@ describe('PF Keys — typing into the search', () => {
     expect(q('.patient').value).toBe('9840');
     press('enter');
     expect(host.patientEnters).toBe(1);
+  });
+});
+
+/** Touch pointer events as a tablet sends them (one pointerId per finger). */
+const down = (el: Element, id: number, init: PointerEventInit = {}) => {
+  const ev = new PointerEvent('pointerdown', { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true, ...init });
+  el.dispatchEvent(ev);
+  return ev;
+};
+const up = (el: Element, id: number, type: 'pointerup' | 'pointercancel' = 'pointerup') =>
+  el.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', bubbles: true, cancelable: true }));
+/** The click a touch browser sends after the lift (detail 1 = a pointer click). */
+const ghostClick = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+
+describe('PF Keys — fast typing: every tap lands, once, in order', () => {
+  it('overlapping fingers (rollover): down a, down b, up a, up b → "ab"', async () => {
+    const { q, key, tapField, tick } = await setup();
+    const t = q('.tests');
+    tapField(t);
+    down(key('a'), 1);
+    down(key('b'), 2);
+    up(key('a'), 1);
+    up(key('b'), 2);
+    tick();
+    expect(t.value).toBe('ab');
+    // The clicks that follow (if the browser sends them at all) add nothing.
+    ghostClick(key('a'));
+    ghostClick(key('b'));
+    tick();
+    expect(t.value).toBe('ab');
+  });
+
+  it('20 fast presses, some with no pointerup before the next: all 20 land, in order, no doubles', async () => {
+    vi.useFakeTimers();
+    try {
+      const { q, key, tapField, tick, host } = await setup();
+      const t = q('.tests');
+      tapField(t);
+      const word = 'haemoglobinglucosepq';
+      expect(word.length).toBe(20);
+      const pending: number[] = [];
+      [...word].forEach((ch, i) => {
+        const id = 100 + i;
+        down(key(ch), id);
+        pending.push(id);
+        // Every third finger is still down when the next one lands.
+        if (i % 3 !== 0) {
+          for (const p of pending.splice(0)) up(key(word[p - 100]), p);
+        }
+      });
+      for (const p of pending.splice(0)) up(key(word[p - 100]), p);
+      tick();
+      expect(t.value).toBe(word);
+      // Their clicks (some browsers drop them for overlapping taps) never double.
+      for (const ch of word) ghostClick(key(ch));
+      tick();
+      expect(t.value).toBe(word);
+      // Real input events reached the screen: its debounced search ran on the whole word.
+      vi.advanceTimersByTime(250);
+      expect(host.searches.at(-1)).toBe(word);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('the field\'s own validator still applies to every fast press', async () => {
+    const { q, key, tapField, tick } = await setup();
+    const t = q('.tests');
+    t.addEventListener('keydown', e => { if (e.key === 'x') e.preventDefault(); });
+    tapField(t);
+    down(key('a'), 1); down(key('x'), 2); down(key('b'), 3);
+    up(key('a'), 1); up(key('x'), 2); up(key('b'), 3);
+    tick();
+    expect(t.value).toBe('ab');
+  });
+
+  it('a click with no pointer press (Enter / Space on a key, a screen reader) still types', async () => {
+    const { q, key, tapField, tick } = await setup();
+    const t = q('.tests');
+    tapField(t);
+    key('q').click();                    // keyboard activation (detail 0)
+    ghostClick(key('r'));                // assistive click: no pointerdown before it
+    tick();
+    expect(t.value).toBe('qr');
+  });
+
+  it('a tap = one character (pointerdown types, its click is swallowed)', async () => {
+    const { q, key, tapField, tick } = await setup();
+    const t = q('.tests');
+    tapField(t);
+    for (const [i, ch] of [...'ee'].entries()) { down(key(ch), i + 1); up(key(ch), i + 1); ghostClick(key(ch)); }
+    tick();
+    expect(t.value).toBe('ee');
+  });
+
+  it('a right-click / non-primary mouse button types nothing', async () => {
+    const { q, key, tapField, tick } = await setup();
+    const t = q('.tests');
+    tapField(t);
+    down(key('a'), 1, { pointerType: 'mouse', button: 2 });
+    tick();
+    expect(t.value).toBe('');
+  });
+
+  it('Enter fires on release of the same finger (once), not on a cancelled press', async () => {
+    const { q, key, tapField, tick, host } = await setup();
+    tapField(q('.tests'));
+    down(key('enter'), 1);
+    expect(host.enters).toBe(0);
+    up(key('enter'), 1);
+    ghostClick(key('enter'));
+    tick();
+    expect(host.enters).toBe(1);
+    // A press the browser cancels (a scroll / gesture) does nothing.
+    down(key('enter'), 2);
+    up(key('enter'), 2, 'pointercancel');
+    tick();
+    expect(host.enters).toBe(1);
+    // Keyboard / assistive activation still works.
+    key('enter').click();
+    expect(host.enters).toBe(2);
+  });
+
+  it('a letter held down while Enter is tapped: both land', async () => {
+    const { q, key, tapField, tick, host } = await setup();
+    const t = q('.tests');
+    tapField(t);
+    down(key('h'), 1);
+    down(key('enter'), 2);
+    up(key('enter'), 2);
+    up(key('h'), 1);
+    tick();
+    expect(t.value).toBe('h');
+    expect(host.enters).toBe(1);
+  });
+
+  it('↑/↓ act on touch-down, once each', async () => {
+    const { q, key, tapField, tick, host } = await setup();
+    tapField(q('.tests'));
+    down(key('down'), 1); down(key('down'), 2); up(key('down'), 1); up(key('down'), 2);
+    ghostClick(key('down')); ghostClick(key('down'));
+    down(key('up'), 3); up(key('up'), 3); ghostClick(key('up'));
+    tick();
+    expect(host.downs).toBe(2);
+    expect(host.ups).toBe(1);
+  });
+
+  it('⌫ deletes on touch-down; held, it clears the field; its click adds nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      const { q, key, tapField, tick, press } = await setup();
+      const t = q('.tests');
+      tapField(t);
+      press('a', 'b', 'c', 'd');
+      down(key('backspace'), 1);
+      expect(t.value).toBe('abc');
+      up(key('backspace'), 1);
+      ghostClick(key('backspace'));
+      tick();
+      expect(t.value).toBe('abc');
+      down(key('backspace'), 2);
+      expect(t.value).toBe('ab');
+      vi.advanceTimersByTime(520);
+      expect(t.value).toBe('');
+      up(key('backspace'), 2);
+      ghostClick(key('backspace'));
+      expect(t.value).toBe('');
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('the hide key closes on release and its click never falls through to the page below', async () => {
+    const { q, key, pad, tapField, tick } = await setup();
+    tapField(q('.tests'));
+    const below = document.createElement('button');
+    const hit = vi.fn();
+    below.addEventListener('click', hit);
+    document.body.appendChild(below);
+    try {
+      down(key('hide'), 1);
+      up(key('hide'), 1);
+      tick();
+      expect(pad()).toBeNull();
+      ghostClick(below);                 // the tap's click lands on what was under the keys
+      expect(hit).not.toHaveBeenCalled();
+      below.click();                     // a later real click works
+      expect(hit).toHaveBeenCalledTimes(1);
+    } finally { below.remove(); }
+  });
+
+  it('keys are touch-action: none and unselectable (no double-tap zoom, no pinch cancelling a rollover)', () => {
+    const css = ((PfKeysPanelComponent as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles || []).join('\n');
+    const keyRule = css.match(/\.pf-k__key[^,{]*,\s*\.pf-k__enter[^{]*\{([^}]*)\}/)![1];
+    expect(keyRule).toMatch(/touch-action:\s*none/);
+    expect(keyRule).toMatch(/user-select:\s*none/);
+    expect(css).toMatch(/touch-action:\s*manipulation/);   // the tray itself
+  });
+});
+
+describe('PF Keys — the primary key says what Enter will do', () => {
+  it('fixed labels stay fixed where the field does not bind them', async () => {
+    const { q, pad, tapField } = await setup();
+    tapField(q('.sample'));
+    const enter = pad()!.querySelector('[data-key="enter"]')!;
+    expect(enter.textContent).toContain('Receive');
+    expect(enter.classList).not.toContain('pf-k__enter--remove');
+    expect(enter.getAttribute('data-tone')).toBe('primary');
+  });
+
+  it('follows the bound label / aria / tone live: Add ⇄ Remove', async () => {
+    const { q, pad, tapField, tick, host } = await setup();
+    tapField(q('.tests'));
+    const enter = () => pad()!.querySelector('[data-key="enter"]')!;
+    expect(enter().textContent).toContain('Add');
+    expect(enter().getAttribute('aria-label')).toBe('Add selected test');
+    host.enterLabel.set('Remove');
+    host.enterAria.set('Remove selected test');
+    host.enterTone.set('remove');
+    tick();
+    expect(enter().textContent).toContain('Remove');
+    expect(enter().textContent).not.toContain('Add');
+    expect(enter().getAttribute('aria-label')).toBe('Remove selected test');
+    expect(enter().classList).toContain('pf-k__enter--remove');
+    expect(enter().getAttribute('data-tone')).toBe('remove');
+    host.enterLabel.set('Add');
+    host.enterAria.set('Add selected test');
+    host.enterTone.set('primary');
+    tick();
+    expect(enter().textContent).toContain('Add');
+    expect(enter().classList).not.toContain('pf-k__enter--remove');
+  });
+
+  it('Remove is destructive-neutral: the neutral key with a muted-red outline, never the violet gradient', () => {
+    const css = ((PfKeysPanelComponent as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles || []).join('\n');
+    const i = css.indexOf('.pf-k__enter--remove');
+    expect(i).toBeGreaterThan(-1);
+    const rule = css.slice(i, css.indexOf('}', i));
+    expect(rule).toMatch(/background:\s*var\(--k-key\)/);
+    expect(rule).toMatch(/--error-text/);
+    expect(rule).not.toMatch(/gradient/);
   });
 });
 

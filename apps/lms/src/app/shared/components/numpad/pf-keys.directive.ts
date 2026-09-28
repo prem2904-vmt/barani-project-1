@@ -1,6 +1,6 @@
 import { DestroyRef, Directive, ElementRef, computed, effect, inject, input, untracked } from '@angular/core';
 import { DeviceClassService } from '../../../core/services/device-class.service';
-import { NUMPAD_EVENT, NumpadService, PfKeysField } from './numpad.service';
+import { NUMPAD_EVENT, NumpadService, PfKeysEnterTone, PfKeysField } from './numpad.service';
 import { NumpadChar, isTypedKey } from './numpad-keys';
 import { PfKeysKind, PfKeysLayout, PfKeysPrefix, deptPrefixes, parseKind } from './pf-keys-layouts';
 import { PfKeysDepartmentsService } from './pf-keys-departments.service';
@@ -16,6 +16,12 @@ const ENTER_ARIA: Record<PfKeysKind, string> = { test: 'Add selected test', pati
  *   <input pfKeys="test" pfKeysEnter="Add" [pfKeysArrows]="true" …>
  *   <input pfKeys="patient">        (number pad: phone / MRN)
  *   <input pfKeys="sample">         (code pad: department prefix + digits)
+ *
+ * The primary key follows what the field's Enter will DO: bind
+ * `[pfKeysEnter]` / `[pfKeysEnterAria]` / `[pfKeysEnterTone]` to the
+ * screen's own highlight state (order create: "Add" ⇄ "Remove" as the
+ * highlighted test is / isn't in the order). Fields that don't bind them
+ * keep their fixed label (Open / Select / Receive / Search).
  *
  * Only on the TABLET device class (html.device-tablet: iPad / Android
  * tablets, native or browser). Phones and desktops: nothing is touched —
@@ -57,6 +63,9 @@ export class PfKeysDirective implements PfKeysField {
   readonly pfKeysEnter = input<string | null>(null);
   /** Primary key aria-label (e.g. "Add selected test"). */
   readonly pfKeysEnterAria = input<string | null>(null);
+  /** Primary key look: 'primary' (default, the violet CTA) or 'remove'
+   *  (Enter removes the highlighted item: neutral key, muted-red outline). */
+  readonly pfKeysEnterTone = input<PfKeysEnterTone | null>(null);
   /** The screen moves a highlight with ↑/↓ → show arrow keys. */
   readonly pfKeysArrows = input(false, { transform: (v: boolean | '' | null | undefined) => v === '' || !!v });
   /** Department prefixes for the code pad; null = the lab's departments. */
@@ -107,6 +116,7 @@ export class PfKeysDirective implements PfKeysField {
   defaultLayout(): PfKeysLayout | null { return this.pfKeysLayout(); }
   enterLabel(): string { return this.pfKeysEnter() || ENTER_LABEL[this.keysKind()]; }
   enterAria(): string { return this.pfKeysEnterAria() || ENTER_ARIA[this.keysKind()]; }
+  enterTone(): PfKeysEnterTone { return this.pfKeysEnterTone() === 'remove' ? 'remove' : 'primary'; }
   arrows(): boolean { return this.pfKeysArrows(); }
   prefixes(): PfKeysPrefix[] {
     const given = this.pfKeysPrefixes();
