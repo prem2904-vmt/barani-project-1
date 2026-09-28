@@ -3,6 +3,16 @@ import { DatePipe } from '@angular/common';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { printLabelOnly } from '../../../shared/utils/print-label';
+import { patientProfileQrUrl } from '../../../shared/utils/patient-strip-qr';
+import { environment } from '../../../../environments/environment';
+
+/** The card's QR target. On the web the page's own origin; inside the native
+ *  app the origin is capacitor://localhost (unopenable by another phone), so
+ *  the public web origin is used instead. */
+export function patientIdCardQrUrl(origin: string, patientId: string): string {
+  const base = /^https?:\/\//i.test(origin ?? '') ? origin : (environment.reportPublicBaseUrl ?? '');
+  return patientProfileQrUrl(base, patientId) ?? `/p/${patientId}`;
+}
 
 /**
  * A printable patient ID card. Shows the patient's identity + a QR that encodes
@@ -97,8 +107,7 @@ export class PatientIdCardComponent {
   /** The QR encodes the app's patient open-route so a phone camera OR the in-app
    *  scanner both resolve it to this patient (see /p/:id + the top-strip scan). */
   get qrValue(): string {
-    const origin = typeof location !== 'undefined' ? location.origin : '';
-    return `${origin}/p/${this.patient.id}`;
+    return patientIdCardQrUrl(typeof location !== 'undefined' ? location.origin : '', this.patient.id);
   }
   print(): void { printLabelOnly(); }
 }

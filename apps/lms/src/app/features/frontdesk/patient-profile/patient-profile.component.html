@@ -642,6 +642,14 @@
         </dl>
       </section>
 
+      <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-idcard">
+        <h3 class="pf-pp-sec__t" id="pf-pp-sec-idcard">Patient ID card</h3>
+        <p class="pf-pp-none">Name, MRN and a QR that opens this profile when scanned.</p>
+        <div class="pf-pp-sec__acts">
+          <button type="button" class="nd-btn nd-btn--secondary pf-pp-idcard" (click)="showIdCard.set(true)">View card</button>
+        </div>
+      </section>
+
       <section class="pf-pp-sec" aria-labelledby="pf-pp-sec-abha">
         <h3 class="pf-pp-sec__t" id="pf-pp-sec-abha">ABHA</h3>
         @if (p.abhaId) {
