@@ -108,7 +108,7 @@ export class ReportQueueComponent implements OnInit {
    *  row meta — a hidden fact, so it rides in the meta line (ND §20). Meta's
    *  "delivered" also flips the report to Delivered server-side. */
   waMeta(r: Report): string {
-    const live = this.waSend.state(r.id);
+    const live = this.waSend?.state(r.id);
     if (live) {
       const word = waSendLabel(live.phase).toLowerCase();
       return live.to && live.phase !== "sending" && live.phase !== "failed" ? `WhatsApp ${word} · ${live.to}` : `WhatsApp ${word}`;
@@ -768,7 +768,7 @@ export class ReportQueueComponent implements OnInit {
     // The lab sends WhatsApp from its Cloud API number: "WhatsApp" is the
     // server send to the patient's number (Sending… → Sent → Delivered / Read
     // in the row meta). "whatsapp-mine" is the wa.me share from this device.
-    if (via === "whatsapp" && this.waSend.canSend(r)) {
+    if (via === "whatsapp" && this.waSend?.canSend(r)) {
       if (r.qrToken || r.type === "final") void this.archiveReportPdf(r);
       void this.waSend.send(r.id).then((m) => { if (m && m.status !== "failed") this.refresh(); });
       return;
