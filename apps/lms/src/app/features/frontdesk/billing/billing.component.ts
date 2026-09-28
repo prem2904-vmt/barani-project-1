@@ -25,6 +25,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
 import { billRoundOff, maxDiscountWithinPaid, previewBillForDiscount } from '../../../shared/utils/bill-math';
 import { SkeletonTableComponent, BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
 
@@ -1967,7 +1968,7 @@ export class BillingComponent implements OnInit, OnChanges {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
     // Tests catalogue — used to derive the report TAT estimate.
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: l => this._tests.set(l ?? []),
       error: () => { /* TAT is non-critical; silently skip if it fails */ }
     });

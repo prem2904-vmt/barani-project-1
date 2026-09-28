@@ -75,6 +75,7 @@ interface DeptRecord {
 /** AG Grid themes live in ./grid-theme (re-exported for existing importers). */
 export { gridThemeDark, gridThemeLight } from './grid-theme';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
+import { testListUrl } from '../../../../shared/utils/test-list-url';
 
 /** Extended row model supporting manual tree hierarchy for profiles/packages. */
 export type TestRow = Test & {
@@ -976,7 +977,7 @@ export class TestsComponent implements OnInit {
 
   private loadTests() {
     // status=all: every test, switched-off ones included (flagged isEnabled).
-    this.api.get<Test[]>('/api/tests/?status=all').subscribe({
+    this.api.get<Test[]>(testListUrl({ status: 'all' })).subscribe({
       next: l => this._tests.set(l ?? []),
       error: e => this.toasts.error(ApiError.from(e).message),
     });

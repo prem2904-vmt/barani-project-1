@@ -33,6 +33,7 @@ import { AvatarComponent } from "../../primitives/avatar.component";
 import { PatientSearchComponent } from "../patient-search/patient-search.component";
 import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { testListUrl } from '../../utils/test-list-url';
 
 interface AppointmentConfigDto {
   branchId: string;
@@ -769,7 +770,7 @@ export class AppointmentBookingModalComponent {
    *  cache it on the modal instance for the rest of the session. */
   private loadTestsIfNeeded() {
     if (this._tests().length > 0) return;
-    this.api.get<Test[]>("/api/tests/").subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: (l) => this._tests.set(l ?? []),
       error: () => {
         /* silent — test picker just stays empty */

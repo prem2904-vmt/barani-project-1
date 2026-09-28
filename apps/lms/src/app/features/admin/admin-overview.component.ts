@@ -15,6 +15,7 @@ import { canOpenRoute } from "../../core/auth/route-access";
 import { ApiService } from "../../core/services/api.service";
 import { ApiError } from "../../shared/models/api-response.model";
 import { ToastService } from "../../core/services/toast.service";
+import { testListUrl } from '../../shared/utils/test-list-url';
 
 interface SeedSummary {
   tenants: number;
@@ -1397,7 +1398,7 @@ export class AdminOverviewComponent implements OnInit {
     this.api.get<unknown[]>("/api/tenants/branches").subscribe({ next: (b) => this.branchCount.set(b?.length ?? 0) });
     this.api.get<unknown[]>("/api/tenants/departments").subscribe({ next: (d) => this.deptCount.set(d?.length ?? 0) });
     this.api.get<unknown[]>("/api/roles/").subscribe({ next: (r) => this.roleCount.set(r?.length ?? 0) });
-    this.api.get<any>("/api/tests").subscribe({ next: (t) => this.testCount.set(Array.isArray(t) ? t.length : (t?.total ?? t?.items?.length ?? 0)) });
+    this.api.get<any>(testListUrl()).subscribe({ next: (t) => this.testCount.set(Array.isArray(t) ? t.length : (t?.total ?? t?.items?.length ?? 0)) });
     this.load();
   }
 

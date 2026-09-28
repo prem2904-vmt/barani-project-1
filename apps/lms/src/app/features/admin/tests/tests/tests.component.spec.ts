@@ -58,6 +58,24 @@ const hb = (over: any = {}) => ({
 });
 const col = (c: any, id: string) => c.colDefs().find((d: any) => (d.colId ?? d.field) === id);
 
+describe('Test Master grid — reads the summary view (DB optimisation phase 2)', () => {
+  it('loads GET /api/tests/?status=all&view=summary (no full parameter blobs)', () => {
+    const { api } = make([hb()]);
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all&view=summary');
+  });
+
+  it('a summary row (trimmed parameters: first value only) still fills the unit / range cells', () => {
+    const multi = hb({
+      derivedUnit: null, derivedReferenceRange: null,
+      // What the server's summary sends for a 2-value test: the FIRST value's unit / bands only.
+      parameters: JSON.stringify({ parameters: [{ unit: 'g/dL', referenceRanges: [{ min: 12, max: 17 }] }] }),
+    });
+    const { c } = make([multi]);
+    expect(col(c, 'unit').valueGetter({ data: multi })).toBe('g/dL');
+    expect(String(col(c, 'referenceRange').valueGetter({ data: multi }))).toContain('12');
+  });
+});
+
 describe('Test Master grid — price / unit / range cells (CURRENT)', () => {
   it('individual view exposes an EDITABLE price (pricing-table value); unit is derived, read-only', () => {
     const { c } = make([hb()]);
@@ -154,7 +172,7 @@ describe('Test Master grid — departments (CURRENT)', () => {
     api.get.mockClear();
     await c.toggleDept(c.departments()[0]);
     expect(api.patch).toHaveBeenCalledWith('/api/tenants/departments/d1', { isActive: false });
-    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all');
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all&view=summary');
   });
 
   it('toggleTestActive PATCHes the test row isActive', () => {
@@ -180,7 +198,7 @@ describe('Test Master grid — Active/Inactive switch + status filter', () => {
 
   it('loads EVERY test (status=all), switched-off ones included', () => {
     const { api } = make([hb()]);
-    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all');
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all&view=summary');
   });
 
   it('default filter is All: a reference-mode "not offered" test stays listed, switch OFF, greyed, Inactive chip', () => {
@@ -379,7 +397,7 @@ describe('Test Master grid — copy-on-write (phases 3 + 5)', () => {
     await c.revertToMaster(hb({ origin: 'customised' }));
     expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ confirmLabel: 'Revert to master' }));
     expect(api.post).toHaveBeenCalledWith('/api/tests/t1/revert-to-master', {});
-    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all');
+    expect(api.get).toHaveBeenCalledWith('/api/tests/?status=all&view=summary');
   });
 
   it('clone mode: no revert button (the lab holds its own copy; nothing to revert to)', () => {

@@ -13,10 +13,11 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { AuthService } from '../../../core/auth/auth.service';
 import { TestPricingService } from '../../../core/services/test-pricing.service';
 import {
-  PriceWriteItem, TENANT_PRICE_SCOPE, effectivePrice, isOffered, isPriceDefault, priceListUrl,
+  PriceWriteItem, TENANT_PRICE_SCOPE, effectivePrice, isOffered, isPriceDefault,
 } from '../../../shared/utils/test-pricing';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { isPackage, shownDepartmentName } from '../../../shared/utils/package-department';
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 /** Department-filter value for the "Packages" option (packages have no department). */
 export const PACKAGES_FILTER = '__packages__';
@@ -380,7 +381,8 @@ export class PricingComponent implements OnInit {
     this.loading.set(true);
     // Isolation ON + a picked scope reads that scope's view; otherwise the
     // plain list (acting branch / tenant price).
-    const url = this.isolationOn() && this.scope() ? priceListUrl(this.scope()) : priceListUrl();
+    // Summary view (DB optimisation phase 2): the grid reads only list fields.
+    const url = testListUrl({ branchId: this.isolationOn() && this.scope() ? this.scope() : null });
     this.api.get<Test[]>(url).subscribe({
       next: list => {
         const rows: PriceRow[] = (list ?? []).map(t => ({

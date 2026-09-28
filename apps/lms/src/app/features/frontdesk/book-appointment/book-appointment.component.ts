@@ -58,6 +58,7 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 interface AppointmentConfigDto {
   branchId: string;
@@ -2028,7 +2029,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
 
   private loadTestsIfNeeded() {
     if (this._tests().length > 0) return;
-    this.api.get<Test[]>("/api/tests/").subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: (l) => this._tests.set(l ?? []),
       error: () => {
         /* silent */

@@ -50,6 +50,7 @@ import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { MIN_LOAD_MS, heldFlag } from '../../../shared/utils/min-duration';
 import { memberDepartmentNames, shownDepartmentName } from '../../../shared/utils/package-department';
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -325,7 +326,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') this.loadOrderableTests();
   };
   private loadOrderableTests(): void {
-    this.api.get<Test[]>('/api/tests/?activeOnly=true').subscribe({
+    this.api.get<Test[]>(testListUrl({ activeOnly: true })).subscribe({
       // Belt and braces: even if a stale cache or future endpoint slips an
       // inactive row through, it never reaches the picker.
       // A test the tenant/branch doesn't offer (pricing table `is_offered`

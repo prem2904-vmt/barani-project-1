@@ -15,6 +15,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 type InvTab = 'items' | 'bom';
 
@@ -456,7 +457,7 @@ export class InventoryComponent implements OnInit {
   async ngOnInit() { await Promise.all([this.load(), this.loadAlerts(), this.loadTests()]); }
 
   private async loadTests() {
-    try { this.tests.set(await firstValueFrom(this.api.get<{ id: string; name: string }[]>('/api/tests/')) ?? []); }
+    try { this.tests.set(await firstValueFrom(this.api.get<{ id: string; name: string }[]>(testListUrl())) ?? []); }
     catch { /* */ }
   }
 

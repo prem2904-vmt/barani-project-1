@@ -212,7 +212,7 @@ describe('Admin band — Inventory', () => {
     const p = renderBandPage(InventoryComponent, {
       getFor: (url) => url === '/api/inventory/items' ? items
         : url === '/api/inventory/alerts' ? { lowStock: [], expiring: [] }
-          : url === '/api/tests/' ? [{ id: 't1', name: 'CBC' }, { id: 't2', name: 'Glucose' }]
+          : url === '/api/tests/?view=summary' ? [{ id: 't1', name: 'CBC' }, { id: 't2', name: 'Glucose' }]
             : [],
     });
     await p.f.whenStable();

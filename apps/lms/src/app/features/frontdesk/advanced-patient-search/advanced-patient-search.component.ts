@@ -11,6 +11,7 @@ import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -1444,7 +1445,7 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   }
 
   private loadTests() {
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    this.api.get<Test[]>(testListUrl()).subscribe({
       next: list => this._tests.set((list ?? []).filter(t => t.isActive)),
       error: () => this._tests.set([])
     });

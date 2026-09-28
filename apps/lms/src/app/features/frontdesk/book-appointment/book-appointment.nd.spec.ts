@@ -51,7 +51,7 @@ async function render(opts: Opts = {}) {
     get: vi.fn((url: string) => {
       if (url === '/api/appointments/config') return of(CONFIG);
       if (url.startsWith('/api/appointments?')) return of([TAKEN]);
-      if (url === '/api/tests/') return of(TESTS);
+      if (url === '/api/tests/?view=summary') return of(TESTS);
       if (url.startsWith('/api/patients?q=')) return of([PATIENT]);
       if (url.startsWith('/api/patients/')) return of({ patient: PATIENT });
       return of(null);

@@ -117,6 +117,7 @@ import { drawerAgeSex, drawerName, drawerPipeline, drawerSampleProgress, drawerS
 import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
 import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
 import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { testListUrl } from '../../../shared/utils/test-list-url';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -1276,7 +1277,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // (view_test | manage_tests | create_order): a Billing Counter lacks all
     // three, got a 403, and — the list staying empty — re-sent it every poll.
     if (this._tests().length === 0 && ['view_test', 'manage_tests', 'create_order'].some(c => this.auth.hasPermission(c))) {
-      this.api.get<Test[]>('/api/tests/').subscribe({ next: l => this._tests.set(l ?? []) });
+      this.api.get<Test[]>(testListUrl()).subscribe({ next: l => this._tests.set(l ?? []) });
     }
   }
 

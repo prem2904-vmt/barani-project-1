@@ -61,10 +61,16 @@ function render() {
   f.detectChanges();
   const c = f.componentInstance as any;
   c._patient.set({ id: 'pA', displayName: 'Mr. Arun' });
-  return { f, c, post };
+  return { f, c, post, get };
 }
 
 describe('Order desk — the specimen has no default unless the mapping names one', () => {
+  it('reads the orderable catalogue through the summary view (DB optimisation phase 2)', () => {
+    const { get } = render();
+    expect(get).toHaveBeenCalledWith('/api/tests/?activeOnly=true&view=summary');
+    expect(get).not.toHaveBeenCalledWith('/api/tests/?activeOnly=true');
+  });
+
   it('a test whose mapping has no single default starts empty; one default is preselected', () => {
     const { f, c } = render();
     c._selected.set(['cs', 'gram', 'hb']);
