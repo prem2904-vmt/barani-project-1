@@ -241,7 +241,12 @@ export function writeParameters(existingJson: string | null | undefined, fields:
  * (hybrid: value ?? test). Returns the input string untouched when nothing
  * needed changing, so an unedited blob round-trips byte-for-byte.
  */
-export function tidyParametersJson(json: string | null | undefined, testMethodology: string | null | undefined): string | null | undefined {
+export function tidyParametersJson(
+  json: string | null | undefined,
+  testMethodology: string | null | undefined,
+  /** The test-level methodology before this edit (see stripRedundantMethodology). */
+  previousTestMethodology?: string | null,
+): string | null | undefined {
   const blob = parseParametersBlob(json);
   if (!blob || !json) return json;
   let changed = false;
@@ -250,7 +255,7 @@ export function tidyParametersJson(json: string | null | undefined, testMethodol
     if (k in out) { delete out[k]; changed = true; }
   }
   if (Array.isArray(blob.parameters)) {
-    const stripped = stripRedundantMethodology(blob.parameters, testMethodology);
+    const stripped = stripRedundantMethodology(blob.parameters, testMethodology, previousTestMethodology);
     if (stripped !== blob.parameters) { out['parameters'] = stripped; changed = true; }
   }
   return changed ? JSON.stringify(out) : json;

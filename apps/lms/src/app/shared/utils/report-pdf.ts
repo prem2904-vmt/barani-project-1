@@ -881,6 +881,12 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       merged.rows.push(...memberRows);
     }
   }
+  // The profile block's methods come from its members' rows (each row carries
+  // its value's effective method): one method for every member → "Method: X";
+  // members measured differently → each method named with its values. The
+  // band used to claim none, so a member's methodology never reached the
+  // report (RCA 2026-09-28).
+  for (const panel of byPkg.values()) applyValueMethods(panel);
   // Append each profile's own notes AFTER its member rows.
   for (const [pkg, notes] of profileNotes) {
     const panel = byPkg.get(pkg);
@@ -3178,6 +3184,7 @@ function renderColumnarTable(
   // table still drops empties.
   if (!PREVIEW_KEEP_EMPTY_COLS && !overriddenRun) vcols = vcols.filter(vc => vc.members.some(memberHasContent));
   const hasResultCol = vcols.some(c => c.hasResult);
+  const hasMethodCol = vcols.some(c => c.members.some(m => m.type === 'method'));
   const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
   const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
   const COLSPAN = vcols.length;
@@ -3380,6 +3387,23 @@ function renderColumnarTable(
                     fontSize: 8.5 * theme.fontScale },
         }]);
         bodyMeta.push(null);
+        bodyKind.push('desc');
+      }
+      // A COMPACT single-value test has no panel band, so it has nowhere for
+      // the "Method: …" sub-line — with "Show method line" on it prints as a
+      // small line right under its row instead (RCA 2026-09-28: Calcium's
+      // methodology never reached the report). A Method column already
+      // carries it, so no second copy then.
+      const compactMethod = compact && r.kind === 'param' && !g.hideMethodLine && !hasMethodCol
+        ? (g.methodLine ?? g.method ?? r.method ?? '').trim() : '';
+      if (compactMethod) {
+        body.push([{
+          content: `Method: ${compactMethod}`,
+          colSpan: COLSPAN,
+          styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
+        }]);
+        bodyMeta.push(null);
+        // 'desc' = a row that belongs to the value above: kept on its page.
         bodyKind.push('desc');
       }
     }
