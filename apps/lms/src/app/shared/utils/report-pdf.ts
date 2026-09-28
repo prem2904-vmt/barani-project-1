@@ -4331,7 +4331,7 @@ function drawSigFooterPage(
     doc.setFontSize(7);
     doc.setTextColor(TEXT_DIM);
     const bandOn = theme.showSampleBand && (practice.phone ?? '').trim();
-    doc.text('Powered by Prefrontal LMS', A4.w / 2, bandOn ? A4.h - 18 : A4.h - 4, { align: 'center' });
+    doc.text('Powered by Prefrontal', A4.w / 2, bandOn ? A4.h - 18 : A4.h - 4, { align: 'center' });
   }
 
   // Optional watermark — a COMBINATION of the lab's logo (faint, centred)
