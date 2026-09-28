@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 
 /**
  * Ambient flowing background — lives behind all shell content at z-index 0.
@@ -11,11 +12,22 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
  *     floating across the viewport
  *
  * Ported from resident-fe's floating-bg pattern. Respects prefers-reduced-motion.
+ *
+ * COST CONTROL (iPad, owner 2026-09-28: stutter + partially painted screens):
+ * every frosted surface (backdrop-filter) above this layer must re-blur what
+ * is under it on EVERY frame the ambient moves — a 200%-tall blurred layer
+ * plus seven blurred, forever-animating glyphs under the docked bar, the
+ * band and the cards. On iPad WebKit that GPU/memory pressure dropped whole
+ * compositing layers (the missing navbar / the unpainted right strip).
+ *  - Touch devices (html.device-touch): the flow is STATIC — same wash, same
+ *    blobs, no drifting glyphs, no animation. Desktop is unchanged.
+ *  - Everywhere: animations pause while the tab / app is hidden.
  */
 @Component({
   selector: 'pf-ambient-bg',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.is-paused]': 'paused()' },
   template: `
     <div class="root" aria-hidden="true">
       <!-- Base wash -->
@@ -276,6 +288,29 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
       .dna-flow,
       .float { animation: none; }
     }
+
+    /* Hidden tab / backgrounded app: nothing to show, nothing to animate. */
+    :host(.is-paused) .dna-flow,
+    :host(.is-paused) .float { animation-play-state: paused; }
+
+    /* Touch devices: a static flow (see COST CONTROL above). The column is
+       one viewport tall (was 200% so it could scroll), so the blobs keep
+       their spread; the drifting glyphs are dropped. */
+    :host-context(html.device-touch) .dna-flow {
+      animation: none;
+      height: 100%;
+    }
+    :host-context(html.device-touch) .float-layer { display: none; }
   `]
 })
-export class AmbientBgComponent {}
+export class AmbientBgComponent {
+  private readonly doc = inject(DOCUMENT);
+  /** True while the page is hidden (tab switched, app backgrounded). */
+  readonly paused = signal(this.doc.visibilityState === 'hidden');
+
+  constructor() {
+    const onVis = () => this.paused.set(this.doc.visibilityState === 'hidden');
+    this.doc.addEventListener('visibilitychange', onVis);
+    inject(DestroyRef).onDestroy(() => this.doc.removeEventListener('visibilitychange', onVis));
+  }
+}

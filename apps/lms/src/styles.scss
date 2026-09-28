@@ -2902,3 +2902,42 @@ html.pf-vt-zoom-out::view-transition-group(root) { animation-duration: 400ms; }
 @media (prefers-reduced-motion: reduce) {
   html::view-transition-group(*), html::view-transition-old(*), html::view-transition-new(*) { animation: none !important; }
 }
+
+/* ═══ Touch devices: GPU budget (iPad stutter / partial paint) ═══
+   Owner, iPad 2026-09-28: the app stuttered, the docked navbar vanished and
+   one Frontdesk frame was only partly painted (right strip, band search,
+   bar missing — only the bell's own animated layer showed). iPad WebKit
+   drops compositing layers under GPU / memory pressure, and the pressure
+   came from live frost: every backdrop-filter surface re-blurs what is
+   behind it, and behind every surface the ambient flow was animating, so
+   dozens of Frontdesk cards (.pf-card, blur 20px each), tiles and glass
+   panels were re-blurred on every frame. On touch devices ONLY
+   (html.device-touch; desktop is untouched):
+     - large in-flow surfaces drop the live blur — what sits behind them is
+       the (now static, already soft) ambient wash, so the look is kept;
+       their translucent fill + border + sheen stay as they are;
+     - decorative forever-loops in the app bar (wordmark beat with an
+       animated drop-shadow = a repaint every frame; bell wiggle) stop — the
+       unread badge still says it;
+     - the ambient flow is static (ambient-bg.component) and the docked bar
+       is one opaque promoted layer (shell.component).
+   Transient overlays (menus, sheets, modal scrims) keep their frost: they
+   are small or short-lived and sit over real content. */
+html.device-touch {
+  .glass,
+  .glass-card,
+  .glass-card-elevated,
+  .glass-card-2025,
+  .glass-button,
+  .glass-input,
+  .glass-badge,
+  .pf-card,
+  pf-tile {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .pf-brand-name,
+  .pf-bell-btn.has-unread svg {
+    animation: none !important;
+  }
+}

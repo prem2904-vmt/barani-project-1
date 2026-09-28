@@ -111,6 +111,38 @@ export interface ZoomTransitionLike {
   skipTransition(): void;
 }
 
+/** The longest any of our view transitions may run (update callback + the
+ *  400ms morph / 360ms slide, with room for a slow first render). */
+export const TRANSITION_MAX_MS = 2000;
+
+/**
+ * Never let a view transition outlive its purpose. While one is pending the
+ * browser shows SNAPSHOTS of the page and suppresses rendering; on iPad
+ * WebKit a transition caught by an app switch / lock / slow frame could sit
+ * there, leaving a frozen or half-painted screen (owner, 2026-09-28: the
+ * Frontdesk frame with an unpainted right strip, an empty search box and no
+ * navbar — just after the Collect → Frontdesk "back" slide). So: skip it
+ * (= jump to the final, live DOM) after `maxMs`, or the moment the page is
+ * hidden. Harmless once it has finished.
+ */
+export function guardTransition(
+  t: Pick<ZoomTransitionLike, 'finished' | 'skipTransition'>,
+  doc: Document = document,
+  maxMs = TRANSITION_MAX_MS,
+): void {
+  let done = false;
+  const skip = () => { if (!done) { try { t.skipTransition(); } catch { /* already over */ } } };
+  const onVis = () => { if (doc.visibilityState === 'hidden') skip(); };
+  const timer = setTimeout(skip, maxMs);
+  doc.addEventListener('visibilitychange', onVis);
+  const settle = () => {
+    done = true;
+    clearTimeout(timer);
+    doc.removeEventListener('visibilitychange', onVis);
+  };
+  Promise.resolve(t.finished).then(settle, settle);
+}
+
 function rectOf(el: HTMLElement): Rect {
   const r = el.getBoundingClientRect();
   return { left: r.left, top: r.top, width: r.width, height: r.height };
@@ -246,16 +278,17 @@ export class ZoomTransitionService {
     const doc = this.doc as Document & { startViewTransition?: (cb: () => void) => ZoomTransitionLike };
     if (typeof doc.startViewTransition !== 'function' || prefersReducedMotion()) { this.arm = null; update(); return; }
     const run = () => { update(); this.appRef.tick(); };
+    const start = () => { const t = doc.startViewTransition!(run); guardTransition(t, this.doc); return t; };
     if (dir === 'in') {
       const arm = this.takeArm();
       if (!arm) { update(); return; }
-      this.zoomIn(doc.startViewTransition(run), arm, '');
+      this.zoomIn(start(), arm, '');
       return;
     }
     const o = this.opened;
     const card = o ? this.pickTarget(o.keys, null, true) : null;   // only the view that zoom opened
     if (!o || !card) { update(); return; }
-    this.zoomOut(doc.startViewTransition(run), o, card);
+    this.zoomOut(start(), o, card);
   }
 
   // ── The two directions ────────────────────────────────────────────────

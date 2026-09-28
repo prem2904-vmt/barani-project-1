@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { Router, ViewTransitionInfo } from '@angular/router';
-import { ZoomTransitionService, prefersReducedMotion } from './zoom-transition';
+import { ZoomTransitionService, guardTransition, prefersReducedMotion } from './zoom-transition';
 
 /** Which step-to-step navigations slide, and in which direction. A flow
  *  moves FORWARD (current screen exits left, next enters from the right)
@@ -36,6 +36,8 @@ export function slideTransition(info: ViewTransitionInfo): void {
   const zoom = inject(ZoomTransitionService);
   const nav = router.getCurrentNavigation();
   const to = nav ? router.serializeUrl(nav.finalUrl ?? nav.extractedUrl) : '';
+  // Whatever happens below, this transition can't hang the screen.
+  guardTransition(info.transition);
   if (prefersReducedMotion()) { zoom.disarm(); info.transition.skipTransition(); return; }
   // Draft → draft hop from the app bar's draft shelf: the chip tags the
   // navigation with its direction (DraftShelfService.swapState), so the
