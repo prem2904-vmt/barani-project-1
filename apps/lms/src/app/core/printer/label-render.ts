@@ -1,6 +1,7 @@
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import bwipjs from 'bwip-js/browser';
+import { FittedLine, LabelLineSpec, QUIET_MODULES, code128Modules, fitLabelText, tubeLabelGeometry } from './label-layout';
 
 /**
  * Render a specimen label to a packed 1-bpp bitmap for a direct-thermal label
@@ -9,9 +10,9 @@ import bwipjs from 'bwip-js/browser';
  * prints. The packed buffer is handed to the transport (Electron USB IPC now;
  * the Capacitor BLE plugin later) which owns the printer command encoding.
  *
- * Geometry: 203 dpi = 8 dots/mm, head prints ≤ 384 dots (48 mm) wide. Tuned +
- * hardware-validated on a 50 × 20 mm label; fonts/positions scale with height
- * so other label sizes stay balanced.
+ * Geometry: 203 dpi = 8 dots/mm, head prints ≤ 384 dots (48 mm) wide. The
+ * layout is LANDSCAPE (text left, code right) from label-layout.ts, the same
+ * geometry the DOM label card prints with.
  */
 export type LabelCodeMode = 'barcode' | 'qr' | 'datamatrix';
 
@@ -30,19 +31,22 @@ export interface LabelData {
   outsourced?: boolean;
 }
 
-/** The label's text lines, top to bottom (px at the 20 mm baseline × s).
- *  Pure — unit-tested. An outsourced tube adds only the heavy "OUTSOURCED"
- *  line on top; every other line is exactly the normal label's. */
-export function labelTextLines(data: LabelData, s: number): { text: string; px: number; heavy: boolean; mono: boolean }[] {
-  const lines: { text: string; px: number; heavy: boolean; mono: boolean }[] = [];
-  if (data.outsourced) lines.push({ text: 'OUTSOURCED', px: Math.round(18 * s), heavy: true, mono: false });
-  if (data.patientName) lines.push({ text: `${data.patientName}${data.ageSex ? '  ' + data.ageSex : ''}`, px: Math.round(20 * s), heavy: true, mono: false });
-  if (data.mrn) lines.push({ text: `MRN ${data.mrn}`, px: Math.round(14 * s), heavy: false, mono: true });
+/** The label's text lines, top to bottom — ONE order for both print paths
+ *  (bitmap + DOM card). Pure — unit-tested. An outsourced tube adds only the
+ *  heavy "OUTSOURCED" line on top; every other line is exactly the normal
+ *  label's. `px` is the legacy 20 mm-baseline size × s; `maxMm`/`minMm`/
+ *  `maxLines` drive the landscape fit (label-layout.ts). */
+export function labelTextLines(data: LabelData, s = 1): (LabelLineSpec & { px: number })[] {
+  const lines: (LabelLineSpec & { px: number })[] = [];
+  const add = (l: LabelLineSpec, px: number) => lines.push({ ...l, px: Math.round(px * s) });
+  if (data.outsourced) add({ role: 'flag', text: 'OUTSOURCED', heavy: true, mono: false, maxMm: 2.4, minMm: 1.6, maxLines: 1 }, 18);
+  if (data.patientName) add({ role: 'name', text: `${data.patientName}${data.ageSex ? '  ' + data.ageSex : ''}`, heavy: true, mono: false, maxMm: 3.0, minMm: 1.7, maxLines: 2 }, 20);
+  if (data.mrn) add({ role: 'meta', text: `MRN ${data.mrn}`, heavy: false, mono: true, maxMm: 2.3, minMm: 1.6, maxLines: 1 }, 14);
   // Dept then Sample ID (OPS-36): department reads immediately above the
   // sample id so the label groups by dept → sample id.
-  if (data.deptCode) lines.push({ text: data.deptCode, px: Math.round(15 * s), heavy: false, mono: false });
-  lines.push({ text: data.code, px: Math.round(22 * s), heavy: true, mono: true });
-  if (data.tube) lines.push({ text: data.tube, px: Math.round(13 * s), heavy: false, mono: false });
+  if (data.deptCode) add({ role: 'dept', text: data.deptCode, heavy: false, mono: false, maxMm: 2.3, minMm: 1.6, maxLines: 1 }, 15);
+  add({ role: 'id', text: data.code, heavy: true, mono: true, maxMm: 3.4, minMm: 2.0, maxLines: 1 }, 22);
+  if (data.tube) add({ role: 'extra', text: data.tube, heavy: false, mono: false, maxMm: 2.0, minMm: 1.5, maxLines: 2 }, 13);
   return lines;
 }
 
@@ -56,6 +60,12 @@ export interface PackedBitmap {
 const DPMM = 8;
 const HEAD_MAX = 384; // 48 mm printable
 
+/**
+ * Landscape bitmap: patient text on the LEFT, the code on the RIGHT (the same
+ * geometry as the DOM label — label-layout.ts). A 1-D barcode keeps its
+ * 10-module quiet zones and an integer narrow bar (2 dots = 0.25 mm when it
+ * fits, never < 1 dot); text shrinks, then wraps — it is never cut.
+ */
 export function renderLabelBitmap(
   data: LabelData,
   opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode; offsetXmm?: number; offsetYmm?: number; codeScalePct?: number; rotation?: number }
@@ -65,9 +75,10 @@ export function renderLabelBitmap(
   const wDots = Math.min(HEAD_MAX, Math.round(opts.widthMm * DPMM));
   // Print ~1 mm short of the label so nothing bleeds into the die-cut gap.
   const hDots = Math.max(48, Math.round((opts.heightMm - 1) * DPMM));
-  const s = hDots / 160; // scale from the 20 mm baseline
-  const MX = Math.round(12 * Math.min(1.4, Math.max(0.7, s)));
-  const MY = Math.round(8 * s);
+
+  const modules = opts.codeMode === 'barcode' ? code128Modules(data.code) : 0;
+  const g = tubeLabelGeometry(wDots / DPMM, hDots / DPMM, opts.codeMode, modules || undefined);
+  const d = (mm: number) => Math.round(mm * DPMM);
 
   const canvas = document.createElement('canvas');
   canvas.width = wDots; canvas.height = hDots;
@@ -82,71 +93,111 @@ export function renderLabelBitmap(
   const oy = Math.round((opts.offsetYmm ?? 0) * DPMM);
   if (ox || oy) ctx.translate(ox, oy);
 
-  // Faux-bold: heavy lines redraw at 1px offsets so anti-aliased strokes carry
-  // enough ink through thermal thresholding; small lines stay plain.
-  const drawText = (text: string, x: number, y: number, px: number, heavy: boolean, maxW: number) => {
-    ctx.font = `bold ${px}px sans-serif`;
-    ctx.fillText(text, x, y, maxW);
-    if (heavy) { ctx.fillText(text, x + 1, y, maxW); ctx.fillText(text, x, y + 1, maxW); }
-  };
-  const mono = (text: string, x: number, y: number, px: number, heavy: boolean, maxW: number) => {
-    ctx.font = `bold ${px}px monospace`;
-    ctx.fillText(text, x, y, maxW);
-    if (heavy) { ctx.fillText(text, x + 1, y, maxW); ctx.fillText(text, x, y + 1, maxW); }
-  };
-
+  // ── code (right) ──
   if (opts.codeMode === 'barcode') {
-    // 1D barcode is a full-width band at the bottom; text stacks above it.
-    const bcH = Math.round(hDots * 0.42 * codeScale);
-    const bcY = hDots - bcH - MY;
-    const bcW = wDots - 2 * MX;
     try {
+      const box = { x: d(g.code.x), y: d(g.code.y), w: d(g.code.w), h: d(g.code.h) };
+      const sideways = rot === 90 || rot === 270;
+      const along = sideways ? box.h : box.w; // the axis the bars run across
+      const n = (modules || 1) + 2 * QUIET_MODULES;
+      // Integer narrow bar so every module is the same width on the head.
+      const mod = Math.max(1, Math.min(3, Math.floor(along / n)));
+      const barLen = Math.round((sideways ? box.w : box.h) * Math.min(1, codeScale));
       const tmp = document.createElement('canvas');
-      JsBarcode(tmp, data.code, { format: 'CODE128', displayValue: false, margin: 0, height: 100, width: 2, background: '#ffffff', lineColor: '#000000' });
-      blitRotated(ctx, tmp, MX, bcY, bcW, bcH, rot);
+      JsBarcode(tmp, data.code, { format: 'CODE128', displayValue: false, margin: 0, height: barLen, width: mod, background: '#ffffff', lineColor: '#000000' });
+      blitRotated(ctx, tmp, box.x + Math.round((box.w - (sideways ? tmp.height : tmp.width)) / 2),
+        box.y + Math.round((box.h - (sideways ? tmp.width : tmp.height)) / 2),
+        sideways ? tmp.height : tmp.width, sideways ? tmp.width : tmp.height, rot, true);
     } catch { /* un-encodable */ }
-    layoutText(MX, MY, wDots - 2 * MX, bcY - 4);
-    // code text just under the bars
-    mono(data.code, MX, hDots - Math.round(2 * s), Math.round(16 * s), false, wDots - 2 * MX);
   } else {
-    // 2D code (QR / Data Matrix) sits on the right; text block on the left.
-    const codeBase = Math.min(hDots - 2 * MY, Math.round(wDots * 0.42));
-    const codeSize = Math.max(24, Math.min(hDots - 2 * MY, Math.round(codeBase * codeScale)));
-    const codeX = wDots - codeSize - MX;
-    const codeY = Math.round((hDots - codeSize) / 2);
+    // Code size % shrinks the square; it never grows past its box (that
+    // would run into the text column).
+    const size = Math.max(24, Math.min(d(g.code.w), Math.round(d(g.code.w) * codeScale)));
+    const codeX = d(g.code.x) + d(g.code.w) - size;
+    const codeY = Math.round((hDots - size) / 2);
     const codeImg = opts.codeMode === 'qr'
-      ? renderQr(data.qrValue ?? data.code, codeSize)
-      : renderDataMatrix(data.code, codeSize);
-    if (codeImg) blitRotated(ctx, codeImg, codeX, codeY, codeSize, codeSize, rot);
-    layoutText(MX, MY, codeX - MX - Math.round(8 * s), hDots - MY);
+      ? renderQr(data.qrValue ?? data.code, size)
+      : renderDataMatrix(data.code, size);
+    if (codeImg) blitRotated(ctx, codeImg, codeX, codeY, size, size, rot);
   }
 
-  // ── shared text layout: stack the present lines and centre the block
-  //    vertically within [top, bottom] so the label isn't top-heavy. ──
-  function layoutText(left: number, top: number, maxW: number, bottom: number) {
-    const lines = labelTextLines(data, s);
-
-    const gap = Math.round(6 * s);
-    const totalH = lines.reduce((sum, l) => sum + l.px, 0) + gap * (lines.length - 1);
-    let cursor = Math.max(top, top + Math.round((bottom - top - totalH) / 2));
-    for (const l of lines) {
-      cursor += l.px; // advance to this line's baseline
-      (l.mono ? mono : drawText)(l.text, left, cursor, l.px, l.heavy, maxW);
-      cursor += gap;
+  // ── text (left): shrink → wrap, never cut; centred vertically ──
+  const maxW = d(g.text.w);
+  const specs = labelTextLines(data);
+  const fitted = fitLabelText(specs, g.text.w, g.text.h);
+  const fontOf = (l: FittedLine, px: number) => `bold ${px}px ${l.mono ? 'monospace' : 'sans-serif'}`;
+  const laid: { l: FittedLine; px: number; rows: string[] }[] = fitted.map((l) => {
+    let px = Math.max(10, d(l.fontMm));
+    ctx.font = fontOf(l, px);
+    // Real metrics: shrink until it fits its line budget (floor = min size)…
+    const minPx = Math.max(10, d(l.minMm));
+    let rows = wrapText(ctx, l.text, maxW);
+    while (rows.length > l.maxLines && px > minPx) { px--; ctx.font = fontOf(l, px); rows = wrapText(ctx, l.text, maxW); }
+    return { l, px, rows }; // …then it simply takes more rows.
+  });
+  const gapPx = Math.max(1, Math.round(hDots / 90));
+  let total = laid.reduce((h, r) => h + r.rows.length * Math.round(r.px * 1.08), 0) + gapPx * (laid.length - 1);
+  const topY = d(g.text.y);
+  // If the real metrics overflow the column, scale the whole block down.
+  if (total > d(g.text.h)) {
+    const k = d(g.text.h) / total;
+    for (const r of laid) { r.px = Math.max(10, Math.floor(r.px * k)); ctx.font = fontOf(r.l, r.px); r.rows = wrapText(ctx, r.l.text, maxW); }
+    total = laid.reduce((h, r) => h + r.rows.length * Math.round(r.px * 1.08), 0) + gapPx * (laid.length - 1);
+  }
+  let cursor = topY + Math.max(0, Math.round((d(g.text.h) - total) / 2));
+  for (const r of laid) {
+    ctx.font = fontOf(r.l, r.px);
+    for (const row of r.rows) {
+      const lh = Math.round(r.px * 1.08);
+      const y = cursor + Math.round(r.px * 0.86);
+      ctx.fillText(row, d(g.text.x), y);
+      // Faux-bold: heavy lines redraw at a 1px offset so anti-aliased strokes
+      // carry enough ink through thermal thresholding (not on tiny text,
+      // where the extra pixel column fills the counters in).
+      if (r.l.heavy && r.px >= 16) ctx.fillText(row, d(g.text.x) + 1, y);
+      cursor += lh;
     }
+    cursor += gapPx;
   }
 
   return pack(ctx, wDots, hDots);
 }
 
+/** Greedy word-wrap to `maxW` px; a single word wider than the column is
+ *  broken by characters (so nothing is ever clipped). */
+export function wrapText(ctx: Pick<CanvasRenderingContext2D, 'measureText'>, text: string, maxW: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const rows: string[] = [];
+  let cur = '';
+  const fits = (t: string) => ctx.measureText(t).width <= maxW;
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (fits(next)) { cur = next; continue; }
+    if (cur) rows.push(cur);
+    if (fits(w)) { cur = w; continue; }
+    // Hard-break an over-long token.
+    let chunk = '';
+    for (const ch of w) {
+      if (fits(chunk + ch) || !chunk) chunk += ch;
+      else { rows.push(chunk); chunk = ch; }
+    }
+    cur = chunk;
+  }
+  if (cur) rows.push(cur);
+  return rows.length ? rows : [''];
+}
+
 /** Draw a pre-rendered code image onto ctx at (x,y,w,h), rotated about its
  *  centre — used so the CODE can rotate while the text stays upright. */
-function blitRotated(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement, x: number, y: number, w: number, h: number, rot: number): void {
+function blitRotated(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement, x: number, y: number, w: number, h: number, rot: number, native = false): void {
   ctx.save();
   ctx.translate(x + w / 2, y + h / 2);
   if (rot) ctx.rotate((rot * Math.PI) / 180);
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  // native: (w,h) is the rotated FOOTPRINT; draw the image at its own pixel
+  // size so barcode modules stay exact integer dots.
+  if (native) ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  else ctx.drawImage(img, -w / 2, -h / 2, w, h);
   ctx.restore();
 }
 

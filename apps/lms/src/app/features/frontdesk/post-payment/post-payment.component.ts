@@ -1,3 +1,4 @@
+import { printTubeLabels } from '../../../shared/utils/print-label';
 import { DatePipe, TitleCasePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -161,22 +162,16 @@ export class PostPaymentComponent implements OnInit {
   /** Print the tube labels. When a directly-driven printer is present
    *  (Electron USB / iPad BLE) we render each label at the branch's configured
    *  size + single code type and stream it straight to the printer. Otherwise
-   *  we fall back to the browser print dialog (`pf-printing-label` hides
-   *  everything except the `.pf-print-label` grid). */
+   *  we fall back to the browser print dialog — one W×H mm page per
+   *  selected label (`printTubeLabels`). */
   private runLabelPrint() {
     if (this.printer.directPrintAvailable()) {
       void this.runDirectPrint();
       return;
     }
-    document.body.classList.add('pf-printing-label');
-    const done = () => {
-      this._printingIds.set(new Set());
-      document.body.classList.remove('pf-printing-label');
-      window.removeEventListener('afterprint', done);
-    };
-    window.addEventListener('afterprint', done);
-    setTimeout(() => window.print(), 50);
-    setTimeout(done, 2000);
+    // A beat for the selected cards to pick up `printing`, then each label
+    // prints on its own exact-size page (printTubeLabels).
+    setTimeout(() => printTubeLabels(() => this._printingIds.set(new Set())), 50);
   }
 
   private async runDirectPrint() {

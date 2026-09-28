@@ -4,6 +4,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { PlatformService } from '../../../core/services/platform.service';
 import { PrinterService, SystemPrinter } from '../../../core/printer/printer.service';
 import { PrintConfigService } from '../../../core/printer/print-config.service';
+import { LABEL_SIZE_PRESETS, MIN_X_MM, code128Modules, tubeLabelGeometry } from '../../../core/printer/label-layout';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
@@ -141,15 +142,24 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
       @if (showSec('label')) {
       <p class="pf-h mt-5 pf-lp-sechead">Label</p>
       <div class="pf-card pf-card--col">
+        <div>
+          <span class="pf-eyebrow">Common tube labels</span>
+          <div class="flex flex-wrap gap-2" role="group" aria-label="Label size presets">
+            @for (p of sizePresets; track p.label) {
+              <button type="button" class="pf-chip" [class.pf-chip--on]="isPreset(p)" [attr.aria-pressed]="isPreset(p)"
+                      (click)="printConfig.setLabelSize(p.widthMm, p.heightMm)">{{ p.label }}</button>
+            }
+          </div>
+        </div>
         <div class="flex flex-wrap items-end gap-5">
           <label class="block">
             <span class="pf-eyebrow">Width (mm)</span>
-            <input type="number" min="10" max="120" class="nd-input nd-num pf-num" [value]="cfg().labelWidthMm"
+            <input type="number" min="10" max="120" step="0.1" class="nd-input nd-num pf-num" [value]="cfg().labelWidthMm"
                    (change)="onSize('w', $any($event.target).valueAsNumber)">
           </label>
           <label class="block">
             <span class="pf-eyebrow">Height (mm)</span>
-            <input type="number" min="10" max="120" class="nd-input nd-num pf-num" [value]="cfg().labelHeightMm"
+            <input type="number" min="10" max="120" step="0.1" class="nd-input nd-num pf-num" [value]="cfg().labelHeightMm"
                    (change)="onSize('h', $any($event.target).valueAsNumber)">
           </label>
           <div class="pf-prev-wrap">
@@ -160,9 +170,12 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
                 {{ printConfig.codeMode() === 'barcode' ? 'BARCODE' : (printConfig.codeMode() === 'qr' ? 'QR' : 'DMX') }}
               </div>
             </div>
-            <span class="pf-mono">{{ cfg().labelWidthMm }} × {{ cfg().labelHeightMm }} mm</span>
+            <span class="pf-mono">{{ cfg().labelWidthMm }} × {{ cfg().labelHeightMm }} mm · landscape, code beside the text</span>
           </div>
         </div>
+        @if (barWarning(); as warn) {
+          <p class="pf-note" role="status">{{ warn }}</p>
+        }
 
         <div>
           <span class="pf-eyebrow">Code</span>
@@ -327,6 +340,20 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
   ]);
 
   readonly cfg = this.printConfig.config;
+  readonly sizePresets = LABEL_SIZE_PRESETS;
+  isPreset(p: { widthMm: number; heightMm: number }): boolean {
+    const c = this.cfg();
+    return Math.abs(c.labelWidthMm - p.widthMm) < 0.05 && Math.abs(c.labelHeightMm - p.heightMm) < 0.05;
+  }
+  /** A 1-D barcode beside the text on narrow stock can drop below a readable
+   *  bar width — say so (with the typical 9-digit sample number). */
+  barWarning(): string | null {
+    if (this.printConfig.codeMode() !== 'barcode') return null;
+    const c = this.cfg();
+    const g = tubeLabelGeometry(c.labelWidthMm, c.labelHeightMm, 'barcode', code128Modules('012600001'));
+    if (g.scannable) return null;
+    return `On ${c.labelWidthMm} × ${c.labelHeightMm} mm the barcode's narrowest bar is ${g.xMm} mm — some scanners need ≥ ${MIN_X_MM} mm. Use a wider label, or ask an admin to switch the code to QR or Data Matrix.`;
+  }
   codeLabel(): string {
     const m = this.printConfig.codeMode();
     return m === 'barcode' ? 'Barcode' : m === 'qr' ? 'QR' : 'Data Matrix';

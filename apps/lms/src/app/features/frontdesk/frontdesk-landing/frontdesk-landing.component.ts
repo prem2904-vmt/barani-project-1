@@ -36,7 +36,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
 import { LabelCardComponent } from '../post-payment/label-card.component';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { printTubeLabels } from '../../../shared/utils/print-label';
 import { Report } from '../../../shared/models/report.model';
 
 /** Slim shape of /api/dispatch-packages — used by the bulk-dispatch
@@ -1778,7 +1778,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         // Give the off-screen label cards a beat to paint their barcodes
         // (JsBarcode is sync but QRCode.toCanvas is async) before printing.
         setTimeout(() => {
-          printLabelOnly();
+          printTubeLabels();
           // Keep the sheet mounted until the print dialog has definitely
           // consumed it (print() isn't blocking on every platform).
           setTimeout(() => this._reprintOrder.set(null), 2000);
