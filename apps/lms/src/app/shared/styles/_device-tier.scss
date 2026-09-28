@@ -1,0 +1,61 @@
+// ─────────────────────────────────────────────────────────────────────────
+// DEVICE TIER — the ONE mechanism that decides "tablet layout vs desktop".
+//
+// The tablet layout (docked icon-only bar, iPad bands, tablet grids) used to
+// switch purely on width at 1279px. A 14" Android tablet (~1280–1500 CSS px
+// in landscape), an iPad Pro in landscape (1366) and the native app on any
+// big tablet are all ≥1280 wide, so they fell into the DESKTOP layout.
+//
+// index.html (before first paint) and DeviceClassService set
+// `html.device-touch` on touch-first devices: the native app, iPads (also
+// iPad-as-Mac), Android, and touch-only browsers. A laptop with a mouse or
+// trackpad never gets it (see core/services/device-class.ts).
+//
+// Use these mixins INSTEAD of the raw width queries — component styles:
+//   @use '<relative>/shared/styles/device-tier' as dt;
+//   @include dt.tablet-tier { .x { … } }     // was @media (max-width: 1279px)
+//   @include dt.tablet-band { .x { … } }     // was (min-width: 641px) and (max-width: 1279px)
+//   @include dt.desktop-only { .x { … } }    // was @media (min-width: 1280px)
+//
+// Below 1280px the output is byte-for-byte the old media query. At 1280px+
+// the touch copy is additionally emitted under :host-context(:where(html.device-touch))
+// — :where() keeps the specificity identical to the old rule — so a desktop
+// with a mouse is unchanged at every width (isolation invariant),
+// and phones / small tablets (<1280) are unchanged too.
+//
+// The content must be selector rules (it is nested under :host-context).
+//
+// Tailwind `xl:` utilities in templates are NOT device-aware (custom
+// variants in styles.scss never reach Tailwind in this build). For a layout
+// switch, drop the `xl:` class and use dt.desktop-only in the component
+// stylesheet — component CSS is unlayered, so it beats any utility.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// First width of the desktop layout (mouse devices only).
+$desktop-min: 1280px;
+/// Last width of the tablet layout on a mouse device.
+$tablet-max: 1279px;
+
+/// Tablet layout: ≤1279px, or a touch-first device at any width.
+@mixin tablet-tier {
+  @media (max-width: $tablet-max) { @content; }
+  @media (min-width: $desktop-min) {
+    :host-context(:where(html.device-touch)) { @content; }
+  }
+}
+
+/// Tablet band (641–1279px; iPads, not phones), or a touch-first device
+/// wider than that.
+@mixin tablet-band {
+  @media (min-width: 641px) and (max-width: $tablet-max) { @content; }
+  @media (min-width: $desktop-min) {
+    :host-context(:where(html.device-touch)) { @content; }
+  }
+}
+
+/// Desktop layout only: ≥1280px AND not a touch-first device.
+@mixin desktop-only {
+  @media (min-width: $desktop-min) {
+    :host-context(:where(html:not(.device-touch))) { @content; }
+  }
+}

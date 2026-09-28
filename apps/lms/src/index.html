@@ -51,6 +51,43 @@
       />
     </noscript>
     <!--
+      Device class BEFORE the first paint (no desktop flash on tablets):
+      html.device-touch + device-tablet / device-phone, or device-desktop.
+      The native app and touch-first browsers (iPad, Android, touch-only)
+      get the tablet / phone layout at EVERY width; a mouse / trackpad keeps
+      the desktop layout. MIRROR of detectDeviceClass() in
+      app/core/services/device-class.ts (device-class.spec.ts keeps the two
+      identical); DeviceClassService keeps it current after boot.
+    -->
+    <script id="pf-device-class">
+      (function () {
+        var cls = 'desktop';
+        try {
+          var w = window, n = w.navigator || {}, ua = n.userAgent || '', tp = n.maxTouchPoints || 0;
+          var mm = function (q) { try { return !!(w.matchMedia && w.matchMedia(q).matches); } catch (e) { return false; } };
+          var native = false, electron = false;
+          try { native = !!(w.Capacitor && w.Capacitor.isNativePlatform && w.Capacitor.isNativePlatform()); } catch (e) {}
+          try { electron = !!(w.electronAPI && w.electronAPI.isElectron); } catch (e) {}
+          var anyCoarse = mm('(any-pointer: coarse)'), coarse = mm('(pointer: coarse)'), anyFine = mm('(any-pointer: fine)');
+          var touch = !electron && (native
+            || (/Macintosh/.test(ua) && tp > 1)
+            || /iPhone|iPad|iPod|Android/.test(ua)
+            || (/X11; Linux/.test(ua) && !/CrOS/.test(ua) && tp > 1)
+            || (anyCoarse && !anyFine)
+            || (coarse && tp > 1 && !anyFine));
+          if (touch) {
+            var s = w.screen || {};
+            var short = s.width && s.height ? Math.min(s.width, s.height) : Math.min(w.innerWidth || 0, w.innerHeight || 0);
+            cls = !short || short >= 600 ? 'tablet' : 'phone';
+          }
+        } catch (e) { cls = 'desktop'; }
+        var root = document.documentElement;
+        if (cls === 'desktop') root.classList.add('device-desktop');
+        else { root.classList.add('device-touch'); root.classList.add('device-' + cls); }
+        root.setAttribute('data-device', cls);
+      })();
+    </script>
+    <!--
       Apply theme BEFORE Angular boots to prevent flash of wrong theme.
       Priority: localStorage override > prefers-color-scheme > dark.
     -->

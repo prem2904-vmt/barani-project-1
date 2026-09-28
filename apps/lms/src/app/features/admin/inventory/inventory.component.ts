@@ -276,6 +276,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
     </section>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     .lbl { display:block; margin-bottom:6px; }
     /* ── ND audit: kit cards / rows ── */
     .pf-inv-alert { padding-bottom: 10px; }
@@ -333,7 +334,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 
     /* The items table is dense (4 row actions + numeric columns). Below desktop, let it
        scroll horizontally inside its own card instead of forcing page-wide overflow. */
-    @media (max-width: 1279px) {
+    @include dt.tablet-tier {
       :host .inv-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       :host .inv-table-wrap table { min-width: 640px; }
     }
@@ -359,7 +360,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
        shrink instead of overflowing the BOM row at any width below desktop.
        Same for alert rows: gap + min-width:0 so a long item/lot name truncates
        instead of colliding with the right-aligned mono value. */
-    @media (max-width: 1279px) {
+    @include dt.tablet-tier {
       :host .bom-line__item { min-width: 0; }
       :host .alert-row { gap: 12px; }
       :host .alert-row__name { min-width: 0; overflow-wrap: anywhere; }

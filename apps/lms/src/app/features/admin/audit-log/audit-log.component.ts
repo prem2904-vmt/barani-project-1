@@ -39,6 +39,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
   imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* Phone (<=640): the log-row header packs 5 children in one non-wrapping
        flex row; let it wrap and reflow the meta (user/time) so it never forces
        horizontal overflow. Desktop layout (>=641) is untouched. */
@@ -103,7 +104,7 @@ const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from:
        Tailwind's lg:grid-cols-5 packs all 5 filters into one row, which leaves
        the date inputs cramped next to the rail. Cap at 3 columns so the filter
        fields reflow with comfortable widths; desktop (>=1280) keeps 5-up. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       :host .audit-filter-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }

@@ -408,6 +408,7 @@ interface KpiCard {
   `,
   styles: [
     `
+    @use '../../shared/styles/device-tier' as dt;
       /* Use the full screen width on web — the KPI / config / manage grids all
        auto-fit, so they spread into the freed space instead of sitting in a
        narrow centred column. A high cap (2200px) just stops absurd stretch on
@@ -929,7 +930,7 @@ interface KpiCard {
       }
 
       /* ---- Web-below-desktop band (641-1279, incl. iPad + narrow browsers) ---- */
-      @media (min-width: 641px) and (max-width: 1279px) {
+      @include dt.tablet-band {
         .pf-ov__stats {
           grid-template-columns: repeat(3, 1fr);
         }

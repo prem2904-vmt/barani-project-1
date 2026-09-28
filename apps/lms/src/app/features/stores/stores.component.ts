@@ -226,6 +226,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
     }
   `,
   styles: [`
+    @use '../../shared/styles/device-tier' as dt;
     /* WORK page: fill the shell's main area and scroll inside the content
        panel, not the page. :host fills the flex:1 shell-main; .wrap is a
        flex column whose header + tabs are fixed and whose .content scrolls. */
@@ -429,7 +430,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
     /* iPad band (641–1279px): the layout already uses available width well
        (KPIs 5-up ≥720, alerts 2-up ≥768, form4 4-up ≥768). Just make sure
        the wide stock table never forces page-level horizontal scroll. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .wrap .tablecard { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
 

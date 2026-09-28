@@ -161,6 +161,7 @@ const EMPTY: LabDraft = {
     </section>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     .pf-section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted); }
     .pf-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 4px; }
     .pf-input { width: 100%; padding: 8px 12px; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); border-radius: 10px; font-size: 13px; outline: none; }
@@ -206,7 +207,7 @@ const EMPTY: LabDraft = {
        needed here. Only safeguard against a long, unbreakable lab name overflowing
        its flex column in the card header (which would otherwise push card width and
        force horizontal scroll against the rail). */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-rl__name { overflow-wrap: anywhere; word-break: break-word; }
       .pf-rl__code { flex-shrink: 0; }
     }

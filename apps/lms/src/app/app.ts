@@ -4,6 +4,7 @@ import { ThemeService } from './core/services/theme.service';
 import { CapacitorService } from './core/services/capacitor.service';
 import { PushService } from './core/services/push.service';
 import { PlatformService } from './core/services/platform.service';
+import { DeviceClassService } from './core/services/device-class.service';
 import { VersionService } from './core/services/version.service';
 import { LockService } from './core/auth/lock.service';
 import { CallRingService } from './core/services/call-ring.service';
@@ -142,6 +143,9 @@ export class App implements OnInit {
   private readonly _capacitor = inject(CapacitorService);
   private readonly _push = inject(PushService);
   private readonly _platform = inject(PlatformService);
+  /** html.device-touch / -tablet / -phone / -desktop: index.html sets it
+   *  before the first paint; this keeps it current (mouse attached, etc.). */
+  private readonly _device = inject(DeviceClassService);
   protected readonly version = inject(VersionService);
   private readonly _lock = inject(LockService);
   /** Root owner of call ringtones — alive on every screen (incl. /login),

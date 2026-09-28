@@ -182,6 +182,7 @@ interface Category {
     </section>
   `,
   styles: [`
+    @use '../../shared/styles/device-tier' as dt;
     /* Page wrapper: claim the full viewport so the rail + pane fill
        the space and there's no big empty band at the bottom. The KPI
        strip + header stay above and the layout flexes to fill what's
@@ -386,7 +387,7 @@ interface Category {
        crams the lone pane into the 200px track and wastes the rest of the width.
        Use one full-width column and let the tiles go 2-up. Bounded so it can
        never touch desktop (>=1280) or phone (<=640). */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-admin-layout {
         grid-template-columns: minmax(0, 1fr);
         gap: 14px;

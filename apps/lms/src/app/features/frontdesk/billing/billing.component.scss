@@ -1,3 +1,4 @@
+@use '../../../shared/styles/device-tier' as dt;
 /* Admin flag in the header: "Frontdesk collects" toggles whether the
  * Order tab routes here automatically after save. */
 .pf-collect-toggle {
@@ -124,7 +125,7 @@
     grid-template-columns: 1fr 1fr;
   }
 }
-@media (min-width: 1280px) {
+@include dt.desktop-only {
   .pf-bill-grid {
     grid-template-columns: 1.1fr 0.9fr;
   }
@@ -606,7 +607,7 @@
   }
 }
 
-@media (min-width: 641px) and (max-width: 1279px) {
+@include dt.tablet-band {
   .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
     margin-bottom: env(safe-area-inset-bottom);
   }
