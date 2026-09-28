@@ -148,7 +148,7 @@ export class KeyboardService {
 
     // Route change: the page that owned the focused field may be gone.
     // Deferred a tick so the old view has been torn down first.
-    const sub = this.router?.events.subscribe(ev => {
+    const sub = this.router?.events?.subscribe(ev => {
       if (ev instanceof NavigationEnd) this.zone.runOutsideAngular(() => setTimeout(() => this.resync(), 0));
     });
     if (sub) this.cleanups.push(() => sub.unsubscribe());

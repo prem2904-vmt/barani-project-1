@@ -194,7 +194,7 @@ export class NumpadService {
     // at once. Deferred a tick so the old view has been torn down.
     const onVisible = () => { if (this.doc.visibilityState !== 'hidden') this.healStale(); };
     this.doc.addEventListener('visibilitychange', onVisible);
-    const navSub = inject(Router, { optional: true })?.events.subscribe(ev => {
+    const navSub = inject(Router, { optional: true })?.events?.subscribe(ev => {
       if (ev instanceof NavigationEnd) setTimeout(() => this.healStale(), 0);
     });
     inject(DestroyRef).onDestroy(() => {
