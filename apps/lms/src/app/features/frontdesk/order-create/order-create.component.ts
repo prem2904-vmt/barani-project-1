@@ -1864,7 +1864,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   async confirmPayment(d: InlinePaymentResult) {
     if (this.isPaymentDueMode()) {
       const bill = this.currentBill();
-      if (!bill) return;
+      // In-flight guard: a second Confirm tap must not post a second payment.
+      if (!bill || this.confirming()) return;
       this.confirming.set(true);
       try {
         const amount = bill.balance;
