@@ -6,7 +6,10 @@ export interface Patient {
    * `patientMrnLabel(p)` to render with a fallback. */
   mrn?: string;
   /** Honorific printed before the name ("Mr.", "Mrs.", "Ms.", "Dr.",
-   *  "Master", "Baby"). Optional; server DisplayName already includes it. */
+   *  "Master", "Baby", "Baby of"). Optional; server DisplayName already
+   *  includes it. "Baby" = the baby's OWN name follows ("Baby Arjun Kumar");
+   *  "Baby of" = an unnamed newborn, the name fields hold the MOTHER's name
+   *  ("Baby of Priya Kumar"). See PATIENT_TITLES. */
   title?: string | null;
   firstName: string;
   fathersName: string;
@@ -35,6 +38,19 @@ export interface Patient {
   attributes?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+/** The honorifics, in pill order (mirrors the server WorkflowSeeder +
+ *  PatientsController.NormalizeTitle). */
+export const PATIENT_TITLES = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of'] as const;
+
+/** Unnamed newborn: the name fields hold the mother's name. */
+export const BABY_OF_TITLE = 'Baby of';
+
+/** True for the "Baby of" title (tolerates case and the B/O shorthand). */
+export function isBabyOfTitle(title: string | null | undefined): boolean {
+  const t = (title ?? '').trim().toLowerCase().replace(/\.$/, '');
+  return t === 'baby of' || t === 'baby-of' || t === 'b/o';
 }
 
 /** Composes a display name for a patient. Tolerates missing fathersName.

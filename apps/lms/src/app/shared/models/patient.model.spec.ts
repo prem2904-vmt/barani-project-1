@@ -1,4 +1,4 @@
-import { patientDisplayName, patientMrnLabel, formatPatientInfo, formatPatientMeta, Patient } from './patient.model';
+import { patientDisplayName, patientMrnLabel, formatPatientInfo, formatPatientMeta, Patient, PATIENT_TITLES, BABY_OF_TITLE, isBabyOfTitle } from './patient.model';
 
 describe('patientDisplayName', () => {
   it('prefers server displayName (which already carries the title)', () => {
@@ -221,5 +221,25 @@ describe('formatPatientMeta', () => {
       sex: 'Xyz',
       mrn: 'TEST1',
     })).toBe('50/X · TEST1');
+  });
+});
+
+describe('Baby vs Baby of titles (2026-09-28)', () => {
+  it('pill order: Mr. / Mrs. / Ms. / Dr. / Master / Baby / Baby of', () => {
+    expect([...PATIENT_TITLES]).toEqual(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of']);
+    expect(BABY_OF_TITLE).toBe('Baby of');
+  });
+
+  it('isBabyOfTitle: "Baby of" (any case), "baby-of", "B/O" — never plain "Baby"', () => {
+    for (const t of ['Baby of', 'baby of', ' BABY OF ', 'baby-of', 'B/O', 'b/o.']) expect(isBabyOfTitle(t), t).toBe(true);
+    for (const t of ['Baby', 'baby', 'Master', '', null, undefined]) expect(isBabyOfTitle(t), String(t)).toBe(false);
+  });
+
+  it('display: "Baby of Priya Kumar" (mother) and "Baby Arjun Kumar" (own name) — never "Baby Baby of"', () => {
+    expect(patientDisplayName({ title: 'Baby of', firstName: 'Priya', fathersName: 'Kumar' })).toBe('Baby of Priya Kumar');
+    expect(patientDisplayName({ title: 'Baby', firstName: 'Arjun', fathersName: 'Kumar' })).toBe('Baby Arjun Kumar');
+    expect(patientDisplayName({ title: 'Baby of', firstName: 'Priya', fathersName: 'Kumar', displayName: 'Baby of Priya Kumar' }))
+      .toBe('Baby of Priya Kumar');
+    expect(patientDisplayName({ title: 'Baby of', firstName: 'Priya', fathersName: 'Kumar' })).not.toMatch(/Baby Baby/);
   });
 });

@@ -59,12 +59,12 @@ const CONFIG = {
 const PATIENT = { id: 'p-1', displayName: 'Mr. Arun Kumar', mrn: 'AA0042', firstName: 'Arun', fathersName: 'Kumar', title: 'Mr.',
   sex: 'Male', phone: '+919876543210', dateOfBirth: '1990-05-15T00:00:00Z' };
 
-function render(opts: { nd?: boolean; patientId?: string; post?: any; returnTo?: string; web?: boolean; tenantPhone?: string } = {}) {
+function render(opts: { nd?: boolean; patientId?: string; post?: any; returnTo?: string; web?: boolean; tenantPhone?: string; config?: unknown; patient?: unknown } = {}) {
   (window as any).matchMedia = () => ({ matches: opts.web ?? false, addEventListener() {}, removeEventListener() {} });
   const api = {
     get: vi.fn((url: string) => {
-      if (url === '/api/workflows/patient_registration') return of({ configJson: JSON.stringify(CONFIG), version: 3 });
-      if (url.startsWith('/api/patients/')) return of({ patient: PATIENT, history: [] });
+      if (url === '/api/workflows/patient_registration') return of({ configJson: JSON.stringify(opts.config ?? CONFIG), version: 3 });
+      if (url.startsWith('/api/patients/')) return of({ patient: opts.patient ?? PATIENT, history: [] });
       return of([]);
     }),
     post: vi.fn(opts.post ?? (() => of({ id: 'p-new', displayName: 'Mr. Ravi Shankar', mrn: 'AA0100' }))),
@@ -482,5 +482,111 @@ describe('Patient registration — errors + behaviour kept', () => {
     const { el } = render({ nd: false });
     expect(el.querySelector('pf-hero-band')).toBeNull();
     expect(el.querySelector('pf-screen-header')).not.toBeNull();
+  });
+});
+
+/** The shipped form after the 2026-09-28 repair: "Baby of" after "Baby",
+ *  guardian shown for Title = Baby / Baby of OR age < 18. */
+const BABY_CONFIG = (() => {
+  const c = JSON.parse(JSON.stringify(CONFIG));
+  const basic = c.steps[0].fields;
+  basic[0].options = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of'].map(v => ({ value: v, label: v }));
+  const rules = [{ field: 'age', operator: 'lessThan', value: 18 }, { field: 'title', operator: 'equals', value: 'Baby' },
+                 { field: 'title', operator: 'equals', value: 'Baby of' }];
+  basic.push(
+    { id: 'g1', name: 'guardian_name', title: 'Guardian name', type: 'text', isStandard: true, isRequired: false, isEditable: true,
+      storageKey: 'guardian_name', width: 'half', showWhen: rules, showWhenLogic: 'OR' },
+    { id: 'g2', name: 'guardian_phone', title: 'Guardian phone', type: 'phone', isStandard: true, isRequired: false, isEditable: true,
+      storageKey: 'guardian_phone', width: 'half', showWhen: rules, showWhenLogic: 'OR' });
+  return c;
+})();
+
+describe('Patient registration — Baby vs Baby of (2026-09-28)', () => {
+  const label = (el: HTMLElement, f: string) =>
+    (el.querySelector(`[data-field="${f}"] .nd-field__lbl`)?.textContent ?? '').replace(/\s+/g, ' ').replace('required', '').trim();
+  const pills = (el: HTMLElement) =>
+    Array.from(el.querySelectorAll('[data-field="title"] .nd-seg__item')).map(b => b.textContent!.trim());
+  const checked = (el: HTMLElement, f: string) =>
+    el.querySelector(`[data-field="${f}"] [role="radio"][aria-checked="true"]`)?.textContent?.trim();
+  const post = (r: ReturnType<typeof render>) => (r.api.post.mock.calls[0] as unknown as [string, Record<string, unknown>])[1];
+
+  it('title pills in order: Mr. / Mrs. / Ms. / Dr. / Master / Baby / Baby of', () => {
+    const { el } = render({ config: BABY_CONFIG });
+    expect(pills(el)).toEqual(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of']);
+  });
+
+  it('a form still offering only "Baby" gets "Baby of" right after it (no duplicate when present)', () => {
+    expect(pills(render().el)).toEqual(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of']);
+    TestBed.resetTestingModule();
+    expect(pills(render({ config: BABY_CONFIG }).el).filter(p => p === 'Baby of').length).toBe(1);
+  });
+
+  it('a customised list without "Baby" is left exactly as the admin set it', () => {
+    const c = JSON.parse(JSON.stringify(CONFIG));
+    c.steps[0].fields[0].options = ['Mr.', 'Ms.', 'Kid'].map(v => ({ value: v, label: v }));
+    expect(pills(render({ config: c }).el)).toEqual(['Mr.', 'Ms.', 'Kid']);
+  });
+
+  it('"Baby of": mother\'s name labels, subject "Baby of Priya Kumar", guardian asked once (mirrored), no auto-sex', async () => {
+    const r = render({ config: BABY_CONFIG });
+    r.seg('title', 'Baby of');
+    expect(label(r.el, 'first_name')).toBe("Mother's first name");
+    expect(label(r.el, 'fathers_name')).toBe("Mother's last name");
+    expect(r.el.querySelector('[data-field="guardian_name"]')).toBeNull();
+    expect(r.el.querySelector('[data-field="guardian_phone"]')).toBeNull();
+    expect(checked(r.el, 'sex')).toBeUndefined();          // the BABY's sex — never derived
+    r.type('first_name', 'Priya');
+    r.type('fathers_name', 'Kumar');
+    expect(r.txt(r.el.querySelector('.pf-reg-ctx__nametext'))).toBe('Baby of Priya Kumar');
+    r.seg('sex', 'Female');
+    r.type('phone', '9876543210');
+    (r.el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
+    await r.flush();
+    expect(post(r)).toMatchObject({ title: 'Baby of', firstName: 'Priya', fathersName: 'Kumar', guardianName: 'Priya Kumar', sex: 'Female' });
+    expect(r.txt(r.el.querySelector('.pf-reg-ctx__nametext'))).not.toMatch(/Baby Baby/);
+  });
+
+  it('"Baby": own-name entry — plain labels, subject "Baby Arjun Kumar", guardian visible, no mirroring, no auto-sex', async () => {
+    const r = render({ config: BABY_CONFIG });
+    r.seg('title', 'Baby');
+    expect(label(r.el, 'first_name')).toBe('First name');
+    expect(label(r.el, 'fathers_name')).toBe('Last name');
+    expect(r.el.querySelector('[data-field="guardian_name"]')).not.toBeNull();
+    expect(checked(r.el, 'sex')).toBeUndefined();
+    r.type('first_name', 'Arjun');
+    r.type('fathers_name', 'Kumar');
+    expect(r.txt(r.el.querySelector('.pf-reg-ctx__nametext'))).toBe('Baby Arjun Kumar');
+    r.seg('sex', 'Male');
+    r.type('phone', '9876543210');
+    (r.el.querySelector('.pf-reg-primary') as HTMLButtonElement).click();
+    await r.flush();
+    const body = post(r);
+    expect(body).toMatchObject({ title: 'Baby', firstName: 'Arjun', fathersName: 'Kumar', sex: 'Male' });
+    expect(body['guardianName']).toBeUndefined();
+  });
+
+  it('title pills: one row on desktop (tight pills), 44px tap targets on touch, rows of 4 in a narrow card', () => {
+    const css = PATIENT_REGISTER_ND_STYLES.replace(/\s+/g, ' ');
+    expect(css).toMatch(/\[data-field="title"\] \.pf-di-seg \.nd-seg__item \{ min-width: 44px; padding: 0 10px; white-space: nowrap; \}/);
+    expect(css).toMatch(/@media \(pointer: coarse\) \{ \.pf-reg-form ::ng-deep \[data-field="title"\] \.pf-di-seg \.nd-seg__item \{ min-height: 44px; \}/);
+    expect(css).toMatch(/\[data-field="title"\] \{ container-type: inline-size; \}/);
+    expect(css).toMatch(/@container \(max-width: 460px\) \{ \.pf-reg-form ::ng-deep \[data-field="title"\] \.pf-di-seg:not\(\.pf-di-seg--fill\) \{ display: grid; grid-template-columns: repeat\(4, 1fr\)/);
+  });
+
+  it('switching Baby of → Mr. restores the plain labels and the Mr. → Male default', () => {
+    const r = render({ config: BABY_CONFIG });
+    r.seg('title', 'Baby of');
+    r.seg('title', 'Mr.');
+    expect(label(r.el, 'first_name')).toBe('First name');
+    expect(checked(r.el, 'sex')).toBe('Male');
+  });
+
+  it('edit mode: a "Baby of" patient loads with its pill on and the mother\'s-name labels', async () => {
+    const r = render({ config: BABY_CONFIG, patientId: 'p-9',
+      patient: { id: 'p-9', displayName: 'Baby of Priya Kumar', firstName: 'Priya', fathersName: 'Kumar', title: 'Baby of', sex: 'Female' } });
+    await r.flush();
+    expect(checked(r.el, 'title')).toBe('Baby of');
+    expect(label(r.el, 'first_name')).toBe("Mother's first name");
+    expect(r.txt(r.el.querySelector('.pf-reg-ctx__nametext'))).toBe('Baby of Priya Kumar');
   });
 });

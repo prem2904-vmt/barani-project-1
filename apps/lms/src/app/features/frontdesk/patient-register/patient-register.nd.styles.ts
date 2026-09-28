@@ -37,6 +37,20 @@ export const PATIENT_REGISTER_ND_STYLES = `
     .pf-reg-form ::ng-deep .pf-wr-cards > [data-step$="__contact"] { grid-column: 2; grid-row: 1; }
   }
 
+  /* Title pills (7 since "Baby of", 2026-09-28): tighter pills so the whole
+     set stays ONE row in the 3-column desktop card; 44px tap targets on
+     touch (iPad / phones). */
+  .pf-reg-form ::ng-deep [data-field="title"] .pf-di-seg .nd-seg__item { min-width: 44px; padding: 0 10px; white-space: nowrap; }
+  @media (pointer: coarse) {
+    .pf-reg-form ::ng-deep [data-field="title"] .pf-di-seg .nd-seg__item { min-height: 44px; }
+  }
+  /* A card too narrow for one row (iPad portrait, phones): balanced rows of
+     four (4 + 3) instead of a lone "Baby of" on row two. */
+  .pf-reg-form ::ng-deep [data-field="title"] { container-type: inline-size; }
+  @container (max-width: 460px) {
+    .pf-reg-form ::ng-deep [data-field="title"] .pf-di-seg:not(.pf-di-seg--fill) { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }
+  }
+
   /* Phones: one column that scrolls naturally under the pinned band;
      Cancel goes (the back chevron is the same move); the save state keeps
      only its mark; the band's actions are 44px icons (pf-hero-band). */

@@ -9,7 +9,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { Patient, patientDisplayName, patientMrnLabel, formatPatientInfo } from '../../models/patient.model';
+import { PATIENT_TITLES, Patient, isBabyOfTitle, patientDisplayName, patientMrnLabel, formatPatientInfo } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 import { AbhaWizardComponent } from '../abha-wizard/abha-wizard.component';
@@ -117,12 +117,12 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                                  (valueChange)="setDraftField('title', $event)"></pf-select>
                     </label>
                     <label>
-                      <span>First name</span>
+                      <span>{{ draftIsBabyOf() ? "Mother's first name" : 'First name' }}</span>
                       <input class="pf-pp-input" [value]="draft().firstName"
                              (input)="setDraftField('firstName', $any($event.target).value)" />
                     </label>
                     <label>
-                      <span>Last name</span>
+                      <span>{{ draftIsBabyOf() ? "Mother's last name" : 'Last name' }}</span>
                       <input class="pf-pp-input" [value]="draft().fathersName"
                              (input)="setDraftField('fathersName', $any($event.target).value)" />
                     </label>
@@ -964,15 +964,11 @@ export class PatientProfileModalComponent {
   private readonly toasts = inject(ToastService);
 
   protected readonly sexOptions = SEX_OPTIONS;
-  /** Honorifics — matches the registration form + server normalizer. */
+  /** Honorifics — matches the registration form + server normalizer.
+   *  "Baby" = own name; "Baby of" = unnamed newborn (names = the mother's). */
   protected readonly titleOptions = [
     { value: '', label: '—' },
-    { value: 'Mr.', label: 'Mr.' },
-    { value: 'Mrs.', label: 'Mrs.' },
-    { value: 'Ms.', label: 'Ms.' },
-    { value: 'Dr.', label: 'Dr.' },
-    { value: 'Master', label: 'Master' },
-    { value: 'Baby', label: 'Baby' },
+    ...PATIENT_TITLES.map(t => ({ value: t as string, label: t as string })),
   ];
 
   // Lifecycle: when activeId flips, fetch the profile.
@@ -1009,6 +1005,8 @@ export class PatientProfileModalComponent {
   readonly saving = this._saving.asReadonly();
   readonly editMode = this._editMode.asReadonly();
   readonly draft = this._draft.asReadonly();
+  /** "Baby of" in the edit draft → the name boxes hold the mother's name. */
+  protected readonly draftIsBabyOf = computed(() => isBabyOfTitle(this._draft().title));
   readonly pageLimit = this._pageLimit.asReadonly();
 
   readonly mobilePromptOpen = this._mobilePromptOpen.asReadonly();
