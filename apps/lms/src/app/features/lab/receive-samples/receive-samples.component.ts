@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { DestroyRef, ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, output, signal } from '@angular/core';
@@ -34,6 +35,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   standalone: true,
   imports: [
     PfKeysDirective,
+    SamplePresetDirective,
     FormsModule,
     DatePipe,
     AvatarComponent,
@@ -113,7 +115,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           <div class="flex gap-2 pf-rs-scanrow">
             <div class="scan-field">
               <pf-scan-icon class="scan-icon" [size]="18" />
-              <input type="text" pfKeys="sample" pfKeysEnter="Receive" pfKeysEnterAria="Receive this sample"
+              <input type="text" pfKeys="sample" pfSamplePreset pfKeysEnter="Receive" pfKeysEnterAria="Receive this sample"
                      aria-label="Sample barcode"
                      placeholder="HAEM260800001"
                      [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"

@@ -19,6 +19,8 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ReportTemplate } from '../../../shared/models/report.model';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/services/whatsapp.service';
+import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
+import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
 
 /** Band pill tabs — the 13 section cards grouped by what they govern. */
 export type LabSettingsTab = 'collection' | 'queues' | 'rules' | 'report';
@@ -121,6 +123,32 @@ interface AutoAssignConfig {
               </span>
             </button>
           }
+        </div>
+        <!-- Sample-search preset (a lab user's suggestion): the lab search
+             boxes open pre-typed with the current ID head. -->
+        <div class="pf-ls__preset">
+          <div class="pf-ls__preset-text">
+            <span class="pf-ls__preset-t">Pre-fill sample search</span>
+            <span class="pf-ls__hint">
+              @if (presetExample(); as ex) {
+                Collect, Receive and My Work open their sample search with
+                <strong class="pf-ls__mono">{{ ex.now }}</strong> already typed — enter only the number.
+                @if (ex.next !== ex.now) { It becomes <strong class="pf-ls__mono">{{ ex.next }}</strong> next month on its own. }
+                Backspace clears it.
+              } @else {
+                Sample search boxes open with the current sample-ID start already typed — enter only the number.
+              }
+            </span>
+            @if (samplePresetSetting() !== null) {
+              <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="resetSamplePreset()">
+                Reset — {{ samplePresetDefault() ? 'on' : 'off' }} by default for this ID format
+              </button>
+            }
+          </div>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="samplePresetOn()"
+                  aria-label="Pre-fill sample search" (click)="setSamplePreset(!samplePresetOn())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
         </div>
       </div>
       </section>
@@ -636,6 +664,10 @@ interface AutoAssignConfig {
     @media (max-width: 640px) {
       .pf-ls__savestate-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     }
+    .pf-ls__preset { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
+    .pf-ls__preset-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .pf-ls__preset-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .pf-ls__mono { font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--text-primary); }
     .pf-ls__link  { background: none; border: none; padding: 0; font-size: 12.5px; color: var(--color-violet-400, #a78bfa); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
     .pf-ls__link:hover { color: var(--color-violet-300, #c4b5fd); }
     .pf-ls__empty { margin: 12px 0 0; font-size: 13px; color: var(--text-tertiary); font-style: italic; }
@@ -1048,6 +1080,7 @@ export class LabSettingsComponent implements OnInit {
       error: () => this.reportTpl.set(null),
     });
     this.tenantState.ensureLoaded();
+    this.samplePresets.reload();
     this.labCfg.ensureLoaded();
     this.entitlements.ensureLoaded();
     this.api.get<any>('/api/tenants/branch-lab-config').subscribe({
@@ -1195,6 +1228,36 @@ export class LabSettingsComponent implements OnInit {
 
   setAllowNoScan(v: boolean) {
     this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).subscribe({
+      next: t => this.tenantState.update(t),
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  // ── Sample-search preset (tenant-wide) ─────────────────────────────
+  private readonly samplePresets = inject(SampleSearchPresetService);
+  /** The lab's explicit choice; null = automatic (follows the ID format). */
+  readonly samplePresetSetting = computed<boolean | null>(() => this.tenantState.tenant()?.sampleSearchPreset ?? null);
+  readonly samplePresetDefault = computed(() => this.samplePresets.config()?.defaultEnabled ?? true);
+  readonly samplePresetOn = computed(() => this.samplePresetSetting() ?? this.samplePresetDefault());
+  /** "2609" now and "2610" next month, from the lab's real format. */
+  readonly presetExample = computed<{ now: string; next: string } | null>(() => {
+    const c = this.samplePresets.config();
+    if (!c) return null;
+    const d = labDate(new Date(), c.timeZone);
+    const n = nextLabMonth(d);
+    const a = sampleIdHead(c.prefix, c.datePrefix, c.separator, d);
+    return a ? { now: a, next: sampleIdHead(c.prefix, c.datePrefix, c.separator, n) } : null;
+  });
+
+  setSamplePreset(v: boolean) {
+    this.api.patch<Tenant>('/api/tenants/current', { sampleSearchPreset: v }).subscribe({
+      next: t => { this.tenantState.update(t); this.toasts.success(v ? 'Sample search pre-fills the current ID start' : 'Sample search starts empty'); },
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  resetSamplePreset() {
+    this.api.patch<Tenant>('/api/tenants/current', { resetSampleSearchPreset: true }).subscribe({
       next: t => this.tenantState.update(t),
       error: e => this.toasts.error(ApiError.from(e).message)
     });
