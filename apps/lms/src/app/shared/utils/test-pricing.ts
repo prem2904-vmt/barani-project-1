@@ -24,6 +24,8 @@ export interface PricedTestLike {
   taxSlab?: number | string | null;
   priceIsDefault?: boolean | null;
   isOffered?: boolean | null;
+  isActive?: boolean | null;
+  isEnabled?: boolean | null;
 }
 
 /** One row of the bulk price write. Absent fields are left unchanged by the
@@ -69,6 +71,22 @@ export function effectivePrice(t: PricedTestLike | null | undefined): number {
 /** Orderable here? Only an explicit `isOffered: false` hides a test. */
 export function isOffered(t: PricedTestLike | null | undefined): boolean {
   return !!t && t.isOffered !== false;
+}
+
+/**
+ * The Test Master Active/Inactive switch — the ONE reading of it.
+ *
+ * A switched-off test is stored differently per catalogue mode: clone mode
+ * sets the lab's own row `isActive: false`; reference mode marks the master
+ * test "not offered" on the pricing table and leaves `isActive` true. The
+ * server sends the combined `isEnabled` (isActive AND isOffered); older
+ * payloads fall back to the same rule. Reading only `isActive` showed a
+ * switched-off reference test as ON and kept it out of the Inactive filter.
+ */
+export function isTestEnabled(t: PricedTestLike | null | undefined): boolean {
+  if (!t) return false;
+  if (typeof t.isEnabled === 'boolean') return t.isEnabled;
+  return t.isActive !== false && t.isOffered !== false;
 }
 
 /** The test's GST slab in percent (0 when unset or garbage). */

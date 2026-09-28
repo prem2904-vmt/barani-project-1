@@ -28,6 +28,10 @@ export interface Test {
   /** False = not offered at this tenant/branch: hidden from ordering
    *  (ordering it anyway → 409 `not_offered`). Absent = offered. */
   isOffered?: boolean;
+  /** The Test Master Active/Inactive switch: isActive AND isOffered (see
+   *  `isTestEnabled`). False = switched off — still listed in Test Master,
+   *  gone from ordering and the lab. */
+  isEnabled?: boolean;
   parameters?: string;
   conditions?: string;
   sampleType?: string;

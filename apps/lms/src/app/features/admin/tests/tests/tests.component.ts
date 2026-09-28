@@ -15,7 +15,6 @@ import {
   ModuleRegistry,
   CellValueChangedEvent,
   RowClassParams,
-  RowStyle,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../../core/services/api.service';
@@ -33,8 +32,8 @@ import { OptionGroupsPanelComponent } from './option-groups-panel.component';
 import { MicroMastersPanelComponent } from './micro-masters-panel.component';
 import { PricingComponent } from '../../pricing/pricing.component';
 import { TestPricingService } from '../../../../core/services/test-pricing.service';
-import { notOfferedElement } from '../../../../shared/primitives/price-flag.component';
-import { isOffered } from '../../../../shared/utils/test-pricing';
+import { inactiveElement } from '../../../../shared/primitives/price-flag.component';
+import { isTestEnabled } from '../../../../shared/utils/test-pricing';
 import { originBadgeElement } from '../../../../shared/primitives/origin-badge.component';
 import {
   canRevertToMaster, originLabel, restoreDefaultsMessage, restoreDefaultsSummary, revertToMasterPath,
@@ -129,6 +128,8 @@ export function actionsWidth(web: boolean, revert: boolean): { width: number; mi
 
 /** Views the band pill's switch can select. */
 type TmView = TestType | 'og' | 'micro' | 'pricing';
+/** Test Master status filter (the Active/Inactive switch). */
+type TmStatus = 'all' | 'active' | 'inactive';
 
 @Component({
   selector: 'pf-tests',
@@ -327,20 +328,41 @@ export class TestsComponent implements OnInit {
     revert: (row: TestRow) => this.revertToMaster(row),
   };
 
-  /** Toggle a test row's active/inactive state immediately via API patch. */
+  /** The Active/Inactive switch, saved immediately. It reads and sets the ONE
+   *  switch state (`isTestEnabled`: isActive AND offered here) — reference mode
+   *  stores "off" as not-offered and keeps isActive true, so flipping only
+   *  isActive made the row vanish from the default view and come back as ON.
+   *  The row never leaves the list: an inactive test stays listed (greyed,
+   *  still editable) and the status filter finds it. The server's row replaces
+   *  the optimistic one. */
   toggleTestActive(row: TestRow) {
     if (!row.id) return;
     const id = row.id;
-    const next = !row.isActive;
+    const prev = this._tests().find(t => t.id === id);
+    const next = !isTestEnabled(row);
     const testName = row.name || 'Test';
+    const flip = (on: boolean) => (t: Test): Test => ({
+      ...t, isEnabled: on,
+      // Clone mode: the row itself; reference mode: the pricing flag.
+      isActive: on ? true : t.catalogMode === 'reference' ? t.isActive : false,
+      isOffered: on ? true : t.catalogMode === 'reference' ? false : t.isOffered,
+    });
 
-    this._tests.update(list => list.map(t => (t.id === id ? { ...t, isActive: next } : t)));
+    this._tests.update(list => list.map(t => (t.id === id ? flip(next)(t) : t)));
     this.api.patch<Test>(`/api/tests/${id}`, { isActive: next }).subscribe({
-      next: () => {
-        this.toasts.success(next ? `'${testName}' activated` : `'${testName}' deactivated`);
+      next: saved => {
+        // Keep the row under its listed id (a reference-mode edit may answer
+        // with the effective row); take the server's switch state.
+        if (saved && typeof saved === 'object') {
+          this._tests.update(list => list.map(t => (t.id === id
+            ? { ...t, isActive: saved.isActive ?? t.isActive, isOffered: saved.isOffered ?? t.isOffered,
+                isEnabled: isTestEnabled(saved) }
+            : t)));
+        }
+        this.toasts.success(next ? `'${testName}' is active again` : `'${testName}' is inactive — find it under Inactive`);
       },
       error: e => {
-        this._tests.update(list => list.map(t => (t.id === id ? { ...t, isActive: !next } : t)));
+        if (prev) this._tests.update(list => list.map(t => (t.id === id ? prev : t)));
         this.toasts.error(ApiError.from(e).message);
       },
     });
@@ -349,20 +371,34 @@ export class TestsComponent implements OnInit {
   /** Stable row identity keeps expansion state + row animation coherent. */
   readonly getRowId = (p: GetRowIdParams<TestRow>) => p.data._key ?? p.data.id;
 
-  /** A test this tenant/branch doesn't offer stays listed, greyed out. */
-  protected getRowStyle = (p: RowClassParams<TestRow>): RowStyle | undefined =>
-    p.data && !isOffered(p.data) ? { opacity: '0.55' } : undefined;
+  /** An inactive test stays listed, its data greyed — the switch and Edit
+   *  stay at full strength so it can be turned back on (scss: .pf-tm-row--off). */
+  protected getRowClass = (p: RowClassParams<TestRow>): string | undefined =>
+    p.data && p.data.id && !isTestEnabled(p.data) ? 'pf-tm-row--off' : undefined;
 
   private gridApi?: GridApi<TestRow>;
 
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
 
-  readonly showInactive = signal(false);
-  readonly inactiveCount = computed(() =>
-    this._tests().filter(t => t.type === this._type() && !t.isActive).length);
+  /** Status filter (card header): All (default — inactive tests listed,
+   *  greyed, so nothing ever disappears) · Active · Inactive. */
+  readonly statusFilter = signal<TmStatus>('all');
+  private readonly ofType = computed(() => this._tests().filter(t => t.type === this._type()));
+  readonly inactiveCount = computed(() => this.ofType().filter(t => !isTestEnabled(t)).length);
+  readonly statusOptions = computed<SegmentedOption<TmStatus>[]>(() => {
+    const all = this.ofType().length;
+    const off = this.inactiveCount();
+    return [
+      { value: 'all', label: 'All', count: all, iconPath: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'] },
+      { value: 'active', label: 'Active', count: all - off, iconPath: ['M20 6 9 17l-5-5'] },
+      { value: 'inactive', label: 'Inactive', count: off, iconPath: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M5.6 5.6l12.8 12.8'] },
+    ];
+  });
 
-  readonly typeTests = computed(() => this._tests().filter(t =>
-    t.type === this._type() && (this.showInactive() || t.isActive)));
+  readonly typeTests = computed(() => {
+    const st = this.statusFilter();
+    return this.ofType().filter(t => st === 'all' || (st === 'active') === isTestEnabled(t));
+  });
 
   readonly search = signal('');
   private matchesSearch(t: Test, q: string): boolean {
@@ -663,7 +699,7 @@ export class TestsComponent implements OnInit {
       headerName: 'Status', colId: 'status', field: 'isActive',
       minWidth: 95, maxWidth: 110, editable: false, sortable: true, filter: false,
       cellRenderer: this.statusSwitchRenderer,
-      valueGetter: p => (p.data?.isActive ? 'Active' : 'Inactive'),
+      valueGetter: p => (p.data && isTestEnabled(p.data) ? 'Active' : 'Inactive'),
     };
   }
 
@@ -673,7 +709,7 @@ export class TestsComponent implements OnInit {
     wrap.style.cssText = 'display:flex;align-items:center;height:100%;';
     if (!data || !data.id) return wrap;
 
-    const isActive = data.isActive ?? true;
+    const isActive = isTestEnabled(data);
 
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -729,7 +765,7 @@ export class TestsComponent implements OnInit {
     name.className = 'pf-tm-clamp2';
     name.textContent = params.value ?? params.data?.name ?? '';
     wrap.appendChild(name);
-    if (params.data && !isOffered(params.data)) wrap.appendChild(notOfferedElement());
+    if (params.data && !isTestEnabled(params.data)) wrap.appendChild(inactiveElement());
     return wrap;
   };
 
@@ -836,7 +872,7 @@ export class TestsComponent implements OnInit {
     label.className = 'pf-tm-tree-name' + (data?._hasChildren ? ' pf-tm-tree-name--bundle' : '');
     label.textContent = data?.name ?? '';
     wrap.appendChild(label);
-    if (data && !isOffered(data)) wrap.appendChild(notOfferedElement());
+    if (data && data.id && !isTestEnabled(data)) wrap.appendChild(inactiveElement());
     return wrap;
   };
 
@@ -939,7 +975,8 @@ export class TestsComponent implements OnInit {
   }
 
   private loadTests() {
-    this.api.get<Test[]>('/api/tests/').subscribe({
+    // status=all: every test, switched-off ones included (flagged isEnabled).
+    this.api.get<Test[]>('/api/tests/?status=all').subscribe({
       next: l => this._tests.set(l ?? []),
       error: e => this.toasts.error(ApiError.from(e).message),
     });

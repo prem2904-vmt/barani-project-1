@@ -21,21 +21,6 @@
         }
         <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions" [value]="view()"
                       (valueChange)="setView($event)"></pf-segmented>
-        @if (gridView() && (inactiveCount() > 0 || showInactive())) {
-          <button type="button" class="nd-chip pf-tm-inactive-chip press"
-                  [attr.aria-pressed]="showInactive()" (click)="showInactive.set(!showInactive())"
-                  title="Show inactive tests">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              @if (showInactive()) {
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
-              } @else {
-                <path d="M17.9 17.9A10.4 10.4 0 0 1 12 19c-6.5 0-10-7-10-7a18.4 18.4 0 0 1 5.1-5.9M9.9 5.2A9.1 9.1 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.2 3.2M14.1 14.2a3 3 0 1 1-4.2-4.2M2 2l20 20"/>
-              }
-            </svg>
-            Inactive ({{ inactiveCount() }})
-          </button>
-        }
       </ng-container>
       <ng-container band-actions>
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="restoring()"
@@ -162,13 +147,6 @@
             (click)="openPricingView()">
       Pricing
     </button>
-    @if (inactiveCount() > 0 || showInactive()) {
-      <label class="pf-tm-inactive-toggle">
-        <input type="checkbox" [checked]="showInactive()"
-               (change)="showInactive.set(!showInactive())" />
-        Show inactive ({{ inactiveCount() }})
-      </label>
-    }
   </div>
 
   <!-- Everything under the band: the grid view FILLS the body (the grid
@@ -243,6 +221,11 @@
         <span class="nd-card__label">{{ type() === 'package' ? 'Packages' : type() === 'profile' ? 'Profiles' : 'Tests' }}</span>
         <span class="nd-card__note pf-tm-hint">Double-click a cell to edit · Save changes to persist</span>
         <span class="pf-tm-count nd-num">{{ rowData().length }} {{ type() === 'package' ? 'packages' : type() === 'profile' ? 'profiles' : 'tests' }}</span>
+        <!-- Status filter: the Active/Inactive switch. All (default) keeps
+             switched-off tests listed, greyed, so nothing ever disappears. -->
+        <pf-segmented class="pf-tm-status" data-status-filter size="sm" [options]="statusOptions()"
+                      [value]="statusFilter()" (valueChange)="statusFilter.set($event)"
+                      aria-label="Filter by status"></pf-segmented>
         @if (narrow() && !theme.isNewDesign()) {
           <button type="button" class="nd-btn nd-btn--secondary pf-tm-deptbtn" (click)="openDeptSheet()"
                   aria-haspopup="dialog" [attr.aria-expanded]="deptSheetOpen()">Departments</button>
@@ -270,7 +253,7 @@
           [columnDefs]="phoneTrim(colDefs())"
           [defaultColDef]="defaultColDef"
           [getRowId]="getRowId"
-          [getRowStyle]="getRowStyle"
+          [getRowClass]="getRowClass"
           [context]="gridContext"
           [animateRows]="true"
           [stopEditingWhenCellsLoseFocus]="true"

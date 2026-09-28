@@ -1,6 +1,6 @@
 import {
   DEFAULT_TEST_PRICE, PRICE_BULK_PATH, TENANT_PRICE_SCOPE,
-  effectivePrice, isNotOfferedError, isOffered, isPriceDefault, lineGst, priceBulkBody, priceListUrl, roundPaiseHalfEven, taxSlabOf,
+  effectivePrice, isNotOfferedError, isOffered, isPriceDefault, isTestEnabled, lineGst, priceBulkBody, priceListUrl, roundPaiseHalfEven, taxSlabOf,
 } from './test-pricing';
 import { ApiError } from '../models/api-response.model';
 
@@ -72,5 +72,19 @@ describe('test-pricing (pricing single source)', () => {
     expect(isNotOfferedError({ code: 'not_offered' })).toBe(true);
     expect(isNotOfferedError(new ApiError('Conflict', 'conflict'))).toBe(false);
     expect(isNotOfferedError(null)).toBe(false);
+  });
+});
+
+describe('isTestEnabled — the Test Master Active/Inactive switch', () => {
+  it('server isEnabled wins', () => {
+    expect(isTestEnabled({ isEnabled: false, isActive: true, isOffered: true })).toBe(false);
+    expect(isTestEnabled({ isEnabled: true })).toBe(true);
+  });
+  it('fallback: isActive AND offered (reference mode stores "off" as not offered)', () => {
+    expect(isTestEnabled({ isActive: true, isOffered: false })).toBe(false);
+    expect(isTestEnabled({ isActive: false, isOffered: true })).toBe(false);
+    expect(isTestEnabled({ isActive: true })).toBe(true);
+    expect(isTestEnabled({})).toBe(true);
+    expect(isTestEnabled(null)).toBe(false);
   });
 });
