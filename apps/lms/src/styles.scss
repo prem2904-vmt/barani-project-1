@@ -279,6 +279,13 @@
   --pf-home-inset: max(calc(env(safe-area-inset-bottom) - 12px), calc(env(safe-area-inset-bottom) / 2));
   --pf-botbar-h: calc(var(--pf-navbar-h) + 1px + var(--pf-home-inset));
 }
+/* Phones (owner, iPhone 2026-09-28): the reduced inset put the icons in the
+   home-indicator zone and the screen's corner curve. On a phone the WHOLE
+   inset sits under the icons (iPhone 34); the iPad keeps the reduced split. */
+:root.device-phone { --pf-home-inset: env(safe-area-inset-bottom); }
+@media (max-width: 640px) {
+  :root:not(.device-tablet):not(.device-desktop) { --pf-home-inset: env(safe-area-inset-bottom); }
+}
 
 /* NEW design: elements that belong to the CLASSIC layout only (duplicate
    search rows, header Refresh buttons that moved into the band, ...). */

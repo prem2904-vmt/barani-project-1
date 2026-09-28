@@ -578,6 +578,20 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         backdrop-filter: blur(18px) saturate(1.3);
         -webkit-backdrop-filter: blur(18px) saturate(1.3);
       }
+      /* Phones: the home-indicator space goes UNDER the icons (not split
+         above/below), and the ends keep clear of the rounded screen corners. */
+      :host-context(html.device-phone.design-new.nav-bottom) .pf-chrome {
+        padding-top: 0;
+        padding-bottom: var(--pf-home-inset);
+        padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+      }
+      @media (max-width: 640px) {
+        :host-context(.design-new.nav-bottom) .pf-chrome {
+          padding-top: 0;
+          padding-bottom: var(--pf-home-inset);
+          padding-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right));
+        }
+      }
       /* Blur is the costliest GPU op on a phone — keep it modest there. */
       @media (max-width: 640px) {
         :host-context(.design-new.nav-bottom) .pf-chrome {
