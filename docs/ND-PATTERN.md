@@ -391,6 +391,87 @@ group's grid. **Search results stay one per row** (section 6).
   the last field's Done focuses the CTA. Desktop / hardware keyboards are
   unchanged. Never hand-roll another keypad for result entry.
 
+### PF Keys: the in-app keypad for search fields on tablets
+
+On iPad and Android tablets the system keyboard covers 40–45% of the
+screen and squeezes the results. PF Keys docks at the bottom at about 28%
+(QWERTY) or 32% (code and number pads) of a landscape tablet (about 21–23%
+in portrait). The page above it resizes; nothing overlaps.
+
+- **Where it is used:** search fields only.
+  - Test search in order create (the pill's Tests scope).
+  - Patient search: `pf-patient-search` everywhere, and the pill's Patient
+    scope.
+  - Sample / tube number lookups: My Work, Receive and Collect, both the
+    band search (`<pf-hero-band keys="sample">`) and the classic inputs.
+  - Everything else keeps the system keyboard: remarks, report text,
+    names, addresses, the pill's Doctor / Hospital scopes, and the Receive
+    sequence box. Never put it on a textarea.
+- **Which devices:** the `device-tablet` class only (`DeviceClassService`).
+  Phones and desktops are untouched: no `inputmode`, no keypad.
+- **How to use it:** `<input pfKeys="test|patient|sample">`.
+  - Optional inputs: `pfKeysEnter` / `pfKeysEnterAria` (the primary label),
+    `[pfKeysArrows]="true"` (only where the screen already moves a
+    highlight with ↑/↓), `[pfKeysPrefixes]`, and `pfKeysLayout` (a default
+    override).
+  - `[pfKeys]="null"` switches it off.
+- **Layouts:**
+  - `qwerty`: Q–P, A–L, Z–M (plus ↑ ↓ where supported). The bottom row is
+    `123`, the system-keyboard key, space, ⌫, **Add ↵**, and the hide
+    chevron. There is no mic.
+  - `code`: a DEPARTMENT PREFIX grid, a 3×4 digit grid (1–9, – 0 .), then
+    ⌫, hide, `ABC`, the system-keyboard key, and a tall **Add ↵**.
+  - `number`: 1–9 and 0, ⌫, `ABC`, and **Open ↵**.
+- **Default layouts:**
+  - Tests default to QWERTY; `123` switches to the code pad.
+  - Patient defaults to the number pad; `ABC` switches to QWERTY, whose
+    `123` goes back to the number pad.
+  - Samples default to the code pad.
+  - The last layout is remembered per user per kind in localStorage (the
+    `pf-keys-layout:<user>:<kind>` key). Every access is try/catch.
+- **Department prefixes** are the lab's own codes, never hardcoded.
+  - Order create passes its catalogue's department codes.
+  - Otherwise `/api/tenants/departments` is loaded once, lazily.
+  - For a test search, a key types the code (`HEM`).
+  - For a sample lookup, a key types the short-barcode prefix DD+YY
+    (`0226`) when the department has a 2-digit sample code. Otherwise it
+    types the letter code.
+- **The primary key** sends the field its OWN Enter. Test search adds the
+  highlighted row (the row shows a neutral "↵ Add" chip while the keys
+  are up). Patient search opens or selects the highlighted patient. The
+  band searches submit. Primary colour is used only on this key.
+- **The engine is the result numpad's, not a fork.**
+  - It uses the same `NumpadService`, also exported as `PfKeysService`.
+  - `inputmode="none"` is set on pointerdown and `readonly` is never used.
+  - Each key is replayed through the field's keydown listeners, then a
+    real `input` event fires, so ngModel and debounced searches work
+    unchanged.
+  - A real hardware key makes the keypad step aside.
+  - Hide keeps focus; tapping the field brings the keypad back.
+  - No autocorrect or suggestions: `autocomplete` / `autocorrect` /
+    `autocapitalize=off`, `spellcheck=false`.
+- **Escape hatch:** the keyboard key gives THIS field the system keyboard
+  until it blurs, for paste and unusual characters.
+- **Docking:**
+  - While open, `html.pf-keys-open` is set and `--pf-keys-h` holds the
+    keypad height.
+  - The shell's `[data-pf-keys-host]` scroller is padded by that height
+    with `!important`, so fixed-height pages end right above the keys.
+  - `KeyboardService.setInAppKeyboard(true)` treats PF Keys as a keyboard:
+    the docked navbar steps aside, so there is no double gap.
+  - Fixed bars, such as order create's cart bar, sit at
+    `bottom: calc(var(--pf-keys-h) + 8px)`, directly above the keys.
+  - Dropdowns subtract the height (listen for `pf-keys:resize`).
+- **Look and feel:**
+  - Slate keys on a tray, 10px radius, keys at least 44px tall.
+  - Light and dark tokens; the safe-area bottom inset is respected.
+  - Reduced motion is respected.
+  - Each key is a `tabindex=-1` button with an aria-label ("Letter Q",
+    "Backspace (hold to clear)", "Add selected test"), and the panel is a
+    labelled group.
+  - The panel is its own lazy chunk, loaded the first time a tablet field
+    shows it.
+
 ## 9. Motion
 
 | Token | Value | Use |

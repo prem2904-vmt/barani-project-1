@@ -91,7 +91,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         <pf-top-strip></pf-top-strip>
       </div>
 
-      <main class="shell-main relative" pfSwipeBack [class.shell-main--kbd]="kbd.visible()"
+      <main class="shell-main relative" pfSwipeBack data-pf-keys-host [class.shell-main--kbd]="kbd.visible()"
             [attr.data-bs]="branchSwitch.busy() ? branchSwitch.phase() : null"
             [attr.aria-busy]="branchSwitch.veil() ? 'true' : null">
         <!-- Auto breadcrumb — appears on every page that isn't itself

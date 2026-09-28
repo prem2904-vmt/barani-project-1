@@ -49,6 +49,7 @@ export class KeyboardService {
   private capUp = false;     // @capacitor/keyboard says the keyboard is up
   private vvUp = false;      // visualViewport gap exceeds the threshold
   private focusUp = false;   // an editable element currently holds focus
+  private inAppUp = false;  // PF Keys (the in-app search keypad) is docked
 
   /**
    * Reference "full" layout-viewport height (keyboard down) to measure the gap
@@ -162,6 +163,9 @@ export class KeyboardService {
       // the bottom bar and page layout stay as they are. Only the viewport /
       // Capacitor keyboard signals can say otherwise.
       if (input.getAttribute('inputmode') === 'none' || input.hasAttribute('data-pf-numpad')) return false;
+      // (A PF Keys search field is marked `data-pf-keys`; while it uses the
+      // keys its inputmode is "none" — caught above. Switched to the system
+      // keyboard (escape hatch) it is a normal field again and counts.)
       // Non-text input types don't raise a keyboard.
       const noKeyboard = new Set([
         'checkbox', 'radio', 'button', 'submit', 'reset',
@@ -253,7 +257,21 @@ export class KeyboardService {
     this.capUp = false;
     this.vvUp = false;
     this.focusUp = false;
+    this.inAppUp = false;
     if (typeof window !== 'undefined') this.baseInnerH = window.innerHeight;
+    this.commit();
+  }
+
+  /**
+   * PF Keys (shared/components/numpad → pfKeys) docks full-width at the
+   * bottom like a keyboard: while it is up the app treats it as one — the
+   * docked navbar steps aside and the shell drops its nav clearance (the
+   * keys publish their own height as `--pf-keys-h`). The corner result
+   * numpad never calls this: it floats above the bar.
+   */
+  setInAppKeyboard(up: boolean): void {
+    if (up === this.inAppUp) return;
+    this.inAppUp = up;
     this.commit();
   }
 
@@ -264,7 +282,7 @@ export class KeyboardService {
    * change-detection thrash on every scroll/resize tick.
    */
   private commit(): void {
-    const up = this.capUp || this.vvUp || this.focusUp;
+    const up = this.capUp || this.vvUp || this.focusUp || this.inAppUp;
     if (up === this.visible()) return;
     this.zone.run(() => this.visible.set(up));
   }
