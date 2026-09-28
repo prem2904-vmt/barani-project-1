@@ -345,24 +345,19 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   // ── Methodology: searchable picker (never a bare text box) ──────────
-  /** Sentinel option that switches the picker to a typed method. */
-  readonly METHOD_OTHER = '\u0000other';
-  /** True while the admin types a method not in the list. */
-  readonly methodTyping = signal(false);
   /** Standard methods (incl. "Calculated") + the tenant's own + the current
-   *  value, then "Type another…". Picking "Calculated" is the lab's choice —
-   *  it is never auto-filled for formula tests. */
+   *  value. A method not in the list is TYPED into the picker's search and
+   *  chosen from its "Use “…”" row (pf-select allowCreate) — the typed text
+   *  is stored as-is. Picking "Calculated" is the lab's choice — it is never
+   *  auto-filled for formula tests. */
   readonly methodologyOptions = computed<PfSelectOption<string>[]>(() => [
     { value: '', label: '— no methodology —' },
     ...methodologyChoices(this._draft().methodology,
       this._allIndividualTests().map(t => t.methodology ?? ''))
       .map(m => ({ value: m, label: m })),
-    { value: this.METHOD_OTHER, label: 'Type another method…' },
   ]);
   onMethodologyPicked(v: string | null) {
-    if (v === this.METHOD_OTHER) { this.methodTyping.set(true); return; }
-    this.methodTyping.set(false);
-    this.patch({ methodology: v ?? '' });
+    this.patch({ methodology: String(v ?? '').trim() });
   }
 
   // ── Creating a NAMED shared list from inside the test ───────────────
@@ -1771,8 +1766,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** The save body as loaded (see buildSaveBody) — what an update diffs against. */
   private _baseline: Record<string, unknown> = {};
+  /** The test-level methodology as loaded — per-value copies equal to it are
+   *  followers of the test, stripped on save (see buildSaveBody). */
+  private _loadedMethodology = '';
 
   private hydrateFrom(t: Test) {
+    this._loadedMethodology = t.methodology ?? '';
     this.origin.set(originOf(t));
     this.catalogMode.set(t.catalogMode ?? null);
     this._savedPrice.set({ price: effectivePrice(t), taxSlab: Number(t.taxSlab) || 0, isDefault: isPriceDefault(t) });
@@ -2048,7 +2047,10 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       : (d.parametersJson
           ? tidyParametersJson(
               hasLegacyFields(d.parametersJson) ? writeParameters(d.parametersJson, this._fields()) : d.parametersJson,
-              d.methodology) ?? undefined
+              // Copies equal to the methodology AS LOADED were following the
+              // test too: changing the test's methodology must carry them
+              // along, never leave them behind as per-value overrides.
+              d.methodology, this._loadedMethodology) ?? undefined
           : undefined);
 
     const outsourced = d.type !== 'package' && !!d.outsourcedVendorId;

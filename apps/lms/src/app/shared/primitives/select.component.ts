@@ -10,6 +10,8 @@ export interface PfSelectOption<T = string> {
   label: string;
   hint?: string;
   disabled?: boolean;
+  /** Set only on the synthetic "Use '…'" row of an `allowCreate` select. */
+  create?: boolean;
 }
 
 export interface PfSelectOptGroup<T = string> {
@@ -130,9 +132,11 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
         @if (!groups?.length) {
           @for (opt of visibleOpts(); track opt.value; let idx = $index) {
             <button type="button" class="pf-dd__option" role="option"
-                    [class.pf-dd__option--active]="isSelected(opt.value)"
+                    [class.pf-dd__option--active]="!opt.create && isSelected(opt.value)"
                     [class.pf-dd__option--focused]="idx === focusedIndex()"
-                    [attr.aria-selected]="isSelected(opt.value)"
+                    [class.pf-dd__option--create]="opt.create"
+                    [class.pf-dd__option--after]="opt.create && idx > 0"
+                    [attr.aria-selected]="!opt.create && isSelected(opt.value)"
                     [disabled]="opt.disabled ?? false"
                     (mouseenter)="focusedIndex.set(idx)"
                     (click)="pick(opt, $event)">
@@ -141,7 +145,14 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                 </span>
               }
-              <span class="pf-dd__opt-label">{{ opt.label }}</span>
+              @if (opt.create) {
+                <span class="pf-dd__opt-label pf-dd__create">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  <span class="pf-dd__create-txt">{{ createVerb }} “{{ opt.label }}”</span>
+                </span>
+              } @else {
+                <span class="pf-dd__opt-label">{{ opt.label }}</span>
+              }
               @if (opt.hint) { <span class="pf-dd__hint">{{ opt.hint }}</span> }
             </button>
           }
@@ -310,6 +321,14 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
 
+    /* allowCreate: the "Use '…'" row — accent text + plus icon, a hairline
+       above it when real matches are listed too. */
+    .pf-dd__option--create { color: var(--color-primary, #7c3aed); font-weight: 600; }
+    .pf-dd__option--create.pf-dd__option--after { border-top: 1px solid var(--border-muted, #e2e8f0); border-radius: 0 0 8px 8px; margin-top: 2px; }
+    .pf-dd__create { display: inline-flex; align-items: center; gap: 6px; }
+    .pf-dd__create svg { flex-shrink: 0; }
+    .pf-dd__create-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
     .pf-dd__group { border-top: 1px solid var(--border-muted, #e2e8f0); margin-top: 2px; padding-top: 2px; }
     .pf-dd__group--first { border-top: 0; margin-top: 0; padding-top: 0; }
     .pf-dd__group-lbl {
@@ -353,6 +372,16 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   @Input() searchable = false;
   readonly search = signal('');
 
+  /** Allow-create (single, searchable, string values): when the typed text
+   *  matches no option exactly, the panel adds a "＋ Use “text”" row —
+   *  picking it (click or Enter) emits the TYPED TEXT as the value. The
+   *  parent keeps that value in its options so the trigger shows it. */
+  @Input() allowCreate = false;
+  /** Verb on the create row ("Use" → "Use “Hexokinase II”"). */
+  @Input() createVerb = 'Use';
+  /** Small second line under the create row (e.g. "Add as a new methodology"). */
+  @Input() createHint?: string;
+
   @Output() valueChange = new EventEmitter<T>();
   @Output() valuesChange = new EventEmitter<T[]>();
 
@@ -381,10 +410,22 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   /** Options the panel actually shows — the search filter applied. */
   visibleOpts(): PfSelectOption<T>[] {
-    const q = this.search().trim().toLowerCase();
+    const raw = this.search().trim();
+    const q = raw.toLowerCase();
     if (!this.searchable || !q) return this.options;
-    return this.options.filter(o =>
+    const hits = this.options.filter(o =>
       o.label.toLowerCase().includes(q) || (o.hint ?? '').toLowerCase().includes(q));
+    const create = this.createOption(raw);
+    return create ? [...hits, create] : hits;
+  }
+
+  /** The synthetic "Use “text”" row — only when allow-create is on and the
+   *  typed text is not already an option (exact, case-insensitive). */
+  private createOption(raw: string): PfSelectOption<T> | null {
+    if (!this.allowCreate || this.multiple || !raw) return null;
+    const q = raw.toLowerCase();
+    if (this.options.some(o => o.label.trim().toLowerCase() === q || String(o.value).trim().toLowerCase() === q)) return null;
+    return { value: raw as unknown as T, label: raw, hint: this.createHint, create: true };
   }
   /** The list keyboard navigation walks (filtered when searchable). */
   private get navOptions(): PfSelectOption<T>[] {
@@ -393,6 +434,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   onSearchInput(v: string): void {
     this.search.set(v);
+    // First row focused — with no other match that is the create row.
     this.focusedIndex.set(0);
     this.panelRef?.detectChanges();
   }
@@ -636,6 +678,9 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   @HostListener('keydown', ['$event'])
   onKey(ev: KeyboardEvent): void {
     if (this.disabled) return;
+    // Keys typed in the search box are handled by onPanelKey — here a SPACE
+    // would pick the focused option mid-word ("Modified Arsenazo" → "Modified").
+    if ((ev.target as HTMLElement | null)?.classList?.contains('pf-dd__combox')) return;
 
     if (!this.isOpen()) {
       if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
