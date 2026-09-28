@@ -9,7 +9,7 @@ import {
   WorkflowRendererComponent,
   splitByStorage
 } from '../../../shared/components/workflow-renderer/workflow-renderer.component';
-import { Patient } from '../../../shared/models/patient.model';
+import { BABY_OF_TITLE, Patient, isBabyOfTitle } from '../../../shared/models/patient.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../../shared/primitives/tile.component';
@@ -282,7 +282,9 @@ export class PatientRegisterComponent implements OnInit {
   protected readonly returnTo = signal<string | null>(null);
 
   /** The pill's subject: the FULL name as typed (never truncated), else
-   *  "New patient" / the loaded name. Baby: "Baby of <mother>". */
+   *  "New patient" / the loaded name. The title leads, so "Baby" reads
+   *  "Baby Arjun Kumar" and "Baby of" (names = the mother's) reads
+   *  "Baby of Priya Kumar" — one rule, never "Baby Baby of". */
   protected readonly subjectName = computed(() => {
     const v = this.values();
     const pick = (n: string) => {
@@ -293,9 +295,7 @@ export class PatientRegisterComponent implements OnInit {
     const title = pick('title');
     const first = pick('first_name');
     const last = pick('fathers_name');
-    const name = title === 'Baby'
-      ? (first ? `Baby of ${first}` : '')
-      : [first, last].filter(Boolean).length ? [title, first, last].filter(Boolean).join(' ') : '';
+    const name = [first, last].filter(Boolean).length ? [title, first, last].filter(Boolean).join(' ') : '';
     return name || this.loadedName() || (this.patientId() ? 'Patient' : 'New patient');
   });
   protected readonly primaryLabel = computed(() => this.patientId() ? 'Save changes' : 'Register patient');
@@ -366,11 +366,12 @@ export class PatientRegisterComponent implements OnInit {
   readonly config = this._config.asReadonly();
   readonly saving = this._saving.asReadonly();
 
-  /** True while the Baby title is selected. */
-  private readonly isBaby = computed(() => {
+  /** True while the "Baby of" title is selected (an unnamed newborn — the
+   *  name boxes hold the MOTHER's name). Plain "Baby" is an own-name title. */
+  private readonly isBabyOf = computed(() => {
     const v = this.values();
     const k = Object.keys(v).find(key => key.endsWith('::title'));
-    return k ? v[k] === 'Baby' : false;
+    return k ? isBabyOfTitle(String(v[k] ?? '')) : false;
   });
 
   /** Field names that belong in the "Contact & IDs" section. */
@@ -381,19 +382,27 @@ export class PatientRegisterComponent implements OnInit {
    *    sections. The split steps KEEP the original step name, so every
    *    storage key (`basic_info::phone`) — and therefore save/load — is
    *    untouched; only the on-screen grouping changes.
-   *  - while Title = Baby the FIRST-NAME box itself becomes "Baby of" (the
-   *    standard infant convention — the mother's name IS the baby's identity
-   *    anchor) and the separate guardian field is dropped: one input, asked
-   *    once. Save copies the name into the guardian column too. */
+   *  - while Title = "Baby of" the name boxes become "Mother's first name" /
+   *    "Mother's last name" (the standard infant convention — the mother's
+   *    name IS the unnamed baby's identity anchor) and the separate guardian
+   *    fields are dropped: asked once. Save copies the mother's name into the
+   *    guardian column too. Title = "Baby" is an ordinary own-name entry.
+   *  - a title list that offers "Baby" always offers "Baby of" right after it
+   *    (the two meanings split 2026-09-28; legacy "Baby" rows were re-titled
+   *    "Baby of", so the pill must exist even on a customised form). */
   protected readonly displayConfig = computed<WorkflowConfig | null>(() => {
     const cfg = this._config();
     if (!cfg) return null;
-    const baby = this.isBaby();
+    const baby = this.isBabyOf();
 
-    const relabel = (f: WorkflowConfig['steps'][number]['fields'][number]) =>
-      baby && f.name === 'first_name'
-        ? { ...f, title: 'Baby of', placeholder: "Mother's name" }
-        : f;
+    type Field = WorkflowConfig['steps'][number]['fields'][number];
+    const relabel = (f: Field): Field => {
+      if (f.name === 'title') return PatientRegisterComponent.withBabyOf(f);
+      if (!baby) return f;
+      if (f.name === 'first_name') return { ...f, title: "Mother's first name", placeholder: "Mother's first name" };
+      if (f.name === 'fathers_name') return { ...f, title: "Mother's last name", placeholder: "Mother's last name" };
+      return f;
+    };
 
     // Canonical identity order: the name trio fills row one, DOB and the
     // guardian/"Baby of" pair fill row two; tenant-added extras follow.
@@ -625,7 +634,19 @@ export class PatientRegisterComponent implements OnInit {
     }
   }
 
-  /** Sex a title implies. Baby and Dr. imply nothing — never guess those. */
+  /** Title field → the same field with "Baby of" inserted right after "Baby"
+   *  when the list offers Baby but not Baby of. Anything else is untouched. */
+  private static withBabyOf<F extends { options?: Array<{ value: string; label: string }> }>(f: F): F {
+    const opts = f.options ?? [];
+    const i = opts.findIndex(o => o.value === 'Baby');
+    if (i === -1 || opts.some(o => isBabyOfTitle(o.value))) return f;
+    const next = [...opts];
+    next.splice(i + 1, 0, { value: BABY_OF_TITLE, label: BABY_OF_TITLE });
+    return { ...f, options: next };
+  }
+
+  /** Sex a title implies. Baby / Baby of (the BABY's sex is asked, never the
+   *  mother's) and Dr. imply nothing — never guess those. */
   private static readonly TITLE_SEX: Record<string, string> = {
     'Mr.': 'Male', 'Master': 'Male', 'Mrs.': 'Female', 'Ms.': 'Female'
   };
@@ -729,10 +750,11 @@ export class PatientRegisterComponent implements OnInit {
     }
 
     this.applyHybridDob(body);
-    // Baby: the "Baby of" box IS the first-name field holding the mother's
-    // name — mirror it into the guardian column (the display form asks once).
-    if (body['title'] === 'Baby' && !body['guardianName'] && body['firstName']) {
-      body['guardianName'] = body['firstName'];
+    // "Baby of": the name boxes hold the MOTHER's name — mirror it into the
+    // guardian column (the display form asks once). Plain "Baby" is the
+    // baby's own name: no mirroring.
+    if (isBabyOfTitle(String(body['title'] ?? '')) && !body['guardianName'] && body['firstName']) {
+      body['guardianName'] = [body['firstName'], body['fathersName']].filter(Boolean).join(' ');
     }
     // Duplicate-confirmation retry: carry the force flag to the API even
     // though it is not a form field.
