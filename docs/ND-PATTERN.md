@@ -452,6 +452,22 @@ group's grid. **Search results stay one per row** (section 6).
 - **Tests:** add specs for the pattern hooks. Examples: only one primary; kit
   classes present; no truncation; mode switching.
 
+### The ⋮ actions menu (`pf-actions-menu`)
+
+- ONE reusable kebab menu: `shared/components/actions-menu/actions-menu.component.ts`.
+  It is the secondary-actions home next to a screen's primary CTA (the primary
+  stays a visible button). Hosts pass `[actions]` already filtered by permission
+  + state and handle `(action)` with their EXISTING handlers (DialogService
+  confirms stay in the host). Project a host-styled button with
+  `pfActionsTrigger` to keep the host's own button classes.
+- Popover beside the ⋮ on web / iPad; a bottom sheet (handle, heading, Cancel,
+  above the navbar) on phones ≤640px. `role=menu` / `menuitem`, ↑ ↓ Home End,
+  Esc / Tab close, focus returns to the ⋮. Rows ≥44px, stroked SVG icons.
+- Reports: every report screen (Report view, Results rows, Patient profile order
+  detail, Validate) uses it; shared share/link/delivery flows live in
+  `core/services/report-actions.service.ts` (patient link = `/track/{token}`,
+  fallback `/reports/public/{qrToken}`; share ladder in `shared/utils/report-share.ts`).
+
 ## 11. Scanner
 
 One shared modal (`shared/components/barcode-scanner/barcode-scanner-modal.component.ts`)
@@ -1236,8 +1252,8 @@ exact PDF on screen. Visual redesign only: every action and API is unchanged.
   **Print**, **Share with…** (only with the Messages module) as ghosts, and
   THE primary **Send WhatsApp** (delivery to the patient). Web: text
   buttons. Touch: 44px icons, words kept via `aria-label`. Phones: the
-  primary + a **More** icon that opens a sheet (Print · Share with a
-  colleague · Edit results · Cancel) above the navbar.
+  primary + the ⋮ report-actions menu (`pf-actions-menu`, every width:
+  share, the PDF, workflow steps, go-to; a bottom sheet on phones).
 - **Action feedback:** Print shows "Preparing…" while the PDF builds, then a
   brief "Printing" with an SVG check; Send shows "Sent" with the check
   (~1.8s, a small pop), then the label returns. Errors stay on the toast.

@@ -28,6 +28,9 @@ import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { PartnerReport, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { ReportWhatsAppStatusComponent } from './report-whatsapp-status.component';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
+import { DialogService } from '../../../core/services/dialog.service';
 
 interface ReportData {
   patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; sex?: string; phone?: string; mrn?: string };
@@ -131,7 +134,9 @@ export const RV_DONE_MS = 1800;
     ReportWhatsAppStatusComponent,
     HeroBandComponent,
     EditResultDialogComponent,
-    ZoomTargetDirective
+    ZoomTargetDirective,
+    ActionsMenuComponent,
+    ActionsMenuTriggerDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './report-viewer.component.html',
@@ -165,8 +170,6 @@ export class ReportViewerComponent implements OnInit {
   /** ≤900px: no side column — REPORT opens as a sheet from the pill. */
   readonly narrow = signal(mq('(max-width: 900px)', this.destroyRef, m => this.narrow?.set(m)));
   readonly detailsOpen = signal(false);
-  /** Phones: the "More" action sheet. */
-  readonly moreOpen = signal(false);
   /** REPORT side card collapsed to a strip (remembered per user). */
   readonly sideCollapsed = signal(this.readCollapsed());
   toggleSide(): void {
@@ -271,8 +274,133 @@ export class ReportViewerComponent implements OnInit {
    *  never calls /deliver or archives, so a view-only print records nothing. */
   readonly canPrint = computed(() =>
     ['deliver_report', 'view_report', 'validate_result'].some(p => this.auth.hasPermission(p)));
-  /** The phones' More sheet has something in it. */
-  readonly hasMoreActions = computed(() => this.canPrint() || this.canDeliver() || this.canEditResult());
+  /** Generate / Regenerate change what the patient receives — the backend
+   *  admits deliver_report | validate_result (same rule as the Results list). */
+  readonly canGenerate = computed(() => ['deliver_report', 'validate_result'].some(p => this.auth.hasPermission(p)));
+
+  // ── ⋮ Report actions (shared/components/actions-menu) ─────────────
+  // EVERY action for this report in one place, on every width: share
+  // (patient link / WhatsApp / a colleague), the PDF (download / print), the
+  // workflow steps (edit results, regenerate) and go-to (patient, lab
+  // results). Rows follow the same permission + state rules as the buttons
+  // they mirror; the band keeps ONE primary (Send WhatsApp).
+  private readonly reportActions = inject(ReportActionsService);
+  private readonly dialog = inject(DialogService);
+  private has(perms: string[]): boolean { return perms.some(p => this.auth.hasPermission(p)); }
+  readonly menuActions = computed<PfAction[]>(() => {
+    const r = this._report();
+    if (!r) return [];
+    const a: PfAction[] = [];
+    if (this.reportActions.canLink(r)) {
+      a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
+      a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
+    }
+    if (this.canDeliver()) {
+      a.push({ id: 'whatsapp', label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report link' });
+      if (this.entitlements.moduleEnabled('messages')) a.push({ id: 'colleague', label: 'Share with a colleague', icon: 'chat', group: 'Share' });
+    }
+    a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
+    if (this.canPrint()) a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report' });
+    if (this.canEditResult()) a.push({ id: 'edit', label: 'Edit results', icon: 'edit', group: 'Report', hint: 'Re-opens the results for correction' });
+    if (this.canGenerate() && r.orderId && !this.isPartial()) {
+      a.push({ id: 'regenerate', label: 'Regenerate', icon: 'regenerate', group: 'Report', hint: 'Rebuild with the current report template' });
+    }
+    if (r.patientId && this.has(PATIENT_PROFILE_PERMS)) a.push({ id: 'patient', label: 'Open patient', icon: 'patient', group: 'Go to' });
+    if (r.orderId && this.has(LAB_RESULTS_PERMS)) a.push({ id: 'lab', label: 'Open lab results', icon: 'lab', group: 'Go to' });
+    return a;
+  });
+
+  /** The menu opened: warm the patient link so Share… keeps the tap's gesture. */
+  onMenuOpened(): void { this.reportActions.prefetch(this._report()); }
+
+  runAction(id: string): void {
+    const r = this._report();
+    if (!r) return;
+    switch (id) {
+      case 'share': void this.reportActions.share(r, this.patientName()); break;
+      case 'copy-link': void this.reportActions.copyLink(r); break;
+      case 'whatsapp': this.deliverWhatsApp(); break;
+      case 'colleague': void this.openSharePicker(); break;
+      case 'download': void this.download(); break;
+      case 'print': void this.print(); break;
+      case 'edit': this.openEditDialog(); break;
+      case 'regenerate': void this.regenerate(); break;
+      case 'patient': void this.router.navigate(['/frontdesk/patients', r.patientId]); break;
+      case 'lab': void this.openLabResults(); break;
+    }
+  }
+
+  /** Download the SAME PDF the preview shows. Native shell: the share sheet
+   *  (Save to Files); web: a file download. */
+  async download(): Promise<void> {
+    const r = this._report();
+    if (!r) return;
+    try {
+      const blob = this._pdfBlob ??= await this.buildPdfBlob(r);
+      const name = `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`;
+      const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+        .Capacitor?.isNativePlatform?.();
+      const file = new File([blob], name, { type: 'application/pdf' });
+      if (isNative && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Download report' });
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* */ } }, 60_000);
+    } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError') return;
+      const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
+      this.toasts.error(reportRenderErrorMessage(err, 'Could not download report'));
+    }
+  }
+
+  /** Regenerate — the Results list's flow (DialogService confirm, then
+   *  POST /api/reports/generate), and the viewer switches to the new version. */
+  async regenerate(): Promise<void> {
+    const r = this._report();
+    if (!r?.orderId || !this.canGenerate()) return;
+    const ok = await this.dialog.confirm({
+      title: 'Regenerate report?',
+      message: 'Rebuild this report using the current report template. The previous version is replaced.',
+      confirmLabel: 'Regenerate',
+      tone: 'primary',
+    });
+    if (!ok) return;
+    this.api.post<Report>('/api/reports/generate', { orderId: r.orderId, type: 'final' }).subscribe({
+      next: r2 => {
+        this.toasts.success('Report regenerated with the latest template');
+        if (!r2?.id) return;
+        this._pdfBlob = null;
+        this._pdfInput = null;
+        this._pdfReady.set(false);
+        this._report.set(r2);
+        this.resolveLayouts();
+        void this.router.navigate(['/reports/view', r2.id], { replaceUrl: true });
+      },
+      error: e => this.toasts.error(ApiError.from(e).message),
+    });
+  }
+
+  /** Open the bench's result screen READ-ONLY (the Results list's action). */
+  async openLabResults(): Promise<void> {
+    const r = this._report();
+    if (!r?.orderId) return;
+    try {
+      const order = await firstValueFrom(this.api.get<{ samples?: Array<{ id: string }> }>(`/api/orders/${r.orderId}`));
+      const sid = order?.samples?.[0]?.id;
+      if (!sid) { this.toasts.error('No sample found for this order.'); return; }
+      void this.router.navigate(['/lab/sample', sid], { queryParams: { view: 1 } });
+    } catch {
+      this.toasts.error('Could not open the lab results.');
+    }
+  }
+
   readonly editDialogOpen = signal(false);
 
   openEditDialog() { this.editDialogOpen.set(true); }

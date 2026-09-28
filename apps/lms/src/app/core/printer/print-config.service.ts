@@ -34,7 +34,14 @@ export interface PrintConfig {
   /** OS printer name to route A4/invoice documents to (Electron). Empty = use
    *  the system print dialog. */
   documentPrinter: string;
+  /** WEB BROWSER ONLY: how "Print label" behaves when no label printer can be
+   *  driven directly. 'printer' (default) = always ask; 'system' = the user
+   *  ticked "Don't ask again" and chose the label-sized system print dialog.
+   *  Ignored on Electron / the native app, which only ever use the printer. */
+  labelRoute: LabelRoute;
 }
+
+export type LabelRoute = 'printer' | 'system';
 
 const KEY = 'pf.printConfig';
 const DEFAULTS: PrintConfig = {
@@ -47,6 +54,7 @@ const DEFAULTS: PrintConfig = {
   codeScalePct: 100,
   rotation: 0,
   documentPrinter: '',
+  labelRoute: 'printer',
 };
 
 @Injectable({ providedIn: 'root' })
@@ -82,6 +90,7 @@ export class PrintConfigService {
     });
   }
   setDocumentPrinter(name: string): void { this.update({ documentPrinter: name }); }
+  setLabelRoute(route: LabelRoute): void { this.update({ labelRoute: route === 'system' ? 'system' : 'printer' }); }
   setDensity(v: number): void { this.update({ density: Math.min(15, Math.max(1, Math.round(v))) }); }
   setSpeed(v: number): void { this.update({ speed: Math.min(5, Math.max(1, Math.round(v))) }); }
   private clampOff(v: number): number { return Math.min(15, Math.max(-15, Math.round((v || 0) * 2) / 2)); }

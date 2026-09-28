@@ -10,8 +10,8 @@ import { loginAs } from './support/auth';
  *    pages; ONE band primary "Send WhatsApp", the pill = patient · order ·
  *    status · date, REPORT ~400px on the right, collapse → strip → back,
  *    no page scroll, no monospace, no native select.
- *  - 375: the preview full width, the primary + More as 44px icons, the
- *    More sheet above the navbar, Details opens the REPORT sheet.
+ *  - 375: the preview full width, the primary + ⋮ as 44px icons, the
+ *    ⋮ report-actions sheet above the navbar, Details opens the REPORT sheet.
  * REPORT_ID picks a report (default: the first on the Results list).
  * Screenshots (light + dark) into $SHOTS_DIR. CORS_RELAY=1 relays backend
  * calls so it can run against a static build on a spare port.
@@ -164,12 +164,13 @@ test.describe('Report view — PREVIEW + REPORT', () => {
     expect(ps2.doc).toBeLessThanOrEqual(1);
     await shoot(page, '375');
 
+    // The ⋮ report-actions menu (pf-actions-menu) is a bottom sheet on phones.
     await more.click();
-    const sheet = page.locator('.pf-rv-sheet--more');
+    const sheet = page.locator('[role=menu].pf-am-panel--sheet');
     await expect(sheet).toBeVisible();
     await page.waitForTimeout(450);
     await shoot(page, '375-more');
-    await sheet.locator('.pf-rv-sheet__cancel').click();
+    await page.locator('.pf-am-cancel').click();
 
     await page.locator('.pf-rv-ctx__details').click();
     await expect(page.locator('.pf-rv-sheet--details')).toBeVisible();

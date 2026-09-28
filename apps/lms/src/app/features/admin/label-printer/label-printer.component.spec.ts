@@ -26,10 +26,13 @@ const primaries = (el: HTMLElement) =>
   Array.from(el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary'))
     .filter(b => !b.closest('.pf-classic-only')).length;
 
-function printerStub() {
+function printerStub(electron = false) {
   return {
     testPrint: vi.fn(async () => ({ ok: true })),
     electronStatus: vi.fn(async () => ({ connected: true, name: 'Detonger DP27' })),
+    labelPrinterState: vi.fn(async () => (electron
+      ? { platform: 'electron', configured: true, name: 'Detonger DP27' }
+      : { platform: 'web', configured: false, name: null })),
     listSystemPrinters: vi.fn(async () => [{ name: 'HP_M1136', displayName: 'HP LaserJet M1136', isDefault: true }]),
     bleConnected: () => false,
     bleDeviceName: () => null,
@@ -49,7 +52,7 @@ function render(opts: { code?: string; electron?: boolean; providers?: unknown[]
   try { localStorage.removeItem('pf.printConfig'); } catch { /* ignore */ }
   // jsdom has no canvas: the preview draw bails out quietly.
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
-  const printer = printerStub();
+  const printer = printerStub(!!opts.electron);
   const p = renderBandPage(LabelPrinterComponent, {
     getFor: (url) => (url === '/api/tenants/branch-lab-config' ? { labelCodeMode: opts.code ?? 'barcode' } : []),
     providers: [
@@ -82,7 +85,7 @@ describe('Printing (ND) — structure', () => {
     expect(ctx.querySelector('.pf-lp-ctx__station')!.textContent).toContain('Web browser');
     const status = ctx.querySelector('.pf-lp-status')!;
     expect(status.getAttribute('data-state')).toBe('web');
-    expect(status.textContent).toContain('System print dialog');
+    expect(status.textContent).toContain('Needs the desktop or tablet app');
     expect(p.el.querySelector('pf-segmented')).toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
   });
@@ -200,6 +203,17 @@ describe('Printing (ND) — every control writes the same station config', () =>
     expect(q.$('.pf-lp-codechip')).not.toBeNull();
   });
 
+  it('web: "Labels in this browser" row shows the remembered route and "Ask each time" clears it', () => {
+    const p = render();
+    const row = () => p.$('.pf-lp-conn[data-conn="route"]')!;
+    expect(row().textContent).toContain('Ask each time');
+    expect(p.btn('Ask each time', row())).toBeUndefined();
+    p.cfg.setLabelRoute('system'); p.f.detectChanges();
+    expect(row().textContent).toContain('System print dialog (label-sized page)');
+    p.click(p.btn('Ask each time', row())!);
+    expect(p.cfg.config().labelRoute).toBe('printer');
+  });
+
   it('Test print is wired to PrinterService.testPrint', async () => {
     const p = render();
     p.click(p.actions()[0]);
@@ -225,10 +239,26 @@ describe('Printing (ND) — desktop app (Electron)', () => {
       .toEqual(['System dialog (ask each time)', 'HP LaserJet M1136 (default)']);
     p.click(p.btn('Refresh', p.$('.pf-lp-conn[data-conn="usb"]')!)!);
     expect(p.printer.electronStatus).toHaveBeenCalledTimes(2);
+    expect(p.$('.pf-lp-conn[data-conn="route"]')).toBeNull();
     p.cmp.printConfig.setDocumentPrinter('HP_M1136');
     expect(p.cfg.config().documentPrinter).toBe('HP_M1136');
     expect(primaries(p.el)).toBe(1);
     hygiene(p.el);
+    p.f.destroy();
+  });
+
+  it('band shows "set up · not connected" when the shared check says configured but USB is unplugged', async () => {
+    const p = render({ electron: true });
+    p.printer.electronStatus.mockResolvedValue({ connected: false } as any);
+    p.printer.labelPrinterState.mockResolvedValue({ platform: 'electron', configured: true, name: 'Detonger DP27' } as any);
+    await p.cmp.refreshUsb(); p.f.detectChanges();
+    const status = p.$('.pf-lp-status')!;
+    expect(status.getAttribute('data-state')).toBe('offline');
+    expect(status.textContent).toContain('Set up · Detonger DP27 · not connected');
+    p.printer.labelPrinterState.mockResolvedValue({ platform: 'electron', configured: false, name: null } as any);
+    await p.cmp.refreshState(); p.f.detectChanges();
+    expect(status.getAttribute('data-state')).toBe('none');
+    expect(status.textContent).toContain('Not set up');
     p.f.destroy();
   });
 });

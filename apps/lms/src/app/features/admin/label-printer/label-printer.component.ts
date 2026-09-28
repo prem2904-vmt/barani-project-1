@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { PlatformService } from '../../../core/services/platform.service';
-import { PrinterService, SystemPrinter } from '../../../core/printer/printer.service';
+import { PrinterService, SystemPrinter, LabelPrinterState } from '../../../core/printer/printer.service';
 import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { LABEL_SIZE_PRESETS, MIN_X_MM, code128Modules, tubeLabelGeometry } from '../../../core/printer/label-layout';
 import { LabelData, renderLabelBitmap } from '../../../core/printer/label-render';
@@ -16,7 +16,7 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { ThemeService } from '../../../core/services/theme.service';
 
 /** Band status of this station's label printer. */
-export type LabelPrinterState = 'connected' | 'offline' | 'none' | 'web';
+export type LabelPrinterBandState = 'connected' | 'offline' | 'none' | 'web';
 
 /** The sample drawn in the live preview — a typical tube (9-digit sample ID,
  *  the same value the thin-barcode check measures). */
@@ -192,9 +192,23 @@ export const PREVIEW_LABEL: LabelData = {
         <div class="nd-card__body pf-lp-body">
           @if (!supported()) {
             <p class="pf-note">
-              Direct printing runs in the installed <b>Prefrontal</b> desktop or tablet app.
-              On the web, labels + invoices use the system print dialog.
+              Tube labels print only on a label printer, driven by the installed <b>Prefrontal</b>
+              desktop or tablet app. A web browser can't reach one directly, so "Print label" asks
+              first — it never falls back to a normal printer on its own. Invoices + reports still use
+              the system print dialog.
             </p>
+            <div class="pf-lp-conn pf-lp-route" data-conn="route">
+              <div class="pf-lp-conn__txt">
+                <span class="pf-lp-conn__k">Labels in this browser</span>
+                <span class="pf-lp-conn__v">
+                  @if (cfg().labelRoute === 'system') { System print dialog (label-sized page) }
+                  @else { Ask each time }
+                </span>
+              </div>
+              @if (cfg().labelRoute === 'system') {
+                <button type="button" class="nd-btn nd-btn--secondary" (click)="printConfig.setLabelRoute('printer')">Ask each time</button>
+              }
+            </div>
           }
 
           @if (isElectron) {
@@ -277,8 +291,8 @@ export const PREVIEW_LABEL: LabelData = {
           <div class="pf-lp-code">
             <div class="pf-lp-conn__txt">
               <span class="pf-lp-conn__k">Code on every label</span>
-              <span class="pf-lp-conn__v"><span class="nd-chip nd-chip--static pf-lp-codechip">{{ codeLabel() }}</span></span>
-              <span class="pf-hint">Set by an admin in Lab settings (organisation policy).</span>
+              <span class="pf-lp-conn__v pf-lp-code__v"><span class="nd-chip nd-chip--static pf-lp-codechip">{{ codeLabel() }}</span>
+                <span class="pf-hint">Organisation policy, set by an admin</span></span>
             </div>
             @if (canEditCode) {
               <a class="nd-btn nd-btn--quiet pf-lp-codelink" routerLink="/admin/lab-settings">Lab settings</a>
@@ -373,6 +387,8 @@ export const PREVIEW_LABEL: LabelData = {
     .pf-lp-conn__k { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .pf-lp-conn__v { font-size: 13.5px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-lp-codechip { cursor: default; color: var(--text-primary); }
+    .pf-lp-code__v { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+    .pf-lp-card[data-card='quality'] .pf-lp-body { gap: 12px; }
     .pf-lp-codelink { flex: none; text-decoration: none; }
     .pf-lp-conn .nd-btn { flex: none; height: 40px; min-height: 40px; }
 
@@ -470,27 +486,29 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
     return m === 'barcode' ? 'Barcode' : m === 'qr' ? 'QR' : 'Data Matrix';
   }
 
-  /** The label printer's state for the band: direct-print apps report the
-   *  transport; the web always uses the system print dialog. */
-  printerState(): LabelPrinterState {
-    if (this.isElectron) {
-      if (this.usbConnected() || this.printer.bleConnected()) return 'connected';
-      return this.printer.bleDeviceName() ? 'offline' : 'none';
-    }
-    if (this.isCapacitor) {
-      if (this.printer.connected()) return 'connected';
-      return this.printer.deviceName() ? 'offline' : 'none';
-    }
-    return 'web';
+  /** This station's label-printer set-up, from the SAME check "Print label"
+   *  uses (PrinterService.labelPrinterState via LabelPrintService): set up or
+   *  not + its name. Live connection comes from the transports below. */
+  readonly labelState = signal<LabelPrinterState | null>(null);
+  async refreshState(): Promise<void> {
+    try { this.labelState.set(await this.printer.labelPrinterState()); } catch { /* keep last */ }
+  }
+
+  /** The label printer's state for the band: web can't drive one; otherwise
+   *  not set up / set up but not reachable now / connected. */
+  printerState(): LabelPrinterBandState {
+    if (!this.supported()) return 'web';
+    const st = this.labelState();
+    if (!st?.configured) return 'none';
+    const live = this.isElectron ? (this.usbConnected() || this.printer.bleConnected()) : this.printer.connected();
+    return live ? 'connected' : 'offline';
   }
   printerStatusText(): string {
     const s = this.printerState();
-    if (s === 'web') return 'System print dialog';
-    if (s === 'none') return this.isCapacitor ? 'None paired' : 'Not connected';
-    const name = this.isElectron
-      ? (this.usbConnected() ? (this.usbName() || 'USB printer') : this.printer.bleDeviceName())
-      : this.printer.deviceName();
-    return `${s === 'connected' ? 'Connected' : 'Offline'}${name ? ' · ' + name : ''}`;
+    if (s === 'web') return 'Needs the desktop or tablet app';
+    if (s === 'none') return 'Not set up';
+    const name = this.labelState()?.name;
+    return s === 'connected' ? `Connected${name ? ' · ' + name : ''}` : `Set up${name ? ' · ' + name : ''} · not connected`;
   }
 
   // Electron BLE pairing + USB status
@@ -521,6 +539,7 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.branchCfg.ensureLoaded(); // the admin-set code comes from here
+    void this.refreshState();
     if (this.isElectron) {
       this.refreshUsb();
       this.loadSystemPrinters();
@@ -567,6 +586,7 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
   async refreshUsb(): Promise<void> {
     const s = await this.printer.electronStatus();
     this.usbConnected.set(s.connected); this.usbName.set(s.name ?? '');
+    void this.refreshState();
   }
   async loadSystemPrinters(): Promise<void> {
     this.systemPrinters.set(await this.printer.listSystemPrinters());
@@ -579,7 +599,7 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
     this.printer.connectBluetooth()
       .then(name => this.toasts.success(`Paired ${name}`))
       .catch((e: Error) => { if (!/cancel|user/i.test(e?.message ?? '')) this.toasts.error(e?.message || 'Pairing failed'); })
-      .finally(() => { this.pairing.set(false); this.unsub?.(); this.unsub = undefined; });
+      .finally(() => { this.pairing.set(false); this.unsub?.(); this.unsub = undefined; void this.refreshState(); });
   }
   choose(id: string): void { this.printer.pickBleDevice(id); }
   cancelPair(): void { this.printer.cancelBlePick(); this.pairing.set(false); this.unsub?.(); }
@@ -606,6 +626,6 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     try { await this.printer.selectDevice(d); this.toasts.success(`Paired ${d.name || d.deviceId}`); }
     catch (e) { this.toasts.error((e as Error)?.message || 'Could not connect'); }
-    finally { this.busy.set(false); }
+    finally { this.busy.set(false); void this.refreshState(); }
   }
 }

@@ -26,6 +26,8 @@ import { parseParametersBlob, readParameters } from '../../../shared/utils/test-
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { pickReassignee } from '../reassign-picker';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS } from '../../../core/services/report-actions.service';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -72,7 +74,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, SelectComponent, ZoomTargetDirective],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -378,37 +380,17 @@ interface ValueRow {
               </span>
               <div class="flex-1"></div>
 
-              @if (hasMoreActions()) {
-                <div class="pf-more">
-                  <button type="button" class="pf-btn pf-btn--ghost press" (click)="moreOpen.set(!moreOpen())"
-                          aria-haspopup="menu" [attr.aria-expanded]="moreOpen()">
-                    More
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+              <!-- ⋮ — the secondary steps (reassign, edit, send back) and
+                   go-to (patient, lab results) in one place. Validate stays
+                   THE primary; Reject stays visible. -->
+              @if (menuActions().length) {
+                <pf-actions-menu [actions]="menuActions()" label="More actions" [heading]="headTitle()"
+                                 (action)="runAction($event)">
+                  <button pfActionsTrigger type="button" class="pf-btn pf-btn--ghost pf-vr-kebab press" aria-label="More actions" title="More actions">
+                    <svg class="pf-vr-kebab__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
+                    <span class="pf-vr-kebab__t">More</span>
                   </button>
-                  @if (moreOpen()) {
-                    <div class="pf-more__bd" (click)="moreOpen.set(false)"></div>
-                    <div class="pf-more__menu" role="menu">
-                      @if (sampleTests().length <= 1) {
-                        <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); reassign()">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l4 4-4 4"/><path d="M20 7H4"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h16"/></svg>
-                          Reassign to another validator
-                        </button>
-                        @if (!isCulture()) {
-                          <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); startEdit()">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                            Edit values myself
-                          </button>
-                        }
-                      }
-                      @if (canEditResult() && editOrderId()) {
-                        <button type="button" role="menuitem" class="pf-more__item press" (click)="moreOpen.set(false); editDialogOpen.set(true)">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-                          Send back for correction
-                        </button>
-                      }
-                    </div>
-                  }
-                </div>
+                </pf-actions-menu>
               }
 
               @if (sampleTests().length > 1) {
@@ -721,43 +703,10 @@ interface ValueRow {
     .pf-btn--danger:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(239, 68, 68, 0.55); }
     .pf-btn--icony .pf-btn__ic { display: none; }
 
-    /* ── More menu (secondary actions) ───────────────────────── */
-    .pf-more { position: relative; }
-    .pf-more__bd { position: fixed; inset: 0; z-index: 1; }
-    .pf-more__menu { position: absolute; bottom: calc(100% + 10px); right: 0; z-index: 2; min-width: 250px; padding: 6px;
-      border-radius: 14px; background: var(--bg-card-solid); border: 1px solid var(--glass-border);
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45); animation: pf-menu-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-    .pf-more__item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 9px; border: none;
-      background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
-      transition: background .15s, color .15s; }
-    .pf-more__item:hover { background: var(--glass-bg-hover); color: var(--text-primary); }
-    .pf-more__item svg { flex-shrink: 0; color: var(--text-tertiary); }
-    @keyframes pf-menu-in { from { transform: translateY(6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    /* ── ⋮ More actions (pf-actions-menu) ────────────────────── */
+    .pf-vr-kebab { display: inline-flex; align-items: center; gap: 6px; }
+    .pf-vr-kebab__i { flex: none; }
 
-    /* ── Detail drawer ───────────────────────────────────────── */
-    .pf-drawer-bd { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(6px); z-index: 44; animation: pf-fade 0.2s ease both; }
-    .pf-drawer { position: fixed; right: 0; top: var(--navbar-height, 4rem); bottom: 0; width: min(100%, 520px); background: var(--bg-card-solid);
-      border-left: 1px solid var(--glass-border); box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5); z-index: 45; display: flex; flex-direction: column;
-      animation: pf-drawer-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-    .pf-drawer__hdr { display: flex; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border-muted); }
-    .pf-drawer__title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--text-primary); }
-    .pf-drawer__close { width: 36px; height: 36px; border-radius: 9999px; background: var(--glass-bg); border: 1px solid var(--glass-border);
-      color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .pf-drawer__body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; }
-    .pf-drawer__value { display: flex; align-items: baseline; gap: 10px; padding: 20px 22px; border-radius: 18px; background: var(--glass-bg);
-      border: 1px solid var(--glass-border); margin-bottom: 8px; }
-    .pf-drawer__num { font-size: 46px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--text-primary); line-height: 1; }
-    .pf-drawer__unit { font-size: 16px; color: var(--text-secondary); font-family: 'JetBrains Mono', ui-monospace, monospace; }
-    .pf-drawer__sec { margin-top: 20px; }
-    .pf-drawer__meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
-    .pf-drawer__meta > div { display: flex; flex-direction: column; gap: 2px; }
-    .pf-drawer__meta dt { font-size: 10.5px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); margin: 0; }
-    .pf-drawer__meta dd { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-    .pf-drawer__meta dd.pf-drawer__range { white-space: pre-line; }
-    .pf-drawer__sec--alert { padding: 14px; border-radius: 14px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
-    .pf-drawer__sec--alert[data-flag='abnormal'] { border-color: rgba(245, 158, 11, 0.4); }
-    .pf-drawer__sec--alert[data-flag='critical'] { border-color: rgba(239, 68, 68, 0.45); }
-    .pf-drawer__why { margin: 0; font-size: 13px; color: var(--text-primary); line-height: 1.5; }
     @keyframes pf-fade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes pf-drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
@@ -768,6 +717,8 @@ interface ValueRow {
       :host .pf-btn--icony .pf-btn-label { display: none; }
       :host .pf-btn--icony .pf-btn__ic { display: inline-block; }
       :host .pf-btn--icony { width: 44px; min-width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+      :host .pf-vr-kebab { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
+      :host .pf-vr-kebab__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
       :host .pf-page__body { padding-bottom: calc(var(--tab-nav-total-height) + 150px); }
       :host .pf-railpat { flex-wrap: wrap; }
       :host .pf-drawer { top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-height: 88dvh; border-left: none;
@@ -804,13 +755,11 @@ interface ValueRow {
       :host .pf-vt__act { min-height: 40px; }
       :host .pf-prow__cbtn { width: 38px; height: 38px; }
       :host .pf-drawer__close { width: 44px; height: 44px; }
-      :host .pf-more__item { min-height: 44px; }
     }
 
     /* Touch devices: neutralize sticky :hover states after a tap. */
     @media (hover: none) {
       :host .pf-btn--ghost:hover:not(:disabled) { background: transparent; color: var(--text-secondary); }
-      :host .pf-more__item:hover { background: transparent; color: var(--text-secondary); }
     }
 
     /* ── Capacitor native: fixed chrome clears the notch ─────── */
@@ -1018,9 +967,41 @@ export class ValidateResultComponent implements OnInit {
   readonly hasSampleCritical = computed(() => this.sampleTests().some(t => this.countsFor(t).critical > 0));
 
   // ── Cockpit helpers ────────────────────────────────────────
-  readonly moreOpen = signal(false);
-  readonly hasMoreActions = computed(() =>
-    this.sampleTests().length <= 1 || !!(this.canEditResult() && this.editOrderId()));
+  /** ⋮ More actions — the same rules the old More dropdown had, plus go-to
+   *  rows (each gated by its destination's route guard). */
+  private has(perms: string[]): boolean { return perms.some(p => this.auth.hasPermission(p)); }
+  readonly menuActions = computed<PfAction[]>(() => {
+    const t = this._selected();
+    if (!t) return [];
+    const a: PfAction[] = [];
+    if (this.sampleTests().length <= 1) {
+      a.push({ id: 'reassign', label: 'Reassign to another validator', icon: 'reassign', group: 'Workflow' });
+      if (!this.isCulture()) a.push({ id: 'edit-self', label: 'Edit values myself', icon: 'edit', group: 'Workflow' });
+    }
+    if (this.canEditResult() && this.editOrderId()) {
+      a.push({ id: 'send-back', label: 'Send back for correction', icon: 'sendback', group: 'Workflow', hint: 'Re-opens the results for re-entry' });
+    }
+    if (this.patientId() && this.has(PATIENT_PROFILE_PERMS)) a.push({ id: 'patient', label: 'Open patient', icon: 'patient', group: 'Go to' });
+    if (t.subOrder?.id && this.has(LAB_RESULTS_PERMS)) a.push({ id: 'lab', label: 'Open lab results', icon: 'lab', group: 'Go to' });
+    return a;
+  });
+  readonly patientId = computed(() => {
+    const o = this._selected()?.subOrder?.order as { patientId?: string; patient?: { id?: string } } | undefined;
+    return o?.patient?.id ?? o?.patientId ?? null;
+  });
+  runAction(id: string): void {
+    switch (id) {
+      case 'reassign': void this.reassign(); break;
+      case 'edit-self': this.startEdit(); break;
+      case 'send-back': this.editDialogOpen.set(true); break;
+      case 'patient': void this.router.navigate(['/frontdesk/patients', this.patientId()]); break;
+      case 'lab': {
+        const sid = this._selected()?.subOrder?.id;
+        if (sid) void this.router.navigate(['/lab/sample', sid], { queryParams: { view: 1 } });
+        break;
+      }
+    }
+  }
 
   /** Attention-first: flagged rows always visible; normals collapse behind
    *  the expander. Editing shows everything — any value may need fixing. */

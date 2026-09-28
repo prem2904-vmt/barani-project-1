@@ -143,6 +143,9 @@ async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unkno
   return { f, el, c, api, router, tab };
 }
 
+const menuItems = () => [...document.body.querySelectorAll('[role=menu] [role=menuitem] .pf-am-item__t')].map(b => b.textContent!.trim());
+const closeMenus = () => document.querySelectorAll('.pf-am-layer').forEach(n => n.remove());
+
 const primaries = (el: HTMLElement) =>
   el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary, pf-touch-btn[variant="primary"], .pf-btn--primary');
 /** Component CSS with Angular's scoping attributes stripped. */
@@ -478,9 +481,10 @@ describe('Reports list — same reports for every viewer, actions by permission'
       expect(viewer.el.querySelector('[title="View on screen"]')).not.toBeNull();
       expect(viewer.el.querySelector('[title="Download PDF"]')).not.toBeNull();
       // No Generate / Regenerate; branch managers (no edit_result, no bench
-      // perms) get no empty More menu either.
+      // perms) get the ⋮ with read-only rows only (View / Download / Print).
       expect(viewer.el.querySelector('.pf-rq-generate')).toBeNull();
-      expect(viewer.el.querySelector('.pf-rq-more, .pf-rq-act--more')).toBeNull();
+      const r0 = viewer.c.items()[0];
+      expect(viewer.c.rowActions().get(r0.id).map((a: { id: string }) => a.id)).toEqual(['view', 'download', 'print']);
     });
   }
 
@@ -493,13 +497,16 @@ describe('Reports list — same reports for every viewer, actions by permission'
     expect(el.querySelector('.pf-rq-genpartial')).toBeNull();
   });
 
-  it('view-only + edit_result (Lab Technician): More keeps Open lab results + Edit, never Regenerate', async () => {
+  it('view-only + edit_result (Lab Technician): the ⋮ keeps Open lab results + Edit, never Regenerate / share', async () => {
     const { el, f } = await render({ perms: ['view_report', 'edit_result', 'enter_result'] });
     const more = el.querySelector('.pf-rq-more') as HTMLButtonElement;
     expect(more).not.toBeNull();
+    expect(more.getAttribute('aria-haspopup')).toBe('menu');
     more.click(); f.detectChanges();
-    const items = [...el.querySelectorAll('.pf-rq-menu__item')].map(b => b.textContent!.trim());
-    expect(items).toEqual(['Open lab results', 'Edit results']);
+    await new Promise(r => setTimeout(r, 0));
+    const items = menuItems();
+    expect(items).toEqual(['View report', 'Download PDF', 'Print', 'Edit results', 'Open lab results']);
+    closeMenus();
   });
 
   it('view-only: the send / generate handlers are inert even if called directly', async () => {
@@ -566,7 +573,70 @@ describe('Reports list — same reports for every viewer, actions by permission'
     expect(el.querySelector('.pf-rq-generate')).not.toBeNull();
     expect(el.querySelector('.pf-rq-viewonly')).toBeNull();
     (el.querySelector('.pf-rq-more') as HTMLButtonElement).click(); f.detectChanges();
-    expect([...el.querySelectorAll('.pf-rq-menu__item')].map(b => b.textContent!.trim())).toContain('Regenerate');
+    await new Promise(r => setTimeout(r, 0));
+    expect(menuItems()).toContain('Regenerate');
+    closeMenus();
+  });
+});
+
+describe('Reports list — ⋮ report actions', () => {
+  afterEach(() => closeMenus());
+  const ids = (c: any, i = 0) => c.rowActions().get(c.items()[i].id).map((a: { id: string }) => a.id);
+
+  it('full delivery desk: share rows, the PDF, workflow steps and go-to — in that order', async () => {
+    const { c } = await render({ perms: ['deliver_report', 'view_report', 'view_order', 'edit_result', 'view_patient', 'enter_result'] });
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'view', 'download', 'print', 'edit', 'regenerate', 'patient', 'lab']);
+  });
+
+  it('pathologist in Results (view_report + validate_result): no share rows, but Regenerate', async () => {
+    const { c } = await render({ perms: ['view_report', 'validate_result'] });
+    expect(ids(c)).toEqual(['view', 'download', 'print', 'regenerate', 'lab']);
+  });
+
+  it('every row id runs the SAME existing handler', async () => {
+    const { c } = await render();
+    const r = c.items()[0];
+    const spies = {
+      deliver: vi.spyOn(c, 'deliver').mockImplementation(() => {}),
+      view: vi.spyOn(c, 'view').mockImplementation(() => {}),
+      downloadPdf: vi.spyOn(c, 'downloadPdf').mockResolvedValue(undefined),
+      printReport: vi.spyOn(c, 'printReport').mockResolvedValue(undefined),
+      openEditDialog: vi.spyOn(c, 'openEditDialog').mockImplementation(() => {}),
+      regenerate: vi.spyOn(c, 'regenerate').mockResolvedValue(undefined),
+      viewLabResults: vi.spyOn(c, 'viewLabResults').mockResolvedValue(undefined),
+    };
+    for (const id of ['whatsapp', 'view', 'download', 'print', 'edit', 'regenerate', 'lab']) c.runRowAction(r, id);
+    expect(spies.deliver).toHaveBeenCalledWith(r, 'whatsapp');
+    for (const k of ['view', 'downloadPdf', 'printReport', 'openEditDialog', 'regenerate', 'viewLabResults'] as const) {
+      expect(spies[k], k).toHaveBeenCalledWith(r);
+    }
+  });
+
+  it('Regenerate from the menu still asks first (DialogService) — cancel posts nothing', async () => {
+    const { c, api } = await render();
+    api.post.mockClear();
+    c.runRowAction(c.items()[0], 'regenerate');
+    await new Promise(r => setTimeout(r, 0));
+    const dialog = TestBed.inject(DialogService) as any;
+    expect(dialog.confirm).toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('Open patient goes to the patient profile', async () => {
+    const { c, router } = await render();
+    c.runRowAction(c.items()[0], 'patient');
+    expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/patients', 'p1']);
+  });
+
+  it('the ⋮ is a vertical-dots SVG button with a label, on web and touch', async () => {
+    for (const touch of [false, true]) {
+      const { el } = await render({ touch });
+      const more = el.querySelector('.pf-rq-more') as HTMLButtonElement;
+      expect(more.getAttribute('aria-label')).toBe('Report actions');
+      expect(more.querySelectorAll('svg path').length).toBe(3);
+      expect(more.classList.contains('nd-rowact--icon')).toBe(touch);
+      TestBed.resetTestingModule();
+    }
   });
 });
 

@@ -16,6 +16,8 @@ import { TenantEntitlementsService } from '../../../core/services/tenant-entitle
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { DialogService } from '../../../core/services/dialog.service';
+import { ReportActionsService } from '../../../core/services/report-actions.service';
 
 /**
  * Report view on the nd pattern (docs/ND-PATTERN.md → "Report view"):
@@ -220,12 +222,14 @@ describe('Report view (nd) — actions', () => {
     expect(api.post).not.toHaveBeenCalled();   // no /deliver, no archive upload
   });
 
-  it('VIEW-ONLY phones: the More sheet holds Print only', async () => {
+  it('VIEW-ONLY phones: the ⋮ sheet holds Download + Print only (no share, no send)', async () => {
     const { el, f } = await render({ perms: ['view_report'], phone: true });
     (el.querySelector('.pf-rv-act--more') as HTMLButtonElement).click();
     f.detectChanges();
-    const rows = Array.from(el.querySelectorAll('.pf-rv-sheet--more .pf-rv-menu__row')).map(b => b.textContent?.trim());
-    expect(rows).toEqual(['Print']);
+    await new Promise(r => setTimeout(r, 0));
+    const rows = Array.from(document.body.querySelectorAll('[role=menu] [role=menuitem]')).map(b => b.querySelector('.pf-am-item__t')?.textContent?.trim());
+    expect(rows).toEqual(['Download PDF', 'Print']);
+    document.querySelectorAll('.pf-am-layer').forEach(n => n.remove());
   });
 
   it('no report permission path: without view/deliver/validate there is no Print', async () => {
@@ -330,18 +334,23 @@ describe('Report view (nd) — REPORT side card', () => {
 });
 
 describe('Report view (nd) — phones', () => {
-  it('the More sheet reaches Print, Share with and Edit (the primary stays in the band)', async () => {
+  it('the ⋮ sheet reaches EVERY action (the primary stays in the band)', async () => {
     const { el, f, c } = await render({ phone: true });
     const print = vi.spyOn(c, 'print').mockResolvedValue(undefined);
-    (el.querySelector('.pf-rv-act--more') as HTMLButtonElement).click();
+    const trigger = el.querySelector('.pf-rv-act--more') as HTMLButtonElement;
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+    trigger.click();
     f.detectChanges();
-    const sheet = el.querySelector('.pf-rv-sheet--more') as HTMLElement;
-    expect(sheet.getAttribute('role')).toBe('dialog');
-    const rows = Array.from(sheet.querySelectorAll('.pf-rv-menu__row')).map(b => b.textContent?.trim());
-    expect(rows).toEqual(['Print', 'Share with a colleague', 'Edit results']);
-    (sheet.querySelector('.pf-rv-menu__row--print') as HTMLButtonElement).click();
+    await new Promise(r => setTimeout(r, 0));
+    const menu = document.body.querySelector('[role=menu]') as HTMLElement;
+    expect(menu.classList).toContain('pf-am-panel--sheet');
+    const rows = Array.from(menu.querySelectorAll('[role=menuitem]')).map(b => b.querySelector('.pf-am-item__t')?.textContent?.trim());
+    expect(rows).toEqual(['Share…', 'Copy patient link', 'Send on WhatsApp', 'Share with a colleague', 'Download PDF', 'Print',
+      'Edit results', 'Regenerate', 'Open patient', 'Open lab results']);
+    (menu.querySelector('[data-action=print]') as HTMLButtonElement).click();
+    f.detectChanges();
     expect(print).toHaveBeenCalled();
-    expect(c.moreOpen()).toBe(false);
+    expect(document.body.querySelector('[role=menu]')).toBeNull();
     // Touch → the band buttons are icon buttons with their words kept for AT.
     expect(el.querySelector('.pf-rv-act--send')?.classList).toContain('pf-rv-act--icon');
     expect(el.querySelector('.pf-rv-act--send')?.getAttribute('aria-label')).toBe('Send WhatsApp');
@@ -387,5 +396,90 @@ describe('Report view (nd) — rules', () => {
     const { el } = await render();
     expect(el.querySelector('.pf-rv-chip--order .nd-num')).not.toBeNull();
     expect(el.querySelector('.pf-rv-ctx__date')?.classList).toContain('nd-num');
+  });
+});
+
+describe('Report view (nd) — ⋮ report actions: permission + state rules', () => {
+  const ids = (c: any) => (c.menuActions() as Array<{ id: string }>).map(a => a.id);
+  afterEach(() => document.querySelectorAll('.pf-am-layer').forEach(n => n.remove()));
+
+  it('the ⋮ shows on web too (not only phones), with a popover beside the button', async () => {
+    const { el, f } = await render();
+    const trigger = el.querySelector('pf-actions-menu .pf-rv-act--more') as HTMLButtonElement;
+    expect(trigger).not.toBeNull();
+    expect(trigger.getAttribute('aria-label')).toBe('Report actions');
+    trigger.click(); f.detectChanges();
+    await new Promise(r => setTimeout(r, 0));
+    expect(document.body.querySelector('[role=menu]')?.classList).not.toContain('pf-am-panel--sheet');
+  });
+
+  it('pathologist (validate_result only): Download, Print, Regenerate, Open lab results — no share / send / edit', async () => {
+    const { c } = await render({ perms: ['validate_result'] });
+    expect(ids(c)).toEqual(['download', 'print', 'regenerate', 'lab']);
+  });
+
+  it('delivery desk without edit_result / lab access: share rows + WhatsApp, no Edit / Lab results', async () => {
+    const { c } = await render({ perms: ['deliver_report', 'view_order', 'view_patient'], messages: false });
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'download', 'print', 'regenerate', 'patient']);
+  });
+
+  it('a PRELIMINARY report is never regenerated as final from here', async () => {
+    const { c } = await render({ partial: true });
+    expect(ids(c)).not.toContain('regenerate');
+  });
+
+  it('Regenerate asks first (DialogService) — cancel sends nothing', async () => {
+    const { c, api } = await render();
+    const confirm = vi.spyOn(TestBed.inject(DialogService), 'confirm').mockResolvedValue(false);
+    c.runAction('regenerate');
+    await new Promise(r => setTimeout(r, 0));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Regenerate report?' }));
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('Regenerate confirmed → POST /api/reports/generate and the viewer moves to the new version', async () => {
+    const { c, api } = await render();
+    vi.spyOn(TestBed.inject(DialogService), 'confirm').mockResolvedValue(true);
+    api.post.mockReturnValue(of({ ...REPORT, id: 'rep-2' }) as never);
+    const router = TestBed.inject(Router) as any;
+    await c.regenerate();
+    expect(api.post).toHaveBeenCalledWith('/api/reports/generate', { orderId: 'ord-1', type: 'final' });
+    expect(c.report().id).toBe('rep-2');
+    expect(router.navigate).toHaveBeenCalledWith(['/reports/view', 'rep-2'], { replaceUrl: true });
+  });
+
+  it('Share… / Copy patient link go through the shared ReportActionsService (prefetched on open)', async () => {
+    const { c } = await render();
+    const svc = TestBed.inject(ReportActionsService);
+    const share = vi.spyOn(svc, 'share').mockResolvedValue('shared');
+    const copy = vi.spyOn(svc, 'copyLink').mockResolvedValue('copied');
+    const pre = vi.spyOn(svc, 'prefetch').mockImplementation(() => {});
+    c.onMenuOpened();
+    expect(pre).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }));
+    c.runAction('share');
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), FULL_NAME);
+    c.runAction('copy-link');
+    expect(copy).toHaveBeenCalled();
+  });
+
+  it('Open patient / Open lab results navigate to the existing screens', async () => {
+    const { c, api } = await render();
+    const router = TestBed.inject(Router) as any;
+    c.runAction('patient');
+    expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/patients', 'p1']);
+    api.get.mockImplementation(((url: string) => url === '/api/orders/ord-1' ? of({ samples: [{ id: 's9' }] }) : of([])) as never);
+    await c.openLabResults();
+    expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's9'], { queryParams: { view: 1 } });
+  });
+
+  it('Download PDF saves the same PDF the preview shows (no delivery recorded)', async () => {
+    const { c, api } = await render();
+    vi.spyOn(c, 'buildPdfBlob').mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
+    const had = (URL as any).createObjectURL;
+    (URL as any).createObjectURL = vi.fn(() => 'blob:dl');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try { await c.download(); } finally { (URL as any).createObjectURL = had; }
+    expect(click).toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
   });
 });
