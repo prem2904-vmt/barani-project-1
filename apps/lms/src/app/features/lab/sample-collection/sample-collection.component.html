@@ -81,7 +81,7 @@
         }
         <div class="pf-scan__body">
           <label class="pf-scan__label">{{ scan.manualEntry() ? 'Find patient or enter sample number' : 'Find patient or scan' }}</label>
-          <input type="text" class="pf-scan__input" pfKeys="sample" pfKeysEnter="Search" pfKeysEnterAria="Search patient or sample"
+          <input type="text" class="pf-scan__input" pfKeys="sample" pfSamplePreset pfKeysEnter="Search" pfKeysEnterAria="Search patient or sample"
                  [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
                  [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
                  (keydown.enter)="runSearch()" aria-label="Search" />

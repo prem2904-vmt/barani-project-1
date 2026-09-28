@@ -4,6 +4,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { brandingSrc } from '../../../core/services/uploads.service';
 import { PfKeysDirective } from '../numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../directives/sample-preset.directive';
 import { PfKeysKind } from '../numpad/pf-keys-layouts';
 
 /**
@@ -38,7 +39,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 @Component({
   selector: 'pf-hero-band',
   standalone: true,
-  imports: [PfKeysDirective],
+  imports: [PfKeysDirective, SamplePresetDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-hb">
@@ -86,6 +87,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
             </svg>
             <input class="pf-hb__input" type="text"
                    [pfKeys]="keys()" [pfKeysEnter]="keysEnter()" [pfKeysEnterAria]="keysEnterAria()"
+                   [pfSamplePreset]="keys() === 'sample'"
                    [attr.aria-label]="keys() ? placeholder() : null"
                    [placeholder]="placeholder()"
                    [value]="value()"
@@ -400,7 +402,9 @@ export class HeroBandComponent {
   /** Controlled value for the built-in search input. */
   readonly value = input<string>('');
   /** PF Keys kind for the built-in search on tablets ('sample' for sample /
-   *  tube lookups); null = the system keyboard (every other band search). */
+   *  tube lookups); null = the system keyboard (every other band search).
+   *  'sample' also turns on the sample-ID search preset (pfSamplePreset) on
+   *  every device: the field opens pre-typed with the current ID head. */
   readonly keys = input<PfKeysKind | null>(null);
   /** PF Keys primary key wording / aria-label (the band's own Enter). */
   readonly keysEnter = input<string | null>(null);

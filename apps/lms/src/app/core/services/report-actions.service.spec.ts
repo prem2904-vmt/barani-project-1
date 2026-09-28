@@ -130,3 +130,53 @@ describe('ReportActionsService — WhatsApp', () => {
     open.mockRestore();
   });
 });
+
+describe('ReportActionsService — WhatsApp Cloud API (lab sends from its number)', () => {
+  function cloud(canSend = true) {
+    const ctx = setup();
+    ctx.api.get.mockImplementation(((url: string) => url === '/api/whatsapp/settings' ? of({ canSend }) : of(null)) as never);
+    ctx.api.post.mockImplementation(((url: string) => url.endsWith('/resend')
+      ? of({ id: 'm1', reportId: 'r1', trigger: 'resend', kind: 'report_ready', status: 'sent', attempts: 1, toDisplay: '+91 ••••• 43210', createdAt: '' })
+      : of({})) as never);
+    return ctx;
+  }
+
+  it('before the lab flag is known (or without a sender) the ⋮ keeps the single wa.me row', () => {
+    const { svc } = cloud(false);
+    expect(svc.whatsAppActions({ id: 'r1', type: 'final' }).map(a => a.id)).toEqual(['whatsapp']);
+    svc.warmWhatsApp();
+    const rows = svc.whatsAppActions({ id: 'r1', type: 'final' });
+    expect(rows.map(a => a.label)).toEqual(['Send on WhatsApp']);
+    expect(rows[0].hint).toBe('Opens WhatsApp with the report link');
+  });
+
+  it('with a sender: Send WhatsApp (server) + Share via my WhatsApp (wa.me) — final reports only', () => {
+    const { svc } = cloud();
+    svc.warmWhatsApp();
+    const rows = svc.whatsAppActions({ id: 'r1', type: 'final' });
+    expect(rows.map(a => [a.id, a.label])).toEqual([['whatsapp', 'Send WhatsApp'], ['whatsapp-mine', 'Share via my WhatsApp']]);
+    expect(svc.whatsAppActions({ id: 'r1', type: 'partial' }).map(a => a.id)).toEqual(['whatsapp']);
+  });
+
+  it('sendWhatsApp posts the server send (no wa.me window) when the lab has a sender', async () => {
+    const { svc, api, toasts } = cloud();
+    svc.warmWhatsApp();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    svc.sendWhatsApp({ id: 'r1', orderId: 'o1', type: 'final' }, { name: 'Priya', phone: '9876543210' });
+    await new Promise(r => setTimeout(r, 0));
+    expect(api.post).toHaveBeenCalledWith('/api/whatsapp/reports/r1/resend', {});
+    expect(open).not.toHaveBeenCalled();
+    expect(toasts.success).toHaveBeenCalledWith('Sent on WhatsApp to +91 ••••• 43210', 5000);
+    open.mockRestore();
+  });
+
+  it('sendWhatsApp falls back to wa.me when the lab has no sender', () => {
+    const { svc, api } = cloud(false);
+    svc.warmWhatsApp();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    svc.sendWhatsApp({ id: 'r1', orderId: 'o1', type: 'final' }, { name: 'Priya', phone: '9876543210' });
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    expect(api.post).not.toHaveBeenCalledWith('/api/whatsapp/reports/r1/resend', {});
+    open.mockRestore();
+  });
+});

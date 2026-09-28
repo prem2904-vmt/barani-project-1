@@ -45,6 +45,7 @@ import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-stri
 import { waLink } from "../../../shared/utils/whatsapp";
 import { ensureFullReport, REPORT_QUEUE_SUMMARY_URL } from "../../../shared/utils/report-summary";
 import { WhatsAppService, waStatusLabel, type WaMessage } from "../../../core/services/whatsapp.service";
+import { WhatsAppSendService, waSendLabel } from "../../../core/services/whatsapp-send.service";
 import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
 import { savedValueRows } from "../../../shared/utils/result-flag";
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
@@ -107,6 +108,11 @@ export class ReportQueueComponent implements OnInit {
    *  row meta — a hidden fact, so it rides in the meta line (ND §20). Meta's
    *  "delivered" also flips the report to Delivered server-side. */
   waMeta(r: Report): string {
+    const live = this.waSend?.state(r.id);
+    if (live) {
+      const word = waSendLabel(live.phase).toLowerCase();
+      return live.to && live.phase !== "sending" && live.phase !== "failed" ? `WhatsApp ${word} · ${live.to}` : `WhatsApp ${word}`;
+    }
     const m = this._wa()[r.id];
     if (!m) return "";
     return `WhatsApp ${waStatusLabel(m.status).toLowerCase()}`;
@@ -162,6 +168,7 @@ export class ReportQueueComponent implements OnInit {
   }
   private readonly api = inject(ApiService);
   private readonly wa = inject(WhatsAppService);
+  private readonly waSend = inject(WhatsAppSendService);
   /** Design gate: the hero band renders in the NEW design only. */
   readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
@@ -257,9 +264,8 @@ export class ReportQueueComponent implements OnInit {
       a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
       a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
     }
-    if (this.canDeliver()) {
-      a.push({ id: 'whatsapp', label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report link' });
-    }
+    // Send WhatsApp (the lab's Cloud API number) + Share via my WhatsApp, or wa.me.
+    a.push(...this.reportActions.whatsAppActions(r));
     a.push({ id: 'view', label: 'View report', icon: 'view', group: 'Report' });
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
     if (this.canPrint()) {
@@ -284,6 +290,7 @@ export class ReportQueueComponent implements OnInit {
       case 'share': void this.reportActions.share(r, this.reportPatientName(r)); break;
       case 'copy-link': void this.reportActions.copyLink(r); break;
       case 'whatsapp': this.deliver(r, 'whatsapp'); break;
+      case 'whatsapp-mine': this.deliver(r, 'whatsapp-mine'); break;
       case 'view': this.view(r); break;
       case 'download': void this.downloadPdf(r); break;
       case 'print': void this.printReport(r); break;
@@ -564,6 +571,7 @@ export class ReportQueueComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.waSend.ensure();
     // Live: a validation elsewhere can complete an order → its report appears.
     this.liveQ.on('reports', 'validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     // Self-healing: ask the backend to generate any missing final
@@ -757,6 +765,15 @@ export class ReportQueueComponent implements OnInit {
 
   deliver(r: Report, via: string) {
     if (!this.canDeliver()) return;
+    // The lab sends WhatsApp from its Cloud API number: "WhatsApp" is the
+    // server send to the patient's number (Sending… → Sent → Delivered / Read
+    // in the row meta). "whatsapp-mine" is the wa.me share from this device.
+    if (via === "whatsapp" && this.waSend?.canSend(r)) {
+      if (r.qrToken || r.type === "final") void this.archiveReportPdf(r);
+      void this.waSend.send(r.id).then((m) => { if (m && m.status !== "failed") this.refresh(); });
+      return;
+    }
+    if (via === "whatsapp-mine") via = "whatsapp";
     // WhatsApp: the Meta API isn't wired up yet, so open WhatsApp Web / app
     // (wa.me) pre-filled with the patient's number + a message carrying the
     // report's QR verify link. wa.me can't auto-attach the PDF, so the link

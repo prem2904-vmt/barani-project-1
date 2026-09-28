@@ -16,6 +16,8 @@ export interface WaMessage {
   attempts: number;
   /** Masked recipient (last 4 digits only). */
   to?: string | null;
+  /** Masked for the desk: country code + last 5 ("+91 ••••• 79229"). */
+  toDisplay?: string | null;
   templateName?: string | null;
   createdAt: string;
   sentAt?: string | null;
@@ -31,6 +33,9 @@ export interface WaReportStatus {
   patientOptOut: boolean;
   autoSendEnabled: boolean;
   configured: boolean;
+  /** Staff can send this lab's reports on WhatsApp from the app right now
+   *  (server on + a sender: the lab's own number, else the shared one). */
+  canSend?: boolean;
   latest: WaMessage | null;
   history: WaMessage[];
 }
@@ -63,6 +68,8 @@ export interface WaSettings {
   sendUpdatedReports: boolean;
   templateName?: string | null;
   templateLanguage?: string | null;
+  /** Staff can send reports on WhatsApp from the app (see WaReportStatus.canSend). */
+  canSend?: boolean;
   sender?: WaSender | null;
   platform: {
     enabled: boolean;

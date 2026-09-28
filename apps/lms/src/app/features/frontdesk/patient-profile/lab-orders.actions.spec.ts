@@ -33,9 +33,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(o: { perms?: string[]; withReport?: boolean } = {}) {
+async function render(o: { perms?: string[]; withReport?: boolean; waCloud?: boolean } = {}) {
   const perms = o.perms ?? ['view_order', 'deliver_report', 'view_report'];
-  const api = { get: vi.fn((url: string) => url === '/api/reports/by-order/o1' ? of(REP) : of(null)), post: vi.fn(() => of({})) };
+  const api = {
+    get: vi.fn((url: string) => url === '/api/reports/by-order/o1' ? of(REP)
+      : url === '/api/whatsapp/settings' ? of({ canSend: !!o.waCloud }) : of(null)),
+    post: vi.fn(() => of({})),
+  };
   const router = { url: '/frontdesk/patients/p1', navigate: vi.fn(() => Promise.resolve(true)), events: of() };
   (window as any).matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   TestBed.configureTestingModule({
@@ -117,5 +121,18 @@ describe('Patient profile order detail — ⋮ report actions', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/reports/view', 'rep-1']);
     await c.runDetailAction(o, 'repeat');
     expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/order'], { queryParams: { patientId: 'p1', fromOrderId: 'o1' } });
+  });
+
+  it('lab sends WhatsApp from its number: Send WhatsApp (server) + Share via my WhatsApp (wa.me)', async () => {
+    const { c } = await render({ waCloud: true });
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'whatsapp-mine', 'download', 'print', 'open-report', 'repeat']);
+    const svc = TestBed.inject(ReportActionsService);
+    const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(() => {});
+    const mine = vi.spyOn(svc, 'whatsApp').mockImplementation(() => {});
+    const o = c.openOrder();
+    await c.runDetailAction(o, 'whatsapp');
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Nair', phone: '9876543210' });
+    await c.runDetailAction(o, 'whatsapp-mine');
+    expect(mine).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Nair', phone: '9876543210' });
   });
 });

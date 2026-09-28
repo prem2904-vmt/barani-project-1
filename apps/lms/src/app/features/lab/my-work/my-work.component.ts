@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
@@ -83,6 +84,7 @@ const COUNTERS: CounterSpec[] = [
   standalone: true,
   imports: [
     PfKeysDirective,
+    SamplePresetDirective,
     TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
     AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
@@ -273,7 +275,7 @@ const COUNTERS: CounterSpec[] = [
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="pf-scan__icon" aria-hidden="true">
             <path d="M3 5v14M6 5v14M9 5v14M12 5v14M15 5v14M18 5v14M21 5v14"/>
           </svg>
-          <input type="text" pfKeys="sample" pfKeysEnter="Open" pfKeysEnterAria="Open this sample"
+          <input type="text" pfKeys="sample" pfSamplePreset pfKeysEnter="Open" pfKeysEnterAria="Open this sample"
                  [value]="scan()"
                  (input)="setScan(asInput($event))"
                  (keydown.enter)="scanSubmit()"
@@ -503,7 +505,7 @@ const COUNTERS: CounterSpec[] = [
               </button>
               <pf-scan-icon class="pf-mw-scan__icon" [size]="14" />
               <input #intakeSearchField type="text" class="pf-mw-scan__input"
-                     pfKeys="sample" pfKeysEnter="Receive" pfKeysEnterAria="Receive this sample"
+                     pfKeys="sample" pfSamplePreset pfKeysEnter="Receive" pfKeysEnterAria="Receive this sample"
                      [placeholder]="(scanSvc.manualEntry() ? 'Enter ' : 'Scan or type ') + sampleIdExample()"
                      [value]="intakeScanInput()"
                      (input)="intakeScanInput.set($any($event.target).value)"
