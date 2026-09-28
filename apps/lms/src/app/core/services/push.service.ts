@@ -275,6 +275,14 @@ export class PushService {
     try { await (await import('./chat-native-reply')).clearReplyCredentials(); } catch { /* old shell */ }
   }
 
+  /** The build's APNs environment, read once from the native shell. */
+  private _apnsEnv: Promise<'production' | 'development' | null> | null = null;
+  private apnsEnvironment(): Promise<'production' | 'development' | null> {
+    return this._apnsEnv ??= import('./chat-native-reply')
+      .then(m => m.readApnsEnvironment())
+      .catch(() => null);
+  }
+
   /** Guards against overlapping registration runs (the auth effect can fire
    *  several times in quick succession on boot/login). */
   private _registering = false;
@@ -299,11 +307,17 @@ export class PushService {
       for (let i = 0; i < delays.length; i++) {
         if (delays[i]) await new Promise(r => setTimeout(r, delays[i]));
         try {
+          const platform = this.detectPlatform();
+          // iOS: tell the server which APNs gateway these tokens belong to
+          // (TestFlight = production, Xcode Debug = sandbox) — sent only when
+          // known, so the field is absent on older native shells.
+          const apnsEnvironment = platform === 'ios' ? await this.apnsEnvironment() : null;
           await firstValueFrom(this.api.post('/api/devices/register', {
-            platform: this.detectPlatform(),
+            platform,
             appToken: this.appToken(),
             voipToken: this.voipToken(),
-            appVersion: this.appVersion()
+            appVersion: this.appVersion(),
+            ...(apnsEnvironment ? { apnsEnvironment } : {}),
           }));
           void this.syncNativeReply();
           return; // landed
