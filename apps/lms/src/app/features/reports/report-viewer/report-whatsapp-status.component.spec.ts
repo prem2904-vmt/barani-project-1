@@ -4,6 +4,11 @@ import { vi } from 'vitest';
 import { ReportWhatsAppStatusComponent } from './report-whatsapp-status.component';
 import { WaMessage, WaReportStatus, WhatsAppService } from '../../../core/services/whatsapp.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { ApiService } from '../../../core/services/api.service';
+import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
+
+const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
 const MSG = (over: Partial<WaMessage> = {}): WaMessage => ({
   id: 'm1', reportId: 'rep-1', trigger: 'auto', kind: 'report_ready', status: 'delivered',
@@ -26,7 +31,11 @@ async function render(status: WaReportStatus | 'error', canDeliver = true, extra
   const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
   TestBed.configureTestingModule({
     imports: [ReportWhatsAppStatusComponent],
-    providers: [{ provide: WhatsAppService, useValue: wa }, { provide: ToastService, useValue: toasts }],
+    providers: [
+      { provide: WhatsAppService, useValue: wa }, { provide: ToastService, useValue: toasts },
+      { provide: AuthService, useValue: { hasPermission: () => canDeliver, user: () => null } },
+      { provide: ApiService, useValue: { post: vi.fn(() => of({})) } },
+    ],
   });
   const f = TestBed.createComponent(ReportWhatsAppStatusComponent);
   f.componentRef.setInput('reportId', 'rep-1');
@@ -38,14 +47,14 @@ async function render(status: WaReportStatus | 'error', canDeliver = true, extra
 }
 
 describe('Report WhatsApp auto-send status', () => {
-  it('shows the delivered status with the masked number and a Resend action', async () => {
+  it('shows the delivered status with the masked number and a Send again action', async () => {
     const { el } = await render(STATUS());
     expect(el.querySelector('.pf-rwa__status')?.textContent).toContain('Delivered');
     expect(el.querySelector('.pf-rwa__status')?.getAttribute('data-tone')).toBe('good');
     expect(el.textContent).toContain('3210');
     expect(el.textContent).not.toContain('9876543210');
     const btn = el.querySelector('.pf-rwa__btn') as HTMLButtonElement;
-    expect(btn.textContent).toContain('Resend');
+    expect(btn.textContent).toContain('Send again');
     // SVG icon, never an emoji glyph.
     expect(btn.querySelector('svg')).not.toBeNull();
   });
@@ -62,21 +71,26 @@ describe('Report WhatsApp auto-send status', () => {
     expect((el.querySelector('.pf-rwa__btn') as HTMLElement).textContent).toContain('Send now');
   });
 
-  it('Resend posts, toasts and reloads', async () => {
-    const { el, wa, toasts, f } = await render(STATUS());
+  it('Send again goes through the shared send (toast with the masked number) and reloads', async () => {
+    const { el, wa, toasts, f } = await render(STATUS(), true, {
+      resend: of(MSG({ id: 'm2', trigger: 'resend', status: 'sent', toDisplay: '+91 ••••• 43210' })),
+    });
     (el.querySelector('.pf-rwa__btn') as HTMLButtonElement).click();
+    await tick();
     f.detectChanges();
     expect(wa.resend).toHaveBeenCalledWith('rep-1');
-    expect(toasts.success).toHaveBeenCalledWith('Report link sent on WhatsApp');
-    expect(wa.reportStatus).toHaveBeenCalledTimes(2);
+    expect(toasts.success).toHaveBeenCalledWith('Sent on WhatsApp to +91 ••••• 43210', 5000);
+    expect(wa.reportStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+    TestBed.inject(WhatsAppSendService)['stopWatch']('rep-1');
   });
 
   it('a refused resend surfaces the server reason (e.g. balance due)', async () => {
     const err = Object.assign(new Error('Payment is still due on this order'), {});
     const { el, toasts, f } = await render(STATUS(), true, { resend: throwError(() => err) });
     (el.querySelector('.pf-rwa__btn') as HTMLButtonElement).click();
+    await tick();
     f.detectChanges();
-    expect(toasts.error).toHaveBeenCalledWith('Payment is still due on this order');
+    expect(toasts.error).toHaveBeenCalledWith('Payment is still due on this order', 6000);
   });
 
   it('the opt-out switch saves and disables Resend', async () => {
@@ -96,6 +110,13 @@ describe('Report WhatsApp auto-send status', () => {
     expect(el.querySelector('.pf-rwa__status')).not.toBeNull();
     expect(el.querySelector('.pf-rwa__btn')).toBeNull();
     expect(el.querySelector('.pf-rwa__opt')).toBeNull();
+  });
+
+  it('lab sends from the app (canSend) but auto-send is off: "Not sent yet" + Send now', async () => {
+    const { el } = await render(STATUS({ autoSendEnabled: false, canSend: true, latest: null, history: [] }));
+    expect(el.querySelector('.pf-rwa__sec')?.textContent?.trim()).toBe('WhatsApp');
+    expect(el.textContent).toContain('Not sent yet');
+    expect((el.querySelector('.pf-rwa__btn') as HTMLElement).textContent).toContain('Send now');
   });
 
   it('renders nothing when auto-send is off and nothing was ever sent', async () => {

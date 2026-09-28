@@ -31,6 +31,7 @@ import { ReportWhatsAppStatusComponent } from './report-whatsapp-status.componen
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { WhatsAppSendService, waSendLabel } from '../../../core/services/whatsapp-send.service';
 
 interface ReportData {
   patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; sex?: string; phone?: string; mrn?: string };
@@ -296,7 +297,8 @@ export class ReportViewerComponent implements OnInit {
       a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
     }
     if (this.canDeliver()) {
-      a.push({ id: 'whatsapp', label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report link' });
+      // Send WhatsApp (the lab's Cloud API number) + Share via my WhatsApp, or wa.me.
+      a.push(...this.reportActions.whatsAppActions({ ...r, type: this.isPartial() ? 'partial' : r.type }));
       if (this.entitlements.moduleEnabled('messages')) a.push({ id: 'colleague', label: 'Share with a colleague', icon: 'chat', group: 'Share' });
     }
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
@@ -320,6 +322,7 @@ export class ReportViewerComponent implements OnInit {
       case 'share': void this.reportActions.share(r, this.patientName()); break;
       case 'copy-link': void this.reportActions.copyLink(r); break;
       case 'whatsapp': this.deliverWhatsApp(); break;
+      case 'whatsapp-mine': this.shareViaMyWhatsApp(); break;
       case 'colleague': void this.openSharePicker(); break;
       case 'download': void this.download(); break;
       case 'print': void this.print(); break;
@@ -829,6 +832,7 @@ export class ReportViewerComponent implements OnInit {
   private readonly uploads = inject(UploadsService);
 
   ngOnInit() {
+    this.waSend.ensure();
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) { this.back(); return; }
     this.load();
@@ -979,7 +983,47 @@ export class ReportViewerComponent implements OnInit {
    *  PDF. (wa.me cannot auto-attach files, so the link stands in for the
    *  attachment.) We still record the delivery best-effort so the queue
    *  reflects it. */
+  // ── Send WhatsApp through the lab's WhatsApp Cloud API number ─────────
+  private readonly waSend = inject(WhatsAppSendService);
+  /** This final report goes out from the server (the lab has a sender). */
+  readonly waCloud = computed(() => {
+    const r = this._report();
+    return !!r && !this.isPartial() && this.waSend.canSend(r);
+  });
+  /** Live phase of the server send for the report on screen. */
+  readonly waState = computed(() => this.waSend.state(this._report()?.id));
+  /** The primary's words: Send WhatsApp → Sending… → Sent → Delivered / Read. */
+  readonly waLabel = computed(() => {
+    const st = this.waState();
+    return st && st.phase !== 'failed' ? waSendLabel(st.phase) : 'Send WhatsApp';
+  });
+  /** Sent / Delivered / Read: the primary shows the check. */
+  readonly waDone = computed(() => ['sent', 'delivered', 'read'].includes(this.waState()?.phase ?? ''));
+
+  /** THE primary. Lab has WhatsApp Cloud → the server sends the approved
+   *  template with the report link to the patient's number; otherwise (or a
+   *  preliminary report) today's wa.me flow. */
   deliverWhatsApp() {
+    const r = this._report();
+    if (!r || !this.canDeliver()) return;
+    if (this.waCloud()) {
+      if (this.waSend.busy(r.id)) return;
+      // The public link serves the archived PDF — archive it alongside (best-effort).
+      void this.archiveReportPdf(r);
+      void this.waSend.send(r.id).then((m) => {
+        if (!m || m.status === 'failed') return;
+        const cur = this._report();
+        if (cur && cur.id === r.id) this._report.set({ ...cur, deliveryStatus: 'delivered', deliveredVia: 'whatsapp' });
+      });
+      return;
+    }
+    this.shareViaMyWhatsApp();
+  }
+
+  /** Share via my WhatsApp: the click-to-chat deep link (wa.me) on THIS
+   *  device — the fallback when the lab has no Cloud API sender, and the
+   *  secondary ⋮ row when it does. */
+  shareViaMyWhatsApp() {
     const r = this._report();
     const d = this.data();
     if (!r || !this.canDeliver()) return;

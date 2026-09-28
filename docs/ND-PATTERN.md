@@ -1360,6 +1360,19 @@ exact PDF on screen. Visual redesign only: every action and API is unchanged.
 - **Action feedback:** Print shows "Preparing…" while the PDF builds, then a
   brief "Printing" with an SVG check; Send shows "Sent" with the check
   (~1.8s, a small pop), then the label returns. Errors stay on the toast.
+- **Send WhatsApp = the lab's WhatsApp Cloud API number** when the lab has a
+  sender (`GET /api/whatsapp/settings` → `canSend`; `WhatsAppSendService`):
+  the server sends the approved template with the report link to THE
+  patient's number (`POST /api/whatsapp/reports/{id}/resend`). The primary
+  reads **Sending…** (spinner, disabled) → **Sent** / **Delivered** / **Read**
+  with the check while the message is watched (~30 s poll of the status
+  endpoint); the toast names the masked number ("+91 ••••• 79229"); a Meta
+  failure / opt-out / no phone / unpaid bill stays on the toast and the REPORT
+  card's WhatsApp section. The ⋮ then offers **Send WhatsApp** + **Share via
+  my WhatsApp** (the wa.me link on this device, secondary). No sender, or a
+  preliminary report: today's wa.me flow and one "Send on WhatsApp" row. The
+  Results list rows and the Patient profile order ⋮ follow the same rule
+  (`ReportActionsService.whatsAppActions` / `sendWhatsApp`).
 - **Context bar (the pill):** the patient chip (FULL name + "29/M · MRN";
   phones: the name only, wrapping), the order number (≥1024px), a status
   chip "Final · Completed" (violet dot; a ring for Preliminary; "Amended"

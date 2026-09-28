@@ -413,13 +413,20 @@ export class LabOrdersComponent implements OnDestroy {
   // print) and the full report view — each by its endpoint / route guard.
   private readonly auth = inject(AuthService);
   private readonly reportActions = inject(ReportActionsService);
+  // The delivery desk's "Send WhatsApp" row depends on the lab's sender.
+  private readonly _waWarm = this.reportActions.warmWhatsApp();
   /** orderId → the stored report (by-order), fetched once. */
   private readonly repByOrder = new Map<string, Promise<StoredReport | null>>();
   private has(perms: string[]): boolean { return perms.some(p => this.auth.hasPermission(p)); }
 
   /** The order's report summary (the patient history carries it). */
-  private reportOf(o: Order): { id: string; status?: string | null } | null {
-    return (o as Order & { report?: { id: string; status?: string | null } | null }).report ?? null;
+  private reportOf(o: Order): { id: string; status?: string | null; type?: string | null } | null {
+    return (o as Order & { report?: { id: string; status?: string | null; type?: string | null } | null }).report ?? null;
+  }
+
+  /** The history summary's report type, when it carries one (else final). */
+  private reportType(rep: { type?: string | null; status?: string | null }): string {
+    return rep.type || (rep.status === 'partial' ? 'partial' : 'final');
   }
 
   readonly detailActions = computed<PfAction[]>(() => {
@@ -431,9 +438,8 @@ export class LabOrdersComponent implements OnDestroy {
       a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
       a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
     }
-    if (this.auth.hasPermission('deliver_report')) {
-      a.push({ id: 'whatsapp', label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report link' });
-    }
+    // Send WhatsApp (the lab's Cloud API number) + Share via my WhatsApp, or wa.me.
+    a.push(...this.reportActions.whatsAppActions({ id: rep.id, orderId: o.id, type: this.reportType(rep) }));
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
     a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report', hint: this.auth.hasPermission('deliver_report') ? 'Recorded as delivered' : undefined });
     // The full viewer reads GET /api/reports/{id} (view_report | deliver_report).
@@ -467,7 +473,8 @@ export class LabOrdersComponent implements OnDestroy {
     switch (id) {
       case 'share': await this.reportActions.share(ref, this.snapshotPatient(rep).name); break;
       case 'copy-link': await this.reportActions.copyLink(ref); break;
-      case 'whatsapp': this.reportActions.whatsApp(ref, this.snapshotPatient(rep)); break;
+      case 'whatsapp': this.reportActions.sendWhatsApp(ref, this.snapshotPatient(rep)); break;
+      case 'whatsapp-mine': this.reportActions.whatsApp(ref, this.snapshotPatient(rep)); break;
       case 'download': await this.reportActions.download(ref); break;
       case 'print': await this.reportActions.print(ref); break;
     }

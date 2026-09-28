@@ -6,6 +6,7 @@ import { signal } from '@angular/core';
 import { of, EMPTY } from 'rxjs';
 import { vi } from 'vitest';
 import { ReportQueueComponent } from './report-queue.component';
+import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 import { cultureStagesDone, cultureSummary, deptCountLabel, pendingStatus, reportStatus } from './report-queue.partial';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -100,7 +101,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[]; wa?: Record<string, unknown> } = {}) {
+async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[]; wa?: Record<string, unknown>; waCloud?: boolean } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover') ? !opts.touch : false,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
@@ -110,9 +111,13 @@ async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unkno
       if (url === '/api/reports/queue?view=summary') return of(opts.queue ?? QUEUE);
       if (url === '/api/orders/today') return of(opts.orders ?? [PARTIAL_ORDER, VALUES_ORDER]);
       if (url === '/api/billing/outstanding') return of({ due: [{ orderId: 'o-r1' }] });
+      if (url === '/api/whatsapp/settings') return of({ canSend: !!opts.waCloud });
       return of([]);
     }),
-    post: vi.fn((url: string, _body?: unknown) => (url === '/api/whatsapp/status' ? of(opts.wa ?? {}) : of({}))),
+    post: vi.fn((url: string, _body?: unknown) => (url === '/api/whatsapp/status' ? of(opts.wa ?? {})
+      : url.endsWith('/resend') ? of({ id: 'm9', reportId: 'r1', trigger: 'resend', kind: 'report_ready', status: 'sent', attempts: 1,
+          to: '••••••••3210', toDisplay: '+91 ••••• 43210', createdAt: '2026-09-28T10:00:00Z' })
+      : of({}))),
   };
   const router = { url: '/reports', navigate: vi.fn(() => Promise.resolve(true)), events: of() };
   TestBed.configureTestingModule({
@@ -678,5 +683,38 @@ describe('Reports list (nd) — WhatsApp auto-send status', () => {
     tab('all');
     const metas = [...el.querySelectorAll<HTMLElement>('.pf-rq-card__meta')].map(m => m.textContent!);
     expect(metas.every(m => !m.includes('WhatsApp'))).toBe(true);
+  });
+});
+
+describe('Reports list — Send WhatsApp through the lab\'s WhatsApp Cloud API number', () => {
+  afterEach(() => closeMenus());
+  const ids = (c: any, i = 0) => c.rowActions().get(c.items()[i].id).map((a: { id: string }) => a.id);
+
+  it('the ⋮ offers Send WhatsApp (server) + Share via my WhatsApp (wa.me) when the lab has a sender', async () => {
+    const { c } = await render({ waCloud: true, perms: ['deliver_report', 'view_report', 'view_order'] });
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'whatsapp-mine', 'view', 'download', 'print', 'regenerate']);
+  });
+
+  it('WhatsApp posts the server send (no wa.me window) and the row meta shows Sent + the masked number', async () => {
+    const { c, el, f, api, tab } = await render({ waCloud: true });
+    tab('all');
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const r = c.items().find((x: { id: string }) => x.id === 'r1');
+    c.deliver(r, 'whatsapp');
+    await new Promise(res => setTimeout(res, 0));
+    f.detectChanges();
+    expect(api.post).toHaveBeenCalledWith('/api/whatsapp/reports/r1/resend', {});
+    expect(open).not.toHaveBeenCalled();
+    const metas = [...el.querySelectorAll<HTMLElement>('.pf-rq-card__meta')].map(m => m.textContent!.trim());
+    expect(metas.some(m => m.endsWith('WhatsApp sent · +91 ••••• 43210'))).toBe(true);
+    (TestBed.inject(WhatsAppSendService) as any).stopWatch('r1');
+  });
+
+  it('Share via my WhatsApp opens wa.me on this device', async () => {
+    const { c, api } = await render({ waCloud: true });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    c.runRowAction(c.items()[0], 'whatsapp-mine');
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    expect(api.post).not.toHaveBeenCalledWith(expect.stringMatching(/\/resend$/), {});
   });
 });

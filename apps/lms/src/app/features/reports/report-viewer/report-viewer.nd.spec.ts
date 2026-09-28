@@ -18,6 +18,7 @@ import { ReportLayoutService } from '../../../core/services/report-layout.servic
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ReportActionsService } from '../../../core/services/report-actions.service';
+import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 
 /**
  * Report view on the nd pattern (docs/ND-PATTERN.md → "Report view"):
@@ -37,7 +38,7 @@ const REPORT = {
   }),
 };
 
-type Opts = { narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean };
+type Opts = { narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean; waCloud?: boolean; waStatus?: string };
 
 const realMatchMedia = (window as any).matchMedia;
 beforeEach(() => {
@@ -72,9 +73,13 @@ async function render(opts: Opts = {}) {
       if (url.startsWith('/api/reports/')) return opts.fail ? throwError(() => new Error('boom')) : of(report);
       if (url === '/api/config/report-template') return of({ dateFormat: 'dd MMM yyyy', timeFormat: '24h' });
       if (url === '/api/directory/users') return of([{ id: 'u2', displayName: 'Priya Nair', email: 'priya@lab', isActive: true }]);
+      if (url === '/api/whatsapp/settings') return of({ canSend: !!opts.waCloud });
       return of([]);
     }),
-    post: vi.fn(() => of({})),
+    post: vi.fn((url: string) => url.endsWith('/resend')
+      ? of({ id: 'm1', reportId: 'rep-1', trigger: 'resend', kind: 'report_ready', status: opts.waStatus ?? 'sent', attempts: 1,
+             to: '••••••••3210', toDisplay: '+91 ••••• 43210', createdAt: '2026-09-28T10:00:00Z', errorReason: opts.waStatus === 'failed' ? 'Message undeliverable.' : null })
+      : of({})),
   };
   const holding = signal(!!opts.holding);
   TestBed.configureTestingModule({
@@ -481,5 +486,64 @@ describe('Report view (nd) — ⋮ report actions: permission + state rules', ()
     try { await c.download(); } finally { (URL as any).createObjectURL = had; }
     expect(click).toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('Report view (nd) — Send WhatsApp through the lab\'s WhatsApp Cloud API number', () => {
+  const sendBtn = (el: HTMLElement) => el.querySelector('.pf-rv-act--send') as HTMLButtonElement;
+
+  it('lab with a sender: the primary sends from the server (no wa.me window) and shows Sent with the check', async () => {
+    const { el, f, c, api } = await render({ waCloud: true });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    expect(c.waCloud()).toBe(true);
+    expect(primaries(el).length).toBe(1);
+    sendBtn(el).click();
+    f.detectChanges();
+    await new Promise(r => setTimeout(r, 0));
+    f.detectChanges();
+    expect(api.post).toHaveBeenCalledWith('/api/whatsapp/reports/rep-1/resend', {});
+    expect(open).not.toHaveBeenCalled();
+    expect(sendBtn(el).textContent).toContain('Sent');
+    expect(sendBtn(el).querySelector('svg')).not.toBeNull();
+    expect(sendBtn(el).getAttribute('aria-label')).toBe('Sent on WhatsApp');
+    expect(c.waState()).toMatchObject({ phase: 'sent', to: '+91 ••••• 43210' });
+    // The delivery is recorded like the wa.me flow; the REPORT card reflects it.
+    expect(api.post).toHaveBeenCalledWith('/api/reports/rep-1/deliver', { via: 'whatsapp', note: 'WhatsApp Cloud API' });
+    expect(c.deliveryLine()).toBe('Delivered via WhatsApp');
+    (TestBed.inject(WhatsAppSendService) as any).stopWatch('rep-1');
+  });
+
+  it('a Meta failure keeps the label "Send WhatsApp" and records no delivery', async () => {
+    const { el, f, api } = await render({ waCloud: true, waStatus: 'failed' });
+    sendBtn(el).click();
+    await new Promise(r => setTimeout(r, 0));
+    f.detectChanges();
+    expect(sendBtn(el).textContent).toContain('Send WhatsApp');
+    expect(api.post).not.toHaveBeenCalledWith('/api/reports/rep-1/deliver', expect.anything());
+  });
+
+  it('the ⋮ keeps wa.me as the secondary "Share via my WhatsApp"', async () => {
+    const { c } = await render({ waCloud: true });
+    const ids = c.menuActions().map((a: { id: string }) => a.id);
+    expect(ids).toContain('whatsapp');
+    expect(ids).toContain('whatsapp-mine');
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    c.runAction('whatsapp-mine');
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+  });
+
+  it('lab without a sender: today\'s wa.me flow, one WhatsApp row', async () => {
+    const { el, c, api } = await render({ waCloud: false });
+    expect(c.waCloud()).toBe(false);
+    expect(c.menuActions().map((a: { id: string }) => a.id)).not.toContain('whatsapp-mine');
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    sendBtn(el).click();
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    expect(api.post).not.toHaveBeenCalledWith('/api/whatsapp/reports/rep-1/resend', {});
+  });
+
+  it('a preliminary report never goes through the server send', async () => {
+    const { c } = await render({ waCloud: true, partial: true });
+    expect(c.waCloud()).toBe(false);
   });
 });

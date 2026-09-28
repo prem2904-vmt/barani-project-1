@@ -43,6 +43,9 @@
 .pf-rv-act__i { display: none; flex: none; }
 .pf-rv-act__t { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .pf-rv-act__check { flex: none; }
+/* Send WhatsApp (Cloud API) in flight. */
+.pf-rv-act__spin { animation: pf-rv-spin 900ms linear infinite; }
+@keyframes pf-rv-spin { to { transform: rotate(360deg); } }
 /* The ⋮ (report actions menu) shows at EVERY width — an icon button. */
 .pf-rv-more { display: inline-flex; flex: none; }
 .pf-rv-act.pf-rv-act--icon { width: 44px; min-width: 44px; height: 44px; padding: 0; gap: 0; border-radius: 12px; }
@@ -251,6 +254,7 @@
 
 /* ── Reduced motion: nothing moves, everything is instant ──────────── */
 @media (prefers-reduced-motion: reduce) {
+  .pf-rv-act__spin,
   .pf-rv-in, .pf-rv-act--done, .pf-rv-pages--in, .pf-rv-side, .pf-rv-strip,
   .pf-rv-scrim, .pf-rv-sheet, .pf-rv-sheet--share, .pf-rv-sheet--details {
     animation: none !important;

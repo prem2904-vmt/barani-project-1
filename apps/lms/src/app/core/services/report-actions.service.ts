@@ -9,13 +9,21 @@ import { orderReportQrUrl } from '../../shared/utils/patient-strip-qr';
 import { copyText, shareLink, shareRoute, shareHint, type ShareEnv, type ShareOutcome } from '../../shared/utils/report-share';
 import { waLink } from '../../shared/utils/whatsapp';
 import { printPdfBlobUrl } from '../../shared/utils/print-pdf';
+import type { PfAction } from '../../shared/components/actions-menu/actions-menu.component';
+import { WhatsAppSendService } from './whatsapp-send.service';
 
 /** What a report row needs for the link / share / delivery actions. */
 export interface ReportRef {
   id: string;
   orderId?: string | null;
   qrToken?: string | null;
+  /** 'final' | 'partial' — only a final report goes through the server send. */
+  type?: string | null;
 }
+
+/** ⋮ ids of the two WhatsApp rows (see `whatsAppActions`). */
+export const WA_ACTION_SEND = 'whatsapp';
+export const WA_ACTION_MINE = 'whatsapp-mine';
 
 /** `GET /api/orders/{id}/track-token` — its guard (TrackingController). */
 export const TRACK_TOKEN_PERMS = ['create_bill', 'view_bill', 'view_order', 'create_order'];
@@ -190,6 +198,41 @@ export class ReportActionsService {
     printPdfBlobUrl(url, { revokeOnDone: true });
     if (this.auth.hasPermission('deliver_report')) this.recordDelivery(rep, 'print');
     return true;
+  }
+
+  // ── WhatsApp: the lab's Cloud API sender, else wa.me ─────────────────
+
+  private readonly waSend = inject(WhatsAppSendService);
+
+  /** The ⋮ WhatsApp rows for the delivery desk. Lab sends from the server
+   *  (`WhatsAppSendService.cloud()`, final report): **Send WhatsApp** (the
+   *  lab's number → the patient's) + **Share via my WhatsApp** (wa.me on this
+   *  device, the secondary). Otherwise today's single wa.me row. */
+  whatsAppActions(r: ReportRef | null | undefined): PfAction[] {
+    if (!r || !this.auth.hasPermission('deliver_report')) return [];
+    if (this.waSend.canSend(r)) {
+      return [
+        { id: WA_ACTION_SEND, label: 'Send WhatsApp', icon: 'whatsapp', group: 'Share', hint: "Sends the report link to the patient's number" },
+        { id: WA_ACTION_MINE, label: 'Share via my WhatsApp', icon: 'share', group: 'Share', hint: 'Opens WhatsApp on this device with the report link' },
+      ];
+    }
+    return [{ id: WA_ACTION_SEND, label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report link' }];
+  }
+
+  /** Warm the "lab sends from the server" flag (screens call it on init —
+   *  never from inside a computed). */
+  warmWhatsApp(): void { this.waSend.ensure(); }
+
+  /** "Send WhatsApp": the server send when the lab has it, else wa.me. */
+  sendWhatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }): void {
+    if (!this.auth.hasPermission('deliver_report')) return;
+    if (this.waSend.canSend(rep)) {
+      // The public link serves the archived PDF — archive it alongside (best-effort).
+      void this.archive(rep);
+      void this.waSend.send(rep.id);
+      return;
+    }
+    this.whatsApp(rep, patient);
   }
 
   /** Send on WhatsApp — wa.me pre-filled with the report link (deliver_report). */

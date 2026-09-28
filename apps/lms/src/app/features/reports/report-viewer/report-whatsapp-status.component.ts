@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -8,14 +8,15 @@ import {
   waStatusLabel,
   waStatusTone,
 } from '../../../core/services/whatsapp.service';
+import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 
 /**
- * The REPORT card's "WhatsApp (automatic)" section: the Meta Cloud API
- * auto-send status of THIS report version (Queued / Sent / Delivered / Read /
- * Failed + the reason), a Resend action for the delivery desk
- * (deliver_report) and the patient's "Don't send WhatsApp" switch. The manual
- * wa.me button in the band stays as the fallback. Renders nothing when the
- * lab has auto-send off and nothing was ever sent for this report.
+ * The REPORT card's "WhatsApp" section: the Meta Cloud API status of THIS
+ * report version (Queued / Sent / Delivered / Read / Failed + the reason, the
+ * masked number), a Send now / Send again action for the delivery desk
+ * (deliver_report, through WhatsAppSendService like the band's primary) and
+ * the patient's "Don't send WhatsApp" switch. Renders nothing when the lab
+ * has no WhatsApp sending and nothing was ever sent for this report.
  */
 @Component({
   selector: 'pf-report-whatsapp-status',
@@ -25,7 +26,7 @@ import {
   template: `
     @if (visible(); as st) {
       <section class="pf-rwa" aria-labelledby="pf-rwa-t">
-        <h3 class="pf-rwa__sec" id="pf-rwa-t">WhatsApp · automatic</h3>
+        <h3 class="pf-rwa__sec" id="pf-rwa-t">{{ st.autoSendEnabled ? 'WhatsApp · automatic' : 'WhatsApp' }}</h3>
 
         @if (st.latest; as m) {
           <div class="pf-rwa__row">
@@ -41,15 +42,17 @@ import {
               {{ m.errorReason }}@if (m.status === 'queued' && m.nextAttemptAt) { Next try {{ m.nextAttemptAt | date: 'h:mm a' }}. }
             </p>
           }
-          @if (m.to) { <p class="pf-rwa__muted pf-rwa__to nd-num">To {{ m.to }}</p> }
+          @if (m.toDisplay || m.to) { <p class="pf-rwa__muted pf-rwa__to nd-num">To {{ m.toDisplay || m.to }}</p> }
         } @else {
           <p class="pf-rwa__muted">
             @if (st.patientOptOut) {
               This patient opted out of WhatsApp.
             } @else if (!st.configured) {
               WhatsApp sending isn't set up on the server yet — messages will wait in the queue.
-            } @else {
+            } @else if (st.autoSendEnabled) {
               Sends automatically once this final report is ready and the bill is fully paid.
+            } @else {
+              Not sent yet. Send WhatsApp sends the report link to the patient's number.
             }
           </p>
         }
@@ -57,9 +60,9 @@ import {
         @if (canDeliver()) {
           <div class="pf-rwa__acts">
             <button type="button" class="nd-btn nd-btn--secondary pf-rwa__btn" (click)="resend()"
-                    [disabled]="busy() || st.patientOptOut" [attr.aria-busy]="busy()">
+                    [disabled]="busy() || sending() || st.patientOptOut || (!st.configured && !st.canSend)" [attr.aria-busy]="sending()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-              {{ st.latest ? 'Resend' : 'Send now' }}
+              {{ sending() ? 'Sending…' : st.latest ? 'Send again' : 'Send now' }}
             </button>
             <button type="button" class="nd-toggle pf-rwa__opt" role="switch" [attr.aria-checked]="st.patientOptOut"
                     [disabled]="busy()" (click)="toggleOptOut()">
@@ -105,11 +108,16 @@ export class ReportWhatsAppStatusComponent {
   readonly status = signal<WaReportStatus | null>(null);
   readonly busy = signal(false);
 
-  /** Hidden while auto-send is off and nothing was ever sent for this report. */
+  private readonly waSend = inject(WhatsAppSendService);
+  /** A staff send of THIS report is in flight (band button or here). */
+  readonly sending = computed(() => this.waSend.busy(this.reportId()));
+
+  /** Hidden while the lab has no WhatsApp sending (auto-send off, no server
+   *  sender) and nothing was ever sent for this report. */
   readonly visible = computed(() => {
     const st = this.status();
     if (!st) return null;
-    return st.autoSendEnabled || st.latest || st.patientOptOut ? st : null;
+    return st.autoSendEnabled || st.canSend || st.latest || st.patientOptOut ? st : null;
   });
   readonly label = computed(() => waStatusLabel(this.status()?.latest?.status));
   readonly tone = computed(() => waStatusTone(this.status()?.latest?.status));
@@ -117,7 +125,13 @@ export class ReportWhatsAppStatusComponent {
   constructor() {
     effect(() => {
       const id = this.reportId();
-      if (id) this.load(id);
+      if (id) untracked(() => this.load(id));
+    });
+    // A staff send (band "Send WhatsApp" or the ⋮ row) moved this report's
+    // message on — Sent → Delivered / Read — reload the section.
+    effect(() => {
+      const live = this.waSend.state(this.reportId());
+      if (live && live.phase !== 'sending') untracked(() => this.load());
     });
   }
 
@@ -128,21 +142,11 @@ export class ReportWhatsAppStatusComponent {
     });
   }
 
+  /** Send now / Send again — the same server send as the band's primary
+   *  (toasts, Sent → Delivered / Read watch, delivery record). */
   resend(): void {
-    if (this.busy() || !this.canDeliver()) return;
-    this.busy.set(true);
-    this.wa.resend(this.reportId()).subscribe({
-      next: (m) => {
-        this.busy.set(false);
-        if (m.status === 'failed') this.toasts.error(m.errorReason || 'WhatsApp could not send the report link');
-        else this.toasts.success(m.status === 'sent' ? 'Report link sent on WhatsApp' : 'Queued for WhatsApp');
-        this.load();
-      },
-      error: (e) => {
-        this.busy.set(false);
-        this.toasts.error(ApiError.from(e).message);
-      },
-    });
+    if (this.busy() || this.sending() || !this.canDeliver()) return;
+    void this.waSend.send(this.reportId()).then(() => this.load());
   }
 
   toggleOptOut(): void {
