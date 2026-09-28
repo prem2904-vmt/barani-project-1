@@ -1,6 +1,6 @@
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
-import { clearReplyCredentials, parseChatOpenLink, syncReplyCredentials } from './chat-native-reply';
+import { clearReplyCredentials, parseChatOpenLink, readApnsEnvironment, syncReplyCredentials } from './chat-native-reply';
 
 /**
  * Reply-from-notification, web half: the device-bound reply token is fetched
@@ -64,5 +64,23 @@ describe('chat-native-reply — open links', () => {
     expect(parseChatOpenLink('prefrontal-chat://open?c=not-a-uuid')).toBeNull();
     expect(parseChatOpenLink(`prefrontal-call://answer?callId=${id}`)).toBeNull();
     expect(parseChatOpenLink(`https://evil.example/open?c=${id}`)).toBeNull();
+  });
+});
+
+/**
+ * iOS push (stage 2026-09-28): an APNs token is valid on ONE gateway —
+ * TestFlight / App Store builds = production, Xcode Debug = sandbox. The app
+ * reports its build's environment with the device registration; anything the
+ * native shell can't answer is null (the server then learns it itself).
+ */
+describe('chat-native-reply — APNs environment', () => {
+  it('passes through production / development', async () => {
+    expect(await readApnsEnvironment({ apnsEnvironment: async () => ({ environment: 'production' }) })).toBe('production');
+    expect(await readApnsEnvironment({ apnsEnvironment: async () => ({ environment: 'development' }) })).toBe('development');
+  });
+  it('is null for unknown values and never throws on an older native shell', async () => {
+    expect(await readApnsEnvironment({ apnsEnvironment: async () => ({ environment: null }) })).toBeNull();
+    expect(await readApnsEnvironment({ apnsEnvironment: async () => ({ environment: 'staging' }) })).toBeNull();
+    await expect(readApnsEnvironment({ apnsEnvironment: async () => { throw new Error('not implemented'); } })).resolves.toBeNull();
   });
 });
