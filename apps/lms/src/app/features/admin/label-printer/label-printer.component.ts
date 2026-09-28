@@ -59,9 +59,25 @@ type PrintTab = 'printer' | 'label' | 'align' | 'quality' | 'docs';
       <div class="pf-lp-col">
       @if (!supported()) {
         <div class="pf-note">
-          Direct printing runs in the installed <b>Prefrontal</b> desktop or tablet app.
-          On the web, labels + invoices use the system print dialog.
+          Tube labels print only on a label printer, driven by the installed <b>Prefrontal</b>
+          desktop or tablet app. A web browser can't reach one directly, so "Print label" asks
+          first — it never falls back to a normal printer on its own. Invoices + reports still use
+          the system print dialog.
         </div>
+        @if (showSec('printer')) {
+          <div class="pf-card pf-lp-route">
+            <div class="min-w-0">
+              <p class="pf-eyebrow">Labels in this browser</p>
+              <p class="pf-val">
+                @if (cfg().labelRoute === 'system') { System print dialog (label-sized page) }
+                @else { Ask each time }
+              </p>
+            </div>
+            @if (cfg().labelRoute === 'system') {
+              <button type="button" class="pf-btn" (click)="printConfig.setLabelRoute('printer')">Ask each time</button>
+            }
+          </div>
+        }
       }
 
       <!-- ── LABEL PRINTER ─────────────────────────────────────── -->

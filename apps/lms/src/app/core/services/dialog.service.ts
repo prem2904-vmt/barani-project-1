@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
-export type DialogKind = 'prompt' | 'confirm' | 'choice';
+export type DialogKind = 'prompt' | 'confirm' | 'choice' | 'actions';
 
 /** One option of a `choose()` dialog — rendered as a selectable card. */
 export interface DialogChoice {
@@ -10,6 +10,21 @@ export interface DialogChoice {
 }
 export type DialogTone = 'primary' | 'danger';
 
+/** One footer button of an `actions()` dialog. Exactly one should be
+ *  'primary' (the CTA); the rest 'secondary'. */
+export interface DialogAction {
+  value: string;
+  label: string;
+  variant?: 'primary' | 'secondary';
+}
+
+/** Result of an `actions()` dialog: the button pressed (null = dismissed) and
+ *  the state of its optional checkbox. */
+export interface DialogActionResult {
+  action: string | null;
+  checked: boolean;
+}
+
 export interface DialogRequest {
   kind: DialogKind;
   title: string;
@@ -17,6 +32,8 @@ export interface DialogRequest {
   confirmLabel?: string;
   cancelLabel?: string;
   tone?: DialogTone;
+  /** Header glyph override (default: info / pencil / warning by kind+tone). */
+  icon?: 'printer';
   /** Optional list under the message (scrolls when long) — e.g. the empty
    *  fields a "Submit all" would leave blank. */
   items?: string[];
@@ -34,11 +51,16 @@ export interface DialogRequest {
   choices?: DialogChoice[];
   /** Pre-selected choice (the sensible default). */
   initialChoice?: string;
+
+  // actions-only
+  actions?: DialogAction[];
+  /** Optional checkbox above the footer (e.g. "Don't ask again"). */
+  checkbox?: { label: string; initial?: boolean };
 }
 
 interface PendingDialog extends DialogRequest {
   id: string;
-  resolve: (result: string | boolean | null) => void;
+  resolve: (result: string | boolean | null, checked?: boolean) => void;
 }
 
 /**
@@ -104,11 +126,29 @@ export class DialogService {
     });
   }
 
-  resolve(result: string | boolean | null): void {
+  /** Several explicit actions (+ Cancel) and an optional checkbox. Resolves to
+   *  the pressed action's `value` (null when dismissed) and the checkbox. */
+  actions(req: Omit<DialogRequest, 'kind' | 'actions'> & { actions: DialogAction[] }): Promise<DialogActionResult> {
+    return new Promise<DialogActionResult>(resolve => {
+      this._active.set({
+        id: this.mkId(),
+        kind: 'actions',
+        cancelLabel: 'Cancel',
+        tone: 'primary',
+        ...req,
+        resolve: (result, checked) => resolve({
+          action: typeof result === 'string' ? result : null,
+          checked: !!checked,
+        }),
+      });
+    });
+  }
+
+  resolve(result: string | boolean | null, checked?: boolean): void {
     const a = this._active();
     if (!a) return;
     this._active.set(null);
-    a.resolve(result);
+    a.resolve(result, checked);
   }
 
   private mkId(): string {
