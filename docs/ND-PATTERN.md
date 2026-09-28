@@ -347,6 +347,16 @@ group's grid. **Search results stay one per row** (section 6).
 
 ## 8. Touch
 
+- **Tablet vs desktop is decided by the DEVICE, not only the width.** The
+  native app, iPads (incl. iPad-as-Mac), Android and touch-only browsers get
+  `html.device-touch` (+ `device-tablet` / `device-phone`) before the first
+  paint (index.html, kept current by `DeviceClassService`); a mouse or
+  trackpad keeps `device-desktop`. Never write a raw `@media (max-width:
+  1279px)` / `(min-width: 1280px)`: use `shared/styles/_device-tier.scss` —
+  `dt.tablet-tier`, `dt.tablet-band`, `dt.desktop-only` — so a 1280px+
+  Android tablet or iPad Pro in landscape keeps the tablet layout and a
+  desktop is unchanged. A Tailwind `xl:` class can't tell them apart: use it
+  for density only, never for a layout switch.
 - Tap targets are at least 44px. Inputs are at least 16px on phones, so iOS
   doesn't zoom.
 - **Phone bottom bar:** `.nd-bottombar` (+ `.nd-bottombar__info`) carries the

@@ -689,6 +689,7 @@ const STATUS_CLASS: Record<string, string> = {
     }
   `,
   styles: [APPOINTMENTS_CALENDAR_ND_STYLES, `
+    @use '../../../shared/styles/device-tier' as dt;
     :host {
       display: block;
       /* WORK page: fill the shell's main area exactly so the PAGE itself
@@ -1192,7 +1193,7 @@ const STATUS_CLASS: Record<string, string> = {
     /* ── iPad band (641–1279): the time grid stays comfortable, but
      * keep week columns from collapsing too far; month cells a touch
      * shorter so the grid fits the viewport height. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-cal-time__head,
       .pf-cal-time__body { min-width: 0; }
       .pf-cal-month__cell { min-height: 76px; }

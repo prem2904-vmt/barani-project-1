@@ -229,6 +229,7 @@ const LANE_COLOR = '#7c3aed';
     </section>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     .pb { position: relative; }
     .pb-chip--hidden { display: none !important; }
     .pb-hint-lock { display: inline-block; vertical-align: -1px; }
@@ -421,7 +422,7 @@ const LANE_COLOR = '#7c3aed';
        820px breakpoint missed), then tile the work-area lanes into a grid that
        auto-fills the full width (2-up portrait, 3-up landscape) instead of a
        side-rail + uneven flex-wrap. Desktop (>=1280) keeps its side-rail board. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pb-board { flex-direction: column; }
       .pb-palette { width: 100%; position: static; }
       .pb-palette-list { flex-direction: row; flex-wrap: wrap; }

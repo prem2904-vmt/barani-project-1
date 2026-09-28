@@ -338,6 +338,7 @@ interface Doctor {
     </section>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     .pf-rn-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -481,7 +482,7 @@ interface Doctor {
 
     /* iPad/tablet (641–1279): centered modal sizes to the *visible* viewport
        so browser/keyboard chrome can't clip it (raw vh stays for >=1280). */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-rn-modal { max-height: calc(100dvh - 32px); }
     }
 

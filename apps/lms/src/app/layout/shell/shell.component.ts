@@ -248,6 +248,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
   `,
   styles: [
     `
+    @use '../../shared/styles/device-tier' as dt;
       .shell-stack {
         position: relative;
         z-index: 1;
@@ -356,7 +357,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
          Desktop (≥1280px) keeps the chrome + its top-strip nav.
          The body already absorbs env(safe-area-inset-top), so pages
          start at the top of the safe area with no double-padding. */
-      @media (max-width: 1279px) {
+      @include dt.tablet-tier {
         .pf-chrome { display: none !important; }
       }
 
@@ -439,7 +440,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
            frontdesk panes' bottom border sit on the literal screen
            edge and read as "cut off". 16px gives the border a clear
            gap so the panes visibly end within the screen. */
-      @media (min-width: 641px) and (max-width: 1279px) {
+      @include dt.tablet-band {
         .shell-main {
           /* Clear the 64px full-height left rail. Each routed page
              keeps its own Tailwind lg:px-10 gutter on top of this, so
@@ -488,7 +489,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
           margin-left: 24px;
         }
       }
-      @media (min-width: 1280px) {
+      @include dt.desktop-only {
         .shell-main {
           padding-bottom: 0;
         }

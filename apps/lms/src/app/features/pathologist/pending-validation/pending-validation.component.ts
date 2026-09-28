@@ -391,6 +391,7 @@ type Tab = 'mine' | 'all';
     }
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* ===== WORK page: non-scroll app layout on all sizes =====
        :host fills the shell's main area; the page is a flex column whose
        header (KPI + title + tabs) is fixed and the queue scrolls internally,
@@ -492,7 +493,7 @@ type Tab = 'mine' | 'all';
     }
 
     /* ===== iPad (641-1279): keep one indented column, ensure no horizontal overflow ===== */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       :host .pv-result-row {
         flex-wrap: wrap;
       }

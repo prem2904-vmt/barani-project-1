@@ -263,6 +263,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     </div>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     :host { display: block; }
 
     .pf-kpi-page {
@@ -711,7 +712,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
     /* Below desktop (<=1279): guard long KPI labels/names from overflowing
        their grid cells. Desktop-web (>=1280) keeps its existing rendering. */
-    @media (max-width: 1279px) {
+    @include dt.tablet-tier {
       .pf-kpi-cat__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
       .pf-kpi-tile__label,
       .pf-kpi-tile__meta {
@@ -726,7 +727,7 @@ const CATEGORY_LABELS: Record<string, string> = {
        The base rule collapses to one column below 900px; for the 901–1279
        band the base two-column layout already applies, so nothing extra is
        needed there. Below 900 we tune spacing for the stacked layout. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-kpi-page { padding-top: 20px; }
     }
 

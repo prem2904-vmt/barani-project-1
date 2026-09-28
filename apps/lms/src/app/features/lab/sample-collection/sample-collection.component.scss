@@ -1,3 +1,4 @@
+@use '../../../shared/styles/device-tier' as dt;
     /* ─── WORK-mode non-scroll app layout (intentional, all sizes) ───────
      * The page fills the shell's main area exactly: header / KPI strip /
      * scan strip / section heading are fixed (flex:0 0 auto) and the
@@ -701,7 +702,7 @@
     /* Below the xl breakpoint the floating bottom-nav pill is visible and
        sits over the drawer footer. Push the footer up so the buttons clear
        the pill. At ≥1280px the nav is hidden and no extra room is needed. */
-    @media (max-width: 1279px) {
+    @include dt.tablet-tier {
       .pf-drawer__foot {
         padding-bottom: calc(28px + var(--tab-nav-total-height, 0px));
       }

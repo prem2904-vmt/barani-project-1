@@ -165,8 +165,9 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       <!-- Body: static chrome around a scrolling param list.
            Mobile (<md): single col, FAB opens numpad drawer.
            Tablet / iPad (md to xl-): rail docked on the right.
-           Desktop (xl+): no rail, full-width params. -->
-      <div class="pf-page__body px-4 md:px-8 lg:px-10 grid grid-cols-1 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] xl:grid-cols-1 gap-5">
+           Desktop (≥1280px with a mouse, dt.desktop-only on .pf-re-body): no
+           rail, full-width params; touch-first devices keep the rail. -->
+      <div class="pf-page__body px-4 md:px-8 lg:px-10 grid grid-cols-1 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] gap-5 pf-re-body">
 
         <!-- LEFT COLUMN — flex column, only params inside scroll -->
         <div class="pf-col-left min-w-0">
@@ -1093,6 +1094,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     }
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* ── Sent-back banner (result rejected by pathologist) ─────
        Visual pattern copied from sample-result-entry's reject banner. */
     .pf-reject-banner {
@@ -2183,10 +2185,14 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       .pf-rail__close,
       .pf-rail-backdrop { display: none !important; }
     }
-    /* Desktop (xl+) has a real keyboard — the whole rail is hidden so the
-       params get the full viewport width. */
-    @media (min-width: 1280px) {
+    /* Desktop (≥1280px with a mouse) has a real keyboard — the whole rail
+       is hidden so the params get the full viewport width. Touch-first
+       devices (html.device-touch) keep the rail at every width. */
+    @include dt.desktop-only {
       .pf-rail { display: none !important; }
+      /* Was the template's xl:grid-cols-1 (a Tailwind utility can't tell a
+         tablet from a desktop). Unlayered, so it beats lg:grid-cols-[…]. */
+      .pf-page__body.pf-re-body { grid-template-columns: repeat(1, minmax(0, 1fr)); }
     }
 
     /* ── Rail header row: eyebrow + close (mobile only) ── */
@@ -2744,7 +2750,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
        are below the 44px minimum tap target. Grow their height (and the
        view-toggle hit area) without disturbing the mouse/desktop layout.
        Padding-only growth keeps the pill shape; line-height stays intact. */
-    @media (pointer: coarse) and (max-width: 1279px) {
+    @media (pointer: coarse) { @include dt.tablet-tier {
       .pf-head__back { height: 44px; padding: 0 16px; }
       .pf-head__btn { height: 44px; padding: 0 18px; }
       /* Icon-only view toggle: full 44px tap target on touch. */
@@ -2772,7 +2778,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       .pf-btnsel__opt,
       .pf-param__filebtn { min-height: 44px; }
       .pf-param__canvas-clear { min-height: 44px; padding-top: 8px; padding-bottom: 8px; }
-    }
+    } }
 
     /* Touch (no real hover): neutralise the :hover background swaps on the
        primary controls so a tap doesn't leave them "stuck" in a hover tint

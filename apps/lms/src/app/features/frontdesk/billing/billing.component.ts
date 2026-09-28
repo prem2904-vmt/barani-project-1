@@ -561,6 +561,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
     }
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     .pf-eyebrow {
       margin: 0;
       font-size: 10.5px;
@@ -1529,7 +1530,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
      * keep a single column. Nothing extra needed for portrait iPad —
      * it already uses both columns. Just ensure the modal stays a
      * centred card (not a phone sheet) and clears safe-area. */
-    @media (min-width: 641px) and (max-width: 1279px) {
+    @include dt.tablet-band {
       .pf-pay-modal:not(.pf-pay-modal--inline) .pf-pay-modal__shell {
         margin-bottom: env(safe-area-inset-bottom);
       }

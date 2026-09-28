@@ -7,6 +7,7 @@
 // critical flags, error red, the amber autosave dot, tube cap colours.
 // ═════════════════════════════════════════════════════════════════════════
 @use '../../../shared/styles/nd-mixins' as nd;
+@use '../../../shared/styles/device-tier' as dt;
 
 /* WORK page: the host fills the shell; only the columns scroll. */
 :host { display: block; height: 100%; min-height: 0; overflow: hidden; }
@@ -49,7 +50,7 @@
 .pf-sre-act__saved { display: none; }
 
 /* Order ID: only where the pill has room. */
-@media (max-width: 1279px) { .pf-sre-chip--order { display: none; } }
+@include dt.tablet-tier { .pf-sre-chip--order { display: none; } }
 .pf-sre-chip__val { font-size: 12.5px; color: var(--text-primary); }
 
 /* Tube tabs (band tools): a neutral segmented control in a FIXED order.

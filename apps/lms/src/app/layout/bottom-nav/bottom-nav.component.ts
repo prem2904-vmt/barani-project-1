@@ -83,7 +83,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   /** Rail mode — on the iPad band (641–1279px) the nav docks as a
    *  vertical rail on the left edge instead of a floating bottom pill.
    *  Phones (≤640px) keep the bottom pill; desktop (≥1280px) hides the
-   *  whole component (xl:hidden) and uses the top-strip nav. */
+   *  whole component (xl:hidden) and uses the top-strip nav; touch-first
+   *  devices (html.device-touch) keep the rail at every width. */
   protected readonly railMode = signal<boolean>(this.computeRailMode());
   /** Show all primary items — the pill is now a horizontally-scrollable
    *  slider so every tab is always reachable without a "More" overflow. */
@@ -99,7 +100,10 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     // 1366pt, which is ≥1280) uses the left rail, not the desktop layout.
     const isNative = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
       .Capacitor?.isNativePlatform?.();
-    if (isNative) return w >= 641;
+    // Same for any touch-first device on the web (Android tablet, iPad Pro
+    // in landscape): html.device-touch, set in index.html before first paint.
+    const isTouch = document.documentElement.classList.contains('device-touch');
+    if (isNative || isTouch) return w >= 641;
     return w >= 641 && w < 1280;
   }
 

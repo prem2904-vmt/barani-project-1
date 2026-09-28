@@ -235,6 +235,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     </section>
   `,
   styles: [`
+    @use '../../../shared/styles/device-tier' as dt;
     /* ── ND audit: kit pieces ── */
     .pf-br-new { margin-bottom: 16px; }
     .pf-br-new__body { padding: 16px 18px; }
@@ -454,7 +455,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     /* ── Below desktop (<1280): keep long branch names from
        overflowing the header row; truncate with ellipsis. Desktop >=1280
        stays byte-identical. ── */
-    @media (max-width: 1279px) {
+    @include dt.tablet-tier {
       .pf-branch-titlewrap { min-width: 0; flex: 1 1 auto; }
       .pf-branch-titlecol { min-width: 0; }
       .pf-trunc {

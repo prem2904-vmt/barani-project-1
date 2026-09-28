@@ -46,7 +46,7 @@ describe('Docked bottom navbar — selected indicator', () => {
     expect(base).toMatch(/transform:\s*translateY\(-50%\)/);
     // Icon-only widths: the pill is centred on BOTH axes of a square link.
     expect(navbarBlock).toMatch(
-      /@media \(max-width: 1279px\)[\s\S]*\.pf-topnav-link::before \{[^}]*left:\s*50%[^}]*transform:\s*translate\(-50%, -50%\)/,
+      /@include dt\.tablet-tier \{[\s\S]*\.pf-topnav-link::before \{[^}]*left:\s*50%[^}]*transform:\s*translate\(-50%, -50%\)/,
     );
     expect(scss).toMatch(/\.pf-topnav-link \{\s*flex: 0 0 44px;\s*width: 44px; height: 44px;[^}]*padding: 0;/);
   });
@@ -79,7 +79,7 @@ describe('Docked bottom navbar — surface', () => {
 });
 
 describe('Docked bottom navbar — one optical scale on iPad + phone (owner 2026-09-28)', () => {
-  const compact = scss.slice(scss.indexOf('@media (max-width: 1279px)'));
+  const compact = scss.slice(scss.indexOf('@include dt.tablet-tier'));
   const px = (re: RegExp) => Number((compact.match(re) ?? [])[1]);
 
   it('icons 22 · pf logo 30 tall · avatar 30 — the anchors stay in proportion to the icons', () => {
@@ -99,7 +99,7 @@ describe('Docked bottom navbar — one optical scale on iPad + phone (owner 2026
 });
 
 describe('Docked bottom navbar — the pf mark lines up with the icons (owner 2026-09-28)', () => {
-  const compact = scss.slice(scss.indexOf('@media (max-width: 1279px)'));
+  const compact = scss.slice(scss.indexOf('@include dt.tablet-tier'));
   it('the mark sits in the same 44px box as the icon buttons, with no pill padding', () => {
     expect(compact).toMatch(/\.pf-brand-lockup \{\s*flex: 0 0 44px; width: 44px; height: 44px; padding: 0; gap: 0; justify-content: center;/);
   });

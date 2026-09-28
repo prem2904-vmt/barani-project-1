@@ -1,3 +1,4 @@
+@use '../../../../shared/styles/device-tier' as dt;
 /* The pinned "Selected" group reads as a summary, not another dept. */
 .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__name { color: var(--text-primary); }
 .pf-pkg-dept-hdr--sel .pf-pkg-dept-hdr__count {
@@ -557,7 +558,7 @@ select.pf-input--compact {
   .tab-strip::-webkit-scrollbar { display: none; }
 }
 
-@media (min-width: 641px) and (max-width: 1279px) {
+@include dt.tablet-band {
   .param-row__ranges .md\\:grid-cols-6 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

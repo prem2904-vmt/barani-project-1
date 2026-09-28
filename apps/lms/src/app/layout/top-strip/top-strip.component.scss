@@ -1,3 +1,4 @@
+@use '../../shared/styles/device-tier' as dt;
 /* Top strip bar — fixed 64px+ height so every interactive element
  * inside it can adopt a consistent vertical rhythm. Padding + children
  * (44px pills) = 64px exact. */
@@ -398,7 +399,7 @@
    below 1280px (mobile + iPad) because the floating bottom-nav
    already has an Admin tab there; showing both would duplicate. */
 .pf-icon-btn--xl-only { display: none; }
-@media (min-width: 1280px) {
+@include dt.desktop-only {
   .pf-icon-btn--xl-only { display: inline-flex; }
 }
 
@@ -1210,7 +1211,7 @@ a.pf-ts-tenant:hover {
 /* Bottom-navbar experiment on tablet/phone: the centered nav can't float
    absolutely (it would overlap brand + utilities) — it joins the flex row
    and scrolls horizontally if cramped; labels drop on phones. */
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
   :host-context(.design-new.nav-bottom) .pf-topnav-center {
     display: flex !important;
     position: static;
@@ -1275,7 +1276,7 @@ a.pf-ts-tenant:hover {
 /* iPad (768–1279) + phone: ICONS ONLY — same layout as web on iPad
    (left-aligned, separate user badge) but every name drops: page labels,
    brand wordmark/heartbeat, branch name. Just icons. */
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
   /* Icon-only work areas: every link is the SAME square 44px box (the
      touch floor, so fine and coarse pointers lay out identically) with
      the icon dead-centre. The selected pill is drawn inside it, centred
@@ -1664,7 +1665,7 @@ a.pf-ts-tenant:hover {
 }
 /* Icon-only widths: the pill is a fixed 40x32 capsule centred on BOTH
    axes of the 44px square (after the base rule so it wins the cascade). */
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
   :host-context(.design-new.nav-bottom) .pf-topnav-link::before {
     left: 50%;
     right: auto;
