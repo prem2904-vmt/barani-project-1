@@ -752,6 +752,11 @@
 /* Row actions: kit .nd-rowact (secondary text on web, 44px icons on touch). */
 .pf-rq-card__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
 .pf-rq-split--nd { position: relative; display: inline-flex; }
+/* ⋮ report actions: the dots show on web too (the owner's "three dot"),
+   beside the kit's "More" text; touch keeps the 44px icon button. */
+.pf-rq-kebab { flex: none; }
+.pf-rq-more > svg { display: block; }
+.pf-rq-more:not(.nd-rowact--icon) { gap: 4px; padding-left: 8px; }
 .pf-rq-split--nd .pf-rq-split__face { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .pf-rq-split--nd .pf-rq-split__caret {
   padding: 0 8px; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0;

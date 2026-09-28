@@ -12,9 +12,15 @@ import { parseResultSnapshot, savedValueRows } from '../../../shared/utils/resul
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { AuthService } from '../../../core/auth/auth.service';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { REPORT_BY_ORDER_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
 import {
   filterOrders, orderStatusLabel, orderTests, orderTitle, orderTone, testStatusLabel, testTone,
 } from './patient-profile.nd';
+
+/** A stored report as `GET /api/reports/by-order/{id}` returns it. */
+type StoredReport = { id: string; orderId?: string; qrToken?: string; data?: string } & Record<string, unknown>;
 
 interface ResultRow { title: string; value: string; unit?: string; range?: string; flag: 'normal' | 'abnormal' | 'critical'; /** mw code — a critical badges CL / CH (legacy C). */ code?: string; }
 
@@ -31,7 +37,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
 @Component({
   selector: 'pf-lab-orders',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, PdfCanvasComponent, ZoomSourceDirective, ZoomTargetDirective],
+  imports: [DatePipe, DecimalPipe, PdfCanvasComponent, ZoomSourceDirective, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (openOrder(); as o) {
@@ -65,6 +71,18 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
             {{ showReport()[o.id] ? 'Hide report' : 'View report' }}
           </button>
+          <!-- ⋮ — every action for this order's REPORT (share, the PDF,
+               open the full report) by permission; only once a report exists. -->
+          @if (detailActions().length) {
+            <pf-actions-menu class="pf-lo-kebab" [actions]="detailActions()" label="Report actions" [heading]="title(o)"
+                             (opened)="onMenuOpened(o)" (action)="runDetailAction(o, $event)">
+              <button pfActionsTrigger type="button" class="nd-btn nd-btn--secondary pf-lo-act pf-lo-act--more"
+                      [class.pf-lo-act--icon]="!web()" aria-label="Report actions" title="Report actions">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
+                <span class="pf-lo-act__t">More</span>
+              </button>
+            </pf-actions-menu>
+          }
         </div>
 
         <h3 class="pf-lo-sec">Tests</h3>
@@ -235,6 +253,9 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
     .pf-lo-detail__head .pf-lo-status { margin-top: 8px; }
     .pf-lo-detail__acts { display: flex; flex-wrap: wrap; gap: 8px; }
     .pf-lo-act { gap: 6px; }
+    .pf-lo-kebab { display: inline-flex; }
+    .pf-lo-act--icon { width: 44px; min-width: 44px; min-height: 44px; padding: 0; justify-content: center; }
+    .pf-lo-act--icon .pf-lo-act__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .pf-lo-sec { margin: 6px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-tertiary); }
 
     .pf-lo-tests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -374,8 +395,7 @@ export class LabOrdersComponent implements OnDestroy {
     if (show && !this.reportUrl()[o.id] && this.reportBusy() !== o.id) {
       this.reportBusy.set(o.id);
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rep = await firstValueFrom(this.api.get<any>(`/api/reports/by-order/${o.id}`)).catch(() => null);
+        const rep = await this.ensureReport(o);
         if (rep) {
           const url = await buildReportBlobUrl(rep, this.api, this.injector);
           if (url) { this.blobUrls.add(url); this.reportUrl.update(m => ({ ...m, [o.id]: url })); }
@@ -385,6 +405,80 @@ export class LabOrdersComponent implements OnDestroy {
         }
       } finally { this.reportBusy.set(null); }
     }
+  }
+
+  // ── ⋮ Report actions (order detail) ───────────────────────────────
+  // The report shown in place gets the same menu as the Results list:
+  // share (patient link, WhatsApp — delivery desk only), the PDF (download,
+  // print) and the full report view — each by its endpoint / route guard.
+  private readonly auth = inject(AuthService);
+  private readonly reportActions = inject(ReportActionsService);
+  /** orderId → the stored report (by-order), fetched once. */
+  private readonly repByOrder = new Map<string, Promise<StoredReport | null>>();
+  private has(perms: string[]): boolean { return perms.some(p => this.auth.hasPermission(p)); }
+
+  /** The order's report summary (the patient history carries it). */
+  private reportOf(o: Order): { id: string; status?: string | null } | null {
+    return (o as Order & { report?: { id: string; status?: string | null } | null }).report ?? null;
+  }
+
+  readonly detailActions = computed<PfAction[]>(() => {
+    const o = this.openOrder();
+    const rep = o ? this.reportOf(o) : null;
+    if (!o || !rep || !this.has(REPORT_BY_ORDER_PERMS)) return [];
+    const a: PfAction[] = [];
+    if (this.reportActions.canLink({ id: rep.id, orderId: o.id })) {
+      a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
+      a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
+    }
+    if (this.auth.hasPermission('deliver_report')) {
+      a.push({ id: 'whatsapp', label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report link' });
+    }
+    a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
+    a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report', hint: this.auth.hasPermission('deliver_report') ? 'Recorded as delivered' : undefined });
+    // The full viewer reads GET /api/reports/{id} (view_report | deliver_report).
+    if (this.has(['view_report', 'deliver_report'])) a.push({ id: 'open-report', label: 'Open full report', icon: 'view', group: 'Go to' });
+    a.push({ id: 'repeat', label: 'Repeat order', icon: 'repeat', group: 'Go to' });
+    return a;
+  });
+
+  private ensureReport(o: Order): Promise<StoredReport | null> {
+    let p = this.repByOrder.get(o.id);
+    if (!p) {
+      p = firstValueFrom(this.api.get<StoredReport | null>(`/api/reports/by-order/${o.id}`)).catch(() => null);
+      this.repByOrder.set(o.id, p);
+      void p.then(r => { if (!r) this.repByOrder.delete(o.id); });
+    }
+    return p;
+  }
+
+  /** Menu opened: fetch the report + warm its patient link (Share… keeps the gesture). */
+  onMenuOpened(o: Order): void {
+    void this.ensureReport(o).then(r => { if (r) this.reportActions.prefetch({ id: r.id, orderId: o.id, qrToken: r.qrToken }); });
+  }
+
+  async runDetailAction(o: Order, id: string): Promise<void> {
+    if (id === 'repeat') { this.repeat(o); return; }
+    const summary = this.reportOf(o);
+    if (id === 'open-report' && summary) { void this.router.navigate(['/reports/view', summary.id]); return; }
+    const rep = await this.ensureReport(o);
+    if (!rep) return;
+    const ref = { ...rep, orderId: rep.orderId ?? o.id };
+    switch (id) {
+      case 'share': await this.reportActions.share(ref, this.snapshotPatient(rep).name); break;
+      case 'copy-link': await this.reportActions.copyLink(ref); break;
+      case 'whatsapp': this.reportActions.whatsApp(ref, this.snapshotPatient(rep)); break;
+      case 'download': await this.reportActions.download(ref); break;
+      case 'print': await this.reportActions.print(ref); break;
+    }
+  }
+
+  /** Patient name + phone from the report snapshot (for the message). */
+  private snapshotPatient(rep: { data?: string }): { name: string | null; phone: string | null } {
+    try {
+      const p = JSON.parse(rep.data ?? '{}')?.patient ?? {};
+      return { name: p.displayName || p.name || null, phone: p.phone || null };
+    } catch { return { name: null, phone: null }; }
   }
 
   ngOnDestroy() { for (const u of this.blobUrls) { try { URL.revokeObjectURL(u); } catch { /* */ } } }

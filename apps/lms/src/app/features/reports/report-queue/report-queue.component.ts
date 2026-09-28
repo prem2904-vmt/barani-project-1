@@ -48,6 +48,8 @@ import { EditResultDialogComponent } from "../../../shared/components/edit-resul
 import { savedValueRows } from "../../../shared/utils/result-flag";
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
@@ -66,7 +68,9 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
     TouchButtonComponent,
     EditResultDialogComponent,
     KpiStripComponent,
-    HeroBandComponent
+    HeroBandComponent,
+    ActionsMenuComponent,
+    ActionsMenuTriggerDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./report-queue.component.html",
@@ -231,7 +235,62 @@ export class ReportQueueComponent implements OnInit {
 
   /** The row's More menu has at least one item (else no empty menu button). */
   hasMore(r: Report): boolean {
-    return !!r.orderId && (this.canOpenLabResults() || this.canEditResult() || this.canGenerate());
+    return (this.rowActions().get(r.id)?.length ?? 0) > 0;
+  }
+
+  // ── ⋮ Report actions per row (shared/components/actions-menu) ─────
+  // EVERY action for the report in one place: share (patient link, WhatsApp,
+  // print-as-delivery), the PDF (view / download / print), the workflow steps
+  // (edit results, regenerate) and go-to (patient, lab results). Each row
+  // follows the SAME permission + state rule as the button it mirrors.
+  private readonly reportActions = inject(ReportActionsService);
+  readonly rowActions = computed<Map<string, PfAction[]>>(() => {
+    const m = new Map<string, PfAction[]>();
+    for (const r of this.visible()) m.set(r.id, this.buildRowActions(r));
+    return m;
+  });
+
+  private buildRowActions(r: Report): PfAction[] {
+    const a: PfAction[] = [];
+    if (this.reportActions.canLink(r)) {
+      a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
+      a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
+    }
+    if (this.canDeliver()) {
+      a.push({ id: 'whatsapp', label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report link' });
+    }
+    a.push({ id: 'view', label: 'View report', icon: 'view', group: 'Report' });
+    a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
+    if (this.canPrint()) {
+      a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report', hint: this.canDeliver() ? 'Recorded as delivered' : undefined });
+    }
+    if (this.canEditResult() && r.orderId) a.push({ id: 'edit', label: 'Edit results', icon: 'edit', group: 'Report' });
+    if (this.canGenerate() && r.orderId) {
+      a.push({ id: 'regenerate', label: 'Regenerate', icon: 'regenerate', group: 'Report', hint: 'Rebuild with the current report template' });
+    }
+    if (r.patientId && PATIENT_PROFILE_PERMS.some(p => this.auth.hasPermission(p))) {
+      a.push({ id: 'patient', label: 'Open patient', icon: 'patient', group: 'Go to' });
+    }
+    if (this.canOpenLabResults() && r.orderId) a.push({ id: 'lab', label: 'Open lab results', icon: 'lab', group: 'Go to' });
+    return a;
+  }
+
+  /** A row's menu opened: warm its patient link (Share… keeps the gesture). */
+  onRowMenuOpened(r: Report): void { this.reportActions.prefetch(r); }
+
+  runRowAction(r: Report, id: string): void {
+    switch (id) {
+      case 'share': void this.reportActions.share(r, this.reportPatientName(r)); break;
+      case 'copy-link': void this.reportActions.copyLink(r); break;
+      case 'whatsapp': this.deliver(r, 'whatsapp'); break;
+      case 'view': this.view(r); break;
+      case 'download': void this.downloadPdf(r); break;
+      case 'print': void this.printReport(r); break;
+      case 'edit': this.openEditDialog(r); break;
+      case 'regenerate': void this.regenerate(r); break;
+      case 'patient': void this.router.navigate(['/frontdesk/patients', r.patientId]); break;
+      case 'lab': void this.viewLabResults(r); break;
+    }
   }
 
   openEditDialog(r: Report) {
