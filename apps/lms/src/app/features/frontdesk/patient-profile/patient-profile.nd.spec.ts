@@ -203,7 +203,7 @@ describe('Patient profile (clinical) — ONE primary + every action reachable', 
     const { el, c, router, timeline, click } = await render();
     click('.pf-pp-act--more');
     const acts = [...el.querySelectorAll('.pf-pp-menu__row')].map(b => (b as HTMLElement).dataset['act']);
-    expect(acts).toEqual(['edit', 'appointment', 'chat', 'abha', 'idcard', 'qr', 'copy', 'timeline', 'merge']);
+    expect(acts).toEqual(['appointment', 'chat', 'abha', 'idcard', 'qr', 'timeline', 'merge']);
     click('[data-act="appointment"]');
     expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/appointments/new'], { queryParams: { patientId: 'p1' } });
     click('.pf-pp-act--more'); click('[data-act="timeline"]');
@@ -485,6 +485,10 @@ describe('Patient profile (clinical) — loading, zoom, rules', () => {
     const edit = el.querySelector('.pf-pp-act--edit') as HTMLElement;
     expect(edit.classList).toContain('pf-pp-act--icon');
     expect(edit.getAttribute('aria-label')).toBe('Edit patient');
+  });
+
+  it('band actions share a consistent 44px height', () => {
+    expect(css(PatientProfileComponent)).toMatch(/\.pf-pp-act\s*\{[^}]*height:\s*44px/);
   });
 
   it('reduced motion switches every animation off', () => {

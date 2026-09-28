@@ -333,7 +333,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
       }
       /* Content clears the docked bar; the band now starts at the very top. */
       :host-context(.design-new.nav-bottom) .shell-main {
-        padding-bottom: calc(var(--pf-botbar-h, 57px) + 12px) !important;
+        padding-bottom: var(--pf-botbar-h, 57px) !important;
       }
 
       /* NEW design (Figma 446-113): a FLUSH full-width bar — no
@@ -604,7 +604,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
       /* One bottom surface only: the phone pill / iPad rail steps aside. */
       :host-context(.design-new.nav-bottom) pf-bottom-nav { display: none !important; }
       :host-context(.design-new.nav-bottom) .shell-main {
-        padding-bottom: calc(var(--pf-botbar-h, 58px) + 12px) !important;
+        padding-bottom: var(--pf-botbar-h, 58px) !important;
         padding-left: 0 !important;
       }
       /* Toasts clear the docked bar (md+ anchors them bottom-center). */
