@@ -3,6 +3,7 @@ import {
   createComponent, inject, signal,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
+import { NavigationEnd, Router } from '@angular/router';
 import { ImpactStyle } from '@capacitor/haptics';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -186,7 +187,19 @@ export class NumpadService {
     this.doc.addEventListener('pointerup', onUp, true);
     view.addEventListener('scroll', onMove, true);
     view.addEventListener('resize', onMove);
+    // Self-heal (iPad: the docked bar missing on an idle screen): a route
+    // change or an app resume can leave the pad "open" for a field that is
+    // gone or no longer focused — no blur ever reaches the directive when
+    // its input is removed from the DOM. Close it (and give the navbar back)
+    // at once. Deferred a tick so the old view has been torn down.
+    const onVisible = () => { if (this.doc.visibilityState !== 'hidden') this.healStale(); };
+    this.doc.addEventListener('visibilitychange', onVisible);
+    const navSub = inject(Router, { optional: true })?.events?.subscribe(ev => {
+      if (ev instanceof NavigationEnd) setTimeout(() => this.healStale(), 0);
+    });
     inject(DestroyRef).onDestroy(() => {
+      navSub?.unsubscribe();
+      this.doc.removeEventListener('visibilitychange', onVisible);
       this.doc.removeEventListener('pointerdown', onDown, true);
       this.doc.removeEventListener('pointerup', onUp, true);
       view.removeEventListener('scroll', onMove, true);
@@ -275,6 +288,25 @@ export class NumpadService {
     this.cancelUnpad();
     this.open.set(true);            // already open → stays put, only the field changes
     this.queueLayout();
+  }
+
+  /**
+   * Drop a pad whose field is gone (removed from the DOM) or no longer holds
+   * focus, and PF Keys chrome (html.pf-keys-open + the navbar hide) that no
+   * open keys justify. A still-focused field keeps its pad.
+   */
+  healStale(): void {
+    const f = this.current();
+    const a = this.doc.activeElement;
+    const alive = !!f && f.el.isConnected && (a === f.el || (!!a && !!this.panelEl?.contains(a)));
+    if (f && !alive) {
+      this.chainUntil = 0;
+      this.hide();
+    }
+    if (this.keysChrome && !(this.open() && isKeysField(this.current()))) {
+      this.dropKeysChrome();
+      this.unpadIfKeys();
+    }
   }
 
   hide(): void {

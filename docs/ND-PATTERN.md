@@ -436,6 +436,8 @@ in portrait). The page above it resizes; nothing overlaps.
   - For a sample lookup, a key types the short-barcode prefix DD+YY
     (`0226`) when the department has a 2-digit sample code. Otherwise it
     types the letter code.
+    (Live sample IDs are `[space/dept/Lab code][date][number]` — see
+    "Sample search preset" below, which pre-types the real head.)
 - **The primary key** sends the field its OWN Enter. Test search adds the
   highlighted row (the row shows a neutral "↵ Add" chip while the keys
   are up). Patient search opens or selects the highlighted patient. The
@@ -493,6 +495,31 @@ in portrait). The page above it resizes; nothing overlaps.
     labelled group.
   - The panel is its own lazy chunk, loaded the first time a tablet field
     shows it.
+
+### Sample search preset (`pfSamplePreset`)
+
+A lab user's suggestion for labs doing 1000+ samples a day: the sample
+search boxes open with the current sample-ID head already typed, so the
+tech types only the tail number.
+
+- **Where:** the sample lookups only: the band search with `keys="sample"`
+  (on by itself) and the classic inputs of My Work, Receive and Collect
+  (`<input pfKeys="sample" pfSamplePreset>`). Every device, not only tablets.
+- **What it types** comes from the lab's REAL sample-ID format
+  (`GET /api/config/sample-search-preset`), never a guess: `[prefix][sep][date][sep]`
+  exactly as the server prints IDs — `2609` for a yymm lab, `HEM26` / `MIC-2609-`
+  when the user works in ONE department / space (their auto-assign pools),
+  else the branch's Lab code. The date is the LAB's (branch timezone, default
+  Asia/Kolkata) and is computed on focus, so it turns into `2610` on 1 October
+  without a reload.
+- **Behaviour:** typed on focus of an EMPTY field, caret at the end; one
+  Backspace (hardware or the PF Keys ⌫) clears the whole preset; a letter
+  typed first replaces it (a patient name on Collect); Enter with only the
+  preset does nothing; leaving the field with only the preset clears it.
+- **Setting:** Lab settings → Sample identification → "Pre-fill sample
+  search" (tenant-wide). Automatic by default: ON when the format starts
+  with year+month (yymm, yymmdd), OFF otherwise; the switch overrides it and
+  "Reset" returns to automatic.
 
 ## 9. Motion
 

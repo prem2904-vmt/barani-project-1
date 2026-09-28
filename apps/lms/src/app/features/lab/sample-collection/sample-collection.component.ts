@@ -1,5 +1,6 @@
 import { DatePipe } from "@angular/common";
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DestroyRef,
   ChangeDetectionStrategy,
@@ -371,7 +372,7 @@ interface OrderGroup {
 @Component({
   selector: "pf-sample-collection",
   standalone: true,
-  imports: [SkeletonDetailComponent, PfKeysDirective,
+  imports: [SkeletonDetailComponent, PfKeysDirective, SamplePresetDirective,
     ZoomSourceDirective,
     ZoomTargetDirective,
     FormsModule,

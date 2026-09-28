@@ -405,7 +405,7 @@ interface GstRow {
                     />
                   </div>
                   <div>
-                    <label class="pf-label">Starting number</label>
+                    <label class="pf-label">Next invoice number</label>
                     <pf-number-input
                       [value]="config().invoiceStartNumber"
                       [min]="1"
@@ -413,6 +413,7 @@ interface GstRow {
                       (valueChange)="patch({ invoiceStartNumber: $event ?? 1 })"
                     >
                     </pf-number-input>
+                    <p class="pf-bc-hint">Can only move forward — issued numbers are never reused.</p>
                   </div>
                 </div>
 
@@ -924,6 +925,7 @@ interface GstRow {
         border: 1px solid var(--nd-line);
         box-shadow: var(--nd-shadow-sm);
       }
+      .pf-bc-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
       .pf-bc-sub {
         margin: 0 0 8px;
         font-size: 12px;
@@ -1384,11 +1386,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.api.get<TenantBillingConfig>("/api/config/billing").subscribe({
-      next: (c) => {
-        if (c) this._config.set({ ...this._config(), ...c });
-      },
-    });
+    this.loadConfig();
     this.api.get<any>("/api/config/invoice-template").subscribe({
       next: (t) => {
         this._tpl.set({ ...this.TPL_DEFAULTS, ...(t ?? {}) });
@@ -1436,6 +1434,16 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
       });
   }
 
+  /** The server's config — incl. the LIVE invoice counter, which moves on
+   *  every bill; re-read after a save so the form never holds a stale one. */
+  private loadConfig() {
+    this.api.get<TenantBillingConfig>("/api/config/billing").subscribe({
+      next: (c) => {
+        if (c) this._config.set({ ...this._config(), ...c });
+      },
+    });
+  }
+
   saveConfig() {
     const c = this._config();
     this.api
@@ -1458,7 +1466,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
         invoiceOnFullPaymentOnly: c.invoiceOnFullPaymentOnly ?? false,
       })
       .subscribe({
-        next: () => this.toasts.success("Billing config saved"),
+        next: () => { this.toasts.success("Billing config saved"); this.loadConfig(); },
         error: (e) => this.toasts.error(ApiError.from(e).message),
       });
   }

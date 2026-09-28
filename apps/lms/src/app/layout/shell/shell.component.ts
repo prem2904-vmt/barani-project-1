@@ -611,6 +611,21 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         /* Faint violet glow off the top edge, paired with the band's. */
         box-shadow: var(--pf-navbar-glow, none);
       }
+      /* Touch devices (iPad, phones, the native app): NO live frost on the
+         docked bar. A fixed, full-width backdrop-filter re-blurs whatever
+         scrolls under it on every frame; on iPad WebKit that layer was the
+         one dropped under GPU pressure — the bar vanished, or only the
+         bell's own (animated) layer was painted (owner, 2026-09-28). The
+         bar takes its opaque surface (the same one the no-backdrop-filter
+         fallback uses) and is promoted as ONE stable layer. will-change
+         (not a translateZ transform) keeps the containing block the blur
+         used to give the bar's fixed children (popover backdrops). */
+      :host-context(html.device-touch.design-new.nav-bottom) .pf-chrome {
+        background-color: var(--pf-navbar-bg);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        will-change: transform;
+      }
       /* Soft keyboard up (iPad / phones): the docked bar would ride on top
          of the keyboard and squeeze the page to a sliver (owner: test search
          on the iPad). Hide it while typing and give the page its space. */
