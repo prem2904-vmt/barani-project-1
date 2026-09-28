@@ -107,7 +107,8 @@ describe('Safe area — bottom edge has ONE owner (the docked navbar)', () => {
   });
 
   it('page content clears the bar through the token (no second raw inset on shell-main)', () => {
-    expect(sh).toMatch(/\.shell-main \{\s*padding-bottom:\s*calc\(var\(--pf-botbar-h, 5\dpx\) \+ 12px\) !important;/);
+    // PR #75 (2026-09-28): content ends flush with the bar — no extra 12px.
+    expect(sh).toMatch(/\.shell-main \{\s*padding-bottom:\s*var\(--pf-botbar-h, 5\dpx\) !important;/);
   });
 });
 

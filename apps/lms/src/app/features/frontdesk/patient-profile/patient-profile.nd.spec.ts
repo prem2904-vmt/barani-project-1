@@ -488,7 +488,7 @@ describe('Patient profile (clinical) — loading, zoom, rules', () => {
   });
 
   it('band actions share a consistent 44px height', () => {
-    expect(css(PatientProfileComponent)).toMatch(/\.pf-pp-act\s*\{[^}]*height:\s*44px/);
+    expect(css(PatientProfileComponent)).toMatch(/\.pf-pp-act(\[[^\]]*\])?\s*\{[^}]*height:\s*44px/);
   });
 
   it('reduced motion switches every animation off', () => {
