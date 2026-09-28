@@ -8,17 +8,18 @@ import { summarizeRanges } from './reference-range';
  * Contract between the server's `GET /api/tests?view=summary` and the list
  * screens (DB optimisation phase 2). The summary row's `parameters` is the
  * server's `TestSummaryDto.TrimParameters`: `items` verbatim, the wrapper flags
- * `askSpecimen` / `microFormat`, and `parameters: [first value's unit /
- * referenceRanges / normalValue]`. Every list helper must read the trimmed
- * blob EXACTLY as it reads the full one.
+ * `askSpecimen` / `microFormat`, and — only when the server-derived unit or
+ * range is empty — `parameters: [first value's unit / referenceRanges /
+ * normalValue]`. Every list helper must read the trimmed blob EXACTLY as it
+ * reads the full one.
  */
-function trim(json: string | undefined): string | undefined {
+function trim(json: string | undefined, keepFirst = true): string | undefined {
   if (!json) return undefined;
   const root = JSON.parse(json);
   const slim: Record<string, unknown> = {};
   if ('items' in root) slim['items'] = root.items;
   for (const k of ['askSpecimen', 'microFormat']) if (k in root) slim[k] = root[k];
-  if (Array.isArray(root.parameters) && root.parameters.length > 0) {
+  if (keepFirst && Array.isArray(root.parameters) && root.parameters.length > 0) {
     const p0 = root.parameters[0] ?? {};
     const first: Record<string, unknown> = {};
     for (const k of ['unit', 'referenceRanges', 'normalValue']) if (k in p0) first[k] = p0[k];
@@ -31,9 +32,11 @@ const value = (name: string, unit: string, min: number, max: number) => ({
   name, title: name, unit, type: 'numeric', printOnReport: true, methodology: 'Photometry',
   referenceRanges: [{ segment: 'default', min, max }], optionRows: [{ value: 'x' }], notes: 'long text '.repeat(20),
 });
-type Row = { id: string; name: string; testCode?: string; shortName?: string; type: string; department?: { name: string }; parameters?: string };
+type Row = { id: string; name: string; testCode?: string; shortName?: string; type: string; department?: { name: string }; parameters?: string;
+  derivedUnit?: string | null; derivedReferenceRange?: string | null };
 const FULL: Row[] = [
   { id: 'alt', name: 'SGPT (ALT)', testCode: 'BIO010', type: 'individual', department: { name: 'Biochemistry' },
+    derivedUnit: 'U/L', derivedReferenceRange: '7–56',
     parameters: JSON.stringify({ parameters: [value('ALT', 'U/L', 7, 56)] }) },
   { id: 'ast', name: 'SGOT (AST)', testCode: 'BIO011', type: 'individual', department: { name: 'Biochemistry' },
     parameters: JSON.stringify({ parameters: [value('AST', 'U/L', 5, 40), value('Ratio', '', 0, 2)] }) },
@@ -48,7 +51,7 @@ const FULL: Row[] = [
   { id: 'pkg', name: 'Fever Package', type: 'package',
     parameters: JSON.stringify({ items: [{ testId: 'lft' }, { testId: 'cbc' }, { testId: 'cs' }] }) },
 ];
-const SUMMARY: Row[] = FULL.map(t => ({ ...t, parameters: trim(t.parameters) }));
+const SUMMARY: Row[] = FULL.map(t => ({ ...t, parameters: trim(t.parameters, !(t.derivedUnit?.trim() && t.derivedReferenceRange?.trim())) }));
 const byId = (list: Row[]) => new Map(list.map(t => [t.id, t] as const));
 
 describe('summary-view parameters are read exactly like the full blob by every list helper', () => {
@@ -88,8 +91,17 @@ describe('summary-view parameters are read exactly like the full blob by every l
     expect(ids(FULL).length).toBeGreaterThan(0);
   });
 
-  it('Test Master grid fallback: the first value\'s unit and bands', () => {
-    const first = (json?: string) => { const p = JSON.parse(json ?? '{}').parameters?.[0]; return p ? summarizeRanges(p.referenceRanges, p.unit, { keepLines: true }) + '|' + (p.unit ?? '') : ''; };
-    for (const t of FULL) expect(first(trim(t.parameters))).toBe(first(t.parameters));
+  it('Test Master grid unit / range cells: derived first, else the first value (tests.component)', () => {
+    const first = (t: Row) => { try { return JSON.parse(t.parameters ?? '{}').parameters?.[0]; } catch { return undefined; } };
+    const unit = (t: Row) => (t.derivedUnit ?? '').trim() || String(first(t)?.unit ?? '').trim();
+    const range = (t: Row) => (t.derivedReferenceRange ?? '').trim()
+      || (first(t) ? (summarizeRanges(first(t).referenceRanges, first(t).unit, { keepLines: true }) || String(first(t).normalValue ?? '')) : '');
+    const sb = byId(SUMMARY);
+    for (const t of FULL) {
+      expect(unit(sb.get(t.id)!)).toBe(unit(t));
+      expect(range(sb.get(t.id)!)).toBe(range(t));
+    }
+    // A single value with server-derived unit + range carries no value at all.
+    expect(sb.get('alt')!.parameters).toBe('{}');
   });
 });

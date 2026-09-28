@@ -5,6 +5,7 @@ import { DatePipe } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Report } from '../../../shared/models/report.model';
+import { ensureFullReport, reportByOrderSummaryUrl } from '../../../shared/utils/report-summary';
 import { PdfCanvasComponent } from './pdf-canvas.component';
 import { PatientTimelineService } from './patient-timeline.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -785,7 +786,9 @@ export class PatientTimelineComponent implements OnDestroy {
         for (const o of v.orders) {
           if (o.id in this.reportCache()) continue;
           this.reportCache.update(m => ({ ...m, [o.id]: null }));
-          this.api.get<Report | null>(`/api/reports/by-order/${o.id}`).subscribe({
+          // Summary (no rendered snapshot): the list only needs "is there a
+          // report"; opening one reads the full report (buildReportUrl).
+          this.api.get<Report | null>(reportByOrderSummaryUrl(o.id)).subscribe({
             next: r => { if (r) this.reportCache.update(m => ({ ...m, [o.id]: r })); },
             error: () => { /* leave null */ },
           });
@@ -974,7 +977,7 @@ export class PatientTimelineComponent implements OnDestroy {
       const svc = this.injector.get(ReportLayoutService);
       // The ONE recipe (template + layouts incl. PROFILE layouts + images +
       // trendograms) — the same report every other screen renders.
-      const input = await prepareReportPdfInput(rep, {
+      const input = await prepareReportPdfInput(await ensureFullReport(this.api, rep), {
         api: this.api,
         preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
         apiUrl: this.injector.get(PlatformService).getApiUrl(),

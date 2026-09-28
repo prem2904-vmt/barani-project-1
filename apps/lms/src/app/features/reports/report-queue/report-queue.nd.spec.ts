@@ -107,7 +107,7 @@ async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unkno
   });
   const api = {
     get: vi.fn((url: string) => {
-      if (url === '/api/reports/queue') return of(opts.queue ?? QUEUE);
+      if (url === '/api/reports/queue?view=summary') return of(opts.queue ?? QUEUE);
       if (url === '/api/orders/today') return of(opts.orders ?? [PARTIAL_ORDER, VALUES_ORDER]);
       if (url === '/api/billing/outstanding') return of({ due: [{ orderId: 'o-r1' }] });
       return of([]);
@@ -153,6 +153,21 @@ const css = () => ((ReportQueueComponent as any).ɵcmp.styles as string[]).join(
   .replace(/\[_ng(content|host)-%COMP%\]/g, '');
 /** Just the new-design rules (the classic look keeps its own palette). */
 const ndCss = () => css().slice(css().indexOf('.pf-rq-seg'));
+
+describe('Reports list — summary rows (DB optimisation phase 2)', () => {
+  it('loads the queue through the summary view (no rendered snapshots in the list)', async () => {
+    const { api } = await render();
+    expect(api.get).toHaveBeenCalledWith('/api/reports/queue?view=summary');
+    expect(api.get).not.toHaveBeenCalledWith('/api/reports/queue');
+  });
+
+  it('rendering a row (download / print / share / archive) reads the full report by id first', async () => {
+    const { c, api } = await render();
+    const row = { id: 'r-sum', orderId: 'o1', type: 'final', deliveryStatus: 'pending' };
+    await c.buildReportRender(row).catch(() => { /* the render itself needs more than this stub */ });
+    expect(api.get).toHaveBeenCalledWith('/api/reports/r-sum');
+  });
+});
 
 describe('Reports list (nd) — band', () => {
   it('ONE status filter in the pill: neutral radios with plain tabular counts, no stats strip', async () => {

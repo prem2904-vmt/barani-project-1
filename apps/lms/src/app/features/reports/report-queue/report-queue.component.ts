@@ -43,6 +43,7 @@ import {
 import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
 import { waLink } from "../../../shared/utils/whatsapp";
+import { ensureFullReport, REPORT_QUEUE_SUMMARY_URL } from "../../../shared/utils/report-summary";
 import { WhatsAppService, waStatusLabel, type WaMessage } from "../../../core/services/whatsapp.service";
 import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
 import { savedValueRows } from "../../../shared/utils/result-flag";
@@ -580,7 +581,8 @@ export class ReportQueueComponent implements OnInit {
 
   refresh() {
     this._loading.set(true);
-    this.api.get<Report[]>("/api/reports/queue").subscribe({
+    // Summary rows (no rendered snapshot): render paths read the report by id.
+    this.api.get<Report[]>(REPORT_QUEUE_SUMMARY_URL).subscribe({
       next: (l) => {
         this._items.set(l ?? []);
         this._loading.set(false);
@@ -720,7 +722,9 @@ export class ReportQueueComponent implements OnInit {
     // PROFILE layouts + images + trendograms). It throws instead of silently
     // falling back to the default design, so a report that can't be rendered
     // exactly as the lab designed it is never downloaded or archived.
-    const { imageCache = {}, trendograms = [], ...baseInput } = await prepareReportPdfInput(r, {
+    // Queue rows are summaries (no rendered snapshot): read the full report first.
+    const full = await ensureFullReport(this.api, r);
+    const { imageCache = {}, trendograms = [], ...baseInput } = await prepareReportPdfInput(full, {
       api: this.api,
       preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
       apiUrl: platform.getApiUrl(),
