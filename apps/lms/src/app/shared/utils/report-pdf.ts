@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { drawTextWithSuperscripts, hasSuperscript, installPdfTextSanitizer, pdfSafeText } from './pdf-text';
-import autoTable from 'jspdf-autotable';
+import autoTable, { __createTable, __drawTable } from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
 import {
   DEFAULT_RESULT_COLUMNS,
@@ -10,6 +10,7 @@ import {
   ResolvedSection,
 } from '../models/report-layout.model';
 import { ReportSignature, ReportTemplate } from '../models/report.model';
+import { layoutSignatureBlock, SIG_IMG_H, SIG_IMG_W, SIG_ROW } from './report-signatures';
 import { savedFlagOf, type SavedFlag } from './result-flag';
 import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
@@ -303,7 +304,13 @@ const BARCODE_H = 26;
  *  following line's ascent — 6pt alone let the timestamps print over the bars. */
 const BARCODE_GAP = 14;
 let MARGIN_TOP = 28;
-let MARGIN_BOTTOM = 150; // table floor — the band signatures are pulled DOWN into (see FOOTER_RESERVE)
+// Content floor: nothing in the body prints below A4.h - MARGIN_BOTTOM. It is
+// the real footer band (date strip + the last page's disclaimer / footer
+// text — see footerFloor) and NOTHING more: sign-off space is reserved only
+// where a department actually signs (see renderColumnarTable), never on every
+// page. It used to be a fixed 150pt, sized for a per-page signature row that
+// no longer prints — ~86pt of every page was lost to it.
+let MARGIN_BOTTOM = 150;
 let HEADER_RESERVE = 70; // drawn letterhead height above the patient block
 let LETTERPAD = false;   // pre-printed-letterpad mode: blank header/footer, body only
 const MM_TO_PT = 2.834645669; // 1mm in PDF points (72dpi)
@@ -616,7 +623,7 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
     HEADER_RESERVE = 0;
   } else {
     MARGIN_TOP = 28;
-    MARGIN_BOTTOM = 150;
+    MARGIN_BOTTOM = 150; // placeholder — replaced by footerFloor() once the footer layout is resolved
     HEADER_RESERVE = 70;
   }
   return { practice, template, snap };
@@ -642,6 +649,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   const layout = computeReportLayout(doc, practice, template?.logoUrl ?? null, template);
   LAYOUT = layout;
   if (!LETTERPAD) HEADER_RESERVE = layout.bodyTop - MARGIN_TOP;
+  if (!LETTERPAD) MARGIN_BOTTOM = footerFloor(layout);
   // Background images go down FIRST on every page they print on, so text,
   // the logo and the results always draw over them. Page 1 now; later pages
   // (ours or autotable's) as each is added.
@@ -1054,10 +1062,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     // beneath it. Anchor to the bottom, but never pull the block UP into
     // content: a long report that already reaches this far keeps flowing.
     // Ends flush on the footer band — directly above the disclaimer line.
-    // Height comes from the block itself: 1-3 signatories are one row,
-    // 4-7 wrap 3-up into more rows, and the anchor rises to fit them so the
-    // LAST row still lands on the footer band.
-    const anchored = Math.max(cursorY, A4.h - FOOTER_RESERVE - signatureBlockHeight(finalSigs.sigs));
+    // Height comes from the block itself (only the signatories present:
+    // 1-4 are one row, 5-7 wrap into balanced rows) and the anchor rises to
+    // fit them so the LAST row still lands on the footer band.
+    const anchored = Math.max(cursorY, A4.h - MARGIN_BOTTOM - signatureBlockHeight(finalSigs.sigs));
     cursorY = drawInlineSignatures(doc, finalSigs.sigs, anchored, practice);
   }
 
@@ -2760,7 +2768,10 @@ function renderContinuousTable(
     // Hold back the room this department's signatures need (plus the
     // End-of-Report line when they are the deferred final block) so the table
     // breaks EARLY and the signatures land under the last rows they belong to.
-    const reserve = signatureBlockHeight(sigs) + (isLast && deferLastSigs && sigs?.length ? 26 : 0);
+    // Only the signatories actually present count (7 configured, 2 resolved →
+    // one row of 2), and a department with none reserves nothing.
+    const sigH = signatureBlockHeight(sigs);
+    const reserve = sigH > 0 ? sigH + SIGN_OFF_SLACK + (isLast && deferLastSigs ? 26 : 0) : 0;
     // Partition the department's groups into consecutive RUNS sharing an
     // effective column set — a group with its own column override renders
     // in its own table run. With zero overrides there is exactly ONE run
@@ -2799,13 +2810,13 @@ function renderContinuousTable(
     // This department's OWN technician + consultant sign at the end of its
     // block — never the global set, never the downloader. The report's LAST
     // department defers its signatures to after the End-of-Report marker.
-    if (sigs?.length) {
+    if (sigH > 0 && sigs) {
       if (isLast && deferLastSigs) deferLastSigs.sigs = sigs;
       else {
         // Sign-off sits at the FOOT of the department's last page, directly
         // above the footer strip — not floating under the last row with a
         // blank half-page beneath (the page-2 bug in REPORT-49289714).
-        const anchored = Math.max(y, A4.h - FOOTER_RESERVE - signatureBlockHeight(sigs));
+        const anchored = Math.max(y, A4.h - MARGIN_BOTTOM - sigH);
         y = drawInlineSignatures(doc, sigs, anchored, practice);
         // The signatures close this department's page; the next department
         // opens clean rather than squeezing under a sign-off. When the theme
@@ -2820,82 +2831,94 @@ function renderContinuousTable(
   return y;
 }
 
-/** Vertical space one signature block needs: 12pt lead + 74pt of
- *  image/name/title/reg per row, wrapped 3-up and capped at 7 signatories.
- *  Callers RESERVE this in the table's bottom margin so the signatures can
- *  never be orphaned onto a page of their own. */
-/** One signature row: 12pt lead + 74pt of image/name/title/reg. */
-const SIG_BLOCK_H = 86;
-/** The page's REAL footer band: hairline at h-30, generated-on at h-18, the
- *  disclaimer stacking up to ≈h-58. Signatures anchor to THIS — anchoring to
- *  MARGIN_BOTTOM (the 150pt table floor) parked them ~100pt above the
- *  disclaimer with a dead band beneath, which is not how a lab report ends. */
-const FOOTER_RESERVE = 64;
+/** Room kept between a table's last row and its sign-off: renderColumnarTable
+ *  returns finalY + 6, so a reserve of exactly the block height would miss by
+ *  those points and push the block onto a page of its own. */
+const SIGN_OFF_SLACK = 8;
 
-function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
-  const n = Math.min(sigs?.length ?? 0, 7);
-  if (n === 0) return 0;
-  return Math.ceil(n / 3) * 86;
+/** The body's floor on every page = the real footer band. The date strip
+ *  (hairline at h-30, "Generated on" at h-18) needs 40pt; the LAST page also
+ *  stacks the disclaimer / footer text up from there (movable in the
+ *  designer), so the floor clears the highest of those + 6pt air. One floor
+ *  for every page — autoTable's bottom margin cannot vary per page and the
+ *  last page is only known once the body is laid out. Footer items dragged up
+ *  into the body are the designer's choice and do not raise the floor. */
+export function footerFloor(layout: Pick<ReportLayoutResult, 'items'> | null | undefined): number {
+  let top = A4.h - 40;
+  for (const it of layout?.items ?? []) {
+    if (it.region !== 'footer' || it.hidden || it.box.y < A4.h * 0.7) continue;
+    top = Math.min(top, it.box.y);
+  }
+  return Math.ceil(A4.h - top + 6);
 }
 
-/** Signature columns drawn INLINE at the end of a department block (image +
- *  name + title, spread evenly). Callers reserve the space up-front, so the
- *  page-break here is only a last-resort guard. */
+/** Height (pt) of the sign-off block the PRESENT signatories need — 0 when
+ *  there are none, so nothing is reserved. See report-signatures.ts. */
+function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
+  return layoutSignatureBlock(sigs, MARGIN_X, A4.w - 2 * MARGIN_X).height;
+}
+
+/** Draw `text` centred on `cx`, shrinking the font (down to 6.5pt) until it
+ *  fits the slot — never truncated, never spilling into the next signatory. */
+function drawFittedCentre(doc: jsPDF, text: string, cx: number, y: number, size: number, maxW: number): void {
+  let fs = size;
+  doc.setFontSize(fs);
+  while (fs > 6.5 && doc.getTextWidth(text) > maxW) { fs -= 0.5; doc.setFontSize(fs); }
+  doc.text(text, cx, y, { align: 'center' });
+}
+
+/** The sign-off block drawn INLINE at the end of a department (or below the
+ *  End-of-Report marker): only the signatories present, laid out by count
+ *  (1 → right, 2 → left/right, 3 → L/C/R, 4 → even; 5-7 wrap into balanced
+ *  rows). Callers reserve the exact height up-front, so the page break here
+ *  is only a last-resort guard — and it moves the WHOLE block, never splits
+ *  it across pages. */
 function drawInlineSignatures(
   doc: jsPDF,
   sigs: ReportSignature[],
   startY: number,
   practice: NonNullable<ReportPdfInput['practice']>
 ): number {
-  const all = sigs.slice(0, 7).filter(s => s.name || s.signatureUrl);
-  if (all.length > 3) {
-    // Wrap: rows of 3, drawn top-down.
-    let yy = startY;
-    for (let i = 0; i < all.length; i += 3) {
-      yy = drawInlineSignatures(doc, all.slice(i, i + 3), yy, practice);
+  const usable = A4.w - 2 * MARGIN_X;
+  const probe = layoutSignatureBlock(sigs, MARGIN_X, usable, 0);
+  if (probe.rows.length === 0) return startY;
+  let top = startY;
+  if (top + probe.height > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
+  const block = layoutSignatureBlock(sigs, MARGIN_X, usable, top);
+  const textW = block.slotW - 6;
+  for (const row of block.rows) {
+    const baseY = row.top + SIG_ROW.base;
+    const hasTitle = row.slots.some(s => !!(s.sig.title ?? '').trim());
+    const titleY = baseY + SIG_ROW.name + SIG_ROW.title;
+    const regY = baseY + SIG_ROW.name + (hasTitle ? SIG_ROW.title : 0) + SIG_ROW.reg;
+    for (const { sig: s, cx: px } of row.slots) {
+      const sigSrc = s.signatureUrl
+        ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
+        : null;
+      if (sigSrc) {
+        try { doc.addImage(sigSrc, 'PNG', px - SIG_IMG_W / 2, baseY - 20, SIG_IMG_W, SIG_IMG_H, undefined, 'FAST'); }
+        catch { drawSigScribble(doc, px, baseY + 4); }
+      } else {
+        drawSigScribble(doc, px, baseY + 4);
+      }
+      if ((s.name ?? '').trim()) {
+        doc.setFont(PDF_FONT, 'bold');
+        doc.setTextColor(BLACK);
+        drawFittedCentre(doc, s.name!.trim(), px, baseY + SIG_ROW.name, 9.5, textW);
+      }
+      if ((s.title ?? '').trim()) {
+        doc.setFont(PDF_FONT, 'normal');
+        doc.setTextColor(TEXT_DIM);
+        drawFittedCentre(doc, `(${s.title!.trim()})`, px, titleY, 8, textW);
+      }
+      if ((s.regNo ?? '').trim()) {
+        doc.setFont(PDF_FONT, 'normal');
+        doc.setTextColor(TEXT_DIM);
+        drawFittedCentre(doc, `Reg. ${s.regNo!.trim()}`, px, regY, 7.5, textW);
+      }
     }
-    return yy;
   }
-  const list = all;
-  if (list.length === 0) return startY;
-  let y = startY + 12;
-  // The block spans 74pt below y; signatures live INSIDE the table's bottom
-  // reserve by design, so only break when the block would collide with the
-  // actual footer strip (disclaimer + generated-on).
-  if (y + 74 > A4.h - FOOTER_RESERVE) { y = newPage(doc, practice) + 6; }
-  const colW = (A4.w - 2 * MARGIN_X) / list.length;
-  const baseY = y + 30;
-  list.forEach((s, i) => {
-    const px = MARGIN_X + i * colW + colW / 2;
-    const sigSrc = s.signatureUrl
-      ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
-      : null;
-    if (sigSrc) {
-      try { doc.addImage(sigSrc, 'PNG', px - 35, baseY - 20, 70, 24, undefined, 'FAST'); }
-      catch { drawSigScribble(doc, px, baseY + 4); }
-    } else {
-      drawSigScribble(doc, px, baseY + 4);
-    }
-    if (s.name) {
-      doc.setFont(PDF_FONT, 'bold');
-      doc.setFontSize(9.5);
-      doc.setTextColor(BLACK);
-      doc.text(s.name, px, baseY + 16, { align: 'center' });
-    }
-    if (s.title) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(`(${s.title})`, px, baseY + 27, { align: 'center' });
-    }
-    if (s.regNo) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(`Reg. ${s.regNo}`, px, baseY + 37, { align: 'center' });
-    }
-  });
-  return baseY + 44;
+  return top + block.height;
 }
 
 /** The single pipeline every column source passes through before rendering:
@@ -3029,9 +3052,10 @@ function renderColumnarTable(
   startY: number,
   practice: NonNullable<ReportPdfInput['practice']>,
   deptLabel: string | null = null,
-  /** Extra bottom margin held back for whatever follows this table on the same
-   *  page — the department's signature block. Without it autoTable fills to
-   *  MARGIN_BOTTOM and the signatures get pushed onto an empty page. */
+  /** Room the department's sign-off block needs under this table's LAST row.
+   *  Held back only on the page where the table ends (see fitSignOff) — the
+   *  table's earlier pages fill to the normal floor. Without it autoTable
+   *  fills to MARGIN_BOTTOM and the signatures get pushed onto an empty page. */
   reserveBottom = 0,
   /** True when `cfg` is a test's/profile's OWN column override (a break-out
    *  run): configured columns print exactly as arranged — even empty ones —
@@ -3040,7 +3064,7 @@ function renderColumnarTable(
   overriddenRun = false
 ): number {
   if (groups.length === 0) return startY;
-  if (startY > A4.h - MARGIN_BOTTOM - reserveBottom - 70) { startY = newPage(doc, practice); }
+  if (startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
 
   const usable = A4.w - 2 * MARGIN_X;
   type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; textOnly: boolean; nameOnly: boolean };
@@ -3307,11 +3331,11 @@ function renderColumnarTable(
   // department the rows belong to.
   let tablePagesSeen = 0;
 
-  autoTable(doc, {
+  const table = __createTable(doc, {
     startY,
     head: head as unknown as Array<Array<string | Cell>>,
     body: body as unknown as Array<Array<string | Cell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM + reserveBottom, top: 56 },
+    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM, top: 56 },
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
@@ -3338,7 +3362,10 @@ function renderColumnarTable(
     // cells here — AFTER layout, so column widths are unaffected — and redraw
     // them with real raised digits in didDrawCell below.
     willDrawCell: (d: CellHookArg) => {
-      if (d.section === 'body' && d.column.index === 0) keepRowsTogether(doc, d as unknown as KeepHookArg, keepWithNext, bodyKind);
+      if (d.section === 'body' && d.column.index === 0) {
+        fitSignOff(d as unknown as Parameters<typeof fitSignOff>[0], reserveBottom);
+        keepRowsTogether(doc, d as unknown as KeepHookArg, keepWithNext, bodyKind);
+      }
       if (d.section === 'body' && sentenceLabels.has(d.row.index)) {
         stashSentenceCell(sentenceCells, d as unknown as SentenceHookArg, sentenceLabels.get(d.row.index)!);
         return;
@@ -3372,7 +3399,37 @@ function renderColumnarTable(
       else doc.triangle(cx - s, cy - s, cx + s, cy - s, cx, cy + s, 'F');
     },
   } as unknown as Parameters<typeof autoTable>[1]);
-  return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+  // A small table that fits here but whose sign-off does not, and that cannot
+  // hand even its header + first rows to the next page without leaving them
+  // stranded, moves to the next page WHOLE — table and signatures together.
+  if (reserveBottom > 0 && table.body.length > 0) {
+    const floor = A4.h - MARGIN_BOTTOM;
+    const headH = table.getHeadHeight(table.columns);
+    const end = startY + headH + table.body.reduce((a, r) => a + r.height, 0);
+    const lead = headH + table.body.slice(0, 2).reduce((a, r) => a + r.height, 0);
+    if (end <= floor && end + reserveBottom > floor && startY + lead > floor - reserveBottom) {
+      table.settings.startY = newPage(doc, practice);
+    }
+  }
+  __drawTable(doc, table);
+  return table.finalY! + 6;
+}
+
+/** Keep a department's sign-off on the page its results END on — without
+ *  reserving it on every page the table spans (which cost multi-page reports
+ *  the full block height on each page). Just before drawing body row i, look
+ *  at where the table would end if the rest ran on here: if the rest fits but
+ *  the sign-off under it would not, raise the floor by the sign-off's height
+ *  so autoTable carries the last rows to the next page with the signatures;
+ *  otherwise keep the normal floor. Runs before keepRowsTogether (which reads
+ *  the floor) and ignores a row it temporarily inflated. */
+function fitSignOff(d: KeepHookArg & { cell: { y: number } }, reserve: number): void {
+  if (reserve <= 0) return;
+  const h = (r: KeepRow) => KEEP_HELD.get(r)?.height ?? r.height;
+  let end = d.cell.y + h(d.row);
+  for (let j = d.row.index + 1; j < d.table.body.length; j++) end += h(d.table.body[j]);
+  const floor = A4.h - MARGIN_BOTTOM;
+  d.table.settings.margin.bottom = end <= floor && end + reserve > floor ? MARGIN_BOTTOM + reserve : MARGIN_BOTTOM;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -4137,7 +4194,10 @@ function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number): numb
 }
 
 // ──────────────────────────────────────────────────────────────
-// Three-column signature footer — runs on every page
+// Page footer — runs on every page. Signatures NEVER print here: they sign
+// at the end of each department's block / below the End-of-Report marker
+// (drawInlineSignatures). The old per-page three-column signature row (at
+// h-118) is gone, and with it the 150pt floor it forced on every page.
 // ──────────────────────────────────────────────────────────────
 
 function drawSignatureFooter(
@@ -4159,66 +4219,9 @@ function drawSigFooterPage(
   pageNo: number,
   pageTotal: number
 ) {
-  const sigY = A4.h - 118;
-  const sigsW = A4.w - 2 * MARGIN_X;
-  const colW = sigsW / 3;
-
-  // Prefer template-supplied signatures (admin-editable JSON array); the
-  // legacy flat practice shape is the fallback when no template is set.
-  // When the snapshot carries PER-DEPARTMENT signatories, each department
-  // block already signs itself inline — skip the repeated page-bottom row
-  // entirely (the disclaimer/date strip below still draws).
-  // Signatures NEVER print in the page footer — they sign at the end of each
-  // department's section (per-department signatories / tester+validator).
-  const sigs: ReportSignature[] = [];
-
-  sigs.forEach((s, i) => {
-    if (!s.name && !s.signatureUrl) return;
-    const cx = MARGIN_X + i * colW;
-    const px = cx + colW / 2;
-    const baseY = sigY;
-    // Signature image wins; without one we draw the faint scribble placeholder
-    // so the column still reads as a sign-off zone. A per-validator signature
-    // (data URL) is already embedded and used directly; template-configured
-    // upload URLs come pre-fetched from IMG_CACHE.
-    const sigSrc = s.signatureUrl
-      ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
-      : null;
-    if (sigSrc) {
-      try {
-        const sigW = 70, sigH = 24;
-        doc.addImage(sigSrc, 'PNG', px - sigW / 2, baseY - sigH + 4, sigW, sigH, undefined, 'FAST');
-      } catch {
-        drawSigScribble(doc, px, baseY);
-      }
-    } else {
-      drawSigScribble(doc, px, baseY);
-    }
-
-    if (s.name) {
-      doc.setFont(PDF_FONT, 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(BLACK);
-      doc.text(s.name, px, baseY + 18, { align: 'center' });
-    }
-
-    if (s.title) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(`(${s.title})`, px, baseY + 30, { align: 'center' });
-    }
-    if (s.regNo) {
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(TEXT_DIM);
-      doc.text(`Reg. ${s.regNo}`, px, baseY + 40, { align: 'center' });
-    }
-  });
-
-  // Disclaimer + footer text — full-width in the band between the signatures
-  // and the date strip. Only on the last page so it doesn't repeat ad nauseam
-  // on multi-page reports.
+  // Disclaimer + footer text — full-width in the band above the date strip.
+  // Only on the last page so it doesn't repeat ad nauseam on multi-page
+  // reports.
   if (pageNo === pageTotal) {
     // Disclaimer + footer text: resolved by the layout model (stacked up
     // from just above the date strip; movable in the report designer).
