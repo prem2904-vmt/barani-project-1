@@ -188,6 +188,6 @@ describe('OrderCreate — not offered here', () => {
     const spy = vi.spyOn(toasts, 'error');
     c.surfaceMutationError({ error: { error: 'not_offered', message: 'Test not offered' } });
     expect(spy).toHaveBeenCalledWith(expect.stringContaining('not offered'));
-    expect(c.api.get).toHaveBeenCalledWith('/api/tests/?activeOnly=true');
+    expect(c.api.get).toHaveBeenCalledWith('/api/tests/?activeOnly=true&view=summary');
   });
 });
