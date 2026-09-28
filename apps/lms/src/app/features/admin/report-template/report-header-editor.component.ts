@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ReportTemplate } from '../../../shared/models/report.model';
+import { normalizeHeaderPreset, ReportTemplate } from '../../../shared/models/report.model';
 import { computeReportPageLayout } from '../../../shared/utils/report-pdf';
 import {
   Align, BG_MAX_UPLOAD_BYTES, BackgroundImage, BgArea, BgFit, HeaderField, HeaderLayoutConfig, ItemOverride, LayoutIssue,
@@ -29,7 +29,7 @@ const FIELD_LABEL: Record<string, string> = {
 };
 const JOINABLE: HeaderField[] = ['address', 'phone', 'email', 'website'];
 const PRESETS = [
-  { value: 'drlogy', label: 'Classic' }, { value: 'centered', label: 'Centered' },
+  { value: 'classic', label: 'Classic' }, { value: 'centered', label: 'Centered' },
   { value: 'banner', label: 'Banner' }, { value: 'minimal', label: 'Minimal' },
 ];
 /** Nudge steps (mm): the pad's step choice; arrows = step, Shift+arrows = 5 mm. */
@@ -584,7 +584,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
               <h4 class="pf-rhe-sec__h">Header style</h4>
               <div class="pf-rhe-presets" role="radiogroup" aria-label="Header style">
                 @for (p of presets; track p.value) {
-                  <button type="button" class="pf-rhe-preset nd-tile-sel" role="radio" [attr.aria-checked]="(template().headerPreset ?? 'drlogy') === p.value"
+                  <button type="button" class="pf-rhe-preset nd-tile-sel" role="radio" [attr.aria-checked]="presetOf(template()) === p.value"
                           (click)="setPreset(p.value)">
                     <span class="pf-rhe-thumb" [class]="'pf-rhe-thumb pf-rhe-thumb--' + p.value" aria-hidden="true"><i></i><b></b><b></b><em></em></span>
                     {{ p.label }}
@@ -1079,7 +1079,7 @@ export class ReportHeaderEditorComponent implements OnDestroy {
       }
       return out;
     }
-    const preset = t.headerPreset ?? 'drlogy';
+    const preset = normalizeHeaderPreset(t.headerPreset);
     if (preset === 'banner') push('banner', 'The coloured band behind the name', 'shown', byId.get('banner'));
     const logo = byId.get('logo');
     if (logo) push('logo', t.logoUrl ? 'Uploaded image' : 'No image — placeholder prints', logo.hidden ? 'hidden' : 'shown', logo);
@@ -1097,7 +1097,7 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     const nabl = byId.get('nabl');
     push('nabl', t.nablAccredited ? (t.nablNumber || 'No number set') : 'Not accredited', nabl ? (nabl.hidden ? 'hidden' : 'shown') : 'off', nabl);
     const bar = byId.get('accentBar');
-    if (preset === 'drlogy' || preset === 'centered') push('accentBar', 'Thin coloured strip under the letterhead', bar ? (bar.hidden ? 'hidden' : 'shown') : 'off', bar);
+    if (preset === 'classic' || preset === 'centered') push('accentBar', 'Thin coloured strip under the letterhead', bar ? (bar.hidden ? 'hidden' : 'shown') : 'off', bar);
     for (const l of this.cfg()?.lines ?? []) {
       const id = 'line:' + l.id; const it = byId.get(id);
       out.push({ id, label: 'Text line', value: l.text, state: it ? (it.hidden ? 'hidden' : 'shown') : 'empty', item: it, warn: warn.has(id) });
@@ -1435,8 +1435,10 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     this.select(null);
     this.emitCfg(null);
   }
+  /** The template's preset, with the pre-rename spelling read as 'classic'. */
+  presetOf(t: ReportTemplate): string { return normalizeHeaderPreset(t.headerPreset); }
   async setPreset(value: string) {
-    if ((this.template().headerPreset ?? 'drlogy') === value) return;
+    if (normalizeHeaderPreset(this.template().headerPreset) === value) return;
     const cfg = this.cfg();
     const moved = cfg && Object.values(cfg.items).some(o => o.x !== undefined || o.y !== undefined || o.align !== undefined);
     if (!moved) { this.emitPatch({ headerPreset: value }); return; }

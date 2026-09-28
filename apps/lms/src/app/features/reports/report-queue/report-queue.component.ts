@@ -707,7 +707,7 @@ export class ReportQueueComponent implements OnInit {
   /** Resolve the tenant template + per-test layouts + images needed to render a
    *  report PDF from its stored snapshot. Shared by download and archive.
    *  The template carries the admin-tunable chrome (colours, logo, signatures);
-   *  without it the PDF falls back to the hardcoded Drlogy defaults. */
+   *  without it the PDF falls back to the hardcoded Classic defaults. */
   private async buildReportRender(r: Report) {
     const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
       import("../../../core/services/report-layout.service"),

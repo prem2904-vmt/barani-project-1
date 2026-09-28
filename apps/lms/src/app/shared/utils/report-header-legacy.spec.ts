@@ -1,4 +1,5 @@
 import { LEGACY_HEADER_GOLDEN } from './report-header-legacy.golden';
+import { LEGACY_CLASSIC_PRESET } from '../models/report.model';
 import { hash, legacyMatrix, renderLegacy, silenceJsdomCanvas } from './report-header-legacy.spec-helpers';
 
 /**
@@ -38,5 +39,15 @@ describe('report header — untouched templates print exactly as before', () => 
     }
     const want = Object.fromEntries(Object.keys(got).map(k => [k, LEGACY_HEADER_GOLDEN[k]]));
     expect(got).toEqual(want);
+  });
+
+  it('a stored pre-rename preset value prints byte-identical to classic', () => {
+    // Rows written before the rename still hold the old value until the
+    // backend migration runs (and older app builds may send it) — the paper
+    // must not change.
+    for (const [name, patch] of MATRIX.filter(([n]) => n.startsWith('classic/'))) {
+      const legacy = hash(renderLegacy(name, { ...patch, headerPreset: LEGACY_CLASSIC_PRESET }));
+      expect(legacy, name).toBe(LEGACY_HEADER_GOLDEN[name]);
+    }
   });
 });

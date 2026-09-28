@@ -9,7 +9,7 @@ import {
   ResolvedRow,
   ResolvedSection,
 } from '../models/report-layout.model';
-import { ReportSignature, ReportTemplate } from '../models/report.model';
+import { normalizeHeaderPreset, ReportSignature, ReportTemplate, type HeaderPreset } from '../models/report.model';
 import { layoutSignatureBlock, SIG_IMG_H, SIG_IMG_W, SIG_ROW } from './report-signatures';
 import { savedFlagOf, type SavedFlag } from './result-flag';
 import { reportFlag, reportFlagWord } from './report-flag';
@@ -27,7 +27,7 @@ import {
   readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption } from './report-header-layout';
 
 /**
- * Render an A4 lab report PDF in the Drlogy template style — blue
+ * Render an A4 lab report PDF in the Classic template style — blue
  * accent (#0066CC), bold-uppercase "LAB NAME" wordmark, three-column
  * patient block with vertical separators (no background fills), centered
  * uppercase test name between hairlines, plain-text column headers with
@@ -39,7 +39,7 @@ import {
  * chart) are honored. Empty columns are dropped automatically so an
  * unused "Specimen" cell never leaves an empty column behind. Tests
  * without a configured layout fall through to a four-column legacy
- * table that mirrors the Drlogy shape (Investigation · Result ·
+ * table that mirrors the classic shape (Investigation · Result ·
  * Reference Value · Unit).
  */
 export interface ReportPdfInput {
@@ -70,7 +70,7 @@ export interface ReportPdfInput {
   };
   /** Per-tenant template config (colors, fonts, header layout, date
    *  format, signatures, watermark, end-of-report text). When supplied
-   *  the renderer reads it instead of the hardcoded Drlogy defaults —
+   *  the renderer reads it instead of the hardcoded Classic defaults —
    *  every visual element in the PDF can be tuned from the admin UI. */
   template?: ReportTemplate | null;
   /** Optional: per-test resolved layouts. When provided, the PDF renders
@@ -122,10 +122,10 @@ interface ResolvedTheme {
   tableHeaderText: string;
   // Typography
   font: 'helvetica' | 'times' | 'courier';
-  // Body font scale — 1.0 = current Drlogy size
+  // Body font scale — 1.0 = current Classic size
   fontScale: number;
   // Layout
-  headerPreset: 'drlogy' | 'centered' | 'banner' | 'minimal';
+  headerPreset: HeaderPreset;
   logoPosition: 'left' | 'center' | 'right';
   logoSize: 'sm' | 'md' | 'lg';
   topAccentBar: boolean;
@@ -329,7 +329,7 @@ let HEADER_RESERVE = 70; // drawn letterhead height above the patient block
 let LETTERPAD = false;   // pre-printed-letterpad mode: blank header/footer, body only
 const MM_TO_PT = 2.834645669; // 1mm in PDF points (72dpi)
 
-// ── Drlogy palette ────────────────────────────────────────────────
+// ── Classic palette ───────────────────────────────────────────────
 // Mutable module-level theme. `applyTheme()` (called at the start of
 // every buildReportPdf) overrides these from the tenant's
 // ReportTemplate so admins can re-skin the PDF without us threading
@@ -379,7 +379,7 @@ function defaultTheme(): ResolvedTheme {
     accent: '#0066CC', primary: '#1B3A6B', body: '#1a1a1a', divider: '#cccccc',
     tableHeaderBg: '#ffffff', tableHeaderText: '#000000',
     font: PDF_FONT, fontScale: 1,
-    headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
+    headerPreset: 'classic', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
     tableStyle: 'plain', zebraRows: false,
     flagStyle: 'bold', flagIndicator: 'letter', abnormalColor: '#dc2626', abnormalLowColor: '#2563eb', groupByDepartment: false, departmentPageBreak: false,
     dateFormat: 'dd MMM yyyy', timeFormat: '12h', dateTimeSeparator: ', ',
@@ -401,7 +401,7 @@ function defaultTheme(): ResolvedTheme {
 }
 
 /** Resolve the template + practice into the effective theme used by the
- *  renderer. Template values win; practice + Drlogy defaults fill gaps. */
+ *  renderer. Template values win; practice + Classic defaults fill gaps. */
 function resolveTheme(
   tpl: ReportTemplate | null | undefined,
   practice: NonNullable<ReportPdfInput['practice']>
@@ -418,7 +418,7 @@ function resolveTheme(
   }
   // Colors: treat empty strings like missing so blank fields in the DB
   // (older rows or partial edits where the admin cleared an input) fall
-  // back to the sane Drlogy defaults instead of breaking jsPDF's
+  // back to the sane Classic defaults instead of breaking jsPDF's
   // setTextColor() with an empty value (which renders as no-text / white).
   t.accent          = pickColor(tpl.accentColor,     pickColor(tpl.primaryColor, t.accent));
   t.primary         = pickColor(tpl.primaryColor,    t.primary);
@@ -429,7 +429,7 @@ function resolveTheme(
   t.font            = (['helvetica','times','courier'].includes(tpl.fontFamily ?? '')
                        ? (tpl.fontFamily as 'helvetica'|'times'|'courier') : 'helvetica');
   t.fontScale       = tpl.fontSize === 'sm' ? 0.9 : tpl.fontSize === 'lg' ? 1.1 : 1.0;
-  t.headerPreset    = (tpl.headerPreset as ResolvedTheme['headerPreset']) ?? 'drlogy';
+  t.headerPreset    = normalizeHeaderPreset(tpl.headerPreset);
   t.logoPosition    = (tpl.logoPosition as 'left'|'center'|'right') ?? 'left';
   t.logoSize        = (tpl.logoSize as 'sm'|'md'|'lg') ?? 'md';
   t.topAccentBar    = tpl.topAccentBar ?? true;
@@ -608,7 +608,7 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   // functions read from `practice.{name,address,phone,email,website,nablNumber}`
   // for legacy reasons; without this merge, edits to those fields in
   // the admin editor (which only passes `template`) wouldn't appear in
-  // the live preview because every read fell back to the Drlogy defaults.
+  // the live preview because every read fell back to the Classic defaults.
   const practice: NonNullable<ReportPdfInput['practice']> = template ? {
     ...rawPractice,
     name:        rawPractice.name        ?? template.labName,
@@ -1205,7 +1205,7 @@ export async function preloadReportImages(
 // ──────────────────────────────────────────────────────────────
 
 /** Renders the tagline by splitting on '|' and colouring each separator
- *  pipe with the accent colour (Drlogy style). For taglines without
+ *  pipe with the accent colour (classic style). For taglines without
  *  pipes ("Accurate. On time.") it just renders as a single black line. */
 function drawTagline(doc: jsPDF, tagline: string, x: number, y: number, size = 9, style: 'normal' | 'bold' | 'italic' = 'bold') {
   doc.setFont(PDF_FONT, style);
@@ -1535,7 +1535,7 @@ function computeReportLayout(
     // (Minimal's contact line inherits the tagline's 9pt — as it always did.)
     joined('contact', ['address', 'phone', 'email', 'website'], x, LH_TOP + 38, align, 9 * fs);
   } else {
-    // Classic ("drlogy"): logo + two-tone wordmark left, phone/email right,
+    // Classic: logo + two-tone wordmark left, phone/email right,
     // the address on its own line under the logo row, the accent bar.
     const size = theme.logoSize === 'sm' ? 24 : theme.logoSize === 'lg' ? 40 : 32;
     const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: logoXFor(size), y: LH_TOP, align: theme.logoPosition,
@@ -2149,7 +2149,7 @@ function drawPatientTimeItem(doc: jsPDF, label: string, value: string, x: number
 /** Patient-block: 4-column labelled grid (compact, label-above-value).
  *  Two rows of four cells each. No vertical separators — the labels
  *  themselves act as visual anchors. Best when the lab wants a more
- *  "form" feel than the Drlogy 3-column block. */
+ *  "form" feel than the classic 3-column block. */
 function drawPatientBlockFourCol(
   doc: jsPDF,
   snap: ReportSnapshot,
@@ -2768,7 +2768,7 @@ function renderScopeHeading(
 ): number {
   let y = startY;
   if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
-  // Department band — the strongest heading inside the body (Drlogy pattern:
+  // Department band — the strongest heading inside the body (classic pattern:
   // clear department separation carries the whole multi-department report).
   doc.setFont(PDF_FONT, 'bold');
   doc.setFontSize(10.5);
@@ -3503,7 +3503,7 @@ function fitSignOff(d: KeepHookArg & { cell: { y: number } }, reserve: number): 
 }
 
 // ──────────────────────────────────────────────────────────────
-// Per-test renderers — Drlogy table style (plain header + hairline)
+// Per-test renderers — classic table style (plain header + hairline)
 // ──────────────────────────────────────────────────────────────
 
 function renderResolvedTest(
@@ -3542,7 +3542,7 @@ function renderResolvedTest(
   return y;
 }
 
-/** Drlogy-style centered uppercase test name. */
+/** Classic-style centered uppercase test name. */
 function drawTestHeading(doc: jsPDF, name: string, y: number) {
   doc.setFont(PDF_FONT, 'bold');
   doc.setFontSize(13);
@@ -3553,7 +3553,7 @@ function drawTestHeading(doc: jsPDF, name: string, y: number) {
   doc.line(MARGIN_X, y + 22, A4.w - MARGIN_X, y + 22);
 }
 
-/** Resolved grid section → Drlogy 4-column shape.
+/** Resolved grid section → classic 4-column shape.
  *
  *  Empty columns are dropped automatically; a synthesized "Investigation"
  *  column is prepended whenever the layout doesn't already include a
@@ -3562,7 +3562,7 @@ function drawTestHeading(doc: jsPDF, name: string, y: number) {
  *
  *  Specimen / sample type (per-test) is rendered as a small dim
  *  italic line BENEATH the test name in the parameter cell, not as a
- *  separate column — matching Drlogy ("CREATININE, SERUM" with
+ *  separate column — matching the classic layout ("CREATININE, SERUM" with
  *  "Compensated Jaffe's reaction, IDMS traceable" italic below). */
 function renderGridSection(
   doc: jsPDF,
@@ -3757,7 +3757,7 @@ function tableHeadStyles() {
     textColor: theme.tableHeaderText,
     fontStyle: 'bold' as const,
     // Column headers sit BELOW the data in the visual hierarchy — smaller
-    // than the body values, with a firm rule underneath (Drlogy pattern).
+    // than the body values, with a firm rule underneath (classic pattern).
     fontSize: 8.5 * theme.fontScale,
     halign: 'left' as const,
     cellPadding: { top: 3, right: 6, bottom: 6, left: 6 },
@@ -3892,7 +3892,7 @@ function renderChartSection(doc: jsPDF, sec: ResolvedSection, startY: number): n
 }
 
 /** Legacy renderer — used when a test has no admin-configured layout.
- *  Drlogy 4-column shape: Investigation · Result · Reference Value · Unit.
+ *  Classic 4-column shape: Investigation · Result · Reference Value · Unit.
  *  Inline RED "High"/blue "Low" tag in the Result cell. */
 function renderLegacyTest(
   doc: jsPDF,
@@ -4310,7 +4310,7 @@ function drawSigFooterPage(
   // Plain page number ("1", "2", "3" …).
   doc.text(String(pageNo), A4.w - MARGIN_X, A4.h - 18, { align: 'right' });
 
-  // Blue band at the bottom (Drlogy "Sample Collection" strip) — the LAB's
+  // Blue band at the bottom (classic "Sample Collection" strip) — the LAB's
   // contact number (home-collection line), never the patient's phone.
   // Admin toggles via template.showSampleCollectionBand.
   const collectPhone = (practice.phone ?? '').trim();
@@ -4377,7 +4377,7 @@ function drawSigFooterPage(
 }
 
 /** Add a new page and redraw the per-page furniture (letterhead etc.
- *  are not repeated — Drlogy reports keep the body pages clean and
+ *  are not repeated — classic reports keep the body pages clean and
  *  rely on the bottom strip alone). */
 function newPage(doc: jsPDF, _practice: NonNullable<ReportPdfInput['practice']>): number {
   doc.addPage();
@@ -4414,11 +4414,11 @@ function buildCanonicalColumns(
   return out;
 }
 
-/** Reorder a column list into the conventional Drlogy lab-report
+/** Reorder a column list into the conventional classic lab-report
  *  arrangement: result first, then reference range (right next to the
  *  value so the eye can compare them), then unit. Text/flag columns
  *  preserve their original relative position around the typed core. */
-function drlogyOrderedColumns(cols: ReportColumn[]): ReportColumn[] {
+function classicOrderedColumns(cols: ReportColumn[]): ReportColumn[] {
   // Build a position map so non-typed columns retain their relative order
   // (e.g. an admin-added "Method" text column stays after the unit, where
   // they placed it).
@@ -4438,17 +4438,17 @@ function drlogyOrderedColumns(cols: ReportColumn[]): ReportColumn[] {
   return ordered;
 }
 
-/** Drlogy-style column header label. Renames the server's "Reference
- *  range" to "Reference Value" (the term Drlogy uses on its PDFs);
+/** Classic-style column header label. Renames the server's "Reference
+ *  range" to "Reference Value" (the conventional lab-report term);
  *  falls back to title-casing the layout's original label for anything
  *  custom. */
-function drlogyLabelFor(c: ReportColumn): string {
+function classicLabelFor(c: ReportColumn): string {
   if (c.type === 'range') return 'Reference Value';
   return titleCaseHeader(c.label);
 }
 
 function titleCaseHeader(label: string): string {
-  // Drlogy uses title case ("Investigation", "Result", "Reference Value", "Unit").
+  // Classic reports use title case ("Investigation", "Result", "Reference Value", "Unit").
   // The admin layout sometimes ships caps ("REFERENCE RANGE") — gently normalise.
   if (!label) return '';
   return label

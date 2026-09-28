@@ -16,7 +16,7 @@ import { MARGIN_X, MM, PAGE, addBackground, readHeaderLayout, setItem, writeHead
 const BASE: ReportTemplate = {
   id: 't', tenantId: 'x', labName: 'Micro World Diagnostics', tagline: 'Accurate | Caring | Instant',
   address: '14 Gandhi Road, Chennai 600017', phone: '+91 98400 12345', email: 'lab@microworld.in',
-  website: 'www.microworld.in', logoUrl: '', nablAccredited: false, headerPreset: 'drlogy', logoPosition: 'left',
+  website: 'www.microworld.in', logoUrl: '', nablAccredited: false, headerPreset: 'classic', logoPosition: 'left',
   logoSize: 'md', topAccentBar: true, primaryColor: '#1B3A6B', accentColor: '#0066CC',
   showPatientName: true, showAge: true, showRefDoctor: true, showOrderId: true, showAbhaId: false, showQrCode: true,
   showCollectionDate: true, showReportDate: true, showMethod: false, showInstrument: false, groupByDepartment: false,

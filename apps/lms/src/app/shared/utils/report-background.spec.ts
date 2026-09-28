@@ -22,7 +22,7 @@ function tpl(cfg: HeaderLayoutConfig | null, p: Partial<ReportTemplate> = {}): R
   const t = {
     id: 't', tenantId: 'x', labName: 'Micro World Diagnostics', tagline: 'Accurate | Caring | Instant',
     address: '14 Gandhi Road', phone: '+91 98400 12345', email: 'lab@microworld.in', website: '',
-    logoUrl: '', nablAccredited: false, headerPreset: 'drlogy', topAccentBar: true, primaryColor: '#1B3A6B',
+    logoUrl: '', nablAccredited: false, headerPreset: 'classic', topAccentBar: true, primaryColor: '#1B3A6B',
     showPatientName: true, showAge: true, showRefDoctor: true, showOrderId: true, showAbhaId: false, showQrCode: true,
     showCollectionDate: true, showReportDate: true, showMethod: false, showInstrument: false, groupByDepartment: false,
     showCriticalFlag: true, showPathologistName: true, showSignature: true, showPoweredBy: true, ...p,
