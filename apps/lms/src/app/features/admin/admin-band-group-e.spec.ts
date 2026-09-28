@@ -191,11 +191,12 @@ describe('Admin band — Printing (/printing)', () => {
     return { ...p, printer };
   };
 
-  it('tabs-only pill (no search), header classic-only, Test print on the band', async () => {
+  it('context-bar pill (no search, no tabs), header classic-only, Test print on the band', async () => {
     const p = make();
     expect(p.band()).not.toBeNull();
     expect(p.bandInput()).toBeNull();
-    expect(p.el.querySelector('.pf-hb__search--tabs')).not.toBeNull();
+    expect(p.el.querySelector('.pf-hb__search--ctx .nd-ctx')).not.toBeNull();
+    expect(p.el.querySelector('pf-hero-band pf-segmented')).toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
     const btn = p.actions().find((b) => b.textContent!.includes('Test print'))!;
     btn.click();
@@ -203,16 +204,12 @@ describe('Admin band — Printing (/printing)', () => {
     expect(p.printer.testPrint).toHaveBeenCalled();
   });
 
-  it('pill tabs switch the visible section (web: no Documents tab)', () => {
+  it('every section is a card in the body at once (web: no Documents card)', () => {
     const p = make();
-    const labels = Array.from(p.tools()!.querySelectorAll('pf-segmented button')).map((b) => b.getAttribute('aria-label'));
-    expect(labels).toEqual(['Printer', 'Label', 'Alignment', 'Quality']);
-    expect(p.body()!.querySelector('.pf-nudge')).toBeNull();
-    segBtn(p.tools(), 'Alignment')!.click();
-    p.f.detectChanges();
-    expect(p.body()!.querySelector('.pf-nudge')).not.toBeNull();
+    const cards = Array.from(p.body()!.querySelectorAll('.nd-card[data-card]')).map((c) => c.getAttribute('data-card'));
+    expect(cards).toEqual(['label', 'printer', 'quality']);
     expect(p.body()!.querySelector('.pf-nudge svg')).not.toBeNull();
-    expect(p.body()!.querySelector('.pf-prev')).toBeNull();
+    expect(p.body()!.querySelector('.pf-lp-label canvas')).not.toBeNull();
   });
 });
 
