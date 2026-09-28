@@ -24,7 +24,7 @@ import {
 } from "../../../shared/utils/reference-range";
 import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
 import { effectiveMethodology } from "../../../shared/utils/methodology";
-import { choiceOptionsFor, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
+import { choiceOptionsFor, isMultiChoice, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
 import { readParameters } from "../../../shared/utils/test-parameters";
 import {
   CalcContext,
@@ -492,7 +492,11 @@ export class SampleResultEntryComponent {
    *  several normals joined with "/". Mirrors mw ResultFlaggingService. */
   private qualitativeFlagFor(t: OrderTest, p: TestParameter): LiveFlag | null {
     const raw = this.getValue(t.id, p.name);
-    if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+    // A multi-select holds several picks: abnormal when ANY pick is not normal.
+    const picks = (Array.isArray(raw) ? raw : [raw])
+      .map((x) => (x === undefined || x === null ? "" : String(x).trim().toLowerCase()))
+      .filter((x) => x !== "");
+    if (!picks.length) return null;
     // The embedded table's Normal rows decide; normalValue is the fallback
     // for legacy parameters. No normals configured = not flaggable (e.g.
     // stone colours, which have no clinical "normal").
@@ -504,8 +508,7 @@ export class SampleResultEntryComponent {
       if (!nv) return null;
       normals = nv.split("/").map(x => x.trim()).filter(Boolean);
     }
-    const v = String(raw).trim().toLowerCase();
-    const isNormal = normals.some(n => n.toLowerCase() === v);
+    const isNormal = picks.every(v => normals.some(n => n.toLowerCase() === v));
     return isNormal
       ? null
       : { tone: "high", label: "Abnormal" };
@@ -530,6 +533,22 @@ export class SampleResultEntryComponent {
     const raw = this.getValue(t.id, p.name);
     if (raw === undefined || raw === null || raw === "") return false;
     return Number.isNaN(Number(String(raw).trim()));
+  }
+
+  /** A choice list where the tech may pick several answers (stored as string[]). */
+  isMultiSelect(p: TestParameter): boolean {
+    return isMultiChoice(p);
+  }
+
+  /** The current picks of a multi-select (a legacy single string reads as one pick). */
+  multiValuesOf(testId: string, paramName: string): string[] {
+    const v = this.getValue(testId, paramName);
+    if (Array.isArray(v)) return v.map((x) => String(x ?? "")).filter((x) => x.trim() !== "");
+    return v === undefined || v === null || String(v).trim() === "" ? [] : [String(v)];
+  }
+
+  onMultiSelectChange(testId: string, paramName: string, values: unknown[]) {
+    this.setValue(testId, paramName, (values ?? []).map((x) => String(x ?? "")).filter((x) => x.trim() !== ""));
   }
 
   onSelectChange(testId: string, paramName: string, value: any) {
