@@ -29,7 +29,7 @@ function baseTemplate(): ReportTemplate {
     address: '14 Gandhi Road, Chennai 600017', phone: '+91 98400 12345', email: 'lab@microworld.in',
     website: 'www.microworld.in', logoUrl: '/uploads/logo.png',
     nablAccredited: false, nablNumber: '', nablLogoUrl: '',
-    headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
+    headerPreset: 'classic', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
     primaryColor: '#1B3A6B', accentColor: '#0066CC', fontFamily: 'helvetica', fontSize: 'md',
     showPatientName: true, showAge: true, showRefDoctor: true, showOrderId: true, showAbhaId: false,
     showQrCode: true, showCollectionDate: true, showReportDate: true, showMethod: false,
@@ -42,7 +42,7 @@ function baseTemplate(): ReportTemplate {
 /** The legacy matrix — name → template patch. */
 export function legacyMatrix(): Array<[string, Partial<ReportTemplate>]> {
   const out: Array<[string, Partial<ReportTemplate>]> = [];
-  for (const preset of ['drlogy', 'centered', 'banner', 'minimal']) {
+  for (const preset of ['classic', 'centered', 'banner', 'minimal']) {
     for (const pos of ['left', 'center', 'right']) {
       for (const size of ['sm', 'md', 'lg']) {
         out.push([`${preset}/${pos}/${size}`, { headerPreset: preset, logoPosition: pos, logoSize: size }]);

@@ -4,7 +4,7 @@ import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from 
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { ReportTemplate } from '../../../shared/models/report.model';
+import { normalizeHeaderPreset, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ReportColumn } from '../../../shared/models/report-layout.model';
 import { ResolvedReportLayout } from '../../../shared/models/report-layout.model';
@@ -827,7 +827,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   }
 
   readonly headerPresetOptions: SegmentedOption<string>[] = [
-    { value: 'drlogy',   label: 'Classic'  },
+    { value: 'classic',  label: 'Classic'  },
     { value: 'centered', label: 'Centered' },
     { value: 'banner',   label: 'Banner'   },
     { value: 'minimal',  label: 'Minimal'  },
@@ -1060,7 +1060,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       tagline: 'Accurate | Caring | Instant',
       address: '', phone: '', email: '', website: '', logoUrl: '',
       nablAccredited: false, nablNumber: '', nablLogoUrl: '',
-      headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
+      headerPreset: 'classic', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
       primaryColor: '#1B3A6B', accentColor: '#0066CC',
       tableHeaderBg: '#ffffff', tableHeaderText: '#000000',
       bodyTextColor: '#1a1a1a', dividerColor: '#cccccc',
@@ -1260,7 +1260,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     }
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => {
-        if (t) this._tpl.set({ ...this._tpl(), ...t });
+        if (t) this._tpl.set({ ...this._tpl(), ...t, headerPreset: normalizeHeaderPreset(t.headerPreset ?? this._tpl().headerPreset) });
         this.savedJson.set(JSON.stringify(this._tpl()));
         this.past.set([]); this.future.set([]);
         this.initPatientCols();

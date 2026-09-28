@@ -50,7 +50,8 @@ export interface ReportTemplate {
   nablLogoUrl?: string;
 
   // ── Header & logo layout ─────────────────────────────────
-  /** 'drlogy' | 'centered' | 'banner' | 'minimal' */
+  /** 'classic' | 'centered' | 'banner' | 'minimal' — read through
+   *  normalizeHeaderPreset(). */
   headerPreset?: string;
   /** 'left' | 'center' | 'right' */
   logoPosition?: string;
@@ -157,4 +158,18 @@ export interface ReportTemplate {
    *  shared/utils/report-header-layout.ts. Absent = print as the header
    *  style always did. */
   metadata?: string | null;
+}
+
+/** The letterhead presets. 'classic' is the default. */
+export type HeaderPreset = 'classic' | 'centered' | 'banner' | 'minimal';
+
+const HEADER_PRESETS: readonly HeaderPreset[] = ['classic', 'centered', 'banner', 'minimal'];
+export const LEGACY_CLASSIC_PRESET = 'drlogy'; // pre-rename stored value of 'classic'; rows migrate server-side
+
+/** Read a stored header preset. Missing / unknown values and the pre-rename
+ *  spelling all mean 'classic', so older rows and older app builds print the
+ *  same letterhead. */
+export function normalizeHeaderPreset(v: string | null | undefined): HeaderPreset {
+  if (v === LEGACY_CLASSIC_PRESET) return 'classic';
+  return (HEADER_PRESETS as readonly string[]).includes(v ?? '') ? (v as HeaderPreset) : 'classic';
 }

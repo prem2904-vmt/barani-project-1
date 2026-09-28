@@ -702,7 +702,7 @@ export class ReportViewerComponent implements OnInit {
    *  renderer: (a) drop text columns whose cells are all blank (the
    *  unused Specimen case), but KEEP typed columns (result/unit/range/
    *  flag) so the header stays consistent across tests; (b) reorder to
-   *  the Drlogy convention `Result → Reference → Unit` so the value
+   *  the classic column order `Result → Reference → Unit` so the value
    *  and its acceptable range sit next to each other. */
   visibleColumns(
     pv: ResolvedReportLayout,
@@ -719,7 +719,7 @@ export class ReportViewerComponent implements OnInit {
     });
     const cols = filtered.length > 0 ? filtered : pv.columns;
 
-    // Reorder typed core into Drlogy convention.
+    // Reorder typed core into the classic column order.
     const result = cols.find(c => c.type === 'result');
     const range  = cols.find(c => c.type === 'range');
     const unit   = cols.find(c => c.type === 'unit');
@@ -735,10 +735,10 @@ export class ReportViewerComponent implements OnInit {
     return ordered;
   }
 
-  /** Drlogy-style column header label. Server defaults emit
-   *  "Reference range" — Drlogy convention says "Reference Value".
+  /** Classic-style column header label. Server defaults emit
+   *  "Reference range" — the classic report says "Reference Value".
    *  Falls back to the layout's original label for custom columns. */
-  drlogyLabelFor(c: ResolvedReportLayout['columns'][number]): string {
+  classicLabelFor(c: ResolvedReportLayout['columns'][number]): string {
     if (c.type === 'range') return 'Reference Value';
     return c.label;
   }

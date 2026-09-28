@@ -245,7 +245,7 @@ export interface ResolvedReportLayout {
   /** Specimen / sample type for this test (e.g. "Serum", "EDTA Whole
    *  Blood"). Surfaced from TestEntity.Parameters JSON's `sampleType`
    *  wrapper key. The PDF prints this as an italic dim sub-line under
-   *  each test name, like Drlogy's "CREATININE, SERUM" rendering. */
+   *  each test name, like the classic "CREATININE, SERUM" rendering. */
   sampleType?: string | null;
   columns: ReportColumn[];
   /** True when `columns` is this test's OWN override (Test Master →

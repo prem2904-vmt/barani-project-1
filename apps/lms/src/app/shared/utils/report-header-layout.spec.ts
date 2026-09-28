@@ -20,7 +20,7 @@ function tpl(p: Partial<ReportTemplate> = {}, cfg?: HeaderLayoutConfig | null): 
     id: 't', tenantId: 'x', labName: 'Micro World Diagnostics', tagline: 'Accurate | Caring | Instant',
     address: '14 Gandhi Road, Chennai 600017', phone: '+91 98400 12345', email: 'lab@microworld.in',
     website: 'www.microworld.in', logoUrl: '/uploads/logo.png', nablAccredited: false,
-    headerPreset: 'drlogy', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
+    headerPreset: 'classic', logoPosition: 'left', logoSize: 'md', topAccentBar: true,
     primaryColor: '#1B3A6B', accentColor: '#0066CC', showPatientName: true, showAge: true, showRefDoctor: true,
     showOrderId: true, showAbhaId: false, showQrCode: true, showCollectionDate: true, showReportDate: true,
     showMethod: false, showInstrument: false, groupByDepartment: false, showCriticalFlag: true,
@@ -95,7 +95,7 @@ describe('header layout — defaults from the old settings', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-27T05:00:00Z')); });
   afterEach(() => vi.useRealTimers());
 
-  for (const preset of ['drlogy', 'minimal']) {
+  for (const preset of ['classic', 'minimal']) {
     for (const size of ['sm', 'md', 'lg']) {
       it(`${preset}/${size}: an edited-but-untouched layout prints byte-identically to the old header`, () => {
         // Short fields that fit → nothing to wrap, nothing to push down.
