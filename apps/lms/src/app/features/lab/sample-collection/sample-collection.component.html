@@ -19,6 +19,7 @@
         [back]="!!queueFrom()" [backAction]="queueFrom() ? queueBackFn : null"
         [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
         [value]="scanValue()"
+        keys="sample" keysEnter="Search" keysEnterAria="Search patient or sample"
         (valueChange)="onSearchInput($event)"
         (submitted)="runSearch()">
         <!-- The scanner FEEDS this field, so it rides inside it, before the
@@ -80,7 +81,7 @@
         }
         <div class="pf-scan__body">
           <label class="pf-scan__label">{{ scan.manualEntry() ? 'Find patient or enter sample number' : 'Find patient or scan' }}</label>
-          <input type="text" class="pf-scan__input"
+          <input type="text" class="pf-scan__input" pfKeys="sample" pfKeysEnter="Search" pfKeysEnterAria="Search patient or sample"
                  [placeholder]="scan.manualEntry() ? 'Name · MRN · phone · order # · sample number' : 'Name · MRN · phone · order # · barcode'"
                  [ngModel]="scanValue()" (ngModelChange)="onSearchInput($event)"
                  (keydown.enter)="runSearch()" aria-label="Search" />

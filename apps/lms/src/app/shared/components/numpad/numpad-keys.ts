@@ -58,3 +58,12 @@ export function parseKeySet(spec: string | null | undefined): ReadonlySet<Numpad
   }
   return out;
 }
+
+const NON_TYPING_KEYS = new Set([
+  'Unidentified', 'Process', 'Dead', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
+  'Fn', 'FnLock', 'Hyper', 'Super', 'OS', 'AltGraph', 'NumLock', 'ScrollLock',
+]);
+/** A real typed key (not a modifier alone or an IME placeholder). */
+export function isTypedKey(e: KeyboardEvent): boolean {
+  return !!e.key && !NON_TYPING_KEYS.has(e.key);
+}

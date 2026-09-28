@@ -3,6 +3,8 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { brandingSrc } from '../../../core/services/uploads.service';
+import { PfKeysDirective } from '../numpad/pf-keys.directive';
+import { PfKeysKind } from '../numpad/pf-keys-layouts';
 
 /**
  * Hero band — the designer's common screen header (Figma: "Prefrontal LMS —
@@ -36,6 +38,7 @@ import { brandingSrc } from '../../../core/services/uploads.service';
 @Component({
   selector: 'pf-hero-band',
   standalone: true,
+  imports: [PfKeysDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-hb">
@@ -82,6 +85,8 @@ import { brandingSrc } from '../../../core/services/uploads.service';
               <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
             </svg>
             <input class="pf-hb__input" type="text"
+                   [pfKeys]="keys()" [pfKeysEnter]="keysEnter()" [pfKeysEnterAria]="keysEnterAria()"
+                   [attr.aria-label]="keys() ? placeholder() : null"
                    [placeholder]="placeholder()"
                    [value]="value()"
                    (input)="valueChange.emit($any($event.target).value)"
@@ -394,6 +399,12 @@ export class HeroBandComponent {
   readonly placeholder = input<string>('Search');
   /** Controlled value for the built-in search input. */
   readonly value = input<string>('');
+  /** PF Keys kind for the built-in search on tablets ('sample' for sample /
+   *  tube lookups); null = the system keyboard (every other band search). */
+  readonly keys = input<PfKeysKind | null>(null);
+  /** PF Keys primary key wording / aria-label (the band's own Enter). */
+  readonly keysEnter = input<string | null>(null);
+  readonly keysEnterAria = input<string | null>(null);
   /** True when the host projects its own search control via [band-search]. */
   readonly customSearch = input<boolean>(false);
 

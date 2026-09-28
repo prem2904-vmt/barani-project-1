@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { DestroyRef, ChangeDetectionStrategy, Component, Input, OnInit, computed, inject, output, signal } from '@angular/core';
@@ -32,6 +33,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   selector: 'pf-receive-samples',
   standalone: true,
   imports: [
+    PfKeysDirective,
     FormsModule,
     DatePipe,
     AvatarComponent,
@@ -58,6 +60,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           <pf-hero-band
             placeholder="Scan or type a barcode (e.g. HAEM260800001)…"
             [value]="scanValue()"
+            keys="sample" keysEnter="Receive" keysEnterAria="Receive this sample"
             (valueChange)="scanValue.set($event)"
             (submitted)="receiveByBarcode()">
             <!-- The camera FEEDS this field, so it sits inside it, before the
@@ -110,7 +113,8 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
           <div class="flex gap-2 pf-rs-scanrow">
             <div class="scan-field">
               <pf-scan-icon class="scan-icon" [size]="18" />
-              <input type="text"
+              <input type="text" pfKeys="sample" pfKeysEnter="Receive" pfKeysEnterAria="Receive this sample"
+                     aria-label="Sample barcode"
                      placeholder="HAEM260800001"
                      [ngModel]="scanValue()" (ngModelChange)="scanValue.set($event)"
                      (keydown.enter)="receiveByBarcode()"

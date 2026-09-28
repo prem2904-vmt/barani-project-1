@@ -6,13 +6,14 @@ import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner
 import { extractAbhaNumber } from '../abha-wizard/abha-prefill.component';
 import { ScanIconComponent } from '../icons/scan-icon.component';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { PfKeysDirective } from '../numpad/pf-keys.directive';
 
 type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
 @Component({
   selector: 'pf-patient-search',
   standalone: true,
-  imports: [BusyComponent, AvatarComponent, BarcodeScannerModalComponent, ScanIconComponent],
+  imports: [BusyComponent, AvatarComponent, BarcodeScannerModalComponent, ScanIconComponent, PfKeysDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (scanning()) {
@@ -31,7 +32,11 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
           <circle cx="11" cy="11" r="7"/>
           <path d="m20 20-3.5-3.5"/>
         </svg>
+        <!-- PF Keys (tablets): number pad for phone / MRN, ABC for names;
+             ↵ opens the highlighted patient, ↑/↓ move the highlight. -->
         <input #searchInput type="text"
+               pfKeys="patient" pfKeysEnter="Open" pfKeysEnterAria="Open selected patient" [pfKeysArrows]="true"
+               [attr.aria-label]="placeholder"
                [placeholder]="placeholder"
                [value]="query()"
                (input)="onInput($event)"
@@ -275,6 +280,8 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
     @keyframes pf-ps-spin { to { transform: rotate(360deg); } }
 
     /* ── Panel ──────────────────────────────────────────────── */
+    /* PF Keys docked (tablets): the list stays above the keys. */
+    :host-context(html.pf-keys-open) .panel { max-height: min(22rem, calc(100dvh - var(--pf-keys-h, 0px) - 160px)); }
     .panel {
       position: absolute;
       left: 0;

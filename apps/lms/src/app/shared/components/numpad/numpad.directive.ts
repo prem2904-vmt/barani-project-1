@@ -1,6 +1,8 @@
 import { DestroyRef, Directive, ElementRef, computed, effect, inject, input, untracked } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { NumpadChar, parseKeySet } from './numpad-keys';
+import { NumpadChar, isTypedKey, parseKeySet } from './numpad-keys';
+
+export { isTypedKey } from './numpad-keys';
 import { focusTargetOf, navigableFields, nextField } from './numpad-nav';
 import { NUMPAD_EVENT, NumpadField, NumpadFlag, NumpadScopeLike, NumpadService } from './numpad.service';
 import { NumpadPanelComponent } from './numpad-panel.component';
@@ -84,15 +86,6 @@ export function focusField(el: HTMLElement, openPicker = false): void {
     // click reach the dropdown's outside-click listener and shut it again.
     setTimeout(() => { if (target.ownerDocument.activeElement === target) target.click(); });
   }
-}
-
-const NON_TYPING_KEYS = new Set([
-  'Unidentified', 'Process', 'Dead', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
-  'Fn', 'FnLock', 'Hyper', 'Super', 'OS', 'AltGraph', 'NumLock', 'ScrollLock',
-]);
-/** A real typed key (not a modifier alone or an IME placeholder). */
-export function isTypedKey(e: KeyboardEvent): boolean {
-  return !!e.key && !NON_TYPING_KEYS.has(e.key);
 }
 
 /**

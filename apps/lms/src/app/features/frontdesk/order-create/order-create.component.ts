@@ -1,4 +1,7 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
+import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
+import { PF_KEYS_EVENT, PF_KEYS_HEIGHT_VAR } from '../../../shared/components/numpad/numpad.service';
+import { PfKeysKind, PfKeysPrefix, deptPrefixes } from '../../../shared/components/numpad/pf-keys-layouts';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, OnDestroy, AfterViewInit, HostListener, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TrendTest } from '../../../shared/utils/trend-chart';
@@ -61,7 +64,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -1004,6 +1007,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (typeof window !== 'undefined') {
       window.visualViewport?.addEventListener('resize', this._onViewport);
       window.addEventListener('resize', this._onViewport);
+      window.addEventListener(PF_KEYS_EVENT, this._onViewport);
     }
     this.labCfg.ensureLoaded();
     // Only active tests are orderable — a disabled department's tests (cascaded
@@ -2296,6 +2300,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (typeof window !== 'undefined') {
       window.visualViewport?.removeEventListener('resize', this._onViewport);
       window.removeEventListener('resize', this._onViewport);
+      window.removeEventListener(PF_KEYS_EVENT, this._onViewport);
     }
     clearTimeout(this.nudgeTimer);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this._onVisibleResync);
@@ -2564,7 +2569,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const p = pill.getBoundingClientRect();
     if (p.width > 0) this.dropBox.set({ left: p.left - u.left, top: p.bottom - u.top + 8, width: p.width });
     const vv = window.visualViewport;
-    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    // PF Keys (tablets) docks over the bottom like a keyboard, but the
+    // visual viewport doesn't shrink for it: subtract its published height.
+    const keysH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(PF_KEYS_HEIGHT_VAR)) || 0;
+    const viewBottom = (vv ? vv.offsetTop + vv.height : window.innerHeight) - keysH;
     this.dropMaxH.set(Math.max(160, Math.floor(viewBottom - (p.bottom + 8) - 12)));
   }
 
@@ -2572,6 +2580,17 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly scopeHighlight = signal(0);
   /** Phone: the compact scope picker menu (the tiles collapse into it). */
   readonly scopeMenuOpen = signal(false);
+
+  // ── PF Keys (tablets): the pill is a search field for Tests (QWERTY,
+  //    123 → department-prefix code pad) and Patient (number pad). Doctor /
+  //    Hospital are free-text names → the system keyboard.
+  readonly pfKeysKind = computed<PfKeysKind | null>(() =>
+    this.scope() === 'tests' ? 'test' : this.scope() === 'patient' ? 'patient' : null);
+  readonly pfKeysEnter = computed(() => this.scope() === 'patient' ? 'Select' : 'Add');
+  readonly pfKeysEnterAria = computed(() => this.scope() === 'patient' ? 'Select highlighted patient' : 'Add selected test');
+  /** The lab's own department codes (from its Test Master) for the code pad. */
+  readonly pfKeysPrefixes = computed<PfKeysPrefix[]>(() =>
+    deptPrefixes(this.deptChips().map(d => ({ name: d.name, code: d.code })), 'test'));
 
   /** What the input shows: the test query in Tests scope, else the scope text. */
   readonly pillValue = computed(() => this.scope() === 'tests' ? this._query() : this.scopeQuery());
