@@ -137,6 +137,10 @@ final class ChatNotificationCenter: NSObject, UNUserNotificationCenterDelegate {
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        if notification.request.content.categoryIdentifier == CallAnswerNative.connectCategory {
+            completionHandler([])   // the app is open — it is connecting already
+            return
+        }
         if let next = next, next.responds(to: #selector(UNUserNotificationCenterDelegate.userNotificationCenter(_:willPresent:withCompletionHandler:))) {
             next.userNotificationCenter?(center, willPresent: notification, withCompletionHandler: completionHandler)
         } else {
@@ -154,6 +158,12 @@ final class ChatNotificationCenter: NSObject, UNUserNotificationCenterDelegate {
         }
         if content.categoryIdentifier == Self.failedCategory {
             openConversation(content.userInfo["conversationId"] as? String)
+            completionHandler()
+            return
+        }
+        if content.categoryIdentifier == CallAnswerNative.connectCategory {
+            // "Open Prefrontal to connect the audio" — the tap itself opened
+            // the app; the web app joins from the CallKit pending answer.
             completionHandler()
             return
         }

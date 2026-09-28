@@ -1,15 +1,17 @@
 diff --git a/node_modules/capacitor-plugin-callkit-voip/dist/esm/definitions.d.ts b/node_modules/capacitor-plugin-callkit-voip/dist/esm/definitions.d.ts
-index 93e5bc5..9133423 100644
+index 93e5bc5..1ecd540 100644
 --- a/node_modules/capacitor-plugin-callkit-voip/dist/esm/definitions.d.ts
 +++ b/node_modules/capacitor-plugin-callkit-voip/dist/esm/definitions.d.ts
-@@ -1,10 +1,23 @@
+@@ -1,10 +1,25 @@
  import type { PluginListenerHandle } from '@capacitor/core';
  export interface CallKitVoipPlugin {
      register(): Promise<void>;
 +    /** End the active CallKit call (dismiss the native UI) — call when the real call ends. */
 +    endCall(): Promise<void>;
-+    /** Tell the native layer the WebRTC call is connected — releases the background task. */
-+    callConnected(): Promise<void>;
++    /** Tell the native layer the web app JOINED the answered call — clears the pending answer, releases the background task. */
++    callConnected(options?: { id?: string }): Promise<void>;
++    /** The answered CallKit call the web app has not joined yet ({} when none). */
++    getPendingAnswer(): Promise<{ id?: string; media?: string; name?: string; duration?: string; audioActive?: boolean }>;
 +    /** Stop an UNANSWERED CallKit ring for this call id (cancelled / answered elsewhere / gone). Never ends an answered call. */
 +    endRing(options: { id: string }): Promise<void>;
      addListener(eventName: 'registration', listenerFunc: (token: CallToken) => void): Promise<PluginListenerHandle> & PluginListenerHandle;
@@ -28,23 +30,24 @@ index 93e5bc5..9133423 100644
  export declare type CallType = 'video' | 'audio';
  export interface CallToken {
 diff --git a/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.m b/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.m
-index 8225bcf..7e5e3cf 100644
+index 8225bcf..3a1d81f 100644
 --- a/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.m
 +++ b/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.m
-@@ -5,5 +5,7 @@
+@@ -5,5 +5,8 @@
  // each method the plugin supports using the CAP_PLUGIN_METHOD macro.
  CAP_PLUGIN(CallKitVoipPlugin, "CallKitVoip",
             CAP_PLUGIN_METHOD(register, CAPPluginReturnPromise);
 +           CAP_PLUGIN_METHOD(endCall, CAPPluginReturnPromise);
 +           CAP_PLUGIN_METHOD(endRing, CAPPluginReturnPromise);
 +           CAP_PLUGIN_METHOD(callConnected, CAPPluginReturnPromise);
++           CAP_PLUGIN_METHOD(getPendingAnswer, CAPPluginReturnPromise);
  )
 -
 diff --git a/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.swift b/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.swift
-index 911588c..d8ad4ae 100644
+index 911588c..ef012c1 100644
 --- a/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.swift
 +++ b/node_modules/capacitor-plugin-callkit-voip/ios/Plugin/CallKitVoipPlugin.swift
-@@ -3,6 +3,15 @@ import Capacitor
+@@ -3,6 +3,28 @@ import Capacitor
  import UIKit
  import CallKit
  import PushKit
@@ -56,11 +59,24 @@ index 911588c..d8ad4ae 100644
 +/// is still UNANSWERED — an answered call is never ended by a push.
 +public extension Notification.Name {
 +    static let pfCallKitEndRing = Notification.Name("PFCallKitEndRing")
++    /// Posted by the plugin the moment the user ANSWERS a CallKit call.
++    /// userInfo: callId, name, appActive (Bool). The app target observes it
++    /// (CallAnswerNative.swift) and tells the backend "answering" over HTTPS
++    /// straight away — the web app may be suspended (locked phone) and unable
++    /// to reach the signaling hub until the user opens it.
++    static let pfCallKitAnswered = Notification.Name("PFCallKitAnswered")
++    /// Posted when the web app confirms it joined the answered call
++    /// (callConnected). userInfo: callId.
++    static let pfCallKitConnected = Notification.Name("PFCallKitConnected")
++    /// Posted when a CallKit call ends (red button / Decline / our endCall)
++    /// that the web app never joined. userInfo: callId, answered (Bool). The
++    /// app target declines it over HTTPS (a no-op server-side once joined).
++    static let pfCallKitEndedUnjoined = Notification.Name("PFCallKitEndedUnjoined")
 +}
  
  /**
   *  CallKit Voip Plugin provides native PushKit functionality with apple CallKit to capacitor
-@@ -13,56 +22,203 @@ public class CallKitVoipPlugin: CAPPlugin {
+@@ -13,37 +35,158 @@ public class CallKitVoipPlugin: CAPPlugin {
      private var provider: CXProvider?
      private let voipRegistry            = PKPushRegistry(queue: nil)
      private var connectionIdRegistry : [UUID: CallConfig] = [:]
@@ -71,6 +87,14 @@ index 911588c..d8ad4ae 100644
 +    // Calls the user answered — a ring-stop (push / JS / timeout) must never
 +    // end one of these.
 +    private var answeredUUIDs = Set<UUID>()
++    // Answered calls the web app has confirmed it JOINED (callConnected).
++    private var connectedUUIDs = Set<UUID>()
++    // The answered call the web app has not joined yet — held so the answer
++    // survives a suspended / reloaded / still-booting WebView. JS reads it
++    // with getPendingAnswer() on attach and on every resume.
++    private var pendingAnswerUUID: UUID?
++    // CallKit activated the audio session for the current call.
++    private var audioActive = false
 +    // Unanswered-ring timeout per call: a ring the server stopped but whose
 +    // stop never reached this phone (offline, push dropped) must not ring on.
 +    private var ringTimeouts: [UUID: DispatchWorkItem] = [:]
@@ -154,16 +178,42 @@ index 911588c..d8ad4ae 100644
 +        hasJSListener = true
 +        let queued = pendingEvents; pendingEvents.removeAll()
 +        for ev in queued { notifyListeners(ev.name, data: ev.data) }
-+        call.resolve()
-+    }
-+
-+    /// JS-callable: the WebRTC call is connected — release the background tasks
-+    /// that kept the process alive through the push/answer/foreground gap.
-+    @objc func callConnected(_ call: CAPPluginCall) {
-+        endTask(&answerBgTask); endTask(&pushBgTask)
          call.resolve()
      }
  
++    /// JS-callable: the WebRTC call is connected — release the background tasks
++    /// that kept the process alive through the push/answer/foreground gap.
++    @objc func callConnected(_ call: CAPPluginCall) {
++        let id = call.getString("id")
++        DispatchQueue.main.async { [weak self] in
++            guard let self else { call.resolve(); return }
++            let uuid = id.flatMap { self.uuid(forCallId: $0) } ?? self.pendingAnswerUUID
++            if let uuid {
++                self.connectedUUIDs.insert(uuid)
++                if self.pendingAnswerUUID == uuid { self.pendingAnswerUUID = nil }
++                if let cid = self.connectionIdRegistry[uuid]?.id {
++                    NotificationCenter.default.post(name: .pfCallKitConnected, object: nil, userInfo: ["callId": cid])
++                }
++            }
++            self.endTask(&self.answerBgTask); self.endTask(&self.pushBgTask)
++            call.resolve()
++        }
++    }
++
++    /// JS-callable: the answered call the web app has not joined yet, if any
++    /// ({} when none). Lets JS pick up an answer made while the WebView was
++    /// suspended (locked phone), reloaded, or not yet booted.
++    @objc func getPendingAnswer(_ call: CAPPluginCall) {
++        DispatchQueue.main.async { [weak self] in
++            guard let self, let uuid = self.pendingAnswerUUID, let config = self.connectionIdRegistry[uuid] else {
++                call.resolve([:]); return
++            }
++            var data = self.payload(config)
++            data["audioActive"] = self.audioActive
++            call.resolve(data)
++        }
++    }
++
      public func notifyEvent(eventName: String, uuid: UUID){
          if let config = connectionIdRegistry[uuid] {
 -            notifyListeners(eventName, data: [
@@ -193,17 +243,16 @@ index 911588c..d8ad4ae 100644
 +        }
          let update                      = CXCallUpdate()
          update.remoteHandle             = CXHandle(type: .generic, value: name)
--        update.hasVideo                 = media == "video"
 +        update.localizedCallerName      = name
-+        // Report ALL calls as "video" so answering from the LOCKSCREEN unlocks +
-+        // foregrounds the app — the only Apple-sanctioned way to wake the
-+        // WKWebView so WebRTC/getUserMedia can run. An audio-only CallKit answer
-+        // does NOT foreground the app, leaving the WebView suspended (the call
-+        // then only connected once the user manually opened the app).
-+        update.hasVideo                 = true
++        // Report the call AS WHAT IT IS: an audio call shows "Prefrontal Audio"
++        // (owner, 2026-09-28 — never fake it as video to force the app open).
++        // An audio answer on the lock screen keeps the app in the background;
++        // the answer reaches the server natively (pfCallKitAnswered) and the
++        // web app joins when it next runs (getPendingAnswer).
+         update.hasVideo                 = media == "video"
          update.supportsDTMF             = false
          update.supportsHolding          = true
-         update.supportsGrouping         = false
+@@ -51,18 +194,78 @@ public class CallKitVoipPlugin: CAPPlugin {
          update.supportsUngrouping       = false
          let uuid = UUID()
          connectionIdRegistry[uuid] = .init(id: id, media: media, name: name, duration: duration)
@@ -283,13 +332,16 @@ index 911588c..d8ad4ae 100644
  
  }
  
-@@ -72,24 +228,79 @@ public class CallKitVoipPlugin: CAPPlugin {
+@@ -72,24 +275,98 @@ public class CallKitVoipPlugin: CAPPlugin {
  extension CallKitVoipPlugin: CXProviderDelegate {
  
      public func providerDidReset(_ provider: CXProvider) {
 -
 +        connectionIdRegistry.removeAll()
 +        answeredUUIDs.removeAll()
++        connectedUUIDs.removeAll()
++        pendingAnswerUUID = nil
++        audioActive = false
 +        ringTimeouts.values.forEach { $0.cancel() }; ringTimeouts.removeAll()
 +        currentCallUUID = nil
 +        endTask(&answerBgTask); endTask(&pushBgTask)
@@ -313,15 +365,19 @@ index 911588c..d8ad4ae 100644
 +            guard let self else { return }; self.endTask(&self.answerBgTask)
 +        }
 +        endTask(&pushBgTask)
++        pendingAnswerUUID = action.callUUID
++        if let config = connectionIdRegistry[action.callUUID] {
++            // Native "answering" to the backend NOW (app target, HTTPS) — the
++            // caller must not sit on "Ringing" while this WebView is suspended.
++            NotificationCenter.default.post(name: .pfCallKitAnswered, object: nil, userInfo: [
++                "callId": config.id, "name": config.name,
++                "appActive": UIApplication.shared.applicationState == .active,
++            ])
++        }
 +        emit("callAnswered", uuid: action.callUUID)
-+        // We reported the call as VIDEO only so answering would foreground the
-+        // WebView from the lockscreen. Now that we're answered + foregrounded,
-+        // DOWNGRADE to audio: a video-flagged call is suspended/cut by iOS when
-+        // the screen locks, whereas an audio call gets the ongoing-call lock
-+        // treatment and keeps running. This is what lets the call survive a lock.
-+        let downgrade = CXCallUpdate()
-+        downgrade.hasVideo = false
-+        provider.reportCall(with: action.callUUID, updated: downgrade)
++        // Fulfil at once: CallKit then activates the audio session
++        // (didActivate) and shows the call as connected; holding the action
++        // until JS is up would time it out on a locked phone.
          action.fulfill()
      }
  
@@ -334,11 +390,21 @@ index 911588c..d8ad4ae 100644
 +        var data: [String: Any] = [:]
 +        if let config = connectionIdRegistry[action.callUUID] { data = payload(config) }
 +        data["answered"] = answeredUUIDs.contains(action.callUUID)
++        if let cid = data["id"] as? String, !connectedUUIDs.contains(action.callUUID) {
++            // Never joined by the web app (Decline on the ring, or hung up
++            // before the app came up): decline natively — the web app may be
++            // suspended. Server-side it is a no-op once the call was joined.
++            NotificationCenter.default.post(name: .pfCallKitEndedUnjoined, object: nil, userInfo: [
++                "callId": cid, "answered": answeredUUIDs.contains(action.callUUID),
++            ])
++        }
 +        if data["id"] != nil { dispatch("callEnded", data: data) }
 +        ringTimeouts[action.callUUID]?.cancel(); ringTimeouts[action.callUUID] = nil
 +        answeredUUIDs.remove(action.callUUID)
++        connectedUUIDs.remove(action.callUUID)
++        if pendingAnswerUUID == action.callUUID { pendingAnswerUUID = nil }
 +        connectionIdRegistry[action.callUUID] = nil
-+        if currentCallUUID == action.callUUID { currentCallUUID = nil }
++        if currentCallUUID == action.callUUID { currentCallUUID = nil; audioActive = false }
 +        endTask(&answerBgTask); endTask(&pushBgTask)
          action.fulfill()
      }
@@ -353,6 +419,7 @@ index 911588c..d8ad4ae 100644
 +        } catch {
 +            print("AVAudioSession config failed: \(error)")
 +        }
++        audioActive = true
 +        dispatch("audioSessionActivated", data: [:])
 +    }
 +
@@ -362,6 +429,7 @@ index 911588c..d8ad4ae 100644
 +        // the call is still live drops the background-audio assertion and lets
 +        // iOS suspend the WebView, ending the call on lock.
 +        if currentCallUUID == nil {
++            audioActive = false
 +            try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
 +        }
 +    }
@@ -369,7 +437,7 @@ index 911588c..d8ad4ae 100644
      public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
          // Report connection started
          print("CXStartCallAction represents initiating an outgoing call")
-@@ -106,23 +317,44 @@ extension CallKitVoipPlugin: PKPushRegistryDelegate {
+@@ -106,23 +383,44 @@ extension CallKitVoipPlugin: PKPushRegistryDelegate {
      public func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
          let parts = pushCredentials.token.map { String(format: "%02.2hhx", $0) }
          let token = parts.joined()

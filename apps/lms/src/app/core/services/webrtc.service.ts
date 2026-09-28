@@ -46,6 +46,14 @@ export class WebrtcService implements OnDestroy {
    *  ringing their phone / browser by PUSH. The outgoing card says "Ringing
    *  their devices…" instead of "Ringing…". Same 60 s "No answer" timeout. */
   readonly ringingDevices = signal(false);
+  /** The callee answered on their phone's native call screen (iOS CallKit on
+   *  the lock screen) and their app is coming up to join. The outgoing card
+   *  says "Answered — connecting…" instead of "Ringing…", and the 60 s
+   *  "No answer" timer gives way to a longer join window. */
+  readonly calleeAnswering = signal(false);
+  /** How long the caller waits for a natively-answered callee to join
+   *  (matches the server's AnsweringTimeout). */
+  static readonly ANSWERING_JOIN_MS = 120_000;
 
   // ── Public state ─────────────────────────────────────────────────
   readonly status = signal<CallStatus>('idle');
@@ -299,19 +307,9 @@ export class WebrtcService implements OnDestroy {
     if (!info) return;
     this.clearIncomingRingTimer();
     this.callError.set(null); // a previous call's "Call declined." must not show on this one
-    this.status.set('connecting');
-    try {
-      await this.acquireLocalStream();
-      await this.refreshIceServers();
-      const res = await this.signaling.acceptCall(info.sessionId);
-      this.sessionId.set(res.sessionId);
-      this.remoteParticipants.set(res.participants);
-      // Existing participants will send us offers; we just answer.
-      this.incomingCall.set(null);
-    } catch (err) {
-      this.handleFatal(err, 'acceptIncoming');
-      throw err;
-    }
+    // One accept path: the in-app Answer and a CallKit answer for the same
+    // call (both tapped, or racing) share a single AcceptCall.
+    return this.acceptBySessionId(info.sessionId, 1);
   }
 
   async rejectIncoming(): Promise<void> {
@@ -332,24 +330,43 @@ export class WebrtcService implements OnDestroy {
    *  user answers via the iOS CallKit lockscreen ringer. On a cold launch from
    *  a VoIP push the in-app incomingCall() signal may not be populated, so we
    *  accept the session directly (signaling.acceptCall awaits connect()). */
-  async acceptBySessionId(sessionId: string): Promise<void> {
+  async acceptBySessionId(sessionId: string, attempts = 6): Promise<void> {
+    // Already on it (answered in-app AND on the CallKit screen, or the native
+    // pending answer replayed on resume): never a second AcceptCall.
+    if (this.acceptInFlight?.sessionId === sessionId) return this.acceptInFlight.promise;
+    if (this.sessionId() === sessionId && this.inCall()) return;
+    const promise = this.doAcceptBySessionId(sessionId, attempts);
+    this.acceptInFlight = { sessionId, promise };
+    try { await promise; }
+    finally { if (this.acceptInFlight?.promise === promise) this.acceptInFlight = null; }
+  }
+
+  private acceptInFlight: { sessionId: string; promise: Promise<void> } | null = null;
+
+  private async doAcceptBySessionId(sessionId: string, attempts: number): Promise<void> {
+    this.clearIncomingRingTimer();
     this.status.set('connecting');
     try {
       await this.acquireLocalStream();
       await this.refreshIceServers();
+      // Set the session id BEFORE AcceptCall: the server's ParticipantJoined
+      // makes the caller send its offer at once, and onSessionOffer drops an
+      // offer for a session id we don't hold yet.
+      this.sessionId.set(sessionId);
       // Cold / lockscreen answer: the SignalR connection is usually mid-
       // (re)connect as the app foregrounds, so the first AcceptCall can fail
       // ("connection disconnected"). connect() now drives to Connected; retry a
       // few times to ride out the transition instead of dropping the call.
       let res: { sessionId: string; participants: string[] } | null = null;
       let lastErr: unknown;
-      for (let attempt = 0; attempt < 6; attempt++) {
+      for (let attempt = 0; attempt < attempts; attempt++) {
         try { res = await this.signaling.acceptCall(sessionId); break; }
-        catch (err) { lastErr = err; await new Promise(r => setTimeout(r, 800)); }
+        catch (err) { lastErr = err; if (attempt < attempts - 1) await new Promise(r => setTimeout(r, 800)); }
       }
       if (!res) throw lastErr ?? new Error('acceptCall failed after retries');
       this.sessionId.set(res.sessionId);
-      this.remoteParticipants.set(res.participants);
+      // MERGE: an offer / join may already have landed during the accept.
+      this.remoteParticipants.update(cur => [...new Set([...res!.participants, ...cur])]);
       this.incomingCall.set(null);
     } catch (err) {
       this.handleFatal(err, 'acceptBySessionId');
@@ -389,6 +406,7 @@ export class WebrtcService implements OnDestroy {
       this.signaling.callRejected.subscribe(p => this.onCallRejected(p)),
       this.signaling.callCancelled.subscribe(p => this.onCallCancelled(p)),
       this.signaling.callHandledElsewhere.subscribe(p => this.onCallHandledElsewhere(p)),
+      this.signaling.callAnswering.subscribe(p => this.onCallAnswering(p)),
       this.signaling.participantJoined.subscribe(p => this.onParticipantJoined(p)),
       this.signaling.participantLeft.subscribe(p => this.onParticipantLeft(p)),
       this.signaling.sessionOffer.subscribe(p => this.onSessionOffer(p)),
@@ -422,6 +440,9 @@ export class WebrtcService implements OnDestroy {
     // while the caller rang into the 60s timeout.
     const cur = this.incomingCall();
     if (cur?.sessionId === info.sessionId) return;
+    // The call we are joining / on (a ring replayed while a CallKit answer is
+    // being accepted) — never decline our own call.
+    if (info.sessionId === this.sessionId()) return;
     // Mid-answer from CallKit (session id not known yet) — this ring may be
     // the very call being answered; never decline it.
     if (this.status() === 'connecting' && !this.sessionId()) return;
@@ -435,6 +456,23 @@ export class WebrtcService implements OnDestroy {
     this.callType.set(info.callType);
     this.localCallerName.set(info.callerName);
     this.armIncomingRingTimeout();
+  }
+
+  /** Caller side: the callee answered on their phone's native call screen
+   *  and is joining. Stop "Ringing…" and the 60 s no-answer timer; wait up
+   *  to ANSWERING_JOIN_MS for their ParticipantJoined (which ends ringing
+   *  via markActive) before giving up. */
+  private onCallAnswering(p: { sessionId: string; userId: string }) {
+    if (p.sessionId !== this.sessionId() || this.status() !== 'outgoing') return;
+    this.calleeAnswering.set(true);
+    this.clearOutgoingRingTimer();
+    this.outgoingRingTimer = setTimeout(() => {
+      if (this.status() === 'outgoing') {
+        this.callError.set('Could not connect.');
+        this.toast.info('They answered, but the call could not connect.');
+        void this.cancelOutgoing();
+      }
+    }, WebrtcService.ANSWERING_JOIN_MS);
   }
 
   /** This user accepted/declined on ANOTHER device — dismiss the ring here.
@@ -880,6 +918,7 @@ export class WebrtcService implements OnDestroy {
     this.localCallerName.set(null);
     this.outgoingPeer.set(null);
     this.ringingDevices.set(false);
+    this.calleeAnswering.set(false);
     this.currentSource = undefined;
     this.usingTurnRelay.set(false);
     this.micMuted.set(false);

@@ -10,6 +10,7 @@
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4C445343055BA7F0E40ED0EF /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4A8BBD7E7BFFFFD7CE817D4 /* MainViewController.swift */; };
 		B2D5F8031C4E5D6F7081A2B3 /* ChatReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D4C5E6F708192 /* ChatReply.swift */; };
+		D4F7BAC51E6A7F8B9C0D1E2F /* CallAnswerNative.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E6A9B40D5F6E7A8B9C0D1E /* CallAnswerNative.swift */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -38,6 +39,7 @@
 		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
 		C4A8BBD7E7BFFFFD7CE817D4 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		A1C4E7F20B3D4C5E6F708192 /* ChatReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatReply.swift; sourceTree = "<group>"; };
+		C3E6A9B40D5F6E7A8B9C0D1E /* CallAnswerNative.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallAnswerNative.swift; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -104,6 +106,7 @@
 				264E2E05DE6D242AE8A147C6 /* printer */,
 				C4A8BBD7E7BFFFFD7CE817D4 /* MainViewController.swift */,
 				A1C4E7F20B3D4C5E6F708192 /* ChatReply.swift */,
+				C3E6A9B40D5F6E7A8B9C0D1E /* CallAnswerNative.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -235,6 +238,7 @@
 				DEFAAF0F9FA71C2269C84EA5 /* PrefrontalPrinterPlugin.m in Sources */,
 				4C445343055BA7F0E40ED0EF /* MainViewController.swift in Sources */,
 				B2D5F8031C4E5D6F7081A2B3 /* ChatReply.swift in Sources */,
+				D4F7BAC51E6A7F8B9C0D1E2F /* CallAnswerNative.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
