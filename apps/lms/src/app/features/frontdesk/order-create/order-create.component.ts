@@ -35,7 +35,7 @@ import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payme
 import { SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES } from './unified-search';
 
 import { LabelCardComponent } from '../post-payment/label-card.component';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { printTubeLabels } from '../../../shared/utils/print-label';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
 import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../shared/utils/micro-specimen';
@@ -1843,7 +1843,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         }
         this._reprintOrder.set(full);
         setTimeout(() => {
-          printLabelOnly();
+          printTubeLabels();
           setTimeout(() => this._reprintOrder.set(null), 2000);
         }, 350);
       },

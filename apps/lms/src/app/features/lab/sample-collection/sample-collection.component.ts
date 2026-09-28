@@ -50,7 +50,7 @@ import { tubeChosenSpecimen, tubeSpecimen } from "../../../shared/utils/micro-sp
 import { PrinterService } from "../../../core/printer/printer.service";
 import { PrintConfigService } from "../../../core/printer/print-config.service";
 import { BranchLabConfigService } from "../../../core/services/branch-lab-config.service";
-import { printLabelOnly } from "../../../shared/utils/print-label";
+import { printTubeLabels } from "../../../shared/utils/print-label";
 import {
   SeriesState,
   countdownLabel,
@@ -1481,7 +1481,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   /** Print every tube label for this order (barcode + QR). The hidden
    *  `.pf-print-label` block in the drawer already holds the rendered labels;
-   *  `printLabelOnly()` toggles the global label-print stylesheet so ONLY those
+   *  `printTubeLabels()` prints each label on its own W×H mm page so ONLY those
    *  labels reach paper — nothing else on the screen prints. */
   printLabels(g: OrderGroup) {
     if (!g.samples.length) {
@@ -1492,7 +1492,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       void this.directPrint(g);
       return;
     }
-    printLabelOnly();
+    printTubeLabels();
   }
 
   /** Render each tube label at the branch's configured size + single code and

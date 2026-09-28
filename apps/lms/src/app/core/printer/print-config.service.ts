@@ -76,8 +76,9 @@ export class PrintConfigService {
 
   setLabelSize(widthMm: number, heightMm: number): void {
     this.update({
-      labelWidthMm: Math.min(120, Math.max(10, Math.round(widthMm || 0))),
-      labelHeightMm: Math.min(120, Math.max(10, Math.round(heightMm || 0))),
+      // 0.1 mm precision so inch stock (2 × 1 in = 50.8 × 25.4 mm) is exact.
+      labelWidthMm: Math.min(120, Math.max(10, Math.round((widthMm || 0) * 10) / 10)),
+      labelHeightMm: Math.min(120, Math.max(10, Math.round((heightMm || 0) * 10) / 10)),
     });
   }
   setDocumentPrinter(name: string): void { this.update({ documentPrinter: name }); }

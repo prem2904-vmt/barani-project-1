@@ -21,7 +21,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { printTubeLabels } from '../../../shared/utils/print-label';
 import {
   ageSexLong, orderStatusLabel, orderTone, patientFlags, patientMetaLine, testStatusLabel, testTone,
 } from './patient-profile.nd';
@@ -449,7 +449,7 @@ export class PatientProfileComponent implements OnInit {
         if (!full?.samples?.length) { this.toasts.warning('No samples on this order to print'); return; }
         this.reprintOrder.set(full);
         setTimeout(() => {
-          printLabelOnly();
+          printTubeLabels();
           setTimeout(() => this.reprintOrder.set(null), 2000);
         }, 350);
       },

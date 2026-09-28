@@ -19,6 +19,9 @@ import { BranchLabConfigService } from '../../../core/services/branch-lab-config
 import { tubeColor } from '../../../shared/utils/tube-colors';
 import { tubeChosenSpecimen } from '../../../shared/utils/micro-specimen';
 import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { PrintConfigService } from '../../../core/printer/print-config.service';
+import { FittedLine, QUIET_MODULES, TubeLabelGeometry, code128Modules, fitLabelText, tubeLabelGeometry } from '../../../core/printer/label-layout';
+import { LabelData, labelTextLines } from '../../../core/printer/label-render';
 
 export interface TubeSpec {
   label: string;
@@ -141,36 +144,54 @@ function deptTube(s: OrderSample): TubeSpec {
         </span>
       </div>
 
-      <!-- White label preview area. Fields: Name · Age/Sex, MRN, Sample ID.
-           Codes (barcode / QR / both per admin) with the dept code beneath. -->
+      <!-- The label itself, drawn at its PHYSICAL size (mm) — landscape:
+           patient text on the left, the code beside it on the right. On
+           screen it is zoomed to fit the card; the print path clones the
+           .pf-tl node onto its own W×H mm page (printTubeLabels). -->
       <div class="pf-lc__preview" [attr.data-color]="spec.color">
         <div class="pf-lc__stripe"></div>
-        @if (isOutsourced) {
-          <!-- Same label as any tube — only this word is added (owner). -->
-          <p class="pf-lc__outsourced">OUTSOURCED</p>
-        }
-        <p class="pf-lc__pname">
-          {{ patientName }}
-          @if (agesex) { <span class="pf-lc__agesex"> {{ agesex }}</span> }
-        </p>
-        <p class="pf-lc__demo">MRN {{ mrnStr }}</p>
-        <p class="pf-lc__sid">{{ barcode }}</p>
-        @if (specimen) {
-          <!-- The specimen chosen at the desk (pots / bottles only). -->
-          <p class="pf-lc__specimen">{{ specimen }}</p>
-        }
-        <div class="pf-lc__codes">
-          <div class="pf-lc__bar-wrap" [class.pf-lc__hidden]="!showBarcode">
-            <svg #barSvg class="pf-lc__bar" role="img" [attr.aria-label]="'Barcode ' + barcode"></svg>
-          </div>
-          <div class="pf-lc__qr-wrap" [class.pf-lc__hidden]="!showQr">
-            <canvas #qrCanvas class="pf-lc__qr" [attr.aria-label]="'QR ' + qrValue"></canvas>
-          </div>
-          <div class="pf-lc__qr-wrap" [class.pf-lc__hidden]="!showDataMatrix">
-            <canvas #dmxCanvas class="pf-lc__qr" [attr.aria-label]="'Data Matrix ' + barcode"></canvas>
+        <div class="pf-lc__stage" [style.zoom]="screenZoom">
+          <div class="pf-tl" [attr.data-code]="codeMode"
+               [attr.data-w-mm]="size.widthMm" [attr.data-h-mm]="size.heightMm"
+               [style.width.mm]="size.widthMm" [style.height.mm]="size.heightMm"
+               [style.padding.mm]="geo.padMm" [style.column-gap.mm]="geo.gapMm">
+            <div class="pf-tl__text" [style.width.mm]="geo.text.w" [style.height.mm]="geo.text.h">
+              @for (l of textLines; track l.role) {
+                @switch (l.role) {
+                  @case ('flag') {
+                    <!-- Same label as any tube — only this word is added (owner). -->
+                    <p class="pf-tl__line pf-lc__outsourced" [style.font-size.mm]="l.fontMm">OUTSOURCED</p>
+                  }
+                  @case ('name') {
+                    <p class="pf-tl__line pf-lc__pname" [style.font-size.mm]="l.fontMm">{{ patientName }}@if (agesex) { <span class="pf-lc__agesex">{{ agesex }}</span>}</p>
+                  }
+                  @case ('meta') {
+                    <p class="pf-tl__line pf-lc__demo" [style.font-size.mm]="l.fontMm">MRN {{ mrnStr }}</p>
+                  }
+                  @case ('dept') {
+                    <p class="pf-tl__line pf-lc__deptcode" [style.font-size.mm]="l.fontMm">{{ deptCode }}</p>
+                  }
+                  @case ('id') {
+                    <p class="pf-tl__line pf-lc__sid" [style.font-size.mm]="l.fontMm">{{ barcode }}</p>
+                  }
+                  @case ('extra') {
+                    <!-- The specimen chosen at the desk (pots / bottles only). -->
+                    <p class="pf-tl__line pf-lc__specimen" [style.font-size.mm]="l.fontMm">{{ specimen }}</p>
+                  }
+                }
+              }
+            </div>
+            <div class="pf-tl__code pf-lc__codes" [style.width.mm]="geo.code.w" [style.height.mm]="geo.code.h">
+              <!-- 1-D: the box carries the 10-module quiet zones as padding. -->
+              <div class="pf-lc__bar-wrap" [class.pf-lc__hidden]="!showBarcode"
+                   [style.padding-inline.mm]="barQuietMm">
+                <svg #barSvg class="pf-lc__bar" role="img" [attr.aria-label]="'Barcode ' + barcode"></svg>
+              </div>
+              <div #qrBox class="pf-lc__qr pf-lc__qr-wrap" [class.pf-lc__hidden]="!showQr" role="img" [attr.aria-label]="'QR ' + qrValue"></div>
+              <div #dmxBox class="pf-lc__qr pf-lc__qr-wrap" [class.pf-lc__hidden]="!showDataMatrix" role="img" [attr.aria-label]="'Data Matrix ' + barcode"></div>
+            </div>
           </div>
         </div>
-        <span class="pf-lc__deptcode">{{ deptCode }}</span>
       </div>
 
       <!-- Tests in this tube -->
@@ -305,15 +326,17 @@ function deptTube(s: OrderSample): TubeSpec {
     .pf-lc__tube-chip[data-color='container'] { background: var(--glass-bg); border-color: var(--border-primary); color: var(--text-tertiary); }
     .pf-lc__tube-chip[data-color='container'] .pf-lc__tube-dot { background: #d1d5db; }
 
-    /* ── White label preview (always light — represents printed paper label) ── */
+    /* ── White label preview (always light — represents the printed label) ── */
     .pf-lc__preview {
       position: relative;
       margin: 10px 14px;
       border-radius: 10px;
-      background: #ffffff;
+      background: #f1f5f9;
       border: 1px solid #e5e7eb;
       overflow: hidden;
-      padding: 12px 12px 8px 20px;
+      padding: 10px 10px 10px 18px;
+      display: flex;
+      justify-content: center;
     }
     .pf-lc__stripe {
       position: absolute;
@@ -328,86 +351,63 @@ function deptTube(s: OrderSample): TubeSpec {
     .pf-lc__preview[data-color='red']      .pf-lc__stripe { background: #fca5a5; }
     .pf-lc__preview[data-color='green']    .pf-lc__stripe { background: #6ee7b7; }
     .pf-lc__preview[data-color='container'] .pf-lc__stripe { background: #e5e7eb; }
+    .pf-lc__stage { line-height: 0; }
 
-    /* Printed on the label itself — black on the white label, bold caps. */
-    .pf-lc__outsourced {
-      margin: 0 0 1px;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.14em;
-      color: #000;
-      line-height: 1.2;
+    /* ── The physical label (mm). Black on white in every theme. ── */
+    .pf-tl {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      background: #ffffff;
+      color: #000000;
+      overflow: hidden;
+      box-shadow: 0 0 0 0.2mm #cbd5e1;
+      font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    .pf-lc__pname {
+    .pf-tl__text {
+      flex: none;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0;
+    }
+    .pf-tl__line {
       margin: 0;
-      font-size: 13.5px;
-      font-weight: 700;
-      color: #0f172a;
-      line-height: 1.3;
-    }
-    .pf-lc__agesex {
-      font-size: 11.5px;
-      font-weight: 600;
-      color: #374151;
-    }
-    .pf-lc__demo {
-      margin: 2px 0 0;
-      font-size: 10.5px;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #475569;
-      letter-spacing: 0.02em;
-    }
-    /* Sample ID — the label's primary identifier, bold above the codes. */
-    .pf-lc__sid {
-      margin: 1px 0 0;
-      font-size: 12px;
-      font-weight: 800;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      color: #0f172a;
-      letter-spacing: 0.04em;
-    }
-    .pf-lc__specimen {
-      margin: 0;
-      font-size: 10px;
-      font-weight: 700;
-      color: #0f172a;
+      line-height: 1.12;
+      color: #000000;
+      /* Never truncated: a line that still doesn't fit at its smallest size
+         wraps (even mid-token) instead of being cut. */
+      white-space: normal;
       overflow-wrap: anywhere;
+      word-break: break-word;
     }
-    /* Codes row: barcode and/or QR, centered. Hidden ones collapse. */
-    .pf-lc__codes {
+    .pf-tl__code {
+      flex: none;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 14px;
-      margin-top: 8px;
+      margin-left: auto;
+      line-height: 0;
     }
+
+    /* Printed on the label itself — black on the white label, bold caps. */
+    .pf-lc__outsourced { font-weight: 800; letter-spacing: 0.08em; }
+    .pf-lc__pname { font-weight: 700; }
+    .pf-lc__agesex { font-weight: 600; white-space: nowrap; margin-left: 0.3em; }
+    .pf-lc__demo { font-family: 'JetBrains Mono', ui-monospace, 'Courier New', monospace; font-weight: 600; }
+    .pf-lc__deptcode { font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    /* Sample ID — the label's primary identifier. */
+    .pf-lc__sid { font-weight: 800; font-family: 'JetBrains Mono', ui-monospace, 'Courier New', monospace; }
+    .pf-lc__specimen { font-weight: 700; }
     .pf-lc__hidden { display: none !important; }
-    .pf-lc__bar-wrap { overflow: hidden; }
-    .pf-lc__bar {
-      display: block;
-      height: 40px;
-      width: auto;
-      max-width: 100%;
-    }
-    .pf-lc__qr-wrap { flex-shrink: 0; line-height: 0; }
-    .pf-lc__qr {
-      display: block;
-      width: 76px;
-      height: 76px;
-      image-rendering: pixelated;
-    }
-    /* Dept code — centered directly under the code(s). */
-    .pf-lc__deptcode {
-      display: block;
-      text-align: center;
-      margin-top: 5px;
-      font-size: 11px;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: #374151;
-    }
+    .pf-lc__bar-wrap { box-sizing: border-box; width: 100%; height: 100%; background: #fff; }
+    .pf-lc__bar { display: block; width: 100%; height: 100%; }
+    .pf-lc__qr { width: 100%; height: 100%; }
+    .pf-lc__qr ::ng-deep svg { display: block; width: 100%; height: 100%; shape-rendering: crispEdges; }
     .pf-lc__out {
       margin-left: 6px;
       padding: 1px 7px;
@@ -535,6 +535,7 @@ function deptTube(s: OrderSample): TubeSpec {
       .pf-lc--printing .pf-lc__hdr,
       .pf-lc--printing .pf-lc__footer { display: none !important; }
       .pf-lc--printing .pf-lc__preview { margin: 0 !important; border-radius: 4px !important; }
+      .pf-tl { box-shadow: none !important; }
     }
 
     /* ── Cross-platform overrides (additive only) ──────────────
@@ -583,11 +584,48 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   @Output() downloadRequest = new EventEmitter<void>();
 
   @ViewChild('barSvg', { static: true }) barSvg!: ElementRef<SVGElement>;
-  @ViewChild('qrCanvas', { static: true }) qrCanvas!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('dmxCanvas', { static: true }) dmxCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('qrBox', { static: true }) qrBox!: ElementRef<HTMLDivElement>;
+  @ViewChild('dmxBox', { static: true }) dmxBox!: ElementRef<HTMLDivElement>;
 
   private readonly labelCfg = inject(BranchLabConfigService);
+  private readonly printCfg = inject(PrintConfigService);
   constructor() { this.labelCfg.ensureLoaded(); }
+
+  /** The station's label stock (Printing → Label), mm. */
+  get size(): { widthMm: number; heightMm: number } {
+    // Tolerant of partial test doubles; defaults = PrintConfig defaults.
+    const c = typeof this.printCfg?.config === 'function' ? this.printCfg.config() : null;
+    return { widthMm: c?.labelWidthMm || 50, heightMm: c?.labelHeightMm || 20 };
+  }
+  /** Landscape geometry: text left, code right (shared with the bitmap path). */
+  get geo(): TubeLabelGeometry {
+    const { widthMm, heightMm } = this.size;
+    return tubeLabelGeometry(widthMm, heightMm, this.codeMode,
+      this.codeMode === 'barcode' ? code128Modules(this.barcode) || undefined : undefined);
+  }
+  /** Barcode quiet zone each side (10 × narrow bar), mm. */
+  get barQuietMm(): number { return this.geo.xMm ? QUIET_MODULES * this.geo.xMm : 0; }
+  /** What the label prints, as data — the same line list the bitmap uses. */
+  get labelData(): LabelData {
+    return {
+      code: this.barcode,
+      patientName: this.patientName,
+      ageSex: this.agesex,
+      mrn: this.mrnStr,
+      deptCode: this.deptCode,
+      tube: this.specimen ?? undefined,
+      outsourced: this.isOutsourced,
+    };
+  }
+  /** Text lines sized to the text column (shrink → wrap; never cut). */
+  get textLines(): FittedLine[] {
+    const g = this.geo;
+    return fitLabelText(labelTextLines(this.labelData), g.text.w, g.text.h);
+  }
+  /** On screen the mm-sized label is zoomed to ~300 px wide (never > 1.6×). */
+  get screenZoom(): number {
+    return Math.round(Math.min(1.6, 300 / (this.size.widthMm * 3.7795)) * 100) / 100;
+  }
 
   get spec(): TubeSpec { return tubeSpec(this.sample); }
   get specimen(): string | null { return labelSpecimen(this.sample); }
@@ -635,36 +673,48 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   get dobStr(): string { return this.patient?.dateOfBirth ?? ''; }
 
   ngAfterViewInit(): void { this.render(); }
-  ngOnChanges(): void { if (this.barSvg && this.qrCanvas) this.render(); }
+  ngOnChanges(): void { if (this.barSvg && this.qrBox) this.render(); }
 
   private render(): void {
     const code = this.barcode;
     if (!code) return;
     // 1D barcode encodes ONLY the Sample ID (short → keeps the bars narrow).
+    // Drawn at 1 unit per module, then stretched to the bar box through the
+    // viewBox so every module prints the same width (the quiet zones are the
+    // wrapper's padding).
     try {
-      JsBarcode(this.barSvg.nativeElement, code, {
+      const svg = this.barSvg.nativeElement;
+      JsBarcode(svg, code, {
         format: 'CODE128',
         displayValue: false,
         margin: 0,
-        height: 40,
-        width: 1.4,
+        height: 100,
+        width: 1,
         background: '#ffffff',
-        lineColor: '#0f172a',
+        lineColor: '#000000',
       });
+      const w = parseFloat(svg.getAttribute('width') ?? '0') || code128Modules(code);
+      svg.setAttribute('viewBox', `0 0 ${w} 100`);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      svg.setAttribute('shape-rendering', 'crispEdges');
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.removeAttribute('style');
     } catch { /* ignore un-encodable strings */ }
-    // QR encodes MRN + Sample ID.
-    QRCode.toCanvas(this.qrCanvas.nativeElement, this.qrValue, {
-      margin: 1,
-      width: 76,
-      color: { dark: '#0f172a', light: '#ffffff' },
-    }).catch(() => {});
+    // QR encodes MRN + Sample ID — vector SVG so it stays crisp at any size.
+    // All three codes are drawn (cheap) so the admin's code choice, which can
+    // load after first render, only toggles visibility.
+    {
+      QRCode.toString(this.qrValue, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } })
+        .then((svg: string) => { this.qrBox.nativeElement.innerHTML = svg; })
+        .catch(() => {});
+    }
     // Data Matrix (2D) encodes ONLY the Sample ID (like the 1D barcode) but
-    // fits a much smaller square — for narrow tube labels. Only rendered when
-    // it's the chosen mode.
-    if (this.showDataMatrix) {
+    // fits a much smaller square — for narrow tube labels.
+    {
       try {
-        bwipjs.toCanvas(this.dmxCanvas.nativeElement, {
-          bcid: 'datamatrix', text: code, scale: 4, paddingwidth: 1, paddingheight: 1,
+        this.dmxBox.nativeElement.innerHTML = bwipjs.toSVG({
+          bcid: 'datamatrix', text: code, paddingwidth: 1, paddingheight: 1,
           barcolor: '000000', backgroundcolor: 'ffffff',
         });
       } catch { /* ignore un-encodable strings */ }
