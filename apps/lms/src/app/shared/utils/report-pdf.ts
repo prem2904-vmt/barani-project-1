@@ -18,6 +18,8 @@ import { fetchAssetBlob } from './upload-fetch';
 import { collectAbnormalResults, renderAbnormalSummary, summaryTestValidated } from './report-abnormal-summary';
 import { withResultsTables } from './results-table';
 import { applyDefaultResultUnitLink } from './result-unit-link';
+import { ORDER_QR_KEY, PATIENT_STRIP_QR_CAPTIONS, PROFILE_QR_KEY, isPatientStripQrKey, orderReportQrUrl, paintQr, patientProfileQrUrl } from './patient-strip-qr';
+import { environment } from '../../../environments/environment';
 import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
@@ -96,6 +98,13 @@ export interface ReportPdfInput {
    *  public link — leaves it unset, so a digital report ALWAYS carries the
    *  lab's letterhead regardless of the letterpad setting. */
   blankLetterhead?: boolean;
+  /** Public web origin the patient-strip QRs point at. Defaults to
+   *  `environment.reportPublicBaseUrl` (never window.location.origin — that is
+   *  capacitor://localhost in the native app). */
+  publicBaseUrl?: string;
+  /** Order tracking token for the patient-strip Order QR, for reports whose
+   *  snapshot predates `order.trackToken`. The snapshot's own token wins. */
+  orderTrackToken?: string | null;
 }
 
 /** Effective theme + chrome values fed to every drawing function.
@@ -174,6 +183,8 @@ interface ResolvedTheme {
 
 interface ReportSnapshot {
   patient?: {
+    /** Patient id — the patient-strip Profile QR opens /p/{id}. */
+    id?: string;
     displayName?: string;
     age?: number | string;
     sex?: string;
@@ -198,6 +209,9 @@ interface ReportSnapshot {
     collectedAt?: string | null;
     /** Comma-joined distinct department names across the order's samples. */
     departments?: string | null;
+    /** Order tracking token (same as the invoice QR) — the patient-strip
+     *  Order QR opens /track/{token} (status + soft-copy download). */
+    trackToken?: string | null;
   };
   type?: string;
   isPartial?: boolean;
@@ -346,6 +360,8 @@ let LAYOUT: ReportLayoutResult | null = null;
 /** The next added page opens with the letterhead (the department pages after
  *  the abnormal-results sheet) — it gets the first-page backgrounds too. */
 let NEXT_PAGE_IS_FIRST = false;
+/** Patient-strip QR targets for the current render (see patient-strip-qr.ts). */
+let STRIP_QR: { base: string; trackToken: string | null } = { base: '', trackToken: null };
 
 /** Per-render theme — frozen once at the start of buildReportPdf.
  *  Functions read from these closure-captured vars at draw time. */
@@ -609,6 +625,10 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   // digital output loses its letterhead. Reset to the normal defaults
   // otherwise (module-level margins persist across renders).
   LETTERPAD = !!input.blankLetterhead;
+  STRIP_QR = {
+    base: input.publicBaseUrl ?? environment.reportPublicBaseUrl ?? '',
+    trackToken: snap.order?.trackToken || input.orderTrackToken || null,
+  };
   PREVIEW_KEEP_EMPTY_COLS = !!input.previewKeepEmptyColumns;
   if (LETTERPAD) {
     MARGIN_TOP = Math.max(0, template?.letterpadHeaderMm ?? 45) * MM_TO_PT;
@@ -1942,7 +1962,18 @@ function drawPatientBlockColumns(
   cols.forEach((keys, ci) => {
     const x = MARGIN_X + ci * colW + 10;
     let y = top + 16;
-    for (const key of keys) y = drawPatientItem(doc, key, x, colW - 16, y, snap, report);
+    for (let k = 0; k < keys.length; k++) {
+      const key = keys[k];
+      // Two QRs placed one after the other sit side by side when they fit —
+      // stacked they would double the strip's height.
+      const next = keys[k + 1];
+      if (isPatientStripQrKey(key) && next && isPatientStripQrKey(next) && next !== key) {
+        y = drawPatientQrPair(doc, [key, next], x, colW - 16, y, snap);
+        k++;
+        continue;
+      }
+      y = drawPatientItem(doc, key, x, colW - 16, y, snap, report);
+    }
     if (y > maxBottom) maxBottom = y;
   });
   const blockBottom = maxBottom + 4;
@@ -2042,6 +2073,9 @@ function drawPatientItem(
       // underneath: the "random barcode with a random id below it". Now it is a
       // real Code-128 of the order number, with no digits beneath.
       return drawReportBarcode(doc, snap, x, y, Math.min(colW, 150));
+    case PROFILE_QR_KEY:
+    case ORDER_QR_KEY:
+      return drawPatientQrPair(doc, [key], x, colW, y, snap);
     case 'registered': return drawPatientTimeItem(doc, 'Registered on: ', formatShort(snap.order?.createdAt), x, y);
     case 'collected':  return drawPatientTimeItem(doc, 'Collected on: ',  formatShort(snap.order?.createdAt), x, y);
     case 'reported':   return drawPatientTimeItem(doc, 'Reported on: ',   formatShort(report.createdAt), x, y);
@@ -2057,6 +2091,42 @@ function drawPatientItem(
       return y + 12;
     }
   }
+}
+
+/** Patient-strip QR size (pt). ~20 mm — comfortably scannable from paper. */
+const STRIP_QR_SIZE = 58;
+const STRIP_QR_GAP = 10;
+
+/** The URL a patient-strip QR key encodes for this report, or null when the
+ *  data it needs is missing (no patient id / no tracking token). */
+export function patientStripQrValue(key: string, snap: ReportSnapshot, base: string, trackToken: string | null): string | null {
+  if (key === PROFILE_QR_KEY) return patientProfileQrUrl(base, snap.patient?.id);
+  if (key === ORDER_QR_KEY) return orderReportQrUrl(base, trackToken);
+  return null;
+}
+
+/** Draw one or two patient-strip QRs in a row, each with its caption beneath.
+ *  A QR whose value is missing costs no space. Returns the new y. */
+function drawPatientQrPair(doc: jsPDF, keys: string[], x: number, colW: number, y: number, snap: ReportSnapshot): number {
+  const items = keys
+    .map(k => ({ k, v: patientStripQrValue(k, snap, STRIP_QR.base, STRIP_QR.trackToken) }))
+    .filter((i): i is { k: string; v: string } => !!i.v);
+  if (!items.length) return y;
+  // Side by side when both fit the column; otherwise one per row.
+  const size = Math.max(40, Math.min(STRIP_QR_SIZE, colW));
+  const perRow = items.length > 1 && size * 2 + STRIP_QR_GAP <= colW ? 2 : 1;
+  const top = y - 8;   // y is a text baseline; the QR's top edge sits at the cap line
+  let rowTop = top;
+  for (let i = 0; i < items.length; i += perRow) {
+    items.slice(i, i + perRow).forEach((it, j) => {
+      const qx = x + j * (size + STRIP_QR_GAP);
+      paintQr(doc, it.v, qx, rowTop, size);
+      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(6.5); doc.setTextColor(BLACK);
+      doc.text(PATIENT_STRIP_QR_CAPTIONS[it.k] ?? '', qx + size / 2, rowTop + size + 7, { align: 'center' });
+    });
+    rowTop += size + 12;
+  }
+  return rowTop + 8;
 }
 
 function drawPatientTimeItem(doc: jsPDF, label: string, value: string, x: number, y: number): number {
