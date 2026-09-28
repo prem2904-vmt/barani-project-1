@@ -85,7 +85,7 @@
       <span class="pf-rq-stat" data-color="violet">
         <span class="pf-rq-stat__dot" aria-hidden="true"></span>
         <span class="pf-rq-stat__label">Total</span>
-        <span class="pf-rq-stat__value">{{ items().length }}</span>
+        <span class="pf-rq-stat__value">{{ counts().all }}</span>
       </span>
       <span class="pf-rq-stat" data-color="amber">
         <span class="pf-rq-stat__dot" aria-hidden="true"></span>
@@ -611,6 +611,16 @@
       }
     </div>
     }
+    @if (filter() !== "partial" && hasMorePages() && visible().length > 0) {
+    <!-- Server paging (DB optimisation phase 3): the next page, appended. -->
+    <div class="pf-rq-more">
+      <button type="button" class="nd-btn nd-btn--secondary pf-rq-more__btn press"
+              [disabled]="loadingMore()" [attr.aria-busy]="loadingMore()" (click)="loadMore()">
+        @if (loadingMore()) { Loading… } @else { Load {{ nextPageCount() }} more }
+      </button>
+      <span class="pf-rq-more__count nd-num" aria-live="polite">Showing {{ items().length }} of {{ total() }}</span>
+    </div>
+    }
   </div>
 
   @if (editOrderId(); as oid) {
@@ -643,7 +653,7 @@
             <span class="pf-rq-stat" data-color="violet">
               <span class="pf-rq-stat__dot" aria-hidden="true"></span>
               <span class="pf-rq-stat__label">Total</span>
-              <span class="pf-rq-stat__value">{{ items().length }}</span>
+              <span class="pf-rq-stat__value">{{ counts().all }}</span>
             </span>
             <span class="pf-rq-stat" data-color="amber">
               <span class="pf-rq-stat__dot" aria-hidden="true"></span>

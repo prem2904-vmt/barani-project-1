@@ -101,14 +101,33 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[]; wa?: Record<string, unknown>; waCloud?: boolean } = {}) {
+/** A paging server (DB optimisation phase 3) over `all`: status + a name
+ *  search applied, then the page; counts over the whole queue. */
+function pagedQueue(all: any[], url: string) {
+  const qs = new URLSearchParams(url.split('?')[1] ?? '');
+  const page = Number(qs.get('page') ?? 1), size = Number(qs.get('pageSize') ?? 50);
+  const status = qs.get('status') ?? 'all', q = (qs.get('q') ?? '').toLowerCase();
+  const rows = all.filter(r => (status === 'all' || r.deliveryStatus === status)
+    && (!q || (r.order?.patient?.displayName ?? '').toLowerCase().includes(q)));
+  const n = (st: string) => all.filter(r => r.deliveryStatus === st).length;
+  return {
+    items: rows.slice((page - 1) * size, page * size), total: rows.length, page, pageSize: size,
+    hasMore: page * size < rows.length,
+    counts: { all: all.length, pending: n('pending'), delivered: n('delivered'), failed: n('failed') },
+  };
+}
+
+async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[]; wa?: Record<string, unknown>; waCloud?: boolean; paged?: boolean } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover') ? !opts.touch : false,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
   });
   const api = {
     get: vi.fn((url: string) => {
-      if (url === '/api/reports/queue?view=summary') return of(opts.queue ?? QUEUE);
+      // Default: a server that predates paging answers the whole queue as an
+      // array whatever the params (the screen must still work against it).
+      if (url.startsWith('/api/reports/queue?view=summary'))
+        return of(opts.paged ? pagedQueue((opts.queue ?? QUEUE) as any[], url) : (opts.queue ?? QUEUE));
       if (url === '/api/orders/today') return of(opts.orders ?? [PARTIAL_ORDER, VALUES_ORDER]);
       if (url === '/api/billing/outstanding') return of({ due: [{ orderId: 'o-r1' }] });
       if (url === '/api/whatsapp/settings') return of({ canSend: !!opts.waCloud });
@@ -162,8 +181,9 @@ const ndCss = () => css().slice(css().indexOf('.pf-rq-seg'));
 describe('Reports list — summary rows (DB optimisation phase 2)', () => {
   it('loads the queue through the summary view (no rendered snapshots in the list)', async () => {
     const { api } = await render();
-    expect(api.get).toHaveBeenCalledWith('/api/reports/queue?view=summary');
-    expect(api.get).not.toHaveBeenCalledWith('/api/reports/queue');
+    const urls = api.get.mock.calls.map((c: unknown[]) => c[0] as string).filter((u: string) => u.startsWith('/api/reports/queue'));
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every((u: string) => u.startsWith('/api/reports/queue?view=summary&'))).toBe(true);
   });
 
   it('rendering a row (download / print / share / archive) reads the full report by id first', async () => {
@@ -668,11 +688,13 @@ describe('Reports list (nd) — WhatsApp auto-send status', () => {
         r4: { id: 'm4', reportId: 'r4', trigger: 'auto', kind: 'report_ready', status: 'failed', attempts: 1, createdAt: '2026-09-26T13:08:00Z' },
       },
     });
+    const loads = () => api.get.mock.calls.filter((c: unknown[]) => (c[0] as string).startsWith('/api/reports/queue')).length;
     tab('all');
     const calls = api.post.mock.calls.filter((c: unknown[]) => c[0] === '/api/whatsapp/status');
-    expect(calls.length).toBe(1);
+    // One batch per queue load (the All tab is its own server page).
+    expect(calls.length).toBe(loads());
     // Partials never go on WhatsApp — only finals are asked about.
-    expect((calls[0][1] as unknown as { reportIds: string[] }).reportIds).toEqual(['r1', 'r3', 'r4']);
+    expect((calls.at(-1)![1] as unknown as { reportIds: string[] }).reportIds).toEqual(['r1', 'r3', 'r4']);
     const metas = [...el.querySelectorAll<HTMLElement>('.pf-rq-card__meta')].map(m => m.textContent!.trim());
     expect(metas.some(m => m.endsWith('WhatsApp sent'))).toBe(true);
     expect(metas.some(m => m.endsWith('WhatsApp failed'))).toBe(true);
@@ -716,5 +738,94 @@ describe('Reports list — Send WhatsApp through the lab\'s WhatsApp Cloud API n
     c.runRowAction(c.items()[0], 'whatsapp-mine');
     expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
     expect(api.post).not.toHaveBeenCalledWith(expect.stringMatching(/\/resend$/), {});
+  });
+});
+
+describe('Reports list — server paging (DB optimisation phase 3)', () => {
+  const many = (n: number, status = 'pending') =>
+    Array.from({ length: n }, (_, i) => rep(`p${String(i).padStart(3, '0')}`, status));
+  const queueUrls = (api: any) => api.get.mock.calls.map((c: unknown[]) => c[0] as string)
+    .filter((u: string) => u.startsWith('/api/reports/queue'));
+  const cards = (el: HTMLElement) => el.querySelectorAll('.pf-rq-card--report').length;
+  const moreBtn = (el: HTMLElement) => el.querySelector('.pf-rq-more__btn') as HTMLButtonElement | null;
+  const settle = async (f: any) => { await f.whenStable(); f.detectChanges(); };
+
+  it('asks for page 1 of the default (Completed) tab, 50 rows', async () => {
+    const { api } = await render({ paged: true });
+    expect(queueUrls(api)[0]).toBe('/api/reports/queue?view=summary&page=1&pageSize=50&status=pending');
+  });
+
+  it('tab counts come from the server (whole queue), not the loaded page', async () => {
+    const queue = [...many(120), rep('f1', 'failed'), rep('d1', 'delivered')];
+    const { c } = await render({ paged: true, queue });
+    expect(c.items().length).toBe(50);
+    expect(c.counts()).toEqual({ all: 122, pending: 120, delivered: 1, failed: 1 });
+    const byTab = Object.fromEntries(c.ndFilters().map((x: any) => [x.value, x.count]));
+    expect(byTab).toMatchObject({ all: 122, pending: 120, delivered: 1, failed: 1 });
+  });
+
+  it('Load more appends the next page until everything is shown, then hides', async () => {
+    const { f, el, c, api } = await render({ paged: true, queue: many(120) });
+    expect(cards(el)).toBe(50);
+    expect(moreBtn(el)!.textContent).toContain('Load 50 more');
+    expect(el.querySelector('.pf-rq-more__count')!.textContent).toContain('Showing 50 of 120');
+    expect(primaries(el).length).toBe(0);   // still no primary on the page
+
+    moreBtn(el)!.click(); await settle(f);
+    expect(queueUrls(api).at(-1)).toBe('/api/reports/queue?view=summary&page=2&pageSize=50&status=pending');
+    expect(cards(el)).toBe(100);
+    expect(moreBtn(el)!.textContent).toContain('Load 20 more');
+
+    moreBtn(el)!.click(); await settle(f);
+    expect(cards(el)).toBe(120);
+    expect(moreBtn(el)).toBeNull();
+    // Same rows, same order as the unpaged queue.
+    expect(c.items().map((r: any) => r.id)).toEqual(many(120).map(r => r.id));
+  });
+
+  it('a live refresh reloads the pages already shown in ONE request (no collapse)', async () => {
+    const { f, el, c, api } = await render({ paged: true, queue: many(120) });
+    moreBtn(el)!.click(); await settle(f);
+    c.refresh(); await settle(f);
+    expect(queueUrls(api).at(-1)).toBe('/api/reports/queue?view=summary&page=1&pageSize=100&status=pending');
+    expect(cards(el)).toBe(100);
+    moreBtn(el)!.click(); await settle(f);
+    expect(queueUrls(api).at(-1)).toBe('/api/reports/queue?view=summary&page=3&pageSize=50&status=pending');
+    expect(cards(el)).toBe(120);
+  });
+
+  it('switching tab asks the server for that status from page 1', async () => {
+    const queue = [...many(3), rep('f1', 'failed'), rep('f2', 'failed')];
+    const { el, api, tab } = await render({ paged: true, queue });
+    tab('failed');
+    await Promise.resolve();
+    expect(queueUrls(api).at(-1)).toBe('/api/reports/queue?view=summary&page=1&pageSize=50&status=failed');
+    expect(cards(el)).toBe(2);
+    tab('all');
+    expect(queueUrls(api).at(-1)).toBe('/api/reports/queue?view=summary&page=1&pageSize=50&status=all');
+    const before = queueUrls(api).length;
+    tab('partial');   // same server status (all) — no reload
+    expect(queueUrls(api).length).toBe(before);
+  });
+
+  it('search narrows the loaded rows at once and asks the server once typing pauses', async () => {
+    const queue = [rep('a', 'pending', 'final', { order: { id: 'o-a', patient: { displayName: 'Anand Krishnan' } } }),
+                   rep('b', 'pending', 'final', { order: { id: 'o-b', patient: { displayName: 'Priya Kumar' } } })];
+    const { f, c, api } = await render({ paged: true, queue });
+    const n = queueUrls(api).length;
+    c.setQuery('pri'); c.setQuery('priy'); f.detectChanges();
+    expect(c.visible().map((r: any) => r.id)).toEqual(['b']);      // client-side, immediately
+    expect(queueUrls(api).length).toBe(n);                          // debounced
+    await new Promise(r => setTimeout(r, 300)); await settle(f);
+    expect(queueUrls(api).length).toBe(n + 1);                      // one server search
+    expect(queueUrls(api).at(-1)).toBe('/api/reports/queue?view=summary&page=1&pageSize=50&status=pending&q=priy');
+    expect(c.items().map((r: any) => r.id)).toEqual(['b']);
+  });
+
+  it('an older server (array, no paging) still shows the whole queue with client counts and no Load more', async () => {
+    const { el, c } = await render({ queue: many(60) });
+    expect(c.items().length).toBe(60);
+    expect(c.counts().all).toBe(60);
+    expect(moreBtn(el)).toBeNull();
   });
 });

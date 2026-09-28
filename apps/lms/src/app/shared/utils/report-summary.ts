@@ -11,6 +11,35 @@ import { firstValueFrom, type Observable } from 'rxjs';
  */
 export const REPORT_QUEUE_SUMMARY_URL = '/api/reports/queue?view=summary';
 
+/** Report-queue tab counts over the WHOLE queue (search / status not applied). */
+export interface ReportQueueCounts { all: number; pending: number; delivered: number; failed: number }
+
+/** One page of `GET /api/reports/queue?view=summary&page=…` (DB optimisation
+ *  phase 3). An older server ignores the paging params and answers the whole
+ *  queue as an array — callers accept both. */
+export interface ReportQueuePage<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  counts: ReportQueueCounts;
+}
+
+export const REPORT_QUEUE_PAGE_SIZE = 50;
+
+/** Server status for a queue tab: the report tabs filter by delivery status;
+ *  All and Partial (whose cards come from elsewhere) read the whole queue. */
+export function reportQueueServerStatus(tab: string): 'all' | 'pending' | 'delivered' | 'failed' {
+  return tab === 'pending' || tab === 'delivered' || tab === 'failed' ? tab : 'all';
+}
+
+export function reportQueuePageUrl(o: { page: number; pageSize: number; status: string; q?: string | null }): string {
+  const q = (o.q ?? '').trim();
+  return `${REPORT_QUEUE_SUMMARY_URL}&page=${o.page}&pageSize=${o.pageSize}&status=${encodeURIComponent(o.status)}`
+    + (q ? `&q=${encodeURIComponent(q)}` : '');
+}
+
 export function reportByOrderSummaryUrl(orderId: string): string {
   return `/api/reports/by-order/${encodeURIComponent(orderId)}?view=summary`;
 }

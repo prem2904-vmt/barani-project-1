@@ -1,6 +1,6 @@
 import { of } from 'rxjs';
 import { vi } from 'vitest';
-import { ensureFullReport, REPORT_QUEUE_SUMMARY_URL, reportByOrderSummaryUrl } from './report-summary';
+import { ensureFullReport, REPORT_QUEUE_SUMMARY_URL, reportByOrderSummaryUrl, reportQueuePageUrl, reportQueueServerStatus } from './report-summary';
 
 describe('report summary reads (DB optimisation phase 2)', () => {
   it('list URLs ask for the summary view', () => {
@@ -26,5 +26,23 @@ describe('report summary reads (DB optimisation phase 2)', () => {
   it('a missing report throws (the caller shows its render-failed toast)', async () => {
     const api = { get: vi.fn(() => of(null)) };
     await expect(ensureFullReport(api as never, { id: 'gone' })).rejects.toThrow();
+  });
+});
+
+
+describe('report queue paging URLs (DB optimisation phase 3)', () => {
+  it('builds the paged summary URL; a blank search is left out, a real one is encoded', () => {
+    expect(reportQueuePageUrl({ page: 2, pageSize: 50, status: 'pending', q: '  ' }))
+      .toBe('/api/reports/queue?view=summary&page=2&pageSize=50&status=pending');
+    expect(reportQueuePageUrl({ page: 1, pageSize: 100, status: 'all', q: ' Dr. A&B ' }))
+      .toBe('/api/reports/queue?view=summary&page=1&pageSize=100&status=all&q=Dr.%20A%26B');
+  });
+
+  it('maps tabs to server statuses (All / Partial read the whole queue)', () => {
+    expect(reportQueueServerStatus('pending')).toBe('pending');
+    expect(reportQueueServerStatus('delivered')).toBe('delivered');
+    expect(reportQueueServerStatus('failed')).toBe('failed');
+    expect(reportQueueServerStatus('all')).toBe('all');
+    expect(reportQueueServerStatus('partial')).toBe('all');
   });
 });

@@ -43,7 +43,14 @@ import {
 import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
 import { waLink } from "../../../shared/utils/whatsapp";
-import { ensureFullReport, REPORT_QUEUE_SUMMARY_URL } from "../../../shared/utils/report-summary";
+import {
+  ensureFullReport,
+  REPORT_QUEUE_PAGE_SIZE,
+  reportQueuePageUrl,
+  reportQueueServerStatus,
+  type ReportQueueCounts,
+  type ReportQueuePage,
+} from "../../../shared/utils/report-summary";
 import { WhatsAppService, waStatusLabel, type WaMessage } from "../../../core/services/whatsapp.service";
 import { WhatsAppSendService, waSendLabel } from "../../../core/services/whatsapp-send.service";
 import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
@@ -119,11 +126,14 @@ export class ReportQueueComponent implements OnInit {
   }
 
   /** One batch call for the final reports on screen. Non-fatal. */
-  private loadWaStatus(list: Report[]): void {
+  private loadWaStatus(list: Report[], append = false): void {
     const ids = list.filter((r) => r.type === "final").map((r) => r.id);
-    if (!ids.length) { this._wa.set({}); return; }
+    if (!ids.length) { if (!append) this._wa.set({}); return; }
     this.wa.statusBatch(ids).subscribe({
-      next: (map) => this._wa.set(map && typeof map === "object" ? map : {}),
+      next: (map) => {
+        const m = map && typeof map === "object" ? map : {};
+        this._wa.update((cur) => (append ? { ...cur, ...m } : m));
+      },
       error: () => { /* no WhatsApp column — nothing else changes */ },
     });
   }
@@ -146,7 +156,7 @@ export class ReportQueueComponent implements OnInit {
   /** ONE status filter, in the band pill: a neutral segmented control
    *  (raised neutral selected tab), plain tabular counts, no colour dots. */
   readonly ndFilters = computed<{ value: Filter; label: string; count: number }[]>(() => [
-    { value: "all", label: "All", count: this.items().length },
+    { value: "all", label: "All", count: this.counts().all },
     { value: "pending", label: "Completed", count: this.counts().pending },
     { value: "partial", label: "Partial", count: this.partialOrders().length },
     { value: "delivered", label: "Delivered", count: this.counts().delivered },
@@ -194,7 +204,7 @@ export class ReportQueueComponent implements OnInit {
     // Icons mirror the ones the old phone-only filter row used, so the
     // vocabulary is unchanged — they just moved into the search bar and
     // only replace the words on phones.
-    { value: "all", label: "All", dot: "#a78bfa", count: this.items().length,
+    { value: "all", label: "All", dot: "#a78bfa", count: this.counts().all,
       iconPath: ["M4 6h16", "M4 12h16", "M4 18h16"] },
     { value: "pending", label: "Completed", dot: "#f59e0b", count: this.counts().pending,
       iconPath: ["M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4 12 14.01l-3-3"] },
@@ -318,7 +328,12 @@ export class ReportQueueComponent implements OnInit {
       "All",
   );
   setFilter(f: Filter) {
+    const before = reportQueueServerStatus(this._filter());
     this._filter.set(f);
+    // The report tabs are filtered server-side (paged queue); Partial reads
+    // the whole queue for its counts, so switching to / from it only reloads
+    // when the server status actually changes.
+    if (reportQueueServerStatus(f) !== before) this.loadQueue("reset");
   }
 
   /** Phone-only presentational state: the compact stat summary's
@@ -385,8 +400,15 @@ export class ReportQueueComponent implements OnInit {
   private readonly _query = signal<string>("");
   readonly query = this._query.asReadonly();
   setQuery(q: string) {
+    const before = this._query().trim();
     this._query.set(q);
+    // The loaded rows narrow instantly (client filter below); the server
+    // search follows once typing pauses.
+    if (q.trim() === before) return;
+    clearTimeout(this._searchTimer);
+    this._searchTimer = setTimeout(() => this.loadQueue("reset"), 250);
   }
+  private _searchTimer: ReturnType<typeof setTimeout> | undefined;
   asInput(ev: Event): string {
     return (ev.target as HTMLInputElement).value;
   }
@@ -411,14 +433,90 @@ export class ReportQueueComponent implements OnInit {
     return this._dueOrderIds().has((r.orderId ?? "").toLowerCase());
   }
 
-  readonly counts = computed(() => {
+  // ── Server paging (DB optimisation phase 3) ─────────────────────
+  // The queue loads a page at a time (status + search applied server-side);
+  // "Load more" appends the next page. `_total` null = an older server that
+  // answered the whole queue as an array (counted client-side, no paging).
+  private readonly _total = signal<number | null>(null);
+  readonly total = this._total.asReadonly();
+  private readonly _serverCounts = signal<ReportQueueCounts | null>(null);
+  private readonly _loadingMore = signal(false);
+  readonly loadingMore = this._loadingMore.asReadonly();
+  private _pages = 0;
+  private _seq = 0;
+  readonly hasMorePages = computed(() => {
+    const t = this._total();
+    return t != null && this._items().length < t;
+  });
+  /** Rows the next page brings ("Load 50 more"). */
+  readonly nextPageCount = computed(() =>
+    Math.max(0, Math.min(REPORT_QUEUE_PAGE_SIZE, (this._total() ?? 0) - this._items().length)));
+
+  readonly counts = computed<ReportQueueCounts>(() => {
+    const sc = this._serverCounts();
+    if (sc) return sc;
     const l = this._items();
     return {
+      all: l.length,
       pending: l.filter((r) => r.deliveryStatus === "pending").length,
       delivered: l.filter((r) => r.deliveryStatus === "delivered").length,
       failed: l.filter((r) => r.deliveryStatus === "failed").length,
     };
   });
+
+  loadMore() {
+    if (this._loadingMore() || !this.hasMorePages()) return;
+    this.loadQueue("more");
+  }
+
+  /** reset = page 1 for the current tab + search; refresh = the same pages
+   *  again (one request, so a live update never collapses a scrolled list);
+   *  more = the next page, appended. Stale answers are dropped. */
+  private loadQueue(mode: "reset" | "refresh" | "more") {
+    const seq = ++this._seq;
+    const pages = Math.max(1, this._pages);
+    const page = mode === "more" ? this._pages + 1 : 1;
+    const pageSize = mode === "refresh" ? REPORT_QUEUE_PAGE_SIZE * pages : REPORT_QUEUE_PAGE_SIZE;
+    if (mode === "more") this._loadingMore.set(true); else this._loading.set(true);
+    const url = reportQueuePageUrl({
+      page, pageSize, status: reportQueueServerStatus(this._filter()), q: this._query(),
+    });
+    this.api.get<Report[] | ReportQueuePage<Report> | null>(url).subscribe({
+      next: (res) => {
+        if (seq !== this._seq) return;
+        this._loading.set(false);
+        this._loadingMore.set(false);
+        if (!res || Array.isArray(res)) {
+          const l = (res as Report[] | null) ?? [];
+          this._items.set(l);
+          this._total.set(null);
+          this._serverCounts.set(null);
+          this._pages = 1;
+          this.loadWaStatus(l);
+          return;
+        }
+        const items = res.items ?? [];
+        if (mode === "more") {
+          const seen = new Set(this._items().map((r) => r.id));
+          const fresh = items.filter((r) => !seen.has(r.id));
+          this._items.update((cur) => [...cur, ...fresh]);
+          this._pages += 1;
+          this.loadWaStatus(fresh, true);
+        } else {
+          this._items.set(items);
+          this._pages = mode === "refresh" ? pages : 1;
+          this.loadWaStatus(items);
+        }
+        this._total.set(res.total ?? items.length);
+        this._serverCounts.set(res.counts ?? null);
+      },
+      error: () => {
+        if (seq !== this._seq) return;
+        this._loading.set(false);
+        this._loadingMore.set(false);
+      },
+    });
+  }
 
   readonly visible = computed(() => {
     const f = this._filter();
@@ -574,6 +672,7 @@ export class ReportQueueComponent implements OnInit {
     this.waSend.ensure();
     // Live: a validation elsewhere can complete an order → its report appears.
     this.liveQ.on('reports', 'validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
+    this.destroyRef.onDestroy(() => clearTimeout(this._searchTimer));
     // Self-healing: ask the backend to generate any missing final
     // reports for orders that are already 'validated' but have no
     // report row yet (e.g. validations done before the
@@ -588,16 +687,9 @@ export class ReportQueueComponent implements OnInit {
   }
 
   refresh() {
-    this._loading.set(true);
     // Summary rows (no rendered snapshot): render paths read the report by id.
-    this.api.get<Report[]>(REPORT_QUEUE_SUMMARY_URL).subscribe({
-      next: (l) => {
-        this._items.set(l ?? []);
-        this._loading.set(false);
-        this.loadWaStatus(l ?? []);
-      },
-      error: () => this._loading.set(false),
-    });
+    // Paged: the pages already on screen, reloaded in one request.
+    this.loadQueue(this._pages > 0 ? "refresh" : "reset");
     // Independent fetch — partial reports come from /api/orders/today
     // (the report queue endpoint only knows about generated PDFs). A
     // failure here doesn't block the main queue load.
