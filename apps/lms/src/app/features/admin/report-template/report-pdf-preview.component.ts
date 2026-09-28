@@ -328,9 +328,11 @@ export class ReportPdfPreviewComponent implements OnDestroy {
     }
 
     const snapshot = {
-      patient: { displayName: 'Sita Raman', age: 35, sex: 'Female', phone: '9080706050' },
+      patient: { id: 'preview-patient', displayName: 'Sita Raman', age: 35, sex: 'Female', phone: '9080706050' },
       order: {
         id: 'preview-order',
+        // Sample token so a placed patient-strip Order QR previews (never a real link).
+        trackToken: 'SAMPLE',
         orderNumber: 'LAB-2608-000042',
         createdAt: new Date().toISOString(),
         refDoctorName: 'Dr. A. Sharma',

@@ -20,6 +20,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
+import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-strip-qr';
 
 type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
@@ -176,6 +177,28 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                   </div>
 
                 </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">QR codes</h4>
+                  <p class="pf-rtb-s">Print QR codes in the patient strip. Each switch adds its code to the arrangement below — drag it to move it.</p>
+                  <div class="pf-sqr">
+                    @for (q of stripQrOptions; track q.key) {
+                      <div class="pf-sqr__row">
+                        <span class="pf-sqr__ic" aria-hidden="true">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v7h-4M14 18v3"/></svg>
+                        </span>
+                        <span class="pf-sqr__txt">
+                          <span class="pf-sqr__label">{{ q.label }}</span>
+                          <span class="pf-sqr__desc">{{ q.desc }}</span>
+                        </span>
+                        <button type="button" class="nd-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="stripQrOn(q.key)"
+                                [attr.aria-label]="q.label" (click)="toggleStripQr(q.key)">
+                          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                        </button>
+                      </div>
+                    }
+                  </div>
                 </div>
 
                 <div class="pf-rtb">
@@ -652,6 +675,18 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
     .pf-rt-work input[type="range"] { width: 100%; accent-color: var(--nd-toggle-on, #aeb8c2); }
     .pf-rt-datesgrid { display: flex; flex-direction: column; gap: 12px; }
+
+    /* Patient-strip QR switches */
+    .pf-sqr { display: flex; flex-direction: column; gap: 2px; }
+    .pf-sqr__row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 0;
+      border-top: 1px solid var(--glass-border, rgba(148,163,184,0.14)); }
+    .pf-sqr__row:first-child { border-top: 0; }
+    .pf-sqr__ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
+      color: var(--text-secondary); background: var(--surface-2); border: 1px solid var(--border-muted); }
+    .pf-sqr__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-sqr__label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-sqr__desc { font-size: 12px; line-height: 1.4; color: var(--text-muted); }
+    .pf-sqr__sw { flex: none; min-width: 44px; min-height: 44px; }
 
     /* Department scope row for the patient strip */
     .pf-pt-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1178,11 +1213,13 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
    *  block, multi-test grouping, sample type, multi-parameter test. */
   private sampleSnapshot(): string {
     return JSON.stringify({
-      patient: { displayName: 'Sita Raman', age: 37, sex: 'Female', phone: '9080706050' },
+      patient: { id: 'preview-patient', displayName: 'Sita Raman', age: 37, sex: 'Female', phone: '9080706050' },
       order:   { id: 'preview-order-12345',
                  // A realistic order number so the preview's barcode is a true
                  // Code-128 of a scannable value, not a placeholder.
                  orderNumber: 'LAB-2608-000042',
+                 // Sample token so a placed patient-strip Order QR previews.
+                 trackToken: 'SAMPLE',
                  createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
                  refDoctorName: 'Dr. A. Sharma',
                  refHospitalName: 'Apollo Speciality Hospital',
@@ -1295,6 +1332,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     // record), so they arrive via the report snapshot's `order` block.
     'refhospital', 'collectedby', 'department', 'branch',
     'specimen', 'barcode', 'registered', 'collected', 'reported',
+    // Patient-strip QR codes (owner, 2026-09-28) — opt-in, start in Unused.
+    PROFILE_QR_KEY, ORDER_QR_KEY,
   ];
   private readonly DEFAULT_PATIENT_COLS: string[][] = [
     ['name', 'age', 'sex', 'mrn'],
@@ -1308,7 +1347,21 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     reported: 'Reported date',
     refhospital: 'Referring hospital', collectedby: 'Collected by',
     department: 'Department', branch: 'Branch / collection centre',
+    [PROFILE_QR_KEY]: 'Patient profile QR', [ORDER_QR_KEY]: 'Order QR (report download)',
   };
+
+  /** The two patient-strip QR options, surfaced as switches above the
+   *  drag board (the chips stay draggable like any other field). */
+  readonly stripQrOptions = [
+    { key: PROFILE_QR_KEY, label: 'Patient profile QR',
+      desc: 'Scanning opens this patient\u2019s profile in the app. Staff sign in first; anyone else only reaches the login.' },
+    { key: ORDER_QR_KEY, label: 'Order QR \u2014 report soft copy',
+      desc: 'Scanning opens the patient\u2019s report page: they confirm date of birth, phone or invoice no. and download the report. Until it is ready, the page shows the order status.' },
+  ];
+  stripQrOn(key: string): boolean { return this.patientCols().some(c => c.includes(key)); }
+  toggleStripQr(key: string) {
+    this.commitPatientCols(toggleStripQrKey(this.patientCols(), key));
+  }
 
   readonly patientCols = signal<string[][]>([[], [], []]);
 
@@ -1523,6 +1576,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     } else {
       transferArrayItem(from, to, ev.previousIndex, ev.currentIndex);
     }
+    this.commitPatientCols(cols);
+  }
+
+  /** Apply a new column arrangement: a department scope marks its draft dirty;
+   *  the default scope patches the template. */
+  private commitPatientCols(cols: string[][]) {
     this.patientCols.set(cols);                    // pool is derived → recomputes
     if (this.patientScope() !== 'default') { this.deptPatientDirty.set(true); return; }
     // Persist the arrangement + the titles of any custom fields now placed in a
@@ -1563,4 +1622,23 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 export function previewTemplateForTab<T extends Pick<ReportTemplate, 'metadata'>>(tab: string, tpl: T): T {
   if (tab !== 'columns' || !readReportOption(tpl, 'abnormalSummary')) return tpl;
   return { ...tpl, metadata: writeReportOption(tpl, 'abnormalSummary', false) };
+}
+
+/** Switch a patient-strip QR on/off in a column arrangement. Off: removed from
+ *  every column. On: placed beside the other QR when that one is already
+ *  printing (they then print side by side), else at the end of the last column. */
+export function toggleStripQrKey(cols: string[][], key: string): string[][] {
+  const out = cols.map(c => [...c]);
+  if (out.some(c => c.includes(key))) return out.map(c => c.filter(k => k !== key));
+  if (out.length === 0) return [[key]];
+  const other = key === PROFILE_QR_KEY ? ORDER_QR_KEY : PROFILE_QR_KEY;
+  const withOther = out.find(c => c.includes(other));
+  if (withOther) {
+    const i = withOther.indexOf(other);
+    // Profile first, then Order — a stable reading order on the page.
+    withOther.splice(key === PROFILE_QR_KEY ? i : i + 1, 0, key);
+    return out;
+  }
+  out[out.length - 1].push(key);
+  return out;
 }
