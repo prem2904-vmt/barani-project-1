@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, untracked, viewChild } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, untracked, viewChild } from '@angular/core';
 import { NumpadChar } from './numpad-keys';
-import { LONG_PRESS_MS, NumpadService } from './numpad.service';
+import { LONG_PRESS_MS, NumpadField, NumpadService, isKeysField } from './numpad.service';
+import { KeyTap } from './key-tap';
 
 interface PadKey { ch: NumpadChar; glyph: string; aria: string; sym: boolean; wide?: boolean; }
 
@@ -31,13 +33,17 @@ const BODY: PadKey[] = [
  *
  * Focus never leaves the field: pointerdown on the pad is cancelled, keys
  * are `tabindex=-1` buttons (screen readers still reach and activate them).
+ * Keys register on POINTERDOWN (key-tap.ts: fast / rolled-over taps all
+ * land, the follow-up click is swallowed); Enter / hide / grip act on
+ * release; a click with no pointer press (keyboard, screen reader) acts.
+ * Never shown for a PF Keys search field (that has its own surface).
  */
 @Component({
   selector: 'pf-numpad-panel',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (svc.open() && svc.current(); as f) {
+    @if (field(); as f) {
       <div #surface class="pf-np" role="group" aria-label="Number pad"
            data-keep-keyboard
            [class.pf-np--sheet]="svc.mode() === 'sheet'"
@@ -45,7 +51,7 @@ const BODY: PadKey[] = [
            [class.pf-np--left]="svc.mode() === 'corner' && svc.corner() === 'left'"
            [class.pf-np--still]="svc.reducedMotion()"
            [attr.data-placement]="svc.mode() === 'corner' ? 'corner-' + svc.corner() : 'sheet'"
-           (pointerdown)="$event.preventDefault()"
+           (pointerdown)="$event.preventDefault()" (pointerup)="tap.up($event)" (pointercancel)="tap.up($event)"
            (mousedown)="$event.preventDefault()">
         <div class="pf-np__head">
           @if (svc.mode() === 'corner') {
@@ -53,6 +59,7 @@ const BODY: PadKey[] = [
             <button type="button" class="pf-np__grip" tabindex="-1"
                     [attr.aria-label]="svc.corner() === 'right' ? 'Move number pad to the bottom-left corner' : 'Move number pad to the bottom-right corner'"
                     [title]="svc.corner() === 'right' ? 'Move to the left corner' : 'Move to the right corner'"
+                    (pointerdown)="tap.arm($event)" (pointerup)="tap.release($event) && svc.toggleCorner()"
                     (click)="svc.toggleCorner()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8 3 12l4 4M17 8l4 4-4 4M3 12h18"/></svg>
             </button>
@@ -69,6 +76,7 @@ const BODY: PadKey[] = [
             </span>
           </div>
           <button type="button" class="pf-np__hide" tabindex="-1" aria-label="Hide number pad" title="Hide number pad"
+                  (pointerdown)="tap.arm($event)" (pointerup)="tap.release($event) && svc.dismiss()"
                   (click)="svc.dismiss()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           </button>
@@ -81,15 +89,15 @@ const BODY: PadKey[] = [
                       [class.pf-np__key--nope]="svc.rejected() === k.ch"
                       [attr.aria-disabled]="!svc.accepts().has(k.ch) ? 'true' : null"
                       [attr.aria-label]="k.aria" [attr.data-key]="k.ch"
-                      (click)="svc.press(k.ch)">{{ k.glyph }}</button>
+                      (pointerdown)="typeDown($event, k.ch)" (click)="svc.press(k.ch)">{{ k.glyph }}</button>
             } @else {
               <span class="pf-np__gap" aria-hidden="true"></span>
             }
           }
           <button type="button" tabindex="-1" class="pf-np__key pf-np__key--sym pf-np__back"
                   aria-label="Delete (hold to clear)" data-key="backspace"
-                  (pointerdown)="holdStart()" (pointerup)="holdEnd()" (pointercancel)="holdEnd()" (pointerleave)="holdEnd()"
-                  (click)="backTap()">
+                  (pointerdown)="backDown($event)" (pointerup)="holdEnd()" (pointercancel)="holdEnd()" (pointerleave)="holdEnd()"
+                  (click)="svc.backspace()">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 5H9l-6 7 6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"/><path d="m16 9-5 6M11 9l5 6"/></svg>
           </button>
           @for (k of body; track k.ch) {
@@ -101,13 +109,14 @@ const BODY: PadKey[] = [
                       [class.pf-np__key--nope]="svc.rejected() === k.ch"
                       [attr.aria-disabled]="k.sym && !svc.accepts().has(k.ch) ? 'true' : null"
                       [attr.aria-label]="k.aria" [attr.data-key]="k.ch"
-                      (click)="svc.press(k.ch)">{{ k.glyph }}</button>
+                      (pointerdown)="typeDown($event, k.ch)" (click)="svc.press(k.ch)">{{ k.glyph }}</button>
             } @else {
               <span class="pf-np__gap" aria-hidden="true"></span>
             }
           }
           <button type="button" tabindex="-1" class="pf-np__next" data-key="next"
                   [attr.aria-label]="svc.isLast() ? 'Enter: done, go to Submit' : 'Enter: next result'"
+                  (pointerdown)="tap.arm($event)" (pointerup)="tap.release($event) && svc.next()"
                   (click)="svc.next()">
             <!-- "Enter" is the promise; the small line says where it goes. -->
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 5v7a3 3 0 0 1-3 3H5"/><path d="m9 11-4 4 4 4"/></svg>
@@ -205,6 +214,12 @@ const BODY: PadKey[] = [
     .pf-np__key--sym { color: var(--text-secondary); font-size: 19px; }
     .pf-np__key:active { transform: scale(0.94); background: var(--nd-sel-bg, #eceff2); }
     .pf-np__key--off { opacity: 0.38; }
+    .pf-np__key, .pf-np__next, .pf-np__hide, .pf-np__grip {
+      /* A keypad: no double-tap zoom / pan / pinch on a key (a pinch would
+         cancel two rolled-over fingers), no text selection. */
+      touch-action: none;
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    }
     .pf-np__key--nope { animation: pf-np-nope 320ms ease-out; }
     .pf-np__zero { grid-column: span 2; }
     .pf-np__next {
@@ -235,35 +250,38 @@ export class NumpadPanelComponent {
   readonly body = BODY;
   private readonly surface = viewChild<ElementRef<HTMLElement>>('surface');
 
+  /** The result field the pad serves (never a PF Keys search field). */
+  readonly field = computed<NumpadField | null>(() => {
+    const f = this.svc.current();
+    return this.svc.open() && f && !isKeysField(f) ? f : null;
+  });
+  /** Pointer-press bookkeeping (rollover map + ghost-click swallow). */
+  readonly tap = new KeyTap(inject(DOCUMENT, { optional: true }));
   private holdTimer: ReturnType<typeof setTimeout> | null = null;
-  private held = false;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => { this.tap.destroy(); this.clearHold(); });
     effect(() => {
       const el = this.surface()?.nativeElement ?? null;
       untracked(() => this.svc.registerSurface(el));
     });
   }
 
-  holdStart(): void {
-    this.held = false;
+  /** A digit / symbol: acts on pointerdown, once per pointer. */
+  typeDown(e: PointerEvent, ch: NumpadChar): void {
+    if (this.tap.down(e)) this.svc.press(ch);
+  }
+
+  /** ⌫ deletes on touch-down; held for LONG_PRESS_MS it clears the field
+   *  (the click that ends the press is swallowed as a ghost). */
+  backDown(e: PointerEvent): void {
+    if (!this.tap.down(e)) return;
+    this.svc.backspace();
     this.clearHold();
-    this.holdTimer = setTimeout(() => {
-      this.holdTimer = null;
-      this.held = true;
-      this.svc.clear();
-    }, LONG_PRESS_MS);
+    this.holdTimer = setTimeout(() => { this.holdTimer = null; this.svc.clear(); }, LONG_PRESS_MS);
   }
 
   holdEnd(): void { this.clearHold(); }
-
-  /** A tap deletes one character; the click that ends a long-press (which
-   *  already cleared the field) is swallowed. */
-  backTap(): void {
-    this.clearHold();
-    if (this.held) { this.held = false; return; }
-    this.svc.backspace();
-  }
 
   private clearHold(): void {
     if (this.holdTimer) { clearTimeout(this.holdTimer); this.holdTimer = null; }

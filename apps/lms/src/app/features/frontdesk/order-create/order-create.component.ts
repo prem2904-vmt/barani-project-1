@@ -1,6 +1,6 @@
 import { Location, NgTemplateOutlet } from '@angular/common';
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
-import { PF_KEYS_EVENT, PF_KEYS_HEIGHT_VAR } from '../../../shared/components/numpad/numpad.service';
+import { PF_KEYS_EVENT, PF_KEYS_HEIGHT_VAR, PfKeysEnterTone } from '../../../shared/components/numpad/numpad.service';
 import { PfKeysKind, PfKeysPrefix, deptPrefixes } from '../../../shared/components/numpad/pf-keys-layouts';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, OnDestroy, AfterViewInit, HostListener, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -2586,8 +2586,21 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   //    Hospital are free-text names → the system keyboard.
   readonly pfKeysKind = computed<PfKeysKind | null>(() =>
     this.scope() === 'tests' ? 'test' : this.scope() === 'patient' ? 'patient' : null);
-  readonly pfKeysEnter = computed(() => this.scope() === 'patient' ? 'Select' : 'Add');
-  readonly pfKeysEnterAria = computed(() => this.scope() === 'patient' ? 'Select highlighted patient' : 'Add selected test');
+  /** Tests scope: Enter would REMOVE the highlighted match (it is already
+   *  in the order — Enter toggles, the row's chip already says "↵ Remove"). */
+  readonly pfKeysEnterRemoves = computed(() => {
+    if (this.scope() !== 'tests') return false;
+    const id = this.activeTestId();
+    return !!id && this._selected().includes(id);
+  });
+  /** The keypad's primary key says what Enter will do, live with the
+   *  highlight and the cart: "Add ↵" ⇄ "Remove ↵" (patient: "Select ↵"). */
+  readonly pfKeysEnter = computed(() =>
+    this.scope() === 'patient' ? 'Select' : this.pfKeysEnterRemoves() ? 'Remove' : 'Add');
+  readonly pfKeysEnterAria = computed(() =>
+    this.scope() === 'patient' ? 'Select highlighted patient'
+      : this.pfKeysEnterRemoves() ? 'Remove selected test' : 'Add selected test');
+  readonly pfKeysEnterTone = computed<PfKeysEnterTone>(() => this.pfKeysEnterRemoves() ? 'remove' : 'primary');
   /** The lab's own department codes (from its Test Master) for the code pad. */
   readonly pfKeysPrefixes = computed<PfKeysPrefix[]>(() =>
     deptPrefixes(this.deptChips().map(d => ({ name: d.name, code: d.code })), 'test'));

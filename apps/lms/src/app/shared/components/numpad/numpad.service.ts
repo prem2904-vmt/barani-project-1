@@ -49,6 +49,9 @@ export interface PfKeysField extends NumpadField {
   /** Primary key label ("Add", "Search", "Open"…) and its aria-label. */
   enterLabel(): string;
   enterAria(): string;
+  /** What the primary key does: 'primary' (the violet CTA) or 'remove'
+   *  (Enter takes the highlighted item OUT — neutral key, muted-red). */
+  enterTone(): PfKeysEnterTone;
   /** The screen already moves a highlight with ↑/↓ → show arrow keys. */
   arrows(): boolean;
   /** Department prefix keys for the code pad. */
@@ -56,6 +59,9 @@ export interface PfKeysField extends NumpadField {
   /** Escape hatch: THIS field uses the system keyboard until blur. */
   useSystemKeyboard(): void;
 }
+
+/** The primary key's look: the violet CTA, or a destructive-neutral Remove. */
+export type PfKeysEnterTone = 'primary' | 'remove';
 
 export function isKeysField(f: NumpadField | null | undefined): f is PfKeysField {
   return !!f && f.kind === 'keys';
@@ -431,15 +437,17 @@ export class NumpadService {
   }
 
   // ── Internals ────────────────────────────────────────────────────────
+  /** Runs after EVERY key press: keep it cheap — signals only change
+   *  when their content does (no re-render of every key per press). */
   private refresh(): void {
     const f = this.current();
     if (!f) return;
     this.value.set(f.el.value ?? '');
     const shown = f.keys();
-    this.keys.set(shown);
+    if (!sameSet(this.keys(), shown)) this.keys.set(shown);
     const ok = new Set<NumpadChar>();
     for (const s of NUMPAD_SYMBOLS) if (shown.has(s) && this.offer(f.el, s)) ok.add(s);
-    this.accepts.set(ok);
+    if (!sameSet(this.accepts(), ok)) this.accepts.set(ok);
     this.isLast.set(f.scope ? f.scope.isLast(f.el) : false);
   }
 
@@ -666,6 +674,13 @@ export class NumpadService {
     else el.style.paddingBottom = prev;
     this.padded = null;
   }
+}
+
+function sameSet<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
 }
 
 /** PF Keys and the result numpad share ONE engine: the same service. */

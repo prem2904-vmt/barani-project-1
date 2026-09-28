@@ -98,7 +98,7 @@
         </svg>
         <span class="sr-only">{{ pillPlaceholder() }}</span>
         <input #searchInput type="text" class="pf-us__input" autocomplete="off" role="combobox"
-          [pfKeys]="pfKeysKind()" [pfKeysEnter]="pfKeysEnter()" [pfKeysEnterAria]="pfKeysEnterAria()"
+          [pfKeys]="pfKeysKind()" [pfKeysEnter]="pfKeysEnter()" [pfKeysEnterAria]="pfKeysEnterAria()" [pfKeysEnterTone]="pfKeysEnterTone()"
           [pfKeysArrows]="true" [pfKeysPrefixes]="pfKeysPrefixes()"
           aria-autocomplete="list" aria-controls="pf-us-drop" [attr.aria-expanded]="scopeOpen()"
           [value]="pillValue()" [placeholder]="pillPlaceholder()" [disabled]="!scopeEnabled(scope())"
