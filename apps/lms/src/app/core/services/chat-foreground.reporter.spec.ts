@@ -66,6 +66,31 @@ describe('ForegroundReporter', () => {
     t.r.stop();
   });
 
+  it('hide() sends "hidden" synchronously with the last handle — before any timer or await', async () => {
+    const t = make();
+    t.r.start(); await tick(0);
+    t.r.hide();                                  // no tick: the OS may freeze us right now
+    expect(t.sent.at(-1)).toEqual([false, [], 'apns-token']);
+    t.r.hide();
+    expect(t.sent.length).toBe(2);               // de-duplicated
+    t.r.poke(0); await tick(0);                  // back (state still visible) → reports the thread
+    expect(t.sent.at(-1)).toEqual([true, ['c1'], 'apns-token']);
+    t.r.stop();
+  });
+
+  it('a hidden visibilitychange cancels a pending debounced report and hides at once', async () => {
+    const t = make();
+    t.r.start(); await tick(0);
+    t.state.viewed = ['c2'];
+    t.r.poke();                                  // debounced "visible on c2" pending…
+    t.state.visible = false;
+    t.doc.dispatchEvent(new Event('visibilitychange'));
+    expect(t.sent.at(-1)).toEqual([false, [], 'apns-token']);
+    await tick(1000);
+    expect(t.sent.some(s => s[0] && s[1].includes('c2'))).toBe(false);
+    t.r.stop();
+  });
+
   it('heartbeats while visible so the server-side report stays fresh', async () => {
     const t = make();
     t.r.start(); await tick(0);
