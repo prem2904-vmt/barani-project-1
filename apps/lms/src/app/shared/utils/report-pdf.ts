@@ -3137,7 +3137,9 @@ function renderColumnarTable(
       bodyMeta.push(null);
       bodyKind.push('other');
 
-      // Method + referral-lab sub-line (ISO 15189 7.4.1.6 for referrals).
+      // Method / Specimen / referral-lab sub-lines (ISO 15189 7.4.1.6 for
+      // referrals) — one per line, in that order (owner, 2026-09-28: with both
+      // switches on, Method then Specimen, never run together on one line).
       const sub: string[] = [];
       const methodText = g.hideMethodLine ? undefined : (g.methodLine ?? g.method);
       if (methodText) sub.push(`Method: ${methodText}`);
@@ -3146,7 +3148,7 @@ function renderColumnarTable(
       if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
       if (sub.length > 0) {
         body.push([{
-          content: sub.join('       '),
+          content: sub.join('\n'),
           colSpan: COLSPAN,
           styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
         }]);

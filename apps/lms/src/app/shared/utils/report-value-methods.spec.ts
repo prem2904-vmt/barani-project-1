@@ -90,6 +90,14 @@ describe('report Specimen line (template metadata option "specimenLine")', () =>
     expect(text).toContain('Specimen: SPECIMENXYZ');
   });
 
+  it('both on: Method, then Specimen, each on its OWN line (owner 2026-09-28)', () => {
+    const text = renderText([withSpecimen()], { showMethod: true, metadata: JSON.stringify({ options: { specimenLine: true } }) });
+    // Separate PDF text runs — never one "Method: … Specimen: …" string.
+    expect(text).toMatch(/\(Method: TESTLEVELMETHOD\) Tj/);
+    expect(text).toMatch(/\(Specimen: SPECIMENXYZ\) Tj/);
+    expect(text.indexOf('Method: TESTLEVELMETHOD')).toBeLessThan(text.indexOf('Specimen: SPECIMENXYZ'));
+  });
+
   it('option off (default): no specimen sub-line', () => {
     expect(renderText([withSpecimen()], { showMethod: true })).not.toContain('Specimen: SPECIMENXYZ');
   });
