@@ -37,6 +37,7 @@ import { OrderEntryService } from '../../../core/services/order-entry.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printTubeLabels } from '../../../shared/utils/print-label';
+import { LabelPrintService } from '../../../core/printer/label-print.service';
 import { Report } from '../../../shared/models/report.model';
 
 /** Slim shape of /api/dispatch-packages — used by the bulk-dispatch
@@ -165,6 +166,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly theme = inject(ThemeService);
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
+  private readonly labelPrint = inject(LabelPrintService);
   private readonly dialog = inject(DialogService);
   private readonly orderEntry = inject(OrderEntryService);
   private readonly router = inject(Router);
@@ -1774,15 +1776,22 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           this.toasts.warning('No samples on this order to print');
           return;
         }
-        this._reprintOrder.set(full);
-        // Give the off-screen label cards a beat to paint their barcodes
-        // (JsBarcode is sync but QRCode.toCanvas is async) before printing.
-        setTimeout(() => {
-          printTubeLabels();
-          // Keep the sheet mounted until the print dialog has definitely
-          // consumed it (print() isn't blocking on every platform).
-          setTimeout(() => this._reprintOrder.set(null), 2000);
-        }, 350);
+        // Labels go ONLY to the station's label printer (LabelPrintService).
+        // The off-screen sheet + label-sized system dialog is used only when a
+        // web user explicitly picks it in the no-printer dialog.
+        void this.labelPrint.printTubeLabels({
+          samples: full.samples,
+          patient: full.patient ?? null,
+          systemPrint: () => {
+            this._reprintOrder.set(full);
+            // A beat for the cards to paint their codes, then print; keep the
+            // sheet mounted until the dialog has consumed it.
+            setTimeout(() => {
+              printTubeLabels();
+              setTimeout(() => this._reprintOrder.set(null), 2000);
+            }, 350);
+          },
+        });
       },
       error: () => {
         this._reprintLoading.set(false);

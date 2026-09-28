@@ -9,7 +9,6 @@ import {
   buildTsplLabel,
   bytesToBase64,
 } from './label-tspl';
-import { printLabelOnly } from '../../shared/utils/print-label';
 import { renderLabelBitmap, LabelData, LabelCodeMode } from './label-render';
 import { buildBleJob } from './dp27';
 import { BleWebPrinter } from './ble-web';
@@ -17,6 +16,24 @@ import { PrintConfigService } from './print-config.service';
 
 const DEVICE_KEY = 'pf.printer.deviceId';
 const NAME_KEY = 'pf.printer.deviceName';
+/** Last USB label printer seen on this Electron station — lets a switched-off
+ *  printer read as "configured but offline" (Retry) rather than "none". */
+const USB_NAME_KEY = 'pf.printer.usbName';
+
+/** Where this build can send a tube label. */
+export type LabelPlatform = 'web' | 'electron' | 'native';
+
+/** Is a direct label printer set up for this station? `configured` + a failed
+ *  send = offline. Plain web can never drive one directly. */
+export interface LabelPrinterState {
+  platform: LabelPlatform;
+  configured: boolean;
+  name: string | null;
+}
+
+/** Outcome of one direct label send. `offline` = the printer could not be
+ *  reached (not switched on / not plugged in / out of range). */
+export interface LabelSendResult { ok: boolean; direct: boolean; offline?: boolean; error?: string }
 
 /** The USB printer bridge exposed by the Electron preload (desktop only). */
 interface ElectronPrinter {
@@ -39,11 +56,13 @@ function electronDoc(): ElectronDoc | undefined {
 }
 
 /**
- * PrinterService — the single entry point the app uses to print a label.
+ * PrinterService — the transport layer for the station's label printer.
  *
- * On a native (Capacitor) build it streams TSPL over BLE via the
- * PrefrontalPrinter plugin; on web/electron it falls back to the existing
- * browser print path (printLabelOnly) so nothing regresses on desktop.
+ * On a native (Capacitor) build it streams over BLE via the PrefrontalPrinter
+ * plugin; on Electron it drives USB (or Web-Bluetooth). Plain web has NO label
+ * transport — it never falls back to the browser print dialog (owner
+ * 2026-09-28: "print label is only for the printer"). Screens don't call this
+ * directly for tube labels — they go through LabelPrintService.printTubeLabels.
  *
  * The chosen printer is remembered in localStorage so day-to-day printing
  * needs no pairing step — only the first setup does.
@@ -114,14 +133,12 @@ export class PrinterService {
   }
 
   /**
-   * Print a label. On native → TSPL over BLE. On web/electron → the DOM print
-   * fallback (the caller must have rendered a `.pf-print-label` element).
-   * Returns true if the native BLE path was used.
+   * Print a TSPL label over native BLE. There is no browser-print fallback:
+   * off-native this throws (labels go to the label printer only).
    */
   async printLabel(label: LabelInput): Promise<boolean> {
     if (!this.supported()) {
-      printLabelOnly();
-      return false;
+      throw new Error('No label printer on this device.');
     }
     await this.ensureConnected();
     const bytes = buildTsplLabel(label);
@@ -150,6 +167,45 @@ export class PrinterService {
   async electronStatus(): Promise<{ connected: boolean; name?: string }> {
     const p = electronPrinter();
     return p ? p.status() : { connected: false };
+  }
+
+  /** Which label transport this build has. */
+  labelPlatform(): LabelPlatform {
+    if (this.platform.isCapacitor()) return 'native';
+    if (this.platform.isElectron()) return 'electron';
+    return 'web';
+  }
+
+  /**
+   * Is a direct label printer configured for this station, and what's it
+   * called? Native: a paired BLE device. Electron: USB connected now (or one
+   * seen before on this station), else a paired Bluetooth printer. Web: never.
+   */
+  async labelPrinterState(): Promise<LabelPrinterState> {
+    const platform = this.labelPlatform();
+    if (platform === 'native') {
+      const id = this.savedDeviceId();
+      return { platform, configured: !!id, name: id ? (this.deviceName() ?? id) : null };
+    }
+    if (platform === 'electron') {
+      const p = electronPrinter();
+      const usb: { connected: boolean; name?: string } = p
+        ? await p.status().catch(() => ({ connected: false }))
+        : { connected: false };
+      if (usb.connected) {
+        const name = usb.name || 'USB label printer';
+        try { localStorage.setItem(USB_NAME_KEY, name); } catch { /* ignore */ }
+        return { platform, configured: true, name };
+      }
+      if (this.bleWeb.hasDevice()) {
+        return { platform, configured: true, name: this.bleWeb.deviceName ?? 'Bluetooth label printer' };
+      }
+      let lastUsb: string | null = null;
+      try { lastUsb = localStorage.getItem(USB_NAME_KEY); } catch { /* ignore */ }
+      if (p && lastUsb) return { platform, configured: true, name: lastUsb };
+      return { platform, configured: false, name: null };
+    }
+    return { platform, configured: false, name: null };
   }
 
   /** True if a Bluetooth printer is currently connected (Electron web-BLE). */
@@ -222,13 +278,13 @@ export class PrinterService {
   /**
    * Print a specimen label at the branch's configured size + single code.
    * Transport priority: USB (if a USB printer is plugged in) → else Bluetooth.
-   * On the iPad it's always BLE via the plugin. Web without any bridge falls
-   * back to the browser print dialog.
+   * On the iPad it's always BLE via the plugin. Plain web has no label
+   * transport → { ok: false } (NEVER the browser print dialog).
    */
   async printLabelData(
     data: LabelData,
     opts: { widthMm: number; heightMm: number; codeMode: LabelCodeMode }
-  ): Promise<{ ok: boolean; direct: boolean; error?: string }> {
+  ): Promise<LabelSendResult> {
     const bmp = renderLabelBitmap(data, opts);
     const drv = this.printConfig.driverOpts(); // per-station darkness/speed
 
@@ -238,7 +294,7 @@ export class PrinterService {
         // Auto-reconnect: if the printer was off and is back on, this succeeds.
         await this.connectWithRetry(() => this.ensureConnected());
       } catch {
-        return { ok: false, direct: true, error: 'Bluetooth printer not connected — turn it on and try again.' };
+        return { ok: false, direct: true, offline: true, error: 'Bluetooth printer not connected — turn it on and try again.' };
       }
       try {
         await PrefrontalPrinter.print({ data: bytesToBase64(buildBleJob(bmp, { density: drv.density, speed: drv.speed })) });
@@ -261,7 +317,7 @@ export class PrinterService {
         try {
           await this.connectWithRetry(() => this.bleWeb.ensureConnected());
         } catch {
-          return { ok: false, direct: true, error: 'Bluetooth printer not connected — turn it on and try again.' };
+          return { ok: false, direct: true, offline: true, error: 'Bluetooth printer not connected — turn it on and try again.' };
         }
         try {
           await this.bleWeb.write(buildBleJob(bmp, { density: drv.density, speed: drv.speed }));
@@ -276,12 +332,11 @@ export class PrinterService {
         const res = await p.print({ ...bmp, density: drv.density, speed: drv.speed });
         return { ok: res.ok, direct: true, error: res.error };
       }
-      return { ok: false, direct: true, error: 'No printer found — plug in USB or pair Bluetooth in Printing settings.' };
+      return { ok: false, direct: true, offline: true, error: 'No printer found — plug in USB or pair Bluetooth in Printing settings.' };
     }
 
-    // Plain web: rely on the DOM print path the caller rendered.
-    printLabelOnly();
-    return { ok: true, direct: false };
+    // Plain web (or Electron without the USB bridge): no label transport.
+    return { ok: false, direct: false, offline: true, error: 'No label printer on this device.' };
   }
 
   /** Retry a connect step a few times so a just-powered-on printer reconnects

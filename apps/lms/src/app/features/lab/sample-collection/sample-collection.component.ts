@@ -44,11 +44,9 @@ import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-stri
 import {
   LabelCardComponent,
   tubeSpec,
-  labelTubeLine,
 } from "../../frontdesk/post-payment/label-card.component";
 import { tubeChosenSpecimen, tubeSpecimen } from "../../../shared/utils/micro-specimen";
-import { PrinterService } from "../../../core/printer/printer.service";
-import { PrintConfigService } from "../../../core/printer/print-config.service";
+import { LabelPrintService } from "../../../core/printer/label-print.service";
 import { BranchLabConfigService } from "../../../core/services/branch-lab-config.service";
 import { printTubeLabels } from "../../../shared/utils/print-label";
 import {
@@ -68,7 +66,7 @@ import {
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
-import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /**
@@ -398,8 +396,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
-  private readonly printer = inject(PrinterService);
-  private readonly printConfig = inject(PrintConfigService);
+  private readonly labelPrint = inject(LabelPrintService);
   private readonly labCfg = inject(BranchLabConfigService);
   /** Show the department on a tube only for standalone labs; an integrated lab
    *  (all departments run as one lab) hides it. (Cortex OPS-37) */
@@ -1479,87 +1476,16 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Print every tube label for this order (barcode + QR). The hidden
-   *  `.pf-print-label` block in the drawer already holds the rendered labels;
-   *  `printTubeLabels()` prints each label on its own W×H mm page so ONLY those
-   *  labels reach paper — nothing else on the screen prints. */
+  /** Print every tube label for this order — ONLY to this station's label
+   *  printer (LabelPrintService). No printer → a dialog, never a fallback
+   *  print. The hidden `.pf-print-label` block in the drawer is only used when
+   *  a web user explicitly picks the label-sized system dialog. */
   printLabels(g: OrderGroup) {
-    if (!g.samples.length) {
-      this.toasts.warning("No tubes to label");
-      return;
-    }
-    if (this.printer.directPrintAvailable()) {
-      void this.directPrint(g);
-      return;
-    }
-    printTubeLabels();
-  }
-
-  /** Render each tube label at the branch's configured size + single code and
-   *  stream it straight to the label printer (Electron USB / iPad BLE). */
-  private async directPrint(g: OrderGroup) {
-    const opts = this.printConfig.labelOpts();
-    this.toasts.info(
-      `Printing ${g.samples.length} label${g.samples.length > 1 ? "s" : ""}…`,
-    );
-    let ok = 0,
-      fail = 0;
-    for (const s of g.samples) {
-      const p = s.order?.patient;
-      const code = s.barcode ?? s.id;
-      const mrn = p?.mrn ?? undefined;
-      const res = await this.printer
-        .printLabelData(
-          {
-            code,
-            qrValue: mrn ? `${mrn}|${code}` : code,
-            // Just the name — age/sex + MRN print as their own lines below, so the
-            // combined "name | age/sex | id" string would duplicate them.
-            patientName: (p && patientDisplayName(p)) || g.patientName,
-            ageSex: this.labelAgeSex(p),
-            mrn,
-            deptCode: tubeDepartmentCodes(s),
-            tube: labelTubeLine(s),
-            outsourced: !!s.outsourcedVendorId,
-          },
-          opts,
-        )
-        .catch((e: unknown) => ({
-          ok: false,
-          direct: true,
-          error: (e as Error)?.message,
-        }));
-      if (res.ok) ok++;
-      else {
-        fail++;
-        if (res.error) this.toasts.error(res.error);
-      }
-    }
-    if (ok) this.toasts.success(`Printed ${ok} label${ok > 1 ? "s" : ""}`);
-    else if (fail) this.toasts.error("Label print failed");
-  }
-
-  private labelAgeSex(
-    p:
-      | {
-          age?: number | null;
-          dateOfBirth?: string | null;
-          sex?: string | null;
-        }
-      | null
-      | undefined,
-  ): string {
-    if (!p) return "";
-    let age = p.age ?? null;
-    if (age == null && p.dateOfBirth) {
-      const d = new Date(p.dateOfBirth),
-        now = new Date();
-      age = now.getFullYear() - d.getFullYear();
-      const m = now.getMonth() - d.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-    }
-    const s = p.sex ? p.sex.charAt(0).toUpperCase() : "";
-    return [age != null ? `${age}Y` : null, s].filter(Boolean).join(" ");
+    void this.labelPrint.printTubeLabels({
+      samples: g.samples,
+      fallbackName: g.patientName,
+      systemPrint: () => printTubeLabels(),
+    });
   }
 
   openScanner() {

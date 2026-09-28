@@ -36,6 +36,7 @@ import { SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, SCOPE_LABELS, SearchScope
 
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printTubeLabels } from '../../../shared/utils/print-label';
+import { LabelPrintService } from '../../../core/printer/label-print.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
 import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../shared/utils/micro-specimen';
@@ -68,6 +69,7 @@ interface HistoryRow {
 export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly labelPrint = inject(LabelPrintService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
@@ -1841,11 +1843,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           this.toasts.warning('No samples on this order to print labels');
           return;
         }
-        this._reprintOrder.set(full);
-        setTimeout(() => {
-          printTubeLabels();
-          setTimeout(() => this._reprintOrder.set(null), 2000);
-        }, 350);
+        // Labels go ONLY to the station's label printer (LabelPrintService).
+        // The off-screen sheet + label-sized system dialog is used only when a
+        // web user explicitly picks it in the no-printer dialog.
+        void this.labelPrint.printTubeLabels({
+          samples: full.samples,
+          patient: full.patient ?? null,
+          systemPrint: () => {
+            this._reprintOrder.set(full);
+            // A beat for the cards to paint their codes, then print; keep the
+            // sheet mounted until the dialog has consumed it.
+            setTimeout(() => {
+              printTubeLabels();
+              setTimeout(() => this._reprintOrder.set(null), 2000);
+            }, 350);
+          },
+        });
       },
       error: () => {
         this.reprintLoading.set(false);

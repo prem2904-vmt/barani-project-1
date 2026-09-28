@@ -55,7 +55,10 @@ function render(opts: { standalone?: boolean } = {}) {
     post: vi.fn(() => of({})),
     patch: vi.fn((url: string) => of({ ...(url.includes('/edta/') ? edta : sst), status: 'collected', collectedAt: '2026-09-27T03:05:00Z' })),
   };
-  const printer = { directPrintAvailable: () => true, printLabelData: vi.fn(async () => ({ ok: true })) };
+  const printer = {
+    labelPrinterState: async () => ({ platform: 'electron', configured: true, name: 'DP27' }),
+    printLabelData: vi.fn(async () => ({ ok: true, direct: true })),
+  };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
@@ -63,7 +66,7 @@ function render(opts: { standalone?: boolean } = {}) {
       { provide: AuthService, useValue: { hasPermission: () => true, user: () => ({ tenantName: 'Micro World' }) } },
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
       { provide: PrinterService, useValue: printer },
-      { provide: PrintConfigService, useValue: { labelOpts: () => ({}) } },
+      { provide: PrintConfigService, useValue: { labelOpts: () => ({}), config: () => ({ labelRoute: 'printer' }) } },
       { provide: BranchLabConfigService, useValue: { standaloneLab: () => !!opts.standalone, ensureLoaded() {}, config: () => null } },
       { provide: DialogService, useValue: { confirm: vi.fn(async () => true) } },
       { provide: ProcessWorkflowService, useValue: { dispatchStepEnabled: () => true, isEnabled: () => true } },
@@ -134,7 +137,7 @@ describe('Sample collection — shared tubes', () => {
     const { f, c, printer } = render();
     await open(f, c);
     c.printLabels(c.activeGroup());
-    await tick(); await tick();
+    await tick(); await tick(); await tick();
     const labels = printer.printLabelData.mock.calls.map(([d]: any[]) => d);
     expect(labels.map((l: any) => l.code)).toEqual(['26209', '26210']);
     expect(labels[0].deptCode).toBe('HEM/BIO');

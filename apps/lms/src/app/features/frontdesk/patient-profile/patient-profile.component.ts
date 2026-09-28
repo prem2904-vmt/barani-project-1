@@ -22,6 +22,7 @@ import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigati
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { printTubeLabels } from '../../../shared/utils/print-label';
+import { LabelPrintService } from '../../../core/printer/label-print.service';
 import {
   ageSexLong, orderStatusLabel, orderTone, patientFlags, patientMetaLine, testStatusLabel, testTone,
 } from './patient-profile.nd';
@@ -97,6 +98,7 @@ export class PatientProfileComponent implements OnInit {
   private readonly chat = inject(ChatService);
   private readonly dialog = inject(DialogService);
   protected readonly toasts = inject(ToastService);
+  private readonly labelPrint = inject(LabelPrintService);
   private readonly auth = inject(AuthService);
   private readonly workflow = inject(ProcessWorkflowService, { optional: true });
   protected readonly navBack = inject(NavBackService);
@@ -447,11 +449,22 @@ export class PatientProfileComponent implements OnInit {
       next: full => {
         this.reprintLoading.set(false);
         if (!full?.samples?.length) { this.toasts.warning('No samples on this order to print'); return; }
-        this.reprintOrder.set(full);
-        setTimeout(() => {
-          printTubeLabels();
-          setTimeout(() => this.reprintOrder.set(null), 2000);
-        }, 350);
+        // Labels go ONLY to the station's label printer (LabelPrintService).
+        // The off-screen sheet + label-sized system dialog is used only when a
+        // web user explicitly picks it in the no-printer dialog.
+        void this.labelPrint.printTubeLabels({
+          samples: full.samples,
+          patient: full.patient ?? null,
+          systemPrint: () => {
+            this.reprintOrder.set(full);
+            // A beat for the cards to paint their codes, then print; keep the
+            // sheet mounted until the dialog has consumed it.
+            setTimeout(() => {
+              printTubeLabels();
+              setTimeout(() => this.reprintOrder.set(null), 2000);
+            }, 350);
+          },
+        });
       },
       error: () => { this.reprintLoading.set(false); this.toasts.error('Could not load the order for label reprint'); },
     });
