@@ -96,7 +96,11 @@ export function cartOverlaps(catalog: readonly CartCatalogItem[], selectedIds: r
   return out;
 }
 
-/** The one refusal message (cart toast / flag) — same wording as the server's. */
-export function overlapMessage(o: CartOverlap): string {
-  return `“${o.member.name}” is already included in “${o.container.name}” — the same test can't be ordered twice. Remove one of them.`;
+/** The one refusal message (cart toast / flag) — same wording as the server's.
+ *  `containerOnOrder` (Modify order): the bundle is already a line of the
+ *  order being edited — name that line as such. */
+export function overlapMessage(o: CartOverlap, containerOnOrder = false): string {
+  return containerOnOrder
+    ? `“${o.member.name}” is already on this order inside “${o.container.name}” — the same test can't be ordered twice.`
+    : `“${o.member.name}” is already included in “${o.container.name}” — the same test can't be ordered twice. Remove one of them.`;
 }

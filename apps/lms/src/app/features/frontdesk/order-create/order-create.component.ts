@@ -22,6 +22,7 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, taxSlabOf } from '../../../shared/utils/test-pricing';
 import { computeBill } from '../../../shared/utils/bill-math';
 import { cartOverlaps, overlapMessage, overlapOnAdd } from './cart-duplicates';
+import { collectedItemIds, orderedItemIds, type OrderLike } from './order-edit-items';
 import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
 import { buildOrderDraft, parseOrderDraft, orderDraftKey, orderDraftKeysFor, orderDraftInScope, parseOrderDraftKey, DraftScope } from './order-draft';
 import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
@@ -59,7 +60,7 @@ type Priority = 'Normal' | 'Urgent';
 interface HistoryRow {
   id: string;
   createdAt: string;
-  samples?: Array<{ tests?: Array<{ testId?: string; test?: { id?: string } }> }>;
+  samples?: Array<{ tests?: Array<{ testId?: string; packageTestId?: string; test?: { id?: string } }> }>;
 }
 
 @Component({
@@ -784,7 +785,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  cart that ARRIVED with one — a restored draft, a repeat, an appointment
    *  prefill — and blocks placing it until one side is removed. */
   readonly cartOverlapList = computed(() => cartOverlaps(this._tests(), this._selected()));
-  readonly cartOverlapMessages = computed(() => this.cartOverlapList().map(overlapMessage));
+  readonly cartOverlapMessages = computed(() => this.cartOverlapList().map(o => overlapMessage(o)));
 
   /** Refuse an ADD that would put the same test in the order twice (a bundle
    *  beside its own member, either way round). Removing is never refused. */
@@ -792,7 +793,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.isSelected(id)) return false;
     const o = overlapOnAdd(this._tests(), this._selected(), id);
     if (!o) return false;
-    this.toasts.error(overlapMessage(o));
+    this.toasts.error(overlapMessage(o, !!this.editOrderId() && this._onOrderIds().has(o.container.id)));
     return true;
   }
 
@@ -1386,20 +1387,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._specimens.update(m => ({ ...picks, ...m }));
   }
 
+  /** Ordered items (package / profile / test — never a member leaf) with a
+   *  line already collected: they stay in the edit cart (order-edit-items). */
   private extractCollectedTestIds(o: Order) {
-    const collected = new Set<string>();
-    for (const s of (o.samples ?? []) as unknown as Array<{ status?: string; collectedAt?: string; collectedBy?: string; tests?: Array<{ testId?: string; packageTestId?: string; status?: string; test?: { id?: string } }> }>) {
-      const isSampleCollected = (!!s.status && s.status !== 'pending' && s.status !== 'requested') || !!s.collectedAt || !!s.collectedBy;
-      for (const t of s.tests ?? []) {
-        const isTestCollected = isSampleCollected || (!!t.status && t.status !== 'pending' && t.status !== 'requested');
-        if (isTestCollected) {
-          const testId = t.testId || t.test?.id;
-          if (testId) collected.add(testId);
-          if (t.packageTestId) collected.add(t.packageTestId);
-        }
-      }
-    }
-    this.collectedTestIds.set(collected);
+    this.collectedTestIds.set(collectedItemIds(o as unknown as OrderLike));
   }
 
   /**
@@ -1445,14 +1436,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private preselectFromOrder(prior: HistoryRow, isEdit = false) {
-    const want = new Set<string>();
-    for (const s of prior.samples ?? []) {
-      for (const t of s.tests ?? []) {
-        const testId = (t as { test?: { id?: string }; testId?: string }).testId
-                    ?? (t as { test?: { id?: string }; testId?: string }).test?.id;
-        if (testId) want.add(testId);
-      }
-    }
+    // The ORDERED items (a package stays one package), never its member
+    // lines — seeding the leaves made the save send a package beside its own
+    // members (server: duplicate_item) or split it into loose tests.
+    const want = new Set<string>(orderedItemIds(prior as unknown as OrderLike));
     if (want.size === 0) {
       this.toasts.warning('Repeated order had no tests');
       return;
