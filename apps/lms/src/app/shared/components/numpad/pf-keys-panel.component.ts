@@ -9,17 +9,17 @@ import { CODE_DIGITS, NUMBER_DIGITS, QWERTY_ROWS, keyAria, numericLayoutOf } fro
  * Docked full width at the bottom (safe-area aware), like a keyboard; the
  * service publishes its height as `--pf-keys-h` so the page above resizes.
  *
- *  qwerty (B)   Q W E R T Y U I O P
+ *  qwerty (B)   Q W E R T Y U I O P ⌫
  *                A S D F G H J K L
  *                 Z X C V B N M [↑ ↓]
- *               123 ⌨ [ space ] ⌫ [Add ↵] ⌄
+ *               123 ⌨ [   space   ] [Add ↵] ⌄
  *
- *  code (C)     DEPARTMENT PREFIX │ 1 2 3 │ ⌫   ⌄
+ *  code (C)     DEPARTMENT PREFIX │ 1 2 3 │ ⌄   ⌫
  *               CLP HEM IMS …     │ 4 5 6 │ ABC ⌨
  *                                 │ 7 8 9 │ Add ↵ [↑]
  *                                 │ – 0 . │       [↓]
  *
- *  number       1 2 3 │ ⌫   ⌄
+ *  number       1 2 3 │ ⌄   ⌫
  *               4 5 6 │ ABC ⌨
  *               7 8 9 │ Search ↵ [↑]
  *                 0   │          [↓]
@@ -53,6 +53,11 @@ import { CODE_DIGITS, NUMBER_DIGITS, QWERTY_ROWS, keyAria, numericLayoutOf } fro
                   @if (r === 2 && f.arrows()) {
                     <ng-container *ngTemplateOutlet="arrowKeys"></ng-container>
                   }
+                  @if (r === 0) {
+                    <!-- Backspace at the RIGHT end of the top row, like the iPad's
+                         own keyboard (owner 2026-09-28). -->
+                    <ng-container *ngTemplateOutlet="backKey; context: { cls: 'pf-k__w2' }"></ng-container>
+                  }
                 </div>
               }
               <div class="pf-k__row pf-k__row--bottom">
@@ -62,7 +67,6 @@ import { CODE_DIGITS, NUMBER_DIGITS, QWERTY_ROWS, keyAria, numericLayoutOf } fro
                 <ng-container *ngTemplateOutlet="sysKey; context: { cls: 'pf-k__w2' }"></ng-container>
                 <button type="button" tabindex="-1" class="pf-k__key pf-k__space" data-key=" " aria-label="Space"
                         (click)="svc.press(' ')"><span aria-hidden="true">space</span></button>
-                <ng-container *ngTemplateOutlet="backKey; context: { cls: 'pf-k__w3' }"></ng-container>
                 <ng-container *ngTemplateOutlet="enterKey; context: { f: f, cls: 'pf-k__w3' }"></ng-container>
                 <ng-container *ngTemplateOutlet="hideKey; context: { cls: 'pf-k__w2' }"></ng-container>
               </div>
@@ -219,16 +223,16 @@ import { CODE_DIGITS, NUMBER_DIGITS, QWERTY_ROWS, keyAria, numericLayoutOf } fro
     }
     .pf-k__enter:active { transform: scale(0.97); filter: brightness(1.06); }
 
-    /* ── QWERTY: 20 half-columns, rows offset like a real keyboard ── */
+    /* ── QWERTY: 22 half-columns (Q–P + ⌫ on top), rows offset like a real keyboard ── */
     .pf-k__qwerty { display: grid; gap: var(--k-gap); max-width: 1040px; margin: 0 auto; }
-    .pf-k__row { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: var(--k-gap); height: var(--k-row); }
+    .pf-k__row { display: grid; grid-template-columns: repeat(22, minmax(0, 1fr)); gap: var(--k-gap); height: var(--k-row); }
     .pf-k__row > * { grid-column: span 2; }
     .pf-k__row[data-row='1'] > :first-child { grid-column: 2 / span 2; }
     .pf-k__row[data-row='2'] > :first-child { grid-column: 4 / span 2; }
     .pf-k__row[data-row='2'].pf-k__row--arrows > :first-child { grid-column: 2 / span 2; }
     .pf-k__row--bottom > .pf-k__w2 { grid-column: span 2; }
     .pf-k__row--bottom > .pf-k__w3 { grid-column: span 3; }
-    .pf-k__space { grid-column: span 7 !important; background: var(--k-key); font-size: 14px; color: var(--k-muted); }
+    .pf-k__space { grid-column: span 12 !important; background: var(--k-key); font-size: 14px; color: var(--k-muted); }
 
     /* ── Code / number pads ── */
     .pf-k__pad {
@@ -248,8 +252,8 @@ import { CODE_DIGITS, NUMBER_DIGITS, QWERTY_ROWS, keyAria, numericLayoutOf } fro
     .pf-k__pad--number > .pf-k__zero { grid-column: 1 / span 3; }
     .pf-k__key--digit { font-size: 24px; font-variant-numeric: tabular-nums; }
     /* Right-hand column (last two grid columns). */
-    .pf-k__at-back  { grid-column: -3 / span 1; grid-row: 1; }
-    .pf-k__at-hide  { grid-column: -2 / span 1; grid-row: 1; }
+    .pf-k__at-back  { grid-column: -2 / span 1; grid-row: 1; }
+    .pf-k__at-hide  { grid-column: -3 / span 1; grid-row: 1; }
     .pf-k__at-abc   { grid-column: -3 / span 1; grid-row: 2; }
     .pf-k__at-sys   { grid-column: -2 / span 1; grid-row: 2; }
     .pf-k__at-enter { grid-column: -3 / span 2; grid-row: 3 / span 2; font-size: 18px; }
