@@ -109,3 +109,22 @@ describe('Validate — ⋮ More actions', () => {
     c.runAction('lab'); expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's1'], { queryParams: { view: 1 } });
   });
 });
+
+
+describe('Validate — reads only the focused test\'s tube (DB optimisation phase 3)', () => {
+  it('asks the queue for this test\'s tube, not the whole queue', async () => {
+    const { api } = await render();
+    expect(api.get).toHaveBeenCalledWith('/api/validation/queue?mine=false&tubeOf=t1');
+    expect(api.get).not.toHaveBeenCalledWith('/api/validation/queue?mine=false');
+  });
+
+  it('an older server (whole queue): the sample group is still the focused test + its tube siblings', async () => {
+    const { c } = await render({ queue: [ot('t1', 's1'), ot('t2', 's1'), ot('t9', 's2')] });
+    expect(c.sampleTests().map((t: { id: string }) => t.id)).toEqual(['t1', 't2']);
+  });
+
+  it('the tubeOf answer gives the same sample group', async () => {
+    const { c } = await render({ queue: [ot('t1', 's1'), ot('t2', 's1')] });
+    expect(c.sampleTests().map((t: { id: string }) => t.id)).toEqual(['t1', 't2']);
+  });
+});

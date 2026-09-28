@@ -107,7 +107,7 @@ function render(opts: Opts = {}) {
       if (url.startsWith('/api/billing/b1')) return of(BILL1);
       if (url.startsWith('/api/billing/b3')) return of({ ...BILL1, id: 'b3', orderId: 'o3', totalPayable: 300, totalPaid: 0, balance: 300, totalDiscount: 0, items: [] });
       if (url.startsWith('/api/billing/b2')) return of({ ...BILL1, id: 'b2', orderId: 'o2', totalPayable: 300, totalPaid: 500, balance: -200, totalDiscount: 0, items: [] });
-      if (url === '/api/orders/today') return of(opts.empty ? [] : [ORDER, ORDER4]);
+      if (url === '/api/orders/today?view=summary') return of(opts.empty ? [] : [ORDER, ORDER4]);
       if (url.startsWith('/api/orders/')) {
         const id = url.split('/')[3];
         return of(ORDERS[id] ?? { ...ORDER, id, patient: { id: 'p2', firstName: 'Kavin', fathersName: 'Raj' } });
@@ -237,7 +237,7 @@ describe('Billing counter — the queue (LEFT)', () => {
     c.poll();
     const urls = api.get.mock.calls.map((x: any[]) => x[0]);
     expect(urls).toContain('/api/billing/outstanding');
-    expect(urls).toContain('/api/orders/today');
+    expect(urls).toContain('/api/orders/today?view=summary');
   });
 
   it('live: a bill / order work event refreshes the lists (debounced, once) — no 20 s network poll', () => {
@@ -254,7 +254,7 @@ describe('Billing counter — the queue (LEFT)', () => {
       vi.advanceTimersByTime(500);
       const urls = api.get.mock.calls.map((x: any[]) => x[0]);
       expect(urls.filter((u: string) => u === '/api/billing/outstanding').length).toBe(1);
-      expect(urls).toContain('/api/orders/today');
+      expect(urls).toContain('/api/orders/today?view=summary');
 
       api.get.mockClear();
       work.push({ type: 'result.draft' });            // not a billing list event

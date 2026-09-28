@@ -1260,7 +1260,7 @@
         </div>
       </dl>
 
-      @if (validatedSamples(so).length > 0) {
+      @if (drawerPrelim().length > 0) {
       <section class="pf-prelim">
         <header class="pf-prelim__hdr">
           <span class="pf-prelim__icon" aria-hidden="true">
@@ -1270,10 +1270,10 @@
             </svg>
           </span>
           <p class="pf-drawer__eyebrow pf-prelim__eyebrow">Preliminary report</p>
-          <span class="pf-prelim__count">{{ validatedSamples(so).length }} dept{{ validatedSamples(so).length === 1 ? ''
+          <span class="pf-prelim__count">{{ drawerPrelim().length }} dept{{ drawerPrelim().length === 1 ? ''
             : 's' }} ready</span>
         </header>
-        @for (vs of validatedSamples(so); track vs.id) {
+        @for (vs of drawerPrelim(); track vs.id) {
         <div class="pf-prelim__sample">
           <header class="pf-prelim__sample-hdr">
             <span class="pf-prelim__sample-dept">{{ vs.deptCode || vs.deptName }}</span>

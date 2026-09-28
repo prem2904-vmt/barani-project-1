@@ -128,7 +128,7 @@ async function render(opts: { touch?: boolean; orders?: unknown[]; queue?: unkno
       // array whatever the params (the screen must still work against it).
       if (url.startsWith('/api/reports/queue?view=summary'))
         return of(opts.paged ? pagedQueue((opts.queue ?? QUEUE) as any[], url) : (opts.queue ?? QUEUE));
-      if (url === '/api/orders/today') return of(opts.orders ?? [PARTIAL_ORDER, VALUES_ORDER]);
+      if (url === '/api/orders/partial-ready') return of(opts.orders ?? [PARTIAL_ORDER, VALUES_ORDER]);
       if (url === '/api/billing/outstanding') return of({ due: [{ orderId: 'o-r1' }] });
       if (url === '/api/whatsapp/settings') return of({ canSend: !!opts.waCloud });
       return of([]);

@@ -333,7 +333,8 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly _laterIds = signal<ReadonlySet<string>>(new Set());
 
   private loadToday() {
-    this.api.get<Order[]>('/api/orders/today').subscribe({
+    // Summary view: the counter reads statuses + billing, never line results.
+    this.api.get<Order[]>('/api/orders/today?view=summary').subscribe({
       next: list => { this._today.set(list ?? []); this.enrich(); },
       error: () => { /* no view_order: the queue still has every bill due */ },
     });

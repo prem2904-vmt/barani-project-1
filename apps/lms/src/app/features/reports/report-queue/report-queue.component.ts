@@ -596,7 +596,7 @@ export class ReportQueueComponent implements OnInit {
   }
 
   // ── Preliminary report state ────────────────────────────────────
-  // Loaded from /api/orders/today and filtered to orders with at
+  // Loaded from /api/orders/partial-ready and filtered to orders with at
   // least one whole sample (department) validated. No PDF here —
   // values are read straight from each OrderTest.currentResult.
   private readonly _todayOrders = signal<Order[]>([]);
@@ -690,10 +690,11 @@ export class ReportQueueComponent implements OnInit {
     // Summary rows (no rendered snapshot): render paths read the report by id.
     // Paged: the pages already on screen, reloaded in one request.
     this.loadQueue(this._pages > 0 ? "refresh" : "reset");
-    // Independent fetch — partial reports come from /api/orders/today
-    // (the report queue endpoint only knows about generated PDFs). A
-    // failure here doesn't block the main queue load.
-    this.api.get<Order[]>("/api/orders/today").subscribe({
+    // Independent fetch — partial reports come from today's orders that carry
+    // a validated line, WITH their results (GET /api/orders/partial-ready; the
+    // day feed itself no longer carries results). A failure here doesn't
+    // block the main queue load.
+    this.api.get<Order[]>("/api/orders/partial-ready").subscribe({
       next: (l) => this._todayOrders.set(l ?? []),
       error: () => {
         /* non-fatal */

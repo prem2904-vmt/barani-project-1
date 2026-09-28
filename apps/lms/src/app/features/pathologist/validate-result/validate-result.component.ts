@@ -1283,7 +1283,11 @@ export class ValidateResultComponent implements OnInit {
     this._id.set(id);
     if (!id) return;
     this._loading.set(true);
-    this.api.get<OrderTest[]>('/api/validation/queue?mine=false').subscribe({
+    // Only this test's tube (the focused test + its queued siblings — all the
+    // screen shows), not the whole queue (DB optimisation phase 3). An older
+    // server ignores tubeOf and answers the whole queue; the lookup below
+    // works on either.
+    this.api.get<OrderTest[]>(`/api/validation/queue?mine=false&tubeOf=${encodeURIComponent(id)}`).subscribe({
       next: rows => {
         this._loading.set(false);
         this._queue.set(rows ?? []);

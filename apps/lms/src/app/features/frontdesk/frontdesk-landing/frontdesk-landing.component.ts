@@ -1242,6 +1242,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         from: new Date(workB.start).toISOString(),
         to:   new Date(workB.end).toISOString()
       });
+      // Summary view: the list never shows line results (the drawer reads them by id).
+      params.set('view', 'summary');
       this.api.get<Order[]>(`/api/orders/range?${params}`).subscribe({
         next: l => { this._orders.set(l ?? []); this.lastUpdated.set(Date.now()); },
         error: () => this._orders.set([])
@@ -1287,7 +1289,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       if (this._ordersEtag) headers['If-None-Match'] = `"${this._ordersEtag}"`;
       const token = await this.auth.getAccessToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const resp = await firstValueFrom(this.http.get(`${environment.apiUrl}/api/orders/today`, {
+      const resp = await firstValueFrom(this.http.get(`${environment.apiUrl}/api/orders/today?view=summary`, {
         headers,
         observe: 'response',
         // Tell HttpClient that 304 is a successful (non-error) response — by
@@ -1711,7 +1713,28 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   openOrder(o: Order) {
     this.sampleIdsOpen.set(false);
     this._selectedOrder.set(o);
+    this.loadDrawerDetail(o);
   }
+
+  /** The day feed is the summary view (no line results / test parameters —
+   *  DB optimisation phase 3), so the drawer's Preliminary report reads the
+   *  order by id when it opens — only when a tube is fully validated, the one
+   *  case the panel shows anything. */
+  private readonly _drawerDetail = signal<Order | null>(null);
+  private loadDrawerDetail(o: Order) {
+    this._drawerDetail.set(null);
+    if (!(o.samples ?? []).some(s => this.isSampleValidated(s))) return;
+    this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
+      next: full => { if (full && this._selectedOrder()?.id === o.id) this._drawerDetail.set(full); },
+      error: () => { /* the panel simply stays hidden */ },
+    });
+  }
+  /** Preliminary panel rows for the open drawer (from the by-id read). */
+  readonly drawerPrelim = computed(() => {
+    const so = this._selectedOrder();
+    const d = this._drawerDetail();
+    return so && d && d.id === so.id ? this.validatedSamples(d) : [];
+  });
   toggleSampleIds() { this.sampleIdsOpen.update(open => !open); }
   /** Build a fresh order pre-populated with the tests from a prior order.
    *  Routes through order-create with `?fromOrderId=…` which triggers
