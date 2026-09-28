@@ -75,6 +75,8 @@ export function isWritableTest(t: OrderTest): boolean {
 export function isFilled(v: unknown): boolean {
   if (v === undefined || v === null) return false;
   if (typeof v === 'boolean') return v;
+  // Multi-select: filled when at least one pick is non-blank.
+  if (Array.isArray(v)) return v.some((x) => String(x ?? '').trim() !== '');
   return String(v).trim() !== '';
 }
 

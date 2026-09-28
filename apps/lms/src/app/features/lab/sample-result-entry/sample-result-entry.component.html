@@ -576,10 +576,18 @@
           @case ("select") {
             <div class="pf-sre__gselect" [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
                  [attr.data-sre-param]="t.id + '::' + p.name">
-              <pf-select size="sm"
-                         [options]="[{ value: '', label: '—' }, ...selectOptionsFor(p).map((o) => ({ value: o, label: o }))]"
-                         [value]="getValue(t.id, p.name)"
-                         (valueChange)="onSelectChange(t.id, p.name, $event)"></pf-select>
+              @if (isMultiSelect(p)) {
+                <!-- Several answers may apply (e.g. morphology findings). -->
+                <pf-select size="sm" [multiple]="true" [compactMulti]="true" placeholder="—"
+                           [options]="selectOptionsFor(p).map((o) => ({ value: o, label: o }))"
+                           [values]="multiValuesOf(t.id, p.name)"
+                           (valuesChange)="onMultiSelectChange(t.id, p.name, $event)"></pf-select>
+              } @else {
+                <pf-select size="sm"
+                           [options]="[{ value: '', label: '—' }, ...selectOptionsFor(p).map((o) => ({ value: o, label: o }))]"
+                           [value]="getValue(t.id, p.name)"
+                           (valueChange)="onSelectChange(t.id, p.name, $event)"></pf-select>
+              }
             </div>
           }
           @case ("textarea") {
