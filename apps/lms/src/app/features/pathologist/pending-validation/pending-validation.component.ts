@@ -27,6 +27,8 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
 import { RegnoPromptComponent } from '../../../shared/components/regno-prompt/regno-prompt.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { CriticalResultEvent, needsAckBy } from '../../../shared/models/critical-result.model';
 import { plural } from '../../../shared/utils/plural';
 import { pickReassignee } from '../reassign-picker';
 import { OrderPriority } from '../../../shared/utils/lab-priority';
@@ -191,6 +193,17 @@ type Tab = 'mine' | 'all';
                               <span class="pv-mine"><span class="pv-mine__dot" aria-hidden="true"></span>Assigned to you</span>
                             }
                             <span class="pv-tile__spacer"></span>
+                            @if (unacknowledged(g)) {
+                              <!-- NABL: the explicit acknowledgement of the tile's critical value(s). -->
+                              <button type="button" class="nd-rowact pv-ack" [class.nd-rowact--icon]="!web()"
+                                      [disabled]="acking() === g.key"
+                                      [attr.aria-label]="'Acknowledge critical result, sample ' + g.sampleLabel" title="Acknowledge critical result"
+                                      (click)="$event.stopPropagation(); acknowledge(g)">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                                <span class="nd-rowact__t">{{ acking() === g.key ? 'Acknowledging…' : 'Acknowledge' }}</span>
+                              </button>
+                            }
                             <button type="button" class="nd-rowact pv-review" [class.nd-rowact--icon]="!web()"
                                     [attr.aria-label]="'Review ' + g.sampleLabel" title="Review"
                                     (click)="$event.stopPropagation(); openOrder(g)">
@@ -787,7 +800,41 @@ export class PendingValidationComponent implements OnInit {
       : this.scope()?.scoped ? 'Results from your departments appear here as soon as the lab submits them.'
       : 'Results appear here as soon as the lab submits them.');
 
-  status(g: QueueTile) { return tileStatus(g); }
+  /** ONE status word: an open NABL record turns "Critical" into "Critical · not acknowledged". */
+  status(g: QueueTile) {
+    const st = tileStatus(g);
+    return st.key === 'critical' && this.unacknowledged(g) ? { ...st, label: 'Critical · not acknowledged' } : st;
+  }
+
+  // ── NABL critical-result records of the queued lines ───────────────────
+  private readonly criticalSvc = inject(CriticalResultsService);
+  private readonly _critical = signal<CriticalResultEvent[]>([]);
+  readonly acking = signal<string | null>(null);
+  /** This user still has to acknowledge a record on one of the tile's lines. */
+  unacknowledged(g: QueueTile): boolean {
+    const me = this.auth.user()?.id;
+    const ids = new Set(g.items.map(i => i.id));
+    return this._critical().some(e => ids.has(e.orderTestId) && needsAckBy(e, me));
+  }
+  loadCritical(ids: string[]) {
+    if (!ids.length) { this._critical.set([]); return; }
+    this.criticalSvc.lookupOpen(ids).subscribe({ next: l => this._critical.set(l ?? []), error: () => { /* advisory */ } });
+  }
+  acknowledge(g: QueueTile) {
+    if (this.acking()) return;
+    const me = this.auth.user()?.id;
+    const ids = new Set(g.items.map(i => i.id));
+    const pending = this._critical().filter(e => ids.has(e.orderTestId) && needsAckBy(e, me));
+    if (!pending.length) return;
+    this.acking.set(g.key);
+    let left = pending.length;
+    for (const e of pending) {
+      this.criticalSvc.acknowledge(e.id, 'pathologist_queue').subscribe({
+        next: u => { this._critical.update(l => l.map(x => (x.id === u.id ? u : x))); if (--left === 0) { this.acking.set(null); this.toasts.success('Critical result acknowledged'); } },
+        error: err => { this.acking.set(null); this.toasts.error(ApiError.from(err).message); },
+      });
+    }
+  }
   /** "44/F · AA0007 · Haematology · entered 9:48 PM" — Noto, tabular, `·`. */
   tileMeta(g: QueueTile): string {
     const at = g.items.map(t => t.resultedAt).filter(Boolean).sort().pop();
@@ -818,6 +865,7 @@ export class PendingValidationComponent implements OnInit {
         // / Reassign from firing on already-validated or re-entry rows.
         this._rows.set((l ?? []).filter(t => t.status === 'entered'));
         this._loading.set(false);
+        this.loadCritical(this._rows().map(t => t.id));
       },
       error: () => this._loading.set(false)
     });

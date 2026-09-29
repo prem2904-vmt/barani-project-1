@@ -231,41 +231,25 @@
               </div>
             }
             @if (d.type === 'individual' && isMicroDept()) {
-              <div class="pf-uf pf-uf--span">
-                <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="askSpecimen()"
-                [disabled]="cultureBench()" (click)="setAskSpecimen(!(askSpecimen()))">
-          <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-          <span>Ask for specimen at order</span>
-        </button>
+              <div class="pf-uf pf-uf--span" data-field="specimen-mode">
+                <label class="pf-uf__lbl">Specimen</label>
+                <pf-select [options]="specimenModeOptions" [value]="specimenMode()"
+                           (valueChange)="setSpecimenMode($event)"></pf-select>
                 <p class="pf-hint">
-                  @if (cultureBench()) {
-                    Culture &amp; Sensitivity always asks. The front desk picks
-                    the specimen sent (from the Specimen master); it prints on
-                    the report.
-                  } @else {
-                    The front desk picks which specimen was sent (from the
-                    Specimen master) when this test is ordered; it prints on
-                    the report.
+                  @switch (specimenMode()) {
+                    @case ('fixed') { Always the one allowed specimen below — the server stamps it on every order; no picker anywhere. }
+                    @case ('choose') { The front desk picks ONLY from the allowed specimens below (with the default preselected); the chosen specimen sets the tube, may carry its own price, and prints on the report. }
+                    @default { No specimen is asked or recorded for this test. }
                   }
                 </p>
               </div>
-              @if (d.id && (askSpecimen() || cultureBench())) {
-                <div class="pf-uf pf-uf--span">
-                  <label class="pf-uf__lbl">Default specimen</label>
-                  <pf-select [options]="defaultSpecimenOptions()" [value]="defaultSpecimenCode()" [searchable]="true"
-                             [disabled]="savingDefaultSpecimen()" placeholder="No default (the desk must choose)"
-                             (valueChange)="setDefaultSpecimen($event)"></pf-select>
-                  <p class="pf-hint">
-                    @if (severalSpecimenDefaults()) {
-                      Several specimens are marked default, which counts as none.
-                      Pick one, or keep "No default".
-                    } @else {
-                      Zero or one. With a default the desk preselects it; with
-                      none the desk starts empty and the specimen must be chosen.
-                      Saved as soon as you pick.
-                    }
-                  </p>
+              @if (d.id && specimenMode() !== 'none') {
+                <div class="pf-uf pf-uf--span" data-field="allowed-specimens">
+                  <label class="pf-uf__lbl">Allowed specimens</label>
+                  <pf-allowed-specimens [testId]="d.id" [mode]="specimenMode()" [master]="specimenMasterRows()"></pf-allowed-specimens>
                 </div>
+              } @else if (!d.id && specimenMode() !== 'none') {
+                <p class="pf-hint pf-uf--span">Save the test first, then add its allowed specimens.</p>
               }
               <div class="pf-uf pf-uf--span">
                 <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="specimenEntry()"

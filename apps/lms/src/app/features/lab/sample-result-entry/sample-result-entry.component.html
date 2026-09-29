@@ -229,6 +229,11 @@
         <!-- Order-level extras, only when they apply: the validator's
              "submitted" line, the Trendogram switch (slate) and the flags
              the last submit raised. -->
+        @if (critical().length > 0) {
+          <!-- NABL: the tube's critical values still to acknowledge / communicate. -->
+          <pf-critical-ack-strip class="pf-sre-critical" [events]="critical()" [via]="criticalVia()"
+                                 (changed)="onCriticalChanged($event)"></pf-critical-ack-strip>
+        }
         @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0 || submitReport().length > 0) {
           <div class="pf-sre-strip">
             @if (validateMode()) {

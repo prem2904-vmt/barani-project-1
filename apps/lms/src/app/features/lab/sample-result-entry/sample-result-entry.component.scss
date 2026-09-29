@@ -134,6 +134,7 @@
 .pf-sre-culturelink__chev { flex: none; margin-left: auto; color: var(--text-tertiary); }
 
 /* Order-level extras above the cards (only when they apply). */
+.pf-sre-critical { flex: none; }
 .pf-sre-strip { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .pf-sre-strip__meta { height: 30px; color: var(--text-secondary); }
 .pf-sre-trend { font-size: 12.5px; }

@@ -1,5 +1,8 @@
 import { RegnoPromptComponent } from '../../../shared/components/regno-prompt/regno-prompt.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { CriticalAckStripComponent } from '../../../shared/components/critical-ack-strip/critical-ack-strip.component';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { CriticalResultEvent } from '../../../shared/models/critical-result.model';
 import {
   Component,
   DestroyRef,
@@ -134,6 +137,7 @@ function calcKey(testId: string, paramName: string): string {
     FormsModule,
     CommentThreadComponent,
     RegnoPromptComponent,
+    CriticalAckStripComponent,
     SelectComponent,
     HeroBandComponent,
     ZoomTargetDirective,
@@ -160,6 +164,7 @@ export class SampleResultEntryComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly draftShelf = inject(DraftShelfService);
+  private readonly criticalSvc = inject(CriticalResultsService);
 
   // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
   /** The route's sample id, known before the tube loads — the RESULTS
@@ -818,6 +823,28 @@ export class SampleResultEntryComponent {
   /** WHICH header action started the running `submitting()` request — only
    *  that button shows the busy dots (ND-PATTERN "Loading feedback"). */
   readonly submitAct = signal<'reopen' | 'validate' | 'reject' | 'submit' | 'all' | null>(null);
+
+  // ── NABL critical-result records of this tube (open / acknowledged) ──
+  private readonly _critical = signal<CriticalResultEvent[]>([]);
+  readonly critical = this._critical.asReadonly();
+  /** The channel stored on the acknowledgement: the validator's review or the bench. */
+  readonly criticalVia = computed(() => (this.validateMode() ? "validate" : "result_entry") as "validate" | "result_entry");
+  hasOpenCritical(t: { id: string }): boolean {
+    return this._critical().some((e) => e.orderTestId === t.id && e.status === "open");
+  }
+  /** Every record of the tube's tests that still needs a hand — after load and after each submit. */
+  loadCritical(): void {
+    const ids = (this._sample()?.tests ?? []).map((t) => t.id);
+    if (ids.length === 0) { this._critical.set([]); return; }
+    this.criticalSvc.lookupOpen(ids).subscribe({
+      next: (list) => this._critical.set(list ?? []),
+      error: () => { /* the badge is advisory — the register is the record */ },
+    });
+  }
+  onCriticalChanged(updated: CriticalResultEvent): void {
+    this._critical.update((list) =>
+      updated.status === "communicated" ? list.filter((e) => e.id !== updated.id) : list.map((e) => (e.id === updated.id ? updated : e)));
+  }
 
   // ── Trendogram: add serial-result trend charts to this order's report ──
   readonly trendEligible = signal<TrendTest[]>([]);
@@ -1728,6 +1755,7 @@ export class SampleResultEntryComponent {
         this.focusFirstEmpty(focusTest);
       }
       await this.loadComments();
+      this.loadCritical();
     } catch (e) {
       if (seq === this.loadSeq) this.toasts.error("Could not load sample");
     } finally {
@@ -1865,6 +1893,7 @@ export class SampleResultEntryComponent {
         }
       }
       this._flags.set(flags);
+      this.loadCritical();
       this._sample.set(this.normalizeSample(resp?.sample ?? s));
       // Values reached the server — the local crash-recovery draft is done.
       this.clearDraft();
@@ -2177,6 +2206,7 @@ export class SampleResultEntryComponent {
         }
       }
       this._flags.set(flags);
+      this.loadCritical();
       const ok = report.filter((r) => r.ok);
       // Submitted tubes leave the draft shelf now.
       this.draftShelf.drop("lab", ok.map((r) => "lab:" + r.sampleId));

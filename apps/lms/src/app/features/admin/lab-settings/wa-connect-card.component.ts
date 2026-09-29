@@ -242,6 +242,8 @@ export class WaConnectCardComponent implements OnInit {
   readonly actionText = computed(() => {
     const s = this.sender();
     if (s?.error) return s.error;
+    if (s?.paymentStatus === 'failed')
+      return 'Meta could not charge your WhatsApp account (payment method error) — add or update the payment method in the billing card below.';
     const bad = this.templates().find(t => ['REJECTED', 'PAUSED', 'DISABLED', 'ERROR', 'NOT_FOUND'].includes((t.status ?? '').toUpperCase()));
     if (bad) {
       const what = bad.kind === 'pdf' ? 'report-with-PDF' : 'report';
@@ -374,6 +376,7 @@ export class WaConnectCardComponent implements OnInit {
       code: aborted ? null : a.code,
       wabaId: a.info?.wabaId ?? null,
       phoneNumberId: a.info?.phoneNumberId ?? null,
+      businessId: a.info?.businessId ?? null,
       event: ev ?? (a.code ? 'FINISH' : 'CANCEL'),
       errorMessage: a.info?.errorMessage ?? null,
     };

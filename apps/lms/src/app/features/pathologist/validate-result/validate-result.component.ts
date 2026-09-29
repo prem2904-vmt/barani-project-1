@@ -31,6 +31,9 @@ import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from
 import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS } from '../../../core/services/report-actions.service';
 import { bandAgeYears } from '../../../shared/utils/patient-age';
 import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
+import { CriticalAckStripComponent } from '../../../shared/components/critical-ack-strip/critical-ack-strip.component';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { CriticalResultEvent } from '../../../shared/models/critical-result.model';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -77,7 +80,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -279,6 +282,11 @@ interface ValueRow {
                 </div>
                 <p class="pf-railpat__entered">Entered {{ t.resultedAt ? (t.resultedAt | date:'MMM d, h:mm a') : '—' }}</p>
               </div>
+
+              @if (critical().length) {
+                <!-- NABL: the tube's critical values still to acknowledge / communicate. -->
+                <pf-critical-ack-strip [events]="critical()" via="validate" (changed)="onCriticalChanged($event)"></pf-critical-ack-strip>
+              }
 
               @if (sampleTests().length > 1) {
                 <div class="pf-rail-card">
@@ -935,6 +943,16 @@ export class ValidateResultComponent implements OnInit {
   /** The full validation queue, kept so we can show every sibling test of the
    *  focused sample without re-fetching. */
   private readonly _queue = signal<OrderTest[]>([]);
+  private readonly criticalSvc = inject(CriticalResultsService);
+  /** NABL critical-result records (open / acknowledged) of this tube's tests. */
+  readonly critical = signal<CriticalResultEvent[]>([]);
+  loadCritical(ids: string[]) {
+    if (!ids.length) { this.critical.set([]); return; }
+    this.criticalSvc.lookupOpen(ids).subscribe({ next: l => this.critical.set(l ?? []), error: () => { /* advisory */ } });
+  }
+  onCriticalChanged(u: CriticalResultEvent) {
+    this.critical.update(list => u.status === 'communicated' ? list.filter(e => e.id !== u.id) : list.map(e => (e.id === u.id ? u : e)));
+  }
   /** Per-test outcome as the pathologist works through the sample. */
   private readonly _outcome = signal<Record<string, 'pending' | 'validating' | 'validated' | 'rejected'>>({});
   /** Tests whose normal rows are shown (attention-first collapse). */
@@ -1322,6 +1340,7 @@ export class ValidateResultComponent implements OnInit {
         const match = (rows ?? []).find(r => r.id === id) ?? null;
         this._selected.set(match);
         if (match) void this.loadComments();
+        this.loadCritical([id, ...(rows ?? []).map(r => r.id)]);
       },
       error: () => this._loading.set(false)
     });

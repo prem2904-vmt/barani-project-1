@@ -16,9 +16,12 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Departments:** admin master only, mapped by CatalogKey.
   - **Vendor balance:** the ledger.
   - **Notifications:** `NotificationCatalog`.
+  - **Critical-value acknowledgement / communication:** `critical_result_events` (one row per critical result version), never the bell row.
   - **Licensing:** the platform entitlement.
   - **Reference ranges:** the single sex + age resolver.
+  - **Specimen of an ordered line:** `order_tests` (code + name), decided by the Test Master's specimen mode + allowed list (`SpecimenRules` / `micro-specimen.ts`); every report path prints the ORDERED specimen, never the Test Master text.
   - **Paid (patient release):** `PatientReleaseGate`.
+  - **Outsourced or in-house:** the tube's `OutsourcedVendorId`, frozen at order time from the lab's effective test; every lab surface filters through `OutsourcingRules` (`InHouseTube` for tubes, `InHouseWork` for lines), never a bare status check.
 - Never match by name or code when an ID / key exists.
 
 ## 2. Tenant and branch isolation
@@ -35,6 +38,10 @@ If a rule blocks you, ask the owner. Don't work around it.
 - **Concurrency:**
   - Counters / numbers (MRN, sample ID, invoice) use atomic `INSERT … ON CONFLICT … RETURNING`, never `MAX+1`.
   - Check-then-insert needs a unique index. Money / stock changes run in one transaction under a row lock.
+  - A money helper called from inside a caller's transaction JOINS it (`CurrentTransaction != null`), never nests one; the caller's totals and the helper's rows commit together, and the bells go out after the commit.
+  - `ExecuteUpdate` / `ExecuteDelete` bypass the audit interceptor: an audited entity written set-based writes its own rows (`Auditing.AuditTrail`) in the same transaction.
+  - Money, clinical results / reports, outboxes (WhatsApp, chat, notifications), idempotency keys, attempt limits and the audit log live only in Postgres — never in Redis, a static dictionary or any cache.
+  - Background services take a Postgres advisory leader lock per tick (`LeaderGate`) AND are idempotent on their own (once-ever unique keys, stamp-then-send, conditional updates); a tick never runs unguarded.
 - **Time windows:**
   - Day windows are IST days converted to UTC ranges. Never `DateTime.UtcNow.Date`.
   - Store UTC; display IST.
@@ -47,7 +54,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - A signed report never changes. Stored PDFs are immutable; only Regenerate creates a new version (supersede the old one in the same transaction).
 - One live final report per order. "Delivered" comes from the live final report.
 - Print ranges / units from the saved result snapshot, not the live Test Master.
-- Critical-value acknowledgements live in the audit / result records.
+- Critical-value acknowledgements live in `critical_result_events` (written with the result version, audit-logged); an explicit Acknowledge action, never "viewed".
 - Patient-facing report links: identity verification is checked on the SERVER before any patient detail or PDF is returned. No patient data before verification.
 
 ## 5. Auth and security

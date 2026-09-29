@@ -24,6 +24,8 @@ import { WaConnectCardComponent } from './wa-connect-card.component';
 import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { spinDelay } from '../../../shared/utils/busy';
 import { createLoadHold } from '../../../shared/utils/min-duration';
+import { WaBillingCardComponent } from './wa-billing-card.component';
+import { WaMessagePickerComponent } from './wa-message-picker.component';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
 
@@ -46,7 +48,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent, BusyComponent, SkeletonCardComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent, BusyComponent, SkeletonCardComponent, WaBillingCardComponent, WaMessagePickerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -514,32 +516,19 @@ interface AutoAssignConfig {
             </button>
             <p class="pf-ls__hint" style="margin-top: 6px;">Off by default — the link the patient already has always opens the latest report.</p>
           </div>
-          <div class="mt-4 flex flex-wrap items-end gap-4">
-            <label class="block pf-ls__wa-field">
-              <span class="nd-field__lbl">Message template</span>
-              <input class="nd-input mt-1" type="text" maxlength="128" autocomplete="off"
-                     [placeholder]="waSettings()!.platform?.defaultTemplateName ?? ''"
-                     [disabled]="waSaving() || !canManageWa()"
-                     [ngModel]="waTemplateName()" (ngModelChange)="waTemplateName.set($event)"
-                     (blur)="saveWaTemplate()" />
-            </label>
-            <label class="block pf-ls__wa-lang">
-              <span class="nd-field__lbl">Language</span>
-              <input class="nd-input mt-1" type="text" maxlength="16" autocomplete="off"
-                     [placeholder]="waSettings()!.platform?.defaultTemplateLanguage ?? ''"
-                     [disabled]="waSaving() || !canManageWa()"
-                     [ngModel]="waTemplateLanguage()" (ngModelChange)="waTemplateLanguage.set($event)"
-                     (blur)="saveWaTemplate()" />
-            </label>
-          </div>
+          <!-- The message: a pick from the templates Meta approved on this lab's
+               sender (labels, never codes) + a live WhatsApp-style preview. -->
+          <pf-wa-message-picker [settings]="waSettings()!" [canEdit]="canManageWa() && !waSaving()" (changed)="applyWa($event)"></pf-wa-message-picker>
           <p class="pf-ls__hint" style="margin-top: 8px;">
-            Leave blank to use the platform template. It must be an approved WhatsApp template.
             The manual "Send WhatsApp" button on each report keeps working as a fallback.
           </p>
         </div>
       </section>
       <!-- The lab's OWN WhatsApp number (Meta Embedded Signup). -->
       <pf-wa-connect-card [settings]="waSettings()!" (changed)="applyWa($event)"></pf-wa-connect-card>
+      <!-- Usage, spend, Meta payment health, the prepaid balance (estimated)
+           and the shared-number credits. -->
+      <pf-wa-billing-card [settings]="waSettings()!"></pf-wa-billing-card>
       }
 
       @if (showSec('queues')) {
@@ -1032,26 +1021,21 @@ export class LabSettingsComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   protected readonly waSettings = signal<WaSettings | null>(null);
   protected readonly waSaving = signal(false);
-  protected readonly waTemplateName = signal('');
-  protected readonly waTemplateLanguage = signal('');
   readonly waSender = computed(() => waSenderLine(this.waSettings()?.sender));
   readonly canManageWa = computed(() =>
     this.auth.hasPermission('manage_lab_settings') || this.auth.hasPermission('manage_notifications'));
 
   protected applyWa(s: WaSettings) {
     this.waSettings.set(s);
-    this.waTemplateName.set(s.templateName ?? '');
-    this.waTemplateLanguage.set(s.templateLanguage ?? '');
   }
 
   saveWa(patch: Partial<{ autoSendEnabled: boolean; sendUpdatedReports: boolean }>) {
     const cur = this.waSettings();
     if (!cur || this.waSaving()) return;
+    // Only the switches: the message pick lives in the picker (the server keeps it).
     const next = {
       autoSendEnabled: patch.autoSendEnabled ?? cur.autoSendEnabled,
       sendUpdatedReports: patch.sendUpdatedReports ?? cur.sendUpdatedReports,
-      templateName: this.waTemplateName().trim() || null,
-      templateLanguage: this.waTemplateLanguage().trim() || null,
     };
     this.waSettings.set({ ...cur, ...next });
     this.waSaving.set(true);
@@ -1065,14 +1049,6 @@ export class LabSettingsComponent implements OnInit {
       },
       error: e => { this.waSaving.set(false); this.applyWa(cur); this.toasts.error(ApiError.from(e).message); },
     });
-  }
-
-  saveWaTemplate() {
-    const cur = this.waSettings();
-    if (!cur) return;
-    const same = (this.waTemplateName().trim() || null) === (cur.templateName ?? null)
-      && (this.waTemplateLanguage().trim() || null) === (cur.templateLanguage ?? null);
-    if (!same) this.saveWa({});
   }
 
   ngOnInit() {
