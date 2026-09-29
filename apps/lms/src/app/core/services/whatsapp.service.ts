@@ -178,12 +178,46 @@ export function waSenderLine(sender: WaSender | null | undefined): string {
   return 'Prefrontal (shared)';
 }
 
+/** One selectable message (a template Meta APPROVED on the lab's sender) — a label, never a code. */
+export interface WaMessageChoice {
+  kind: 'link' | 'pdf';
+  code: string;
+  label: string;
+  status: string;
+  approved: boolean;
+  languages: { code: string; label: string }[];
+  /** The preview's shape, from the definition submitted to Meta. */
+  components: {
+    header?: { format: string } | null;
+    body: string;
+    footer?: string | null;
+    buttons: { type: string; text: string }[];
+  };
+}
+
+/** The message MENU the server builds for the lab's current sender. */
+export interface WaMessageMenu {
+  sender: 'tenant' | 'platform';
+  senderLine: string;
+  /** The effective choice (automatic when chosenKind is null). */
+  kind: 'link' | 'pdf';
+  code: string;
+  language: string;
+  chosenKind?: 'link' | 'pdf' | null;
+  labName: string;
+  templates: WaMessageChoice[];
+  pending: { kind: string; label: string; status: string; reason?: string | null }[];
+  sample: { bodyParams: string[]; buttonUrl: string; documentFilename: string };
+}
+
 export interface WaSettings {
   autoSendEnabled: boolean;
   autoSendEnabledAt?: string | null;
   sendUpdatedReports: boolean;
   templateName?: string | null;
   templateLanguage?: string | null;
+  /** The message picker's menu (older servers omit it). */
+  message?: WaMessageMenu | null;
   /** Staff can send reports on WhatsApp from the app (see WaReportStatus.canSend). */
   canSend?: boolean;
   sender?: WaSender | null;
@@ -199,8 +233,14 @@ export interface WaSettings {
 export interface WaSettingsInput {
   autoSendEnabled: boolean;
   sendUpdatedReports: boolean;
-  templateName?: string | null;
+  /** A listed template's code (omit = unchanged, '' = automatic) + one of its languages. */
+  templateCode?: string | null;
   templateLanguage?: string | null;
+}
+
+/** "Hello {{1}}, … {{2}}" + ["Asha", "Micro World"] → the sentence the patient reads. */
+export function waFillTemplate(body: string, params: string[]): string {
+  return body.replace(/\{\{(\d+)\}\}/g, (_m, n) => params[Number(n) - 1] ?? '');
 }
 
 /** User-facing word for a message status. */

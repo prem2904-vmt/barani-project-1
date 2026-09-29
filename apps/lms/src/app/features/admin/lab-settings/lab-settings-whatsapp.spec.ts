@@ -72,8 +72,7 @@ describe('Lab settings — WhatsApp auto-send', () => {
     const p = make(SETTINGS());
     p.main().click();
     p.f.detectChanges();
-    expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings',
-      { autoSendEnabled: true, sendUpdatedReports: true, templateName: null, templateLanguage: null });
+    expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings', { autoSendEnabled: true, sendUpdatedReports: true });
     expect(p.main().getAttribute('aria-checked')).toBe('true');
     expect(p.toasts.success).toHaveBeenCalledWith('Reports will be sent on WhatsApp automatically once paid');
   });
@@ -115,7 +114,8 @@ describe('Lab settings — WhatsApp auto-send', () => {
     expect(regen.textContent).toContain('regenerated');
     regen.click();
     p.f.detectChanges();
-    expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings',
-      { autoSendEnabled: true, sendUpdatedReports: true, templateName: null, templateLanguage: null });
+    expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings', { autoSendEnabled: true, sendUpdatedReports: true });
+    // No raw template name / code inputs anywhere on the card (the picker lists labels).
+    expect(p.card()!.querySelector('input[type="text"]')).toBeNull();
   });
 });
