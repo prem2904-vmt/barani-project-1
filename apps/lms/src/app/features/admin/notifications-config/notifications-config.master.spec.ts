@@ -45,6 +45,8 @@ describe('Notifications — master switch', () => {
     expect(p.el.querySelectorAll('.pf-nc-paused').length).toBeGreaterThan(0);
     const always = Array.from(p.el.querySelectorAll('.pf-nc-badge--always')).map((c) => c.closest('.pf-nc-card')?.querySelector('p.font-semibold')?.textContent?.trim());
     expect(always).toEqual(['Critical result entered']);
+    // Critical rows are live while paused: not dimmed.
+    expect(p.el.querySelectorAll('.pf-nc-paused .pf-nc-card--live').length).toBe(1);
   });
 
   it('a missing / older backend reads as on', () => {

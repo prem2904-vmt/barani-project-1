@@ -145,7 +145,7 @@ const MODULE_LABELS: Record<string, string> = {
           </div>
           <div class="space-y-2">
             @for (r of rowsFor(m); track r.key) {
-              <div class="nd-card pf-nc-card">
+              <div class="nd-card pf-nc-card" [class.pf-nc-card--live]="r.critical">
                 <div class="pf-nc-row">
                   <div class="pf-nc-row__icon" [class.pf-nc-row__icon--overdue]="r.kind === 'overdue'"
                        [class.pf-nc-row__icon--off]="!r.enabled">
@@ -231,6 +231,7 @@ const MODULE_LABELS: Record<string, string> = {
     /* Master off: the per-alert list stays editable (choices are kept) but
        reads as paused; critical rows carry an "Always sends" chip. */
     .pf-nc-paused .pf-nc-card { opacity: 0.6; }
+    .pf-nc-paused .pf-nc-card--live { opacity: 1; }
     .pf-nc-badge--always { color: var(--text-primary); }
     @media (max-width: 640px) { .pf-nc-modsel { min-width: 0; width: 100%; } }
     .pf-nc-chips {
