@@ -5,6 +5,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import {
   WaReportStatus,
   WhatsAppService,
+  waAttachmentLine,
   waStatusLabel,
   waStatusTone,
 } from '../../../core/services/whatsapp.service';
@@ -37,11 +38,12 @@ import { WhatsAppSendService } from '../../../core/services/whatsapp-send.servic
             </span>
             <span class="pf-rwa__when nd-num">{{ (m.readAt || m.deliveredAt || m.sentAt || m.failedAt || m.createdAt) | date: 'd MMM, h:mm a' }}</span>
           </div>
-          @if (m.errorReason && (m.status === 'failed' || m.status === 'skipped' || m.status === 'queued')) {
+          @if (m.errorReason && (m.status === 'failed' || m.status === 'skipped' || m.status === 'queued' || m.status === 'held')) {
             <p class="pf-rwa__reason" [class.pf-rwa__reason--bad]="m.status === 'failed'">
               {{ m.errorReason }}@if (m.status === 'queued' && m.nextAttemptAt) { Next try {{ m.nextAttemptAt | date: 'h:mm a' }}. }
             </p>
           }
+          @if (attachmentLine(); as att) { <p class="pf-rwa__muted" data-testid="rwa-attachment">{{ att }}</p> }
           @if (m.toDisplay || m.to) { <p class="pf-rwa__muted pf-rwa__to nd-num">To {{ m.toDisplay || m.to }}</p> }
         } @else {
           <p class="pf-rwa__muted">
@@ -50,7 +52,7 @@ import { WhatsAppSendService } from '../../../core/services/whatsapp-send.servic
             } @else if (!st.configured) {
               WhatsApp sending isn't set up on the server yet — messages will wait in the queue.
             } @else if (st.autoSendEnabled) {
-              Sends automatically once this final report is ready and the bill is fully paid.
+              Sends automatically, with the report PDF, once this final report is ready and the bill is fully paid.
             } @else {
               Not sent yet. Send WhatsApp sends the report link to the patient's number.
             }
@@ -121,6 +123,7 @@ export class ReportWhatsAppStatusComponent {
   });
   readonly label = computed(() => waStatusLabel(this.status()?.latest?.status));
   readonly tone = computed(() => waStatusTone(this.status()?.latest?.status));
+  readonly attachmentLine = computed(() => waAttachmentLine(this.status()?.latest));
 
   constructor() {
     effect(() => {

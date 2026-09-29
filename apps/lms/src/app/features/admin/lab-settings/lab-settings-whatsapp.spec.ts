@@ -9,8 +9,9 @@ import { TenantEntitlementsService } from '../../../core/services/tenant-entitle
 import { LabSettingsComponent } from './lab-settings.component';
 
 /**
- * Lab settings → Report → "Send reports on WhatsApp automatically" (Meta
- * Cloud API). Tenant switch (default OFF) + "also send corrected reports" +
+ * Lab settings → Report → "Send WhatsApp automatically when the report is
+ * ready" (Meta Cloud API). Tenant switch (server default ON; paid orders only)
+ * + "send again when a report is regenerated" (default OFF) +
  * template override; the sender line says whose number the patient sees, and
  * "Connect your WhatsApp number" (Embedded Signup) is disabled — coming soon.
  */
@@ -45,7 +46,7 @@ function make(settings: unknown) {
   p.cmp.tab.set('report');
   p.f.detectChanges();
   const card = () => p.el.querySelector<HTMLElement>('[data-testid="ls-whatsapp"]');
-  const main = () => card()!.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Send reports on WhatsApp automatically"]')!;
+  const main = () => card()!.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Send WhatsApp automatically when the report is ready"]')!;
   return { ...p, card, main };
 }
 
@@ -70,7 +71,7 @@ describe('Lab settings — WhatsApp auto-send', () => {
     expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings',
       { autoSendEnabled: true, sendUpdatedReports: true, templateName: null, templateLanguage: null });
     expect(p.main().getAttribute('aria-checked')).toBe('true');
-    expect(p.toasts.success).toHaveBeenCalledWith('Reports will be sent on WhatsApp automatically');
+    expect(p.toasts.success).toHaveBeenCalledWith('Reports will be sent on WhatsApp automatically once paid');
   });
 
   it('a connected lab number shows the lab\'s own name and hides Connect', () => {
@@ -108,5 +109,23 @@ describe('Lab settings — WhatsApp auto-send', () => {
     expect(p.api.post).toHaveBeenCalledWith('/api/whatsapp/onboarding/start', {});
     expect(assign).toHaveBeenCalledWith('https://api.example/api/whatsapp/onboarding/begin?state=abc');
     Object.defineProperty(window, 'location', { value: orig, configurable: true, writable: true });
+  });
+
+  it('says the message waits for payment, carries the PDF, and the regenerate re-send is a switch (off by default)', () => {
+    const p = make(SETTINGS({ autoSendEnabled: true, sendUpdatedReports: false }));
+    const text = p.card()!.textContent!;
+    expect(text).toContain('fully paid');
+    expect(text).toContain('On hold');
+    expect(text).toContain('report PDF');
+    expect(text).toContain('Partial reports are never sent');
+    const regen = p.card()!.querySelector<HTMLButtonElement>('[data-testid="ls-wa-resend-regen"]')!;
+    expect(regen.classList.contains('nd-toggle')).toBe(true);
+    expect(regen.getAttribute('role')).toBe('switch');
+    expect(regen.getAttribute('aria-checked')).toBe('false');
+    expect(regen.textContent).toContain('regenerated');
+    regen.click();
+    p.f.detectChanges();
+    expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings',
+      { autoSendEnabled: true, sendUpdatedReports: true, templateName: null, templateLanguage: null });
   });
 });

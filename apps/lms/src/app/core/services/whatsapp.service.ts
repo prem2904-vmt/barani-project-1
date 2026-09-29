@@ -2,8 +2,10 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 
-/** Lifecycle of one automatic / resent WhatsApp report message (Meta Cloud API). */
-export type WaStatus = 'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'skipped';
+/** Lifecycle of one automatic / resent WhatsApp report message (Meta Cloud API).
+ *  `held` = the report is complete but the order isn't paid yet — it sends by
+ *  itself once the bill is settled. */
+export type WaStatus = 'held' | 'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'skipped';
 
 export interface WaMessage {
   id: string;
@@ -14,6 +16,10 @@ export interface WaMessage {
   errorCode?: number | null;
   errorReason?: string | null;
   attempts: number;
+  /** What went out: 'pdf' (the report PDF attached + the link) or 'link' (link only). */
+  attachment?: 'pdf' | 'link' | null;
+  /** Why it went link-only (PDF not ready / too large / template not approved). */
+  attachmentNote?: string | null;
   /** Masked recipient (last 4 digits only). */
   to?: string | null;
   /** Masked for the desk: country code + last 5 ("+91 ••••• 79229"). */
@@ -90,6 +96,7 @@ export interface WaSettingsInput {
 /** User-facing word for a message status. */
 export function waStatusLabel(s: WaStatus | null | undefined): string {
   switch (s) {
+    case 'held': return 'On hold';
     case 'queued':
     case 'sending': return 'Queued';
     case 'sent': return 'Sent';
@@ -107,11 +114,20 @@ export function waStatusTone(s: WaStatus | null | undefined): 'good' | 'info' | 
     case 'delivered':
     case 'read': return 'good';
     case 'sent': return 'info';
+    case 'held':
     case 'queued':
     case 'sending': return 'wait';
     case 'failed': return 'bad';
     default: return 'muted';
   }
+}
+
+/** "PDF attached" / "Link only · PDF not ready" for a message that went out; '' otherwise. */
+export function waAttachmentLine(m: Pick<WaMessage, 'status' | 'attachment' | 'attachmentNote'> | null | undefined): string {
+  if (!m || !['sent', 'delivered', 'read'].includes(m.status)) return '';
+  if (m.attachment === 'pdf') return 'Report PDF attached';
+  if (m.attachment === 'link' && m.attachmentNote) return `Link only · ${m.attachmentNote}`;
+  return '';
 }
 
 /** The WhatsApp Cloud API report auto-send endpoints. */
