@@ -59,7 +59,7 @@
                  [attr.aria-invalid]="error() ? 'true' : null"
                  (focus)="onFocus()" />
           <p class="pr-err" id="pr-err" role="alert" data-testid="pr-error">{{ error() }}</p>
-          <button type="submit" class="nd-btn nd-btn--primary pr-cta" data-testid="pr-open" [disabled]="busy() || !secret().trim()">
+          <button type="submit" class="nd-btn nd-btn--primary pr-cta" data-testid="pr-open" [disabled]="busy() || !secret().trim()" [pfBusy]="busy()" pfBusyLabel="Checking…">
             @if (busy()) { <span class="pr-spin" aria-hidden="true"></span> Checking… } @else { Open my report }
           </button>
           @if (mode() === 'digits') {
@@ -190,7 +190,7 @@
             }
 
             <div class="pr-actions">
-              <button type="button" class="nd-btn nd-btn--primary pr-download" data-testid="pr-download" (click)="download()">
+              <button type="button" class="nd-btn nd-btn--primary pr-download" data-testid="pr-download" [pfBusy]="downloading()" pfBusyLabel="Downloading…" (click)="download()">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
                 {{ downloading() ? 'Downloading…' : 'Download PDF' }}
               </button>

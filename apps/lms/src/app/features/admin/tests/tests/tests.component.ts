@@ -51,6 +51,7 @@ import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { prefetch, prefetchWhenIdle } from '../../../../shared/utils/prefetch';
 import { RouteProgressService } from '../../../../core/navigation/route-progress.service';
 import { afterNextPaint } from '../../../../shared/utils/busy';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { TEST_EDITOR_PREFETCH_KEY, loadTestEditor } from '../test-editor/test-editor.loader';
 // (ViewChild refs let the header Create button drive the active panel)
 
@@ -143,6 +144,7 @@ type TmStatus = 'all' | 'active' | 'inactive';
   standalone: true,
   imports: [
     ...SKELETON_KIT,
+    BusyDirective,
     AgGridAngular,
     FormsModule,
     NgTemplateOutlet,

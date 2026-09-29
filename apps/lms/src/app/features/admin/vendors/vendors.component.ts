@@ -17,6 +17,7 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 type VendorStatus = 'all' | 'active' | 'inactive';
 
@@ -73,7 +74,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
 @Component({
   selector: 'pf-vendors',
   standalone: true,
-  imports: [SkeletonRowsComponent, SkeletonTableComponent,
+  imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
     HeroBandComponent
@@ -167,7 +168,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
           </div>
           <div class="nd-card__foot">
             <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleNewVendor()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" (click)="createVendor()" [disabled]="!draft().name.trim() || saving()">
+            <button type="button" class="nd-btn nd-btn--primary press" (click)="createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…">
               {{ saving() ? 'Creating…' : 'Create vendor' }}
             </button>
           </div>
@@ -250,7 +251,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
                   </div>
                   <div class="mt-3 flex gap-2 justify-end">
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="closeTopUp()">Cancel</pf-touch-btn>
-                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmTopUp(v)" [disabled]="!topUpAmountValid() || saving()">
+                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmTopUp(v)" [disabled]="!topUpAmountValid() || saving()" [busy]="saving()" busyLabel="Saving…">
                       Add ₹{{ topUpAmount() || '0' }}
                     </pf-touch-btn>
                   </div>
@@ -287,7 +288,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
                   </div>
                   <div class="mt-3 flex gap-2 justify-end">
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="closePayment()">Cancel</pf-touch-btn>
-                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmPayment(v)" [disabled]="!paymentAmountValid() || saving()">
+                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmPayment(v)" [disabled]="!paymentAmountValid() || saving()" [busy]="saving()" busyLabel="Saving…">
                       {{ saving() ? 'Saving…' : 'Record ₹' + (paymentAmount() || '0') }}
                     </pf-touch-btn>
                   </div>

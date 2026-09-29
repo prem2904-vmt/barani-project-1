@@ -8,6 +8,7 @@ import {
   WaConnectState, WaSettings, WaSignupConfig, WaSignupResult, WaTenantTemplate, WhatsAppService,
 } from '../../../core/services/whatsapp.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import {
   EmbeddedSignupMessage, FacebookSdk, loadFacebookSdk, parseEmbeddedSignupMessage,
 } from '../../../shared/utils/whatsapp-embedded-signup';
@@ -39,6 +40,7 @@ export const WA_INFO_WAIT_MS = 2500;
 @Component({
   selector: 'pf-wa-connect-card',
   standalone: true,
+  imports: [BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="nd-card pf-wac" data-testid="ls-wa-connect-card" [attr.data-state]="state()">
@@ -110,16 +112,16 @@ export const WA_INFO_WAIT_MS = 2500;
           <div class="pf-wac__actions">
             @if (showConnect()) {
               <button type="button" class="nd-btn nd-btn--primary pf-wac__btn" data-testid="wac-connect"
-                      [disabled]="busy() || !sdkReady()" (click)="connect()">
+                      [disabled]="busy() || !sdkReady()" [pfBusy]="localConnecting()" pfBusyLabel="Connecting…" (click)="connect()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
                 {{ hasNumber() ? 'Reconnect WhatsApp' : 'Connect WhatsApp' }}
               </button>
             }
             @if (hasNumber()) {
               <button type="button" class="nd-btn nd-btn--secondary pf-wac__btn" data-testid="wac-refresh"
-                      [disabled]="busy()" (click)="refresh()">Check status</button>
+                      [disabled]="busy()" [pfBusy]="busyAction() === 'refresh'" pfBusyLabel="Checking…" (click)="refresh()">Check status</button>
               <button type="button" class="nd-btn nd-btn--danger pf-wac__btn" data-testid="wac-disconnect"
-                      [disabled]="busy()" (click)="disconnect()">Disconnect</button>
+                      [disabled]="busy()" [pfBusy]="busyAction() === 'disconnect'" pfBusyLabel="Disconnecting…" (click)="disconnect()">Disconnect</button>
             }
           </div>
           @if (showConnect() && !hasNumber()) {
@@ -198,8 +200,10 @@ export class WaConnectCardComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly busy = signal(false);
+  /** Which of Check status / Disconnect is running (its button shows the dots). */
+  protected readonly busyAction = signal<'refresh' | 'disconnect' | null>(null);
   /** Local "connecting" while the popup is open (the server state catches up on reload). */
-  private readonly localConnecting = signal(false);
+  protected readonly localConnecting = signal(false);
   private readonly sdk = signal<FacebookSdk | null>(null);
   private readonly config = signal<WaSignupConfig | null>(null);
   protected readonly sdkError = signal<string | null>(null);
@@ -401,9 +405,10 @@ export class WaConnectCardComponent implements OnInit {
   refresh() {
     if (this.busy()) return;
     this.busy.set(true);
+    this.busyAction.set('refresh');
     this.wa.refreshOnboarding().subscribe({
-      next: s => { this.busy.set(false); this.changed.emit(s); this.toasts.success('WhatsApp status updated'); },
-      error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); },
+      next: s => { this.busy.set(false); this.busyAction.set(null); this.changed.emit(s); this.toasts.success('WhatsApp status updated'); },
+      error: e => { this.busy.set(false); this.busyAction.set(null); this.toasts.error(ApiError.from(e).message); },
     });
   }
 
@@ -417,9 +422,10 @@ export class WaConnectCardComponent implements OnInit {
     });
     if (!ok) return;
     this.busy.set(true);
+    this.busyAction.set('disconnect');
     this.wa.disconnect().subscribe({
-      next: s => { this.busy.set(false); this.changed.emit(s); this.toasts.success('Disconnected — reports go from the shared Prefrontal number'); },
-      error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); },
+      next: s => { this.busy.set(false); this.busyAction.set(null); this.changed.emit(s); this.toasts.success('Disconnected — reports go from the shared Prefrontal number'); },
+      error: e => { this.busy.set(false); this.busyAction.set(null); this.toasts.error(ApiError.from(e).message); },
     });
   }
 }

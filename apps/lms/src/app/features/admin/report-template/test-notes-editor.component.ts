@@ -328,7 +328,7 @@ import { mergeDescriptionsOntoLatest, type LooseSection } from '../../../shared/
               </span>
             } @else {
               <pf-touch-btn size="sm" variant="primary"
-                            [disabled]="saving()" (pressed)="save()">
+                            [disabled]="saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
                 @if (saving()) { Saving… } @else { Save }
               </pf-touch-btn>
             }

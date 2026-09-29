@@ -7,6 +7,7 @@ import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { shareLink } from '../../../shared/utils/report-share';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import {
   ReportLinkInfo, ReportSummary, VerifiedReport, clock, mismatchMessage, reportFileName, safeLogoUrl, summarise, telHref,
 } from './public-report.util';
@@ -38,7 +39,7 @@ interface ApiEnvelope<T> { success?: boolean; data?: T; error?: string; message?
 @Component({
   selector: 'pf-public-report',
   standalone: true,
-  imports: [],
+  imports: [BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'pr', lang: 'en' },
   templateUrl: './public-report.component.html',

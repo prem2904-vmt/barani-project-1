@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ActivatedRoute } from '@angular/router';
@@ -21,6 +21,9 @@ import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-strip-qr';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 
 type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 
@@ -32,7 +35,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [
+  imports: [SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -62,7 +65,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
               }
             </span>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
-                    [disabled]="saving()" (click)="save()" aria-label="Save template" title="Save template">
+                    [disabled]="saving() || tplSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" aria-label="Save template" title="Save template">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -81,12 +84,20 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
         <span class="nd-savestate pf-rt-savestate" role="status" aria-live="polite">
           @if (dirty()) { <span class="nd-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
         </span>
-        <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving()">
+        <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving() || tplSkeleton()" [busy]="saving()" busyLabel="Saving…">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </header>
 
       <div class="pf-band-body pf-band-body--fill">
+      @if (tplSkeleton()) {
+        <!-- First load: the designer's shape until the lab's template lands
+             (never the defaults flashing before the saved template). -->
+        <div class="pf-rt-loading">
+          <section class="nd-card"><div class="nd-card__body"><pf-skeleton-form [fields]="8" [cols]="2" label="Loading report template…"></pf-skeleton-form></div></section>
+          <section class="nd-card"><div class="nd-card__body"><pf-skeleton-card [lines]="8" [boxed]="false" label="Loading preview…"></pf-skeleton-card></div></section>
+        </div>
+      } @else {
       <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()"
            [class.pf-rt-grid--designer]="designerTab()">
         <!-- ── Section rail (CLASSIC only): the new design puts the
@@ -156,7 +167,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                               (click)="resetDeptPatient()">Reset to default</button>
                       <!-- Secondary: the band's Save owns the ONE primary. -->
                       <button type="button" class="nd-btn nd-btn--secondary pf-pt-btn press"
-                              [disabled]="!deptPatientDirty() || deptPatientSaving()"
+                              [disabled]="!deptPatientDirty() || deptPatientSaving()" [pfBusy]="deptPatientSaving()" pfBusyLabel="Saving…"
                               (click)="saveDeptPatient()">{{ deptPatientSaving() ? 'Saving…' : 'Save for department' }}</button>
                     }
                   </div>
@@ -488,6 +499,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
         </aside>
         }
       </div>
+      }
       </div>
     </section>
   `,
@@ -583,6 +595,8 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-rt-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-tertiary, #94a3b8); }
 
     .pf-rt-grid { display: grid; grid-template-columns: 188px minmax(0, 1fr) minmax(400px, 40%); gap: 18px; align-items: start; }
+    .pf-rt-loading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 40%); gap: 18px; align-items: start; }
+    @media (max-width: 1180px) { .pf-rt-loading { grid-template-columns: 1fr; } }
     @media (max-width: 1180px) { .pf-rt-grid { grid-template-columns: 1fr; } }
 
     /* ── Section list (left panel). ── */
@@ -1253,18 +1267,26 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** First load: skeleton until the lab's template lands (held, no flash). */
+  private readonly tplHold = createLoadHold(true);
+  readonly tplSkeleton = this.tplHold.active;
+  private readonly destroyRef = inject(DestroyRef);
+
   ngOnInit() {
     const initial = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
     if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
     }
+    this.destroyRef.onDestroy(() => this.tplHold.cancel());
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => {
         if (t) this._tpl.set({ ...this._tpl(), ...t, headerPreset: normalizeHeaderPreset(t.headerPreset ?? this._tpl().headerPreset) });
         this.savedJson.set(JSON.stringify(this._tpl()));
         this.past.set([]); this.future.set([]);
         this.initPatientCols();
-      }
+        this.tplHold.done();
+      },
+      error: () => this.tplHold.done(),
     });
     this.loadCustomPatientFields();
     this.initPatientCols();

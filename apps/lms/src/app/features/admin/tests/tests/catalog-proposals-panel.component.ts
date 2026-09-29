@@ -25,9 +25,11 @@ import {
  * Dismiss = keep yours until the master changes again. Hidden when nothing waits.
  */
 import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
 @Component({
   selector: 'pf-catalog-proposals-panel',
   standalone: true,
+  imports: [BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (proposals().length > 0) {
@@ -46,8 +48,8 @@ import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
           <button type="button" class="nd-btn nd-btn--tertiary pf-cp__btn press" (click)="open.set(!open())" [attr.aria-expanded]="open()">
             {{ open() ? 'Hide' : 'Review' }}
           </button>
-          <button type="button" class="nd-btn nd-btn--tertiary pf-cp__btn press" [disabled]="busy()" (click)="dismissAll()">Dismiss all</button>
-          <button type="button" class="nd-btn nd-btn--secondary pf-cp__btn press" [disabled]="busy()" (click)="acceptAll()">Accept all</button>
+          <button type="button" class="nd-btn nd-btn--tertiary pf-cp__btn press" [disabled]="busy()" [pfBusy]="busyKey() === 'dismiss-all'" pfBusyLabel="Dismissing…" (click)="dismissAll()">Dismiss all</button>
+          <button type="button" class="nd-btn nd-btn--secondary pf-cp__btn press" [disabled]="busy()" [pfBusy]="busyKey() === 'accept-all'" pfBusyLabel="Accepting…" (click)="acceptAll()">Accept all</button>
         </div>
         @if (open()) {
           <ul class="pf-cp__list">
@@ -61,12 +63,12 @@ import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
                   <span class="pf-cp__tag">{{ p.kind }}</span>
                   <span class="pf-cp__tag pf-cp__tag--branch">{{ p.branch }}</span>
                   <span class="pf-cp__spacer"></span>
-                  <button type="button" class="nd-rowact pf-cp__act" [class.nd-rowact--icon]="!web()" [disabled]="busy()" (click)="dismiss(p.id)"
+                  <button type="button" class="nd-rowact pf-cp__act" [class.nd-rowact--icon]="!web()" [disabled]="busy()" [pfBusy]="busyKey() === 'dismiss:' + p.id" pfBusyLabel="Dismissing…" (click)="dismiss(p.id)"
                           [attr.aria-label]="'Dismiss the update for ' + p.name"
                           title="Keep your version. A later master change will ask again.">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     <span class="nd-rowact__t">Dismiss</span></button>
-                  <button type="button" class="nd-rowact pf-cp__act" [class.nd-rowact--icon]="!web()" [disabled]="busy()" (click)="accept(p.id)"
+                  <button type="button" class="nd-rowact pf-cp__act" [class.nd-rowact--icon]="!web()" [disabled]="busy()" [pfBusy]="busyKey() === 'accept:' + p.id" pfBusyLabel="Accepting…" (click)="accept(p.id)"
                           [attr.aria-label]="'Accept the master version of ' + p.name"
                           title="Take the master's current version of this test. Prices stay as they are.">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -141,6 +143,8 @@ export class CatalogProposalsPanelComponent {
   readonly web = webPointerSignal();
   readonly open = signal(false);
   readonly busy = signal(false);
+  /** Which action is running (its button shows the busy dots). */
+  readonly busyKey = signal<string | null>(null);
 
   private readonly branchNames = computed(() =>
     new Map((this.auth.user?.()?.branches ?? []).map(b => [b.id, b.name] as const)));
@@ -158,8 +162,8 @@ export class CatalogProposalsPanelComponent {
     };
   }));
 
-  accept(id: string) { this.run(this.api.post(proposalPath(id, 'accept'), {}), 'Update accepted'); }
-  dismiss(id: string) { this.run(this.api.post(proposalPath(id, 'dismiss'), {}), 'Update dismissed'); }
+  accept(id: string) { this.run(this.api.post(proposalPath(id, 'accept'), {}), 'Update accepted', 'accept:' + id); }
+  dismiss(id: string) { this.run(this.api.post(proposalPath(id, 'dismiss'), {}), 'Update dismissed', 'dismiss:' + id); }
 
   async acceptAll() {
     const n = this.proposals().length;
@@ -171,7 +175,7 @@ export class CatalogProposalsPanelComponent {
       tone: 'primary',
     });
     if (!ok) return;
-    this.run(this.api.post(proposalPath(null, 'accept-all'), {}), 'All updates accepted');
+    this.run(this.api.post(proposalPath(null, 'accept-all'), {}), 'All updates accepted', 'accept-all');
   }
 
   async dismissAll() {
@@ -184,15 +188,16 @@ export class CatalogProposalsPanelComponent {
       tone: 'danger',
     });
     if (!ok) return;
-    this.run(this.api.post(proposalPath(null, 'dismiss-all'), {}), 'All updates dismissed');
+    this.run(this.api.post(proposalPath(null, 'dismiss-all'), {}), 'All updates dismissed', 'dismiss-all');
   }
 
-  private run(call: Observable<unknown>, done: string) {
+  private run(call: Observable<unknown>, done: string, key: string) {
     if (this.busy()) return;
     this.busy.set(true);
+    this.busyKey.set(key);
     call.subscribe({
-      next: () => { this.busy.set(false); this.toasts.success(done); this.changed.emit(); },
-      error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); },
+      next: () => { this.busy.set(false); this.busyKey.set(null); this.toasts.success(done); this.changed.emit(); },
+      error: e => { this.busy.set(false); this.busyKey.set(null); this.toasts.error(ApiError.from(e).message); },
     });
   }
 }

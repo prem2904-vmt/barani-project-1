@@ -2,6 +2,7 @@ import { CommonModule, DatePipe } from "@angular/common";
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { firstValueFrom } from "rxjs";
+import { busyWhile } from "../../../shared/utils/busy";
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { DestroyRef,
   ChangeDetectionStrategy,
@@ -59,6 +60,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
 import { formatAge } from "../../../shared/utils/patient-age";
+import { BusyDirective } from "../../../shared/directives/busy.directive";
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
@@ -79,7 +81,8 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
     KpiStripComponent,
     HeroBandComponent,
     ActionsMenuComponent,
-    ActionsMenuTriggerDirective
+    ActionsMenuTriggerDirective,
+    BusyDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./report-queue.component.html",
@@ -612,6 +615,25 @@ export class ReportQueueComponent implements OnInit {
   private readonly _generating = signal<string | null>(null);
   readonly generating = this._generating.asReadonly();
 
+  // ── Loading feedback (ND-PATTERN "Loading feedback") ──────────────
+  // A row action that renders / posts (Download, Print, Regenerate) keeps
+  // ITS button busy until it answers; keyed "<reportId>:<kind>" so several
+  // rows can run at once and a repeat press on the same one is ignored.
+  private readonly _rowBusy = signal<ReadonlySet<string>>(new Set());
+  isRowBusy(id: string, kind: 'download' | 'print' | 'regenerate'): boolean {
+    return this._rowBusy().has(`${id}:${kind}`);
+  }
+  private setRowBusy(id: string, kind: 'download' | 'print' | 'regenerate', on: boolean): void {
+    const key = `${id}:${kind}`;
+    const next = new Set(this._rowBusy());
+    if (on) next.add(key); else next.delete(key);
+    this._rowBusy.set(next);
+  }
+  /** The row's WhatsApp server send is running (its Share face is busy). */
+  waSending(id: string): boolean { return !!this.waSend?.busy(id); }
+  /** "Generate" (order id prompt) is posting. */
+  readonly generatingReport = signal(false);
+
   generatePartial(po: PrelimOrder) {
     if (this._generating() || !this.canGenerate()) return;
     this._generating.set(po.id);
@@ -747,6 +769,8 @@ export class ReportQueueComponent implements OnInit {
    *  the file in blob storage). A report with nothing stored yet is rendered
    *  ONCE from its saved snapshot and stored first. */
   async downloadPdf(r: Report) {
+    if (this.isRowBusy(r.id, 'download')) return;
+    this.setRowBusy(r.id, 'download', true);
     try {
       const blob = await this.storedPdf(r);
       if (this.isNativePlatform()) {
@@ -762,6 +786,8 @@ export class ReportQueueComponent implements OnInit {
       console.error("[reports] download failed", err);
       const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
       this.toasts.error(reportRenderErrorMessage(err, "Could not download report"));
+    } finally {
+      this.setRowBusy(r.id, 'download', false);
     }
   }
 
@@ -870,8 +896,15 @@ export class ReportQueueComponent implements OnInit {
    *  Letterpad setting on → one quick choice (letterhead paper, header &
    *  footer blank — the default — or plain paper) for THIS job only. */
   async printReport(r: Report) {
-    if (!this.canPrint()) return;
-    if (await this.printJob(r) && this.canDeliver()) this.recordDelivery(r, "print");
+    if (!this.canPrint() || this.isRowBusy(r.id, 'print')) return;
+    this.setRowBusy(r.id, 'print', true);
+    let printed = false;
+    try {
+      printed = await this.printJob(r);
+    } finally {
+      this.setRowBusy(r.id, 'print', false);
+    }
+    if (printed && this.canDeliver()) this.recordDelivery(r, "print");
   }
 
   /** Render + hand the report to the printer. True when something was
@@ -931,9 +964,10 @@ export class ReportQueueComponent implements OnInit {
       required: true,
       confirmLabel: "Generate",
     });
-    if (!oid) return;
+    if (!oid || this.generatingReport()) return;
     this.api
       .post<Report>("/api/reports/generate", { orderId: oid, type: "final" })
+      .pipe(busyWhile(this.generatingReport))
       .subscribe({
         next: (r) => {
           this.toasts.success("Report generated");
@@ -956,16 +990,21 @@ export class ReportQueueComponent implements OnInit {
       confirmLabel: "Regenerate",
       tone: "primary",
     });
-    if (!ok) return;
+    if (!ok || this.isRowBusy(r.id, 'regenerate')) return;
+    this.setRowBusy(r.id, 'regenerate', true);
     this.api
       .post<Report>("/api/reports/generate", { orderId: r.orderId, type: "final" })
       .subscribe({
         next: async (r2) => {
           try { await this.archiveReportPdf(r2); } catch { /* archive is best-effort */ }
+          this.setRowBusy(r.id, 'regenerate', false);
           this.toasts.success("Report regenerated with the latest template");
           this.refresh();
         },
-        error: (e) => this.toasts.error(ApiError.from(e).message),
+        error: (e) => {
+          this.setRowBusy(r.id, 'regenerate', false);
+          this.toasts.error(ApiError.from(e).message);
+        },
       });
   }
 }

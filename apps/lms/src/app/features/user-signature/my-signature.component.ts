@@ -12,6 +12,8 @@ import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/seg
 import { ThemeService } from '../../core/services/theme.service';
 import { ActivatedRoute } from '@angular/router';
 import { REGNO_PROMPT_TEXT } from '../../shared/components/regno-prompt/regno-prompt.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
+import { BusyComponent } from '../../shared/primitives/skeleton-kit.component';
 
 type SigTab = 'signature' | 'registration';
 
@@ -24,7 +26,7 @@ type SigTab = 'signature' | 'registration';
 @Component({
   selector: 'pf-my-signature',
   standalone: true,
-  imports: [CommonModule, ScreenHeaderComponent, SignaturePadComponent, HeroBandComponent, SegmentedComponent],
+  imports: [BusyComponent, BusyDirective, CommonModule, ScreenHeaderComponent, SignaturePadComponent, HeroBandComponent, SegmentedComponent],
   template: `
     <!-- Hidden picker at the template root so the band's Upload action and
          the classic in-card buttons can both open it. -->
@@ -43,16 +45,16 @@ type SigTab = 'signature' | 'registration';
           <ng-container band-actions>
             @if (tab() === 'signature' && !uploadPreview()) {
               @if (current()) {
-                <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="busy()" (click)="remove()"
+                <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="busy()" [pfBusy]="busyKind() === 'remove'" pfBusyLabel="Removing…" (click)="remove()"
                         aria-label="Remove" title="Remove signature"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Remove</button>
               }
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="processing()" (click)="file.click()"
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="processing()" [pfBusy]="processing()" pfBusyLabel="Processing…" (click)="file.click()"
                       aria-label="Upload image" title="Upload image"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M4 21h16"/></svg>{{ processing() ? 'Processing…' : 'Upload image' }}</button>
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="pad.set(true)"
                       [attr.aria-label]="current() ? 'Re-draw' : 'Draw signature'" [title]="current() ? 'Re-draw' : 'Draw signature'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>{{ current() ? 'Re-draw' : 'Draw signature' }}</button>
             } @else if (tab() === 'registration') {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
-                      [disabled]="busy() || regId().trim() === savedRegId()" (click)="saveRegId()"
+                      [disabled]="busy() || regId().trim() === savedRegId()" [pfBusy]="busyKind() === 'reg'" pfBusyLabel="Saving…" (click)="saveRegId()"
                       aria-label="Save" title="Save registration ID"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Save</button>
             }
           </ng-container>
@@ -67,6 +69,10 @@ type SigTab = 'signature' | 'registration';
       @if (showSec('signature')) {
       <div class="pf-sig-tile">
         <p class="pf-sig-eyebrow">Your signature</p>
+        @if (busyKind() === 'sig') {
+          <!-- The new signature is on its way to your account. -->
+          <p class="pf-sig-muted pf-sig-saving" role="status"><pf-busy label="Saving your signature…"></pf-busy> Saving your signature…</p>
+        }
 
         @if (uploadPreview(); as up) {
           <!-- Processed upload — confirm before it replaces the saved one. -->
@@ -75,7 +81,7 @@ type SigTab = 'signature' | 'registration';
           </div>
           <p class="pf-sig-muted" style="margin-top: 8px;">Background removed. Use this signature?</p>
           <div class="pf-sig-row">
-            <button type="button" class="pf-sig-cta pf-sig-cta--primary" style="margin-top: 0;" [disabled]="busy()" (click)="confirmUpload()">Use this signature</button>
+            <button type="button" class="pf-sig-cta pf-sig-cta--primary" style="margin-top: 0;" [disabled]="busy()" [pfBusy]="busyKind() === 'sig'" pfBusyLabel="Saving…" (click)="confirmUpload()">Use this signature</button>
             <button type="button" class="pf-sig-cta" (click)="uploadPreview.set(null)">Discard</button>
           </div>
         } @else if (current()) {
@@ -87,7 +93,7 @@ type SigTab = 'signature' | 'registration';
             <button type="button" class="pf-sig-cta" [disabled]="processing()" (click)="file.click()">
               {{ processing() ? 'Processing…' : 'Upload image' }}
             </button>
-            <button type="button" class="pf-sig-cta pf-sig-cta--danger" [disabled]="busy()" (click)="remove()">Remove</button>
+            <button type="button" class="pf-sig-cta pf-sig-cta--danger" [disabled]="busy()" [pfBusy]="busyKind() === 'remove'" pfBusyLabel="Removing…" (click)="remove()">Remove</button>
           </div>
         } @else {
           <div class="pf-sig-empty">
@@ -121,7 +127,7 @@ type SigTab = 'signature' | 'registration';
           <input type="text" class="nd-input nd-num pf-sig-input" maxlength="64" aria-label="Registration ID" placeholder="e.g. TN-12345"
                  [value]="regId()" (input)="regId.set($any($event.target).value)" />
           <button type="button" class="pf-sig-cta pf-sig-cta--primary pf-classic-only" style="margin-top: 0;"
-                  [disabled]="busy() || regId().trim() === savedRegId()" (click)="saveRegId()">Save</button>
+                  [disabled]="busy() || regId().trim() === savedRegId()" [pfBusy]="busyKind() === 'reg'" pfBusyLabel="Saving…" (click)="saveRegId()">Save</button>
         </div>
       </div>
       }
@@ -147,6 +153,7 @@ type SigTab = 'signature' | 'registration';
     .pf-sig-empty { padding: 22px 6px 16px; }
     .pf-sig-empty p { margin: 0; font-size: 14px; color: var(--text-secondary, #cbd5e1); }
     .pf-sig-muted { color: var(--text-tertiary, #94a3b8) !important; font-size: 12.5px !important; margin-top: 4px !important; }
+    .pf-sig-saving { display: flex; align-items: center; gap: 8px; }
     .pf-sig-row { display: flex; gap: 10px; margin-top: 14px; }
     .pf-sig-cta { min-height: 44px; border-radius: var(--nd-radius-sm, 10px); padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
       border: 1px solid var(--nd-line); background: transparent; color: var(--text-secondary); }
@@ -182,6 +189,8 @@ export class MySignatureComponent {
   readonly current = computed(() => this.auth.user()?.signatureDataUrl);
   readonly pad = signal(false);
   readonly busy = signal(false);
+  /** Which request is running (its button / the tile shows it). */
+  readonly busyKind = signal<'reg' | 'sig' | 'remove' | null>(null);
   /** Processed (background-removed) upload awaiting the user's confirmation. */
   readonly uploadPreview = signal<string | null>(null);
   readonly processing = signal(false);
@@ -216,29 +225,33 @@ export class MySignatureComponent {
   saveRegId(): void {
     const value = this.regId().trim();
     this.busy.set(true);
+    this.busyKind.set('reg');
     this.api.put<{ registrationId: string | null }>('/api/auth/me/registration-id', { registrationId: value }).subscribe({
       next: r => {
         this.auth.setRegistrationIdLocal(r.registrationId ?? null);
         this.busy.set(false);
+        this.busyKind.set(null);
         this.toasts.success(value ? 'Registration ID saved' : 'Registration ID cleared');
       },
-      error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); },
+      error: e => { this.busy.set(false); this.busyKind.set(null); this.toasts.error(ApiError.from(e).message); },
     });
   }
 
   onSaved(dataUrl: string): void {
     this.busy.set(true);
+    this.busyKind.set('sig');
     this.api.put<{ signatureDataUrl: string }>('/api/auth/me/signature', { dataUrl }).subscribe({
-      next: r => { this.auth.setSignatureLocal(r.signatureDataUrl); this.busy.set(false); this.pad.set(false); this.toasts.success('Signature saved'); },
-      error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); },
+      next: r => { this.auth.setSignatureLocal(r.signatureDataUrl); this.busy.set(false); this.busyKind.set(null); this.pad.set(false); this.toasts.success('Signature saved'); },
+      error: e => { this.busy.set(false); this.busyKind.set(null); this.toasts.error(ApiError.from(e).message); },
     });
   }
 
   remove(): void {
     this.busy.set(true);
+    this.busyKind.set('remove');
     this.api.delete('/api/auth/me/signature').subscribe({
-      next: () => { this.auth.setSignatureLocal(null); this.busy.set(false); this.toasts.success('Signature removed'); },
-      error: e => { this.busy.set(false); this.toasts.error(ApiError.from(e).message); },
+      next: () => { this.auth.setSignatureLocal(null); this.busy.set(false); this.busyKind.set(null); this.toasts.success('Signature removed'); },
+      error: e => { this.busy.set(false); this.busyKind.set(null); this.toasts.error(ApiError.from(e).message); },
     });
   }
 }

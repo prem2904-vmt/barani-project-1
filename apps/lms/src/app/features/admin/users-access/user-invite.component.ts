@@ -17,6 +17,7 @@ import { hasDoctorRole } from '../../../shared/opd/doctor-role';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ROLE_INFO } from './permission-catalog';
 import { rolePickerRows } from './role-assignability';
 import { TITLE_OPTIONS, USER_FORM_STYLES } from './user-form.styles';
@@ -48,6 +49,7 @@ interface CreateForm {
     HeroBandComponent,
     AlphaDirective,
     NumericDirective,
+    BusyDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -58,7 +60,7 @@ interface CreateForm {
         <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=users'" [customSearch]="true" [contextBar]="true">
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="!canCreate() || saving()" (click)="submit()"
+                    [disabled]="!canCreate() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()"
                     [attr.aria-label]="saving() ? 'Creating user' : 'Create user'" title="Create user">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
               {{ saving() ? 'Creating…' : 'Create user' }}
@@ -81,7 +83,7 @@ interface CreateForm {
         title="Create user"
         parentRoute="/admin/users?tab=users"
         subtitle="Set a username and password, pick the roles and branch scope. Share the password with them — there's no email.">
-        <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canCreate() || saving()" (pressed)="submit()">
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canCreate() || saving()" [busy]="saving()" busyLabel="Creating…" (pressed)="submit()">
           {{ saving() ? 'Creating…' : 'Create user' }}
         </pf-touch-btn>
       </pf-screen-header>

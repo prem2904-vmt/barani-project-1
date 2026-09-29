@@ -16,6 +16,7 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 type InvTab = 'items' | 'bom';
 
@@ -35,7 +36,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 @Component({
   selector: 'pf-inventory',
   standalone: true,
-  imports: [SkeletonTableComponent, FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
+  imports: [BusyDirective, SkeletonTableComponent, FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10 max-w-6xl">
@@ -67,7 +68,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                 New item
               </button>
             } @else if (bomTestId()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="bomSaving()" (click)="saveBom()"
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="bomSaving()" [pfBusy]="bomSaving()" pfBusyLabel="Saving…" (click)="saveBom()"
                       aria-label="Save consumables">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -140,7 +141,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           </div>
           <div class="nd-card__foot">
             <button type="button" class="nd-btn nd-btn--tertiary press" (click)="editing.set(false)">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!canSave()" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
+            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!canSave() || itemSaving()" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
           </div>
         </section>
       }
@@ -183,7 +184,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                         <label class="block"><span class="nd-field__lbl lbl">Qty *</span><input class="nd-input" [class.nd-input--error]="rcvError()?.field==='qty'||rcvError()?.field==='quantity'" type="number" [ngModel]="rcv().qty" (ngModelChange)="setR('qty',+$event)"/>
                           @if (rcvError()?.field==='qty'||rcvError()?.field==='quantity') { <span class="fld-err">{{ rcvError()!.message }}</span> }
                         </label>
-                        <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="rcv().qty<=0" (click)="receive(it)">Add stock</button>
+                        <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="rcv().qty<=0 || receiving()" [pfBusy]="receiving()" pfBusyLabel="Adding stock…" (click)="receive(it)">Add stock</button>
                       </div>
                     }
 
@@ -267,7 +268,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
             <div class="flex gap-2 pt-1">
               <button type="button" class="nd-btn nd-btn--tertiary touch-link" (click)="addLine()">+ Add item</button>
             </div>
-            <button class="pf-classic-only mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="bomSaving()" (click)="saveBom()">{{ bomSaving() ? 'Saving…' : 'Save consumables' }}</button>
+            <button class="pf-classic-only mt-2 px-3 py-2 rounded-lg text-sm font-bold text-white" style="background:var(--violet-600,#7c3aed)" [disabled]="bomSaving()" [pfBusy]="bomSaving()" pfBusyLabel="Saving…" (click)="saveBom()">{{ bomSaving() ? 'Saving…' : 'Save consumables' }}</button>
           </div>
         }
         </div>
@@ -453,6 +454,9 @@ export class InventoryComponent implements OnInit {
   readonly bomTestId = signal('');
   readonly bomLines = signal<{ itemId: string; qtyPerTest: number }[]>([]);
   readonly bomSaving = signal(false);
+  /** Loading feedback: Save item / Add stock running. */
+  readonly itemSaving = signal(false);
+  readonly receiving = signal(false);
 
   async ngOnInit() { await Promise.all([this.load(), this.loadAlerts(), this.loadTests()]); }
 
@@ -506,8 +510,9 @@ export class InventoryComponent implements OnInit {
   startEdit(it: InvItem) { this.itemError.set(null); this.form.set({ ...it }); this.editing.set(true); }
 
   async saveItem() {
-    if (!this.canSave()) return;
+    if (!this.canSave() || this.itemSaving()) return;
     this.itemError.set(null);
+    this.itemSaving.set(true);
     try {
       await firstValueFrom(this.api.post('/api/inventory/items', this.form()));
       this.editing.set(false); this.toasts.success('Item saved'); await this.load(); await this.loadAlerts();
@@ -515,6 +520,8 @@ export class InventoryComponent implements OnInit {
       const err = ApiError.from(e);
       if (err.field === 'sku' || err.field === 'code' || err.field === 'name') this.itemError.set({ field: err.field, message: err.message });
       else this.toasts.error(err.message);
+    } finally {
+      this.itemSaving.set(false);
     }
   }
 
@@ -544,8 +551,9 @@ export class InventoryComponent implements OnInit {
 
   async receive(it: InvItem) {
     const r = this.rcv();
-    if (r.qty <= 0) return;
+    if (r.qty <= 0 || this.receiving()) return;
     this.rcvError.set(null);
+    this.receiving.set(true);
     try {
       const res: any = await firstValueFrom(this.api.post(`/api/inventory/items/${it.id}/receive`, {
         lotNumber: r.lot || null, expiryDate: r.expiry ? r.expiry + 'T00:00:00Z' : null, unitCost: r.cost, qty: r.qty,
@@ -558,6 +566,8 @@ export class InventoryComponent implements OnInit {
       const err = ApiError.from(e);
       if (err.field === 'qty' || err.field === 'quantity') this.rcvError.set({ field: err.field, message: err.message });
       else this.toasts.error(err.message);
+    } finally {
+      this.receiving.set(false);
     }
   }
 

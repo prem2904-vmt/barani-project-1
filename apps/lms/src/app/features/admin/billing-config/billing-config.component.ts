@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   OnDestroy,
   OnInit,
   computed,
@@ -36,6 +37,11 @@ import { ImageUploadComponent } from "../report-template/image-upload.component"
 import { environment } from "../../../../environments/environment";
 import { ThemeService } from "../../../core/services/theme.service";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile } from '../../../shared/utils/busy';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { finalize } from 'rxjs';
+import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type Tab = "gst" | "discounts" | "invoice";
 type GstScope = "branch" | "region" | "tenant";
@@ -70,7 +76,7 @@ interface GstRow {
 @Component({
   selector: "pf-billing-config",
   standalone: true,
-  imports: [
+  imports: [SkeletonFormComponent, BusyDirective, 
     FormsModule,
     NumberInputComponent,
     ScreenHeaderComponent,
@@ -100,6 +106,9 @@ interface GstRow {
             <button
               type="button"
               class="pf-hb-btn pf-hb-btn--primary press"
+              [disabled]="savingConfig() || configSkeleton()"
+              [pfBusy]="savingConfig()"
+              pfBusyLabel="Saving…"
               (click)="saveConfig()"
               aria-label="Save billing config"
               title="Save billing config"
@@ -136,6 +145,9 @@ interface GstRow {
           actions
           size="sm"
           variant="primary"
+          [busy]="savingConfig()"
+          [disabled]="configSkeleton()"
+          busyLabel="Saving…"
           (pressed)="saveConfig()"
         >
           <span icon-left aria-hidden="true">
@@ -161,6 +173,13 @@ interface GstRow {
       </pf-screen-header>
 
       <div class="pf-band-body">
+        @if (configSkeleton()) {
+          <!-- First load: the form's shape until the saved config lands
+               (never the defaults flashing before the lab's own values). -->
+          <section class="nd-card"><div class="nd-card__body">
+            <pf-skeleton-form [fields]="8" [cols]="2" label="Loading billing config…"></pf-skeleton-form>
+          </div></section>
+        } @else {
         <div class="mb-5 pf-classic-only">
           <pf-segmented
             [options]="tabOptions"
@@ -293,7 +312,9 @@ interface GstRow {
                         <pf-touch-btn
                           size="sm"
                           variant="ghost"
-                          [disabled]="!hasGstinFor(b.id)"
+                          [disabled]="!hasGstinFor(b.id) || gstinSaving() === b.id"
+                          [busy]="gstinSaving() === b.id"
+                          busyLabel="Saving…"
                           (pressed)="saveGstin(b.id)"
                           >Save</pf-touch-btn
                         >
@@ -797,6 +818,8 @@ interface GstRow {
                   type="button"
                   class="nd-btn nd-btn--secondary pf-save-letterhead mt-4 press"
                   [disabled]="savingTpl()"
+                  [pfBusy]="savingTpl()"
+                  pfBusyLabel="Saving…"
                   (click)="saveTpl()"
                 >
                   {{ savingTpl() ? "Saving…" : "Save letterhead" }}
@@ -858,6 +881,7 @@ interface GstRow {
               }
             </div>
           </div>
+        }
         }
       </div>
     </section>
@@ -1415,7 +1439,8 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.loadConfig();
+    this.destroyRef.onDestroy(() => this.configHold.cancel());
+    this.loadConfig(() => this.configHold.done());
     this.api.get<any>("/api/config/invoice-template").subscribe({
       next: (t) => {
         this._tpl.set({ ...this.TPL_DEFAULTS, ...(t ?? {}) });
@@ -1461,15 +1486,20 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     map.set(bid, { ...cur, stateCode: v });
     this._gstinByBranch.set(map);
   }
+  /** Loading feedback: the branch row whose GSTIN is saving / the config save. */
+  readonly gstinSaving = signal<string | null>(null);
+  readonly savingConfig = signal(false);
   saveGstin(bid: string) {
     const row = this._gstinByBranch().get(bid);
-    if (!row) return;
+    if (!row || this.gstinSaving() === bid) return;
+    this.gstinSaving.set(bid);
     this.api
       .post("/api/config/gst", {
         branchId: bid,
         gstin: row.gstin,
         stateCode: row.stateCode,
       })
+      .pipe(finalize(() => { if (this.gstinSaving() === bid) this.gstinSaving.set(null); }))
       .subscribe({
         next: () => {
           this.toasts.success("GSTIN saved");
@@ -1481,15 +1511,22 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
 
   /** The server's config — incl. the LIVE invoice counter, which moves on
    *  every bill; re-read after a save so the form never holds a stale one. */
-  private loadConfig() {
+  private loadConfig(landed?: () => void) {
     this.api.get<TenantBillingConfig>("/api/config/billing").subscribe({
       next: (c) => {
         if (c) this._config.set({ ...this._config(), ...c });
+        landed?.();
       },
+      ...(landed ? { error: () => landed() } : {}),
     });
   }
+  /** First load: skeleton form until the saved config lands (held, no flash). */
+  private readonly configHold = createLoadHold(true);
+  readonly configSkeleton = this.configHold.active;
+  private readonly destroyRef = inject(DestroyRef);
 
   saveConfig() {
+    if (this.savingConfig()) return;
     const c = this._config();
     this.api
       .post("/api/config/billing", {
@@ -1510,6 +1547,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
         bankName: c.bankName?.trim() || null,
         invoiceOnFullPaymentOnly: c.invoiceOnFullPaymentOnly ?? false,
       })
+      .pipe(busyWhile(this.savingConfig))
       .subscribe({
         next: () => { this.toasts.success("Billing config saved"); this.loadConfig(); },
         error: (e) => this.toasts.error(ApiError.from(e).message),

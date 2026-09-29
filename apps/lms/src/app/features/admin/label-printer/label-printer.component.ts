@@ -14,6 +14,7 @@ import { PfBleDevice } from '../../../core/printer/prefrontal-printer.plugin';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 /** Band status of this station's label printer. */
 export type LabelPrinterBandState = 'connected' | 'offline' | 'none' | 'web';
@@ -42,13 +43,13 @@ export const PREVIEW_LABEL: LabelData = {
   selector: 'pf-label-printer',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, RouterLink, ScreenHeaderComponent, HeroBandComponent, SelectComponent],
+  imports: [BusyDirective, CommonModule, RouterLink, ScreenHeaderComponent, HeroBandComponent, SelectComponent],
   template: `
     <section class="pf-band-page pf-lp mx-auto w-full max-w-6xl px-4 py-4">
       @if (theme.isNewDesign()) {
         <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true">
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press pf-lp-test" (click)="test()" [disabled]="busy()"
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press pf-lp-test" (click)="test()" [disabled]="busy()" [pfBusy]="testing()" pfBusyLabel="Printing…"
                     aria-label="Test print" title="Test print">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -75,7 +76,7 @@ export const PREVIEW_LABEL: LabelData = {
       <pf-screen-header class="pf-classic-only" title="Printing"
         subtitle="Set up this station's printers and label. USB is used automatically when connected, otherwise Bluetooth.">
         <div actions>
-          <button type="button" class="nd-btn nd-btn--primary press" (click)="test()" [disabled]="busy()">Test print</button>
+          <button type="button" class="nd-btn nd-btn--primary press" (click)="test()" [disabled]="busy()" [pfBusy]="testing()" pfBusyLabel="Printing…">Test print</button>
         </div>
       </pf-screen-header>
 
@@ -260,7 +261,7 @@ export const PREVIEW_LABEL: LabelData = {
                   @if (printer.connected()) { <span class="pf-ok"><svg class="pf-ok__i" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>connected</span> }
                 </span>
               </div>
-              <button type="button" class="nd-btn nd-btn--secondary" (click)="scan()" [disabled]="busy()">
+              <button type="button" class="nd-btn nd-btn--secondary" (click)="scan()" [disabled]="busy()" [pfBusy]="scanning()" pfBusyLabel="Scanning…">
                 {{ scanning() ? 'Scanning…' : 'Scan' }}
               </button>
             </div>
@@ -269,7 +270,7 @@ export const PREVIEW_LABEL: LabelData = {
                 <p class="pf-muted">{{ scanning() ? 'Looking…' : 'Tap Scan to find your printer.' }}</p>
               } @else {
                 @for (d of devices(); track d.deviceId) {
-                  <button type="button" class="pf-row" (click)="pair(d)" [disabled]="busy()">
+                  <button type="button" class="pf-row" (click)="pair(d)" [disabled]="busy()" [pfBusy]="pairingId() === d.deviceId" pfBusyLabel="Connecting…">
                     <span class="min-w-0"><span class="block pf-wrap">{{ d.name || 'Unnamed device' }}</span>
                       <span class="pf-mono">{{ d.deviceId }}</span></span>
                     <span class="pf-hint">tap to pair</span>
@@ -524,6 +525,9 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
   readonly devices = signal<PfBleDevice[]>([]);
   readonly scanning = signal(false);
   readonly busy = signal(false);
+  /** Loading feedback: Test print running / the device row being paired. */
+  readonly testing = signal(false);
+  readonly pairingId = signal<string | null>(null);
 
   /** Live label preview — redrawn whenever size, position, code size,
    *  rotation or the org's code changes. */
@@ -606,11 +610,12 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
 
   async test(): Promise<void> {
     this.busy.set(true);
+    this.testing.set(true);
     this.toasts.info('Printing test label…');
     try {
       const r = await this.printer.testPrint();
       if (r.ok) this.toasts.success('Test label sent'); else this.toasts.error(r.error || 'Print failed');
-    } finally { this.busy.set(false); }
+    } finally { this.busy.set(false); this.testing.set(false); }
   }
 
   async scan(): Promise<void> {
@@ -624,8 +629,9 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
   }
   async pair(d: PfBleDevice): Promise<void> {
     this.busy.set(true);
+    this.pairingId.set(d.deviceId);
     try { await this.printer.selectDevice(d); this.toasts.success(`Paired ${d.name || d.deviceId}`); }
     catch (e) { this.toasts.error((e as Error)?.message || 'Could not connect'); }
-    finally { this.busy.set(false); void this.refreshState(); }
+    finally { this.busy.set(false); this.pairingId.set(null); void this.refreshState(); }
   }
 }

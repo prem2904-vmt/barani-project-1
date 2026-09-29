@@ -143,6 +143,29 @@ describe('LoginComponent', () => {
     await fixture.whenStable();
   });
 
+  it('stays busy while the app\'s first screen is on its way — no dead "Sign in" to press twice', async () => {
+    const { $, fixture, auth, router } = await render();
+    let land!: (ok: boolean) => void;
+    const nav = vi.spyOn(router, 'navigateByUrl').mockImplementation(() => new Promise<boolean>(r => { land = r; }));
+    $<HTMLInputElement>('#lg-username').value = 'u'; $<HTMLInputElement>('#lg-username').dispatchEvent(new Event('input'));
+    $<HTMLInputElement>('#lg-password').value = 'p'; $<HTMLInputElement>('#lg-password').dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    $<HTMLButtonElement>('.lg__submit').click();
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    fixture.detectChanges();
+    expect(nav).toHaveBeenCalled();                      // signed in, navigating
+    const btn = $<HTMLButtonElement>('.lg__submit');
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute('aria-busy')).toBe('true');
+    expect(btn.textContent).toContain('Signing in');
+    btn.click();                                          // a second press does nothing
+    expect(auth.signIn).toHaveBeenCalledTimes(1);
+    land(false);                                          // a refused navigation releases the button
+    await Promise.resolve(); await Promise.resolve();
+    fixture.detectChanges();
+    expect($<HTMLButtonElement>('.lg__submit').disabled).toBe(false);
+  });
+
   it('shows the "session expired" note and returns to the saved URL after signing in', async () => {
     const { $, fixture, router } = await render('/login?reason=expired&returnUrl=%2Ffrontdesk');
     expect($('.lg__notice').textContent).toContain('Your session expired. Please sign in again.');

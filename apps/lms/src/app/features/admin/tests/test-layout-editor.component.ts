@@ -78,7 +78,7 @@ const OPERATORS = [
         </pf-touch-btn>
         <!-- Secondary: embedded in the test editor, whose band owns the ONE primary. -->
         <pf-touch-btn size="sm" variant="secondary"
-                      [disabled]="saving() || !testId()"
+                      [disabled]="saving() || !testId()" [busy]="saving()" busyLabel="Saving layout…"
                       (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save layout' }}
         </pf-touch-btn>

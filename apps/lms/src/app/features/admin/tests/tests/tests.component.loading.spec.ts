@@ -7,6 +7,7 @@ import { Subject, of } from 'rxjs';
 import { isPrefetched, resetPrefetchForTests } from '../../../../shared/utils/prefetch';
 import { vi } from 'vitest';
 import { TestsComponent } from './tests.component';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
@@ -63,7 +64,7 @@ function render(opts: { confirm?: boolean; narrow?: boolean; tests$?: Subject<an
     ],
   });
   TestBed.overrideComponent(TestsComponent, {
-    set: { imports: [FormsModule, NgTemplateOutlet], schemas: [CUSTOM_ELEMENTS_SCHEMA] },
+    set: { imports: [FormsModule, NgTemplateOutlet, BusyDirective], schemas: [CUSTOM_ELEMENTS_SCHEMA] },
   });
   const f = TestBed.createComponent(TestsComponent);
   f.detectChanges();

@@ -62,12 +62,12 @@ export interface ColumnsEditorState {
         <span class="grow"></span>
         <pf-touch-btn size="sm" variant="secondary" (pressed)="resetToDefaults()">Reset</pf-touch-btn>
         <pf-touch-btn size="sm" variant="secondary"
-                      [disabled]="!totalOk() || applyingAll()" (pressed)="applyToAll()">
+                      [disabled]="!totalOk() || applyingAll()" [busy]="applyingAll()" busyLabel="Applying…" (pressed)="applyToAll()">
           {{ applyingAll() ? 'Applying…' : 'Apply to all' }}
         </pf-touch-btn>
         <!-- Secondary: the host page's band owns the ONE primary. -->
         <pf-touch-btn size="sm" variant="secondary"
-                      [disabled]="!totalOk() || saving()" (pressed)="save()">
+                      [disabled]="!totalOk() || saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </div>
@@ -227,7 +227,7 @@ export interface ColumnsEditorState {
         <div class="pf-ce-inspector" style="margin-top: 16px;">
           <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
             <h4 style="margin:0; font-size:13px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
-            <pf-touch-btn size="sm" variant="secondary" [disabled]="sigSaving()" (pressed)="saveSignatories()">
+            <pf-touch-btn size="sm" variant="secondary" [disabled]="sigSaving()" [busy]="sigSaving()" busyLabel="Saving…" (pressed)="saveSignatories()">
               {{ sigSaving() ? 'Saving…' : 'Save signatories' }}
             </pf-touch-btn>
           </div>

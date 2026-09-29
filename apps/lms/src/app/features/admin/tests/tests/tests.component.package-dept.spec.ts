@@ -6,6 +6,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { TestsComponent } from './tests.component';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
@@ -70,7 +71,7 @@ function render(type: 'individual' | 'profile' | 'package') {
     ],
   });
   TestBed.overrideComponent(TestsComponent, {
-    set: { imports: [FormsModule, NgTemplateOutlet], schemas: [CUSTOM_ELEMENTS_SCHEMA] },
+    set: { imports: [FormsModule, NgTemplateOutlet, BusyDirective], schemas: [CUSTOM_ELEMENTS_SCHEMA] },
   });
   const f = TestBed.createComponent(TestsComponent);
   f.detectChanges();

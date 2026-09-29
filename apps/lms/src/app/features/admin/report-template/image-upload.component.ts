@@ -5,6 +5,8 @@ import { UploadsService } from '../../../core/services/uploads.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ImageEditorComponent } from '../../../shared/components/image-editor/image-editor.component';
+import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { spinDelay } from '../../../shared/utils/busy';
 
 /** Small reusable image-upload tile used by the report-template editor
  *  for the lab logo, NABL badge, and signature scans. POSTs the file to
@@ -16,7 +18,7 @@ import { ImageEditorComponent } from '../../../shared/components/image-editor/im
 @Component({
   selector: 'pf-image-upload',
   standalone: true,
-  imports: [ImageEditorComponent],
+  imports: [BusyComponent, ImageEditorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (editFile()) {
@@ -31,10 +33,11 @@ import { ImageEditorComponent } from '../../../shared/components/image-editor/im
         }
       </div>
       <div class="flex-1 min-w-0">
-        <label class="pf-file-btn">
+        <label class="pf-file-btn" [class.pf-is-busy]="uploading()" [attr.aria-busy]="uploading() ? 'true' : null">
           <input type="file" accept="image/png,image/jpeg,image/webp"
                  (change)="onPick($event)" hidden />
           {{ uploading() ? 'Uploading…' : (url ? 'Replace image' : 'Upload image') }}
+          @if (uploadDots()) { <pf-busy class="pf-busy--inbtn" label="Uploading…"></pf-busy> }
         </label>
         @if (url) {
           <button type="button" class="pf-remove-link" (click)="clear()">Remove</button>
@@ -89,6 +92,8 @@ export class ImageUploadComponent {
   @Output() urlChange = new EventEmitter<string>();
 
   readonly uploading = signal<boolean>(false);
+  /** The kit's busy dots after 150ms of an upload (no flicker for a fast one). */
+  readonly uploadDots = spinDelay(this.uploading);
   /** The raster file currently open in the crop/resize editor (OPS-14). */
   readonly editFile = signal<File | null>(null);
 

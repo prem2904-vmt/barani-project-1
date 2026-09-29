@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, CdkDropList, CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
@@ -12,6 +12,9 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /** A physical lab space within a branch; departments are assigned to one. */
 interface LabSpace { id: string; branchId: string; name: string; code?: string | null; order: number; }
@@ -23,7 +26,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
 @Component({
   selector: 'pf-branches',
   standalone: true,
-  imports: [
+  imports: [SkeletonRowsComponent, BusyDirective, 
     FormsModule,
     CdkDropList,
     CdkDrag,
@@ -90,12 +93,15 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
           </div>
           <div class="nd-card__foot">
             <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleNewBranch()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" (click)="createBranch()">Create branch</button>
+            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
           </div>
         </section>
       }
 
-      @if (branches().length === 0) {
+      @if (listSkeleton()) {
+        <!-- First load: the branch cards' shape, not "No branches yet". -->
+        <pf-skeleton-rows [rows]="3" [avatar]="false" label="Loading branches…"></pf-skeleton-rows>
+      } @else if (branches().length === 0) {
         <p class="pf-band-empty">No branches yet.</p>
       } @else if (visibleBranches().length === 0) {
         <p class="pf-band-empty">No branches match "{{ q() }}".</p>
@@ -220,7 +226,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                     }
 
                     <!-- Add-space tile — mirrors the process builder's "+ Add work-area". -->
-                    <button type="button" class="pf-add-space-lane press" (click)="addSpace(b.id)">
+                    <button type="button" class="pf-add-space-lane press" [disabled]="addingSpaceFor() === b.id" [pfBusy]="addingSpaceFor() === b.id" pfBusyLabel="Adding…" (click)="addSpace(b.id)">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                       Add space
                     </button>
@@ -574,8 +580,21 @@ export class BranchesComponent implements OnInit {
     this._sampleCodeError.update(m => { const { [deptId]: _drop, ...rest } = m; return rest; });
   }
 
+  // ── Loading feedback (ND-PATTERN "Loading feedback") ──
+  private readonly listHold = createLoadHold(true);
+  /** First load: skeleton cards until the branches land (held, no flash). */
+  readonly listSkeleton = this.listHold.active;
+  readonly creatingBranch = signal(false);
+  /** The branch whose "Add space" is posting. */
+  readonly addingSpaceFor = signal<string | null>(null);
+  private readonly destroyRef = inject(DestroyRef);
+
   ngOnInit() {
-    this.api.get<Branch[]>('/api/tenants/branches').subscribe({ next: l => this._branches.set(l ?? []) });
+    this.destroyRef.onDestroy(() => this.listHold.cancel());
+    this.api.get<Branch[]>('/api/tenants/branches').subscribe({
+      next: l => { this._branches.set(l ?? []); this.listHold.done(); },
+      error: () => this.listHold.done(),
+    });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({ next: l => this._departments.set(l ?? []) });
     this.api.get<LabSpace[]>('/api/tenants/lab-spaces').subscribe({ next: l => this._spaces.set(l ?? []) });
     this.api.get<DeptSpaceLink[]>('/api/tenants/department-space-links').subscribe({ next: l => this._links.set(l ?? []) });
@@ -619,9 +638,11 @@ export class BranchesComponent implements OnInit {
 
   addSpace(branchId: string) {
     const order = this.spacesFor(branchId).length;
+    if (this.addingSpaceFor() === branchId) return;
+    this.addingSpaceFor.set(branchId);
     this.api.post<LabSpace>('/api/tenants/lab-spaces', { branchId, name: `Space ${order + 1}`, order }).subscribe({
-      next: sp => this._spaces.update(l => [...l, sp]),
-      error: e => this.toasts.error(ApiError.from(e).message),
+      next: sp => { this.addingSpaceFor.set(null); this._spaces.update(l => [...l, sp]); },
+      error: e => { this.addingSpaceFor.set(null); this.toasts.error(ApiError.from(e).message); },
     });
   }
   private renameSpaceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -709,9 +730,11 @@ export class BranchesComponent implements OnInit {
   createBranch() {
     const b = this._newBranch();
     if (!b.name.trim() || !b.code.trim()) { this.toasts.warning('Name and code required'); return; }
+    if (this.creatingBranch()) return;
+    this.creatingBranch.set(true);
     this.api.post<Branch>('/api/tenants/branches', b).subscribe({
-      next: saved => { this._branches.update(list => [...list, saved]); this.toasts.success('Branch added'); this.toggleNewBranch(); },
-      error: e => this.toasts.error(ApiError.from(e).message)
+      next: saved => { this.creatingBranch.set(false); this._branches.update(list => [...list, saved]); this.toasts.success('Branch added'); this.toggleNewBranch(); },
+      error: e => { this.creatingBranch.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }
 

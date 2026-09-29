@@ -12,6 +12,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
 import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isAllowedPlacement, isFixedSlotAction, isLockedItem, isMandatoryItem, actionHome, normalizeWorkflow, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
@@ -29,7 +30,7 @@ const LANE_COLOR = '#7c3aed';
 @Component({
   selector: 'pf-process-builder',
   standalone: true,
-  imports: [FormsModule, DragDropModule, HeroBandComponent, SelectComponent],
+  imports: [BusyDirective, FormsModule, DragDropModule, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pb pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-12">
@@ -61,7 +62,7 @@ const LANE_COLOR = '#7c3aed';
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
               Set active
             </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()" (click)="save()">
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
               {{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}
             </button>
@@ -98,7 +99,7 @@ const LANE_COLOR = '#7c3aed';
           <button type="button" class="pb-btn" (click)="newWorkflow()" title="New workflow">+ New</button>
           <button type="button" class="pb-btn" [disabled]="!currentId()" (click)="duplicate()">Duplicate</button>
           <button type="button" class="pb-btn" [disabled]="!currentId() || isActive()" (click)="activate()">Set active</button>
-          <button type="button" class="pb-btn pb-btn--primary" [disabled]="saving()" (click)="save()">{{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}</button>
+          <button type="button" class="pb-btn pb-btn--primary" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}</button>
         </div>
       </header>
 

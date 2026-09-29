@@ -13,6 +13,7 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface Hospital {
   id: string;
@@ -57,7 +58,7 @@ interface Doctor {
 @Component({
   selector: 'pf-referring-network',
   standalone: true,
-  imports: [SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
+  imports: [BusyDirective, SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-screen-2xl mx-auto w-full">
@@ -271,7 +272,7 @@ interface Doctor {
             <span class="flex-1"></span>
             <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeHospitalEditor()">Cancel</button>
             <button type="button" class="nd-btn nd-btn--primary press"
-                    [disabled]="!he.name?.trim() || savingHospital()" (click)="saveHospital()">
+                    [disabled]="!he.name?.trim() || savingHospital()" [pfBusy]="savingHospital()" pfBusyLabel="Saving…" (click)="saveHospital()">
               @if (savingHospital()) { Saving… } @else { Save hospital }
             </button>
           </footer>
@@ -329,7 +330,7 @@ interface Doctor {
             <span class="flex-1"></span>
             <button type="button" class="nd-btn nd-btn--secondary press" (click)="closeDoctorEditor()">Cancel</button>
             <button type="button" class="nd-btn nd-btn--primary press"
-                    [disabled]="!de.name?.trim() || savingDoctor()" (click)="saveDoctor()">
+                    [disabled]="!de.name?.trim() || savingDoctor()" [pfBusy]="savingDoctor()" pfBusyLabel="Saving…" (click)="saveDoctor()">
               @if (savingDoctor()) { Saving… } @else { Save doctor }
             </button>
           </footer>

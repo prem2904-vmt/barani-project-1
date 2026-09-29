@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
@@ -15,6 +16,8 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 type AreaMode = 'pincode' | 'radius';
 interface Draft {
@@ -31,7 +34,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
 @Component({
   selector: 'pf-home-collection-agents',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent],
+  imports: [SkeletonTilesComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* ── ND audit: kit cards ── */
@@ -149,14 +152,17 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
           </div>
           <div class="nd-card__foot">
             <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleForm()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!draft().userId || saving()" (click)="save()">
+            <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               {{ saving() ? 'Saving…' : 'Save agent' }}
             </button>
           </div>
         </section>
       }
 
-      @if (agents().length === 0) {
+      @if (listSkeleton()) {
+        <!-- First load: the agent cards' shape, not "No agents yet". -->
+        <pf-skeleton-tiles [count]="3" label="Loading agents…"></pf-skeleton-tiles>
+      } @else if (agents().length === 0) {
         <p class="pf-band-empty">No home-collection agents yet.</p>
       } @else if (visibleAgents().length === 0) {
         <p class="pf-band-empty">No agents match "{{ q() }}".</p>
@@ -175,7 +181,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
                 </div>
                 <div class="flex items-center justify-end gap-2 pt-2 pf-hc-acts">
                   <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="edit(a)" aria-label="Edit area" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="nd-rowact__t">Edit</span></button>
-                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="remove(a)" aria-label="Remove agent" title="Remove"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span class="nd-rowact__t">Remove</span></button>
+                  <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="remove(a)" [disabled]="removingId() === a.id" [pfBusy]="removingId() === a.id" pfBusyLabel="Removing…" aria-label="Remove agent" title="Remove"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span class="nd-rowact__t">Remove</span></button>
                 </div>
               </div>
             </div>
@@ -220,13 +226,24 @@ export class HomeCollectionAgentsComponent implements OnInit {
   readonly userOptions = computed<PfSelectOption<string>[]>(() =>
     this._users().filter(u => u.isActive).map(u => ({ value: u.id, label: `${userDisplayName(u)} · ${u.email}` })));
 
+  /** First load: skeleton cards until the agents land (held, no flash). */
+  private readonly listHold = createLoadHold(true);
+  readonly listSkeleton = this.listHold.active;
+  /** The agent whose Remove is running. */
+  readonly removingId = signal<string | null>(null);
+  private readonly destroyRef = inject(DestroyRef);
+
   ngOnInit() {
+    this.destroyRef.onDestroy(() => this.listHold.cancel());
     this.load();
     this.api.get<User[]>('/api/users/').subscribe({ next: l => this._users.set(l ?? []) });
   }
 
   private load() {
-    this.svc.listAgents().subscribe({ next: l => this._agents.set(l ?? []) });
+    this.svc.listAgents().subscribe({
+      next: l => { this._agents.set(l ?? []); this.listHold.done(); },
+      error: () => this.listHold.done(),
+    });
   }
 
   toggleForm() {
@@ -271,9 +288,11 @@ export class HomeCollectionAgentsComponent implements OnInit {
   }
 
   remove(a: HomeCollectionAgent) {
+    if (this.removingId() === a.id) return;
+    this.removingId.set(a.id);
     this.svc.removeAgent(a.id).subscribe({
-      next: () => { this.toast.success('Removed.'); this.load(); },
-      error: e => this.toast.error(ApiError.from(e).message)
+      next: () => { this.removingId.set(null); this.toast.success('Removed.'); this.load(); },
+      error: e => { this.removingId.set(null); this.toast.error(ApiError.from(e).message); }
     });
   }
 

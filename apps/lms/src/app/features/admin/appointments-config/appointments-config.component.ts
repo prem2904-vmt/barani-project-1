@@ -11,6 +11,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 /** Band pill tabs — one per section card. */
 export type AppointmentsTab = 'mode' | 'slots' | 'priority';
@@ -26,7 +27,7 @@ const MODES: ModeOption[] = [
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent],
+  imports: [BusyDirective, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
@@ -87,7 +88,7 @@ const MODES: ModeOption[] = [
                           (valueChange)="tab.set($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || !cfg()"
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || !cfg()" [pfBusy]="saving()" pfBusyLabel="Saving…"
                     (click)="save()" aria-label="Save" title="Save">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -103,7 +104,7 @@ const MODES: ModeOption[] = [
         eyebrow="Admin"
         title="Appointments & queue"
         subtitle="Choose how this branch runs its front desk, and tune the priority engine.">
-        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving() || !cfg()" (pressed)="save()">
+        <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving() || !cfg()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </pf-screen-header>

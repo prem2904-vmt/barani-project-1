@@ -394,7 +394,7 @@
             <div #thread class="nd-card__body pf-mnd-scroller" (scroll)="onScrollerScroll()"
                  (dragover)="onScrollerDragOver($event)" (drop)="onScrollerDrop($event)" aria-live="polite">
               @if (chat.loadingHistory()) {
-                <p class="pf-mnd-note">Loading…</p>
+                <pf-skeleton-rows [rows]="5" [trailing]="false" label="Loading messages…"></pf-skeleton-rows>
               } @else {
                 @if (chat.loadingOlder()) {
                   <p class="pf-mnd-note"><span class="pf-mnd-dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
@@ -932,7 +932,7 @@
       <ul class="nd-card__body pf-mnd-modal__list" role="list">
         @for (u of addMemberCandidates(); track u.id) {
           <li>
-            <button type="button" class="pf-mnd-row" [disabled]="addMemberBusy()" (click)="addMember(u.id)">
+            <button type="button" class="pf-mnd-row" [disabled]="addMemberBusy()" [pfBusy]="addingMemberId() === u.id" pfBusyLabel="Adding…" (click)="addMember(u.id)">
               <span class="pf-mnd-av pf-mnd-av--sm" aria-hidden="true">{{ nameInitials(u.displayName) }}<pf-presence-dot [userId]="u.id" /></span>
               <span class="pf-mnd-row__main">
                 <span class="pf-mnd-row__name">{{ u.displayName }}</span>

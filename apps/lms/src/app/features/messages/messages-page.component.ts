@@ -24,6 +24,8 @@ import { presenceText as presenceDisplayText } from '../../shared/models/presenc
 import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.model';
 import { ApiError } from '../../shared/models/api-response.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
+import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 interface PatientLite {
@@ -51,7 +53,7 @@ type CallFilter = 'all' | 'missed';
 @Component({
   selector: 'app-messages-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective],
+  imports: [BusyDirective, SkeletonRowsComponent, CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-page.component.html',
   styleUrls: ['./messages-page.component.scss']
@@ -111,6 +113,8 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly addMemberOpen = signal(false);
   protected readonly addMemberSearch = signal('');
   protected readonly addMemberBusy = signal(false);
+  /** The picker row whose add is running (its busy dots). */
+  protected readonly addingMemberId = signal<string | null>(null);
 
   /** Reply / edit / hover-menu state on the composer. */
   protected readonly replyingTo = signal<{ id: string; preview: string; fromName: string } | null>(null);
@@ -698,13 +702,14 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     const conv = this.chat.activeConversation();
     if (!conv) return;
     this.addMemberBusy.set(true);
+    this.addingMemberId.set(userId);
     try {
       await this.chat.addMember(conv.id, userId);
       this.toasts.info('Member added.');
       this.closeAddMember();
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
-    } finally { this.addMemberBusy.set(false); }
+    } finally { this.addMemberBusy.set(false); this.addingMemberId.set(null); }
   }
 
   protected async removeMember(userId: string): Promise<void> {

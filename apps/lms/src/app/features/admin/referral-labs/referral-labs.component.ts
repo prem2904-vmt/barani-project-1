@@ -12,6 +12,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface LabDraft {
   id?: string;
@@ -36,7 +37,7 @@ const EMPTY: LabDraft = {
 @Component({
   selector: 'pf-referral-labs',
   standalone: true,
-  imports: [SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
+  imports: [BusyDirective, SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -111,7 +112,7 @@ const EMPTY: LabDraft = {
           </div>
           <div class="nd-card__foot">
             <button type="button" class="nd-btn nd-btn--tertiary press" (click)="toggleForm()">Cancel</button>
-            <button type="button" class="nd-btn nd-btn--primary press" (click)="save()" [disabled]="!draft().name.trim() || saving()">
+            <button type="button" class="nd-btn nd-btn--primary press" (click)="save()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…">
               {{ saving() ? 'Saving…' : (draft().id ? 'Save changes' : 'Create referral lab') }}
             </button>
           </div>

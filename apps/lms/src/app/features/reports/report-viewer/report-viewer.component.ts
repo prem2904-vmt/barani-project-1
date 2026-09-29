@@ -4,7 +4,7 @@ import { environment } from '../../../../environments/environment';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { ActivatedRoute, Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -33,6 +33,8 @@ import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService } from '
 import { DialogService } from '../../../core/services/dialog.service';
 import { WhatsAppSendService, waSendLabel } from '../../../core/services/whatsapp-send.service';
 import { formatAge } from '../../../shared/utils/patient-age';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 interface ReportData {
   patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; ageDisplay?: string | null; ageYears?: number | null; sex?: string; phone?: string; mrn?: string };
@@ -138,7 +140,9 @@ export const RV_DONE_MS = 1800;
     EditResultDialogComponent,
     ZoomTargetDirective,
     ActionsMenuComponent,
-    ActionsMenuTriggerDirective
+    ActionsMenuTriggerDirective,
+    BusyDirective,
+    SkeletonRowsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './report-viewer.component.html',
@@ -190,6 +194,9 @@ export class ReportViewerComponent implements OnInit {
   /** Brief success state on an action button, then back to its label. */
   readonly done = signal<'print' | 'whatsapp' | null>(null);
   readonly busy = signal<'print' | null>(null);
+  /** A ⋮ menu action whose work outlives the menu (Download builds the PDF,
+   *  Regenerate posts): the ⋮ trigger shows it busy until it answers. */
+  readonly menuBusy = signal<'download' | 'regenerate' | null>(null);
   private doneTimer: ReturnType<typeof setTimeout> | null = null;
   private flash(kind: 'print' | 'whatsapp'): void {
     this.done.set(kind);
@@ -339,7 +346,8 @@ export class ReportViewerComponent implements OnInit {
    *  (Save to Files); web: a file download. */
   async download(): Promise<void> {
     const r = this._report();
-    if (!r) return;
+    if (!r || this.menuBusy()) return;
+    this.menuBusy.set('download');
     try {
       const blob = this._pdfBlob ??= await this.buildPdfBlob(r);
       const name = `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`;
@@ -362,6 +370,8 @@ export class ReportViewerComponent implements OnInit {
       if ((err as { name?: string })?.name === 'AbortError') return;
       const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
       this.toasts.error(reportRenderErrorMessage(err, 'Could not download report'));
+    } finally {
+      if (this.menuBusy() === 'download') this.menuBusy.set(null);
     }
   }
 
@@ -376,8 +386,11 @@ export class ReportViewerComponent implements OnInit {
       confirmLabel: 'Regenerate',
       tone: 'primary',
     });
-    if (!ok) return;
-    this.api.post<Report>('/api/reports/generate', { orderId: r.orderId, type: 'final' }).subscribe({
+    if (!ok || this.menuBusy()) return;
+    this.menuBusy.set('regenerate');
+    this.api.post<Report>('/api/reports/generate', { orderId: r.orderId, type: 'final' }).pipe(
+      finalize(() => { if (this.menuBusy() === 'regenerate') this.menuBusy.set(null); }),
+    ).subscribe({
       next: r2 => {
         this.toasts.success('Report regenerated with the latest template');
         if (!r2?.id) return;
@@ -447,6 +460,10 @@ export class ReportViewerComponent implements OnInit {
   protected readonly chatPickerSearch = signal('');
   protected readonly chatPickerUsers = signal<{ id: string; displayName: string; email: string; isActive: boolean }[]>([]);
   protected readonly chatPickerSending = signal(false);
+  /** The colleague row whose share is running (its busy dots). */
+  protected readonly chatPickerSendingTo = signal<string | null>(null);
+  /** The directory is on its way (first open): skeleton rows, not "No colleagues match". */
+  protected readonly chatPickerLoading = signal(false);
   protected readonly chatPickerFiltered = computed(() => {
     const term = this.chatPickerSearch().toLowerCase().trim();
     const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
@@ -459,12 +476,13 @@ export class ReportViewerComponent implements OnInit {
     this.chatPickerOpen.set(true);
     this.chatPickerSearch.set('');
     if (this.chatPickerUsers().length === 0) {
+      this.chatPickerLoading.set(true);
       try {
         const users = await firstValueFrom(this.api.get<{ id: string; displayName: string; email: string; isActive: boolean }[]>('/api/directory/users'));
         this.chatPickerUsers.set(users ?? []);
       } catch {
         this.toasts.error('Could not load directory.');
-      }
+      } finally { this.chatPickerLoading.set(false); }
     }
   }
   closeSharePicker(): void { this.chatPickerOpen.set(false); this.chatPickerSending.set(false); }
@@ -473,6 +491,7 @@ export class ReportViewerComponent implements OnInit {
     const r = this.report();
     if (!r) return;
     this.chatPickerSending.set(true);
+    this.chatPickerSendingTo.set(u.id);
     try {
       const label = this.subtitle() || `Report #${r.id.slice(0, 8)}`;
       const convId = await this.chat.openConversationWithContext(u.id, 'report', r.id, label);
@@ -482,7 +501,7 @@ export class ReportViewerComponent implements OnInit {
       this.router.navigate(['/messages']);
     } catch (err) {
       this.toasts.error(ApiError.from(err).message);
-    } finally { this.chatPickerSending.set(false); }
+    } finally { this.chatPickerSending.set(false); this.chatPickerSendingTo.set(null); }
   }
 
   readonly data = computed<ReportData | null>(() => {

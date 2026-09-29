@@ -61,6 +61,12 @@ export class LoginComponent implements AfterViewInit {
   protected readonly username = signal('');
   protected readonly password = signal('');
   protected readonly busy = signal(false);
+  /** Signed in, the app's first screen is on its way (lazy chunk + guards):
+   *  the button stays busy until the navigation lands, so there is no dead
+   *  "Sign in" button to press again in between (ND-PATTERN "Loading feedback"). */
+  protected readonly entering = signal(false);
+  /** The submit button's busy look: signing in OR entering the app. */
+  protected readonly working = computed(() => this.busy() || this.entering());
   protected readonly error = signal<string | null>(null);
   /** Which field the error is about (inline + aria-invalid); null = the form. */
   protected readonly errorField = signal<LoginField | null>(null);
@@ -211,6 +217,7 @@ export class LoginComponent implements AfterViewInit {
   private async enterApp(): Promise<void> {
     if (this.navigating) return;
     this.navigating = true;
+    this.entering.set(true);
     let ok = false;
     try {
       if (this.auth.mustChangePassword()) {
@@ -225,7 +232,7 @@ export class LoginComponent implements AfterViewInit {
       ok = await this.router.navigateByUrl('/', { replaceUrl: true });
     } finally {
       // One-shot once we have left: a late auth signal must not navigate again.
-      if (!ok) this.navigating = false;
+      if (!ok) { this.navigating = false; this.entering.set(false); }
     }
   }
 
@@ -237,7 +244,7 @@ export class LoginComponent implements AfterViewInit {
     // Prevent the form's default action so we don't get a duplicate
     // call (button click triggers submit AND form ngSubmit can fire).
     ev?.preventDefault?.();
-    if (this.busy()) return;
+    if (this.busy() || this.entering()) return;
 
     console.info('[login] submit', {
       hasOrg: this.org().length > 0,

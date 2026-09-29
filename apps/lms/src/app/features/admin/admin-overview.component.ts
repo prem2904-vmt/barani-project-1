@@ -17,6 +17,7 @@ import { ApiError } from "../../shared/models/api-response.model";
 import { ToastService } from "../../core/services/toast.service";
 import { testListUrl } from '../../shared/utils/test-list-url';
 import { addDays, istDayRange, labToday } from "../../shared/utils/lab-clock";
+import { BusyDirective } from '../../shared/directives/busy.directive';
 
 interface SeedSummary {
   tenants: number;
@@ -62,7 +63,7 @@ interface KpiCard {
 @Component({
   selector: "pf-admin-overview",
   standalone: true,
-  imports: [RouterLink, DatePipe, HeroBandComponent],
+  imports: [BusyDirective, RouterLink, DatePipe, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-ov pf-band-page">
@@ -119,7 +120,7 @@ interface KpiCard {
         <!-- Refresh is a quiet button on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
         <ng-container band-actions>
-          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="load()">
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [pfBusy]="loading()" pfBusyLabel="Refreshing…" (click)="load()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>

@@ -16,6 +16,7 @@ import {
   PriceWriteItem, TENANT_PRICE_SCOPE, effectivePrice, isOffered, isPriceDefault,
 } from '../../../shared/utils/test-pricing';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isPackage, shownDepartmentName } from '../../../shared/utils/package-department';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 
@@ -57,7 +58,7 @@ export interface PriceRow {
 @Component({
   selector: 'pf-pricing',
   standalone: true,
-  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
+  imports: [SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-pricing" [class.pf-pricing--embedded]="embedded()">
@@ -171,7 +172,8 @@ export interface PriceRow {
           </span>
           <div class="flex items-center gap-2 ml-auto">
             <button type="button" class="nd-btn nd-btn--tertiary press" [disabled]="saving()" (click)="discard()">Discard</button>
-            <button type="button" class="nd-btn nd-btn--primary pf-pricing__save press" [disabled]="saving()" (click)="save()">
+            <button type="button" class="nd-btn nd-btn--primary pf-pricing__save press" [disabled]="saving()"
+                    [pfBusy]="saving()" pfBusyLabel="Saving prices…" (click)="save()">
               @if (saving()) { Saving… } @else { Save changes }
             </button>
           </div>

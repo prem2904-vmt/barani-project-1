@@ -154,9 +154,9 @@
                Both call the same guarded method. -->
           <button #submitBtn type="submit" class="nd-btn nd-btn--primary lg__submit"
                   (click)="submit($event)"
-                  [disabled]="busy()"
-                  [attr.aria-busy]="busy()">
-            @if (busy()) {
+                  [disabled]="working()"
+                  [attr.aria-busy]="working()">
+            @if (working()) {
               <pf-loading-logo size="xs" color="white" [inline]="true"></pf-loading-logo>
               <span>{{ addMode() ? 'Adding account…' : 'Signing in…' }}</span>
             } @else {

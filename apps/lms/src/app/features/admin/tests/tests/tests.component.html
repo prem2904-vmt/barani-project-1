@@ -24,7 +24,7 @@
       </ng-container>
       <ng-container band-actions>
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="restoring()"
-                (click)="restoreDefaults()" title="Restore to default" aria-label="Restore to default">
+                [pfBusy]="restoring()" pfBusyLabel="Restoring…" (click)="restoreDefaults()" title="Restore to default" aria-label="Restore to default">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
@@ -41,7 +41,7 @@
             Discard
           </button>
           <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
-                  (click)="saveAll()" title="Save changes" aria-label="Save changes">
+                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveAll()" title="Save changes" aria-label="Save changes">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
@@ -62,7 +62,7 @@
             Discard
           </button>
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-tm-pricesave press" [disabled]="pricingSaving()"
-                  (click)="pricingTable()?.save()" title="Save price changes" aria-label="Save price changes">
+                  [pfBusy]="pricingSaving()" pfBusyLabel="Saving…" (click)="pricingTable()?.save()" title="Save price changes" aria-label="Save price changes">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
@@ -101,12 +101,12 @@
     title="Test Master"
     subtitle="Tests, profiles and packages from the Admin Test Master — edit one to keep your own version, price it inline.">
     <div actions class="flex flex-wrap items-center gap-2 justify-end">
-      <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" (pressed)="restoreDefaults()">
+      <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" [busy]="restoring()" busyLabel="Restoring…" (pressed)="restoreDefaults()">
         {{ restoring() ? 'Restoring…' : 'Restore to default' }}
       </pf-touch-btn>
       @if (dirtyCount() > 0) {
         <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
-        <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
+        <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
       }
       <pf-touch-btn size="sm" variant="primary" (pressed)="openCreate()">
         <span icon-left aria-hidden="true">

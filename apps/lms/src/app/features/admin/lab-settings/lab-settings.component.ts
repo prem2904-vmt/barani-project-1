@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { MonoTypeOperatorFunction, defer, finalize } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -20,6 +21,9 @@ import { ReportTemplate } from '../../../shared/models/report.model';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/services/whatsapp.service';
 import { WaConnectCardComponent } from './wa-connect-card.component';
+import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { spinDelay } from '../../../shared/utils/busy';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
 
@@ -42,7 +46,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent, BusyComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -57,9 +61,15 @@ interface AutoAssignConfig {
           <!-- Autosave is authoritative here (no Save button): the band says
                so as the neutral save state with a violet check. -->
           <ng-container band-actions>
-            <span class="nd-savestate pf-ls__savestate" role="status" title="Every change saves as you make it">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-              <span class="pf-ls__savestate-t">Changes save automatically</span>
+            <span class="nd-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
+                  [attr.aria-busy]="savingShown() ? 'true' : null">
+              @if (savingShown()) {
+                <pf-busy label="Saving…"></pf-busy>
+                <span class="pf-ls__savestate-t">Saving…</span>
+              } @else {
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                <span class="pf-ls__savestate-t">Changes save automatically</span>
+              }
             </span>
           </ng-container>
         </pf-hero-band>
@@ -74,11 +84,25 @@ interface AutoAssignConfig {
       <!-- This page has no Save button by design: every change persists the
            moment you make it (OPS-15). Make that explicit so it doesn't read as
            unsaved. -->
-      <div class="pf-ls__autosave pf-classic-only" role="status">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-        <span>Changes are saved automatically</span>
+      <div class="pf-ls__autosave pf-classic-only" role="status" [attr.aria-busy]="savingShown() ? 'true' : null">
+        @if (savingShown()) {
+          <pf-busy label="Saving…"></pf-busy>
+          <span>Saving…</span>
+        } @else {
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          <span>Changes are saved automatically</span>
+        }
       </div>
+
+      @if (firstLoad()) {
+        <!-- First load: the section cards' shape until the branch config lands. -->
+        <div class="pf-ls__skel">
+          <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
+          <pf-skeleton-card [lines]="4" label="Loading lab settings…"></pf-skeleton-card>
+          <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
+        </div>
+      } @else {
 
       @if (showSec('collection')) {
       <!-- Counters & collection — now driven by the Workflow (single source) -->
@@ -623,10 +647,12 @@ interface AutoAssignConfig {
       </div>
       </section>
       }
+      }
       </div>
     </section>
   `,
   styles: [`
+    .pf-ls__skel { display: flex; flex-direction: column; gap: 16px; }
     .pf-ls__autosave {
       display: inline-flex; align-items: center; gap: 6px;
       margin: 2px 0 18px; padding: 5px 12px; border-radius: 999px;
@@ -801,6 +827,22 @@ export class LabSettingsComponent implements OnInit {
     { value: 'report', label: 'Report' },
   ];
   readonly tab = signal<LabSettingsTab>('collection');
+
+  // ── Loading feedback (ND-PATTERN "Loading feedback") ──
+  /** First load: skeleton cards until the branch config answers (held, no flash). */
+  private readonly loadHold = createLoadHold(true);
+  readonly firstLoad = this.loadHold.active;
+  /** Autosaves in flight — the band's save state reads "Saving…" meanwhile. */
+  private readonly pendingSaves = signal(0);
+  /** "Saving…" after 150ms (no flicker for a fast answer), held 300ms. */
+  readonly savingShown = spinDelay(computed(() => this.pendingSaves() > 0));
+  /** Counts one autosave request while it runs (request itself unchanged). */
+  private tracked<T>(): MonoTypeOperatorFunction<T> {
+    return src => defer(() => {
+      this.pendingSaves.update(n => n + 1);
+      return src.pipe(finalize(() => this.pendingSaves.update(n => Math.max(0, n - 1))));
+    });
+  }
   showSec(key: LabSettingsTab): boolean {
     return !this.theme.isNewDesign() || this.tab() === key;
   }
@@ -893,7 +935,7 @@ export class LabSettingsComponent implements OnInit {
   ];
   setInventoryEnabled(v: boolean) {
     this.inventoryEnabled.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).pipe(this.tracked()).subscribe({
       next: cfg => {
         // Push the fresh config into the shared service so the Stores nav entry
         // appears / disappears immediately (no reload needed).
@@ -910,7 +952,7 @@ export class LabSettingsComponent implements OnInit {
     const msg = v === 'none' ? 'Payment gate removed'
       : v === 'dispatch' ? 'Full payment now required before dispatch'
       : 'Full payment now required before sharing the report';
-    this.api.patch('/api/tenants/branch-lab-config', { paymentGateStage: v }).subscribe({
+    this.api.patch('/api/tenants/branch-lab-config', { paymentGateStage: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(msg),
       error: e => { this.paymentGateStage.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
@@ -919,7 +961,7 @@ export class LabSettingsComponent implements OnInit {
     const prev = this.labelCodeMode();
     if (prev === v) return;
     this.labelCodeMode.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labelCodeMode: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labelCodeMode: v }).pipe(this.tracked()).subscribe({
       next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Label code format updated'); },
       error: e => { this.labelCodeMode.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
@@ -928,7 +970,7 @@ export class LabSettingsComponent implements OnInit {
     const prev = this.queueFocusMode();
     if (prev === v) return;
     this.queueFocusMode.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { queueFocusMode: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { queueFocusMode: v }).pipe(this.tracked()).subscribe({
       next: cfg => {
         if (cfg) { this.labCfg.update(cfg); this.effectiveQueueFocus.set(cfg.effectiveQueueFocus ?? 'patient'); }
         this.toasts.success('Queue focus updated');
@@ -940,21 +982,21 @@ export class LabSettingsComponent implements OnInit {
     const prev = this.labStructure();
     if (prev === v) return;
     this.labStructure.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labStructure: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { labStructure: v }).pipe(this.tracked()).subscribe({
       next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success('Lab structure updated'); },
       error: e => { this.labStructure.set(prev); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setRequireValidation(v: boolean) {
     this.requireValidation.set(v);
-    this.api.patch('/api/tenants/branch-lab-config', { requireValidationForAllResults: v }).subscribe({
+    this.api.patch('/api/tenants/branch-lab-config', { requireValidationForAllResults: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(v ? 'All results now require validation' : 'Direct-flow tests auto-validate again'),
       error: e => { this.requireValidation.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setShowPaymentsDue(v: boolean) {
     this.showPaymentsDue.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { showPaymentsDueTab: v }).subscribe({
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { showPaymentsDueTab: v }).pipe(this.tracked()).subscribe({
       next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success(v ? '"Payments due" tab shown at the front desk' : '"Payments due" tab hidden'); },
       error: e => { this.showPaymentsDue.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
@@ -975,7 +1017,7 @@ export class LabSettingsComponent implements OnInit {
     const next: ReportTemplate = { ...prev, metadata: writeReportOption(prev, 'abnormalSummary', v) };
     this.reportTpl.set(next);
     this.savingReportOption.set(true);
-    this.api.post('/api/config/report-template', next).subscribe({
+    this.api.post('/api/config/report-template', next).pipe(this.tracked()).subscribe({
       next: () => {
         this.savingReportOption.set(false);
         this.toasts.success(v ? 'Reports now open with a summary of abnormal results' : 'Summary of abnormal results turned off');
@@ -987,6 +1029,7 @@ export class LabSettingsComponent implements OnInit {
 
   // ── WhatsApp auto-send (Meta Cloud API) ──
   private readonly wa = inject(WhatsAppService);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly waSettings = signal<WaSettings | null>(null);
   protected readonly waSaving = signal(false);
   protected readonly waTemplateName = signal('');
@@ -1012,7 +1055,7 @@ export class LabSettingsComponent implements OnInit {
     };
     this.waSettings.set({ ...cur, ...next });
     this.waSaving.set(true);
-    this.wa.saveSettings(next).subscribe({
+    this.wa.saveSettings(next).pipe(this.tracked()).subscribe({
       next: s => {
         this.waSaving.set(false);
         if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s);
@@ -1033,6 +1076,7 @@ export class LabSettingsComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.destroyRef.onDestroy(() => this.loadHold.cancel());
     // Deep link: …/lab-settings?tab=report opens the Report tab (WhatsApp lives there).
     if (this.router.parseUrl(this.router.url).queryParams['tab'] === 'report') this.tab.set('report');
     this.wa.settings().subscribe({
@@ -1064,7 +1108,9 @@ export class LabSettingsComponent implements OnInit {
           c?.labStructure === 'standalone' || c?.labStructure === 'individual' ? 'standalone'
           : c?.labStructure === 'integrated' ? 'integrated'
           : 'auto');
-      }
+        this.loadHold.done();
+      },
+      error: () => this.loadHold.done(),
     });
     // Auto-assign + the per-branch toggle are scoped to the ACTIVE branch (the
     // backend keys branch-lab-config / auto-assign on the X-Active-Branch
@@ -1089,7 +1135,7 @@ export class LabSettingsComponent implements OnInit {
   /** Per-branch master toggle. Off → all received tests go to the queue. */
   setAutoAssignEnabled(v: boolean) {
     this.autoAssignEnabled.set(v);
-    this.api.patch('/api/tenants/branch-lab-config', { autoAssignEnabled: v }).subscribe({
+    this.api.patch('/api/tenants/branch-lab-config', { autoAssignEnabled: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(v ? 'Auto-assign on for this branch' : 'Auto-assign off — tests go to the queue'),
       error: e => { this.autoAssignEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
@@ -1099,7 +1145,7 @@ export class LabSettingsComponent implements OnInit {
    *  shared validation queue. */
   setAutoAssignValidatorsEnabled(v: boolean) {
     this.autoAssignValidatorsEnabled.set(v);
-    this.api.patch('/api/tenants/branch-lab-config', { autoAssignValidatorsEnabled: v }).subscribe({
+    this.api.patch('/api/tenants/branch-lab-config', { autoAssignValidatorsEnabled: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(v ? 'Validator auto-assign on for this branch' : 'Validator auto-assign off — results wait in the shared queue'),
       error: e => { this.autoAssignValidatorsEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
@@ -1168,7 +1214,7 @@ export class LabSettingsComponent implements OnInit {
       validatorUserIds: change.validatorUserIds ?? this.validatorsFor(departmentId),
       validatorRoleIds: change.validatorRoleIds ?? this.validatorRolesFor(departmentId),
     };
-    this.api.put<unknown>('/api/tenants/auto-assign-configs', body).subscribe({
+    this.api.put<unknown>('/api/tenants/auto-assign-configs', body).pipe(this.tracked()).subscribe({
       next: () => {
         const patch: AutoAssignConfig = {
           departmentId,
@@ -1191,7 +1237,7 @@ export class LabSettingsComponent implements OnInit {
   }
 
   setAllowNoScan(v: boolean) {
-    this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { allowNoScanClaim: v }).pipe(this.tracked()).subscribe({
       next: t => this.tenantState.update(t),
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -1214,14 +1260,14 @@ export class LabSettingsComponent implements OnInit {
   });
 
   setSamplePreset(v: boolean) {
-    this.api.patch<Tenant>('/api/tenants/current', { sampleSearchPreset: v }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { sampleSearchPreset: v }).pipe(this.tracked()).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success(v ? 'Sample search pre-fills the current ID start' : 'Sample search starts empty'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
 
   resetSamplePreset() {
-    this.api.patch<Tenant>('/api/tenants/current', { resetSampleSearchPreset: true }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { resetSampleSearchPreset: true }).pipe(this.tracked()).subscribe({
       next: t => this.tenantState.update(t),
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -1231,7 +1277,7 @@ export class LabSettingsComponent implements OnInit {
    *  tenantState so the lab screens flip immediately (no reload). */
   setScanMode(v: 'scan' | 'manual') {
     if (this.scanMode() === v) return;
-    this.api.patch<Tenant>('/api/tenants/current', { scanMode: v }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { scanMode: v }).pipe(this.tracked()).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success(v === 'manual' ? 'Manual entry — scanner hidden on lab screens' : 'Scan mode — QR/barcode scanner shown'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -1268,7 +1314,7 @@ export class LabSettingsComponent implements OnInit {
     const cur = this.tenantState.tenant()?.calcConstants ?? null;
     const curNorm = cur ? JSON.stringify(JSON.parse(cur)) : null;
     if ((next ? JSON.stringify(next) : null) === curNorm) return;
-    this.api.patch<Tenant>('/api/tenants/current', { calcConstants: next }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { calcConstants: next }).pipe(this.tracked()).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success('Calculation constants saved'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -1278,7 +1324,7 @@ export class LabSettingsComponent implements OnInit {
   saveSampleNumberWidth() {
     const width = Math.min(Math.max(Math.trunc(this.sampleNumberWidth() || 1), 1), 9);
     this.sampleNumberWidth.set(width);
-    this.api.patch<Tenant>('/api/tenants/current', { sampleNumberWidth: width }).subscribe({
+    this.api.patch<Tenant>('/api/tenants/current', { sampleNumberWidth: width }).pipe(this.tracked()).subscribe({
       next: t => { this.tenantState.update(t); this.toasts.success('Sample number width saved'); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });

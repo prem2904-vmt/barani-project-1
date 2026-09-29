@@ -971,7 +971,7 @@
                   <div class="pf-calc-edit__actions">
                     <pf-touch-btn size="sm" variant="ghost" (pressed)="calcEdit.set(null)">Cancel</pf-touch-btn>
                     @if (calcEditHasExisting()) { <pf-touch-btn size="sm" variant="ghost" (pressed)="removeCalc()">Remove formula</pf-touch-btn> }
-                    <pf-touch-btn size="sm" variant="secondary" [disabled]="!ce.expr.trim() || !!calcEditError() || calcSaving()" (pressed)="saveCalc()">
+                    <pf-touch-btn size="sm" variant="secondary" [disabled]="!ce.expr.trim() || !!calcEditError() || calcSaving()" [busy]="calcSaving()" busyLabel="Saving formula…" (pressed)="saveCalc()">
                       {{ calcSaving() ? 'Saving…' : 'Save formula' }}
                     </pf-touch-btn>
                   </div>

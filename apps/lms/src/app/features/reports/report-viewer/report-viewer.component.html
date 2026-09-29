@@ -21,7 +21,7 @@
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--print pf-rv-in" style="--i: 4"
                 [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'print'"
                 [attr.aria-label]="done() === 'print' ? 'Printing' : 'Print'" title="Print"
-                [disabled]="busy() === 'print'" (click)="print()">
+                [disabled]="busy() === 'print'" [pfBusy]="busy() === 'print'" pfBusyLabel="Preparing the report…" (click)="print()">
           @if (done() === 'print') {
             <svg class="pf-rv-act__i pf-rv-act__i--done" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
             <span class="pf-rv-act__t"><svg class="pf-rv-act__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Printing</span>
@@ -46,7 +46,8 @@
         <pf-actions-menu class="pf-rv-more" style="--i: 5" [actions]="menuActions()" label="Report actions"
                          [heading]="patientName()" (opened)="onMenuOpened()" (action)="runAction($event)">
           <button pfActionsTrigger type="button" class="pf-hb-btn pf-hb-btn--ghost pf-rv-act pf-rv-act--icon pf-rv-act--more pf-rv-in"
-                  aria-label="Report actions" title="Report actions">
+                  aria-label="Report actions" title="Report actions"
+                  [pfBusy]="menuBusy() !== null" [pfBusyLabel]="menuBusy() === 'regenerate' ? 'Regenerating…' : 'Preparing the PDF…'">
             <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             <span class="pf-rv-act__t">More</span>
           </button>
@@ -264,9 +265,13 @@
                [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
       </div>
       <ul class="pf-rv-share__list">
+        @if (chatPickerLoading()) {
+          <li><pf-skeleton-rows [rows]="4" [trailing]="false" [dense]="true" label="Loading colleagues…"></pf-skeleton-rows></li>
+        } @else {
         @for (u of chatPickerFiltered(); track u.id) {
           <li>
-            <button type="button" class="pf-rv-share__row" [disabled]="chatPickerSending()" (click)="shareWith(u)">
+            <button type="button" class="pf-rv-share__row" [disabled]="chatPickerSending()"
+                    [pfBusy]="chatPickerSendingTo() === u.id" pfBusyLabel="Sending…" (click)="shareWith(u)">
               <span class="pf-rv-share__avatar" aria-hidden="true">{{ initials(u.displayName) }}</span>
               <span class="pf-rv-share__meta">
                 <span class="pf-rv-share__name">{{ u.displayName }}</span>
@@ -278,6 +283,7 @@
           <li class="nd-empty nd-empty--compact">
             <p class="nd-empty__title">No colleagues match</p>
           </li>
+        }
         }
       </ul>
     </div>

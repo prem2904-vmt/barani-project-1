@@ -10,6 +10,7 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
 import { DialogService } from '../../../core/services/dialog.service';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /** One catalog event merged with the tenant's override — mirrors the
  *  middleware's NotificationCatalogRow. The catalog itself lives in the
@@ -46,7 +47,7 @@ const MODULE_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-notifications-config',
   standalone: true,
-  imports: [FormsModule, NumberInputComponent, ScreenHeaderComponent, HeroBandComponent, SelectComponent],
+  imports: [SkeletonRowsComponent, FormsModule, NumberInputComponent, ScreenHeaderComponent, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -134,7 +135,8 @@ const MODULE_LABELS: Record<string, string> = {
       </div>
 
       @if (loading()) {
-        <p class="text-[13px] px-1" style="color: var(--text-muted);">Loading the event catalog…</p>
+        <!-- The catalogue's shape (module cards of alert rows), not a line of text. -->
+        <pf-skeleton-rows [rows]="6" [avatar]="false" label="Loading the event catalog…"></pf-skeleton-rows>
       }
 
       @for (m of visibleModules(); track m) {

@@ -10,6 +10,7 @@ import {
   waStatusTone,
 } from '../../../core/services/whatsapp.service';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 /**
  * The REPORT card's "WhatsApp" section: the Meta Cloud API status of THIS
@@ -22,7 +23,7 @@ import { WhatsAppSendService } from '../../../core/services/whatsapp-send.servic
 @Component({
   selector: 'pf-report-whatsapp-status',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (visible(); as st) {
@@ -62,7 +63,7 @@ import { WhatsAppSendService } from '../../../core/services/whatsapp-send.servic
         @if (canDeliver()) {
           <div class="pf-rwa__acts">
             <button type="button" class="nd-btn nd-btn--secondary pf-rwa__btn" (click)="resend()"
-                    [disabled]="busy() || sending() || st.patientOptOut || (!st.configured && !st.canSend)" [attr.aria-busy]="sending()">
+                    [disabled]="busy() || sending() || st.patientOptOut || (!st.configured && !st.canSend)" [pfBusy]="sending()" pfBusyLabel="Sending…">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
               {{ sending() ? 'Sending…' : st.latest ? 'Send again' : 'Send now' }}
             </button>

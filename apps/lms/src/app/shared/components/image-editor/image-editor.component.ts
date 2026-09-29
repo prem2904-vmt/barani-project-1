@@ -5,6 +5,7 @@ import {
 import {
   Rect, Handle, clampRect, moveRect, resizeRect, computeOutputSize, centeredCrop,
 } from './image-crop';
+import { BusyDirective } from '../../directives/busy.directive';
 
 /**
  * Crop + resize editor (OPS-14). Opened with a picked raster File; the user
@@ -22,6 +23,7 @@ import {
 @Component({
   selector: 'pf-image-editor',
   standalone: true,
+  imports: [BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-ie__scrim" (pointerdown)="onScrim($event)">
@@ -72,7 +74,7 @@ import {
           <span class="pf-ie__spacer"></span>
           <button type="button" class="pf-ie__btn" (click)="cancel()">Cancel</button>
           <button type="button" class="pf-ie__btn pf-ie__btn--primary" [disabled]="busy() || !ready()"
-                  (click)="apply()">{{ busy() ? 'Applying…' : 'Apply' }}</button>
+                  [pfBusy]="busy()" pfBusyLabel="Applying…" (click)="apply()">{{ busy() ? 'Applying…' : 'Apply' }}</button>
         </footer>
       </div>
     </div>

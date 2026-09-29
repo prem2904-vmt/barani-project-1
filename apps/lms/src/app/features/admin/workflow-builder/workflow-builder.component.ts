@@ -27,6 +27,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 interface HistoryRow {
   id: string;
@@ -39,7 +40,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-workflow-builder',
   standalone: true,
-  imports: [SkeletonRowsComponent,
+  imports: [BusyDirective, SkeletonRowsComponent,
     FormsModule,
     DragDropModule,
     DatePipe,
@@ -150,12 +151,12 @@ interface HistoryRow {
                   </div>
                 }
               </span>
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-draft" [disabled]="!builder.isDirty() || saving()"
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-wfe-draft" [disabled]="!builder.isDirty() || saving()" [pfBusy]="savingKind() === 'draft'" pfBusyLabel="Saving draft…"
                       (click)="saveDraft()" aria-label="Save draft" title="Save draft">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
                 Save draft
               </button>
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-wfe-publish" [disabled]="saving()"
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-wfe-publish" [disabled]="saving()" [pfBusy]="savingKind() === 'publish'" pfBusyLabel="Publishing…"
                       (click)="publish()" [attr.aria-label]="saving() ? 'Publishing' : 'Publish'" title="Publish">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
                 {{ saving() ? 'Publishing…' : 'Publish' }}
@@ -209,8 +210,8 @@ interface HistoryRow {
           <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openPreview()">Preview</pf-touch-btn>
           <pf-touch-btn actions size="sm" variant="ghost" (pressed)="openHistory()">History</pf-touch-btn>
           <pf-touch-btn actions size="sm" variant="ghost" (pressed)="resetWorkflow()">Reset</pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="secondary" [disabled]="!builder.isDirty() || saving()" (pressed)="saveDraft()">Save draft</pf-touch-btn>
-          <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" (pressed)="publish()">{{ saving() ? 'Publishing…' : 'Publish' }}</pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="secondary" [disabled]="!builder.isDirty() || saving()" [busy]="savingKind() === 'draft'" busyLabel="Saving draft…" (pressed)="saveDraft()">Save draft</pf-touch-btn>
+          <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving()" [busy]="savingKind() === 'publish'" busyLabel="Publishing…" (pressed)="publish()">{{ saving() ? 'Publishing…' : 'Publish' }}</pf-touch-btn>
         </pf-screen-header>
 
         <div class="pf-wfe-body" [class.pf-band-body]="theme.isNewDesign()">
@@ -876,19 +877,23 @@ export class WorkflowBuilderComponent implements OnInit, OnDestroy {
   }
 
   // Save / publish
+  /** Which of Save draft / Publish is running (its button shows the dots). */
+  readonly savingKind = signal<'draft' | 'publish' | null>(null);
   saveDraft() {
     this.saving.set(true);
+    this.savingKind.set('draft');
     this.builder.saveDraft('Manual edit').subscribe({
-      next: () => { this.saving.set(false); this.toasts.success('Draft saved'); },
-      error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); }
+      next: () => { this.saving.set(false); this.savingKind.set(null); this.toasts.success('Draft saved'); },
+      error: e => { this.saving.set(false); this.savingKind.set(null); this.toasts.error(ApiError.from(e).message); }
     });
   }
 
   publish() {
     this.saving.set(true);
+    this.savingKind.set('publish');
     this.builder.publish('Manual edit').subscribe({
-      next: () => { this.saving.set(false); this.toasts.success('Published'); },
-      error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); }
+      next: () => { this.saving.set(false); this.savingKind.set(null); this.toasts.success('Published'); },
+      error: e => { this.saving.set(false); this.savingKind.set(null); this.toasts.error(ApiError.from(e).message); }
     });
   }
 

@@ -9,6 +9,7 @@ import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
 import { ADMIN_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
+import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
 // KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
@@ -172,22 +173,22 @@ export const appRoutes: Route[] = [
       {
         path: 'admin/users/invite',
         canActivate: [...routeGuards('/admin/users/invite')],
-        loadComponent: () => import('./features/admin/users-access/user-invite.component').then(m => m.UserInviteComponent)
+        loadComponent: loadUserInvite
       },
       {
         path: 'admin/users/:id/edit',
         canActivate: [permissionGuard('manage_users')],
-        loadComponent: () => import('./features/admin/users-access/user-edit.component').then(m => m.UserEditComponent)
+        loadComponent: loadUserEdit
       },
       {
         path: 'admin/roles/new',
         canActivate: [...routeGuards('/admin/roles/new')],
-        loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
+        loadComponent: loadRoleEditor
       },
       {
         path: 'admin/roles/:id/edit',
         canActivate: [permissionGuard('manage_users')],
-        loadComponent: () => import('./features/admin/users-access/role-editor.component').then(m => m.RoleEditorComponent)
+        loadComponent: loadRoleEditor
       },
       {
         path: 'admin/tests',
