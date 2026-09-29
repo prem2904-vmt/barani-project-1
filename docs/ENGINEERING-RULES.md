@@ -19,6 +19,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Critical-value acknowledgement / communication:** `critical_result_events` (one row per critical result version), never the bell row.
   - **Licensing:** the platform entitlement.
   - **Reference ranges:** the single sex + age resolver.
+  - **Specimen of an ordered line:** `order_tests` (code + name), decided by the Test Master's specimen mode + allowed list (`SpecimenRules` / `micro-specimen.ts`); every report path prints the ORDERED specimen, never the Test Master text.
   - **Paid (patient release):** `PatientReleaseGate`.
   - **Outsourced or in-house:** the tube's `OutsourcedVendorId`, frozen at order time from the lab's effective test; every lab surface filters through `OutsourcingRules` (`InHouseTube` for tubes, `InHouseWork` for lines), never a bare status check.
 - Never match by name or code when an ID / key exists.

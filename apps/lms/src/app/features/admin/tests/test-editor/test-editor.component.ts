@@ -36,15 +36,10 @@ import { hasLegacyFields, loadEditorFields, newFieldId, parseParametersBlob, rea
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { methodologyChoices } from '../../../../shared/utils/methodology';
 import { TUBE_COLORS } from '../../../../shared/utils/tube-colors';
-import { ownAsksSpecimen, withAskSpecimen } from '../../../../shared/utils/micro-specimen';
-
-/** GET/PUT /api/microbiology/test-specimens — one test's mapping. */
-interface TestSpecimenMap {
-  testId: string;
-  specimens: Array<{ code: string; name: string; isDefault: boolean }>;
-  defaultSpecimen: string | null;
-  inherited: boolean;
-}
+import {
+  SPECIMEN_MODE_OPTIONS, specimenModeOf, withSpecimenMode, type SpecimenMode,
+} from '../../../../shared/utils/micro-specimen';
+import { AllowedSpecimensComponent } from './allowed-specimens.component';
 import { TouchButtonComponent } from '../../../../shared/primitives/touch-button.component';
 import { TestLayoutEditorComponent } from '../test-layout-editor.component';
 import { ReportStructureComponent } from '../report-structure.component';
@@ -174,7 +169,8 @@ function makeEmptyDraft(): DraftTest {
     OriginBadgeComponent,
     HeroBandComponent,
     RangeTableComponent,
-    NgTemplateOutlet
+    NgTemplateOutlet,
+    AllowedSpecimensComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-editor.component.html',
@@ -436,7 +432,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const d = this._draft();
     if (!d.id && d.type === 'individual' && /micro/i.test(name)) {
       this.patch({
-        parametersJson: withAskSpecimen(d.parametersJson, true),
+        parametersJson: withSpecimenMode(d.parametersJson, 'choose'),
         ...(d.tubeColor ? {} : { tubeColor: 'sterile' }),
       });
     }
@@ -502,62 +498,21 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.persistFieldsToDraft();
   }
-  /** "Ask for specimen at order" (micro): the order desk picks WHICH
-   *  specimen was sent for this test (Specimen master), it rides on the
-   *  ordered test and prints on the report. Stored as `askSpecimen: true`
-   *  in the Parameters wrapper; Culture & Sensitivity always asks, so the
-   *  switch reads on (locked) while the culture bench mark is on. */
-  readonly askSpecimen = computed<boolean>(() => ownAsksSpecimen(this._draft().parametersJson));
-
-  // ── Default specimen (Test–Specimen Mapping) ──
-  // Owner 2026-09-27: "there is no default". ZERO or ONE mapped specimen is
-  // the default: the order desk preselects a single default, otherwise the
-  // specimen must be chosen. Single-select by construction (the server
-  // un-defaults every other specimen in the same write). Saved on pick.
-  readonly specimenMap = signal<TestSpecimenMap | null>(null);
-  readonly savingDefaultSpecimen = signal(false);
-  private specimenMapFor: string | null = null;
-  private readonly loadSpecimenMap = effect(() => {
-    const id = this._draft().id;
-    if (!id || !(this.askSpecimen() || this.cultureBench()) || this.specimenMapFor === id) return;
-    this.specimenMapFor = id;
-    this.api.get<TestSpecimenMap[]>(`/api/microbiology/test-specimens?testIds=${id}`).subscribe({
-      next: rows => this.specimenMap.set(rows?.[0] ?? { testId: id, specimens: [], defaultSpecimen: null, inherited: false }),
-      error: () => this.specimenMap.set(null),
-    });
-  });
-  /** "No default" first, then the mapped specimens (or the whole Specimen
-   *  master when this test has no mapping yet). */
-  readonly defaultSpecimenOptions = computed<PfSelectOption<string>[]>(() => {
-    const mapped = this.specimenMap()?.specimens ?? [];
-    const rows = mapped.length ? mapped.map(s => ({ value: s.code, label: s.name }))
-      : this._specimens().map(s => ({ value: s.code, label: s.name }));
-    return [{ value: '', label: 'No default (the desk must choose)' }, ...rows];
-  });
-  /** The ONE default's code; '' when none — or when several are marked
-   *  (legacy data), which counts as no default. */
-  readonly defaultSpecimenCode = computed<string>(() => {
-    const d = (this.specimenMap()?.specimens ?? []).filter(s => s.isDefault);
-    return d.length === 1 ? d[0].code : '';
-  });
-  readonly severalSpecimenDefaults = computed<boolean>(() =>
-    (this.specimenMap()?.specimens ?? []).filter(s => s.isDefault).length > 1);
-  setDefaultSpecimen(code: string) {
-    const id = this._draft().id;
-    if (!id || this.savingDefaultSpecimen() || (code || '') === this.defaultSpecimenCode() && !this.severalSpecimenDefaults()) return;
-    this.savingDefaultSpecimen.set(true);
-    this.api.put<TestSpecimenMap>(`/api/microbiology/test-specimens/${id}/default`, { code: code || null }).subscribe({
-      next: m => {
-        this.savingDefaultSpecimen.set(false);
-        if (m) this.specimenMap.set(m);
-        this.toasts.success(code ? `Default specimen: ${m?.defaultSpecimen ?? code}` : 'No default specimen: the desk must choose');
-      },
-      error: e => { this.savingDefaultSpecimen.set(false); this.toasts.error(ApiError.from(e).message); },
-    });
+  /** The test's SPECIMEN MODE (owner 2026-09-29, the one setting — the
+   *  server's SpecimenRules twin): fixed = the one allowed specimen is
+   *  stamped on every order (no picker); choose = the desk picks from the
+   *  allowed list; none = no specimen. Stored as `specimenMode` in the
+   *  Parameters wrapper and saved with the test; the allowed list itself is
+   *  edited (and saved) by the Allowed specimens grid below it. */
+  readonly specimenMode = computed<SpecimenMode>(() => specimenModeOf(this._draft().parametersJson));
+  readonly specimenModeOptions: PfSelectOption<string>[] = SPECIMEN_MODE_OPTIONS.map(o => ({ value: o.value, label: o.label, hint: o.hint }));
+  setSpecimenMode(mode: string) {
+    const m = mode === 'fixed' || mode === 'choose' || mode === 'none' ? mode : 'none';
+    if (m === this.specimenMode()) return;
+    this.patch({ parametersJson: withSpecimenMode(this._draft().parametersJson, m) });
   }
-  setAskSpecimen(on: boolean) {
-    this.patch({ parametersJson: withAskSpecimen(this._draft().parametersJson, on) });
-  }
+  /** The Specimen master rows for the allowed-specimens grid's "Add" picker. */
+  readonly specimenMasterRows = computed(() => this._specimens());
   readonly cultureBench = computed<boolean>(() => {
     try { return JSON.parse(this._draft().parametersJson || '{}')?.microFormat === 'culture_sensitivity'; }
     catch { return false; }

@@ -60,6 +60,19 @@ describe('test-pricing (pricing single source)', () => {
     expect(priceBulkBody([{ testId: 'a', price: 5, discount: 2 }])).toEqual({ updates: [{ testId: 'a', price: 5, discount: 2 }] });
   });
 
+  it('priceBulkBody: a specimen row carries its code and sends a null price EXPLICITLY (back to the base price)', () => {
+    const b = priceBulkBody([
+      { testId: 't', specimenCode: 'SPEC005', price: 250.004 },
+      { testId: 't', specimenCode: 'SPEC013', price: null },
+      { testId: 'u', price: null },
+    ]);
+    expect(b.updates).toEqual([
+      { testId: 't', specimenCode: 'SPEC005', price: 250 },
+      { testId: 't', specimenCode: 'SPEC013', price: null },
+      { testId: 'u' },                                   // a base row: null = unchanged (not sent)
+    ]);
+  });
+
   it('priceListUrl: acting branch by default, a branch or the tenant view by branchId', () => {
     expect(priceListUrl()).toBe('/api/tests/');
     expect(priceListUrl('b1')).toBe('/api/tests/?branchId=b1');

@@ -8,7 +8,7 @@ import { summarizeRanges } from './reference-range';
  * Contract between the server's `GET /api/tests?view=summary` and the list
  * screens (DB optimisation phase 2). The summary row's `parameters` is the
  * server's `TestSummaryDto.TrimParameters`: `items` verbatim, the wrapper flags
- * `askSpecimen` / `microFormat`, and — only when the server-derived unit or
+ * `specimenMode` / `askSpecimen` / `microFormat`, and — only when the server-derived unit or
  * range is empty — `parameters: [first value's unit / referenceRanges /
  * normalValue]`. Every list helper must read the trimmed blob EXACTLY as it
  * reads the full one.
@@ -18,7 +18,7 @@ function trim(json: string | undefined, keepFirst = true): string | undefined {
   const root = JSON.parse(json);
   const slim: Record<string, unknown> = {};
   if ('items' in root) slim['items'] = root.items;
-  for (const k of ['askSpecimen', 'microFormat']) if (k in root) slim[k] = root[k];
+  for (const k of ['specimenMode', 'askSpecimen', 'microFormat']) if (k in root) slim[k] = root[k];
   if (keepFirst && Array.isArray(root.parameters) && root.parameters.length > 0) {
     const p0 = root.parameters[0] ?? {};
     const first: Record<string, unknown> = {};

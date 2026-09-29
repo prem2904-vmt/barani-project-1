@@ -44,7 +44,10 @@ import { printTubeLabels } from '../../../shared/utils/print-label';
 import { LabelPrintService } from '../../../core/printer/label-print.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { KeyboardService } from '../../../core/services/keyboard.service';
-import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../shared/utils/micro-specimen';
+import {
+  allowedSpecimensFor, asksSpecimen, deskDefaultCode, findAllowed, fixedSpecimenOf, hasSpecimen, specimenLinePrice,
+  specimenLookupIds, specimenModeOf, type AllowedSpecimen, type TestSpecimenMap,
+} from '../../../shared/utils/micro-specimen';
 import { byName, mergeRecent, planRepeat, sortByName, type RepeatItem } from './catalogue-order';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -129,18 +132,60 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _tests = signal<Test[]>([]);
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
-  // ── Specimen choice at the desk: testId → specimen ──
-  // Every test that asks (Culture & Sensitivity, and any test whose Test
-  // Master "Ask specimen" switch is on — all of Microbiology), or a bundle
-  // carrying one (shared/utils/micro-specimen).
+  // ── Specimen choice at the desk: testId → specimen CODE ──
+  // The Test Master decides (shared/utils/micro-specimen, the server's
+  // SpecimenRules twin): a "choose" test — or a bundle carrying one — picks
+  // ONLY from its allowed specimens; a "fixed" test shows no picker (the
+  // server stamps its one specimen); "none" shows nothing.
   private readonly _specimens = signal<Record<string, string>>({});
-  readonly specimenOpts = signal<PfSelectOption[]>([]);
+  /** The Specimen master (code + name) — what a test with an EMPTY allowed
+   *  list offers; also names a stored code. */
+  readonly specimenMaster = signal<AllowedSpecimen[]>([]);
+  /** Kept for the template's "is there anything to pick" guard. */
+  readonly specimenOpts = computed<PfSelectOption[]>(() => this.specimenMaster().map(s => ({ value: s.code, label: s.name })));
+  /** test id → its allowed list (+ mode, default, prices), as loaded. */
+  private readonly _specimenMaps = signal<Record<string, TestSpecimenMap | undefined>>({});
   private readonly _testById = computed(() => new Map(this._tests().map(t => [t.id, t] as const)));
   asksSpecimen(t: { parameters?: string | null; type?: string | null }): boolean {
     const byId = this._testById();
     return asksSpecimen(t, id => byId.get(id));
   }
+  /** The allowed specimens for one cart line (a bundle: what every choosing
+   *  member allows), as picker options — value = the master CODE. */
+  private readonly _allowedById = computed<Record<string, AllowedSpecimen[]>>(() => {
+    const byId = this._testById();
+    const maps = this._specimenMaps();
+    const master = this.specimenMaster();
+    const out: Record<string, AllowedSpecimen[]> = {};
+    for (const id of this._selected()) {
+      const t = byId.get(id);
+      if (t && this.asksSpecimen(t)) out[id] = allowedSpecimensFor(t, maps, master, mid => byId.get(mid));
+    }
+    return out;
+  });
+  allowedFor(id: string): AllowedSpecimen[] { return this._allowedById()[id] ?? []; }
+  specimenOptsFor(id: string): PfSelectOption[] {
+    return this.allowedFor(id).map(s => ({
+      value: s.code, label: s.name,
+      hint: s.price != null ? this.inrFmt.transform(Number(s.price)) : undefined,
+    }));
+  }
+  /** Mode fixed: the specimen the server will stamp (shown, never picked). */
+  fixedSpecimenName(t: { id: string; parameters?: string | null }): string | null {
+    if (specimenModeOf(t.parameters) !== 'fixed') return null;
+    return fixedSpecimenOf(this._specimenMaps()[t.id])?.name ?? null;
+  }
   specimenOf(id: string): string { return this._specimens()[id] ?? ''; }
+  /** The NAME of the line's specimen (a stored code or an older name). */
+  specimenLabel(id: string): string {
+    const v = this.specimenOf(id);
+    if (!v) return '';
+    return (findAllowed(this.allowedFor(id), v) ?? findAllowed(this.specimenMaster(), v))?.name ?? v;
+  }
+  /** The allowed row the line's pick names (null = none / not allowed). */
+  private chosenRow(id: string): AllowedSpecimen | null {
+    return findAllowed(this.allowedFor(id), this.specimenOf(id));
+  }
   setSpecimen(id: string, v: string) {
     this._specimens.update(m => ({ ...m, [id]: v }));
     this._defaultApplied.add(id);
@@ -164,8 +209,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Inline "Choose the specimen" per cart line (set by a blocked save/pay). */
   private readonly _specimenErr = signal<Record<string, true>>({});
   specimenError(id: string): boolean { return !!this._specimenErr()[id]; }
-  /** Cart lines that ask for a specimen and have none — they block save/pay.
-   *  Only when the Specimen master offers something to pick. */
+  /** Cart lines that choose a specimen and have none — they block save/pay.
+   *  Only when there is something to pick (the allowed list, or the master). */
   readonly missingSpecimenIds = computed<string[]>(() => {
     if (this.specimenOpts().length === 0) return [];
     const byId = this._testById();
@@ -191,38 +236,44 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     }, 0);
     return true;
   }
-  /** Read the mapping defaults for asking cart lines not yet asked about. */
+  /** Read the allowed lists (+ defaults, prices) of cart lines not yet asked about. */
   private loadSpecimenDefaults(ids: string[]) {
     const fresh = ids.filter(id => !this._defaultsAsked.has(id));
     if (fresh.length === 0) return;
     fresh.forEach(id => this._defaultsAsked.add(id));
-    this.api.get<Array<{ testId: string; defaultSpecimen?: string | null }>>(
-      `/api/microbiology/test-specimens?testIds=${fresh.join(',')}`).subscribe({
-      next: rows => this._specimenDefaults.update(m => {
-        const n = { ...m };
-        for (const id of fresh) n[id] = null;
-        for (const r of rows ?? []) n[r.testId] = r.defaultSpecimen ?? null;
-        return n;
-      }),
-      error: () => { /* no mapping (or micro module absent): nothing preselects */ }
+    this.api.get<TestSpecimenMap[]>(`/api/microbiology/test-specimens?testIds=${fresh.join(',')}`).subscribe({
+      next: rows => {
+        this._specimenMaps.update(m => {
+          const n = { ...m };
+          for (const id of fresh) n[id] = { testId: id, specimens: [] };
+          for (const r of rows ?? []) n[r.testId] = { ...r, specimens: r.specimens ?? [] };
+          return n;
+        });
+        this._specimenDefaults.update(m => {
+          const n = { ...m };
+          for (const id of fresh) n[id] = null;
+          for (const r of rows ?? []) n[r.testId] = r.defaultSpecimen ?? null;
+          return n;
+        });
+      },
+      error: () => { /* no mapping (or micro module absent): the master is offered, nothing preselects */ }
     });
   }
-  /** Preselect the single default on lines that have no choice yet. */
+  /** Preselect the single default (by code) on lines that have no choice yet. */
   private applySpecimenDefaults() {
     if (this.isReadOnly()) return;
     const byId = this._testById();
-    const opts = new Set(this.specimenOpts().map(o => String(o.value)));
-    const defaults = this._specimenDefaults();
+    const maps = this._specimenMaps();
     const picks: Record<string, string> = {};
     for (const id of this._selected()) {
       if (this._defaultApplied.has(id) || this.specimenOf(id)) continue;
       const t = byId.get(id);
       if (!t || !this.asksSpecimen(t)) continue;
       const lookup = specimenLookupIds(t, mid => byId.get(mid));
-      if (lookup.some(l => !(l in defaults))) continue;       // still loading
+      if (lookup.some(l => !maps[l])) continue;              // still loading
       this._defaultApplied.add(id);
-      const d = deskDefaultSpecimen(t, defaults, mid => byId.get(mid));
-      if (d && opts.has(d)) picks[id] = d;
+      const d = deskDefaultCode(t, maps, mid => byId.get(mid));
+      if (d && this.allowedFor(id).some(s => s.code.toUpperCase() === d)) picks[id] = d;
     }
     if (Object.keys(picks).length) this._specimens.update(m => ({ ...m, ...picks }));
   }
@@ -235,8 +286,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     return Object.keys(out).length ? out : null;
   }
   private loadSpecimens() {
-    this.api.get<{ name: string }[]>('/api/microbiology/specimens').subscribe({
-      next: rows => this.specimenOpts.set((rows ?? []).map(r => ({ value: r.name, label: r.name }))),
+    this.api.get<{ code: string; name: string; container?: string | null }[]>('/api/microbiology/specimens').subscribe({
+      next: rows => this.specimenMaster.set((rows ?? []).map(r => ({ code: r.code, name: r.name, isDefault: false, container: r.container ?? null }))),
       error: () => { /* micro module absent — culture tests simply show no picker */ }
     });
   }
@@ -285,8 +336,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       if (ids.length) this.loadSpecimenDefaults(ids);
     });
     effect(() => {
-      this._specimenDefaults(); this._selected(); this.specimenOpts(); this._testById();
+      this._specimenMaps(); this._selected(); this.specimenOpts(); this._testById();
       this.applySpecimenDefaults();
+    });
+    // A FIXED test's stamp (and its price) also come from its map, so read it
+    // for every selected line that carries a specimen at all.
+    effect(() => {
+      const byId = this._testById();
+      const ids = this._selected().filter(id => {
+        const t = byId.get(id);
+        return !!t && specimenModeOf(t.parameters) === 'fixed';
+      });
+      if (ids.length) this.loadSpecimenDefaults(ids);
     });
     // Fetch trend eligibility whenever the attached patient changes.
     effect(() => {
@@ -818,8 +879,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /** Price shown and totalled for a test: the DTO's effective price for the
-   *  acting branch (pricing table), ₹1 when nobody has priced it. */
-  priceOf(t: Test | null | undefined): number { return effectivePrice(t); }
+   *  acting branch (pricing table), ₹1 when nobody has priced it — or, for a
+   *  line ordered on a specimen with its OWN price (owner 2026-09-29), that
+   *  price. Bundles keep one price. */
+  priceOf(t: Test | null | undefined): number {
+    if (!t) return 0;
+    const base = effectivePrice(t);
+    if (t.type !== 'individual' || !hasSpecimen(t.parameters)) return base;
+    const row = specimenModeOf(t.parameters) === 'fixed'
+      ? fixedSpecimenOf(this._specimenMaps()[t.id])
+      : this.chosenRow(t.id);
+    return specimenLinePrice(base, row);
+  }
   /** Still at the ₹1 default (data only — the UI shows just the price). */
   notPriced(t: Test | null | undefined): boolean { return isPriceDefault(t); }
   isNotPriced(id: string): boolean { return isPriceDefault(this._tests().find(x => x.id === id)); }
@@ -841,7 +912,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   readonly subtotal = computed(() =>
-    this.billedLines().reduce((a, t) => a + effectivePrice(t), 0));
+    this.billedLines().reduce((a, t) => a + this.priceOf(t), 0));
   /** Tenant GST master switch — when off, the cart shows no tax (mirrors the
    *  backend bill, which bills at a zero slab → Bill of Supply). */
   readonly gstEnabled = signal(true);
@@ -849,7 +920,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  (0 when GST is off → Bill of Supply). */
   private readonly billUnits = computed(() => {
     const gstOn = this.gstEnabled();
-    return this.billedLines().map(t => ({ price: effectivePrice(t), slab: gstOn ? taxSlabOf(t) : 0 }));
+    return this.billedLines().map(t => ({ price: this.priceOf(t), slab: gstOn ? taxSlabOf(t) : 0 }));
   });
   /** PRE-discount gross = subtotal + GST at full price — the total the patient
    *  sees before a discount and the ONE base every discount % / cap is measured
@@ -1379,7 +1450,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       for (const k of [t.testId, t.packageTestId, t.profileTestId]) {
         if (!k) continue;
         onOrder.add(k);
-        const sp = (t.specimen ?? '').trim();
+        const sp = (t.specimenCode ?? t.specimen ?? '').trim();
         if (sp && !picks[k]) picks[k] = sp;
       }
     }

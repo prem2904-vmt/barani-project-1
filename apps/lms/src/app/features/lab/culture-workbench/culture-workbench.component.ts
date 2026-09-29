@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -14,6 +14,7 @@ import { CommentThreadComponent } from '../../../shared/components/comment-threa
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
+import { PRICE_DIFFERS_MESSAGE, findAllowed, type AllowedSpecimen, type TestSpecimenMap } from '../../../shared/utils/micro-specimen';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
@@ -129,7 +130,7 @@ interface StageField { name: string; title: string; type: string; options: strin
             <label class="pf-cse-spec">
               <span class="pf-cse-spec__lbl">Specimen</span>
               <pf-select class="pf-cse__specsel" size="sm" [searchable]="true"
-                         [options]="specimenOpts()" [value]="c()?.specimen ?? ''"
+                         [options]="specimenOpts()" [value]="specimenValue()"
                          placeholder="Choose…" (valueChange)="setSpecimen($event)"></pf-select>
             </label>
             <span class="nd-seg pf-cse-branches" role="group" aria-label="Culture branch">
@@ -1011,27 +1012,69 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     this.measureReq.set(null);
   }
 
-  // ── Specimen (order-test level; desk-picked, bench-editable) ──
-  readonly specimenOpts = signal<PfSelectOption[]>([]);
+  // ── Specimen (order-test level; desk-picked / server-stamped, bench-editable
+  //    ONLY within the test's allowed list — the Test Master decides) ──
+  /** The Specimen master (what a test with an empty allowed list offers). */
+  private readonly specimenMaster = signal<AllowedSpecimen[]>([]);
+  /** The ordered test's allowed specimens; null = not loaded (yet). */
+  private readonly allowedSpecimens = signal<AllowedSpecimen[] | null>(null);
+  private allowedFor: string | null = null;
+  /** The picker's value: the stored CODE, else the older stored NAME resolved
+   *  against the rows (a name off every list shows as itself). */
+  readonly specimenValue = computed<string>(() => {
+    const cc = this.c();
+    if (cc?.specimenCode) return cc.specimenCode;
+    const rows = [...(this.allowedSpecimens() ?? []), ...this.specimenMaster()];
+    return findAllowed(rows, cc?.specimen)?.code ?? (cc?.specimen ?? '');
+  });
+  /** Picker rows: the allowed list (else the master); value = the master
+   *  CODE. A stored specimen that is OFF the allowed list (an older order, or
+   *  the list changed since) stays visible as its own row — never lost, and
+   *  the bench sees what was recorded — but only the allowed rows are
+   *  accepted by the server. */
+  readonly specimenOpts = computed<PfSelectOption[]>(() => {
+    const allowed = this.allowedSpecimens();
+    const rows = allowed && allowed.length ? allowed : this.specimenMaster();
+    const opts: PfSelectOption[] = rows.map(r => ({ value: r.code, label: r.name }));
+    const cur = this.specimenValue();
+    if (cur && !opts.some(o => o.value === cur)) {
+      const name = findAllowed(this.specimenMaster(), cur)?.name ?? this.c()?.specimen ?? cur;
+      opts.unshift({ value: cur, label: name, hint: 'not in the allowed list' });
+    }
+    return opts;
+  });
+  private readonly loadAllowedForCase = effect(() => {
+    const testId = this.c()?.testId;
+    if (!testId || this.allowedFor === testId) return;
+    this.allowedFor = testId;
+    this.api.get<TestSpecimenMap[]>(`/api/microbiology/test-specimens?testIds=${testId}`).subscribe({
+      next: rows => this.allowedSpecimens.set(rows?.[0]?.specimens ?? []),
+      error: () => this.allowedSpecimens.set([]),
+    });
+  });
   private loadSpecimens() {
-    this.api.get<{ name: string }[]>('/api/microbiology/specimens').subscribe({
-      next: rows => this.specimenOpts.set((rows ?? []).map(r => ({ value: r.name, label: r.name }))),
+    this.api.get<{ code: string; name: string }[]>('/api/microbiology/specimens').subscribe({
+      next: rows => this.specimenMaster.set((rows ?? []).map(r => ({ code: r.code, name: r.name, isDefault: false }))),
       error: () => { /* list stays empty — the pill still shows the current value */ }
     });
   }
-  setSpecimen(v: string) {
-    if (!v || v === (this.c()?.specimen ?? '')) return;
+  setSpecimen(code: string) {
+    if (!code || code === this.specimenValue()) return;
+    const name = this.specimenOpts().find(o => o.value === code)?.label ?? code;
     this.busy.set(true);
-    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/specimen`, { specimen: v }).subscribe({
+    this.api.post<CultureCaseView>(`/api/microbiology/culture/${this.id}/specimen`, { specimen: code }).subscribe({
       next: t => {
         this.busy.set(false);
         if (t) this.c.set(t);
-        this.astValue.update(x => ({ ...x, specimen: v }));
-        this.toasts.success(`Specimen set to ${v}`);
+        this.astValue.update(x => ({ ...x, specimen: t?.specimen ?? name }));
+        this.toasts.success(`Specimen set to ${t?.specimen ?? name}`);
       },
-      error: () => {
+      error: e => {
         this.busy.set(false);
-        this.toasts.error('Could not update the specimen');
+        // After billing, a change whose price differs is BLOCKED by the server
+        // (409 price_differs): the front desk re-prices through modify-order.
+        const err = ApiError.from(e);
+        this.toasts.error(err.code === 'price_differs' ? PRICE_DIFFERS_MESSAGE : (err.message || 'Could not update the specimen'));
       },
     });
   }
