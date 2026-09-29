@@ -11,12 +11,12 @@ import { CallRingService } from './core/services/call-ring.service';
 import { LockScreenComponent } from './shared/components/lock-screen.component';
 import { SwitchScreenComponent } from './shared/components/switch-screen.component';
 import { SessionService } from './core/auth/session.service';
-import { LoadingLogoComponent } from './shared/components/loading-logo/loading-logo.component';
+import { BusyComponent } from './shared/primitives/skeleton-kit.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, LoadingLogoComponent],
+  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, BusyComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <router-outlet></router-outlet>
@@ -30,9 +30,9 @@ import { LoadingLogoComponent } from './shared/components/loading-logo/loading-l
     <!-- Sign-out cover: from the first step of the sign-out sequence until
          the login screen is in place, so the half-cleared app never paints. -->
     @if (session.ending()) {
-      <div class="pf-signout-cover" role="status" aria-live="polite">
-        <pf-loading-logo size="sm" [inline]="true"></pf-loading-logo>
-        <span>Signing out…</span>
+      <div class="pf-signout-cover">
+        <pf-busy label="Signing out…"></pf-busy>
+        <span aria-hidden="true">Signing out…</span>
       </div>
     }
 
