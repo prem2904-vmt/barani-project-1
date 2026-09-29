@@ -1,10 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Session } from '@supabase/supabase-js';
+import type { Session } from '@supabase/supabase-js';
 import { environment } from '../../../environments/environment';
 import { AccountsService, StoredAccount } from './accounts.service';
 import { BranchRef, CurrentUser } from './mock-user';
 import { SessionScopeService } from './session-scope.service';
-import { supabase } from './supabase.client';
+import { purgeSupabaseIndexedDb, purgeSupabaseLocalStorage } from './supabase-storage';
 
 interface MeResponse {
   id: string;
@@ -30,12 +30,32 @@ interface MeResponse {
   isDoctor?: boolean;
 }
 
+/**
+ * What a refresh-token exchange came back with.
+ *  - `ok`        — a new access token is in place.
+ *  - `transient` — the auth server could not be reached / answered 5xx / 429 /
+ *                  timed out. The session is NOT over: keep it, retry later.
+ *  - `dead`      — the auth server REJECTED the refresh token (revoked, reused,
+ *                  not found) or there is none. Only this ends a session.
+ *
+ * Login audit 2026-09-29 (root cause #1): every failure used to be reported
+ * as `false`, and `false` signed the user out — a Wi-Fi blip on resume, a 4s
+ * timeout on mobile data or a 502 during a deploy all logged people out.
+ */
+export type RefreshOutcome = 'ok' | 'transient' | 'dead';
+
+/** Why a session ended — drives the note on the login screen. */
+export type SessionEndReason = 'user' | 'expired' | 'suspended' | 'elsewhere';
+
+/** Outcome of loading /api/auth/me (same classification as a refresh). */
+export type ProfileOutcome = 'ok' | 'transient' | 'dead';
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   /** Gmail-style multi-account registry (shared lab machines). */
   readonly accounts = inject(AccountsService);
   /** One "session changed" event for every user-scoped service — fired
-   *  BEFORE a different person's profile is published (see loadProfile). */
+   *  BEFORE a different person's profile is published (see applyProfile). */
   private readonly scope = inject(SessionScopeService);
 
   private readonly _session = signal<Session | null>(null);
@@ -58,11 +78,30 @@ export class AuthService {
   private readonly _mustChangePassword = signal(false);
   readonly mustChangePassword = this._mustChangePassword.asReadonly();
 
+  /** Refresh this long BEFORE the access token expires (resume / foreground
+   *  tick), so the burst of requests after a wake never meets an expired
+   *  token in the first place. */
+  static readonly REFRESH_AHEAD_MS = 5 * 60_000;
+  /** Mobile data after a resume routinely needs > 4s (the old abort). */
+  static readonly REFRESH_TIMEOUT_MS = 10_000;
+  /** With a stored session but no cached profile, wait this long for /me
+   *  before booting as signed-out (was 4s — a slow cold start on mobile data
+   *  landed people on the login screen with a perfectly good session). */
+  static readonly BOOT_WATCHDOG_MS = 15_000;
+
   // Persisted session tokens. The SDK's setSession() hangs on native
   // (WKWebView Web-Locks / refresh), so it never writes the session to
   // storage — meaning the user was signed out on every cold start. We own
   // persistence here instead: store the tokens on login, restore on boot.
   private static readonly SESSION_KEY = 'pf.session';
+  /** Cross-tab session events (sign-out) — see onStorage(). */
+  static readonly SESSION_EVENT_KEY = 'pf.sessionEvent';
+  /** Last good /me per auth user (keyed by the JWT sub) — lets a restored
+   *  session boot straight in and survive /me being unreachable (a deploy,
+   *  a dead zone) instead of being thrown back to the login screen. */
+  static readonly PROFILE_KEY_PREFIX = 'pf.profile:';
+  private static readonly ACTIVE_BRANCH_KEY = 'pf.activeBranch';
+
   private persistSession(s: Session | null): void {
     try {
       if (s?.access_token) {
@@ -112,11 +151,12 @@ export class AuthService {
       return s?.access_token ? (s as Session) : null;
     } catch { return null; }
   }
+
   /** Single-flight guard: concurrent 401s (e.g. a burst of API calls after
    *  the token expires) must NOT each burn the one-time-use refresh token —
    *  Supabase rotates it, so the second concurrent exchange fails and signs
    *  the user out. All callers await the same in-flight refresh. */
-  private _refreshInFlight: Promise<boolean> | null = null;
+  private _refreshInFlight: Promise<RefreshOutcome> | null = null;
 
   // ── Stale-permission refresh ──────────────────────────────────────
   // Long-lived tabs keep serving day-old roles/permissions: an admin revokes
@@ -126,7 +166,7 @@ export class AuthService {
   // on tab switch) doesn't stack concurrent loads.
   private static readonly PROFILE_STALE_MS = 5 * 60_000;
   private _lastProfileLoadedAt = 0;
-  private _staleProfileRefresh: Promise<void> | null = null;
+  private _staleProfileRefresh: Promise<unknown> | null = null;
 
   private refreshProfileIfStale(): void {
     if (!this._session()) return; // no session — nothing to refresh
@@ -136,37 +176,152 @@ export class AuthService {
       .finally(() => { this._staleProfileRefresh = null; });
   }
 
+  // ── Session end (logout / expiry) ─────────────────────────────────
+  // The full sign-out sequence (revoke → push → sockets → timers → clear →
+  // navigate) lives in SessionService, which depends on services that
+  // themselves inject AuthService. It registers itself here so a definitive
+  // auth failure detected INSIDE AuthService (a dead refresh token on /me,
+  // a suspended tenant, another tab signing out) runs the same sequence.
+  private _endHandler: ((reason: SessionEndReason) => Promise<void>) | null = null;
+  setSessionEndHandler(fn: ((reason: SessionEndReason) => Promise<void>) | null): void {
+    this._endHandler = fn;
+  }
+  /** End the session for `reason`. Falls back to a local clear when no
+   *  SessionService is wired (unit tests of AuthService alone). */
+  endSession(reason: SessionEndReason): Promise<void> {
+    if (this._endHandler) return this._endHandler(reason);
+    this.clearLocalSession({ broadcast: reason !== 'elsewhere' });
+    return Promise.resolve();
+  }
+
   /** Exchange the stored refresh token for a fresh access token, straight
    *  against Supabase's token endpoint (the SDK refresh flow hangs on native).
-   *  Updates + persists the session. Returns false if there's no refresh token
-   *  or the exchange fails. Deduped: concurrent callers share one refresh. */
-  refreshAccessToken(): Promise<boolean> {
-    this._refreshInFlight ??= this.doRefreshAccessToken()
+   *  Updates + persists the session. Deduped: concurrent callers share one
+   *  refresh — and across TABS a Web Lock serialises it, so two tabs of the
+   *  same account never race the same one-time-use token. */
+  refreshSession(): Promise<RefreshOutcome> {
+    this._refreshInFlight ??= AuthService.withRefreshLock(() => this.doRefresh())
       .finally(() => { this._refreshInFlight = null; });
     return this._refreshInFlight;
   }
 
-  private async doRefreshAccessToken(): Promise<boolean> {
-    let refresh = this._session()?.refresh_token;
-    if (!refresh) return false;
-    // Another tab holding the SAME account may already have rotated the
-    // refresh token (Supabase revokes the old one, and re-using it outside
-    // the reuse window revokes the whole session). Prefer the registry's
-    // newer copy: adopt it outright if its access token is still good,
-    // otherwise refresh with the newest refresh token.
+  /** Boolean facade kept for existing callers: true only on `ok`. */
+  refreshAccessToken(): Promise<boolean> {
+    return this.refreshSession().then(o => o === 'ok');
+  }
+
+  /**
+   * Proactive refresh before a request goes out: when the access token is
+   * within 60s of expiry, refresh first (single-flight) instead of letting
+   * every in-flight request 401 and queue behind a reactive refresh.
+   *  - `fresh` — nothing to do (or no session at all);
+   *  - otherwise the refresh outcome. `transient` still sends the request
+   *    (the API accepts a token a few minutes past expiry — clock skew).
+   */
+  async ensureFreshToken(): Promise<'fresh' | RefreshOutcome> {
+    const t = this._session()?.access_token;
+    if (!t || !this.isExpiringSoon(t)) return 'fresh';
+    return this.refreshSession();
+  }
+
+  /** Serialise refreshes across tabs (Web Locks). Falls back to running
+   *  unlocked when the API is missing or the lock can't be had in time —
+   *  WKWebView's lock implementation is what made the SDK hang, so this
+   *  never waits more than a few seconds for it. */
+  private static async withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+    const locks = typeof navigator !== 'undefined'
+      ? (navigator as unknown as { locks?: { request?: (n: string, o: object, cb: () => Promise<T>) => Promise<T> } }).locks
+      : undefined;
+    if (!locks?.request || typeof AbortController === 'undefined') return fn();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    let started = false;
+    try {
+      return await locks.request('pf-auth-refresh', { signal: ctrl.signal }, () => {
+        started = true;
+        clearTimeout(timer);
+        return fn();
+      });
+    } catch (e) {
+      if (!started) return fn();   // lock unavailable / timed out — go unlocked
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** A NEWER copy of this tab's own session written by another tab (registry
+   *  row or the shared pf.session key), for the SAME auth user. */
+  private newerStoredSession(cur: Session): Session | null {
+    const mySub = AuthService.jwtSub(cur.access_token ?? '');
     const ownId = this.ownAccountId();
     const row = ownId ? this.accounts.fresh(ownId) : null;
-    if (row?.refreshToken && row.refreshToken !== refresh) {
-      if (row.accessToken && !this.isExpiringSoon(row.accessToken)) {
-        const adopted = { access_token: row.accessToken, refresh_token: row.refreshToken } as Session;
-        this._session.set(adopted);
-        this.persistSession(adopted);
-        return true;
+    if (row?.refreshToken && row.refreshToken !== cur.refresh_token) {
+      const rowSub = AuthService.jwtSub(row.accessToken ?? '');
+      if (!mySub || !rowSub || rowSub === mySub) {
+        return { access_token: row.accessToken, refresh_token: row.refreshToken } as Session;
       }
-      refresh = row.refreshToken;
     }
+    try {
+      const raw = localStorage.getItem(AuthService.SESSION_KEY);
+      const s = raw ? JSON.parse(raw) as Session : null;
+      if (s?.refresh_token && s.refresh_token !== cur.refresh_token && mySub
+        && AuthService.jwtSub(s.access_token ?? '') === mySub) {
+        return s;
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  /** Put a (refreshed or adopted) session in place for THIS tab's account. */
+  private adoptSession(s: Session): void {
+    this._session.set(s);
+    this.persistSession(s);
+    // Keep the multi-account registry's copy fresh — Supabase rotates the
+    // refresh token on every exchange, so a stale registry copy goes dead.
+    // File them under the account THIS tab holds — not the device-wide
+    // "active" id, which another tab may have switched to someone else.
+    const ownId = this.ownAccountId();
+    if (ownId && s.refresh_token) this.accounts.updateTokens(ownId, s.access_token, s.refresh_token);
+  }
+
+  private async doRefresh(): Promise<RefreshOutcome> {
+    const current = this._session();
+    if (!current?.refresh_token) return 'dead';
+    let refresh = current.refresh_token;
+    // Another tab holding the SAME account may already have rotated the
+    // refresh token (Supabase revokes the old one, and re-using it outside
+    // the reuse window revokes the whole session). Prefer the newer copy:
+    // adopt it outright if its access token is still good, otherwise
+    // refresh with the newest refresh token.
+    const newer = this.newerStoredSession(current);
+    if (newer) {
+      if (newer.access_token && !this.isExpiringSoon(newer.access_token)) {
+        this.adoptSession(newer);
+        return 'ok';
+      }
+      refresh = newer.refresh_token!;
+    }
+    const first = await this.postRefresh(refresh);
+    if (first.session) { this.adoptSession(first.session); return 'ok'; }
+    if (!first.rejected) return 'transient';
+    // Rejected — but a tab may have rotated it while ours was in flight.
+    // Only after that last check is the session really over.
+    const late = this.newerStoredSession({ ...current, refresh_token: refresh } as Session);
+    if (late) {
+      if (late.access_token && !this.isExpiringSoon(late.access_token)) { this.adoptSession(late); return 'ok'; }
+      const second = await this.postRefresh(late.refresh_token!);
+      if (second.session) { this.adoptSession(second.session); return 'ok'; }
+      if (!second.rejected) return 'transient';
+    }
+    return 'dead';
+  }
+
+  /** One refresh-token grant. `rejected` = the auth server answered and said
+   *  no (400 invalid_grant / 401 / 403); anything else is transient. */
+  private async postRefresh(refresh: string): Promise<{ session: Session | null; rejected: boolean }> {
     const ctrl = new AbortController();
-    const killer = setTimeout(() => ctrl.abort(), 4000);
+    const killer = setTimeout(() => ctrl.abort(), AuthService.REFRESH_TIMEOUT_MS);
     try {
       const res = await fetch(`${environment.auth.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
         method: 'POST',
@@ -175,20 +330,16 @@ export class AuthService {
         cache: 'no-store',
         signal: ctrl.signal,
       });
-      if (!res.ok) return false;
-      const s = await res.json() as Session;
-      if (!s?.access_token) return false;
-      this._session.set(s);
-      this.persistSession(s);
-      // Keep the multi-account registry's copy fresh — Supabase rotates the
-      // refresh token on every exchange, so a stale registry copy goes dead.
-      // File them under the account THIS tab holds — not the device-wide
-      // "active" id, which another tab may have switched to someone else.
-      const ownId = this.ownAccountId();
-      if (ownId) this.accounts.updateTokens(ownId, s.access_token, s.refresh_token!);
-      return true;
-    } catch { return false; }
+      if (!res.ok) return { session: null, rejected: AuthService.isRejection(res.status) };
+      const s = await res.json().catch(() => null) as Session | null;
+      return s?.access_token ? { session: s, rejected: false } : { session: null, rejected: false };
+    } catch { return { session: null, rejected: false }; }
     finally { clearTimeout(killer); }
+  }
+
+  /** The token endpoint's "this refresh token is no good" statuses. */
+  static isRejection(status: number): boolean {
+    return status === 400 || status === 401 || status === 403;
   }
 
   /** Exchange ANY refresh token for a fresh session (used when switching to a
@@ -198,21 +349,8 @@ export class AuthService {
    *  timeout / network error / 5xx is transient and must not kill the
    *  profile (it used to be removed from the device on any failure). */
   private async exchangeRefreshToken(refresh: string): Promise<{ session: Session | null; dead: boolean }> {
-    const ctrl = new AbortController();
-    const killer = setTimeout(() => ctrl.abort(), 8000);
-    try {
-      const res = await fetch(`${environment.auth.supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: { apikey: environment.auth.supabaseAnonKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refresh }),
-        cache: 'no-store',
-        signal: ctrl.signal,
-      });
-      if (!res.ok) return { session: null, dead: res.status === 400 || res.status === 401 };
-      const s = await res.json() as Session;
-      return s?.access_token ? { session: s, dead: false } : { session: null, dead: false };
-    } catch { return { session: null, dead: false }; }
-    finally { clearTimeout(killer); }
+    const r = await this.postRefresh(refresh);
+    return { session: r.session, dead: !r.session && r.rejected };
   }
 
   /** Who a token belongs to (app user id) — read-only /api/auth/me. */
@@ -231,7 +369,8 @@ export class AuthService {
     return Object.assign(new Error(message), { code });
   }
 
-  // Remembered organizations for the login dropdown (most-recent first).
+  // Remembered organizations for the login screen (most-recent first). A
+  // per-device convenience — it survives sign-out on purpose.
   private static readonly ORGS_KEY = 'pf.orgs';
   readonly rememberedOrgs = signal<string[]>(AuthService.loadOrgs());
   private static loadOrgs(): string[] {
@@ -248,7 +387,6 @@ export class AuthService {
   // permitted branches and REFUSES anything else (403 branch_not_permitted —
   // strict branch access, 2026-09-27). /me still answers, so a stale id is
   // reset here on every profile load; see also dropActiveBranch().
-  private static readonly ACTIVE_BRANCH_KEY = 'pf.activeBranch';
   private readonly _activeBranchId = signal<string | null>(
     (() => { try { return localStorage.getItem(AuthService.ACTIVE_BRANCH_KEY); } catch { return null; } })()
   );
@@ -275,7 +413,7 @@ export class AuthService {
     try { localStorage.setItem(AuthService.ACTIVE_BRANCH_KEY, branchId); } catch { /* private mode */ }
     if (opts.reload === false) return true;
     // Full reload re-scopes every component that caches branch data in
-    // signals; the Supabase session survives it.
+    // signals; the session survives it.
     try { window.location.reload(); } catch { /* SSR/native guard */ }
     return true;
   }
@@ -292,58 +430,66 @@ export class AuthService {
   }
 
   constructor() {
-    // Restore session on startup and subscribe to auth changes. A 3s watchdog
-    // guarantees the auth guard never hangs on a stalled Supabase call — if
-    // getSession() throws or takes too long, we just boot as signed-out.
-    const settle = () => { this._isReady.set(true); this._readyResolver(); };
-    const watchdog = setTimeout(() => {
-      if (!this._isReady()) {
-        console.warn('[auth] session restore timed out; booting as signed-out');
-        settle();
-      }
-    }, 4000);
+    // The Supabase JS SDK is no longer used for sessions (login audit
+    // 2026-09-29, root cause #2): its own storage held a stale copy of the
+    // refresh token (we rotate ours directly), getSession() silently
+    // refreshed that stale copy — Supabase's reuse detection then revoked the
+    // whole session — and signOut() defaulted to scope=global, revoking the
+    // user's sessions on EVERY device and tab. Drop whatever it left behind.
+    purgeSupabaseLocalStorage();
 
-    // Restore from OUR persisted tokens first (survives SDK setSession hangs).
-    // Falls back to the SDK's storage if we have nothing of our own.
+    const settle = () => {
+      if (this._isReady()) return;
+      this._isReady.set(true);
+      this._readyResolver();
+    };
+
     const stored = this.restorePersistedSession();
-    const restore = stored
-      ? (async () => { this._session.set(stored); await this.loadProfile(); })()
-      : supabase.auth.getSession().then(async ({ data }) => {
-          this._session.set(data.session ?? null);
-          if (data.session) await this.loadProfile();
-        });
-    restore
-      .catch(err => console.error('[auth] session restore failed', err))
-      .finally(() => { clearTimeout(watchdog); settle(); });
-
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      // Only ADOPT a real SDK session (e.g. a successful background refresh).
-      // Ignore null/SIGNED_OUT events: our session is owned locally (custom
-      // login + persisted tokens) and signOut() clears it explicitly — letting
-      // the SDK's empty state null us out would sign the user out on boot.
-      if (session) {
-        // Multi-account guard: after a profile switch the SDK's storage can
-        // still hold the PREVIOUS account and background-refresh it — blindly
-        // adopting that session silently switches the user back. Only adopt
-        // when it belongs to the same auth user as our locally-owned session.
-        const mySub = AuthService.jwtSub(this._session()?.access_token ?? '');
-        const sdkSub = AuthService.jwtSub(session.access_token);
-        if (mySub && sdkSub && mySub !== sdkSub) {
-          return; // stale SDK session from another profile — ours is authoritative
-        }
-        this._session.set(session);
-        this.persistSession(session);
-        await this.loadProfile();
+    if (!stored) {
+      settle();
+    } else {
+      this._session.set(stored);
+      this.startSessionTimer();
+      const cached = this.cachedProfile(AuthService.jwtSub(stored.access_token));
+      if (cached) {
+        // Instant, offline-tolerant boot: publish the last good profile and
+        // let the guard through; /me revalidates in the background and ends
+        // the session only on a DEFINITIVE answer (dead token / suspended).
+        this.applyProfile(cached, { fromCache: true });
+        settle();
+        void this.loadProfile().catch(err => console.error('[auth] profile revalidate failed', err));
+      } else {
+        // No cached profile: wait for /me, but never forever — a stalled
+        // network still boots (as signed-out) after the watchdog. The login
+        // screen follows the session in if /me answers later.
+        const watchdog = setTimeout(() => {
+          if (!this._isReady()) console.warn('[auth] session restore is slow; booting without a profile');
+          settle();
+        }, AuthService.BOOT_WATCHDOG_MS);
+        this.loadProfile()
+          .catch(err => console.error('[auth] session restore failed', err))
+          .finally(() => { clearTimeout(watchdog); settle(); });
       }
-    });
+    }
 
-    // Stale-permission refresh: re-pull the profile when the app comes back
-    // to the foreground after sitting idle (see refreshProfileIfStale).
+    // Resume / foreground: refresh ahead of expiry (the token very likely
+    // lapsed while the app was backgrounded) and re-pull stale permissions.
     try {
-      window.addEventListener('focus', () => this.refreshProfileIfStale());
+      const onResume = () => this.onResume();
+      window.addEventListener('focus', onResume);
+      window.addEventListener('online', onResume);
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') this.refreshProfileIfStale();
+        if (document.visibilityState === 'visible') this.onResume();
       });
+      // Cross-tab: a token rotated / a sign-out in another tab.
+      window.addEventListener('storage', (e) => this.onStorage(e));
+      // Capacitor: WKWebView doesn't always raise visibilitychange on resume.
+      const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+      if (cap?.isNativePlatform?.()) {
+        void import('@capacitor/app')
+          .then(({ App }) => App.addListener('appStateChange', ({ isActive }) => { if (isActive) this.onResume(); }))
+          .catch(() => { /* plugin missing — visibilitychange covers it */ });
+      }
     } catch { /* SSR/native guard */ }
   }
 
@@ -351,10 +497,68 @@ export class AuthService {
     return this._ready;
   }
 
+  // ── Resume + foreground refresh ───────────────────────────────────
+  private _resumeBusy = false;
+  private onResume(): void {
+    if (!this._session() || this._resumeBusy) return;
+    this._resumeBusy = true;
+    void this.refreshIfExpiringSoon()
+      .finally(() => { this._resumeBusy = false; this.refreshProfileIfStale(); });
+  }
+
+  /** Refresh when the access token is within REFRESH_AHEAD_MS of expiry.
+   *  A dead refresh token ends the session (definitive); a transient
+   *  failure is left for the next tick / request. */
+  async refreshIfExpiringSoon(): Promise<RefreshOutcome | 'fresh'> {
+    const t = this._session()?.access_token;
+    if (!t || !this.isExpiringSoon(t, AuthService.REFRESH_AHEAD_MS)) return 'fresh';
+    const outcome = await this.refreshSession();
+    if (outcome === 'dead' && this._session()) await this.endSession('expired');
+    return outcome;
+  }
+
+  private _sessionTimer: ReturnType<typeof setInterval> | null = null;
+  /** A light foreground tick: keeps the token ahead of expiry while the app
+   *  is open (hub reconnects, pollers) without the SDK's background timer. */
+  private startSessionTimer(): void {
+    if (this._sessionTimer || typeof window === 'undefined') return;
+    this._sessionTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (this._session() && !this._resumeBusy) void this.refreshIfExpiringSoon();
+    }, 60_000);
+  }
+  /** Stop the foreground refresh tick (sign-out). */
+  stopSessionTimers(): void {
+    if (this._sessionTimer) { clearInterval(this._sessionTimer); this._sessionTimer = null; }
+    if (this._profileRetry) { clearTimeout(this._profileRetry); this._profileRetry = null; }
+  }
+
+  /** Another tab changed shared auth storage. */
+  private onStorage(e: StorageEvent): void {
+    try {
+      if (e.key === AuthService.SESSION_EVENT_KEY && e.newValue) {
+        const ev = JSON.parse(e.newValue) as { type?: string; userId?: string };
+        const me = this._user()?.id;
+        // Only THIS tab's account: on a shared machine another tab signing a
+        // different profile out must leave this one alone.
+        if (ev.type === 'signout' && me && ev.userId === me) void this.endSession('elsewhere');
+        return;
+      }
+      // Token rotated by another tab for the same auth user → adopt it, so
+      // this tab never presents (or refreshes with) a revoked token.
+      if (e.key === AuthService.SESSION_KEY || e.key === 'pf.accounts' || e.key === null) {
+        const cur = this._session();
+        if (!cur) return;
+        const newer = this.newerStoredSession(cur);
+        if (newer?.access_token && !this.isExpiringSoon(newer.access_token)) this._session.set(newer);
+      }
+    } catch { /* malformed — ignore */ }
+  }
+
   /** Auth user id (sub claim) from a JWT — used to tell profiles apart when
    *  reconciling our locally-owned session with the SDK's. Null on any parse
    *  failure so callers fail open (treat as "unknown", not "different"). */
-  private static jwtSub(token: string): string | null {
+  static jwtSub(token: string): string | null {
     try {
       const payload = token.split('.')[1];
       const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
@@ -432,16 +636,12 @@ export class AuthService {
       refresh_token: data.refreshToken,
     } as Session;
 
-    // Publish to the SDK so refresh + onAuthStateChange keep working (non-fatal).
-    try {
-      await Promise.race([
-        supabase.auth.setSession({ access_token: data.accessToken, refresh_token: data.refreshToken }),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('setSession timed out')), 2000)),
-      ]);
-    } catch { console.warn('[auth] setSession hung — continuing with local session'); }
-
+    // Add account keeps the previous profile's session until the new one
+    // is fully loaded — restored if /me can't be reached.
+    const prev = this._session();
     this._session.set(session);
-    this.persistSession(session);   // survive cold start regardless of the SDK
+    this.persistSession(session);   // survive cold start
+    this.startSessionTimer();
     this._mustChangePassword.set(!!data.mustChangePassword);
     this.rememberOrg(data.tenant?.name ?? org);
     // A fresh credential sign-in supersedes any leftover idle-lock from a prior
@@ -451,7 +651,14 @@ export class AuthService {
     // _locked signal was seeded at construction, before this login).
     try { localStorage.removeItem('pf.lockedAt'); } catch { /* ignore */ }
     try { window.dispatchEvent(new Event('pf:fresh-signin')); } catch { /* ignore */ }
-    await this.loadProfile();
+    const outcome = await this.loadProfile(false, { quiet: true });
+    if (outcome !== 'ok') {
+      this._session.set(prev);
+      this.persistSession(prev);
+      throw new Error(outcome === 'transient'
+        ? `Signed in, but couldn't load your profile. Check your connection and try again.`
+        : 'This account can’t be used here. Ask your admin to check it.');
+    }
   }
 
   /** Set a new password (forced-change gate + self-service). Clears the gate. */
@@ -470,55 +677,60 @@ export class AuthService {
   }
 
   /**
-   * Bypass-the-SDK sign-in path. POSTs directly to Supabase's token endpoint
-   * with an AbortController so it can never outrun the caller's timeout. If
-   * this fetch also hangs the problem is network-level (extension blocking
-   * *.supabase.co, corporate proxy, DNS) — the error message says so.
+   * Revoke THIS session's refresh token on the auth server (best effort).
+   * scope=local ends only this device's session — never the user's other
+   * devices (the SDK's default was scope=global). The access JWT itself stays
+   * valid for the API until it expires (stateless validation), so the push
+   * unregister that follows still authenticates.
    */
-  private async directTokenFetch(email: string, password: string, ms: number): Promise<Session> {
-    const ctrl = new AbortController();
-    const killer = setTimeout(() => ctrl.abort(), ms);
-    try {
-      const url = `${environment.auth.supabaseUrl}/auth/v1/token?grant_type=password`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'apikey': environment.auth.supabaseAnonKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password }),
-        cache: 'no-store',
-        signal: ctrl.signal
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`Supabase rejected sign-in (${res.status}): ${body}`);
-      }
-      return await res.json() as Session;
-    } catch (e: unknown) {
-      if ((e as Error).name === 'AbortError') {
-        throw new Error(
-          "Can't reach Supabase auth — a browser extension, ad blocker, or corporate proxy is probably blocking *.supabase.co. Try an Incognito window to confirm."
-        );
-      }
-      throw e;
-    } finally {
-      clearTimeout(killer);
+  async revokeSession(timeoutMs = 5000): Promise<void> {
+    let token = this._session()?.access_token;
+    if (!token) return;
+    if (this.isExpiringSoon(token, 0)) {
+      if (await this.refreshSession() !== 'ok') return;   // dead/offline — nothing to revoke with
+      token = this._session()?.access_token;
+      if (!token) return;
     }
+    const ctrl = new AbortController();
+    const killer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      await fetch(`${environment.auth.supabaseUrl}/auth/v1/logout?scope=local`, {
+        method: 'POST',
+        headers: { apikey: environment.auth.supabaseAnonKey, Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+        signal: ctrl.signal,
+      });
+    } catch { /* offline — the token dies with its expiry */ }
+    finally { clearTimeout(killer); }
   }
 
-  async signOut(): Promise<void> {
+  /**
+   * Drop every piece of THIS session on this device: the tokens, the user /
+   * tenant / permission state, the active branch, the idle lock, the cached
+   * profile, the registry row of the signed-out profile (other profiles on a
+   * shared machine stay) and any Supabase SDK leftovers. Per-device
+   * conveniences — theme, design mode, remembered organizations, printer —
+   * are kept. `broadcast` tells other tabs of the same account to follow.
+   */
+  clearLocalSession(opts: { broadcast?: boolean } = {}): void {
+    const activeId = this._user()?.id ?? AuthService.readTabAccount() ?? this.accounts.activeUserId();
+    const sub = AuthService.jwtSub(this._session()?.access_token ?? '') ?? this._user()?.authId ?? null;
+    this.stopSessionTimers();
     // Remove ONLY the active profile from the device registry — other signed-in
     // accounts stay so their owners can still switch in with their PIN.
-    const activeId = this._user()?.id ?? this.accounts.activeUserId();
     if (activeId) this.accounts.remove(activeId);
     // Tear down every user-scoped realtime service (hubs, stores, windows,
     // pop-ups, rings) before anything else can react to the sign-out.
     this.scope.changed(null);
     AuthService.writeTabAccount(null);
-    this.persistSession(null);   // clear our stored tokens
+    this.persistSession(null);
     this._session.set(null);
     this._user.set(null);
+    this._mustChangePassword.set(false);
+    this._lastProfileLoadedAt = 0;
+    this._activeBranchId.set(null);
+    try { localStorage.removeItem(AuthService.ACTIVE_BRANCH_KEY); } catch { /* */ }
+    if (sub) { try { localStorage.removeItem(AuthService.PROFILE_KEY_PREFIX + sub); } catch { /* */ } }
     // Signing out ENDS the idle lock. Leaving pf.lockedAt behind meant the
     // next person to sign in on this device was met by the PIN screen for a
     // lock that belonged to the session they just ended (owner: "if it's
@@ -526,8 +738,25 @@ export class AuthService {
     // here rather than in LockService to avoid an AuthService <-> LockService
     // DI cycle; the event lets a live LockService drop its in-memory flag too.
     try { localStorage.removeItem('pf.lockedAt'); } catch { /* */ }
+    purgeSupabaseLocalStorage();
+    void purgeSupabaseIndexedDb();
+    if (opts.broadcast && activeId) {
+      try {
+        localStorage.setItem(AuthService.SESSION_EVENT_KEY,
+          JSON.stringify({ type: 'signout', userId: activeId, at: Date.now() }));
+      } catch { /* */ }
+    }
     try { window.dispatchEvent(new Event('pf:signed-out')); } catch { /* SSR/native */ }
-    try { await supabase.auth.signOut(); } catch { /* SDK may hang on native — already cleared locally */ }
+  }
+
+  /**
+   * Low-level sign-out: best-effort server revoke + local clear. Screens use
+   * SessionService.logout() (the full ordered sequence); this stays for the
+   * few callers that only need the auth half.
+   */
+  async signOut(opts: { revoke?: boolean } = {}): Promise<void> {
+    if (opts.revoke !== false) await this.revokeSession();
+    this.clearLocalSession({ broadcast: true });
   }
 
   // ── Multi-account switching + PIN (shared lab machines) ──────────────
@@ -596,19 +825,9 @@ export class AuthService {
       this.accounts.setHasPin(acc.userId, false);
     }
 
-    // Point the SDK's own storage at the NEW profile too — otherwise it keeps
-    // background-refreshing the previous account and (on the next boot) would
-    // try to clobber the switch. Non-fatal: the onAuthStateChange sub-guard
-    // also refuses cross-profile adoption if this hangs.
-    try {
-      await Promise.race([
-        supabase.auth.setSession({ access_token: sess.access_token, refresh_token: sess.refresh_token! }),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('setSession timed out')), 2000)),
-      ]);
-    } catch { console.warn('[auth] setSession hung during switch — continuing with local session'); }
-
     this._session.set(sess);
     this.persistSession(sess);
+    this.startSessionTimer();
     this.accounts.setActive(acc.userId);
     this._mustChangePassword.set(false);
     await this.loadProfile();
@@ -663,126 +882,203 @@ export class AuthService {
     if (u) this._user.set({ ...u, registrationId: regId ?? undefined });
   }
 
+  /**
+   * The current access token, refreshed first when it is expired / near
+   * expiry (SignalR's accessTokenFactory, raw fetches). Never falls back to
+   * the Supabase SDK's own storage: that copy is stale by design and reading
+   * it made the SDK refresh a rotated token (root cause #2).
+   */
   async getAccessToken(): Promise<string | null> {
-    // Prefer the session we set locally via directTokenFetch — the SDK's
-    // getSession() occasionally hangs on cold starts waiting on the Web-Locks
-    // refresh flow. Fall back to SDK only if we haven't cached one yet.
-    const local = this._session()?.access_token;
-    // On a cold launch the cached token is often expired; hand SignalR an
-    // expired token and the hub handshake 401s and the call silently drops.
-    // Refresh first when it's expired/near-expiry.
+    const local = this._session()?.access_token ?? null;
     if (local && this.isExpiringSoon(local)) {
-      if (await this.refreshAccessToken()) return this._session()?.access_token ?? local;
-      return local; // refresh failed — return what we have rather than nothing
+      await this.refreshSession();
+      return this._session()?.access_token ?? null;
     }
-    if (local) return local;
-    try {
-      const { data } = await Promise.race([
-        supabase.auth.getSession(),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('getSession timed out')), 1500))
-      ]);
-      return data.session?.access_token ?? null;
-    } catch {
-      return null;
-    }
+    return local;
   }
 
-  /** True if the JWT is expired or within 60s of expiring. */
+  /** True if the JWT is expired or within `skewMs` (default 60s) of expiring. */
   private isExpiringSoon(jwt: string, skewMs = 60_000): boolean {
     try {
-      const exp = (JSON.parse(atob(jwt.split('.')[1])).exp as number) * 1000;
+      const payload = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const exp = (JSON.parse(atob(payload)).exp as number) * 1000;
       return Date.now() >= exp - skewMs;
     } catch { return true; }
   }
 
-  private async loadProfile(retried = false): Promise<void> {
-    const token = await this.getAccessToken();
-    if (!token) { this._user.set(null); return; }
+  // ── Profile (/api/auth/me) ─────────────────────────────────────────
 
+  private cachedProfile(sub: string | null): CurrentUser | null {
+    if (!sub) return null;
+    try {
+      const raw = localStorage.getItem(AuthService.PROFILE_KEY_PREFIX + sub);
+      const parsed = raw ? JSON.parse(raw) as { user?: CurrentUser } : null;
+      return parsed?.user?.id ? parsed.user : null;
+    } catch { return null; }
+  }
+
+  private cacheProfile(u: CurrentUser): void {
+    const sub = AuthService.jwtSub(this._session()?.access_token ?? '') ?? u.authId ?? null;
+    if (!sub) return;
+    // The signature image (up to ~45 kB) is not needed to boot.
+    const { signatureDataUrl: _sig, ...rest } = u;
+    try {
+      localStorage.setItem(AuthService.PROFILE_KEY_PREFIX + sub, JSON.stringify({ user: rest, at: Date.now() }));
+    } catch { /* quota / private mode */ }
+  }
+
+  /** Publish a profile as the current user (from /me or the boot cache). */
+  private applyProfile(u: CurrentUser, opts: { fromCache: boolean }): void {
+    // A DIFFERENT person is about to become the active user (Add account
+    // signs in without a reload): reset every user-scoped service FIRST so
+    // nothing — hub sockets, message stores, windows, rings — survives
+    // from the previous account. No-op for the same person.
+    this.scope.changed({ userId: u.id, tenantId: u.tenantId, authId: u.authId ?? null });
+    AuthService.writeTabAccount(u.id);
+    const prev = this._user();
+    // Keep the signature we already hold when the cache (which omits it)
+    // stands in for the same person.
+    const signature = opts.fromCache && prev?.id === u.id ? prev.signatureDataUrl : u.signatureDataUrl;
+    this._user.set({ ...u, signatureDataUrl: signature });
+
+    // Seed / validate the active branch against what this user may access.
+    // Clear a stale stored branch so the header doesn't send a rejected id.
+    const branches = u.branches ?? [];
+    const stored = this._activeBranchId();
+    if (!stored || !branches.some(b => b.id === stored)) {
+      this._activeBranchId.set(u.branchId);
+      try { localStorage.setItem(AuthService.ACTIVE_BRANCH_KEY, u.branchId); } catch { /* private mode */ }
+    }
+  }
+
+  private _profileRetry: ReturnType<typeof setTimeout> | null = null;
+  private _profileRetryDelay = 5000;
+  /** /me couldn't be reached and there is no profile to show: try again
+   *  with backoff while the session exists (the login screen follows the
+   *  session in once it answers). */
+  private scheduleProfileRetry(): void {
+    if (this._profileRetry || typeof window === 'undefined') return;
+    const delay = this._profileRetryDelay;
+    this._profileRetryDelay = Math.min(delay * 2, 60_000);
+    this._profileRetry = setTimeout(() => {
+      this._profileRetry = null;
+      if (this._session() && !this._user()) void this.loadProfile();
+    }, delay);
+  }
+
+  /**
+   * Load /api/auth/me for the current session and classify the answer:
+   *  - 200            → `ok`, profile published + cached;
+   *  - network / 5xx / 429 / anything unexpected → `transient`: the session
+   *    and whatever profile we hold stay (it used to sign out on any non-200
+   *    — every dev deploy's 502/503 window logged people out);
+   *  - 401 → refresh once and retry; a rejected refresh, or a 401 again
+   *    with a freshly minted token, is `dead`;
+   *  - 403 (tenant suspended) → `dead`.
+   * `dead` ends the session (SessionService sequence) unless `quiet`, where
+   * the caller (sign-in) reports it instead.
+   */
+  async loadProfile(retried = false, opts: { quiet?: boolean } = {}): Promise<ProfileOutcome> {
+    const token = await this.getAccessToken();
+    if (!token) {
+      if (!this._session()) this._user.set(null);
+      return this._session() ? 'transient' : 'dead';
+    }
+
+    let res: Response;
     try {
       // no-store to stop Chrome's HTTP cache from serving a stale 401 from a
       // previous (signed-out) session — that used to leave the login button
       // stuck on "Signing in…" whenever DevTools was closed (DevTools auto-
       // disables the cache, which is why it worked with inspect open).
-      const res = await fetch(`${environment.apiUrl}/api/auth/me`, {
+      res = await fetch(`${environment.apiUrl}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store'
       });
-      if (!res.ok) {
-        // 401 on a restored session usually means the cached access token
-        // expired (they're ~1h). Refresh once with the stored refresh token,
-        // then retry — so the user stays logged in across longer gaps instead
-        // of being bounced to the login screen.
-        if (res.status === 401 && !retried && await this.refreshAccessToken()) {
-          return this.loadProfile(true);
-        }
-        // Couldn't authenticate — sign out cleanly (clears persisted tokens).
-        await this.signOut();
-        return;
-      }
-      const json = await res.json();
-      const data: MeResponse | undefined = json?.data;
-      if (!data) { this._user.set(null); return; }
-
-      // A DIFFERENT person is about to become the active user (Add account
-      // signs in without a reload): reset every user-scoped service FIRST so
-      // nothing — hub sockets, message stores, windows, rings — survives
-      // from the previous account. No-op for the same person.
-      this.scope.changed({ userId: data.id, tenantId: data.tenantId, authId: data.authId ?? null });
-      AuthService.writeTabAccount(data.id);
-
-      this._user.set({
-        id: data.id,
-        authId: data.authId,
-        firstName: data.firstName ?? '',
-        fathersName: data.fathersName ?? '',
-        displayName: data.displayName || [data.firstName, data.fathersName].filter(Boolean).join(' '),
-        email: data.email,
-        tenantId: data.tenantId,
-        tenantName: data.tenantName,
-        branchId: data.branchId,
-        branchName: data.branchName,
-        roles: data.roles ?? [],
-        permissions: data.permissions ?? [],
-        branches: data.branches ?? [],
-        // OPD build: module scope from the backend; older servers omit it →
-        // default ['lab'] so the front-desk fork stays lab-only.
-        modules: data.modules ?? ['lab'],
-        hasPin: data.hasPin ?? false,
-        signatureDataUrl: data.signatureDataUrl ?? undefined,
-        registrationId: data.registrationId ?? undefined,
-        isDoctor: data.isDoctor ?? false
-      });
-      this._lastProfileLoadedAt = Date.now();
-
-      // Sync the multi-account registry: this profile is now the device's
-      // active account, with its current tokens and display info.
-      const sess = this._session();
-      if (sess?.access_token) {
-        this.accounts.upsert({
-          userId: data.id,
-          org: data.tenantName,
-          tenantId: data.tenantId,
-          displayName: data.displayName || [data.firstName, data.fathersName].filter(Boolean).join(' '),
-          email: data.email,
-          accessToken: sess.access_token,
-          refreshToken: sess.refresh_token ?? '',
-          hasPin: data.hasPin ?? false,
-          addedAt: new Date().toISOString(),
-        });
-        this.accounts.setActive(data.id);
-      }
-
-      // Seed / validate the active branch against what this user may access.
-      // Clear a stale stored branch so the header doesn't send a rejected id.
-      const branches = data.branches ?? [];
-      const stored = this._activeBranchId();
-      if (!stored || !branches.some(b => b.id === stored)) {
-        this._activeBranchId.set(data.branchId);
-        try { localStorage.setItem(AuthService.ACTIVE_BRANCH_KEY, data.branchId); } catch { /* private mode */ }
-      }
     } catch {
-      this._user.set(null);
+      return this.profileUnavailable(opts.quiet);
     }
+
+    if (res.status === 401) {
+      if (!retried) {
+        // The access token expired while we were away. Refresh once and retry.
+        const r = await this.refreshSession();
+        if (r === 'ok') return this.loadProfile(true, opts);
+        if (r === 'transient') return this.profileUnavailable(opts.quiet);
+      }
+      if (!opts.quiet) await this.endSession('expired');
+      return 'dead';
+    }
+    if (res.status === 403) {
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      if (!opts.quiet) await this.endSession(body?.error === 'tenant_suspended' ? 'suspended' : 'expired');
+      return 'dead';
+    }
+    if (!res.ok) return this.profileUnavailable(opts.quiet);
+
+    const json = await res.json().catch(() => null);
+    const data: MeResponse | undefined = json?.data;
+    if (!data) return this.profileUnavailable(opts.quiet);
+    // The session may have ended (sign-out) while /me was in flight.
+    if (AuthService.jwtSub(this._session()?.access_token ?? '') !== AuthService.jwtSub(token)) return 'transient';
+
+    const user: CurrentUser = {
+      id: data.id,
+      authId: data.authId,
+      firstName: data.firstName ?? '',
+      fathersName: data.fathersName ?? '',
+      displayName: data.displayName || [data.firstName, data.fathersName].filter(Boolean).join(' '),
+      email: data.email,
+      tenantId: data.tenantId,
+      tenantName: data.tenantName,
+      branchId: data.branchId,
+      branchName: data.branchName,
+      roles: data.roles ?? [],
+      permissions: data.permissions ?? [],
+      branches: data.branches ?? [],
+      // OPD build: module scope from the backend; older servers omit it →
+      // default ['lab'] so the front-desk fork stays lab-only.
+      modules: data.modules ?? ['lab'],
+      hasPin: data.hasPin ?? false,
+      signatureDataUrl: data.signatureDataUrl ?? undefined,
+      registrationId: data.registrationId ?? undefined,
+      isDoctor: data.isDoctor ?? false
+    };
+    this.applyProfile(user, { fromCache: false });
+    this.cacheProfile(user);
+    this._lastProfileLoadedAt = Date.now();
+    this._profileRetryDelay = 5000;
+    if (this._profileRetry) { clearTimeout(this._profileRetry); this._profileRetry = null; }
+
+    // Sync the multi-account registry: this profile is now the device's
+    // active account, with its current tokens and display info.
+    const sess = this._session();
+    if (sess?.access_token) {
+      this.accounts.upsert({
+        userId: data.id,
+        org: data.tenantName,
+        tenantId: data.tenantId,
+        displayName: user.displayName,
+        email: data.email,
+        accessToken: sess.access_token,
+        refreshToken: sess.refresh_token ?? '',
+        hasPin: data.hasPin ?? false,
+        addedAt: new Date().toISOString(),
+      });
+      this.accounts.setActive(data.id);
+    }
+    return 'ok';
+  }
+
+  /** /me unreachable: keep the session and any profile we hold; if there is
+   *  none yet, fall back to the cached one, else retry with backoff. */
+  private profileUnavailable(quiet = false): ProfileOutcome {
+    // Sign-in reports the failure itself (and restores the previous session).
+    if (!quiet && !this._user()) {
+      const cached = this.cachedProfile(AuthService.jwtSub(this._session()?.access_token ?? ''));
+      if (cached) this.applyProfile(cached, { fromCache: true });
+      else this.scheduleProfileRetry();
+    }
+    return 'transient';
   }
 }
