@@ -1723,7 +1723,15 @@ reject / reassign actions on the review screens) plus `GET /api/validation/scope
 - **Reassign** is a DialogService choice of the validators who cover the
   result's department (`GET /api/validation/{id}/reassign-options`), never a
   pasted id.
-- **Specs:** `pending-validation.nd.spec.ts`, `reassign-picker.spec.ts`.
+- **Registration number prompt:** a signing user (validate_result) with no
+  registration number sees `pf-regno-prompt` at the top of the SCOPE card
+  (and in the tube review strip): a neutral notice (slate surface, violet
+  SVG mark) "Add your registration number — it prints under your
+  signature." + an `.nd-rowact` **Add** link to `/signature?tab=registration`.
+  It disappears once saved. The number lives ONLY on the user
+  (`users.RegistrationId`); admins edit it in Users & roles → Edit user or
+  OPD → Doctors.
+- **Specs:** `pending-validation.nd.spec.ts`, `reassign-picker.spec.ts`. `regno-prompt.component.spec.ts`.
 
 ## API summary
 
