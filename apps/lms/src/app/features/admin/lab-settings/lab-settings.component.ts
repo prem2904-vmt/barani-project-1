@@ -20,6 +20,7 @@ import { ReportTemplate } from '../../../shared/models/report.model';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/services/whatsapp.service';
 import { WaConnectCardComponent } from './wa-connect-card.component';
+import { WaBillingCardComponent } from './wa-billing-card.component';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
 
@@ -42,7 +43,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent, WaBillingCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -516,6 +517,9 @@ interface AutoAssignConfig {
       </section>
       <!-- The lab's OWN WhatsApp number (Meta Embedded Signup). -->
       <pf-wa-connect-card [settings]="waSettings()!" (changed)="applyWa($event)"></pf-wa-connect-card>
+      <!-- Usage, spend, Meta payment health, the prepaid balance (estimated)
+           and the shared-number credits. -->
+      <pf-wa-billing-card [settings]="waSettings()!"></pf-wa-billing-card>
       }
 
       @if (showSec('queues')) {

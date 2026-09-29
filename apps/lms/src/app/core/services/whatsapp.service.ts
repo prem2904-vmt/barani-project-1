@@ -80,6 +80,10 @@ export interface WaSender {
   templateStatus?: string | null;
   templateStatusReason?: string | null;
   templates?: WaTenantTemplate[];
+  /** Billing: unknown | set | missing | failed (failed = sends fall back to the shared number). */
+  paymentStatus?: WaPaymentStatus | null;
+  paymentStatusReason?: string | null;
+  businessId?: string | null;
   /** WhatsApp:EmbeddedSignupEnabled on the server (off until Meta App Review). */
   canConnect: boolean;
 }
@@ -99,8 +103,73 @@ export interface WaSignupResult {
   code?: string | null;
   wabaId?: string | null;
   phoneNumberId?: string | null;
+  /** The lab's Meta Business Portfolio (session info) — billing deep links need it. */
+  businessId?: string | null;
   event?: string | null;
   errorMessage?: string | null;
+}
+
+// ── Billing (the lab pays Meta for its OWN number; credits on the shared one) ──
+
+/** unknown | set | missing | failed — "failed" = Meta refused a send with a payment error (131042). */
+export type WaPaymentStatus = 'unknown' | 'set' | 'missing' | 'failed';
+
+export interface WaBillingCategory { category: string; volume: number; cost: number | null; source: 'meta' | 'estimate' }
+export interface WaBillingMonth {
+  month: string; messages: number; cost: number; costSource: 'meta' | 'estimate';
+  byCategory: WaBillingCategory[]; syncedAt?: string | null;
+}
+export interface WaDeliveryMonth {
+  month: string; sent: number; delivered: number; read: number; failed: number;
+  own: number; shared: number; held: number; queued: number;
+}
+export interface WaBillingLinks {
+  paymentMethods: string; accountBilling: string; manager: string; insights: string;
+  helpAddPaymentMethod: string; helpAboutBilling: string; helpPaymentThreshold: string; precise: boolean;
+}
+/** Meta exposes NO balance API: this is the amount the admin last confirmed minus our sends since (an estimate). */
+export interface WaBillingBalance {
+  source: 'estimate' | null; reported: number | null; reportedAt?: string | null;
+  spentSince: number; messagesSince: number; estimated: number | null; threshold: number; isLow: boolean; isOut: boolean;
+}
+export interface WaBilling {
+  own: boolean; wabaId?: string | null; businessId?: string | null; currency?: string | null; currencyWarning?: string | null;
+  usage: { thisMonth: WaBillingMonth | null; lastMonth: WaBillingMonth | null; syncedAt?: string | null; nextSyncAt?: string | null; syncError?: string | null };
+  delivery: { thisMonth: WaDeliveryMonth; lastMonth: WaDeliveryMonth };
+  payment: { status: WaPaymentStatus; reason?: string | null; checkedAt?: string | null; failedAt?: string | null; fallingBack: boolean };
+  balance: WaBillingBalance | null;
+  spend: { monthlyThreshold: number | null; thisMonth: number; percent: number | null };
+  links: WaBillingLinks;
+  steps: string[];
+  rates: { currency: string; utility: number; marketing: number; authentication: number; authenticationInternational: number; service: number; note: string; url: string };
+}
+export interface WaCreditLedgerRow {
+  id: string; type: 'allowance' | 'topup' | 'adjustment' | 'charge' | 'expiry'; amount: number; balanceAfter: number;
+  month?: string | null; reason?: string | null; actor?: string | null; at: string;
+}
+/** Shared-number message credits (tracking only). `tracked` false = no allowance set (unlimited). */
+export interface WaCredits {
+  tracked: boolean; balance: number | null; monthlyAllowance: number | null; allowanceMonth?: string | null; lowThreshold: number | null;
+  usedThisMonth: number; grantedTotal: number; usedTotal: number; isLow: boolean; isExhausted: boolean;
+  updatedAt?: string | null; updatedBy?: string | null; ledger: WaCreditLedgerRow[];
+}
+export interface WaBillingView { billing: WaBilling; credits: WaCredits }
+export interface WaBillingSettingsInput { monthlySpendThreshold: number | null; lowBalanceThreshold: number | null }
+
+/** The words for the payment chip. */
+export function waPaymentLabel(s: WaPaymentStatus | null | undefined): { label: string; tone: 'ok' | 'wait' | 'bad' | 'muted' } {
+  switch (s) {
+    case 'set': return { label: 'Payment method set', tone: 'ok' };
+    case 'missing': return { label: 'Payment method missing', tone: 'wait' };
+    case 'failed': return { label: 'Payment failed', tone: 'bad' };
+    default: return { label: 'Payment not checked yet', tone: 'muted' };
+  }
+}
+
+/** "₹1,234.50" (Indian grouping). */
+export function inr(n: number | null | undefined): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /** "Prefrontal (shared)" or "<lab display name> (connected)". */
@@ -224,5 +293,35 @@ export class WhatsAppService {
 
   setOptOut(patientId: string, optOut: boolean): Observable<{ patientId: string; optOut: boolean }> {
     return this.api.put(`/api/whatsapp/patients/${patientId}/opt-out`, { optOut });
+  }
+
+  // ── Billing (reads the server's cache — never Meta per page) ──
+
+  billing(): Observable<WaBillingView> {
+    return this.api.get<WaBillingView>('/api/whatsapp/billing');
+  }
+
+  /** "Refresh usage": one Meta read, honoured at most every few minutes. */
+  refreshBilling(): Observable<WaBillingView> {
+    return this.api.post<WaBillingView>('/api/whatsapp/billing/refresh', {});
+  }
+
+  saveBillingSettings(input: WaBillingSettingsInput): Observable<WaBillingView> {
+    return this.api.put<WaBillingView>('/api/whatsapp/billing/settings', input);
+  }
+
+  /** "I added funds": the prepaid amount now held with Meta (null clears the tracker). */
+  setBillingBalance(amount: number | null): Observable<WaBillingView> {
+    return this.api.put<WaBillingView>('/api/whatsapp/billing/balance', { amount });
+  }
+
+  // ── Shared-number credits (platform console only — the lab route has no such endpoint) ──
+
+  setCreditAllowance(monthlyAllowance: number | null, lowThreshold: number | null): Observable<WaBillingView> {
+    return this.api.put<WaBillingView>('/api/whatsapp/credits/allowance', { monthlyAllowance, lowThreshold });
+  }
+
+  adjustCredits(amount: number, reason: string | null): Observable<WaBillingView> {
+    return this.api.post<WaBillingView>('/api/whatsapp/credits/adjust', { amount, reason });
   }
 }

@@ -75,6 +75,8 @@ export interface EmbeddedSignupMessage {
   event: EmbeddedSignupEvent;
   wabaId: string | null;
   phoneNumberId: string | null;
+  /** The Meta Business Portfolio the WABA was created under (billing deep links). */
+  businessId: string | null;
   errorMessage: string | null;
   currentStep: string | null;
 }
@@ -96,6 +98,7 @@ export function parseEmbeddedSignupMessage(ev: Pick<MessageEvent, 'origin' | 'da
     event: m.event.toUpperCase(),
     wabaId: str(data['waba_id']),
     phoneNumberId: str(data['phone_number_id']),
+    businessId: str(data['business_id']),
     errorMessage: str(data['error_message']),
     currentStep: str(data['current_step']),
   };
