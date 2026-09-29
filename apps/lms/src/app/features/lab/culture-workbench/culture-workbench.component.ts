@@ -1019,12 +1019,6 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
   /** The ordered test's allowed specimens; null = not loaded (yet). */
   private readonly allowedSpecimens = signal<AllowedSpecimen[] | null>(null);
   private allowedFor: string | null = null;
-  /** Picker rows: the allowed list (else the master); value = the master CODE. */
-  readonly specimenOpts = computed<PfSelectOption[]>(() => {
-    const allowed = this.allowedSpecimens();
-    const rows = allowed && allowed.length ? allowed : this.specimenMaster();
-    return rows.map(r => ({ value: r.code, label: r.name }));
-  });
   /** The picker's value: the stored CODE, else the older stored NAME resolved
    *  against the rows (a name off every list shows as itself). */
   readonly specimenValue = computed<string>(() => {
@@ -1032,6 +1026,22 @@ export class CultureWorkbenchComponent implements OnInit, OnDestroy {
     if (cc?.specimenCode) return cc.specimenCode;
     const rows = [...(this.allowedSpecimens() ?? []), ...this.specimenMaster()];
     return findAllowed(rows, cc?.specimen)?.code ?? (cc?.specimen ?? '');
+  });
+  /** Picker rows: the allowed list (else the master); value = the master
+   *  CODE. A stored specimen that is OFF the allowed list (an older order, or
+   *  the list changed since) stays visible as its own row — never lost, and
+   *  the bench sees what was recorded — but only the allowed rows are
+   *  accepted by the server. */
+  readonly specimenOpts = computed<PfSelectOption[]>(() => {
+    const allowed = this.allowedSpecimens();
+    const rows = allowed && allowed.length ? allowed : this.specimenMaster();
+    const opts: PfSelectOption[] = rows.map(r => ({ value: r.code, label: r.name }));
+    const cur = this.specimenValue();
+    if (cur && !opts.some(o => o.value === cur)) {
+      const name = findAllowed(this.specimenMaster(), cur)?.name ?? this.c()?.specimen ?? cur;
+      opts.unshift({ value: cur, label: name, hint: 'not in the allowed list' });
+    }
+    return opts;
   });
   private readonly loadAllowedForCase = effect(() => {
     const testId = this.c()?.testId;

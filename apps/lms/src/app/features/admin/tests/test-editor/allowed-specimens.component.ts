@@ -92,13 +92,19 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
         </p>
       } @else {
         <table class="pf-as__table">
+          <colgroup>
+            <col class="pf-as__c-spec" /><col class="pf-as__c-cont" /><col class="pf-as__c-num" /><col class="pf-as__c-text" />
+            <col class="pf-as__c-instr" /><col class="pf-as__c-def" />
+            @if (showPrice()) { <col class="pf-as__c-num" /> }
+            <col class="pf-as__c-x" />
+          </colgroup>
           <thead>
             <tr>
-              <th scope="col">Specimen</th>
-              <th scope="col">Container</th>
+              <th scope="col" class="pf-as__col-spec">Specimen</th>
+              <th scope="col" class="pf-as__col-cont">Container</th>
               <th scope="col" class="pf-as__num">Vol. (ml)</th>
-              <th scope="col">Transport</th>
-              <th scope="col">Instruction</th>
+              <th scope="col" class="pf-as__col-text">Transport</th>
+              <th scope="col" class="pf-as__col-text pf-as__col-instr">Instruction</th>
               <th scope="col" class="pf-as__c">Default</th>
               @if (showPrice()) { <th scope="col" class="pf-as__num">Price (₹)</th> }
               <th scope="col"><span class="pf-as__sr">Remove</span></th>
@@ -163,15 +169,18 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
     .pf-as__add { flex: 1 1 260px; max-width: 360px; }
     .pf-as__count { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
     .pf-as__note { margin: 4px 0 8px; }
-    .pf-as__table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .pf-as__table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+    .pf-as__c-spec { width: 17%; } .pf-as__c-cont { width: 196px; } .pf-as__c-num { width: 84px; }
+    .pf-as__c-text { width: 15%; } .pf-as__c-instr { width: auto; } .pf-as__c-def { width: 64px; } .pf-as__c-x { width: 36px; }
     .pf-as__table th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .02em; text-transform: uppercase;
       color: var(--text-tertiary); padding: 4px 6px; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
     .pf-as__table td { padding: 6px; vertical-align: middle; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.06)); }
-    .pf-as__name { font-weight: 600; white-space: nowrap; }
+    .pf-as__name { font-weight: 600; }
     .pf-as__code { display: block; font-weight: 400; font-size: 11px; color: var(--text-tertiary); }
-    .pf-as__num { width: 96px; text-align: right; }
+    .pf-as__num { text-align: right; }
     .pf-as__c { width: 64px; text-align: center; }
-    .pf-as__in { width: 100%; min-width: 72px; font-size: 16px; }
+    .pf-as__in { width: 100%; min-width: 0; font-size: 16px; }
+    .pf-as__name { white-space: normal; overflow-wrap: anywhere; }
     .pf-as__acts { width: 36px; text-align: right; }
     .pf-as__rm { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px;
       color: var(--text-tertiary); background: transparent; border: 0; cursor: pointer; }

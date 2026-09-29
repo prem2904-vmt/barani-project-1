@@ -71,6 +71,13 @@ describe('Culture bench — the specimen stays within the test\'s allowed list',
     expect(cmp.specimenValue()).toBe('SPEC005');
   });
 
+  it('a stored specimen OFF the allowed list stays visible as its own row (never lost)', () => {
+    const { cmp } = render({ caseOver: { specimenCode: 'SPEC026', specimen: 'Blood' } });
+    expect(cmp.specimenValue()).toBe('SPEC026');
+    expect(cmp.specimenOpts().map((o: any) => o.value)).toEqual(['SPEC026', 'SPEC013', 'SPEC005']);
+    expect(cmp.specimenOpts()[0]).toMatchObject({ label: 'Blood', hint: 'not in the allowed list' });
+  });
+
   it('an older line stored by NAME resolves to its code; an empty allowed list offers the master', () => {
     const { cmp } = render({ caseOver: { specimenCode: null, specimen: 'urine' }, allowed: [{ testId: 't-cs', specimens: [] }] });
     expect(cmp.specimenOpts().map((o: any) => o.value)).toEqual(['SPEC013', 'SPEC005', 'SPEC026']);
