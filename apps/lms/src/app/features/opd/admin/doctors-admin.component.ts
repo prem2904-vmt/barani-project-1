@@ -40,7 +40,8 @@ interface DoctorRow {
 
 /**
  * OPD → Doctors (admin). Same AG-Grid + theme as Test Master, so the look
- * carries across the app. Editable per-doctor consultation fee; edited rows are
+ * carries across the app. Editable per-doctor consultation fee and
+ * registration number (the user's one RegistrationId); edited rows are
  * batch-saved via PATCH /api/doctors/{id}.
  */
 @Component({
@@ -139,6 +140,12 @@ export class DoctorsAdminComponent {
     { field: 'department', headerName: 'Department', valueFormatter: p => p.value || '—' },
     { headerName: 'Specialisation', flex: 1.6, minWidth: 180,
       valueGetter: p => p.data?.specializations?.length ? p.data.specializations.join(', ') : '—' },
+    // The ONE registration number (users.RegistrationId) — what prints under
+    // the doctor's signature. Blank clears it; the doctor can also add it
+    // themselves in My signature.
+    { field: 'regNo', headerName: 'Registration no.', editable: true, minWidth: 150,
+      cellClass: 'nd-num', valueParser: p => String(p.newValue ?? '').trim().slice(0, 64),
+      valueFormatter: p => p.value || '—' },
     { field: 'fee', headerName: 'Consultation fee (₹)', editable: true, width: 190, flex: 0,
       cellClass: 'pf-da-fee nd-num', type: 'numericColumn',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) && n >= 0 ? n : (p.oldValue ?? 0); },
@@ -162,7 +169,7 @@ export class DoctorsAdminComponent {
     this.saving.set(true);
     let done = 0, failed = 0;
     for (const r of changed) {
-      this.api.patch(`/api/doctors/${r.id}`, { fee: r.fee }).subscribe({
+      this.api.patch(`/api/doctors/${r.id}`, { fee: r.fee, regNo: r.regNo ?? '' }).subscribe({
         next: () => { if (++done + failed === changed.length) this.finish(failed); },
         error: () => { failed++; if (done + failed === changed.length) this.finish(failed); },
       });
@@ -171,7 +178,7 @@ export class DoctorsAdminComponent {
   private finish(failed: number) {
     this.saving.set(false);
     this._dirty.set(new Set());
-    if (failed) this.toasts.error(`${failed} fee(s) failed to save`);
-    else this.toasts.success('Fees saved');
+    if (failed) this.toasts.error(`${failed} doctor(s) failed to save`);
+    else this.toasts.success('Doctors saved');
   }
 }

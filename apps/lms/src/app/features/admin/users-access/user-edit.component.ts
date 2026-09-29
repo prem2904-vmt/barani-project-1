@@ -24,12 +24,20 @@ import { rolePickerRows } from './role-assignability';
 import { DEPARTMENTS_HINT, UserDepartmentsRow, sameIds, viaRoleLabels } from './consultant-departments';
 import { SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, scopeValuesFromRoles, soleScope } from './branch-scope';
 
+/** Did the admin change the registration number (trim-insensitive)? */
+export function regIdChanged(next: string | null | undefined, loaded: string | null | undefined): boolean {
+  return (next ?? '').trim() !== (loaded ?? '').trim();
+}
+
 interface EditForm {
   /** Honorific ("Dr." for doctors, etc.) — prefixes every mention of the name. */
   title: string;
   firstName: string;
   fathersName: string;
   phone: string;
+  /** Medical council / registration number — prints under the user's
+   *  signature on reports (users.RegistrationId, the one home). */
+  registrationId: string;
   roleIds: string[];
   /** Branch scope: 'all' | 'b:<id>' | 'sb:<id>' (see branch-scope.ts). */
   scope: string[];
@@ -154,6 +162,15 @@ interface EditForm {
                     </div>
                     @if (fieldError()['phone']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
                   </div>
+                  <label class="nd-field" [class.pf-uf-span]="!username()">
+                    <span class="nd-field__lbl">Registration number</span>
+                    <input type="text" class="nd-input nd-num pf-ue-regno" maxlength="64" autocomplete="off"
+                           [class.nd-input--error]="!!fieldError()['registrationId']"
+                           placeholder="e.g. TN-12345" aria-label="Registration number"
+                           [ngModel]="form().registrationId" (ngModelChange)="patch({ registrationId: $event })" />
+                    @if (fieldError()['registrationId']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                    <p class="nd-field__hint">Medical council registration for doctors and consultants — prints under their signature on reports. They can also add it themselves in My signature.</p>
+                  </label>
                 </div>
               </div>
             </section>
@@ -250,7 +267,7 @@ export class UserEditComponent implements OnInit {
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
-  private readonly _form = signal<EditForm>({ title: '', firstName: '', fathersName: '', phone: '', roleIds: [], scope: [] });
+  private readonly _form = signal<EditForm>({ title: '', firstName: '', fathersName: '', phone: '', registrationId: '', roleIds: [], scope: [] });
   private readonly _saving = signal(false);
   /** The user's role rows have landed (so a sole-branch default won't be
    *  overwritten by — or overwrite — the loaded scope). */
@@ -363,7 +380,7 @@ export class UserEditComponent implements OnInit {
           this._loadedUser.set(u);
           this._loadedName.set(u.displayName || u.firstName || u.username || '');
           this._username.set(u.username || '');
-          this._form.update(v => ({ ...v, title: u.title ?? '', firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '' }));
+          this._form.update(v => ({ ...v, title: u.title ?? '', firstName: u.firstName ?? '', fathersName: u.fathersName ?? '', phone: u.phone ?? '', registrationId: u.registrationId ?? '' }));
 
           if (u.phone) {
             const parsed = parsePhoneNumber(u.phone);
@@ -432,6 +449,8 @@ export class UserEditComponent implements OnInit {
     // Details first, then roles (full-replace). Both must land for a clean save.
     this.api.patch<User>(`/api/users/${this.id}`, {
       title: i.title, firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
+      // Only when changed (blank clears); the server audit-logs the change.
+      ...(regIdChanged(i.registrationId, this._loadedUser()?.registrationId) ? { registrationId: i.registrationId.trim() } : {}),
     }).subscribe({
       next: () => {
         // Roles apply at every selected branch (one assignment per role × branch).
@@ -460,7 +479,7 @@ export class UserEditComponent implements OnInit {
   /** Route field-named backend failures to the offending input; toast the rest. */
   private showError(e: unknown) {
     const err = ApiError.from(e);
-    const inputs = ['firstName', 'fathersName', 'phone'];
+    const inputs = ['firstName', 'fathersName', 'phone', 'registrationId'];
     if (err.field && inputs.includes(err.field)) {
       this._fieldError.update(fe => ({ ...fe, [err.field!]: err.message }));
     } else {

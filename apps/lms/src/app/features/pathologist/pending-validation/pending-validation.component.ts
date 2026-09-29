@@ -24,6 +24,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { TileGridDirective } from '../../../shared/directives/tile-grid.directive';
+import { RegnoPromptComponent } from '../../../shared/components/regno-prompt/regno-prompt.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { plural } from '../../../shared/utils/plural';
 import { pickReassignee } from '../reassign-picker';
@@ -67,6 +68,7 @@ type Tab = 'mine' | 'all';
     KpiStripComponent,
     HeroBandComponent,
     TileGridDirective,
+    RegnoPromptComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -224,6 +226,9 @@ type Tab = 'mine' | 'all';
             }
           </header>
           <div class="nd-card__body pv-side__body">
+            <!-- Missing registration number: it prints under this
+                 consultant's signature — they can add it themselves. -->
+            <pf-regno-prompt />
             <p class="pv-side__h">Departments</p>
             <div class="pv-side__depts">
               @if (scope()?.scoped) {
@@ -309,6 +314,7 @@ type Tab = 'mine' | 'all';
             (valueChange)="setTab($event)">
           </pf-segmented>
         </div>
+        <div class="mb-4"><pf-regno-prompt /></div>
       </div>
 
       <div class="pv-scroll pb-10">

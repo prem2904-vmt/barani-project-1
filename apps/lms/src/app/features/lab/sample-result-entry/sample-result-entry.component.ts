@@ -1,3 +1,4 @@
+import { RegnoPromptComponent } from '../../../shared/components/regno-prompt/regno-prompt.component';
 import {
   Component,
   DestroyRef,
@@ -129,6 +130,7 @@ function calcKey(testId: string, paramName: string): string {
     CommonModule,
     FormsModule,
     CommentThreadComponent,
+    RegnoPromptComponent,
     SelectComponent,
     HeroBandComponent,
     ZoomTargetDirective,
@@ -634,7 +636,8 @@ export class SampleResultEntryComponent {
     this.techName().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "T");
 
   /** Medical registration ID beside the name — a dash until the user sets one
-   *  (editable on the My signature screen). */
+   *  (editable on the My signature screen; a validator without one sees the
+   *  pf-regno-prompt line in the strip). */
   readonly techRegId = computed(
     () => this.auth.user()?.registrationId?.trim() || "—",
   );

@@ -18,6 +18,9 @@ export interface User {
    *  'rounds' | 'surgery' | 'dnd' | 'away') — serialized on every user
    *  object by the API. See shared/models/presence.model.ts. */
   presenceStatus?: string;
+  /** Medical council / registration number — the ONE home (users table);
+   *  printed as "Reg. …" under the user's report signature. */
+  registrationId?: string | null;
   isActive: boolean;
   createdAt: string;
 }

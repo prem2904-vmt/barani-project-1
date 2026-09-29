@@ -10,6 +10,8 @@ import { signatureFileToPng } from '../../shared/utils/signature-image';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
 import { ThemeService } from '../../core/services/theme.service';
+import { ActivatedRoute } from '@angular/router';
+import { REGNO_PROMPT_TEXT } from '../../shared/components/regno-prompt/regno-prompt.component';
 
 type SigTab = 'signature' | 'registration';
 
@@ -111,6 +113,10 @@ type SigTab = 'signature' | 'registration';
           Your medical council / registration number. Appears next to your name on
           lab screens and as "Reg. …" under your signature on reports.
         </p>
+        @if (!savedRegId()) {
+          <!-- Missing (the admin didn't add it): the user fills it here. -->
+          <p class="pf-sig-regprompt" role="status">{{ regPrompt }}</p>
+        }
         <div class="pf-sig-row" style="margin-top: 0;">
           <input type="text" class="nd-input nd-num pf-sig-input" maxlength="64" aria-label="Registration ID" placeholder="e.g. TN-12345"
                  [value]="regId()" (input)="regId.set($any($event.target).value)" />
@@ -150,6 +156,7 @@ type SigTab = 'signature' | 'registration';
     .pf-sig-cta--danger { color: var(--red-text, #b91c1c); border-color: rgba(248,113,113,0.4); }
     .pf-sig-cta:disabled { opacity: .5; cursor: default; }
     .pf-sig-input { flex: 1; }
+    .pf-sig-regprompt { margin: 0 0 10px; font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
   `],
 })
 export class MySignatureComponent {
@@ -161,7 +168,12 @@ export class MySignatureComponent {
     { value: 'signature', label: 'Signature' },
     { value: 'registration', label: 'Registration ID' },
   ];
-  readonly tab = signal<SigTab>('signature');
+  /** ?tab=registration (the "Add your registration number" prompt links
+   *  here) opens straight on the Registration ID section. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
+  readonly tab = signal<SigTab>(
+    this.route?.snapshot?.queryParamMap?.get('tab') === 'registration' ? 'registration' : 'signature');
+  readonly regPrompt = REGNO_PROMPT_TEXT;
   /** Classic shows both sections; the new design shows the pill's tab. */
   showSec(k: SigTab): boolean { return !this.theme.isNewDesign() || this.tab() === k; }
   private readonly auth = inject(AuthService);
