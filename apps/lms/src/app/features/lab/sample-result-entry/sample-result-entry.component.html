@@ -74,6 +74,9 @@
             @if (hasWritable()) { <span class="pf-sre-tab__dot" aria-hidden="true"></span> }
           </span>
         }
+        @if (urgent()) {
+          <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--urgent" title="Order priority">Urgent</span>
+        }
         @if (s.order?.orderNumber) {
           <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--order" title="Order ID">
             <span class="pf-sre-chip__meta">Order</span><span class="nd-num pf-sre-chip__val">{{ s.order?.orderNumber }}</span>

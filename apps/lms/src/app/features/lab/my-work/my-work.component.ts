@@ -46,6 +46,8 @@ import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { plural } from '../../../shared/utils/plural';
 import { lineDepartment } from '../../../shared/utils/shared-tube';
+import { OrderPriority, comparePriorityThenDue } from '../../../shared/utils/lab-priority';
+import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-work.priority';
 
 /** The departments of a tube's lines, "Haematology · Biochemistry" — a
  *  shared tube (integrated lab) carries several. */
@@ -61,9 +63,10 @@ const INTAKE_PIN_KEY = 'pf-lms.my-work.intake-pinned';
 const COLLECT_COLLAPSED_KEY = 'pf-lms.my-work.collect-collapsed';
 
 type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed' | 'culture';
-type Level = 'urgent' | 'high' | 'normal';
-type Bucket = { level: Level; items: Enriched[] };
-type Enriched = OrderTest & { _level: Level; _remainingMin: number };
+/** Queue groups are the ORDER's priority (Urgent / Normal — the only two
+ *  the lab has). TAT is a separate clock chip, never a group or "priority". */
+type Bucket = { priority: OrderPriority; label: 'Urgent' | 'Normal'; items: Enriched[] };
+type Enriched = WorkLine;
 
 interface CounterSpec {
   id: 'pending' | 'critical' | 'in_progress' | 'done' | 'all';
@@ -736,14 +739,14 @@ const COUNTERS: CounterSpec[] = [
         </div>
       }
 
-      @for (bucket of buckets(); track bucket.level) {
+      @for (bucket of buckets(); track bucket.priority) {
         @if (bucket.items.length > 0) {
           <div class="mb-6">
             <div class="flex items-center gap-3 mb-3 px-1">
-              <span class="pf-dot" [attr.data-level]="bucket.level"></span>
+              <span class="pf-dot" [attr.data-priority]="bucket.priority"></span>
               <h3 class="text-[11px] font-mono uppercase tracking-[0.18em]"
                   style="color: var(--text-secondary);">
-                {{ bucket.level }} · {{ labCfg.sampleFocused() ? sampleCountIn(bucket.items) : bucket.items.length }}
+                {{ bucket.label }} · {{ labCfg.sampleFocused() ? sampleCountIn(bucket.items) : bucket.items.length }}
               </h3>
             </div>
 
@@ -753,7 +756,7 @@ const COUNTERS: CounterSpec[] = [
             <ul class="grid grid-cols-1 lg:grid-cols-2 gap-3" [ndTileGrid]="theme.isNewDesign()">
               @for (g of patientGroups(bucket.items); track g.orderId) {
                 <li>
-                  <pf-tile [tone]="toneFor(bucket.level)" padding="md" class="block">
+                  <pf-tile [tone]="toneFor(bucket.priority)" padding="md" class="block">
                     <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
                             (click)="toggleExpand(g.orderId)">
                       <pf-avatar [name]="g.patientName" [size]="40"></pf-avatar>
@@ -763,7 +766,7 @@ const COUNTERS: CounterSpec[] = [
                         <!-- Line 2: TAT urgency + how many tests ride on this card.
                              Expand the card (or open the tube) for test names + barcodes. -->
                         <div class="flex items-center gap-2 flex-wrap mt-1">
-                          <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"/>
+                          <pf-tat-indicator [remainingMinutes]="g.remainingMin" [dueAt]="g.dueAt"/>
                           @if (!theme.isNewDesign()) { <span class="pf-grp-count">{{ g.items.length }} test<span [class.hidden]="g.items.length === 1">s</span></span> }
                         </div>
                       </div>
@@ -900,8 +903,7 @@ const COUNTERS: CounterSpec[] = [
                        content — so the card is identical on a bench tablet and
                        a desktop. -->
                   <div class="pf-tq" [pfZoomSource]="tube.sampleId"
-                       [class.pf-tq--urgent]="bucket.level === 'urgent'"
-                       [class.pf-tq--high]="bucket.level === 'high'"
+                       [class.pf-tq--urgent]="bucket.priority === 'urgent'"
                        [class.pf-tq--rejected]="tube.rejections.length > 0"
                        [class.pf-tq--picking]="pickingTubeId() === tube.sampleId"
                        [class.pf-tq--holding]="holdingPeekId() === tube.sampleId"
@@ -925,6 +927,9 @@ const COUNTERS: CounterSpec[] = [
                         }
                         @if (tube.rejections.length > 0) {
                           <span class="pf-tq__tag pf-tq__tag--warn">Re-entry</span>
+                        }
+                        @if (!tube.allDone) {
+                          <pf-tat-indicator class="pf-tq__tat" [remainingMinutes]="tube.remainingMin" [dueAt]="tube.dueAt"/>
                         }
                         @if (tab() === 'service_queue' && tube.assignedTo) {
                           <span class="pf-tq__tag">{{ assigneeName(tube.assignedTo) }}</span>
@@ -995,14 +1000,14 @@ const COUNTERS: CounterSpec[] = [
             <ul class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               @for (t of bucket.items; track t.id) {
                 <li>
-                  <pf-tile [tone]="toneFor(bucket.level)" padding="md">
+                  <pf-tile [tone]="toneFor(bucket.priority)" padding="md">
                     <div class="flex items-start gap-3">
                       <pf-avatar [name]="t.subOrder?.order?.patient?.displayName ?? 'Patient'" [size]="40"></pf-avatar>
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
                           <p class="text-[15px] font-semibold truncate"
                              style="color: var(--text-primary);">{{ t.test?.name ?? 'Test' }}</p>
-                          <pf-tat-indicator [tatLevel]="t._level" [remainingMinutes]="t._remainingMin"/>
+                          <pf-tat-indicator [remainingMinutes]="t._remainingMin" [dueAt]="t._dueAt"/>
                         </div>
                         <p class="text-[12px] font-mono mt-0.5"
                            style="color: var(--text-tertiary);">
@@ -1751,9 +1756,9 @@ const COUNTERS: CounterSpec[] = [
       border-radius: 9999px;
       flex-shrink: 0;
     }
-    .pf-dot[data-level='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
-    .pf-dot[data-level='high']   { background: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.65); }
-    .pf-dot[data-level='normal'] { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.55); }
+    /* Group dot = ORDER priority: Urgent red, Normal quiet. */
+    .pf-dot[data-priority='urgent'] { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.7); }
+    .pf-dot[data-priority='normal'] { background: #94a3b8; box-shadow: none; }
 
     /* Tube tile gets a soft red wash when any of its tests are in
        re_entry — pulls the eye to it without screaming. */
@@ -1804,7 +1809,7 @@ const COUNTERS: CounterSpec[] = [
        its own 44px target; hover and press add feedback only.
 
        Depth comes from a hairline + 1px inset highlight rather than a heavy
-       panel, and priority is a 3px cap stripe down the left edge — a nod to
+       panel, and URGENT (order priority) is a red 3px cap stripe down the left edge — a nod to
        the tube's own cap — so colour never floods the surface. */
     .pf-tq {
       --tq-accent: rgba(148, 163, 184, 0.5);
@@ -1829,10 +1834,9 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq--done .pf-tq__tag { color: #0f9d6f; }
     .pf-tq--rejected { border-color: rgba(242, 85, 90, 0.34); }
 
-    /* Cap stripe = priority. */
+    /* Cap stripe = order priority (Urgent only). TAT lives in its own chip. */
     .pf-tq__cap { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tq-accent); }
     .pf-tq--urgent { --tq-accent: #f2555a; }
-    .pf-tq--high   { --tq-accent: #f0a03c; }
     .pf-tq--done   { --tq-accent: #34d399; }
 
     /* Primary zone — the tap target for open / pick. */
@@ -2500,7 +2504,7 @@ const COUNTERS: CounterSpec[] = [
        Queue / My Work / Done tiles become calm nd cards: neutral surface,
        hairline border, 12px radius, small soft shadow; Noto Sans with
        tabular numbers for sample IDs. The left cap stripe keeps ONLY the
-       functional priority colours (urgent red, high amber); done is a
+       functional priority colour (Urgent red); done is a
        violet mark, not green. Counter chips lose their colour dots. */
     :host-context(.design-new) .pf-tq {
       background: var(--nd-card-bg, var(--bg-card-solid));
@@ -2511,7 +2515,7 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq:hover { border-color: var(--nd-sel-border); box-shadow: var(--nd-shadow-sm); }
     :host-context(.design-new) .pf-tq__main:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, transparent); }
     :host-context(.design-new) .pf-tq--done { --tq-accent: var(--color-violet-500, #8b5cf6); }
-    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--high):not(.pf-tq--done) .pf-tq__cap { background: transparent; }
+    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--done) .pf-tq__cap { background: transparent; }
     :host-context(.design-new) .pf-tq--done .pf-tq__tag,
     :host-context(.design-new) .pf-tq__stat--done { color: var(--violet-text, #6d28d9) !important; }
     :host-context(.design-new) .pf-tq__id,
@@ -2706,10 +2710,9 @@ const COUNTERS: CounterSpec[] = [
     /* Queue "done" stat: palette only — violet check, never green. */
     :host-context(.design-new) .pf-tq__stat--done,
     :host-context(.design-new) .pf-tq__stat--done .pf-tq__stat-u { color: var(--violet-text, #6d28d9); }
-    /* Group dots: NORMAL is neutral; red / amber stay for urgent / high. */
-    :host-context(.design-new) .pf-dot[data-level='normal'] { background: var(--nd-toggle-on, #aeb8c2); box-shadow: none; }
-    :host-context(.design-new) .pf-dot[data-level='urgent'],
-    :host-context(.design-new) .pf-dot[data-level='high'] { box-shadow: none; }
+    /* Group dots: NORMAL is neutral; red only for Urgent (order priority). */
+    :host-context(.design-new) .pf-dot[data-priority='normal'] { background: var(--nd-toggle-on, #aeb8c2); box-shadow: none; }
+    :host-context(.design-new) .pf-dot[data-priority='urgent'] { box-shadow: none; }
 
     /* ════ Adaptive tile grid (owner): 3 / 2 / 1 by the LIST's width ════
        In a grid cell the tile stacks: content on top (name wraps, never
@@ -2734,8 +2737,9 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-tq__who { font-size: 13px !important; font-weight: 500 !important; color: var(--text-secondary) !important; }
     :host-context(.design-new) .pf-tq__sub,
     :host-context(.design-new) .pf-tq__note { font-size: 12px; color: var(--text-muted); }
-    /* Stripe only where it means something: urgent (red) / high (amber). */
-    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent):not(.pf-tq--high) .pf-tq__cap { background: transparent; }
+    /* Stripe only where it means something: an Urgent order (red). */
+    :host-context(.design-new) .pf-tq:not(.pf-tq--urgent) .pf-tq__cap { background: transparent; }
+    .pf-tq__tat { margin-left: auto; }
     /* Intake scan field: kit input + a real secondary Receive. */
     :host-context(.design-new) .pf-mw-scan:focus-within {
       border-color: var(--color-violet-600, #7c3aed);
@@ -3312,22 +3316,11 @@ export class MyWorkComponent implements OnInit {
   readonly buckets = computed<Bucket[]>(() => {
     const enriched: Enriched[] = this.enrich(this._rows());
     const filtered = this.filterByCounter(enriched);
-    return [
-      { level: 'urgent' as const, items: filtered.filter(e => e._level === 'urgent') },
-      { level: 'high'   as const, items: filtered.filter(e => e._level === 'high') },
-      { level: 'normal' as const, items: filtered.filter(e => e._level === 'normal') }
-    ];
+    return groupByPriority(filtered);
   });
 
   private enrich(rows: OrderTest[]): Enriched[] {
-    return rows.map(t => {
-      const ral = t.subOrder?.receivedAtLab;
-      const budget = (t.test?.tatHours ?? 0) * 60;
-      const elapsed = ral ? (Date.now() - new Date(ral).getTime()) / 60000 : 0;
-      const remaining = budget - elapsed;
-      const level: Level = remaining <= 0 ? 'urgent' : remaining <= 60 ? 'high' : 'normal';
-      return { ...t, _level: level, _remainingMin: remaining };
-    });
+    return enrichWorkLines(rows);
   }
 
   /** Counter-tile filter runs on top of the segmented tab filter. */
@@ -3363,16 +3356,17 @@ export class MyWorkComponent implements OnInit {
   /**
    * Group bucket items by orderId so the queue shows one card per patient
    * with all their tests nested inside instead of one floating card per
-   * test. The card's TAT level is the worst (most-urgent) of any test in
-   * the order so a patient with one breached test isn't buried.
+   * test. The card's TAT chip is the soonest-due test in the order so a
+   * patient with one overdue test isn't buried; cards sort by that due time.
    */
   patientGroups(items: Enriched[]): Array<{
     orderId: string;
     patientName: string;
     patientInfo: string;
     items: Enriched[];
-    level: Level;
-    remainingMin: number;
+    priority: OrderPriority;
+    remainingMin: number | null;
+    dueAt: number | null;
   }> {
     const byOrder = new Map<string, Enriched[]>();
     for (const t of items) {
@@ -3380,9 +3374,8 @@ export class MyWorkComponent implements OnInit {
       if (!byOrder.has(oid)) byOrder.set(oid, []);
       byOrder.get(oid)!.push(t);
     }
-    const levelRank: Record<Level, number> = { 'urgent': 0, 'high': 1, 'normal': 2 };
     return Array.from(byOrder.entries()).map(([orderId, group]) => {
-      const worst = [...group].sort((a, b) => levelRank[a._level] - levelRank[b._level])[0];
+      const worst = soonestDue(group);
       const patient = worst.subOrder?.order?.patient;
       return {
         orderId,
@@ -3390,10 +3383,11 @@ export class MyWorkComponent implements OnInit {
         // Standard patient line: <Name(≤15)+..> | <age>/<sex> | <P-ID>
         patientInfo: patient ? formatPatientInfo(patient) : 'Patient',
         items: group,
-        level: worst._level,
-        remainingMin: Math.min(...group.map(t => t._remainingMin))
+        priority: group.some(t => t._priority === 'urgent') ? 'urgent' as const : 'normal' as const,
+        remainingMin: worst._remainingMin,
+        dueAt: worst._dueAt
       };
-    });
+    }).sort(comparePriorityThenDue);
   }
 
   // Expand/collapse state per order id within My Work.
@@ -3405,8 +3399,8 @@ export class MyWorkComponent implements OnInit {
     this._expanded.set(next);
   }
 
-  toneFor(level: Level): TileTone {
-    return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
+  toneFor(priority: OrderPriority): TileTone {
+    return priority === 'urgent' ? 'rose' : 'default';
   }
 
   ngOnInit() {
@@ -3666,6 +3660,8 @@ export class MyWorkComponent implements OnInit {
     hasDraft: boolean;
     assignedTo: string | null;
     rejections: Array<{ testName: string; reason: string }>;
+    remainingMin: number | null;
+    dueAt: number | null;
   }> {
     const bySample = new Map<string, Enriched[]>();
     for (const t of items) {
@@ -3692,7 +3688,11 @@ export class MyWorkComponent implements OnInit {
       const rejections = tests
         .filter(x => x.status === 're_entry' && (x.rejectionReason ?? '').trim().length > 0)
         .map(x => ({ testName: x.test?.name ?? 'Test', reason: x.rejectionReason ?? '' }));
-      return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections };
+      // TAT chip: the soonest-due OPEN test on the tube (done lines don't count).
+      const open = tests.filter(x => x.status !== 'entered' && x.status !== 'validated');
+      const due = soonestDue(open.length ? open : tests);
+      return { sampleId, deptName, barcode, tests, allDone, hasDraft, assignedTo, rejections,
+               remainingMin: due._remainingMin, dueAt: due._dueAt };
     // Sequence by sample number — the queue reads 26034, 26035, 26036, not the
     // insertion order the grouping map happened to preserve.
     }).sort((a, b) => (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true }));
@@ -3714,11 +3714,18 @@ export class MyWorkComponent implements OnInit {
     hasDraft: boolean;
     assignedTo: string | null;
     rejections: Array<{ testName: string; reason: string }>;
+    remainingMin: number | null;
+    dueAt: number | null;
     patientName: string;
     patientInfo: string;
     patientMeta: string;
   }> {
-    return this.tubesIn(items).map(tube => {
+    // Within the priority group: soonest due first (overdue on top), then
+    // sample number for a stable read.
+    const tubes = this.tubesIn(items).sort((a, b) =>
+      ((a.remainingMin ?? Infinity) - (b.remainingMin ?? Infinity))
+      || (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true }));
+    return tubes.map(tube => {
       const patient = tube.tests[0]?.subOrder?.order?.patient;
       return {
         ...tube,

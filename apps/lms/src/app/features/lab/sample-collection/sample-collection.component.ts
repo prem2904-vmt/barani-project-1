@@ -69,6 +69,7 @@ import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.co
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
+import { normalizePriority } from '../../../shared/utils/lab-priority';
 import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
 
 /**
@@ -870,7 +871,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         if ((t as { test?: { fastingRequired?: boolean; name?: string } }).test?.fastingRequired)
           fasting.add((t as { test?: { name?: string } }).test?.name ?? "Test");
     return {
-      urgent: (o?.priority ?? "").toLowerCase() === "urgent",
+      // Order priority, normalised: urgent / STAT → Urgent (the lab has Urgent / Normal only).
+      urgent: normalizePriority(o?.priority) === "urgent",
       fasting: [...fasting],
       refDoctor: (o?.refDoctorName ?? "").trim(),
       refHospital: (o?.refHospitalName ?? "").trim(),

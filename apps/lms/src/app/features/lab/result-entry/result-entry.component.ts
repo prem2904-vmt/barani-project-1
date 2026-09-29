@@ -9,6 +9,7 @@ import { BarcodeScannerModalComponent } from '../../../shared/components/barcode
 import { TatIndicatorComponent } from '../../../shared/components/tat-indicator/tat-indicator.component';
 import { OrderTest } from '../../../shared/models/order.model';
 import { chosenSpecimen } from '../../../shared/utils/micro-specimen';
+import { TatState, linePriority, tatDetail, tatInfo } from '../../../shared/utils/lab-priority';
 import { patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { ReferenceRange, TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -197,16 +198,19 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                   <p class="pf-patient-bar__meta">
                     {{ t.test?.department?.name ?? '—' }}
                     <span class="pf-patient-bar__sep">·</span> TAT {{ t.test?.tatHours }}h
+                    @if (priority() === 'urgent') {
+                      <span class="pf-patient-bar__sep">·</span> <span class="pf-prio-urgent">Urgent</span>
+                    }
                   </p>
                 </div>
                 <div class="pf-patient-bar__prog">
                   <div class="pf-tat-track">
                     <div class="pf-tat-fill"
-                         [class]="'pf-tat-' + tatLevel()"
+                         [class]="'pf-tat-' + tatState()"
                          [style.width.%]="tatPercent()"></div>
                   </div>
                 </div>
-                <pf-tat-indicator [tatLevel]="tatLevel()" [remainingMinutes]="tatRemaining()"></pf-tat-indicator>
+                <pf-tat-indicator [remainingMinutes]="tatClock().remainingMin" [dueAt]="tatClock().dueAt"></pf-tat-indicator>
               </div>
             </pf-tile>
           }
@@ -1167,9 +1171,12 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
       border-radius: 9999px;
       transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .pf-tat-normal { background: linear-gradient(90deg, #10b981, #34d399); box-shadow: 0 0 12px rgba(16, 185, 129, 0.45); }
-    .pf-tat-high   { background: linear-gradient(90deg, #f59e0b, #fbbf24); box-shadow: 0 0 12px rgba(245, 158, 11, 0.45); }
-    .pf-tat-urgent { background: linear-gradient(90deg, #ef4444, #f87171); box-shadow: 0 0 14px rgba(239, 68, 68, 0.55); }
+    /* TAT bar = the clock (on track / due soon / overdue) — not a priority. */
+    .pf-tat-onTrack { background: linear-gradient(90deg, #10b981, #34d399); box-shadow: 0 0 12px rgba(16, 185, 129, 0.45); }
+    .pf-tat-dueSoon { background: linear-gradient(90deg, #f59e0b, #fbbf24); box-shadow: 0 0 12px rgba(245, 158, 11, 0.45); }
+    .pf-tat-overdue { background: linear-gradient(90deg, #ef4444, #f87171); box-shadow: 0 0 14px rgba(239, 68, 68, 0.55); }
+    /* Order priority — the front desk's Urgent (the lab has Urgent / Normal only). */
+    .pf-prio-urgent { color: var(--red-text, #dc2626); font-weight: 600; }
 
 
     /* ── Results head — eyebrow + count + dot pips + % ──────── */
@@ -3103,13 +3110,11 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     return Math.max(0, (Date.now() - new Date(ral).getTime()) / 60000);
   });
   readonly tatBudgetMin = computed(() => (this._ot()?.test?.tatHours ?? 0) * 60);
-  readonly tatRemaining = computed(() => this.tatBudgetMin() - this.tatElapsedMin());
-  readonly tatLevel = computed<'urgent' | 'high' | 'normal'>(() => {
-    const r = this.tatRemaining();
-    if (r <= 0) return 'urgent';
-    if (r <= 60) return 'high';
-    return 'normal';
-  });
+  /** TAT clock (from lab receipt). A clock, never a priority. */
+  readonly tatClock = computed(() => tatInfo(this._ot()?.subOrder?.receivedAtLab, this._ot()?.test?.tatHours));
+  readonly tatState = computed<TatState>(() => this.tatClock().state);
+  /** The ORDER's priority, normalised: Urgent (urgent / STAT) or Normal. */
+  readonly priority = computed(() => linePriority(this._ot()));
   readonly tatPercent = computed(() => {
     const b = this.tatBudgetMin();
     if (!b) return 0;
@@ -3123,17 +3128,12 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
   readonly subtitle = computed(() => {
     if (!this._ot()) return 'Capturing parameter values for this test.';
-    const rem = this.tatRemaining();
-    const state =
-      this.tatLevel() === 'urgent' ? 'past TAT' :
-      this.tatLevel() === 'high'   ? `${Math.round(rem)}m remaining` :
-      `${Math.round(rem)}m to go`;
-    return `Enter parameter values. Currently ${state}.`;
+    return `Enter parameter values. ${tatDetail(this.tatClock().remainingMin)}.`;
   });
 
   readonly panelTone = computed<TileTone>(() => {
-    const l = this.tatLevel();
-    return l === 'urgent' ? 'rose' : l === 'high' ? 'amber' : 'violet';
+    // Tint follows the ORDER priority (Urgent = rose); TAT has its own chip.
+    return this.priority() === 'urgent' ? 'rose' : 'violet';
   });
 
   readonly criticalFlags = computed<Array<TestParameter & { value: string }>>(() => {

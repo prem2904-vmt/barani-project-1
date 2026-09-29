@@ -127,7 +127,17 @@ Which side it sits on depends on what the companion does:**
   `aria-label` + the visually-hidden `.nd-rowact__t`. Never a gradient.
 - Header / group counts are pluralised properly (`plural()` in
   `shared/utils/plural.ts`): "1 sample", "2 samples". Group dots: NORMAL is
-  neutral; red / amber only for urgent / high.
+  neutral; red only for URGENT.
+- **Priority vs TAT (owner, 2026-09-29).** The lab has exactly two
+  priorities — the ORDER's **Urgent** and **Normal** (`urgent` / `stat` →
+  Urgent; `routine` / `normal` / empty → Normal). There is no "High". Work
+  queues group by that priority (Urgent first) and sort by TAT due time
+  inside each group. TAT is a separate clock chip (`pf-tat-indicator`,
+  `shared/utils/lab-priority.ts`), never called a priority: **Overdue**
+  (rose), **Due in 20m** / **Due in 1h 20m** (amber, within the hour),
+  otherwise the plain due time (**Due 14:30**, neutral). A test with no TAT
+  budget shows no chip. The abnormal-result "High" (H) flag is a result
+  flag and is unaffected.
 - Tiles don't repeat a test count ("1 test") — it is noise on a sample row.
 - Status on rows (Validated, Submitted, Draft) = neutral chips; a violet
   dot/check marks "done". Red only for real warnings (Re-entry).
@@ -270,7 +280,7 @@ pill. Functional exceptions — these are data or warnings, not decoration:
 Queue / My Work / Completed / Culture tiles and Lab Intake rows lead with the
 SAMPLE ID: ~16.5px, weight 600, normal text colour, Noto Sans tabular numbers
 (never small violet, never monospace). Patient name ~13px / 500 secondary,
-meta ~12px muted. Colour stripes only for urgent (red) / high (amber). A
+meta ~12px muted. Colour stripe only for an Urgent order (red). A
 received / done row goes quieter (muted text + a small violet check), never
 a green or amber pill. The next step on a culture case is a neutral chip
 whose small violet dot is the one accent.
@@ -325,7 +335,7 @@ Queue / My Work / Completed / Culture lists use `<ul [ndTileGrid]="…">`
 own width decides — never the window, because side panes can be pinned:
 ≥1100px → 3 columns, ≥640px → 2, below → 1. Tiles in a row share a height,
 names wrap (never truncate), the row action sits at the tile's bottom-right,
-and group headers (URGENT / HIGH / NORMAL) span the full width above each
+and group headers (URGENT / NORMAL — order priority) span the full width above each
 group's grid. **Search results stay one per row** (section 6).
 
 ## 7. Search: one mode per device type
@@ -1692,10 +1702,10 @@ reject / reassign actions on the review screens) plus `GET /api/validation/scope
   `All · Assigned to me` with plain tabular counts (filtered locally; the
   queue is always fetched whole). Refresh is a quiet ghost band action.
 - **QUEUE card (main):** one tile per TUBE in `[ndTileGrid]`, grouped
-  URGENT / HIGH / ON TIME (neutral dot for on time). Sample ID leads
+  by ORDER priority, URGENT / NORMAL (neutral dot for Normal). Sample ID leads
   (16.5/600 tabular), FULL patient name, meta `44/F · MRN · Department ·
   entered 9:48 PM`, the tests. ONE status: dot + coloured word — Critical ›
-  Overdue (red) › Due in N min (amber) › On time (green). "Assigned to you"
+  Overdue (red) › Due in 20m (amber) › On time (green). "Assigned to you"
   is quiet text with a violet dot. Row action `.nd-rowact` Review (text on
   web, 44px eye icon on touch); the whole tile is the `pfZoomSource` and
   opens the tube review (`/lab/sample/:id?validate=1`; culture → culture case).
@@ -1704,7 +1714,7 @@ reject / reassign actions on the review screens) plus `GET /api/validation/scope
 - **SCOPE card (side):** the consultant's departments (static chips, or "All
   departments" + the hint to get assigned in Users & roles), Today (pending,
   overdue, critical, assigned to you, validated today, by you) and the ONE
-  primary **Review next** (mine › critical › most urgent). Tablet (641–1023):
+  primary **Review next** (mine › critical › Urgent order › soonest due). Tablet (641–1023):
   the side column narrows to 300px. Phones: the side card is a sheet; its
   summary + Review next ride `.nd-bottombar`.
 - **Department scope (server):** a consultant listed in a department's

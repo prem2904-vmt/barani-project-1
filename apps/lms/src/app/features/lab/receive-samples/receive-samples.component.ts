@@ -931,7 +931,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     }
 
     /* ── New design (owner): palette + pattern ──
-       No coloured stripes (urgent/high only, where they exist); pending =
+       No coloured stripes (an Urgent order only, where they exist); pending =
        neutral row + .nd-rowact Receive; received = quieter row, small violet
        check + muted "Received", no pill, no green/amber/teal. The sample ID
        is the primary line (16.5 / 600, Noto tabular). */

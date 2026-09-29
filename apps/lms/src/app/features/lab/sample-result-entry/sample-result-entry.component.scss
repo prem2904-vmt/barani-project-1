@@ -458,3 +458,11 @@
 .pf-sre__out-name { font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; }
 .pf-sre__out-chip { height: 26px; }
 .pf-sre__out-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
+
+/* Order priority: an Urgent order is flagged in the context bar (muted red,
+   like the desk's Urgent toggle). Normal shows nothing. TAT is not a priority. */
+.pf-sre-chip--urgent {
+  color: var(--red-text, #dc2626) !important;
+  border-color: color-mix(in srgb, var(--red-text, #dc2626) 35%, transparent) !important;
+  font-weight: 600;
+}

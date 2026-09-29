@@ -12,9 +12,13 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
+import { TatState } from '../../../shared/utils/lab-priority';
 
-type TatLevel = 'urgent' | 'high' | 'normal';
-type LevelFilter = 'all' | TatLevel;
+/** The board groups by the TAT CLOCK (overdue / due soon / on track) — never
+ *  called a priority (the lab's priorities are the order's Urgent / Normal).
+ *  The server still sends its legacy `level` words; they're mapped here. */
+type LevelFilter = 'all' | TatState;
+const FROM_SERVER: Record<string, TatState> = { urgent: 'overdue', high: 'dueSoon', normal: 'onTrack' };
 
 interface TatRow {
   orderTestId: string;
@@ -25,7 +29,10 @@ interface TatRow {
   receivedAtLab?: string;
   elapsedMinutes: number;
   remainingMinutes: number | null;
-  level: 'urgent' | 'high' | 'normal';
+  /** Server's legacy TAT word (urgent = overdue, high = within the hour). */
+  level: string;
+  /** Mapped TAT state (client). */
+  tat: TatState;
 }
 interface TatSummary { total: number; urgent: number; high: number; normal: number; }
 
@@ -127,7 +134,7 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
                       </p>
                     </div>
 
-                    <pf-tat-indicator [tatLevel]="r.level" [remainingMinutes]="r.remainingMinutes"></pf-tat-indicator>
+                    <pf-tat-indicator [remainingMinutes]="r.remainingMinutes"></pf-tat-indicator>
                   </div>
                 </pf-tile>
               }
@@ -175,9 +182,9 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
       border-radius: 9999px;
       display: inline-block;
     }
-    .urg-urgent { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
-    .urg-high   { background: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.55); }
-    .urg-normal { background: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+    .urg-overdue { background: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
+    .urg-dueSoon { background: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.55); }
+    .urg-onTrack { background: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
 
     /* ---- WORK page: non-scroll app layout on all sizes ----
        The page fills the shell main area exactly; the outer page never
@@ -246,20 +253,20 @@ export class TatBoardComponent implements OnInit, OnDestroy {
     bandFilter(this._rows(), this.q(), (r) => [r.patient, r.test, r.status, r.status?.replace(/_/g, ' ')]));
   readonly visibleCount = computed(() => {
     const f = this.levelFilter();
-    return this.matched().filter((r) => f === 'all' || r.level === f).length;
+    return this.matched().filter((r) => f === 'all' || r.tat === f).length;
   });
   readonly levelOptions = computed<SegmentedOption<LevelFilter>[]>(() => {
     const m = this.matched();
-    const n = (l: TatLevel) => m.filter((r) => r.level === l).length;
+    const n = (l: TatState) => m.filter((r) => r.tat === l).length;
     return [
       { value: 'all', label: 'All', count: m.length },
-      { value: 'urgent', label: 'Urgent', dot: '#ef4444', count: n('urgent') },
-      { value: 'high', label: 'High', dot: '#f59e0b', count: n('high') },
-      { value: 'normal', label: 'Within TAT', dot: '#10b981', count: n('normal') },
+      { value: 'overdue', label: 'Overdue', dot: '#ef4444', count: n('overdue') },
+      { value: 'dueSoon', label: 'Due soon', dot: '#f59e0b', count: n('dueSoon') },
+      { value: 'onTrack', label: 'On track', dot: '#10b981', count: n('onTrack') },
     ];
   });
 
-  readonly levels: Array<'urgent' | 'high' | 'normal'> = ['urgent', 'high', 'normal'];
+  readonly levels: TatState[] = ['overdue', 'dueSoon', 'onTrack'];
 
   private readonly _summary = signal<TatSummary | null>(null);
   private readonly _rows = signal<TatRow[]>([]);
@@ -273,18 +280,18 @@ export class TatBoardComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() { if (this._interval) clearInterval(this._interval); }
 
-  rowsFor(level: 'urgent' | 'high' | 'normal'): TatRow[] {
+  rowsFor(level: TatState): TatRow[] {
     const f = this.levelFilter();
     if (f !== 'all' && f !== level) return [];
-    return this.matched().filter(r => r.level === level);
+    return this.matched().filter(r => r.tat === level);
   }
 
-  levelLabel(level: 'urgent' | 'high' | 'normal'): string {
-    return level === 'urgent' ? 'Urgent' : level === 'high' ? 'High' : 'Within TAT';
+  levelLabel(level: TatState): string {
+    return level === 'overdue' ? 'Overdue' : level === 'dueSoon' ? 'Due soon' : 'On track';
   }
 
-  rowTone(level: 'urgent' | 'high' | 'normal'): TileTone {
-    return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
+  rowTone(level: TatState): TileTone {
+    return level === 'overdue' ? 'rose' : level === 'dueSoon' ? 'amber' : 'default';
   }
 
   statusTone(status: string): ChipTone {
@@ -300,7 +307,10 @@ export class TatBoardComponent implements OnInit, OnDestroy {
 
   refresh() {
     this.api.get<{ summary: TatSummary; rows: TatRow[] }>('/api/dashboard/tat').subscribe({
-      next: r => { this._summary.set(r.summary); this._rows.set(r.rows ?? []); }
+      next: r => {
+        this._summary.set(r.summary);
+        this._rows.set((r.rows ?? []).map(x => ({ ...x, tat: FROM_SERVER[x.level] ?? 'onTrack' })));
+      }
     });
   }
 }

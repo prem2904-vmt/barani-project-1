@@ -68,6 +68,7 @@ import { ZoomTargetDirective } from "../../../core/navigation/zoom.directive";
 import { NumpadDirective, NumpadScopeDirective } from "../../../shared/components/numpad/numpad.directive";
 import { outsourcedChip, splitOutsourced } from "./outsourced-lines";
 import { chosenSpecimen } from "../../../shared/utils/micro-specimen";
+import { normalizePriority } from "../../../shared/utils/lab-priority";
 import { DraftShelfService } from "../../../core/services/draft-shelf.service";
 import {
   MissingEntry,
@@ -167,6 +168,8 @@ export class SampleResultEntryComponent {
 
   /** Full patient name — never cut in code (ND rule 5). */
   readonly patientName = computed(() => patientDisplayName(this._sample()?.order?.patient) || "Patient");
+  /** The ORDER priority is Urgent (urgent / STAT) — the lab has Urgent / Normal only. */
+  readonly urgent = computed(() => normalizePriority(this._sample()?.order?.priority) === "urgent");
   /** "29/M · AA0012". */
   readonly patientMeta = computed(() => formatPatientMeta(this._sample()?.order?.patient));
 

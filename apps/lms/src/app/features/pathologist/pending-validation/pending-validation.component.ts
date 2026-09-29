@@ -27,8 +27,9 @@ import { TileGridDirective } from '../../../shared/directives/tile-grid.directiv
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { plural } from '../../../shared/utils/plural';
 import { pickReassignee } from '../reassign-picker';
+import { OrderPriority } from '../../../shared/utils/lab-priority';
 import {
-  Enriched, Level, QueueTile, ValidationScope,
+  Enriched, QueueTile, ValidationScope,
   departmentsIn, enrich, groupBySample, isCritical, matchesQuery, nextTile, tileStatus,
 } from './pending-validation.logic';
 
@@ -39,7 +40,7 @@ type Tab = 'mine' | 'all';
  *
  * New design (docs/ND-PATTERN.md → "Pathologist queue"): band (search + All ·
  * Assigned to me) → QUEUE card (one tile per tube, sample ID first, one
- * status word, Urgent / High / On time groups, department filter) + SCOPE
+ * status word, Urgent / Normal (order priority) groups, department filter) + SCOPE
  * side card (the consultant's departments, today's numbers, the ONE primary
  * "Review next"). Tapping a tube zooms into the review screen (the same
  * sample screen the tech entered on, ?validate=1; culture → culture case).
@@ -155,10 +156,10 @@ type Tab = 'mine' | 'all';
                 <p class="nd-empty__body">{{ emptyBody() }}</p>
               </div>
             } @else {
-              @for (grp of ndGroups(); track grp.level) {
-                <div class="pv-group" [attr.data-level]="grp.level">
+              @for (grp of ndGroups(); track grp.priority) {
+                <div class="pv-group" [attr.data-priority]="grp.priority">
                   <h3 class="pv-group__h">
-                    <span class="pv-group__dot" [attr.data-level]="grp.level" aria-hidden="true"></span>
+                    <span class="pv-group__dot" [attr.data-priority]="grp.priority" aria-hidden="true"></span>
                     {{ grp.label }}
                     <span class="pv-group__n nd-num">{{ grp.tiles.length }}</span>
                   </h3>
@@ -167,7 +168,7 @@ type Tab = 'mine' | 'all';
                       @let st = status(g);
                       <li>
                         <div class="pv-tile nd-tile-fill" role="button" tabindex="0"
-                             [attr.data-level]="g.level" [attr.data-status]="st.key"
+                             [attr.data-priority]="g.priority" [attr.data-status]="st.key"
                              [class.pv-tile--mine]="g.mine"
                              [pfZoomSource]="[g.key, g.sampleId, g.items[0]?.id]"
                              [attr.aria-label]="'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + st.label"
@@ -328,11 +329,11 @@ type Tab = 'mine' | 'all';
         </div>
       }
 
-      @for (bucket of buckets(); track bucket.level) {
+      @for (bucket of buckets(); track bucket.priority) {
         @if (bucket.items.length > 0) {
           <div class="mb-7">
             <div class="flex items-center gap-2 mb-3 px-1">
-              <span class="pf-urg-dot" [class]="'pf-urg-' + bucket.level"></span>
+              <span class="pf-urg-dot" [class]="'pf-urg-' + bucket.priority"></span>
               <span class="text-[11px] font-mono uppercase tracking-[0.16em]"
                     style="color: var(--text-secondary);">
                 {{ bucket.label }}
@@ -345,7 +346,7 @@ type Tab = 'mine' | 'all';
 
             <div class="space-y-2.5">
               @for (g of sampleGroups(bucket.items); track g.key) {
-                <pf-tile [tone]="rowTone(bucket.level)" padding="md" class="block"
+                <pf-tile [tone]="rowTone(bucket.priority)" padding="md" class="block"
                          [pfZoomSource]="[g.key, g.items[0]?.subOrder?.id, g.items[0]?.id]">
                   <button type="button" class="w-full flex items-center gap-3 cursor-pointer text-left"
                           (click)="openOrder(g)"
@@ -363,7 +364,7 @@ type Tab = 'mine' | 'all';
                         @for (lbl of g.testNames; track lbl) { <span class="ml-1">· {{ lbl }}</span> }
                       </p>
                     </div>
-                    <pf-tat-indicator [tatLevel]="g.level" [remainingMinutes]="g.remainingMin"></pf-tat-indicator>
+                    <pf-tat-indicator [remainingMinutes]="g.remainingMin"></pf-tat-indicator>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
                          style="color: var(--text-muted);">
@@ -437,13 +438,8 @@ type Tab = 'mine' | 'all';
       background: #ef4444;
       box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
     }
-    .pf-urg-high {
-      background: #f59e0b;
-      box-shadow: 0 0 12px rgba(245, 158, 11, 0.55);
-    }
     .pf-urg-normal {
-      background: #10b981;
-      box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+      background: #94a3b8;
     }
 
     /* ===== Phone (<=640): stack expanded result rows so 3 actions don't overflow ===== */
@@ -561,13 +557,12 @@ type Tab = 'mine' | 'all';
       color: var(--text-secondary);
     }
     .pv-group__n { font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); }
-    /* Group dots: NORMAL neutral; red / amber only for urgent / high. */
+    /* Group = ORDER priority. Dots: Normal neutral; red only for Urgent. */
     .pv-group__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--nd-toggle-on); }
-    .pv-group__dot[data-level='urgent'] { background: var(--red-text, #dc2626); }
-    .pv-group__dot[data-level='high'] { background: var(--amber-text, #d97706); }
+    .pv-group__dot[data-priority='urgent'] { background: var(--red-text, #dc2626); }
 
     /* The tube tile. Sample ID leads (16.5 / 600, tabular), patient 13 / 500,
-       meta 12 muted. Stripe only for urgent (red) / high (amber). */
+       meta 12 muted. Stripe only for an Urgent order (red). */
     .pv-tile {
       position: relative; display: flex; flex-direction: column; gap: 4px; min-height: 132px;
       padding: 14px 14px 12px 16px; border-radius: var(--nd-radius);
@@ -579,8 +574,7 @@ type Tab = 'mine' | 'all';
       content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0;
       background: transparent;
     }
-    .pv-tile[data-level='urgent']::before { background: var(--red-text, #dc2626); }
-    .pv-tile[data-level='high']::before { background: var(--amber-text, #d97706); }
+    .pv-tile[data-priority='urgent']::before { background: var(--red-text, #dc2626); }
     @media (hover: hover) and (pointer: fine) {
       .pv-tile:hover { border-color: var(--nd-sel-border); background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--nd-card-bg)); }
     }
@@ -691,8 +685,8 @@ export class PendingValidationComponent implements OnInit {
     if (!this.theme.isNewDesign()) this.refresh();
   }
 
-  rowTone(level: Level): TileTone {
-    return level === 'urgent' ? 'rose' : level === 'high' ? 'amber' : 'default';
+  rowTone(priority: OrderPriority): TileTone {
+    return priority === 'urgent' ? 'rose' : 'default';
   }
 
   /** Classic: group the queue by SAMPLE (one tube / department) so a sample
@@ -719,10 +713,10 @@ export class PendingValidationComponent implements OnInit {
   readonly buckets = computed(() => {
     const q = this.query().trim().toLowerCase();
     const enriched = enrich(this._rows().filter(t => matchesQuery(t, q)));
+    // Groups are the ORDER priority (Urgent / Normal); TAT is the row chip.
     return [
-      { level: 'urgent' as const, label: 'Urgent',      items: enriched.filter(e => e._level === 'urgent') },
-      { level: 'high'   as const, label: 'High',        items: enriched.filter(e => e._level === 'high')   },
-      { level: 'normal' as const, label: 'Within TAT',  items: enriched.filter(e => e._level === 'normal') }
+      { priority: 'urgent' as const, label: 'Urgent', items: enriched.filter(e => e._priority === 'urgent') },
+      { priority: 'normal' as const, label: 'Normal', items: enriched.filter(e => e._priority === 'normal') }
     ];
   });
 
@@ -756,9 +750,8 @@ export class PendingValidationComponent implements OnInit {
   readonly ndGroups = computed(() => {
     const tiles = this.visibleTiles();
     return [
-      { level: 'urgent' as const, label: 'Urgent', tiles: tiles.filter(t => t.level === 'urgent') },
-      { level: 'high' as const, label: 'High', tiles: tiles.filter(t => t.level === 'high') },
-      { level: 'normal' as const, label: 'On time', tiles: tiles.filter(t => t.level === 'normal') },
+      { priority: 'urgent' as const, label: 'Urgent', tiles: tiles.filter(t => t.priority === 'urgent') },
+      { priority: 'normal' as const, label: 'Normal', tiles: tiles.filter(t => t.priority === 'normal') },
     ].filter(g => g.tiles.length > 0);
   });
   readonly ndTabs = computed(() => [
@@ -770,7 +763,7 @@ export class PendingValidationComponent implements OnInit {
     const tiles = this.allTiles();
     return {
       pending: tiles.length,
-      overdue: tiles.filter(t => t.level === 'urgent').length,
+      overdue: tiles.filter(t => t.tat === 'overdue').length,
       critical: tiles.filter(t => t.anyCritical).length,
       mine: tiles.filter(t => t.mine).length,
     };
