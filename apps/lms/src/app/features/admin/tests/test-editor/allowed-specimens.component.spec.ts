@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
-import { AllowedSpecimensComponent, rowsOf, writesOf } from './allowed-specimens.component';
+import { AllowedSpecimensComponent, autoGrow, rowsOf, writesOf } from './allowed-specimens.component';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 
@@ -56,6 +56,50 @@ describe('AllowedSpecimensComponent — pure mappers', () => {
     const w = writesOf([{ code: 'SPEC013', name: 'Urine', isDefault: true, container: '', volumeMl: null, transport: ' ', instruction: 'x', price: -5 }]);
     expect(w).toEqual([{ code: 'SPEC013', isDefault: true, container: null, volumeMl: null, transport: null, instruction: 'x', price: 0 }]);
     expect(writesOf([{ code: 'A', name: 'A', isDefault: false, container: 'edta', volumeMl: 2, transport: '', instruction: '', price: '' }])[0].price).toBeNull();
+  });
+});
+
+describe('AllowedSpecimensComponent — free text never truncates (ND rule)', () => {
+  it('autoGrow (fallback engine) fits a textarea to its content: reset, then the scroll height', () => {
+    const el = { style: { height: '20px' }, scrollHeight: 72 };
+    autoGrow(el, false);
+    expect(el.style.height).toBe('72px');
+    // Not laid out yet (0) → left at auto, never a stale fixed height.
+    const unlaid = { style: { height: '72px' }, scrollHeight: 0 };
+    autoGrow(unlaid, false);
+    expect(unlaid.style.height).toBe('auto');
+    expect(() => autoGrow(null)).not.toThrow();
+  });
+
+  it('autoGrow (native field-sizing) clears any inline height so the CSS sizes the textarea — an inline height would pin it', () => {
+    const el = { style: { height: '40px' }, scrollHeight: 72 };
+    autoGrow(el, true);
+    expect(el.style.height).toBe('');
+  });
+
+  it('Transport and Instruction are auto-growing textareas (never a clipped single-line input), and every cell is labelled for the phone layout', async () => {
+    const { f, el } = make();
+    await f.whenStable(); f.detectChanges();          // [ngModel] writes the value in a microtask
+    const row = el.querySelector('tbody tr[data-code="SPEC013"]')!;
+    const instr = row.querySelector<HTMLTextAreaElement>('textarea[aria-label="Instruction for Urine"]');
+    const transport = row.querySelector<HTMLTextAreaElement>('textarea[aria-label="Transport for Urine"]');
+    expect(instr).not.toBeNull();
+    expect(transport).not.toBeNull();
+    expect(instr!.classList.contains('pf-as__grow')).toBe(true);
+    expect(instr!.value).toBe('Mid-stream');
+    expect(row.querySelector('input[aria-label="Instruction for Urine"]')).toBeNull();
+    expect(Array.from(row.querySelectorAll('td[data-label]')).map(td => td.getAttribute('data-label')))
+      .toEqual(['Container', 'Vol. (ml)', 'Transport', 'Instruction', 'Default', 'Price (₹)']);
+  });
+
+  it('typing into the instruction textarea updates the row and re-fits the height', () => {
+    const { c, el } = make();
+    const instr = el.querySelector<HTMLTextAreaElement>('textarea[aria-label="Instruction for Urine"]')!;
+    instr.value = 'Mid-stream, first morning sample, deliver within 2 hours';
+    instr.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(c.rows().find(r => r.code === 'SPEC013')!.instruction).toBe('Mid-stream, first morning sample, deliver within 2 hours');
+    expect(c.dirty()).toBe(true);
+    expect(instr.style.height === 'auto' || /px$/.test(instr.style.height)).toBe(true);
   });
 });
 

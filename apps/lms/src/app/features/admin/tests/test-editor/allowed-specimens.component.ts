@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, afterRenderEffect, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
@@ -31,6 +31,23 @@ export interface AllowedWrite {
   transport: string | null;
   instruction: string | null;
   price: number | null;
+}
+
+/** Does this browser size a textarea to its content natively (`field-sizing: content`)? */
+export function supportsFieldSizing(): boolean {
+  try { return typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('field-sizing', 'content'); }
+  catch { return false; }
+}
+
+/** Size a textarea to its content (ND rule: no truncation — the cell grows,
+ *  the text never clips). Native (`field-sizing: content`): clear any inline
+ *  height so the CSS sizes it — an inline height would pin it. Fallback:
+ *  reset, then fit scrollHeight. Pure over the element. */
+export function autoGrow(el: { style: { height: string }; scrollHeight: number } | null | undefined, native = supportsFieldSizing()): void {
+  if (!el) return;
+  if (native) { el.style.height = ''; return; }
+  el.style.height = 'auto';
+  if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight}px`;
 }
 
 /** Server rows → grid rows (pure). */
@@ -93,18 +110,18 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
       } @else {
         <table class="pf-as__table">
           <colgroup>
-            <col class="pf-as__c-spec" /><col class="pf-as__c-cont" /><col class="pf-as__c-num" /><col class="pf-as__c-text" />
+            <col class="pf-as__c-spec" /><col class="pf-as__c-cont" /><col class="pf-as__c-vol" /><col class="pf-as__c-text" />
             <col class="pf-as__c-instr" /><col class="pf-as__c-def" />
-            @if (showPrice()) { <col class="pf-as__c-num" /> }
+            @if (showPrice()) { <col class="pf-as__c-price" /> }
             <col class="pf-as__c-x" />
           </colgroup>
           <thead>
             <tr>
-              <th scope="col" class="pf-as__col-spec">Specimen</th>
-              <th scope="col" class="pf-as__col-cont">Container</th>
+              <th scope="col">Specimen</th>
+              <th scope="col">Container</th>
               <th scope="col" class="pf-as__num">Vol. (ml)</th>
-              <th scope="col" class="pf-as__col-text">Transport</th>
-              <th scope="col" class="pf-as__col-text pf-as__col-instr">Instruction</th>
+              <th scope="col">Transport</th>
+              <th scope="col">Instruction</th>
               <th scope="col" class="pf-as__c">Default</th>
               @if (showPrice()) { <th scope="col" class="pf-as__num">Price (₹)</th> }
               <th scope="col"><span class="pf-as__sr">Remove</span></th>
@@ -114,27 +131,35 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
             @for (r of rows(); track r.code) {
               <tr [attr.data-code]="r.code">
                 <td class="pf-as__name">{{ r.name }}<span class="pf-as__code">{{ r.code }}</span></td>
-                <td>
+                <td data-label="Container">
                   <pf-select size="sm" [options]="containerOptions" [value]="r.container"
                              placeholder="Test's own" (valueChange)="set(r.code, { container: $event })"></pf-select>
                 </td>
-                <td class="pf-as__num">
+                <td class="pf-as__num" data-label="Vol. (ml)">
                   <input type="number" class="nd-input nd-num pf-as__in" min="0" step="0.5" inputmode="decimal"
                          [attr.aria-label]="'Volume of ' + r.name" [ngModel]="r.volumeMl"
                          (ngModelChange)="set(r.code, { volumeMl: $event === '' || $event == null ? null : +$event })" />
                 </td>
-                <td><input type="text" class="nd-input pf-as__in" [attr.aria-label]="'Transport for ' + r.name"
-                           [ngModel]="r.transport" (ngModelChange)="set(r.code, { transport: $event })" /></td>
-                <td><input type="text" class="nd-input pf-as__in" [attr.aria-label]="'Instruction for ' + r.name"
-                           [ngModel]="r.instruction" (ngModelChange)="set(r.code, { instruction: $event })" /></td>
-                <td class="pf-as__c">
+                <!-- Free text grows with its content (ND: no truncation): an
+                     auto-sizing textarea, one line when short. -->
+                <td data-label="Transport">
+                  <textarea rows="1" class="nd-input pf-as__in pf-as__grow" [attr.aria-label]="'Transport for ' + r.name"
+                            [ngModel]="r.transport" (ngModelChange)="set(r.code, { transport: $event })"
+                            (input)="grow($event)" (focus)="grow($event)"></textarea>
+                </td>
+                <td data-label="Instruction">
+                  <textarea rows="1" class="nd-input pf-as__in pf-as__grow" [attr.aria-label]="'Instruction for ' + r.name"
+                            [ngModel]="r.instruction" (ngModelChange)="set(r.code, { instruction: $event })"
+                            (input)="grow($event)" (focus)="grow($event)"></textarea>
+                </td>
+                <td class="pf-as__c" data-label="Default">
                   <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="r.isDefault"
                           [attr.aria-label]="'Default: ' + r.name" (click)="setDefault(r.code, !r.isDefault)">
                     <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
                   </button>
                 </td>
                 @if (showPrice()) {
-                  <td class="pf-as__num">
+                  <td class="pf-as__num" data-label="Price (₹)">
                     <input type="number" class="nd-input nd-num pf-as__in" min="0" step="0.01" inputmode="decimal"
                            [attr.aria-label]="'Price of ' + r.name" [placeholder]="basePriceText()"
                            [ngModel]="r.price" (ngModelChange)="set(r.code, { price: $event === '' || $event == null ? '' : +$event })" />
@@ -170,16 +195,22 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
     .pf-as__count { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
     .pf-as__note { margin: 4px 0 8px; }
     .pf-as__table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
-    .pf-as__c-spec { width: 17%; } .pf-as__c-cont { width: 196px; } .pf-as__c-num { width: 84px; }
-    .pf-as__c-text { width: 15%; } .pf-as__c-instr { width: auto; } .pf-as__c-def { width: 64px; } .pf-as__c-x { width: 36px; }
+    /* Free text gets the room: instruction is the widest column, transport
+       next; the number inputs are as narrow as their values. */
+    .pf-as__c-spec { width: 14%; } .pf-as__c-cont { width: 148px; } .pf-as__c-vol { width: 64px; }
+    .pf-as__c-text { width: 15%; } .pf-as__c-instr { width: auto; } .pf-as__c-def { width: 56px; }
+    .pf-as__c-price { width: 84px; } .pf-as__c-x { width: 32px; }
     .pf-as__table th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .02em; text-transform: uppercase;
       color: var(--text-tertiary); padding: 4px 6px; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
-    .pf-as__table td { padding: 6px; vertical-align: middle; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.06)); }
+    .pf-as__table td { padding: 6px; vertical-align: top; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.06)); }
     .pf-as__name { font-weight: 600; }
     .pf-as__code { display: block; font-weight: 400; font-size: 11px; color: var(--text-tertiary); }
     .pf-as__num { text-align: right; }
     .pf-as__c { width: 64px; text-align: center; }
     .pf-as__in { width: 100%; min-width: 0; font-size: 16px; }
+    /* Auto-growing text: never clips, never scrolls inside the cell. */
+    .pf-as__grow { display: block; resize: none; overflow: hidden; line-height: 1.35; min-height: 40px; height: auto;
+      white-space: pre-wrap; overflow-wrap: anywhere; field-sizing: content; }
     .pf-as__name { white-space: normal; overflow-wrap: anywhere; }
     .pf-as__acts { width: 36px; text-align: right; }
     .pf-as__rm { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px;
@@ -189,11 +220,18 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
     .pf-as__foot { display: flex; align-items: flex-start; gap: 12px; margin-top: 10px; }
     .pf-as__foot .pf-hint { flex: 1 1 auto; margin: 0; }
     @media (max-width: 720px) {
-      .pf-as__table, .pf-as__table thead, .pf-as__table tbody, .pf-as__table tr, .pf-as__table td { display: block; }
-      .pf-as__table thead { display: none; }
-      .pf-as__table tr { padding: 8px 0; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
+      /* One card per specimen: the name heads it, every field is labelled,
+         the free text keeps growing. */
+      .pf-as__table, .pf-as__table thead, .pf-as__table tbody, .pf-as__table tr, .pf-as__table td, .pf-as__table colgroup { display: block; }
+      .pf-as__table thead, .pf-as__table colgroup { display: none; }
+      .pf-as__table tr { position: relative; padding: 10px 0 8px; border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
       .pf-as__table td { border: 0; padding: 4px 0; width: auto; text-align: left; }
-      .pf-as__acts { text-align: right; }
+      .pf-as__table td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600;
+        letter-spacing: .02em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 2px; }
+      .pf-as__name { font-size: 15px; padding-right: 44px; }
+      .pf-as__acts { position: absolute; top: 6px; right: 0; width: auto; }
+      .pf-as__num, .pf-as__c { text-align: left; }
+      .pf-as__num .pf-as__in { max-width: 160px; }
       .pf-as__foot { flex-direction: column; }
     }
   `],
@@ -201,6 +239,18 @@ export function writesOf(rows: AllowedRow[]): AllowedWrite[] {
 export class AllowedSpecimensComponent {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** Loaded / changed rows: size every growing textarea to its text once
+   *  rendered (the CSS `field-sizing: content` does it natively where
+   *  supported; this is the fallback for the rest). */
+  private readonly fitGrowing = afterRenderEffect(() => {
+    this.rows();
+    if (supportsFieldSizing()) return;
+    // [ngModel] writes the value in a microtask after render: fit after it.
+    const host = this.host.nativeElement;
+    setTimeout(() => host.querySelectorAll<HTMLTextAreaElement>('.pf-as__grow').forEach(t => autoGrow(t)), 0);
+  });
 
   /** The Test Master test whose list this edits. */
   readonly testId = input.required<string>();
@@ -220,7 +270,7 @@ export class AllowedSpecimensComponent {
   private loadedFor: string | null = null;
 
   readonly containerOptions: PfSelectOption<string>[] = [
-    { value: '', label: "Test's own container" },
+    { value: '', label: "Test's own" },
     ...TUBE_COLORS.map(t => ({ value: t.key, label: t.label })),
   ];
   /** The template tenant carries no prices (basePrice null) → no price column. */
@@ -254,6 +304,11 @@ export class AllowedSpecimensComponent {
     this.basePrice.set(m.basePrice ?? null);
     this.error.set(null);
   }
+
+  /** Fit a growing textarea to its text (input / focus); see autoGrow. */
+  grow(ev: Event) { autoGrow(ev.target as HTMLTextAreaElement | null); }
+  /** Fallback engine (no `field-sizing`): scrollHeight, no `field-sizing` CSS. */
+  readonly nativeSizing = supportsFieldSizing();
 
   add(code: string) {
     if (!code) return;
