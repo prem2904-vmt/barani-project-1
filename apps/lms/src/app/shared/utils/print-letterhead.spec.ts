@@ -143,6 +143,7 @@ describe('print entry points', () => {
 
   function queue(template: unknown, dialog: unknown, perms: { deliver: boolean } = { deliver: true }) {
     const c = Object.create(ReportQueueComponent.prototype) as any;
+    c._rowBusy = signal<ReadonlySet<string>>(new Set());   // per-row busy state (loading feedback)
     const { api, posted } = apiWith(template);
     c.injector = injectorFor(); c.api = api; c.dialog = dialog;
     // Field initialisers don't run under Object.create — the permission gates.
@@ -267,6 +268,7 @@ describe('digital outputs always carry the header & footer (setting ON)', () => 
 
   it('queue WhatsApp → archived PDF (StoredPdfKey / public QR copy) has the header', async () => {
     const c = Object.create(ReportQueueComponent.prototype) as any;
+    c._rowBusy = signal<ReadonlySet<string>>(new Set());   // per-row busy state (loading feedback)
     const { api, posted } = apiWith(tplOn);
     c.injector = injectorFor(); c.api = api; c.dialog = dialogPicking(PRINT_CHOICE_LETTERHEAD);
     c.auth = { user: () => ({ tenantName: LAB }) };
@@ -283,6 +285,7 @@ describe('digital outputs always carry the header & footer (setting ON)', () => 
 
   it('queue Download → the downloaded (native share sheet) + archived PDF have the header', async () => {
     const c = Object.create(ReportQueueComponent.prototype) as any;
+    c._rowBusy = signal<ReadonlySet<string>>(new Set());   // per-row busy state (loading feedback)
     const { api, posted } = apiWith(tplOn);
     c.injector = injectorFor(); c.api = api; c.toasts = { error: vi.fn() };
     // Native shell path: the "download" is the share sheet — capture its file.
