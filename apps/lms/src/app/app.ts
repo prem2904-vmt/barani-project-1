@@ -10,6 +10,7 @@ import { LockService } from './core/auth/lock.service';
 import { CallRingService } from './core/services/call-ring.service';
 import { LockScreenComponent } from './shared/components/lock-screen.component';
 import { SwitchScreenComponent } from './shared/components/switch-screen.component';
+import { isPublicPatientPath } from './core/navigation/public-paths';
 
 @Component({
   selector: 'app-root',
@@ -157,8 +158,14 @@ export class App implements OnInit {
   private readonly _bootHref = typeof window !== 'undefined' ? window.location.href : '';
 
   async ngOnInit() {
+    // Patient-facing public pages (report link, order tracking) are opened in
+    // a phone browser by someone who is not a user of the app: no idle lock,
+    // no push / calling hand-offs — keep the page light and self-contained.
+    // (Browser only: the installed apps keep their full boot everywhere.)
+    const publicPage = !this._platform.isCapacitor() && !this._platform.isElectron()
+      && isPublicPatientPath(typeof window !== 'undefined' ? window.location.pathname : '');
     // Idle-lock timer for shared lab machines (arms only for PIN-enabled users).
-    this._lock.start();
+    if (!publicPage) this._lock.start();
     // Version handshake — best-effort, fire-and-forget (errors are ignored
     // inside the service so an offline boot never hangs on it).
     void this.version.init();
@@ -174,6 +181,7 @@ export class App implements OnInit {
     // Push + CallKit init lives in its own service so the surface area
     // (token registration, payload routing) stays out of capacitor.service.
     // No-op on web/electron.
+    if (publicPage) return;
     void this._push.init();
     // Offline calling hand-offs, lazy-loaded (off the initial bundle):
     //  • answer / decline / show a call rung by PUSH (Android notification

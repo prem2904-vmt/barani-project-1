@@ -1733,6 +1733,35 @@ reject / reassign actions on the review screens) plus `GET /api/validation/scope
   OPD → Doctors.
 - **Specs:** `pending-validation.nd.spec.ts`, `reassign-picker.spec.ts`. `regno-prompt.component.spec.ts`.
 
+## 24. Public report link (patients, no login)
+
+`/reports/public/:token` (`features/reports/public-report/`) — the link in the
+WhatsApp template `lab_report_ready` and on the report QR. A patient opens it
+in a phone browser: no app chrome, no login, no shell (the shell route is
+lazy, and the root skips the idle lock / push / calling boot on
+`core/navigation/public-paths.ts` paths).
+
+- **Lab first, patient never before the answer.** `GET /api/public/report/{token}`
+  returns only the lab (name, logo, phone) + the link state. The header shows
+  the lab logo (or its initials) and name on every step.
+- **Identity step:** "Confirm it's you" — last 4 phone digits or DOB as DDMM
+  (`inputmode=numeric`, 56px field, 18–24px text), "Use my invoice number
+  instead" switches to text. Misses read "That doesn't match — N attempts
+  left" (`role=alert`); the server's lockout shows a countdown and a
+  **Call** button (`tel:`). The field scrolls clear of the soft keyboard.
+- **States:** skeleton (link read / PDF prep), identity, locked, expired
+  ("This link has expired" + the lab's phone), invalid, not ready yet, and
+  the report card.
+- **Report card:** Ready (violet dot) / Partial (ring) chip, date, the
+  printed name, age · sex, order number; a superseded link shows the latest
+  with a note. ONE primary **Download PDF** (the API's attachment URL, file
+  `Report-<Name>-<date>.pdf`; a client-rendered PDF saves via `<a download>`),
+  **View** (new tab: iOS shows every page there, never an iframe) and
+  **Share** (the file where Web Share supports files, else the link — it still
+  asks for the answer).
+- `noindex` + `no-referrer` meta while open; API answers are `no-store`.
+- **Specs:** `public-report.component.spec.ts`.
+
 ## API summary
 
 ```
