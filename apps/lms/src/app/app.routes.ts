@@ -507,6 +507,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/opd/doctor/consult-room.component').then(m => m.ConsultRoomComponent)
       },
 
+      // Critical results — the NABL acknowledgement register (lab + pathologist
+      // + quality). Reads: enter_result / validate_result / view_audit_log.
+      {
+        path: 'lab/critical-results',
+        canActivate: [...routeGuards('/lab/critical-results')],
+        loadComponent: () => import('./features/lab/critical-results/critical-results.component').then(m => m.CriticalResultsComponent)
+      },
+
       // Pathologist — only doctors with validate_result.
       {
         path: 'pathologist',

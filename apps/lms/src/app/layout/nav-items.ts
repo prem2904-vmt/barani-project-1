@@ -368,6 +368,12 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     module: 'lab'
   },
   {
+    // NABL critical-result acknowledgement register (Lab world).
+    id: 'critical-results', label: 'Critical results', href: '/lab/critical-results',
+    iconPath: ['M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z', 'M3.22 12H9.5l.5-1 2 4 1-2 1.5 1h5.27'],
+    module: 'lab'
+  },
+  {
     id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
     iconPath: ['M4 6h16M4 12h16M4 18h16'],
   },

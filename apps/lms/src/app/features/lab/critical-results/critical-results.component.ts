@@ -1,0 +1,480 @@
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal } from '@angular/core';
+import { NgTemplateOutlet, formatDate } from '@angular/common';
+import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry, RowClassParams } from 'ag-grid-community';
+import { AgGridAngular } from 'ag-grid-angular';
+import { AuthService } from '../../../core/auth/auth.service';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../shared/models/api-response.model';
+import {
+  CriticalRegisterFilter, CriticalResultEvent, CriticalResultStatus, criticalMethodLabel, criticalRoleLabel,
+  criticalStatusWord, criticalViaLabel, needsAckBy,
+} from '../../../shared/models/critical-result.model';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { CriticalCommunicationDialogComponent } from '../../../shared/components/critical-communication-dialog/critical-communication-dialog.component';
+import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
+import { bandFilter } from '../../../shared/utils/band-search';
+import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
+import { plural } from '../../../shared/utils/plural';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+type StatusFilter = CriticalResultStatus | 'all';
+type QuickRange = 'today' | '7d' | '30d' | 'custom';
+
+const PAGE_SIZE = 200;
+
+/** ISO instant → "29 Sep, 2:45 pm" in the lab's IST day (never the device zone). */
+export function istStamp(iso?: string | null): string {
+  if (!iso) return '';
+  try { return formatDate(iso, 'd MMM, h:mm a', 'en-US', LAB_TIME_ZONE); } catch { return ''; }
+}
+
+/** Only the events matching the band search (patient, MRN, order, sample, test, values). */
+export function searchEvents(rows: readonly CriticalResultEvent[], q: string): CriticalResultEvent[] {
+  return bandFilter(rows, q, e => [e.patientName, e.patientMrn, e.orderNumber, e.sampleBarcode, e.testName, e.testCode, e.summary,
+    e.acknowledgedByName, e.communicatedToName]);
+}
+
+/**
+ * Lab → Critical results: the NABL acknowledgement register. ND pattern —
+ * band (search pill; quiet Refresh + Export CSV, no primary), a FILTERS
+ * companion on the LEFT (status, IST date range, branch) and the register
+ * grid (AG-Grid, the app's Test Master theme) as the main card. Each row
+ * carries ONE status word (Not acknowledged · Acknowledged · Communicated)
+ * and its two row actions. The CSV comes from the server (every filtered row,
+ * IST stamps) for the audit file.
+ */
+@Component({
+  selector: 'pf-critical-results',
+  standalone: true,
+  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, NdDateComponent, SelectComponent, CriticalCommunicationDialogComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <section class="pf-cr pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <pf-hero-band [back]="true" backTo="/lab/my-work" placeholder="Search patient, MRN, order, test…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-actions>
+            @if (narrow()) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="sheetOpen.set(true)"
+                      aria-haspopup="dialog" [attr.aria-expanded]="sheetOpen()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
+                Filters
+              </button>
+            }
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="loading()" (click)="load()" aria-label="Refresh" title="Refresh">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+              Refresh
+            </button>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-cr__export" [disabled]="exporting()" (click)="exportCsv()" title="Download the NABL register as CSV">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              {{ exporting() ? 'Preparing…' : 'Export CSV' }}
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only" eyebrow="Lab" title="Critical results" subtitle="NABL acknowledgement register" parentRoute="/lab/my-work">
+        <div actions>
+          <button type="button" class="nd-btn nd-btn--secondary" [disabled]="exporting()" (click)="exportCsv()">Export CSV</button>
+        </div>
+      </pf-screen-header>
+
+      <div class="pf-band-body pf-band-body--fill pf-cr__body">
+        <div class="pf-cr__panels" [class.pf-cr__panels--narrow]="narrow()">
+          <!-- FILTERS: the companion comes first (left); a sheet on phones. -->
+          @if (narrow()) {
+            @if (sheetOpen()) {
+              <div class="nd-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
+              <aside class="nd-card pf-cr__side pf-cr__side--sheet" role="dialog" aria-modal="true" aria-label="Filters" (keydown.escape)="sheetOpen.set(false)">
+                <span class="nd-sheet__handle" aria-hidden="true"></span>
+                <ng-container *ngTemplateOutlet="filterHead; context: { sheet: true }"></ng-container>
+                <ng-container *ngTemplateOutlet="filterBody"></ng-container>
+              </aside>
+            }
+          } @else {
+            <aside class="nd-card pf-cr__side" aria-label="Filters">
+              <ng-container *ngTemplateOutlet="filterHead; context: { sheet: false }"></ng-container>
+              <ng-container *ngTemplateOutlet="filterBody"></ng-container>
+            </aside>
+          }
+
+          <!-- MAIN: the register -->
+          <section class="nd-card pf-cr__main" aria-label="Critical results register">
+            <header class="nd-card__head pf-cr__head">
+              <span class="nd-card__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4 1-2 1.5 1h5.27"/></svg>
+              </span>
+              <h2 class="nd-card__label">Critical results</h2>
+              <span class="nd-card__note pf-cr__hint">Every critical value with who acknowledged it and who was told — the NABL record.</span>
+              <span class="pf-cr__count nd-num" aria-live="polite">{{ countLabel() }}</span>
+            </header>
+            <div class="pf-cr__grid-wrap">
+              @if (!loading() && visibleRows().length === 0) {
+                <div class="nd-empty nd-empty--compact">
+                  <span class="nd-empty__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  </span>
+                  <p class="nd-empty__title">{{ q().trim() ? 'No critical results match "' + q().trim() + '"' : 'No critical results in this range' }}</p>
+                  <p class="nd-empty__body">{{ q().trim() ? 'Try another name, order or test.' : 'Widen the date range or switch the status filter to All.' }}</p>
+                </div>
+              } @else {
+                <ag-grid-angular class="pf-cr__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
+                                 [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="getRowClass"
+                                 [animateRows]="true" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)">
+                </ag-grid-angular>
+              }
+              @if (truncated()) {
+                <p class="pf-cr__more nd-num">Showing the latest {{ rows().length }} of {{ total() }} — narrow the dates, or Export CSV for every row.</p>
+              }
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <ng-template #filterHead let-sheet="sheet">
+      <header class="nd-card__head">
+        <span class="nd-card__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
+        </span>
+        <h2 class="nd-card__label">Filters</h2>
+        <span class="nd-card__spacer"></span>
+        @if (sheet) {
+          <button type="button" class="nd-btn nd-btn--icon" (click)="sheetOpen.set(false)" aria-label="Close filters">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        }
+      </header>
+    </ng-template>
+
+    <ng-template #filterBody>
+      <div class="nd-card__body pf-cr__filters">
+        <div class="nd-field">
+          <span class="nd-field__lbl" id="pf-cr-status-lbl">Status</span>
+          <span class="nd-seg pf-cr__seg" role="radiogroup" aria-labelledby="pf-cr-status-lbl">
+            @for (o of statusOptions(); track o.value) {
+              <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="status() === o.value" (click)="setStatus(o.value)">
+                {{ o.label }}@if (o.count != null) { <span class="nd-num pf-cr__segn">{{ o.count }}</span> }
+              </button>
+            }
+          </span>
+        </div>
+        <div class="nd-field">
+          <span class="nd-field__lbl" id="pf-cr-range-lbl">Detected (IST)</span>
+          <span class="nd-seg pf-cr__seg" role="radiogroup" aria-labelledby="pf-cr-range-lbl">
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'today'" (click)="setQuick('today')">Today</button>
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === '7d'" (click)="setQuick('7d')">7 days</button>
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === '30d'" (click)="setQuick('30d')">30 days</button>
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'custom'" (click)="setQuick('custom')">Custom</button>
+          </span>
+          <div class="pf-cr__dates">
+            <label class="pf-cr__dates-lbl" for="pf-cr-from">From</label>
+            <pf-nd-date label="From" inputId="pf-cr-from" [value]="from()" [max]="to() || today" (valueChange)="setFrom($event)"></pf-nd-date>
+            <label class="pf-cr__dates-lbl" for="pf-cr-to">To</label>
+            <pf-nd-date label="To" inputId="pf-cr-to" [value]="to()" [min]="from()" [max]="today" (valueChange)="setTo($event)"></pf-nd-date>
+          </div>
+        </div>
+        @if (branchOptions().length > 1) {
+          <div class="nd-field">
+            <label class="nd-field__lbl" for="pf-cr-branch">Branch</label>
+            <pf-select id="pf-cr-branch" size="sm" [options]="branchOptions()" [value]="branchId()" (valueChange)="setBranch($event)"></pf-select>
+          </div>
+        }
+        <p class="nd-field__hint">Acknowledge = "I have seen this". Record communication = who was told, how and when. Viewing alone is never recorded.</p>
+      </div>
+    </ng-template>
+
+    @if (dialogFor(); as e) {
+      <pf-critical-communication-dialog [event]="e" (closed)="dialogFor.set(null)" (saved)="onCommunicated($event)"></pf-critical-communication-dialog>
+    }
+  `,
+  styles: [`
+    :host { display: block; min-height: 0; }
+    .pf-cr__body { display: flex; flex-direction: column; min-height: 0; }
+    .pf-cr__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+    .pf-cr__panels--narrow { grid-template-columns: minmax(0, 1fr); }
+    .pf-cr__side { min-height: 0; }
+    .pf-cr__side--sheet {
+      position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 80; max-height: 80dvh;
+      border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .pf-cr__side--sheet .nd-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--nd-line); }
+    .pf-cr__filters { gap: 16px; }
+    .pf-cr__seg { flex-wrap: wrap; }
+    .pf-cr__segn { margin-left: 5px; color: var(--text-tertiary); }
+    .nd-seg__item[aria-checked='true'] .pf-cr__segn { color: inherit; }
+    .pf-cr__dates { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; }
+    .pf-cr__dates-lbl { font-size: 12px; color: var(--text-tertiary); }
+    .pf-cr__main { min-width: 0; min-height: 0; }
+    .pf-cr__head { flex-wrap: nowrap; }
+    .pf-cr__hint { color: var(--text-tertiary); }
+    .pf-cr__count { flex: none; margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-cr__grid-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .pf-cr__grid { display: block; width: 100%; flex: 1 1 auto; height: calc(100dvh - 300px); min-height: 320px; }
+    :host-context(.design-new) .pf-cr__grid { height: auto; min-height: 280px; }
+    .pf-cr__main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
+    .pf-cr__main ::ng-deep .ag-pinned-right-header, .pf-cr__main ::ng-deep .ag-pinned-right-cols-container { border-left: 1px solid var(--nd-line); }
+    .pf-cr__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--nd-line); }
+    /* Row cells: ONE status word (dot + colour), row actions as kit .nd-rowact. */
+    .pf-cr__main ::ng-deep .pf-cr-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; --pf-cr-tone: var(--text-secondary); color: color-mix(in srgb, var(--pf-cr-tone) 70%, var(--text-primary)); }
+    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='red'] { --pf-cr-tone: var(--red-text, #b91c1c); }
+    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='amber'] { --pf-cr-tone: var(--amber-text, #b45309); }
+    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='green'] { --pf-cr-tone: var(--green-text, #15803d); }
+    .pf-cr__main ::ng-deep .pf-cr-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-cr-tone); flex: none; }
+    .pf-cr__main ::ng-deep .pf-cr-acts { display: inline-flex; gap: 6px; align-items: center; height: 100%; }
+    .pf-cr__main ::ng-deep .pf-cr-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+    .pf-cr__main ::ng-deep .pf-cr-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-cr__main ::ng-deep .pf-cr-cell--stack { gap: 2px; padding: 6px 0; }
+    .pf-cr__main ::ng-deep .pf-cr-cell--stack .pf-cr-status { white-space: normal; }
+    .pf-cr__main ::ng-deep .ag-cell.pf-cr-actcell { padding-left: 6px; padding-right: 6px; }
+    .pf-cr__main ::ng-deep .pf-cr-acts .nd-rowact--icon { width: 44px; height: 44px; }
+    .pf-cr__main ::ng-deep .pf-cr-row--open .ag-cell:first-child { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
+    @media (max-width: 900px) {
+      .pf-cr__grid { height: calc(100dvh - 260px); }
+    }
+    @media (max-width: 640px) {
+      .pf-cr__hint { display: none; }
+      .pf-cr__main ::ng-deep .pf-cr-acts { gap: 4px; }
+    }
+  `],
+})
+export class CriticalResultsComponent {
+  private readonly svc = inject(CriticalResultsService);
+  private readonly toasts = inject(ToastService);
+  private readonly auth = inject(AuthService);
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly theme = inject(ThemeService);
+
+  readonly today = labToday();
+  readonly isPhone = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+  readonly isCoarse = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  readonly narrow = signal(this.mq('(max-width: 900px)'));
+  readonly sheetOpen = signal(false);
+
+  // ── Filters ───────────────────────────────────────────────────────────
+  readonly q = signal('');
+  readonly status = signal<StatusFilter>('open');
+  readonly quick = signal<QuickRange>('30d');
+  readonly from = signal<string | null>(labDaysAgo(30));
+  readonly to = signal<string | null>(labToday());
+  readonly branchId = signal<string>('');
+  readonly branchOptions = computed<PfSelectOption<string>[]>(() => {
+    const list = this.auth.user()?.branches ?? [];
+    if (list.length < 2) return [];
+    return [{ value: '', label: 'All branches' }, ...list.map(b => ({ value: b.id, label: b.name }))];
+  });
+
+  // ── Data ───────────────────────────────────────────────────────────────
+  readonly rows = signal<CriticalResultEvent[]>([]);
+  readonly total = signal(0);
+  readonly openCount = signal(0);
+  readonly loading = signal(true);
+  readonly exporting = signal(false);
+  readonly dialogFor = signal<CriticalResultEvent | null>(null);
+  readonly visibleRows = computed(() => searchEvents(this.rows(), this.q()));
+  readonly truncated = computed(() => this.total() > this.rows().length);
+  readonly countLabel = computed(() => {
+    const n = this.visibleRows().length;
+    const open = this.openCount();
+    return `${plural(n, 'record')}${open > 0 ? ` · ${open} not acknowledged` : ''}`;
+  });
+  readonly statusOptions = computed<Array<{ value: StatusFilter; label: string; count?: number | null }>>(() => [
+    { value: 'open', label: 'Not acknowledged', count: this.openCount() },
+    { value: 'acknowledged', label: 'Acknowledged' },
+    { value: 'communicated', label: 'Communicated' },
+    { value: 'all', label: 'All' },
+  ]);
+
+  // ── Grid ───────────────────────────────────────────────────────────────
+  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  readonly getRowId = (p: GetRowIdParams<CriticalResultEvent>) => p.data.id;
+  readonly getRowClass = (p: RowClassParams<CriticalResultEvent>) => (p.data?.status === 'open' ? 'pf-cr-row--open' : '');
+  readonly defaultColDef: ColDef<CriticalResultEvent> = { sortable: true, resizable: true, filter: false, minWidth: 120, autoHeight: true, wrapText: true };
+  readonly colDefs = computed<ColDef<CriticalResultEvent>[]>(() => {
+    const me = this.auth.user()?.id;
+    const canAct = this.auth.hasAnyPermission(['enter_result', 'validate_result']);
+    const web = !this.isCoarse && !this.isPhone;
+    const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
+    const cell = (main: string, sub?: string) =>
+      `<div class="pf-cr-cell"><span>${esc(main)}</span>${sub ? `<span class="pf-cr-cell__sub">${esc(sub)}</span>` : ''}</div>`;
+    const multiBranch = this.branchOptions().length > 1;
+    // Columns that can only read "—" under the current status filter stay hidden.
+    const status = this.status();
+    const cols: ColDef<CriticalResultEvent>[] = [
+      { colId: 'detectedAt', headerName: 'Detected', minWidth: 150, width: 160, flex: 0, sort: 'desc',
+        valueGetter: p => p.data?.detectedAt ?? '',
+        cellRenderer: (p: { data?: CriticalResultEvent }) => cell(istStamp(p.data?.detectedAt), [
+          p.data?.detectedByName ? 'by ' + p.data.detectedByName : '',
+          p.data?.alertedAt ? plural(p.data.alertedCount, 'person', 'people') + ' alerted' : '',
+        ].filter(Boolean).join(' · ')) },
+      { colId: 'patient', headerName: 'Patient', flex: 1.3, minWidth: 170,
+        valueGetter: p => p.data?.patientName ?? '',
+        cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.patientName ?? '',
+          [p.data?.patientMrn, p.data?.orderNumber, multiBranch ? p.data?.branchName : null].filter(Boolean).join(' · ')) },
+      { colId: 'test', headerName: 'Test · critical values', flex: 1.4, minWidth: 170,
+        valueGetter: p => p.data?.testName ?? '',
+        cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.testName ?? '', p.data?.summary) },
+      { colId: 'status', headerName: 'Status', minWidth: 160, width: 165, flex: 0,
+        valueGetter: p => p.data?.status ?? '',
+        cellRenderer: (p: { data?: CriticalResultEvent }) => {
+          const st = criticalStatusWord(p.data?.status ?? 'open');
+          return `<span class="pf-cr-status" data-tone="${st.tone}"><span class="pf-cr-status__dot" aria-hidden="true"></span>${st.label}</span>`;
+        } },
+      { colId: 'acknowledged', headerName: 'Acknowledged', flex: 1, minWidth: 150, hide: status === 'open',
+        valueGetter: p => p.data?.acknowledgedAt ?? '',
+        cellRenderer: (p: { data?: CriticalResultEvent }) => p.data?.acknowledgedAt
+          ? cell(p.data.acknowledgedByName ?? '', `${istStamp(p.data.acknowledgedAt)} · ${criticalViaLabel(p.data.acknowledgedVia)}`)
+          : cell('—') },
+      { colId: 'communicated', headerName: 'Communicated', flex: 1.3, minWidth: 170, hide: status === 'open' || status === 'acknowledged',
+        valueGetter: p => p.data?.communicatedAt ?? '',
+        cellRenderer: (p: { data?: CriticalResultEvent }) => p.data?.communicatedAt
+          ? cell(`${criticalMethodLabel(p.data.communicationMethod)} · ${p.data.communicatedToName ?? ''}${p.data.communicatedToRole ? ' (' + criticalRoleLabel(p.data.communicatedToRole) + ')' : ''}`,
+                 `${istStamp(p.data.communicatedAt)} · by ${p.data.communicatedByName ?? ''}${p.data.communicationNotes ? ' · ' + p.data.communicationNotes : ''}`)
+          : cell('—') },
+    ];
+    if (canAct) cols.push({
+      colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
+      minWidth: web ? 292 : 104, width: web ? 292 : 104, flex: 0, cellClass: 'pf-cr-actcell',
+      cellRenderer: (p: { data?: CriticalResultEvent }) => {
+        const e = p.data; if (!e) return '';
+        const btn = (act: string, label: string, path: string) =>
+          `<button type="button" class="nd-rowact${web ? '' : ' nd-rowact--icon'}" data-act="${act}" aria-label="${esc(label)} — ${esc(e.testName)}" title="${esc(label)}">` +
+          `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>` +
+          `<span class="nd-rowact__t">${esc(label)}</span></button>`;
+        const acts: string[] = [];
+        if (needsAckBy(e, me)) acts.push(btn('ack', 'Acknowledge', '<path d="M20 6 9 17l-5-5"/>'));
+        if (e.status !== 'communicated') acts.push(btn('comm', web ? 'Communicate' : 'Record communication', '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.7a2 2 0 0 1 1.7 2z"/>'));
+        return `<span class="pf-cr-acts">${acts.join('')}</span>`;
+      },
+    });
+    return this.phoneTrim(cols);
+  });
+
+  constructor() {
+    // Any filter change reloads (the search is client-side on the loaded page).
+    effect(() => {
+      this.status(); this.from(); this.to(); this.branchId();
+      this.load();
+    });
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() { if (this.sheetOpen()) this.sheetOpen.set(false); }
+
+  private mq(query: string): boolean {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    const m = window.matchMedia(query);
+    const on = (ev: MediaQueryListEvent) => this.narrow?.set(ev.matches);
+    try { m.addEventListener('change', on); this.destroyRef.onDestroy(() => m.removeEventListener('change', on)); } catch { /* old Safari */ }
+    return m.matches;
+  }
+
+  /** Phones: one stacked RECORD column (who · what · status) between the
+   *  compact time and the 44px icon actions — a 390px grid cannot hold six
+   *  columns, and nothing may be truncated. */
+  protected phoneTrim(cols: ColDef<CriticalResultEvent>[]): ColDef<CriticalResultEvent>[] {
+    if (!this.isPhone) return cols;
+    const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
+    const record: ColDef<CriticalResultEvent> = {
+      colId: 'record', headerName: 'Record', flex: 1, minWidth: 150,
+      valueGetter: p => p.data?.patientName ?? '',
+      cellRenderer: (p: { data?: CriticalResultEvent }) => {
+        const e = p.data; if (!e) return '';
+        const st = criticalStatusWord(e.status);
+        return `<div class="pf-cr-cell pf-cr-cell--stack"><span>${esc(e.patientName)}</span>` +
+          `<span class="pf-cr-cell__sub">${esc([e.patientMrn, e.orderNumber].filter(Boolean).join(' · '))}</span>` +
+          `<span>${esc(e.testName)} <span class="pf-cr-cell__sub">${esc(e.summary)}</span></span>` +
+          `<span class="pf-cr-status" data-tone="${st.tone}"><span class="pf-cr-status__dot" aria-hidden="true"></span>${st.label}</span></div>`;
+      },
+    };
+    const detected = cols.find(c => c.colId === 'detectedAt');
+    const actions = cols.find(c => c.colId === 'actions');
+    return [
+      { ...detected, headerName: 'When', width: 92, minWidth: 92, cellRenderer: (p: { data?: CriticalResultEvent }) => {
+        const [d, t] = istStamp(p.data?.detectedAt).split(', ');
+        return `<div class="pf-cr-cell"><span>${esc(d)}</span><span class="pf-cr-cell__sub">${esc(t ?? '')}</span></div>`;
+      } },
+      record,
+      ...(actions ? [{ ...actions, width: 108, minWidth: 108 }] : []),
+    ];
+  }
+
+  filter(): CriticalRegisterFilter {
+    return { status: this.status(), from: this.from(), to: this.to(), branchId: this.branchId() || null, page: 1, pageSize: PAGE_SIZE };
+  }
+
+  load() {
+    this.loading.set(true);
+    this.svc.list(this.filter()).subscribe({
+      next: page => {
+        this.rows.set(page?.items ?? []);
+        this.total.set(page?.total ?? 0);
+        this.openCount.set(page?.openCount ?? 0);
+        this.loading.set(false);
+      },
+      error: err => { this.loading.set(false); this.toasts.error(ApiError.from(err).message); },
+    });
+  }
+
+  setStatus(s: StatusFilter) { this.status.set(s); }
+  setBranch(id: string) { this.branchId.set(id ?? ''); }
+  setQuick(r: QuickRange) {
+    this.quick.set(r);
+    if (r === 'today') { this.from.set(labToday()); this.to.set(labToday()); }
+    else if (r === '7d') { this.from.set(labDaysAgo(6)); this.to.set(labToday()); }
+    else if (r === '30d') { this.from.set(labDaysAgo(30)); this.to.set(labToday()); }
+  }
+  setFrom(v: string | null) { if (v !== this.from()) { this.quick.set('custom'); this.from.set(v); } }
+  setTo(v: string | null) { if (v !== this.to()) { this.quick.set('custom'); this.to.set(v); } }
+
+  onCellClicked(ev: CellClickedEvent<CriticalResultEvent>) {
+    const target = (ev.event?.target as HTMLElement | null)?.closest?.('[data-act]') as HTMLElement | null;
+    const e = ev.data;
+    if (!target || !e) return;
+    if (target.dataset['act'] === 'ack') this.acknowledge(e);
+    else if (target.dataset['act'] === 'comm') this.dialogFor.set(e);
+  }
+
+  acknowledge(e: CriticalResultEvent) {
+    this.svc.acknowledge(e.id, 'register').subscribe({
+      next: updated => { this.toasts.success('Critical result acknowledged'); this.replace(updated); },
+      error: err => this.toasts.error(ApiError.from(err).message),
+    });
+  }
+
+  onCommunicated(updated: CriticalResultEvent) {
+    this.dialogFor.set(null);
+    this.replace(updated);
+  }
+
+  private replace(updated: CriticalResultEvent) {
+    const before = this.rows().find(r => r.id === updated.id);
+    this.rows.update(list => list.map(r => (r.id === updated.id ? updated : r)));
+    if (before?.status === 'open' && updated.status !== 'open') this.openCount.update(n => Math.max(0, n - 1));
+  }
+
+  exportCsv() {
+    if (this.exporting()) return;
+    this.exporting.set(true);
+    const f = this.filter();
+    this.svc.exportCsv(f).subscribe({
+      next: blob => {
+        this.exporting.set(false);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `critical-results-${f.from ?? 'all'}_to_${f.to ?? 'all'}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      },
+      error: err => { this.exporting.set(false); this.toasts.error(ApiError.from(err).message); },
+    });
+  }
+}
