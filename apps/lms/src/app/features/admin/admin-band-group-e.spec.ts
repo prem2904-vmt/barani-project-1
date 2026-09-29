@@ -162,9 +162,10 @@ describe('Admin band — TAT board (/dashboard)', () => {
     p.f.destroy();
   });
 
-  it('urgency filter in the pill shows one level, with counts', () => {
+  it('TAT filter in the pill shows one clock state, with counts (never a "High" priority)', () => {
     const p = make();
-    const urgent = segBtn(p.tools(), 'Urgent')!;
+    expect(segBtn(p.tools(), 'High')).toBeFalsy();
+    const urgent = segBtn(p.tools(), 'Overdue')!;
     expect(urgent.textContent).toContain('1');
     urgent.click();
     p.f.detectChanges();
