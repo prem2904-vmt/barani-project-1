@@ -2668,7 +2668,17 @@ function buildPanelGroup(
         const savedRaw = sv && typeof sv === 'object' && 'flag' in sv ? sv.flag
           : rc.saved ? rc.flag : (rowFlag ?? rc.flag);
         const resultText = rc.value || (resultSrc ? String(r.cells[resultSrc.name] ?? '') : '');
-        const rangeText = rangeCellText(coerceCellText(rangeSrc ? r.cells[rangeSrc.name] : ''), r.unit);
+        // Range / unit print what was SAVED with the result (the snapshot's
+        // per-value `range` / `unit`, frozen at sign-off) — the layout's cell
+        // is the live Test Master and only stands in for a value saved
+        // without them (legacy reports; frozen for good once the report's
+        // PDF is stored). Audit H1: a released report must not change when
+        // the Test Master is edited later.
+        const savedObj = sv && typeof sv === 'object' ? sv as SavedFlag : undefined;
+        const savedRange = (savedObj?.range ?? '').toString().trim();
+        const savedUnit = (savedObj?.unit ?? '').toString().trim();
+        const rangeText = rangeCellText(
+          rangeSrc ? (savedRange || coerceCellText(r.cells[rangeSrc.name])) : '', savedUnit || r.unit);
         // Reports never print C / Critical (owner 2026-09-26: critical is
         // internal) — a critical maps to H / L by its direction.
         const saved = reportFlag(savedRaw, resultText, rangeText || (sv as SavedFlag | undefined)?.range);
@@ -2695,8 +2705,8 @@ function buildPanelGroup(
           // Prefer the Unit column when present; otherwise fall back to the
           // parameter's own unit so EVERY department shows it (e.g. "11.4 g/dL")
           // — but never grow a unit onto a qualitative result ("Normal mg/dL").
-          unit: coerceCellText(unitSrc ? r.cells[unitSrc.name] : '')
-            || (looksNumeric(resultText) ? (r.unit ?? '') : ''),
+          unit: (unitSrc ? (savedUnit || coerceCellText(r.cells[unitSrc.name])) : '')
+            || (looksNumeric(resultText) ? (savedUnit || r.unit || '') : ''),
           flag: letter,
           isLow,
           abnormal: hasSaved ? saved.abnormal : (sev === 'high' || sev === 'warn' || !!letter || saved.abnormal),

@@ -212,7 +212,6 @@ describe('Report view (nd) — actions', () => {
 
   it('VIEW-ONLY: Print prints (letterpad choice honoured) and records NO delivery', async () => {
     const { c, api } = await render({ perms: ['view_report'] });
-    vi.spyOn(c, 'buildPdfInput').mockResolvedValue({ template: { letterpadMode: false }, report: { id: 'rep-1' } });
     const blob = vi.spyOn(c, 'buildPdfBlob').mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
     const had = (URL as any).createObjectURL;
     (URL as any).createObjectURL = vi.fn(() => 'blob:print');

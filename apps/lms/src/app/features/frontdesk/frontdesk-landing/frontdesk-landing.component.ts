@@ -2740,10 +2740,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   protected readonly _downloadingReport = signal<string | null>(null);
   readonly downloadingReport = this._downloadingReport.asReadonly();
 
-  /** Pull the latest final report for the order and render it as a
-   *  client-side PDF. Mirrors the invoice download — no server PDF
-   *  endpoint required, jsPDF builds the document from the snapshot
-   *  the backend already stores on Report.Data. */
+  /** Download the order's live report — its STORED PDF (owner rule
+   *  2026-09-29: the report is the file in blob storage). A report with
+   *  nothing stored yet is rendered ONCE from its saved snapshot and stored. */
   async downloadReport(o: Order) {
     if (this._downloadingReport()) return;
     this._downloadingReport.set(o.id);
@@ -2755,8 +2754,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         this.toasts.warning('No report yet for this order — try again in a moment.');
         return;
       }
-      const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
-      generateReportPdf(await this.reportInput(report));
+      const blob = await this.storedReport(report);
+      const { downloadPdfBlob } = await import('../../../shared/utils/stored-report-pdf');
+      const shortId = report.id.replace(/-/g, '').slice(-8).toUpperCase();
+      downloadPdfBlob(blob, `${report.type === 'partial' ? 'PRELIM' : 'REPORT'}-${shortId}.pdf`);
     } catch (err) {
       console.error('[fd] download report failed', err);
       const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
@@ -2765,21 +2766,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._downloadingReport.set(null);
     }
   }
-  /** The full PDF input for a stored report — the ONE recipe shared by every
-   *  report entry point (template + layouts incl. PROFILE layouts + images +
-   *  trendograms). Throws rather than rendering the product-default design. */
-  private async reportInput(report: Report) {
-    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-      import('../../../core/services/report-layout.service'),
-      import('../../../core/services/platform.service'),
-      import('../../../shared/utils/report-render-input'),
-    ]);
-    const svc = this.injector.get(ReportLayoutService);
-    return prepareReportPdfInput(report, {
-      api: this.api,
-      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
-      apiUrl: this.injector.get(PlatformService).getApiUrl(),
-    });
+  /** THE report PDF (stored; rendered + stored once from the snapshot). */
+  private async storedReport(report: Report): Promise<Blob> {
+    const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+    return storedReportBlob(report, this.api, this.injector);
   }
 
   /** Count of staff with status === 'on_duty' for the button badge. */
