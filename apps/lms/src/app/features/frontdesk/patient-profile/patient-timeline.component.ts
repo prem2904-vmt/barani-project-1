@@ -5,7 +5,7 @@ import { DatePipe } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Report } from '../../../shared/models/report.model';
-import { ensureFullReport, reportByOrderSummaryUrl } from '../../../shared/utils/report-summary';
+import { reportByOrderSummaryUrl } from '../../../shared/utils/report-summary';
 import { PdfCanvasComponent } from './pdf-canvas.component';
 import { PatientTimelineService } from './patient-timeline.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -963,32 +963,20 @@ export class PatientTimelineComponent implements OnDestroy {
     } finally { this.busyItem.set(null); }
   }
 
-  /** Build the report PDF client-side (viewer recipe) → object URL, cached. */
+  /** The report's STORED PDF → object URL, cached (rendered + stored once
+   *  from its saved snapshot when it has none yet). */
   private async buildReportUrl(rep: Report, o?: Order): Promise<string> {
     const cached = this.reportBlobs.get(rep.id);
     if (cached) return cached;
     try {
-      const [{ renderReportPdfBlobUrl }, { ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-        import('../../../shared/utils/report-pdf'),
-        import('../../../core/services/report-layout.service'),
-        import('../../../core/services/platform.service'),
-        import('../../../shared/utils/report-render-input'),
-      ]);
-      const svc = this.injector.get(ReportLayoutService);
-      // The ONE recipe (template + layouts incl. PROFILE layouts + images +
-      // trendograms) — the same report every other screen renders.
-      const input = await prepareReportPdfInput(await ensureFullReport(this.api, rep), {
-        api: this.api,
-        preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
-        apiUrl: this.injector.get(PlatformService).getApiUrl(),
-      });
-      const url = renderReportPdfBlobUrl(input);
+      const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+      const url = URL.createObjectURL(await storedReportBlob(rep, this.api, this.injector));
       this.reportBlobs.set(rep.id, url); this.blobUrls.add(url);
       return url;
     } catch (err) {
       // Never fall back to a template-less render: it looks like a different
       // lab's report. Say so instead.
-      console.error('[timeline] report render failed', err);
+      console.error('[timeline] report load failed', err);
       const { reportRenderErrorMessage } = await import('../../../shared/utils/report-render-input');
       this.toasts.error(reportRenderErrorMessage(err, 'Could not open the report'));
       return '';
