@@ -38,6 +38,10 @@ If a rule blocks you, ask the owner. Don't work around it.
 - **Concurrency:**
   - Counters / numbers (MRN, sample ID, invoice) use atomic `INSERT … ON CONFLICT … RETURNING`, never `MAX+1`.
   - Check-then-insert needs a unique index. Money / stock changes run in one transaction under a row lock.
+  - A money helper called from inside a caller's transaction JOINS it (`CurrentTransaction != null`), never nests one; the caller's totals and the helper's rows commit together, and the bells go out after the commit.
+  - `ExecuteUpdate` / `ExecuteDelete` bypass the audit interceptor: an audited entity written set-based writes its own rows (`Auditing.AuditTrail`) in the same transaction.
+  - Money, clinical results / reports, outboxes (WhatsApp, chat, notifications), idempotency keys, attempt limits and the audit log live only in Postgres — never in Redis, a static dictionary or any cache.
+  - Background services take a Postgres advisory leader lock per tick (`LeaderGate`) AND are idempotent on their own (once-ever unique keys, stamp-then-send, conditional updates); a tick never runs unguarded.
 - **Time windows:**
   - Day windows are IST days converted to UTC ranges. Never `DateTime.UtcNow.Date`.
   - Store UTC; display IST.
