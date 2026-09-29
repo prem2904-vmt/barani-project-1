@@ -32,9 +32,10 @@ import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from
 import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { WhatsAppSendService, waSendLabel } from '../../../core/services/whatsapp-send.service';
+import { formatAge } from '../../../shared/utils/patient-age';
 
 interface ReportData {
-  patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; sex?: string; phone?: string; mrn?: string };
+  patient?: { name?: string; displayName?: string; firstName?: string; fathersName?: string; age?: number; ageDisplay?: string | null; ageYears?: number | null; sex?: string; phone?: string; mrn?: string };
   order?: { id?: string; orderNumber?: string; createdAt?: string; priority?: string; refDoctorName?: string };
   type?: string;
   amendment?: { isAmended?: boolean; reason?: string } | null;
@@ -219,11 +220,12 @@ export class ReportViewerComponent implements OnInit {
   readonly patientMeta = computed(() => {
     const p = this.data()?.patient;
     const q = this._report()?.order?.patient;
-    const age = p?.age ?? q?.age ?? null;
+    // The snapshot's age at collection ("8 M" for an infant), else the live patient.
+    const ageSrc = p && (p.age != null || p.ageDisplay) ? { age: p.age, ageDisplay: p.ageDisplay } : q ?? null;
     const sex = p?.sex ?? q?.sex ?? null;
     const mrn = p?.mrn ?? q?.mrn ?? null;
-    if (age == null && !sex && !mrn) return '';
-    return formatPatientMeta({ age: age as never, sex: sex as never, mrn: mrn as never });
+    if (!formatAge(ageSrc) && !sex && !mrn) return '';
+    return formatPatientMeta({ ...(ageSrc ?? {}), sex: sex as never, mrn: mrn as never } as never);
   });
   readonly orderLabel = computed(() => {
     const o = this.data()?.order;
@@ -914,7 +916,7 @@ export class ReportViewerComponent implements OnInit {
     if (tests.length === 0) return;
 
     const p = this.data()?.patient;
-    const patient = { sex: p?.sex ?? null, age: p?.age ?? null };
+    const patient = { sex: p?.sex ?? null, age: p?.age ?? null, ageYears: p?.ageYears ?? null, ageDisplay: p?.ageDisplay ?? null };
     // The ONE resolver: SCALAR values (the snapshot's { value, flag, … }
     // wrappers are unwrapped so "show when result > X" conditions match),
     // snapshot images, and the ordered PROFILES' layouts.

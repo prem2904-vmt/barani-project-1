@@ -12,6 +12,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { formatAge } from '../../../shared/utils/patient-age';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -345,7 +346,7 @@ const PAGE_SIZE = 20;
                           </td>
                           <td>
                             <span class="pf-aps-mono">
-                              {{ h.patient.age ?? '—' }}@if (h.patient.age != null) {y} / {{ h.patient.sex ?? '—' }}
+                              {{ ageLabel(h.patient) }} / {{ h.patient.sex ?? '—' }}
                             </span>
                           </td>
                           <td>
@@ -1138,6 +1139,8 @@ const PAGE_SIZE = 20;
   `]
 })
 export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
+  /** "34y" (infants "8m" / "12d") — the shared patient-age helper, DOB first. */
+  ageLabel(p: { age?: number | null; dateOfBirth?: string | null } | null | undefined): string { return formatAge(p, 'y', '—'); }
   private readonly api = inject(ApiService);
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly document = inject(DOCUMENT);

@@ -252,7 +252,8 @@ export interface WorkflowStepCompleteEvent {
                 [error]="nd() ? fieldError(step, f.name) : null"
                 [defaultCountryCode]="nd() ? $any(context()['defaultPhoneCode'] ?? null) : null"
                 (localErrorChange)="setLocalError(step, f.name, $event)"
-                (valueChange)="setValue(step, f.name, $event)"></pf-dynamic-input>
+                (valueChange)="setValue(step, f.name, $event)"
+                (dobEstimatedChange)="setValue(step, f.name + DOB_ESTIMATED_SUFFIX, $event)"></pf-dynamic-input>
             </div>
           }
         } @empty {
@@ -299,6 +300,7 @@ export interface WorkflowStepCompleteEvent {
   `]
 })
 export class WorkflowRendererComponent implements OnChanges {
+  protected readonly DOB_ESTIMATED_SUFFIX = DOB_ESTIMATED_SUFFIX;
   readonly config = input<WorkflowConfig | null>(null);
   readonly context = input<WorkflowContext>({});
   readonly resources = input<WorkflowRendererResources>({});
@@ -818,6 +820,11 @@ export function splitByStep(values: WorkflowFormValues): Record<string, Record<s
 
 /** Helper for callers: given a workflow config + flat values, produce { standard, metadata }
  *  where metadata bundles every custom field (storageKey starting with `metadata.`). */
+/** Companion form-value key suffix: `<step>::<dobField>#estimated` = true
+ *  when the DOB was synthesised from the age box. Not a field, so
+ *  splitByStorage ignores it; the registration host reads it. */
+export const DOB_ESTIMATED_SUFFIX = '#estimated';
+
 export function splitByStorage(
   cfg: WorkflowConfig,
   values: WorkflowFormValues

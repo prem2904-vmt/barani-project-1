@@ -27,10 +27,10 @@ import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot
 import { effectiveMethodology } from "../../../shared/utils/methodology";
 import { choiceOptionsFor, isMultiChoice, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
 import { readParameters } from "../../../shared/utils/test-parameters";
+import { ageInYears, bandAgeYears } from "../../../shared/utils/patient-age";
 import {
   CalcContext,
   CalcDef,
-  ageYearsFromDob,
   evaluateCalc,
   parseCalc,
 } from "../../../shared/utils/calculation";
@@ -451,7 +451,8 @@ export class SampleResultEntryComponent {
     const p = this._sample()?.order?.patient;
     return {
       sex: normalizeSex(p?.sex),
-      age: typeof p?.age === "number" ? p.age : null,
+      // DOB-derived fractional age — the server's band-pick metric.
+      age: bandAgeYears(p),
     };
   }
 
@@ -1326,10 +1327,8 @@ export class SampleResultEntryComponent {
     const byCode = this._testByCode();
     const consts = this._calcConstants();
     const patient = this._sample()?.order?.patient;
-    const age =
-      typeof patient?.age === "number"
-        ? patient.age
-        : ageYearsFromDob(patient?.dateOfBirth);
+    // Formula AGE: whole years from the DOB (shared helper).
+    const age = ageInYears(patient);
     const resolveParam = (t: OrderTest, name: string | null) => {
       if (!name) return this.calcTargetParam(t);
       const want = name.trim().toLowerCase();

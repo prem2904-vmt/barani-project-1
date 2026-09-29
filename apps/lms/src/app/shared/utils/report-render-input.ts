@@ -72,13 +72,16 @@ type RenderableReport = ReportPdfInput['report'];
  *  for a stored report. Throws `ReportRenderError` instead of degrading. */
 export async function prepareReportPdfInput(report: RenderableReport, deps: ReportRenderDeps): Promise<ReportPdfInput> {
   let tests: LayoutSnapshotTest[] = [];
-  let patient: { sex?: string | null; age?: number | null } | undefined;
+  let patient: { sex?: string | null; age?: number | null; ageYears?: number | null; ageDisplay?: string | null } | undefined;
   let order: { id?: string; trackToken?: string | null } | undefined;
   try {
     const snap = JSON.parse(report.data ?? '{}');
     tests = snap?.tests ?? [];
     order = snap?.order ?? undefined;
-    patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null };
+    // Age at collection from the snapshot (DOB-derived server-side); the
+    // fractional `ageYears` drives the band pick (older snapshots: `age`).
+    patient = { sex: snap?.patient?.sex ?? null, age: snap?.patient?.age ?? null,
+                ageYears: snap?.patient?.ageYears ?? null, ageDisplay: snap?.patient?.ageDisplay ?? null };
   } catch { /* malformed snapshot — render without layouts (same for everyone) */ }
 
   const [template, resolvedLayouts] = await Promise.all([

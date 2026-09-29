@@ -59,6 +59,7 @@ import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
+import { formatAge } from "../../../shared/utils/patient-age";
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
@@ -556,14 +557,14 @@ export class ReportQueueComponent implements OnInit {
    *  Renders only what's available; returns '' if both are missing so the
    *  template's `@if … as` skips the element entirely. */
   patientSexAge(
-    p: { sex?: string | null; age?: number | null } | null | undefined,
+    p: { sex?: string | null; age?: number | null; dateOfBirth?: string | null } | null | undefined,
   ): string {
     if (!p) return "";
     const parts: string[] = [];
     const sex = this.formatSex(p.sex);
     if (sex) parts.push(sex);
-    if (p.age != null && Number.isFinite(p.age) && p.age >= 0)
-      parts.push(`${p.age}y`);
+    const age = formatAge(p, "y");
+    if (age) parts.push(age);
     return parts.join(" · ");
   }
 

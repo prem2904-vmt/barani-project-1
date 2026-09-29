@@ -25,6 +25,7 @@ import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
   readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption } from './report-header-layout';
+import { AgeStyle, formatAge } from './patient-age';
 
 /**
  * Render an A4 lab report PDF in the Classic template style — blue
@@ -182,12 +183,27 @@ interface ResolvedTheme {
   showQrCode: boolean;
 }
 
+/** The snapshot's age at collection in `style` — the shared patient-age
+ *  helper: adults print as before ("34 Years" / "34 yrs"), an infant as
+ *  months / days ("8 Months", "12 days") — never "0 Years". */
+function snapAge(snap: ReportSnapshot, style: AgeStyle): string {
+  const p = snap.patient;
+  if (!p) return '';
+  const age = typeof p.age === 'string' ? (p.age.trim() === '' ? null : Number(p.age)) : p.age;
+  return formatAge({ age: age ?? null, ageDisplay: p.ageDisplay ?? null, ageYears: p.ageYears ?? null }, style);
+}
+
 interface ReportSnapshot {
   patient?: {
     /** Patient id — the patient-strip Profile QR opens /p/{id}. */
     id?: string;
     displayName?: string;
+    /** Whole years at collection (server: DOB-derived). */
     age?: number | string;
+    /** "34 Y" / "8 M" / "12 D" at collection (server; newer snapshots). */
+    ageDisplay?: string | null;
+    /** Fractional band age at collection (server; newer snapshots). */
+    ageYears?: number | null;
     sex?: string;
     phone?: string;
     /** Lifetime MRN, e.g. `DEL-2605-004217-3`. Server-assigned;
@@ -1866,8 +1882,8 @@ function drawPatientBlockThreeCol(
   doc.setFont(PDF_FONT, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(BLACK);
-  if (snap.patient?.age != null) {
-    doc.text(`Age : ${snap.patient.age} Years`, x1, y);
+  if (snapAge(snap, 'Years')) {
+    doc.text(`Age : ${snapAge(snap, 'Years')}`, x1, y);
     y += 12;
   }
   if (snap.patient?.sex) {
@@ -2029,9 +2045,9 @@ function drawPatientItem(
       doc.text(snap.patient?.displayName ?? '—', x, y);
       return y + 16;
     case 'age':
-      if (snap.patient?.age == null) return y;
+      if (!snapAge(snap, 'Years')) return y;
       doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Age : ${snap.patient.age} Years`, x, y); return y + 12;
+      doc.text(`Age : ${snapAge(snap, 'Years')}`, x, y); return y + 12;
     case 'sex':
       if (!snap.patient?.sex) return y;
       doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
@@ -2167,7 +2183,7 @@ function drawPatientBlockFourCol(
   const colW = w / 4;
   const mrn = (snap.patient?.mrn ?? '').trim();
   const ageSex = [
-    snap.patient?.age != null ? `${snap.patient.age} yrs` : '',
+    snapAge(snap, 'yrs'),
     snap.patient?.sex ?? ''
   ].filter(Boolean).join(' / ');
   const specimens = Array.from(new Set(
@@ -2230,7 +2246,7 @@ function drawPatientBlockStacked(
   const mrn = (snap.patient?.mrn ?? '').trim();
   const orderShort = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
   const ageSex = [
-    snap.patient?.age != null ? `${snap.patient.age} yrs` : '',
+    snapAge(snap, 'yrs'),
     snap.patient?.sex ?? ''
   ].filter(Boolean).join(' / ');
   const specimens = Array.from(new Set(

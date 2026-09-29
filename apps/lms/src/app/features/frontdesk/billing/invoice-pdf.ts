@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 import { Bill } from "../../../shared/models/bill.model";
 import { billRoundOff } from "../../../shared/utils/bill-math";
 import { Order } from "../../../shared/models/order.model";
+import { formatAge } from "../../../shared/utils/patient-age";
 
 /**
  * Generate a professional A4 PDF invoice directly with jsPDF (sharp, searchable,
@@ -184,7 +185,7 @@ export function generateInvoicePdf(rawInput: InvoicePdfInput): string | void {
   doc.setTextColor(TEXT_MUTED);
   let by = y + 30;
   const ageSex = [
-    patient?.age != null ? `${patient.age}y` : "",
+    formatAge(patient, "y"),
     patient?.sex ?? "",
   ]
     .filter(Boolean)
@@ -628,7 +629,7 @@ export function buildCashBillModel(input: InvoicePdfInput): CashBillModel {
   const { bill, order, invoiceNumber, effectivePayable } = input;
   const patient = order?.patient;
   const ageSex = [
-    patient?.age != null ? String(patient.age) : "",
+    formatAge(patient, "num"),
     patient?.sex ?? "",
   ]
     .filter(Boolean)

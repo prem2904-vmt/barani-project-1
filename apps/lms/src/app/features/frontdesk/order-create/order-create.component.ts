@@ -52,6 +52,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { MIN_LOAD_MS, heldFlag } from '../../../shared/utils/min-duration';
 import { memberDepartmentNames, shownDepartmentName } from '../../../shared/utils/package-department';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { formatAge } from '../../../shared/utils/patient-age';
 
 type Priority = 'Normal' | 'Urgent';
 
@@ -2742,7 +2743,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       return this.patientResults().map(p => ({
         key: p.id, kind: 'match' as const, title: patientDisplayName(p),
         meta: [
-          [p.age != null ? `${p.age}` : '', (p.sex ?? '').charAt(0).toUpperCase()].filter(Boolean).join('/'),
+          [formatAge(p, 'num'), (p.sex ?? '').charAt(0).toUpperCase()].filter(Boolean).join('/'),
           p.mrn, p.phone,
         ].filter(Boolean).join(' · '),
       }));

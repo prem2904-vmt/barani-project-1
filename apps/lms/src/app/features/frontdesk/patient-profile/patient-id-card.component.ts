@@ -5,6 +5,7 @@ import { BarcodeDisplayComponent } from '../../../shared/components/barcode-disp
 import { printLabelOnly } from '../../../shared/utils/print-label';
 import { patientProfileQrUrl } from '../../../shared/utils/patient-strip-qr';
 import { environment } from '../../../../environments/environment';
+import { formatAge } from '../../../shared/utils/patient-age';
 
 /** The card's QR target. On the web the page's own origin; inside the native
  *  app the origin is capacitor://localhost (unopenable by another phone), so
@@ -101,7 +102,7 @@ export class PatientIdCardComponent {
 
   get name(): string { return patientDisplayName(this.patient); }
   get ageSex(): string {
-    return [this.patient.age != null ? this.patient.age + ' yrs' : null, this.patient.sex]
+    return [formatAge(this.patient, 'yrs') || null, this.patient.sex]
       .filter(Boolean).join(' · ') || '—';
   }
   /** The QR encodes the app's patient open-route so a phone camera OR the in-app
