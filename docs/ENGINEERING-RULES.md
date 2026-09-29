@@ -18,6 +18,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Notifications:** `NotificationCatalog`.
   - **Licensing:** the platform entitlement.
   - **Reference ranges:** the single sex + age resolver.
+  - **Paid (patient release):** `PatientReleaseGate`.
 - Never match by name or code when an ID / key exists.
 
 ## 2. Tenant and branch isolation
