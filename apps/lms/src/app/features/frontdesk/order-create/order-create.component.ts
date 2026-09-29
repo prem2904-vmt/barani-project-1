@@ -23,6 +23,8 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { effectivePrice, isNotOfferedError, isOffered, isPriceDefault, taxSlabOf } from '../../../shared/utils/test-pricing';
 import { computeBill } from '../../../shared/utils/bill-math';
 import { cartOverlaps, overlapMessage, overlapOnAdd } from './cart-duplicates';
+import { suggestBundles, type PackageSuggestion as BundleSuggestion } from './package-suggest';
+import { PackageSuggestCardComponent } from './package-suggest-card.component';
 import { collectedItemIds, orderedItemIds, type OrderLike } from './order-edit-items';
 import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
 import { buildOrderDraft, parseOrderDraft, orderDraftKey, orderDraftKeysFor, orderDraftInScope, parseOrderDraftKey, DraftScope } from './order-draft';
@@ -71,7 +73,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective, PackageSuggestCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -1018,51 +1020,21 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   /**
-   * Package suggestions — when the cart contains individual tests that
-   * are also bundled inside one or more packages, suggest the package(s)
-   * that COVER ALL the picked individual tests so the patient saves
-   * money. Sorted by package price ascending (cheapest deal first).
-   *
-   * Implementation: each package stores its member test ids inside the
-   * `Parameters` JSON as { items: [{ testId: '...' }] } — same shape the
-   * backend's OrderService.ParsePackageChildIds reads.
+   * Package / profile suggestions (package-suggest.ts): a bundle that holds
+   * something in the cart is shown as a SAVING (costs no more than the lines
+   * it replaces — the only struck-through price) or a quiet UPGRADE (+₹X,
+   * adds N tests, vs its members bought separately), else not at all.
+   * Amounts use the cart's own billed unit per test (priceOf + GST slab)
+   * through the BillMath mirror, so "Save ₹X" / "+₹X" is exactly the change
+   * in the cart's pre-discount total when applied.
    */
   readonly packageSuggestions = computed<PackageSuggestion[]>(() => {
-    const sel = new Set(this._selected());
-    if (sel.size === 0) return [];
-    const all = this._tests();
-    const out: PackageSuggestion[] = [];
-    for (const pkg of all) {
-      if (pkg.type !== 'package' || !pkg.isActive) continue;
-      // Skip if the package is already in the cart.
-      if (sel.has(pkg.id)) continue;
-      const memberIds = parsePackageMembers(pkg.parameters);
-      if (memberIds.length === 0) continue;
-      const memberSet = new Set(memberIds);
-      // Only suggest if EVERY selected individual test is inside this
-      // package. Filter out package-typed selections (rare edge case).
-      const covered = [...sel].filter(id => {
-        const t = all.find(x => x.id === id);
-        return t && t.type !== 'package';
-      });
-      if (covered.length === 0) continue;
-      const allCovered = covered.every(id => memberSet.has(id));
-      if (!allCovered) continue;
-      const individualSum = covered
-        .map(id => effectivePrice(all.find(t => t.id === id)))
-        .reduce((a, b) => a + b, 0);
-      const savings = Math.max(0, individualSum - effectivePrice(pkg));
-      out.push({
-        package: pkg,
-        coveredIds: covered,
-        memberCount: memberIds.length,
-        individualSum,
-        savings
-      });
-    }
-    // Cheapest-first per the user's preference: low value → high value.
-    return out.sort((a, b) => effectivePrice(a.package) - effectivePrice(b.package));
+    const gstOn = this.gstEnabled();
+    return suggestBundles(this._tests(), this._selected(),
+      t => ({ price: this.priceOf(t), slab: gstOn ? taxSlabOf(t) : 0 }));
   });
+  /** How a suggestion names a test — the cart's own display name. */
+  readonly suggestName = (t: { name: string; shortName?: string | null }) => this.testDisplayName(t);
 
   ngAfterViewInit() {
     const hasPatientId = this.route.snapshot.queryParamMap.has('patientId');
@@ -1682,17 +1654,22 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   applyPackage(s: PackageSuggestion) {
     const droppedCollected = s.coveredIds.filter(id => this.isCollected(id));
     if (droppedCollected.length > 0) {
-      this.toasts.warning('Cannot switch to package — some tests already have collected samples');
+      this.toasts.warning(`Cannot switch to ${s.kind === 'upgrade' ? 'the' : 'a'} ${s.bundle.type === 'profile' ? 'profile' : 'package'} — some tests already have collected samples`);
       return;
     }
     this._selected.update(cur => {
       const dropped = new Set(s.coveredIds);
       const next = cur.filter(id => !dropped.has(id));
-      if (!next.includes(s.package.id)) next.push(s.package.id);
+      if (!next.includes(s.bundle.id)) next.push(s.bundle.id);
       return next;
     });
     this.showCart();
-    this.toasts.success(`Switched to ${s.package.name} — saving ₹${s.savings}`);
+    const inr = new CurrencyInrPipe();
+    this.toasts.success(s.kind === 'upgrade'
+      ? `Upgraded to ${s.bundle.name} (+${inr.transform(s.extraCost)})`
+      : s.savings > 0
+        ? `Switched to ${s.bundle.name} — saving ${inr.transform(s.savings)}`
+        : `Switched to ${s.bundle.name} — same price, ${s.extraCount} more test${s.extraCount === 1 ? '' : 's'}`);
   }
   findTest(id: string): Test | undefined { return this._tests().find(t => t.id === id); }
 
@@ -2986,19 +2963,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 }
 
-/** Suggestion shown above the cart when picked individual tests are
- *  available as part of a cheaper package. */
-interface PackageSuggestion {
-  package: Test;
-  /** Selected individual-test ids that this package contains. */
-  coveredIds: string[];
-  /** How many tests the package contains in total (covered + extras). */
-  memberCount: number;
-  /** Sum of the covered individual tests' prices (without GST). */
-  individualSum: number;
-  /** individualSum − package.price, clamped at 0. */
-  savings: number;
-}
+/** A package / profile suggestion for this cart (package-suggest.ts). */
+type PackageSuggestion = BundleSuggestion<Test>;
 
 /** Parse the package's `Parameters` JSON to extract member test ids.
  *  Mirrors the backend's OrderService.ParsePackageChildIds shape:

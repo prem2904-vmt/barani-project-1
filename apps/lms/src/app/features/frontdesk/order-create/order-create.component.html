@@ -710,36 +710,9 @@
         }
       </ul>
 
-      @if (!orderLocked() && packageSuggestions().length > 0) {
-      <div class="pf-pkg-suggest">
-        <header class="pf-pkg-suggest__hdr">
-          <svg class="pf-pkg-suggest__icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
-          <span>Save with a package</span>
-        </header>
-        <p class="pf-pkg-suggest__sub">These bundles include everything in your cart at a lower price.</p>
-        <ul class="pf-pkg-suggest__list">
-          @for (s of packageSuggestions(); track s.package.id) {
-          <li class="pf-pkg-suggest__row">
-            <div class="min-w-0 flex-1">
-              <p class="pf-pkg-suggest__name" [title]="testDisplayName(s.package)">{{ testDisplayName(s.package) }}</p>
-              <p class="pf-pkg-suggest__meta">
-                Includes {{ s.memberCount }} test{{ s.memberCount === 1 ? '' : 's' }}
-                <span class="pf-pkg-suggest__sep">·</span>
-                <span class="pf-pkg-suggest__strike">{{ s.individualSum | inr }}</span>
-                <span class="pf-pkg-suggest__price"><ng-container *ngTemplateOutlet="priceTpl; context: { $implicit: s.package }"></ng-container></span>
-              </p>
-            </div>
-            @if (s.savings > 0) {
-            <span class="pf-pkg-suggest__save">Save {{ s.savings | inr }}</span>
-            }
-            <button type="button" class="pf-pkg-suggest__apply press" (click)="applyPackage(s)">Apply</button>
-          </li>
-          }
-        </ul>
-      </div>
+      @if (!orderLocked()) {
+      <pf-package-suggest [suggestions]="packageSuggestions()" [nameOf]="suggestName"
+        (apply)="applyPackage($event)"></pf-package-suggest>
       }
 
       </div>
