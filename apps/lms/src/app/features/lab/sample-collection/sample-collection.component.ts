@@ -70,7 +70,9 @@ import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigati
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { normalizePriority } from '../../../shared/utils/lab-priority';
-import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SkeletonDetailComponent, SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile, spinDelay } from '../../../shared/utils/busy';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -373,7 +375,7 @@ interface OrderGroup {
 @Component({
   selector: "pf-sample-collection",
   standalone: true,
-  imports: [SkeletonDetailComponent, PfKeysDirective, SamplePresetDirective,
+  imports: [SkeletonDetailComponent, SkeletonRowsComponent, BusyDirective, PfKeysDirective, SamplePresetDirective,
     ZoomSourceDirective,
     ZoomTargetDirective,
     FormsModule,
@@ -462,6 +464,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  order routinely has one walked-in specimen among several draws. */
   private readonly _sourceBusy = signal(false);
   readonly sourceBusy = this._sourceBusy.asReadonly();
+  /** Which tube's External mark is saving (its flag shows the busy state). */
+  protected readonly sourceBusyId = signal<string | null>(null);
   /** The flag shows on tubes that can still be marked: pending and not a
    *  locked/not-yet-due series time point. */
   canMarkExternal(s: OrderSample): boolean {
@@ -473,6 +477,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (this._sourceBusy()) return;
     const source = s.source === "external" ? "internal" : "external";
     this._sourceBusy.set(true);
+    this.sourceBusyId.set(s.id);
     try {
       const updated = await firstValueFrom(
         this.api.patch<OrderSample>(`/api/samples/${s.id}/source`, { source }),
@@ -497,6 +502,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this.toasts.error(ApiError.from(e).message);
     } finally {
       this._sourceBusy.set(false);
+      this.sourceBusyId.set(null);
     }
   }
 
@@ -642,6 +648,16 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   protected readonly scanValue = signal("");
   protected readonly scannerOpen = signal(false);
   private readonly _pending = signal<OrderSample[]>([]);
+  /** The pending queue has answered at least once (success or error). Until
+   *  then the list region is a skeleton of its rows — never the "No samples
+   *  waiting" empty state for a queue that simply hasn't arrived yet. The
+   *  skeleton only appears when the first answer is slower than 150ms (no
+   *  flash for a fast answer) and, once shown, holds 300ms (ND-PATTERN
+   *  "Loading feedback"). */
+  protected readonly queueLoaded = signal(false);
+  protected readonly queueSkeleton = spinDelay(computed(() => !this.queueLoaded()));
+  /** The band / header Refresh button's request is in flight. */
+  protected readonly refreshing = signal(false);
   private readonly _openOrderId = signal<string | null>(null);
   /** Admin-configured container colour/label per department code (Branches →
    *  Departments). Loaded once so the tube guide reflects the lab's own scheme. */
@@ -1187,6 +1203,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     } catch {
       this._pending.set([]);
     }
+    this.queueLoaded.set(true);
   }
 
   tube(s: OrderSample) {
@@ -1475,7 +1492,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   refresh() {
-    this.api.get<OrderSample[]>("/api/samples/pending-collection").subscribe({
+    this.api.get<OrderSample[]>("/api/samples/pending-collection").pipe(busyWhile(this.refreshing)).subscribe({
       next: (l) => this._pending.set(l ?? []),
     });
   }
@@ -1485,12 +1502,16 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  print. The hidden `.pf-print-label` block in the drawer is only used when
    *  a web user explicitly picks the label-sized system dialog. */
   printLabels(g: OrderGroup) {
+    if (this.printing()) return;
+    this.printing.set(true);
     void this.labelPrint.printTubeLabels({
       samples: g.samples,
       fallbackName: g.patientName,
       systemPrint: () => printTubeLabels(),
-    });
+    }).finally(() => this.printing.set(false));
   }
+  /** Print labels is talking to the label printer (busy button). */
+  protected readonly printing = signal(false);
 
   openScanner() {
     this.scannerOpen.set(true);

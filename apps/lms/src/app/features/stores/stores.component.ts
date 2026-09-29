@@ -1,4 +1,8 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../shared/directives/busy.directive';
+import { SkeletonTableComponent } from '../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../shared/utils/min-duration';
+import { busyWhile } from '../../shared/utils/busy';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -31,7 +35,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
 @Component({
   selector: 'pf-stores',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent],
+  imports: [FormsModule, DecimalPipe, DatePipe, BarcodeDisplayComponent, BarcodeScannerModalComponent, ScanIconComponent, BusyDirective, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wrap">
@@ -82,6 +86,11 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
         </div>
 
         <!-- Stock-on-hand table -->
+        @if (stockSkeleton()) {
+          <!-- First load: the table's shape (held 600ms), never "No inventory
+               items yet" for a list that simply hasn't arrived. -->
+          <div class="tablecard"><pf-skeleton-table [rows]="6" [cols]="5" label="Loading stock…"></pf-skeleton-table></div>
+        } @else {
         <div class="tablecard">
           <table class="stock">
             <thead><tr><th>Item</th><th>Category</th><th class="r">On hand</th><th class="r">Reorder</th><th class="r">Status</th></tr></thead>
@@ -106,6 +115,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
             </tbody>
           </table>
         </div>
+        }
 
         <!-- Alerts -->
         <div class="alerts">
@@ -133,7 +143,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
                    (keyup.enter)="resolve(term())"
                    [placeholder]="action()==='receive' ? 'Scan supplier barcode, or type to search items' : 'Scan item / lot barcode, or type to search items'" />
           </div>
-          <button class="btn btn--primary" (click)="resolve(term())">Resolve</button>
+          <button class="btn btn--primary" (click)="resolve(term())" [disabled]="resolving()" [pfBusy]="resolving()" pfBusyLabel="Looking up…">Resolve</button>
           <button class="btn btn--ghost" (click)="scanning.set(true)" title="Use device camera">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           </button>
@@ -160,7 +170,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
                 <label><span class="lbl">Unit cost</span><input class="inp" type="number" [ngModel]="rcv().cost" (ngModelChange)="setR('cost',+$event)"/></label>
                 <label><span class="lbl">Qty *</span><input class="inp" type="number" [ngModel]="rcv().qty" (ngModelChange)="setR('qty',+$event)"/></label>
               </div>
-              <button class="btn btn--green mt" [disabled]="busy() || rcv().qty<=0" (click)="doReceive(r.item)">Receive stock</button>
+              <button class="btn btn--green mt" [disabled]="busy() || rcv().qty<=0" [pfBusy]="busy()" pfBusyLabel="Receiving…" (click)="doReceive(r.item)">Receive stock</button>
               @if (lastLabel()) {
                 <div class="label-block">
                   <div class="label-block__head">
@@ -182,7 +192,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
             @if (action() === 'issue') {
               <div class="form-row">
                 <label><span class="lbl">Qty to issue *</span><input class="inp" style="width:140px" type="number" [ngModel]="issueQty()" (ngModelChange)="issueQty.set(+$event)"/></label>
-                <button class="btn btn--primary" [disabled]="busy() || issueQty()<=0" (click)="doIssue(r.item)">Issue (FEFO)</button>
+                <button class="btn btn--primary" [disabled]="busy() || issueQty()<=0" [pfBusy]="busy()" pfBusyLabel="Issuing…" (click)="doIssue(r.item)">Issue (FEFO)</button>
               </div>
               <p class="hint">FEFO — the earliest-expiring non-expired lot is consumed first.</p>
             }
@@ -194,7 +204,7 @@ interface InvBatch { id: string; lotNumber?: string; lotBarcode?: string; expiry
                   <span class="batch__lot">{{ b.lotNumber || '—' }} <span class="muted">exp {{ b.expiryDate ? (b.expiryDate | date) : '—' }} · system {{ b.qtyOnHand | number:'1.0-2' }}</span></span>
                   <span class="batch__act">
                     <input class="inp" style="width:90px" type="number" [ngModel]="countDraft()[b.id]" (ngModelChange)="setCount(b.id,+$event)" placeholder="count"/>
-                    <button class="link" [disabled]="busy()" (click)="doCount(b)">Save</button>
+                    <button class="link" [disabled]="busy()" [pfBusy]="busy() && countingId() === b.id" pfBusyLabel="Saving…" (click)="doCount(b)">Save</button>
                   </span>
                 </div>
               } @empty { <p class="muted">No batches at this branch yet.</p> }
@@ -471,6 +481,13 @@ export class StoresComponent implements OnInit, AfterViewInit {
   private lastParsed: any = null;
   readonly scanning = signal(false);
   readonly busy = signal(false);
+  /** The batch whose count is saving (its Save shows the busy state). */
+  readonly countingId = signal<string | null>(null);
+  /** Resolve (scan / typed code lookup) request in flight. */
+  readonly resolving = signal(false);
+  /** First-load skeleton for the stock table (ND-PATTERN "Loading feedback"). */
+  private readonly stockHold = createLoadHold(true);
+  readonly stockSkeleton = this.stockHold.active;
   readonly resolved = signal<{ item: InvItem; batches: InvBatch[] } | null>(null);
   readonly lastLabel = signal<string | null>(null);
 
@@ -534,6 +551,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
   async ngOnInit() {
     this.action.set(this.allowedActions()[0]?.key ?? 'receive');
     await Promise.all([this.loadItems(), this.loadAlerts()]);
+    this.stockHold.done();
   }
   ngAfterViewInit() { this.focusScan(); }
 
@@ -608,7 +626,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
     // dropped burst, not a real barcode.
     if (c.length < 3) { this.toasts.warning('That scan looked incomplete — try again.'); this.focusScan(); return; }
     try {
-      const r: any = await firstValueFrom(this.api.post('/api/inventory/scan/resolve', { code: c }));
+      const r: any = await firstValueFrom(this.api.post('/api/inventory/scan/resolve', { code: c }).pipe(busyWhile(this.resolving)));
       if (!r?.item) {
         this.toasts.warning(this.action() === 'receive'
           ? `No item for “${c}” — pick it below to link the barcode.`
@@ -679,6 +697,7 @@ export class StoresComponent implements OnInit, AfterViewInit {
   async doCount(b: InvBatch) {
     const counted = this.countDraft()[b.id];
     if (counted == null || counted < 0) { this.toasts.warning('Enter a counted quantity'); return; }
+    this.countingId.set(b.id);
     this.busy.set(true);
     try {
       const r: any = await firstValueFrom(this.api.post(`/api/inventory/batches/${b.id}/count`, { countedQty: counted }));

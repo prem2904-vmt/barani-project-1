@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, TemplateRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Subscription, firstValueFrom } from 'rxjs';
@@ -58,7 +59,7 @@ const NOT_A_DISK = '__not_a_disk';
 @Component({
   selector: 'pf-plate-measure',
   standalone: true,
-  imports: [SelectComponent, LogoMarkComponent, NgTemplateOutlet, NumpadDirective, NumpadScopeDirective],
+  imports: [SelectComponent, LogoMarkComponent, NgTemplateOutlet, NumpadDirective, NumpadScopeDirective, BusyDirective],
   host: { '(window:keydown)': 'onKey($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -369,7 +370,7 @@ const NOT_A_DISK = '__not_a_disk';
             <p class="pm-hinttext" role="status">{{ plateLine() }}</p>
             <div class="pm-row">
               <button type="button" class="nd-btn nd-btn--secondary pm-btn" (click)="resetCalibration()">Re-tap rim</button>
-              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" [disabled]="!calibrated() || measuring()" (click)="goMeasure()">{{ measuring() ? 'Measuring…' : 'Measure' }}</button>
+              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary" [disabled]="!calibrated() || measuring()" [pfBusy]="measuring()" pfBusyLabel="Measuring…" (click)="goMeasure()">{{ measuring() ? 'Measuring…' : 'Measure' }}</button>
             </div>
           </div>
         }
@@ -395,7 +396,7 @@ const NOT_A_DISK = '__not_a_disk';
             <div class="pm-row pm-row--wrap">
               <button type="button" class="nd-btn nd-btn--secondary pm-btn" (click)="mode.set('measure')">Back</button>
               <span class="pm-grow"></span>
-              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="busy() || applyCount() === 0 || applyBlocked" (click)="apply()">
+              <button type="button" class="nd-btn nd-btn--primary pm-btn pm-btn--primary pm-apply" [disabled]="busy() || applyCount() === 0 || applyBlocked" [pfBusy]="busy()" pfBusyLabel="Saving…" (click)="apply()">
                 {{ busy() ? 'Saving…' : applyLabel }}
               </button>
             </div>

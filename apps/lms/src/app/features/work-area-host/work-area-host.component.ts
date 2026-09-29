@@ -9,6 +9,7 @@ import { catalogFor } from '../../shared/models/process-workflow.model';
 import { portablePanel } from '../../shared/workflow/portable-panels';
 import { CollectBandButtonComponent } from '../../shared/components/collect-band-button/collect-band-button.component';
 import { SkeletonCardComponent } from '../../shared/primitives/skeleton-kit.component';
+import { RouteProgressService } from '../../core/navigation/route-progress.service';
 
 interface HostItem { type: string; label: string; hint?: string; iconPath: string[]; route: string; cmp: Type<unknown> | null; }
 
@@ -42,7 +43,7 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
               @if (it.cmp) {
                 <ng-container *ngComponentOutlet="it.cmp" />
               } @else {
-                <button type="button" class="wah-launch press" (click)="go(it.route)">
+                <button type="button" class="wah-launch press" (click)="go(it.route, $event)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                     @for (p of it.iconPath; track $index) { <path [attr.d]="p" /> }
                   </svg>
@@ -76,6 +77,7 @@ interface HostItem { type: string; label: string; hint?: string; iconPath: strin
 export class WorkAreaHostComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly routeProgress = inject(RouteProgressService);
   private readonly auth = inject(AuthService);
   private readonly process = inject(ProcessWorkflowService);
 
@@ -109,5 +111,10 @@ export class WorkAreaHostComponent {
     });
   }
 
-  go(route: string) { this.router.navigate([route]); }
+  /** The pressed launcher turns "held" the same frame until its (lazy)
+   *  screen arrives; the global top bar covers the rest. */
+  go(route: string, ev?: Event) {
+    this.routeProgress.markSource(ev?.currentTarget as HTMLElement | null);
+    this.router.navigate([route]);
+  }
 }

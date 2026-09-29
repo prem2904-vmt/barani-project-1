@@ -1,4 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 import {
   AllCommunityModule,
   ColDef,
@@ -47,7 +50,7 @@ interface DoctorRow {
 @Component({
   selector: 'pf-doctors-admin',
   standalone: true,
-  imports: [AgGridAngular, ScreenHeaderComponent, HeroBandComponent],
+  imports: [AgGridAngular, ScreenHeaderComponent, HeroBandComponent, BusyDirective, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-da pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -56,7 +59,7 @@ interface DoctorRow {
         <pf-hero-band [back]="true" backTo="/admin/opd" placeholder="Search doctors — name, department, specialisation…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" (click)="save()">
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
@@ -70,14 +73,17 @@ interface DoctorRow {
         eyebrow="OPD" title="Doctors" subtitle="Consultation fee per doctor"
         parentRoute="/admin/opd">
         <div actions>
-          <button type="button" class="pf-da__save press" [disabled]="!dirty() || saving()" (click)="save()">
+          <button type="button" class="pf-da__save press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
             {{ saving() ? 'Saving…' : 'Save changes' }}
           </button>
         </div>
       </pf-screen-header>
 
       <div class="pf-band-body pf-band-body--fill">
-      @if (!loading() && rowData().length === 0) {
+      @if (listSkeleton()) {
+        <!-- First load: the grid's shape (held 600ms), not an empty grid. -->
+        <pf-skeleton-table class="pf-da-skel" [rows]="8" [cols]="4" label="Loading doctors…"></pf-skeleton-table>
+      } @else if (!loading() && rowData().length === 0) {
         <div class="pf-da__empty">
           <p class="pf-da__empty-t">No doctors yet</p>
           <p class="pf-da__muted">Create a user with a Doctor-type role — they'll appear here.</p>
@@ -106,6 +112,7 @@ interface DoctorRow {
     .pf-da__save { padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700;
       color: #fff; background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-da__save:disabled { opacity: .5; cursor: default; }
+    .pf-da-skel { display: block; margin-top: 8px; overflow: hidden; border: 1px solid var(--glass-border); border-radius: 12px; }
     .pf-da-grid { display: block; width: 100%; height: calc(100dvh - 240px); min-height: 420px; margin-top: 8px; }
     /* New design: the grid fills the band body (no page scroll). */
     :host-context(.design-new) .pf-da-grid { flex: 1 1 auto; height: auto; min-height: 320px; margin-top: 0; }
@@ -128,6 +135,9 @@ export class DoctorsAdminComponent {
     bandFilter(this.rowData(), this.q(), d => [d.name, d.department, d.regNo, ...(d.specializations ?? [])]));
   readonly loading = signal(true);
   readonly saving = signal(false);
+  /** First-load skeleton over the grid's box (ND-PATTERN "Loading feedback"). */
+  private readonly listHold = createLoadHold(true);
+  readonly listSkeleton = this.listHold.active;
   private readonly _dirty = signal<Set<string>>(new Set());
   readonly dirty = computed(() => this._dirty().size > 0);
 
@@ -154,8 +164,8 @@ export class DoctorsAdminComponent {
 
   constructor() {
     this.api.get<DoctorRow[]>('/api/doctors').subscribe({
-      next: docs => { this.rowData.set((docs ?? []).map(d => ({ ...d, fee: d.fee ?? 0 }))); this.loading.set(false); },
-      error: () => { this.loading.set(false); this.toasts.error('Could not load doctors'); },
+      next: docs => { this.listHold.done(); this.rowData.set((docs ?? []).map(d => ({ ...d, fee: d.fee ?? 0 }))); this.loading.set(false); },
+      error: () => { this.listHold.done(); this.loading.set(false); this.toasts.error('Could not load doctors'); },
     });
   }
 

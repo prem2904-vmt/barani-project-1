@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Input, OnChanges, SimpleChanges, TemplateRef, computed, inject, input, output, signal } from '@angular/core';
+import { BusyDirective } from '../../directives/busy.directive';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   ConditionLogic,
@@ -32,7 +33,7 @@ export interface WorkflowStepCompleteEvent {
 @Component({
   selector: 'pf-workflow-renderer',
   standalone: true,
-  imports: [DynamicInputComponent, NgTemplateOutlet, SelectComponent],
+  imports: [DynamicInputComponent, NgTemplateOutlet, SelectComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let cfg = config();
@@ -79,10 +80,10 @@ export interface WorkflowStepCompleteEvent {
       @if (!hideActions()) {
         <div class="mt-5 flex flex-wrap gap-3 justify-end items-center">
           @for (action of extraActions(); track action.id) {
-            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="submitting()"
+            <button type="button" class="nd-btn nd-btn--secondary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                     (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
           }
-          <button type="button" class="nd-btn nd-btn--primary" [disabled]="submitting()"
+          <button type="button" class="nd-btn nd-btn--primary" [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                   (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
         </div>
       }
@@ -110,11 +111,11 @@ export interface WorkflowStepCompleteEvent {
           <button type="button" class="pf-btn"
                   [class.pf-btn-primary]="action.variant === 'primary'"
                   [class.pf-btn-ghost]="action.variant !== 'primary'"
-                  [disabled]="submitting()"
+                  [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                   (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
         }
         <button type="button" class="pf-btn pf-btn-primary"
-                [disabled]="submitting()"
+                [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                 (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
       </div>
     } @else {
@@ -152,11 +153,11 @@ export interface WorkflowStepCompleteEvent {
               <button type="button" class="pf-btn"
                       [class.pf-btn-primary]="action.variant === 'primary'"
                       [class.pf-btn-ghost]="action.variant !== 'primary'"
-                      [disabled]="submitting()"
+                      [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === action.id" pfBusyLabel="Working…"
                       (click)="triggerExtraAction(action.id)">{{ action.label }}</button>
             }
             <button type="button" class="pf-btn pf-btn-primary"
-                    [disabled]="submitting()"
+                    [disabled]="submitting()" [pfBusy]="submitting() && lastAct() === \'finish\'" pfBusyLabel="Submitting…"
                     (click)="finish()">{{ submitting() ? 'Submitting…' : finishLabel() }}</button>
           </div>
         } @else {
@@ -647,7 +648,12 @@ export class WorkflowRendererComponent implements OnChanges {
     }
   }
 
+  /** The last action pressed — the one whose button shows the parent's
+   *  `submitting` state as busy dots (the others just stay disabled). */
+  protected readonly lastAct = signal<string | null>(null);
+
   finish(): void {
+    this.lastAct.set('finish');
     if (this.singlePage()) {
       if (!this.validateAll()) return;
       this.workflowComplete.emit(this._formValues());
@@ -661,6 +667,7 @@ export class WorkflowRendererComponent implements OnChanges {
   }
 
   triggerExtraAction(actionId: string): void {
+    this.lastAct.set(actionId);
     if (this.singlePage()) {
       if (!this.validateAll()) return;
       this.extraActionClicked.emit({ actionId, values: this._formValues() });

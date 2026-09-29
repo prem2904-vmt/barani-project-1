@@ -90,6 +90,12 @@
       background: var(--glass-bg); border: 1px dashed var(--glass-border);
       border-radius: 16px; color: var(--text-tertiary); font-size: 13px;
     }
+    /* First-load queue skeleton (kit rows) — same box as the list/empty. */
+    .pf-sc__skel {
+      display: block; overflow: hidden;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      border-radius: 16px;
+    }
     /* Deep-link loading stub — centred loading-logo while the
        drawer's order fetch resolves. */
     .pf-sc__loading {

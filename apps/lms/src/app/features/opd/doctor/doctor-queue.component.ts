@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
@@ -40,7 +41,7 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
 @Component({
   selector: 'pf-doctor-queue',
   standalone: true,
-  imports: [SkeletonRowsComponent, DatePipe, HeroBandComponent],
+  imports: [SkeletonRowsComponent, DatePipe, HeroBandComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page dq-page">
@@ -66,7 +67,8 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
         <!-- Refresh is a quiet button on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
         <ng-container band-actions>
-          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="load()">
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="load()"
+                  [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
@@ -83,7 +85,8 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
             <h1 class="dq-title">Consult room</h1>
             <p class="dq-sub">{{ today | date:'EEEE, MMM d' }} · {{ counts().waiting }} waiting · {{ counts().done }} seen</p>
           </div>
-          <button type="button" class="dq-refresh press" (click)="load()" aria-label="Refresh queue">
+          <button type="button" class="dq-refresh press" (click)="load()" aria-label="Refresh queue"
+                  [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
             Refresh
           </button>
@@ -99,7 +102,9 @@ type QueueFilter = 'all' | 'waiting' | 'in_consult' | 'done';
       </header>
 
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-16">
-        @if (loading()) {
+        <!-- Skeleton on the first load only; a Refresh keeps the tokens on
+             screen (the Refresh button shows the busy state instead). -->
+        @if (loading() && _rows().length === 0) {
           <div class="dq-empty"><pf-skeleton-rows [rows]="6" label="Loading queue…"></pf-skeleton-rows></div>
         } @else if (visible().length === 0) {
           <div class="dq-empty">
@@ -227,7 +232,7 @@ export class DoctorQueueComponent implements OnInit {
   ];
   readonly filter = signal<QueueFilter>('all');
   readonly loading = signal(true);
-  private readonly _rows = signal<Consultation[]>([]);
+  protected readonly _rows = signal<Consultation[]>([]);
 
   /** Band search — patient name, same contract as the other queues. */
   readonly query = signal('');

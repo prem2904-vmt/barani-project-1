@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -29,7 +31,7 @@ interface VitalField {
 @Component({
   selector: 'pf-consult-room',
   standalone: true,
-  imports: [FormsModule, SelectComponent, PatientTimelineComponent],
+  imports: [FormsModule, SelectComponent, PatientTimelineComponent, BusyDirective, SkeletonDetailComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="cr-shell">
@@ -53,10 +55,12 @@ interface VitalField {
             </span>
             <span class="crb__grow"></span>
             @if (!readonly()) {
-              <button type="button" class="crb__btn press" [disabled]="saving() || !dirty()" (click)="save(false)">
+              <button type="button" class="crb__btn press" [disabled]="saving() || !dirty()" (click)="save(false)"
+                      [pfBusy]="saving() && !completing()" pfBusyLabel="Saving…">
                 {{ saving() ? 'Saving…' : 'Save draft' }}
               </button>
-              <button type="button" class="crb__btn crb__btn--primary press" [disabled]="saving()" (click)="save(true)">
+              <button type="button" class="crb__btn crb__btn--primary press" [disabled]="saving()" (click)="save(true)"
+                      [pfBusy]="saving() && completing()" pfBusyLabel="Completing…">
                 Complete consult
               </button>
             }
@@ -133,7 +137,10 @@ interface VitalField {
             }
           </div>
         </pf-patient-timeline>
-      } @else if (!loading()) {
+      } @else if (loading()) {
+        <!-- The consult on its way: the journey's shape, not a blank page. -->
+        <pf-skeleton-detail class="cr-skel" [fields]="6" [sections]="2" label="Opening the consultation…"></pf-skeleton-detail>
+      } @else {
         <div class="cr-missing">Consultation not found.</div>
       }
     </section>
@@ -142,6 +149,7 @@ interface VitalField {
     :host { display: block; height: 100%; overflow: hidden; }
     .cr-shell { height: 100%; padding: 8px 12px 10px; }
     .cr-shell pf-patient-timeline { display: block; height: 100%; }
+    .cr-skel { padding: 12px 4px; }
 
     /* ── The consult strip inside the journey's top bar ── */
     .crb { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
@@ -220,6 +228,8 @@ export class ConsultRoomComponent implements OnInit {
   readonly c = signal<Consultation | null>(null);
   readonly loading = signal(true);
   readonly saving = signal(false);
+  /** The running save is "Complete consult" (vs "Save draft"): which button shows busy. */
+  readonly completing = signal(false);
   readonly dirty = signal(false);
   readonly readonly = computed(() => {
     const s = this.c()?.status;
@@ -321,6 +331,7 @@ export class ConsultRoomComponent implements OnInit {
     if (!cc || this.saving()) return;
     const cleanVitals = Object.fromEntries(Object.entries(this.vitals()).filter(([, v]) => v != null && (v as unknown) !== ''));
     const cleanRx = this.rx().filter(r => r.drug.trim());
+    this.completing.set(complete);
     this.saving.set(true);
     this.api.patch<Consultation>(`/api/opd/consultations/${cc.id}`, {
       vitalsJson: JSON.stringify(cleanVitals),

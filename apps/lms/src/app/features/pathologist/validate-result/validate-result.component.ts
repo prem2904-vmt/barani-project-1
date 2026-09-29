@@ -12,13 +12,14 @@ import { chosenSpecimen } from '../../../shared/utils/micro-specimen';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { OrderTestComment } from '../../../shared/models/comment.model';
 import { CommentThreadComponent } from '../../../shared/components/comment-thread/comment-thread.component';
-import { LoadingLogoComponent } from '../../../shared/components/loading-logo/loading-logo.component';
+import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
-import { firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
 import { criticalBadge, flagTone, rangeWithUnit, savedFlagOf, type CriticalCode, type SavedFlag } from '../../../shared/utils/result-flag';
@@ -76,7 +77,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, LoadingLogoComponent, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -106,9 +107,10 @@ interface ValueRow {
 
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-32">
         @if ((loading() && !selected()) || zoom.holding()) {
-          <div class="pf-empty-block flex justify-center py-12" [pfZoomTarget]="zoomKeys()">
-            <pf-loading-logo size="xl" color="purple" [showDna]="true"
-                             [showText]="true" text="Loading validation…"></pf-loading-logo>
+          <!-- The cockpit's own shape (identity, values, a card) — the kit
+               skeleton, never the PF logo (ND-PATTERN "Loading feedback"). -->
+          <div class="pf-vr-skel" [pfZoomTarget]="zoomKeys()">
+            <pf-skeleton-detail [fields]="6" [sections]="1" label="Loading validation…"></pf-skeleton-detail>
           </div>
         }
 
@@ -156,7 +158,7 @@ interface ValueRow {
                       @case ('validating') { <span class="pf-vt__badge" data-outcome="validating">Working…</span> }
                       @default {
                         @if (sampleTests().length > 1) {
-                          <button type="button" class="pf-vt__act pf-vt__act--reject press" [disabled]="saving()" (click)="rejectTest(st)">Reject</button>
+                          <button type="button" class="pf-vt__act pf-vt__act--reject press" [disabled]="saving() || rejectingId() === st.id" [pfBusy]="rejectingId() === st.id" pfBusyLabel="Rejecting…" (click)="rejectTest(st)">Reject</button>
                           <button type="button" class="pf-vt__act pf-vt__act--approve press" [disabled]="saving()" (click)="approveTest(st)">Approve</button>
                         }
                       }
@@ -359,7 +361,7 @@ interface ValueRow {
               </span>
               <div class="flex-1"></div>
               <button type="button" class="pf-btn pf-btn--ghost press" (click)="cancelEdit()">Cancel</button>
-              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" (click)="saveEdits()">
+              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEdits()">
                 {{ saving() ? 'Saving…' : 'Save changes' }}
               </button>
             } @else {
@@ -388,7 +390,8 @@ interface ValueRow {
               @if (menuActions().length) {
                 <pf-actions-menu [actions]="menuActions()" label="More actions" [heading]="headTitle()"
                                  (action)="runAction($event)">
-                  <button pfActionsTrigger type="button" class="pf-btn pf-btn--ghost pf-vr-kebab press" aria-label="More actions" title="More actions">
+                  <button pfActionsTrigger type="button" class="pf-btn pf-btn--ghost pf-vr-kebab press" aria-label="More actions" title="More actions"
+                          [pfBusy]="reassigning()" pfBusyLabel="Reassigning…">
                     <svg class="pf-vr-kebab__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
                     <span class="pf-vr-kebab__t">More</span>
                   </button>
@@ -401,12 +404,14 @@ interface ValueRow {
                         [class.pf-btn--primary]="!hasSampleCritical()"
                         [class.pf-btn--danger]="hasSampleCritical()"
                         [disabled]="saving() || pendingSampleTests().length === 0"
+                        [pfBusy]="saving()" pfBusyLabel="Validating…"
                         (click)="validateAllRemaining()">
                   <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
                   <span class="pf-btn-label">{{ saving() ? 'Validating…' : 'Validate all remaining (' + pendingSampleTests().length + ')' }}</span>
                 </button>
               } @else {
-                <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject">
+                <button type="button" class="pf-btn pf-btn--ghost pf-btn--icony press" (click)="reject()" aria-label="Reject"
+                        [disabled]="rejecting()" [pfBusy]="rejecting()" pfBusyLabel="Rejecting…">
                   <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>
                   <span class="pf-btn-label">Reject</span>
                 </button>
@@ -415,6 +420,7 @@ interface ValueRow {
                         [class.pf-btn--primary]="!hasCritical()"
                         [class.pf-btn--danger]="hasCritical()"
                         [disabled]="saving() || isCulture() || valueRows().length === 0"
+                        [pfBusy]="saving()" pfBusyLabel="Validating…"
                         (click)="validate()"
                         [attr.aria-label]="hasCritical() ? 'Validate and notify' : 'Validate'">
                   <svg class="pf-btn__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -526,6 +532,7 @@ interface ValueRow {
     @media (hover: hover) { .pf-hdr-back:hover { background: var(--glass-bg, rgba(255,255,255,0.06)); } }
 
     .pf-empty-block { padding: 40px 0; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+    .pf-vr-skel { padding: 16px 0; }
 
     /* ── Cockpit: results + always-visible context rail ──────── */
     .pf-cockpit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -915,6 +922,12 @@ export class ValidateResultComponent implements OnInit {
   readonly comment = this._comment.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly saving = this._saving.asReadonly();
+  /** Single-test Reject (header) request in flight, after the reason prompt. */
+  readonly rejecting = signal(false);
+  /** Reassign (⋮ menu) request in flight, after the validator picker. */
+  readonly reassigning = signal(false);
+  /** Per-test Reject (multi-test tube) request in flight: that test's id. */
+  readonly rejectingId = signal<string | null>(null);
   readonly editing = this._editing.asReadonly();
   readonly detailRow = this._detailRow.asReadonly();
 
@@ -1084,7 +1097,10 @@ export class ValidateResultComponent implements OnInit {
       multiline: true, required: true, tone: 'danger', confirmLabel: 'Reject result'
     });
     if (!reason) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: null }).subscribe({
+    this.rejectingId.set(t.id);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: null }).pipe(finalize(() => {
+      if (this.rejectingId() === t.id) this.rejectingId.set(null);
+    })).subscribe({
       next: () => {
         this._outcome.update(m => ({ ...m, [t.id]: 'rejected' }));
         this.toasts.success('Rejected — lab tech notified');
@@ -1400,7 +1416,8 @@ export class ValidateResultComponent implements OnInit {
       confirmLabel: 'Reject result'
     });
     if (!reason) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: this._comment() || null }).subscribe({
+    this.rejecting.set(true);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reject`, { reason, note: this._comment() || null }).pipe(finalize(() => this.rejecting.set(false))).subscribe({
       next: () => {
         this.toasts.success('Rejected — lab tech notified');
         this.back();
@@ -1415,7 +1432,8 @@ export class ValidateResultComponent implements OnInit {
     // A picker of the validators who cover this department (never a pasted id).
     const id = await pickReassignee(this.api, this.dialog, this.toasts, t);
     if (!id) return;
-    this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).subscribe({
+    this.reassigning.set(true);
+    this.api.post<OrderTest>(`/api/validation/${t.id}/reassign`, { assigneeId: id }).pipe(finalize(() => this.reassigning.set(false))).subscribe({
       next: () => {
         this.toasts.success('Reassigned');
         this.back();

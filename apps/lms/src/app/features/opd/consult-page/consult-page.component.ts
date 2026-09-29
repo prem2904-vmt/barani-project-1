@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile } from '../../../shared/utils/busy';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -24,7 +26,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 @Component({
   selector: 'pf-consult-page',
   standalone: true,
-  imports: [FormsModule, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent],
+  imports: [FormsModule, AvatarComponent, ScreenHeaderComponent, PatientSearchComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './consult-page.component.html',
   styleUrl: './consult-page.component.scss',
@@ -50,6 +52,8 @@ export class ConsultPageComponent {
 
   readonly total = computed(() => this.fee());
   readonly canSubmit = computed(() => !!this._patient() && !!this.doctorId());
+  /** Create-consultation request in flight (busy button, no double create). */
+  readonly submitting = signal(false);
 
   constructor() {
     // Real doctors for the picker — users with a DoctorProfile (captured at user
@@ -90,7 +94,7 @@ export class ConsultPageComponent {
   }
 
   submit() {
-    if (!this.canSubmit()) return;
+    if (!this.canSubmit() || this.submitting()) return;
     const patient = this._patient();
     if (!patient) return;
     // Creates the consultation → the doctor's token queue. Billing (Order
@@ -99,7 +103,7 @@ export class ConsultPageComponent {
       patientId: patient.id,
       doctorUserId: this.doctorId(),
       fee: this.fee(),
-    }).subscribe({
+    }).pipe(busyWhile(this.submitting)).subscribe({
       next: c => {
         this.toasts.success(c?.token ? `Consultation created — token ${c.token}` : 'Consultation created');
         this.back();

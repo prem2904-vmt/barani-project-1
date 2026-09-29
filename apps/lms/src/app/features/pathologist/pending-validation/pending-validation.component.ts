@@ -1,4 +1,5 @@
 import { DestroyRef, ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isCultureOrderTest } from '../../../core/navigation/culture-redirect.guard';
 import { ThemeService } from '../../../core/services/theme.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -54,7 +55,7 @@ type Tab = 'mine' | 'all';
 @Component({
   selector: 'pf-pending-validation',
   standalone: true,
-  imports: [
+  imports: [BusyDirective, 
     ZoomSourceDirective,
     FormsModule,
     TatIndicatorComponent,
@@ -99,6 +100,7 @@ type Tab = 'mine' | 'all';
         </ng-container>
         <ng-container band-actions>
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pv-refresh" (click)="refresh()"
+                  [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
                   aria-label="Refresh" title="Refresh">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -293,7 +295,8 @@ type Tab = 'mine' | 'all';
           eyebrow="Validation queue"
           title="Pending validation"
           subtitle="Review entered results. Validate, reject, or reassign to another pathologist.">
-          <pf-touch-btn actions size="sm" variant="secondary" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh">
+          <pf-touch-btn actions size="sm" variant="secondary" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh"
+                        [busy]="loading()" busyLabel="Refreshing…">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>

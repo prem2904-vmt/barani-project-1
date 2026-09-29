@@ -48,6 +48,8 @@ import { plural } from '../../../shared/utils/plural';
 import { lineDepartment } from '../../../shared/utils/shared-tube';
 import { OrderPriority, comparePriorityThenDue } from '../../../shared/utils/lab-priority';
 import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-work.priority';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { busyWhile } from '../../../shared/utils/busy';
 
 /** The departments of a tube's lines, "Haematology · Biochemistry" — a
  *  shared tube (integrated lab) carries several. */
@@ -85,7 +87,7 @@ const COUNTERS: CounterSpec[] = [
 @Component({
   selector: 'pf-my-work',
   standalone: true,
-  imports: [
+  imports: [BusyDirective, 
     PfKeysDirective,
     SamplePresetDirective,
     TileGridDirective, ZoomSourceDirective,
@@ -168,7 +170,8 @@ const COUNTERS: CounterSpec[] = [
         <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
         <ng-container band-actions>
-          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()">
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()"
+                  [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
@@ -235,7 +238,8 @@ const COUNTERS: CounterSpec[] = [
           }
         </div>
         }
-        <pf-touch-btn actions variant="secondary" size="sm" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh">
+        <pf-touch-btn actions variant="secondary" size="sm" class="pf-classic-only" (pressed)="refresh()" aria-label="Refresh"
+                      [busy]="loading()" busyLabel="Refreshing…">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" icon-left>
             <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
             <path d="M21 3v5h-5"/>
@@ -293,7 +297,8 @@ const COUNTERS: CounterSpec[] = [
           </button>
           }
         </div>
-        <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()">
+        <pf-touch-btn class="pf-open-btn" variant="primary" size="lg" (pressed)="scanSubmit()" [disabled]="!scan()"
+                      [busy]="scanning()" busyLabel="Opening…">
           Open
           <span icon-right>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -686,6 +691,7 @@ const COUNTERS: CounterSpec[] = [
                             [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
                             [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
                             [disabled]="printingTubeId() === tube.sampleId"
+                            [pfBusy]="printingTubeId() === tube.sampleId" pfBusyLabel="Opening the report…"
                             [attr.aria-label]="'Print report for ' + (tube.barcode || tube.sampleId)"
                             (click)="printCompletedTube(tube)">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -702,6 +708,7 @@ const COUNTERS: CounterSpec[] = [
                             [class.pf-tq__act]="!theme.isNewDesign()" [class.nd-rowact]="theme.isNewDesign()"
                             [class.nd-rowact--icon]="theme.isNewDesign() && !webPointer()"
                             [disabled]="reopeningTubeId() === tube.sampleId"
+                            [pfBusy]="reopeningTubeId() === tube.sampleId" pfBusyLabel="Opening…"
                             [attr.aria-label]="'Edit ' + (tube.barcode || tube.sampleId)"
                             (click)="editCompletedTube(tube)">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -789,6 +796,8 @@ const COUNTERS: CounterSpec[] = [
                           <li class="rounded-lg p-2.5 pf-tube-tile pf-tube-tile--tappable" [pfZoomSource]="tube.sampleId"
                               [class.pf-tube-tile--rejected]="tube.rejections.length > 0"
                               [class.pf-tube-tile--picking]="pickingTubeId() === tube.sampleId"
+                              [class.pf-nav-pending]="claimingTube(tube.sampleId)"
+                              [attr.aria-busy]="claimingTube(tube.sampleId) ? 'true' : null"
                               role="button" tabindex="0"
                               [attr.aria-label]="(tab() === 'service_queue' ? 'Pick tube ' : 'Open tube ') + (tube.barcode || tube.sampleId)"
                               (click)="onCardActivate(tube, g.patientName, $event)"
@@ -906,6 +915,8 @@ const COUNTERS: CounterSpec[] = [
                        [class.pf-tq--urgent]="bucket.priority === 'urgent'"
                        [class.pf-tq--rejected]="tube.rejections.length > 0"
                        [class.pf-tq--picking]="pickingTubeId() === tube.sampleId"
+                       [class.pf-nav-pending]="claimingTube(tube.sampleId)"
+                       [attr.aria-busy]="claimingTube(tube.sampleId) ? 'true' : null"
                        [class.pf-tq--holding]="holdingPeekId() === tube.sampleId"
                        [class.pf-tq--done]="tube.allDone">
                     <span class="pf-tq__cap" aria-hidden="true"></span>
@@ -1124,6 +1135,7 @@ const COUNTERS: CounterSpec[] = [
     @if (delegateTarget(); as t) {
       <pf-delegate-modal
         [testName]="delegateLabel()"
+        [busyId]="delegatingTo()"
         (chose)="onDelegate($event)"
         (cancelled)="cancelDelegate()">
       </pf-delegate-modal>
@@ -3544,7 +3556,7 @@ export class MyWorkComponent implements OnInit {
       // sample and open result entry directly (so any valid code opens the
       // tests, not only rows already assigned here).
       this.api.get<{ sampleId: string; orderId: string }>(
-        `/api/results/resolve-sample?barcode=${encodeURIComponent(q)}`).subscribe({
+        `/api/results/resolve-sample?barcode=${encodeURIComponent(q)}`).pipe(busyWhile(this.scanning)).subscribe({
         next: r => {
           if (r?.sampleId) {
             this._scan.set('');
@@ -3560,7 +3572,7 @@ export class MyWorkComponent implements OnInit {
       return;
     }
     const scannedBarcode = hit.subOrder?.barcode ?? q;
-    this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).subscribe({
+    this.api.post<OrderTest>(`/api/results/${hit.id}/claim-by-scan`, { barcode: scannedBarcode }).pipe(busyWhile(this.scanning)).subscribe({
       next: () => { this._scan.set(''); this.enterJustScanned(hit); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });
@@ -3573,6 +3585,8 @@ export class MyWorkComponent implements OnInit {
   // the user is actually the assignee (auto-assigned or delegated) —
   // which prevents cross-tech scanning.
   private readonly _scanTarget = signal<OrderTest | null>(null);
+  /** The scan bar's lookup / claim request is running (Open button busy). */
+  readonly scanning = signal(false);
   readonly scanTarget = this._scanTarget.asReadonly();
   readonly scanExpected = computed(() => this._scanTarget()?.subOrder?.barcode ?? '');
 
@@ -3870,6 +3884,10 @@ export class MyWorkComponent implements OnInit {
     else this.startClaimScan();
   }
   cancelClaim() { if (!this._claiming()) this._claimTarget.set(null); }
+  /** This tube's claim request is running (its card shows the held look). */
+  claimingTube(sampleId: string): boolean {
+    return this._claiming() && this._claimTarget()?.sampleId === sampleId;
+  }
 
   /** Open the scan gate for the pending claim. Tubes with no printed barcode
    *  (legacy/seeder samples) can't be scan-verified, so they fall back to a
@@ -3935,12 +3953,17 @@ export class MyWorkComponent implements OnInit {
   }
   cancelDelegate() { this._delegateTests.set(null); }
 
+  /** The user a running delegation is going to (the modal's busy row). */
+  readonly delegatingTo = signal<string | null>(null);
+
   onDelegate(toUserId: string) {
     const list = this._delegateTests();
-    if (!list?.length) return;
+    if (!list?.length || this.delegatingTo()) return;
+    this.delegatingTo.set(toUserId);
     let done = 0, failed = 0, lastError = '';
     const finish = () => {
       if (done + failed < list.length) return;
+      this.delegatingTo.set(null);
       this._delegateTests.set(null);
       if (failed) this.toasts.error(
         failed === list.length ? lastError

@@ -1,4 +1,8 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, QueryList, ViewChildren, computed, inject, signal } from '@angular/core';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { finalize } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ScanService } from '../../../core/services/scan.service';
@@ -93,6 +97,8 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     EditResultDialogComponent,
     NumpadDirective,
     NumpadScopeDirective,
+    BusyDirective,
+    SkeletonCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -134,7 +140,8 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
               </button>
             }
             <button type="button" class="pf-head__btn pf-head__btn--ghost press"
-                    (click)="rejectSample()" aria-label="Reject sample">
+                    (click)="rejectSample()" aria-label="Reject sample"
+                    [disabled]="rejecting()" [pfBusy]="rejecting()" pfBusyLabel="Rejecting…">
               Reject
             </button>
             <button type="button" class="pf-head__btn pf-head__btn--secondary press"
@@ -145,7 +152,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                     class="pf-head__btn pf-head__btn--primary press"
                     [class.pf-head__btn--danger]="hasCritical()"
                     (click)="submit()"
-                    [disabled]="saving() || !canSubmit()">
+                    [disabled]="saving() || !canSubmit()" [pfBusy]="saving()" pfBusyLabel="Submitting…">
               {{ hasCritical() ? 'Submit · notify' : 'Submit' }}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 12h14m-5-6 6 6-6 6"/>
@@ -219,7 +226,13 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
           <!-- Results — the ONLY scrolling area on the page -->
           <!-- Critical values indicate themselves via row tint + flag pill;
                no separate banner needed. -->
-          @if (isCulture()) {
+          @if (recordSkeleton()) {
+            <!-- The result on its way: the results card's shape on the first
+                 frame (held 600ms), never an empty column. -->
+            <pf-tile tone="default" padding="lg" class="pf-col-static pf-re-skel">
+              <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading the result…"></pf-skeleton-card>
+            </pf-tile>
+          } @else if (isCulture()) {
             <pf-tile tone="default" padding="lg" class="pf-col-scrolls">
               <header class="pf-col-scrolls__head pf-results-head">
                 <span class="pf-results-head__eyebrow">Culture &amp; Sensitivity</span>
@@ -2863,6 +2876,11 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
 
   private readonly _ot = signal<OrderTest | null>(null);
+  /** First-load skeleton for the result (ND-PATTERN "Loading feedback"). */
+  private readonly recordHold = createLoadHold(true);
+  readonly recordSkeleton = this.recordHold.active;
+  /** Reject-sample request in flight (after the reason prompt). */
+  readonly rejecting = signal(false);
   private readonly _saving = signal(false);
   private readonly _values = signal<Record<string, unknown>>({});
   // Backend field errors from the last submit, keyed by param name. Surfaced
@@ -3249,6 +3267,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
     this.api.get<OrderTest>(`/api/results/${id}`).subscribe({
       next: t => {
+        this.recordHold.done();
         this._ot.set(t);
         const raw = t.currentResult;
         if (raw) {
@@ -3264,7 +3283,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
         // Calculated test → fetch tube siblings and prefill from the formula.
         this.initCalc();
       },
-      error: () => this.toasts.error('Could not load result entry')
+      error: () => { this.recordHold.done(); this.toasts.error('Could not load result entry'); }
     });
     // Cleared on destroy: the route recreates this screen per test
     // (data.recreateOn), so a leaked ticker would pile up per switch.
@@ -4109,7 +4128,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       confirmLabel: 'Reject sample'
     });
     if (!reason) return;
-    this.api.post(`/api/results/${id}/reject-sample`, { reason }).subscribe({
+    this.rejecting.set(true);
+    this.api.post(`/api/results/${id}/reject-sample`, { reason }).pipe(finalize(() => this.rejecting.set(false))).subscribe({
       next: () => { this.toasts.success('Sample rejected'); this.back(); },
       error: e => this.toasts.error(ApiError.from(e).message)
     });

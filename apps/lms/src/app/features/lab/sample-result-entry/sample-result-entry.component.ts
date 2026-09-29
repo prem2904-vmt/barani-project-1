@@ -1,4 +1,5 @@
 import { RegnoPromptComponent } from '../../../shared/components/regno-prompt/regno-prompt.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import {
   Component,
   DestroyRef,
@@ -138,6 +139,7 @@ function calcKey(testId: string, paramName: string): string {
     ZoomTargetDirective,
     NumpadDirective,
     NumpadScopeDirective,
+    BusyDirective,
   ],
   templateUrl: "./sample-result-entry.component.html",
   styleUrl: "./sample-result-entry.component.scss",
@@ -813,6 +815,9 @@ export class SampleResultEntryComponent {
   readonly sample = this._sample.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly submitting = this._submitting.asReadonly();
+  /** WHICH header action started the running `submitting()` request — only
+   *  that button shows the busy dots (ND-PATTERN "Loading feedback"). */
+  readonly submitAct = signal<'reopen' | 'validate' | 'reject' | 'submit' | 'all' | null>(null);
 
   // ── Trendogram: add serial-result trend charts to this order's report ──
   readonly trendEligible = signal<TrendTest[]>([]);
@@ -935,6 +940,7 @@ export class SampleResultEntryComponent {
     });
     if (!reason || !reason.trim()) return;
 
+    this.submitAct.set('reopen');
     this._submitting.set(true);
     try {
       await firstValueFrom(
@@ -1558,6 +1564,7 @@ export class SampleResultEntryComponent {
   async validateTube() {
     const targets = this.enteredTests();
     if (!targets.length || this.submitting()) return;
+    this.submitAct.set('validate');
     this._submitting.set(true);
     let ok = 0, lastErr = '';
     for (const t of targets) {
@@ -1590,6 +1597,7 @@ export class SampleResultEntryComponent {
       confirmLabel: 'Reject results',
     });
     if (!reason) return;
+    this.submitAct.set('reject');
     this._submitting.set(true);
     let ok = 0, lastErr = '';
     for (const t of targets) {
@@ -1792,6 +1800,7 @@ export class SampleResultEntryComponent {
   async submitAll() {
     const s = this._sample();
     if (!s || this._submitting()) return;
+    this.submitAct.set('submit');
     this._submitting.set(true);
     const all = this._values();
     // Skip tests that the backend will refuse:
@@ -2095,6 +2104,7 @@ export class SampleResultEntryComponent {
     try {
       // 1. The unsaved typing first (local copy + server draft, awaited).
       await this.flushPendingNow();
+      this.submitAct.set('all');
       this._submitting.set(true);
       this.submitReport.set([]);
       // 2. Every tab's latest state.
@@ -2134,6 +2144,7 @@ export class SampleResultEntryComponent {
           await this.goToMissing(missing[0]);
           return;
         }
+        this.submitAct.set('all');
         this._submitting.set(true);
       }
       // 5. Tab by tab, the per-tab endpoint. One tab failing never stops
@@ -2200,6 +2211,8 @@ export class SampleResultEntryComponent {
   // show-on-report toggle (mirrors the culture bench's checkboxes — the
   // bench keeps everything, only `show` images print). Videos never print.
   readonly attachBusy = signal(false);
+  /** `testId|param` of the paperclip whose upload is running (its busy dots). */
+  readonly attachBusyKey = signal<string | null>(null);
   private readonly _attach = signal<Record<string, ResultAttachment[]>>({});
   private attachTargetId: string | null = null;
   private attachTargetParam: string | null = null;
@@ -2308,6 +2321,7 @@ export class SampleResultEntryComponent {
     input.value = "";
     const targetId = this.attachTargetId;
     if (!files.length || !targetId) return;
+    this.attachBusyKey.set(`${targetId}|${this.attachTargetParam ?? ''}`);
     this.attachBusy.set(true);
     try {
       const target = { id: targetId };

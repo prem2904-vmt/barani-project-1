@@ -136,13 +136,15 @@
     @if (validateMode()) {
       <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-reject"
               aria-label="Reject" title="Reject — send back to the technician"
-              [disabled]="submitting() || enteredTests().length === 0" (click)="rejectTube()">
+              [disabled]="submitting() || enteredTests().length === 0" (click)="rejectTube()"
+              [pfBusy]="submitting() && submitAct() === 'reject'" pfBusyLabel="Rejecting…">
         <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         <span class="pf-sre-act__t">Reject</span>
       </button>
       <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit"
               [attr.aria-label]="'Validate ' + enteredTests().length" [title]="'Validate (' + enteredTests().length + ')'"
-              [disabled]="submitting() || enteredTests().length === 0" (click)="validateTube()">
+              [disabled]="submitting() || enteredTests().length === 0" (click)="validateTube()"
+              [pfBusy]="submitting() && submitAct() === 'validate'" pfBusyLabel="Validating…">
         <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
         <span class="pf-sre-act__t">{{ submitting() ? "Validating…" : "Validate (" + enteredTests().length + ")" }}</span>
       </button>
@@ -152,7 +154,8 @@
              and re-opens it to this tech (audited). -->
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-reopen"
                 aria-label="Edit result" title="Edit result"
-                [disabled]="submitting()" (click)="reopenSample()">
+                [disabled]="submitting()" (click)="reopenSample()"
+                [pfBusy]="submitting() && submitAct() === 'reopen'" pfBusyLabel="Opening…">
           <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
           <span class="pf-sre-act__t">{{ submitting() && !hasWritable() ? "Opening…" : "Edit result" }}</span>
         </button>
@@ -160,7 +163,8 @@
       @if (hasWritable()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-draft"
                 aria-label="Save draft" [title]="lastSavedLabel() ? 'Save draft · ' + lastSavedLabel() : 'Save draft'"
-                [disabled]="loading() || submitting() || savingDraft()" (click)="saveDraft()">
+                [disabled]="loading() || submitting() || savingDraft()" (click)="saveDraft()"
+                [pfBusy]="savingDraft()" pfBusyLabel="Saving draft…">
           <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
           <span class="pf-sre-act__t">{{ savingDraft() ? "Saving…" : "Save draft" }}</span>
           @if (lastSavedLabel() && !autosaving()) { <span class="pf-sre-act__saved" aria-hidden="true"></span> }
@@ -172,21 +176,24 @@
         @if (hasWritable()) {
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-submit-one"
                   aria-label="Submit this sample" [title]="'Submit only ' + activeBarcode()"
-                  [disabled]="loading() || submitting() || savingDraft()" (click)="submitAll()">
+                  [disabled]="loading() || submitting() || savingDraft()" (click)="submitAll()"
+                  [pfBusy]="submitting() && submitAct() === 'submit'" pfBusyLabel="Submitting…">
             <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
             <span class="pf-sre-act__t">Submit this sample</span>
           </button>
         }
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit pf-sre-submit-all"
                 aria-label="Submit all" [title]="'Submit all ' + tubeTabs().length + ' samples'"
-                [disabled]="loading() || submitting() || savingDraft() || !anyWritableAcrossTabs()" (click)="submitAllTabs()">
+                [disabled]="loading() || submitting() || savingDraft() || !anyWritableAcrossTabs()" (click)="submitAllTabs()"
+                [pfBusy]="submitting() && submitAct() === 'all'" pfBusyLabel="Submitting…">
           <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>
           <span class="pf-sre-act__t">{{ submitting() ? "Submitting…" : "Submit all" }}</span>
         </button>
       } @else {
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-sre-act pf-sre-submit"
                 aria-label="Submit results" title="Submit results"
-                [disabled]="loading() || submitting() || savingDraft() || !hasWritable()" (click)="submitAll()">
+                [disabled]="loading() || submitting() || savingDraft() || !hasWritable()" (click)="submitAll()"
+                [pfBusy]="submitting() && submitAct() === 'submit'" pfBusyLabel="Submitting…">
           <svg class="pf-sre-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
           <span class="pf-sre-act__t">{{ submitting() ? "Submitting…" : hasReopenable() && !hasWritable() ? "Submitted" : "Submit results" }}</span>
         </button>
@@ -502,7 +509,7 @@
       </ng-template>
 
       <ng-template #attachBtn let-t="t" let-param="param" let-count="count">
-        <button type="button" class="pf-sre__attach-btn" tabindex="-1" [disabled]="attachBusy()"
+        <button type="button" class="pf-sre__attach-btn" tabindex="-1" [disabled]="attachBusy()" [pfBusy]="attachBusy() && attachBusyKey() === t.id + '|' + (param ?? '')" pfBusyLabel="Uploading…"
                 (click)="pickAttachment(t, attachInput, param ?? undefined)"
                 [title]="param ? 'Attach an image or video to this value' : 'Attach an image or video to this result'"
                 [attr.aria-label]="param ? 'Attach an image or video to this value' : 'Attach an image or video'">

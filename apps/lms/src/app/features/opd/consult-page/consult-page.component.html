@@ -111,8 +111,9 @@
           <span>₹{{ total() }}</span>
         </div>
 
-        <button type="button" class="pf-csum__submit press" [disabled]="!canSubmit()" (click)="submit()">
-          Create consultation
+        <button type="button" class="pf-csum__submit press" [disabled]="!canSubmit() || submitting()" (click)="submit()"
+                [pfBusy]="submitting()" pfBusyLabel="Creating…">
+          {{ submitting() ? 'Creating…' : 'Create consultation' }}
         </button>
       </div>
     </aside>

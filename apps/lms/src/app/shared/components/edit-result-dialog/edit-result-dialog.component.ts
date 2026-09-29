@@ -155,7 +155,7 @@ export interface EditPlan {
 
         <footer class="pf-erd-actions">
           <pf-touch-btn size="sm" variant="ghost" [disabled]="saving()" (pressed)="close()">Cancel</pf-touch-btn>
-          <pf-touch-btn size="sm" [disabled]="!canConfirm()" (pressed)="confirm()">
+          <pf-touch-btn size="sm" [disabled]="!canConfirm()" [busy]="saving()" busyLabel="Sending…" (pressed)="confirm()">
             {{ saving() ? 'Sending…' : 'Send for correction' }}
           </pf-touch-btn>
         </footer>
