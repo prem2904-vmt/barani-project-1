@@ -135,6 +135,9 @@ export class DraftShelfService {
 
   private static areaOf(url: string): DraftArea | null {
     if (url.startsWith('/frontdesk')) return 'frontdesk';
+    // Lab settings live at /lab/settings but are configuration, not lab WORK:
+    // the lab's unfinished result drafts must not ride along there.
+    if (url === '/lab/settings' || url.startsWith('/lab/settings/') || url.startsWith('/lab/settings?')) return null;
     if (url.startsWith('/lab')) return 'lab';
     if (url.startsWith('/sample-collection')) return 'collect';
     if (url.startsWith('/pathologist')) return 'validate';

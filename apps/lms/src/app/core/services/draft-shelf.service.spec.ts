@@ -74,6 +74,18 @@ describe('DraftShelfService — which draft is on stage', () => {
     expect(shelf.items().map(d => d.id)).toEqual(['fd:pA', 'fd:pB']);
   });
 
+  it('Lab settings (/lab/settings…) is configuration, not lab work: no drafts on the bar there', async () => {
+    const { router, shelf } = setup();
+    await router.navigateByUrl('/lab/my-work');
+    expect(shelf.items().map(d => d.id)).toEqual(['lab:A', 'lab:B']);
+    await router.navigateByUrl('/lab/settings');
+    expect(shelf.items()).toEqual([]);
+    await router.navigateByUrl('/lab/settings?tab=report');
+    expect(shelf.items()).toEqual([]);
+    await router.navigateByUrl('/lab/sample/A');           // back in lab work: drafts return
+    expect(shelf.items().map(d => d.id)).toEqual(['lab:A', 'lab:B']);
+  });
+
   it('swapState: a draft → draft hop slides by shelf order; none from a non-draft screen or onto itself', async () => {
     const { router, shelf } = setup();
     await router.navigateByUrl('/lab/my-work');
