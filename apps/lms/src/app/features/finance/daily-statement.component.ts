@@ -9,6 +9,8 @@ import { NumberInputComponent } from '../../shared/primitives/number-input.compo
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
 import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
+import { SkeletonCardComponent } from '../../shared/primitives/skeleton-kit.component';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../core/services/theme.service';
 import { bandFilter } from '../../shared/utils/band-search';
@@ -81,7 +83,9 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
     ScreenHeaderComponent,
     TileComponent,
     TouchButtonComponent,
-    HeroBandComponent
+    HeroBandComponent,
+    BusyDirective,
+    SkeletonCardComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -104,7 +108,7 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
             @if (stmt(); as s) {
               @if (!s.closure) {
                 <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
-                        [disabled]="countedCash() === null || saving()" (click)="closeDay()"
+                        [disabled]="countedCash() === null || saving()" [pfBusy]="saving()" pfBusyLabel="Closing…" (click)="closeDay()"
                         [attr.aria-label]="shiftName().trim() ? 'Close shift' : 'Close day'"
                         [title]="countedCash() === null ? 'Enter the counted cash first' : (shiftName().trim() ? 'Close shift' : 'Close day')">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -262,6 +266,7 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
             <div class="mt-4 pf-classic-only">
               <pf-touch-btn size="md" variant="primary"
                             [disabled]="countedCash() === null || saving()"
+                            [busy]="saving()" busyLabel="Closing…"
                             (pressed)="closeDay()">
                 <span icon-left aria-hidden="true">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -276,7 +281,7 @@ const OTHER_ICON = 'M12 8v8M8 12h8M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z';
         }
       } @else {
         <pf-tile tone="default" padding="lg" class="block mb-5">
-          <p class="text-[13px]" style="color: var(--text-tertiary);">Loading statement…</p>
+          <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading statement…"></pf-skeleton-card>
         </pf-tile>
       }
 

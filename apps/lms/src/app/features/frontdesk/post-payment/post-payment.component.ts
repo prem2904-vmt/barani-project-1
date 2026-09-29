@@ -19,13 +19,15 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { waLink } from '../../../shared/utils/whatsapp';
 import { tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyComponent, SkeletonDetailComponent, SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { createLoadHold } from '../../../shared/utils/min-duration';
 import { formatAge } from '../../../shared/utils/patient-age';
 
 @Component({
   selector: 'pf-post-payment',
   standalone: true,
-  imports: [BusyComponent,
+  imports: [BusyComponent, BusyDirective, SkeletonDetailComponent, SkeletonTilesComponent,
     DatePipe,
     TitleCasePipe,
     CurrencyInrPipe,
@@ -57,6 +59,11 @@ export class PostPaymentComponent implements OnInit {
   private readonly _printingIds = signal<Set<string>>(new Set());
   private readonly _referralLabs = signal<Record<string, string>>({});
   readonly waSent = signal(false);
+  /** First load: the label grid + sidebar draw their shape (never blank). */
+  private readonly orderHold = createLoadHold(true);
+  readonly orderLoading = this.orderHold.active;
+  /** "Print N labels" is sending to the station printer. */
+  readonly labelsPrinting = signal(false);
 
   /** Referral-lab name for an outsourced vial (for its label badge). */
   vendorNameFor(s: OrderSample): string | null {
@@ -110,14 +117,15 @@ export class PostPaymentComponent implements OnInit {
       error: () => { /* badges fall back to "OUTSOURCED" */ }
     });
     const id = this.route.snapshot.queryParamMap.get('orderId');
-    if (!id) { this.router.navigateByUrl('/frontdesk'); return; }
+    if (!id) { this.orderHold.cancel(); this.router.navigateByUrl('/frontdesk'); return; }
 
     this.api.get<Order>(`/api/orders/${id}`).subscribe({
       next: o => {
         this._order.set(o);
         this._selected.set(new Set(o.samples.map(s => s.id)));
+        this.orderHold.done();
       },
-      error: () => this.toasts.error('Could not load order'),
+      error: () => { this.orderHold.done(); this.toasts.error('Could not load order'); },
     });
 
     this.api.get<Bill[]>('/api/billing/').subscribe({
@@ -150,7 +158,9 @@ export class PostPaymentComponent implements OnInit {
   }
 
   printSelected() {
-    this.runLabelPrint([...this._selected()]);
+    if (this.labelsPrinting()) return;
+    this.labelsPrinting.set(true);
+    void this.runLabelPrint([...this._selected()]).finally(() => this.labelsPrinting.set(false));
   }
 
   /** Print the tube labels — ONLY to this station's label printer, via the

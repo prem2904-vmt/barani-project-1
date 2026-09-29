@@ -465,7 +465,9 @@
 
               <!-- APPOINTMENTS LIST -->
               @if (leftTab() === 'appt') {
-              @if (visibleAppointments().length === 0) {
+              @if (apptSkel() && visibleAppointments().length === 0) {
+              <pf-skeleton-rows [rows]="4" label="Loading appointments…"></pf-skeleton-rows>
+              } @else if (visibleAppointments().length === 0) {
               <div class="pf-empty-tile nd-empty" data-empty="appt">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -531,7 +533,8 @@
                       </a>
                       }
                       @if (a.status === 'booked') {
-                      <button type="button" class="pf-ghostbtn press" (click)="checkIn(a)">Check-in</button>
+                      <button type="button" class="pf-ghostbtn press" [disabled]="checkingInId() === a.id"
+                        [pfBusy]="checkingInId() === a.id" pfBusyLabel="Checking in…" (click)="checkIn(a)">Check-in</button>
                       } @else if (a.status === 'checked_in') {
                       <button type="button" class="pf-ghostbtn press" (click)="resumeAppointmentOrder(a)">Resume
                         order</button>
@@ -546,7 +549,9 @@
 
               <!-- HOME COLLECTION LIST -->
               @if (leftTab() === 'home') {
-              @if (homeCollections().length === 0) {
+              @if (homeSkel() && homeCollections().length === 0) {
+              <pf-skeleton-rows [rows]="3" label="Loading home collections…"></pf-skeleton-rows>
+              } @else if (homeCollections().length === 0) {
               <div class="pf-empty-tile nd-empty" data-empty="home">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -773,14 +778,16 @@
                 }
                 <span class="pf-selbar__gap" aria-hidden="true"></span>
                 <div class="pf-selbar__acts">
-                  <button type="button" class="nd-btn nd-btn--secondary pf-selbar__btn" (click)="bulkDispatch()">
+                  <button type="button" class="nd-btn nd-btn--secondary pf-selbar__btn" [disabled]="bulkBusy() !== null"
+                    [pfBusy]="bulkBusy() === 'dispatch'" pfBusyLabel="Dispatching…" (click)="bulkDispatch()">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M5 12h14m-5-6 6 6-6 6" />
                     </svg>
                     Mark dispatched
                   </button>
-                  <button type="button" class="nd-btn nd-btn--primary pf-selbar__btn" (click)="createDispatchPackage()">
+                  <button type="button" class="nd-btn nd-btn--primary pf-selbar__btn" [disabled]="bulkBusy() !== null"
+                    [pfBusy]="bulkBusy() === 'package'" pfBusyLabel="Creating package…" (click)="createDispatchPackage()">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M21 16V8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 22V13" />
@@ -844,7 +851,9 @@
                 }
               </ul>
               }
-              @if (visibleOrders().length === 0 && draftOrders().length === 0) {
+              @if (ordersSkel() && visibleOrders().length === 0 && draftOrders().length === 0) {
+              <pf-skeleton-rows [rows]="5" label="Loading orders…"></pf-skeleton-rows>
+              } @else if (visibleOrders().length === 0 && draftOrders().length === 0) {
               <div class="pf-empty-tile nd-empty" data-empty="ip">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -925,7 +934,8 @@
                            Recollect (reopens it to pending). Never Collect / Dispatch
                            as if nothing happened (QA #6). -->
                       <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
-                        [disabled]="recollecting() === o.id" (click)="recollectOrder(o)" aria-label="Recollect">
+                        [disabled]="recollecting() === o.id" [pfBusy]="recollecting() === o.id" pfBusyLabel="Reopening…"
+                        (click)="recollectOrder(o)" aria-label="Recollect">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                           <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
@@ -945,6 +955,7 @@
                       </button>
                       } @else if (showDispatchOn(o)) {
                       <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
+                        [disabled]="dispatchingId() === o.id" [pfBusy]="dispatchingId() === o.id" pfBusyLabel="Dispatching…"
                         (click)="markDispatched(o)" aria-label="Dispatch">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -966,7 +977,8 @@
                       </button>
                       } @else if (o.status === 'billed') {
                       <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
-                        [disabled]="reprintLoading()" (click)="reprintLabels(o)" aria-label="Reprint labels">
+                        [disabled]="reprintLoading()" [pfBusy]="reprintLoading() && reprintOrderId() === o.id"
+                        pfBusyLabel="Printing labels…" (click)="reprintLabels(o)" aria-label="Reprint labels">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                           <path d="M6 9V3h12v6" />
@@ -993,7 +1005,8 @@
                       @if (o.status === 'partially_validated' && sampleStatus(o) !== 'partially_collected' &&
                       !showCollectOn(o)) {
                       <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
-                        [disabled]="downloadingReport() !== null" (click)="downloadReport(o)"
+                        [disabled]="downloadingReport() !== null" [pfBusy]="downloadingReport() === o.id"
+                        pfBusyLabel="Preparing report…" (click)="downloadReport(o)"
                         aria-label="Download report">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1013,7 +1026,9 @@
 
               <!-- COMPLETED TAB -->
               @if (rightTab() === 'done') {
-              @if (completedOrders().length === 0) {
+              @if (ordersSkel() && completedOrders().length === 0) {
+              <pf-skeleton-rows [rows]="5" label="Loading orders…"></pf-skeleton-rows>
+              } @else if (completedOrders().length === 0) {
               <div class="pf-empty-tile nd-empty" data-empty="done">
                 <span class="nd-empty__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -1097,6 +1112,7 @@
 
                       <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!webPointer()"
                         aria-label="Download report" [disabled]="downloadingReport() !== null"
+                        [pfBusy]="downloadingReport() === o.id" pfBusyLabel="Preparing report…"
                         (click)="downloadReport(o)">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1399,7 +1415,8 @@
 
       @if (canViewInvoice(so)) {
       <button type="button" class="nd-btn nd-btn--secondary pf-drawer__act" (click)="viewInvoice(so)"
-        title="View the invoice" aria-label="View invoice" [disabled]="invoiceLoading()">
+        title="View the invoice" aria-label="View invoice" [disabled]="invoiceLoading()"
+        [pfBusy]="invoiceLoading()" pfBusyLabel="Preparing invoice…">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 4h11l5 5v11H4z" />
@@ -1425,6 +1442,7 @@
       @if (so.status === 'validated' || so.status === 'partially_validated' || so.status === 'delivered' || so.status
       === 'completed') {
       <button type="button" class="nd-btn nd-btn--secondary pf-drawer__act" [disabled]="downloadingReport() !== null"
+        [pfBusy]="downloadingReport() === so.id" pfBusyLabel="Preparing report…"
         (click)="downloadReport(so)" title="Download the report PDF" aria-label="Download report">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1436,6 +1454,7 @@
 
       @if (so.status === 'billed') {
       <button type="button" class="nd-btn nd-btn--secondary pf-drawer__act" [disabled]="reprintLoading()"
+        [pfBusy]="reprintLoading() && reprintOrderId() === so.id" pfBusyLabel="Printing labels…"
         (click)="reprintLabels(so)" title="Reprint the sample labels" aria-label="Reprint labels">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1481,7 +1500,8 @@
       placeholder="e.g. patient left, duplicate order" />
     <div class="pf-cancel__actions">
       <button type="button" class="pf-cancel__keep" (click)="cancelTarget.set(null)">Keep order</button>
-      <button type="button" class="pf-cancel__confirm" [disabled]="cancelling()" (click)="confirmCancel()">
+      <button type="button" class="pf-cancel__confirm" [disabled]="cancelling()" [pfBusy]="cancelling()"
+        pfBusyLabel="Cancelling order…" (click)="confirmCancel()">
         {{ cancelling() ? 'Cancelling…' : 'Cancel & refund' }}
       </button>
     </div>
@@ -1590,7 +1610,7 @@
     @if (sheet.canClose) {
     <footer class="pf-series__foot">
       <button type="button" class="pf-series__closecoll press" [disabled]="seriesClosing()"
-        (click)="closeSeriesCollection(sheet.order)">
+        [pfBusy]="seriesClosing()" pfBusyLabel="Closing collection…" (click)="closeSeriesCollection(sheet.order)">
         {{ seriesClosing() ? 'Closing…' : 'Close collection' }}
       </button>
     </footer>
@@ -1982,7 +2002,8 @@
       </div>
       <button type="button" class="press"
         style="width:100%; padding:13px; border-radius:12px; border:0; font-size:14px; font-weight:700; color:#fff; cursor:pointer; background:linear-gradient(135deg,#7c3aed,#db2777); box-shadow:0 6px 16px rgba(124,58,237,0.28);"
-        [disabled]="confirmingPayment()" (click)="dispatchFromDrawer(bo)">
+        [disabled]="confirmingPayment()" [pfBusy]="confirmingPayment()" pfBusyLabel="Dispatching…"
+        (click)="dispatchFromDrawer(bo)">
         <span style="display:inline-flex; align-items:center; gap:8px; justify-content:center;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -2003,6 +2024,27 @@
         [allowLater]="false" (confirm)="confirmOutstandingPayment(bo, sb, $event)"></pf-inline-payment-panel>
     </div>
     }
+  </div>
+</aside>
+} @else {
+<!-- The bill is on its way (created on open): the drawer opens at once with
+     its own shape instead of waiting on the request. -->
+<div class="pf-drawer-bd" (click)="closePaymentDrawer()"></div>
+<aside class="pf-drawer" role="dialog" aria-modal="true" aria-label="Collect outstanding payment">
+  <header class="pf-drawer__hdr">
+    <pf-avatar [name]="bo.patient?.displayName ?? 'Patient'" [size]="44"></pf-avatar>
+    <div class="pf-drawer__hdr-info">
+      <h2 class="pf-drawer__hdr-name">{{ drawerName(bo.patient) }}</h2>
+    </div>
+    <button type="button" class="pf-drawer__close" (click)="closePaymentDrawer()" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round">
+        <path d="M18 6 6 18M6 6l12 12" />
+      </svg>
+    </button>
+  </header>
+  <div class="pf-drawer__body">
+    <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading the bill…"></pf-skeleton-card>
   </div>
 </aside>
 }

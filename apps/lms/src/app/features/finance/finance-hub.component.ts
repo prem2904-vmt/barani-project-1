@@ -13,7 +13,7 @@ import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.c
 import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
 import { ThemeService } from '../../core/services/theme.service';
 import { bandFilter } from '../../shared/utils/band-search';
-import { SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
+import { SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
 import { labDaysAgo } from '../../shared/utils/lab-clock';
 
 type Module = 'overall' | 'lab' | 'credit' | 'ipd' | 'opd' | 'pharmacy';
@@ -52,7 +52,7 @@ interface FinanceSummary {
 @Component({
   selector: 'pf-finance-hub',
   standalone: true,
-  imports: [SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
+  imports: [SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-fin pf-band-page">
@@ -208,7 +208,7 @@ interface FinanceSummary {
         </div>
 
         @if (vendorsLoading()) {
-          <p class="pf-fin__loading">Loading partners…</p>
+          <pf-skeleton-rows [rows]="3" [avatar]="false" [dense]="true" label="Loading partners…"></pf-skeleton-rows>
         } @else if (vendors().length === 0) {
           <p class="pf-fin__empty">No credit-wallet partners yet.</p>
         } @else {

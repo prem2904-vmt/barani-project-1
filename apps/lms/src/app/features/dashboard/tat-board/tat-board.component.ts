@@ -13,6 +13,11 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { TatState } from '../../../shared/utils/lab-priority';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { busyWhile } from '../../../shared/utils/busy';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { finalize } from 'rxjs';
 
 /** The board groups by the TAT CLOCK (overdue / due soon / on track) — never
  *  called a priority (the lab's priorities are the order's Urgent / Normal).
@@ -49,7 +54,9 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
     TouchButtonComponent,
     KpiStripComponent,
     HeroBandComponent,
-    SegmentedComponent
+    SegmentedComponent,
+    BusyDirective,
+    SkeletonRowsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -65,7 +72,8 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
                           (valueChange)="levelFilter.set($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="refresh()"
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="refreshing()"
+                    [pfBusy]="refreshing()" pfBusyLabel="Refreshing…" (click)="refresh(true)"
                     aria-label="Refresh" title="Refresh">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -85,7 +93,7 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
           eyebrow="Live dashboard"
           title="TAT Board"
           subtitle="Turnaround health across in-flight tests. Auto-refresh every 30s.">
-          <pf-touch-btn actions size="sm" variant="secondary" (pressed)="refresh()">
+          <pf-touch-btn actions size="sm" variant="secondary" [busy]="refreshing()" busyLabel="Refreshing…" (pressed)="refresh(true)">
             <span icon-left aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
@@ -146,7 +154,9 @@ interface TatSummary { total: number; urgent: number; high: number; normal: numb
       @if (rows().length > 0 && visibleCount() === 0) {
         <p class="pf-band-empty">No tests match this search / filter.</p>
       }
-      @if (rows().length === 0) {
+      @if (firstLoad() && rows().length === 0) {
+        <pf-skeleton-rows [rows]="5" label="Loading the TAT board…"></pf-skeleton-rows>
+      } @else if (rows().length === 0) {
         <pf-tile tone="default" padding="xl">
           <div class="text-center py-6">
             <p class="text-[14px]" style="color: var(--text-secondary);">
@@ -305,8 +315,15 @@ export class TatBoardComponent implements OnInit, OnDestroy {
     }
   }
 
-  refresh() {
-    this.api.get<{ summary: TatSummary; rows: TatRow[] }>('/api/dashboard/tat').subscribe({
+  /** Refresh button pressed: the button is busy until the board answers. */
+  readonly refreshing = signal(false);
+  /** First load: the board's rows as a skeleton, not "No active tests". */
+  private readonly firstHold = createLoadHold(true);
+  readonly firstLoad = this.firstHold.active;
+  /** `manual` = the Refresh button (the 30s poll stays silent). */
+  refresh(manual = false) {
+    const req = this.api.get<{ summary: TatSummary; rows: TatRow[] }>('/api/dashboard/tat');
+    (manual ? req.pipe(busyWhile(this.refreshing)) : req).pipe(finalize(() => this.firstHold.done())).subscribe({
       next: r => {
         this._summary.set(r.summary);
         this._rows.set((r.rows ?? []).map(x => ({ ...x, tat: FROM_SERVER[x.level] ?? 'onTrack' })));

@@ -19,6 +19,7 @@ import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { PatientIdCardComponent } from './patient-id-card.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { printTubeLabels } from '../../../shared/utils/print-label';
@@ -84,7 +85,7 @@ export type PpDetail =
   standalone: true,
   imports: [DatePipe, FormsModule, CurrencyInrPipe, CommonModule, NgTemplateOutlet, PatientIdCardComponent, BarcodeDisplayComponent,
     LabTrendsComponent, LabOrdersComponent, CumulativeResultsComponent, AbhaWizardComponent, HeroBandComponent,
-    ZoomTargetDirective, ZoomSourceDirective, LabelCardComponent],
+    ZoomTargetDirective, ZoomSourceDirective, LabelCardComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss', './patient-profile.clinical.scss']
@@ -381,6 +382,8 @@ export class PatientProfileComponent implements OnInit {
   protected readonly chatPickerSearch = signal('');
   protected readonly chatPickerUsers = signal<DirectoryUser[]>([]);
   protected readonly chatPickerSending = signal(false);
+  /** The colleague row the patient is being sent to (its row shows busy). */
+  protected readonly sendingToId = signal<string | null>(null);
   protected readonly chatPickerFiltered = computed(() => {
     const term = this.chatPickerSearch().toLowerCase().trim();
     const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
@@ -482,6 +485,7 @@ export class PatientProfileComponent implements OnInit {
   async sendPatientToColleague(u: DirectoryUser): Promise<void> {
     const p = this.patient();
     if (!p) return;
+    this.sendingToId.set(u.id);
     this.chatPickerSending.set(true);
     try {
       const label = `${this.displayName()}${p.mrn ? ' · ' + p.mrn : ''}`;
@@ -501,6 +505,8 @@ export class PatientProfileComponent implements OnInit {
   protected readonly mergeSearch = signal('');
   protected readonly mergeResults = signal<Patient[]>([]);
   protected readonly merging = signal(false);
+  /** The duplicate row being merged (its row shows busy). */
+  protected readonly mergingId = signal<string | null>(null);
 
   displayOf(p: Patient): string { return patientDisplayName(p); }
   openMerge(): void {
@@ -535,6 +541,7 @@ export class PatientProfileComponent implements OnInit {
       confirmLabel: 'Merge records',
     });
     if (!ok) return;
+    this.mergingId.set(source.id);
     this.merging.set(true);
     try {
       const res = await firstValueFrom(this.api.post<MergeResult>(`/api/patients/${source.id}/merge-into/${target.id}`, {}));

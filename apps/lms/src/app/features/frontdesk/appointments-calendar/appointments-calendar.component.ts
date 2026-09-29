@@ -30,6 +30,7 @@ import {
   matchesAppointment, placeLanes
 } from './appointments-calendar.nd';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 
 type CalView = 'day' | 'week' | 'month';
 
@@ -57,7 +58,7 @@ const STATUS_CLASS: Record<string, string> = {
 @Component({
   selector: 'pf-appointments-calendar',
   standalone: true,
-  imports: [BusyComponent,
+  imports: [BusyComponent, BusyDirective,
     CommonModule, FormsModule, HeroBandComponent, NdDateComponent, SelectComponent,
     ZoomSourceDirective, ZoomTargetDirective
   ],
@@ -314,23 +315,23 @@ const STATUS_CLASS: Record<string, string> = {
         @if (!rescheduleOpen()) {
           <button type="button" class="nd-btn nd-btn--secondary nd-span pf-apc-act" (click)="openProfile(a)">Open profile</button>
           @if (a.status === 'booked') {
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.checkIn(a.id))">Check in</button>
+            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'checkIn'" [pfBusy]="sheetBusy() === 'checkIn'" pfBusyLabel="Checking in…" (click)="run(queue.checkIn(a.id), 'checkIn')">Check in</button>
             <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="openReschedule()">Reschedule</button>
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.noShow(a.id))">No-show</button>
+            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
           }
           @if (a.status === 'checked_in') {
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.complete(a.id))">Complete</button>
+            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'complete'" [pfBusy]="sheetBusy() === 'complete'" pfBusyLabel="Completing…" (click)="run(queue.complete(a.id), 'complete')">Complete</button>
             @if (a.type !== 'urgent') {
-              <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.markUrgent(a.id))">Mark urgent</button>
+              <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'markUrgent'" [pfBusy]="sheetBusy() === 'markUrgent'" pfBusyLabel="Marking urgent…" (click)="run(queue.markUrgent(a.id), 'markUrgent')">Mark urgent</button>
             }
-            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="run(queue.noShow(a.id))">No-show</button>
+            <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
           }
           @if (a.status !== 'cancelled' && a.status !== 'completed') {
-            <button type="button" class="nd-btn nd-btn--danger pf-apc-act" (click)="run(queue.cancel(a.id))">Cancel appointment</button>
+            <button type="button" class="nd-btn nd-btn--danger pf-apc-act" [disabled]="sheetBusy() === 'cancel'" [pfBusy]="sheetBusy() === 'cancel'" pfBusyLabel="Cancelling…" (click)="run(queue.cancel(a.id), 'cancel')">Cancel appointment</button>
           }
         } @else {
           <button type="button" class="nd-btn nd-btn--tertiary pf-apc-act" (click)="closeReschedule()">Back</button>
-          <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" (click)="doReschedule(a)">Save new time</button>
+          <button type="button" class="nd-btn nd-btn--secondary pf-apc-act" [disabled]="sheetBusy() === 'reschedule'" [pfBusy]="sheetBusy() === 'reschedule'" pfBusyLabel="Saving new time…" (click)="doReschedule(a)">Save new time</button>
         }
       </footer>
     </ng-template>
@@ -656,19 +657,19 @@ const STATUS_CLASS: Record<string, string> = {
             <div class="mt-3 flex flex-wrap gap-1.5">
               <button class="pf-appt-btn pf-appt-btn--primary" (click)="openProfile(a)">Open profile</button>
               @if (a.status === 'booked') {
-                <button class="pf-appt-btn" (click)="run(queue.checkIn(a.id))">Check in</button>
+                <button class="pf-appt-btn" [disabled]="sheetBusy() === 'checkIn'" [pfBusy]="sheetBusy() === 'checkIn'" pfBusyLabel="Checking in…" (click)="run(queue.checkIn(a.id), 'checkIn')">Check in</button>
                 <button class="pf-appt-btn" (click)="rescheduleOpen.set(true)">Reschedule</button>
-                <button class="pf-appt-btn" (click)="run(queue.noShow(a.id))">No-show</button>
+                <button class="pf-appt-btn" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
               }
               @if (a.status === 'checked_in') {
-                <button class="pf-appt-btn" (click)="run(queue.complete(a.id))">Complete</button>
+                <button class="pf-appt-btn" [disabled]="sheetBusy() === 'complete'" [pfBusy]="sheetBusy() === 'complete'" pfBusyLabel="Completing…" (click)="run(queue.complete(a.id), 'complete')">Complete</button>
                 @if (a.type !== 'urgent') {
-                  <button class="pf-appt-btn" (click)="run(queue.markUrgent(a.id))">Mark urgent</button>
+                  <button class="pf-appt-btn" [disabled]="sheetBusy() === 'markUrgent'" [pfBusy]="sheetBusy() === 'markUrgent'" pfBusyLabel="Marking urgent…" (click)="run(queue.markUrgent(a.id), 'markUrgent')">Mark urgent</button>
                 }
-                <button class="pf-appt-btn" (click)="run(queue.noShow(a.id))">No-show</button>
+                <button class="pf-appt-btn" [disabled]="sheetBusy() === 'noShow'" [pfBusy]="sheetBusy() === 'noShow'" pfBusyLabel="Marking no-show…" (click)="run(queue.noShow(a.id), 'noShow')">No-show</button>
               }
               @if (a.status !== 'cancelled' && a.status !== 'completed') {
-                <button class="pf-appt-btn pf-appt-btn--danger" (click)="run(queue.cancel(a.id))">Cancel</button>
+                <button class="pf-appt-btn pf-appt-btn--danger" [disabled]="sheetBusy() === 'cancel'" [pfBusy]="sheetBusy() === 'cancel'" pfBusyLabel="Cancelling…" (click)="run(queue.cancel(a.id), 'cancel')">Cancel</button>
               }
             </div>
           } @else {
@@ -679,7 +680,7 @@ const STATUS_CLASS: Record<string, string> = {
                 <input type="time" class="pf-input" [(ngModel)]="rTime" /></label>
               <div class="flex gap-2 justify-end mt-1">
                 <button class="pf-appt-btn" (click)="rescheduleOpen.set(false)">Back</button>
-                <button class="pf-appt-btn pf-appt-btn--primary" (click)="doReschedule(a)">Save</button>
+                <button class="pf-appt-btn pf-appt-btn--primary" [disabled]="sheetBusy() === 'reschedule'" [pfBusy]="sheetBusy() === 'reschedule'" pfBusyLabel="Saving new time…" (click)="doReschedule(a)">Save</button>
               </div>
             </div>
           }
@@ -1723,17 +1724,22 @@ export class AppointmentsCalendarComponent {
   }
 
   /** Run a queue transition, then refresh the calendar and close the sheet. */
-  protected run(obs: Observable<unknown>) {
+  /** The sheet action whose request is in flight (only that button shows busy). */
+  protected readonly sheetBusy = signal<string | null>(null);
+  protected run(obs: Observable<unknown>, key?: string) {
+    if (key && this.sheetBusy() === key) return;
+    if (key) this.sheetBusy.set(key);
+    const release = () => { if (key && this.sheetBusy() === key) this.sheetBusy.set(null); };
     obs.subscribe({
-      next: () => { this.refresh(); this.closeAppt(); },
-      error: (e) => { this.toasts.error(ApiError.from(e).message); this.refresh(); }
+      next: () => { release(); this.refresh(); this.closeAppt(); },
+      error: (e) => { release(); this.toasts.error(ApiError.from(e).message); this.refresh(); }
     });
   }
 
   protected doReschedule(a: Appointment) {
     if (!this.rDate) { this.toasts.warning('Pick a new date.'); return; }
     const iso = new Date(this.rDate).toISOString();
-    this.run(this.queue.reschedule(a.id, iso, this.rTime || undefined));
+    this.run(this.queue.reschedule(a.id, iso, this.rTime || undefined), 'reschedule');
   }
 
   private refresh() {

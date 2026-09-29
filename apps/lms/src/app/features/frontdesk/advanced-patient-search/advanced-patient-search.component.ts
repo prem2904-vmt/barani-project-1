@@ -10,7 +10,8 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { Test } from '../../../shared/models/test.model';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { formatAge } from '../../../shared/utils/patient-age';
 import { phoneLast10 } from '../../../shared/utils/indian-phone';
@@ -70,7 +71,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'pf-advanced-patient-search',
   standalone: true,
-  imports: [BusyComponent, DatePipe, AvatarComponent, SelectComponent],
+  imports: [BusyDirective, SkeletonTableComponent, DatePipe, AvatarComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open) {
@@ -269,9 +270,9 @@ const PAGE_SIZE = 20;
                       (click)="reset()">Clear</button>
               <button type="button" class="pf-aps-btn pf-aps-btn--primary"
                       [disabled]="loading() || !hasAnyFilter()"
+                      [pfBusy]="loading()" pfBusyLabel="Searching…"
                       (click)="runSearch()">
                 @if (loading()) {
-                  <pf-busy></pf-busy>
                   Searching…
                 } @else {
                   Search
@@ -282,6 +283,9 @@ const PAGE_SIZE = 20;
 
           <section class="pf-aps-results">
             @switch (resultState()) {
+              @case ('loading') {
+                <pf-skeleton-table [rows]="6" [cols]="5" label="Searching patients…"></pf-skeleton-table>
+              }
               @case ('idle') {
                 <div class="pf-aps-empty">
                   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -402,9 +406,9 @@ const PAGE_SIZE = 20;
                     @if (hasMore()) {
                       <button type="button" class="pf-aps-btn pf-aps-btn--ghost"
                               [disabled]="loadingMore()"
+                              [pfBusy]="loadingMore()" pfBusyLabel="Loading more…"
                               (click)="loadMore()">
                         @if (loadingMore()) {
-                          <pf-busy></pf-busy>
                           Loading…
                         } @else {
                           Load {{ remaining() }} more
@@ -1223,7 +1227,10 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
       .slice(0, 200);
   });
 
-  readonly resultState = computed<'idle' | 'empty' | 'results'>(() => {
+  readonly resultState = computed<'loading' | 'idle' | 'empty' | 'results'>(() => {
+    // A search in flight with nothing on screen yet draws the table's shape
+    // (never a "No patients found" flash before the answer lands).
+    if (this._loading() && this._results().length === 0) return 'loading';
     if (!this._hasSearched()) return 'idle';
     if (this._results().length === 0) return 'empty';
     return 'results';

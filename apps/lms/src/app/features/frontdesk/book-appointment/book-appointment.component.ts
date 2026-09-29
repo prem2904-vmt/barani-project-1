@@ -1,4 +1,5 @@
 import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { Location, DatePipe } from "@angular/common";
 import {
   ChangeDetectionStrategy,
@@ -79,7 +80,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 @Component({
   selector: "pf-book-appointment",
   standalone: true,
-  imports: [SkeletonTilesComponent,
+  imports: [SkeletonTilesComponent, BusyDirective,
     FormsModule,
     DatePipe,
     AvatarComponent,
@@ -109,6 +110,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
           </button>
           @if (!phone()) {
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-bka-book press" [disabled]="saving()"
+                    [pfBusy]="saving()" pfBusyLabel="Booking…"
                     (click)="attemptBook()" [attr.aria-label]="saving() ? 'Booking' : 'Book appointment'"
                     title="Book appointment (Ctrl/⌘+Enter)" aria-keyshortcuts="Control+Enter Meta+Enter">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -271,7 +273,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
             </header>
             <div class="nd-card__body">
               @if (loadingSlots()) {
-                <p class="pf-bka-note" role="status">Loading slots…</p>
+                <pf-skeleton-tiles [count]="8" min="92px" height="40px" [lines]="1" label="Loading slots…"></pf-skeleton-tiles>
               } @else if (slots().length === 0) {
                 <div class="nd-empty nd-empty--compact">
                   <span class="nd-empty__icon" aria-hidden="true">
@@ -433,7 +435,8 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
       @if (phone()) {
         <div class="nd-bottombar pf-bka-bar">
           <span class="nd-bottombar__info nd-num">{{ dateLabel() }}@if (selectedTime()) { · {{ selectedTime() }} }</span>
-          <button type="button" class="nd-btn nd-btn--primary pf-bka-book press" [disabled]="saving()" (click)="attemptBook()">
+          <button type="button" class="nd-btn nd-btn--primary pf-bka-book press" [disabled]="saving()"
+                  [pfBusy]="saving()" pfBusyLabel="Booking…" (click)="attemptBook()">
             {{ saving() ? 'Booking…' : 'Book appointment' }}
           </button>
         </div>
@@ -1152,6 +1155,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
               type="button"
               class="flex-[2] py-2.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white disabled:opacity-50 disabled:pointer-events-none border-0 cursor-pointer transition-all"
               [disabled]="!canSubmit() || saving()"
+              [pfBusy]="saving()" pfBusyLabel="Booking…"
               (click)="submit()"
             >
               {{ saving() ? "Booking…" : "Book" }}

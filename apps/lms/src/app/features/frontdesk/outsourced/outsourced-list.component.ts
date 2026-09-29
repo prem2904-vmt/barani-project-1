@@ -6,6 +6,8 @@ import { UploadsService } from '../../../core/services/uploads.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import {
@@ -26,7 +28,7 @@ import {
 @Component({
   selector: 'pf-outsourced-list',
   standalone: true,
-  imports: [DatePipe, SegmentedComponent, SelectComponent],
+  imports: [DatePipe, SegmentedComponent, SelectComponent, BusyDirective, SkeletonRowsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (showFilters()) {
@@ -41,7 +43,7 @@ import {
     <input #file type="file" class="pf-out__file" [accept]="accept" (change)="onFile($event)" tabindex="-1" aria-hidden="true" />
 
     @if (svc.loading() && svc.rows().length === 0) {
-      <p class="pf-out__empty">Loading outsourced tests…</p>
+      <pf-skeleton-rows [rows]="4" [avatar]="false" label="Loading outsourced tests…"></pf-skeleton-rows>
     } @else if (shown().length === 0) {
       <div class="nd-empty pf-out__none" data-empty="out">
         <span class="nd-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
@@ -83,6 +85,7 @@ import {
               }
               @if (r.status === 'completed') {
                 <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
+                        [pfBusy]="busy() === r.sampleId && busyAct() === 'undo'" pfBusyLabel="Undoing…"
                         [attr.aria-label]="'Undo completed for ' + (r.barcode ?? 'this tube')" (click)="undo(r)">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -92,6 +95,7 @@ import {
                 </button>
               } @else if (r.hasReport) {
                 <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
+                        [pfBusy]="busy() === r.sampleId && busyAct() === 'complete'" pfBusyLabel="Completing…"
                         [attr.aria-label]="'Mark completed for ' + (r.barcode ?? 'this tube')" (click)="markCompleted(r)">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
@@ -99,6 +103,7 @@ import {
                 </button>
               }
               <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
+                      [pfBusy]="busy() === r.sampleId && busyAct() === 'upload'" pfBusyLabel="Uploading…"
                       [attr.aria-label]="(r.hasReport ? 'Replace partner report for ' : 'Upload partner report for ') + (r.barcode ?? 'this tube')"
                       (click)="pick(r)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -156,6 +161,8 @@ export class OutsourcedListComponent implements OnInit {
 
   readonly web = webPointerSignal();
   readonly busy = signal<string | null>(null);
+  /** Which row action holds `busy` (only that button shows the dots). */
+  readonly busyAct = signal<'upload' | 'complete' | 'undo'>('upload');
   readonly statusLabel = STATUS_LABEL;
   readonly accept = PARTNER_REPORT_ACCEPT;
   readonly rowReport = rowReport;
@@ -196,6 +203,7 @@ export class OutsourcedListComponent implements OnInit {
   async uploadAndComplete(r: OutsourcedTube, file: File) {
     const problem = partnerFileProblem(file);
     if (problem) { this.toasts.error(problem); return; }
+    this.busyAct.set('upload');
     this.busy.set(r.sampleId);
     try {
       const url = await this.svc.upload(file);
@@ -209,6 +217,7 @@ export class OutsourcedListComponent implements OnInit {
   }
 
   async markCompleted(r: OutsourcedTube) {
+    this.busyAct.set('complete');
     this.busy.set(r.sampleId);
     try {
       await this.svc.complete(actionLines(r), null);
@@ -228,6 +237,7 @@ export class OutsourcedListComponent implements OnInit {
       tone: 'danger',
     });
     if (!ok) return;
+    this.busyAct.set('undo');
     this.busy.set(r.sampleId);
     try {
       await this.svc.reopen(r.tests.map(t => t.orderTestId));

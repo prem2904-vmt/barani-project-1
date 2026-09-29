@@ -48,6 +48,7 @@ import { asksSpecimen, deskDefaultSpecimen, specimenLookupIds } from '../../../s
 import { byName, mergeRecent, planRepeat, sortByName, type RepeatItem } from './catalogue-order';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { MIN_LOAD_MS, heldFlag } from '../../../shared/utils/min-duration';
@@ -68,7 +69,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective],
+  imports: [NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -2135,12 +2136,20 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     setTimeout(() => this.selectScope('patient'), 0);
   }
 
-  printPaidInvoice() { void this.emitPaidInvoice('print'); }
+  /** Which paid-invoice action is building its PDF (template + QR fetches
+   *  run first) — the pressed button shows its busy state meanwhile. */
+  readonly invoiceBusy = signal<'print' | 'thermal' | 'share' | null>(null);
+  private runInvoiceAction(kind: 'print' | 'thermal' | 'share', work: () => Promise<void>): void {
+    if (this.invoiceBusy() === kind) return;
+    this.invoiceBusy.set(kind);
+    void work().finally(() => { if (this.invoiceBusy() === kind) this.invoiceBusy.set(null); });
+  }
+  printPaidInvoice() { this.runInvoiceAction('print', () => this.emitPaidInvoice('print')); }
   /** Force the receipt-roll layout for this print even when the tenant's saved
    *  default is A4 (a counter can have both printers). Width comes from the
    *  saved setting when that is already a roll; otherwise 3 in / 80 mm, the
    *  common desk receipt printer. */
-  printPaidThermal() { void this.emitPaidInvoice('print', 'thermal_auto'); }
+  printPaidThermal() { this.runInvoiceAction('thermal', () => this.emitPaidInvoice('print', 'thermal_auto')); }
 
   /** Post-payment "Share on WhatsApp". On the native shell we hand the real
    *  invoice PDF to the OS share sheet (WhatsApp is a target and attaches the
@@ -2151,7 +2160,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   sharePaidInvoice() {
     const bill = this.paidBill();
     if (!bill) return;
-    if (this.isNativePlatform()) { void this.emitPaidInvoice('share'); return; }
+    if (this.isNativePlatform()) { this.runInvoiceAction('share', () => this.emitPaidInvoice('share')); return; }
     const p = this._patient();
     const lab = this.auth.user()?.tenantName || 'our lab';
     const lines = [

@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DraftShelfService } from '../../../core/services/draft-shelf.service';
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
@@ -8,7 +9,10 @@ import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListene
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { firstValueFrom } from 'rxjs';
+import { finalize, firstValueFrom } from 'rxjs';
+import { createLoadHold } from '../../../shared/utils/min-duration';
+import { SkeletonCardComponent, SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { busyIdWhile } from '../busy-id';
 import { skip } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
 import { AppointmentBookingService } from '../../../core/services/appointment-booking.service';
@@ -156,7 +160,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -576,6 +580,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _queueItems = signal<QueueItem[]>([]);
   private readonly _orders = signal<Order[]>([]);
   private readonly _homeCollections = signal<Appointment[]>([]);
+  /** FIRST-load skeletons for the lists (ND-PATTERN "Loading feedback"):
+   *  their shape instead of an "All caught up" flash before the data lands.
+   *  Later polls / range changes keep the rows on screen. */
+  private readonly apptHold = createLoadHold(true);
+  private readonly homeHold = createLoadHold(true);
+  private readonly ordersHold = createLoadHold(true);
+  readonly apptSkel = this.apptHold.active;
+  readonly homeSkel = this.homeHold.active;
+  readonly ordersSkel = this.ordersHold.active;
   
   readonly homeCollections = computed(() => {
     return this._homeCollections().filter(a => this.inApptRange(a.appointmentDate));
@@ -882,7 +895,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     if (b) {
       this.selectedBill.set(b);
     } else {
-      this.api.post<Bill>('/api/billing/', { orderId: o.id, discount: 0 }).subscribe({
+      // The drawer is already open with its skeleton; if the bill never
+      // arrives it closes again (it used to simply never appear).
+      this.api.post<Bill>('/api/billing/', { orderId: o.id, discount: 0 }).pipe(finalize(() => {
+        if (!this.selectedBill() && this.selectedBillingOrder()?.id === o.id) this.selectedBillingOrder.set(null);
+      })).subscribe({
         next: bill => this.selectedBill.set(bill)
       });
     }
@@ -1213,7 +1230,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Fetch Appointments based on apptBounds
     const apptB = this.apptBounds();
     if (apptB.isToday) {
-      this.api.get<Appointment[]>('/api/appointments/today').subscribe({
+      this.api.get<Appointment[]>('/api/appointments/today').pipe(finalize(() => this.apptHold.done())).subscribe({
         next: l => this._appointments.set(l ?? []),
       });
     } else {
@@ -1221,7 +1238,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         from: new Date(apptB.start).toISOString(),
         to:   new Date(apptB.end).toISOString()
       });
-      this.api.get<Appointment[]>(`/api/appointments?${params}`).subscribe({
+      this.api.get<Appointment[]>(`/api/appointments?${params}`).pipe(finalize(() => this.apptHold.done())).subscribe({
         next: l => this._appointments.set(l ?? []),
         error: () => this._appointments.set([])
       });
@@ -1244,7 +1261,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       });
       // Summary view: the list never shows line results (the drawer reads them by id).
       params.set('view', 'summary');
-      this.api.get<Order[]>(`/api/orders/range?${params}`).subscribe({
+      this.api.get<Order[]>(`/api/orders/range?${params}`).pipe(finalize(() => this.ordersHold.done())).subscribe({
         next: l => { this._orders.set(l ?? []); this.lastUpdated.set(Date.now()); },
         error: () => this._orders.set([])
       });
@@ -1269,7 +1286,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     });
 
     // Fetch open home-collection requests for the Home Collection tab.
-    this.api.get<Appointment[]>('/api/home-collection/all').subscribe({
+    this.api.get<Appointment[]>('/api/home-collection/all').pipe(finalize(() => this.homeHold.done())).subscribe({
       next: l => this._homeCollections.set(l ?? []),
       error: () => this._homeCollections.set([])
     });
@@ -1318,6 +1335,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this.lastUpdated.set(Date.now());
     } catch {
       /* network blip — leave the existing list intact */
+    } finally {
+      this.ordersHold.done();
     }
   }
 
@@ -1783,6 +1802,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _reprintOrder = signal<Order | null>(null);
   readonly reprintOrder = this._reprintOrder.asReadonly();
   private readonly _reprintLoading = signal(false);
+  /** The order whose labels are being reprinted (only that row's button shows busy). */
+  readonly reprintOrderId = signal<string | null>(null);
   readonly reprintLoading = this._reprintLoading.asReadonly();
 
   /** Reprint the tube labels straight from the landing. Fetches the full
@@ -1792,6 +1813,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  label-only print path — no bill required, no route change. */
   reprintLabels(o: Order) {
     if (this._reprintLoading()) return;
+    this.reprintOrderId.set(o.id);
     this._reprintLoading.set(true);
     this.api.get<Order>(`/api/orders/${o.id}`).subscribe({
       next: full => {
@@ -2479,8 +2501,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       s.status === 'dispatched' || s.status === 'in_transit'
       || s.status === 'received' || s.status === 'processing');
   }
+  /** Row whose Dispatch request is in flight. */
+  readonly dispatchingId = signal<string | null>(null);
   markDispatched(o: Order) {
-    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).subscribe({
+    if (this.dispatchingId() === o.id) return;
+    this.api.patch<{ dispatched: number }>(`/api/orders/${o.id}/dispatch`, {}).pipe(busyIdWhile(this.dispatchingId, o.id)).subscribe({
       next: r => {
         this.toasts.success(`${r.dispatched} tube${r.dispatched === 1 ? '' : 's'} dispatched to lab`);
         // Optimistic local update so the badge flips immediately.
@@ -2516,13 +2541,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const o = this.paymentsDueOrders().find(x => x.id === b.orderId);
     this.openPaymentDrawer(o ?? ({ id: b.orderId } as Order));
   }
+  /** Appointment whose Check-in request is in flight. */
+  readonly checkingInId = signal<string | null>(null);
   checkIn(a: Appointment) {
+    if (this.checkingInId() === a.id) return;
     // Check-in flips the appointment to checked-in but does NOT auto-create an
     // order. Reception always lands on a FRESH order at the desk with the
     // pre-booked tests PRE-FILLED (?patientId=&appointmentId= preloads the
     // appointment's TestIds) — they review/change the tests, then Create + bill
     // + collect payment exactly like a manual walk-in.
-    this.api.patch(`/api/appointments/${a.id}/checkin`).subscribe({
+    this.api.patch(`/api/appointments/${a.id}/checkin`).pipe(busyIdWhile(this.checkingInId, a.id)).subscribe({
       next: () => {
         const name = a.patient?.displayName ?? 'Patient';
         this.toasts.success(`${name} checked in — review & create the order`);
@@ -2853,12 +2881,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   /** Plain bulk dispatch — flip every selected order's tubes to
    *  dispatched, no package wrapper. */
+  /** Which selection-bar action is in flight. */
+  readonly bulkBusy = signal<'dispatch' | 'package' | null>(null);
   bulkDispatch() {
+    if (this.bulkBusy()) return;
     const ids = this.workSel.ids();
     if (ids.length === 0) { this.toasts.info('Select orders that have collected tubes ready to dispatch.'); return; }
     this.api.post<{ ordersTouched: number; samplesDispatched: number }>(
       '/api/orders/bulk-dispatch', { orderIds: ids }
-    ).subscribe({
+    ).pipe(busyIdWhile(this.bulkBusy, 'dispatch')).subscribe({
       next: res => {
         this.toasts.success(`Dispatched ${res.samplesDispatched} sample${res.samplesDispatched === 1 ? '' : 's'} across ${res.ordersTouched} order${res.ordersTouched === 1 ? '' : 's'}`);
         this.workSel.clear();
@@ -2886,9 +2917,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  show the modal with QR + code so reception can hand the lab
    *  one scannable token. */
   createDispatchPackage() {
+    if (this.bulkBusy()) return;
     const ids = this.workSel.ids();
     if (ids.length === 0) { this.toasts.info('Pick at least one in-progress order with collected tubes.'); return; }
-    this.api.post<DispatchPackage>('/api/dispatch-packages', { orderIds: ids }).subscribe({
+    this.api.post<DispatchPackage>('/api/dispatch-packages', { orderIds: ids }).pipe(busyIdWhile(this.bulkBusy, 'package')).subscribe({
       next: pkg => {
         this._activePackage.set(pkg);
         this.toasts.success(`Package ${pkg.code} created with ${pkg.orderCount} order${pkg.orderCount === 1 ? '' : 's'}`);

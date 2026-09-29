@@ -3,6 +3,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../models/api-response.model';
 import { BarcodeScannerModalComponent } from '../barcode-scanner/barcode-scanner-modal.component';
 import { ScanIconComponent } from '../icons/scan-icon.component';
+import { BusyDirective } from '../../directives/busy.directive';
 
 /**
  * Pull a 14-digit ABHA number out of a scanned/pasted string — the ABHA card QR
@@ -45,7 +46,7 @@ export interface AbhaPrefillData {
 @Component({
   selector: 'pf-abha-prefill',
   standalone: true,
-  imports: [BarcodeScannerModalComponent, ScanIconComponent],
+  imports: [BarcodeScannerModalComponent, ScanIconComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (scanning()) {
@@ -77,7 +78,7 @@ export interface AbhaPrefillData {
                 </button>
               </div>
               @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
-              <button type="button" class="pf-abp__go" [disabled]="busy() || aadhaar().length !== 12" (click)="createRequestOtp()">{{ busy() ? 'Sending…' : 'Send OTP' }}</button>
+              <button type="button" class="pf-abp__go" [disabled]="busy() || aadhaar().length !== 12" [pfBusy]="busy()" pfBusyLabel="Sending OTP…" (click)="createRequestOtp()">{{ busy() ? 'Sending…' : 'Send OTP' }}</button>
             } @else {
               <p class="pf-abp__lead">Enter or scan the patient's ABHA number, then verify by OTP to auto-fill the form.</p>
               <label class="pf-abp__label">ABHA number</label>
@@ -89,7 +90,7 @@ export interface AbhaPrefillData {
                 </button>
               </div>
               @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
-              <button type="button" class="pf-abp__go" [disabled]="busy() || abha().length !== 14" (click)="requestOtp()">{{ busy() ? 'Sending…' : 'Send OTP' }}</button>
+              <button type="button" class="pf-abp__go" [disabled]="busy() || abha().length !== 14" [pfBusy]="busy()" pfBusyLabel="Sending OTP…" (click)="requestOtp()">{{ busy() ? 'Sending…' : 'Send OTP' }}</button>
             }
           } @else {
             @if (info()) { <p class="pf-abp__info">{{ info() }}</p> }
@@ -103,9 +104,9 @@ export interface AbhaPrefillData {
             }
             @if (error()) { <p class="pf-abp__err">{{ error() }}</p> }
             @if (mode() === 'create') {
-              <button type="button" class="pf-abp__go" [disabled]="busy() || otp().length < 4 || mobile().length !== 10" (click)="createConfirm()">{{ busy() ? 'Creating…' : 'Create ABHA' }}</button>
+              <button type="button" class="pf-abp__go" [disabled]="busy() || otp().length < 4 || mobile().length !== 10" [pfBusy]="busy()" pfBusyLabel="Creating ABHA…" (click)="createConfirm()">{{ busy() ? 'Creating…' : 'Create ABHA' }}</button>
             } @else {
-              <button type="button" class="pf-abp__go" [disabled]="busy() || otp().length < 4" (click)="confirm()">{{ busy() ? 'Fetching…' : 'Fetch details' }}</button>
+              <button type="button" class="pf-abp__go" [disabled]="busy() || otp().length < 4" [pfBusy]="busy()" pfBusyLabel="Fetching details…" (click)="confirm()">{{ busy() ? 'Fetching…' : 'Fetch details' }}</button>
             }
           }
         </div>

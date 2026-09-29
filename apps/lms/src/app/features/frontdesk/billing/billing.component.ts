@@ -26,6 +26,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { billPreDiscountGross, discountPctOf, percentDiscountAmount } from '../../../shared/utils/discount';
 import { billRoundOff, maxDiscountWithinPaid, previewBillForDiscount } from '../../../shared/utils/bill-math';
 import { SkeletonTableComponent, BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 
 type PayMode = 'upi' | 'card' | 'cash' | 'wallet' | 'split' | 'later';
@@ -65,7 +66,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
   // page (:host:not(.pf-embedded)) without affecting the inline/embedded use
   // inside the order screen, which must keep flowing in normal document flow.
   host: { '[class.pf-embedded]': 'embedded' },
-  imports: [SkeletonTableComponent, BusyComponent,
+  imports: [SkeletonTableComponent, BusyComponent, BusyDirective,
     CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent,
     TileComponent,
@@ -118,6 +119,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                     <p class="pf-bill-total">{{ effectivePayable() | inr }}</p>
                   </div>
                   <button type="button" class="pf-bill-print-icon pf-no-print"
+                          [disabled]="printing()" [pfBusy]="printing()" pfBusyLabel="Preparing invoice…"
                           (click)="printInvoice()" aria-label="Print invoice" title="Print invoice (opens the print dialog)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -237,7 +239,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                               (click)="refundMode.set(m.key)">{{ m.label }}</button>
                     }
                   </div>
-                  <button type="button" class="pf-refund__btn" [disabled]="refunding()" (click)="doRefund()">
+                  <button type="button" class="pf-refund__btn" [disabled]="refunding()"
+                          [pfBusy]="refunding()" pfBusyLabel="Recording refund…" (click)="doRefund()">
                     {{ refunding() ? 'Refunding…' : ('Refund ' + (refundDue() | inr)) }}
                   </button>
                 </div>
@@ -481,6 +484,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
               <pf-touch-btn size="md" variant="primary" [full]="true"
                             (pressed)="confirm()"
                             [disabled]="saving() || !canConfirm()"
+                            [busy]="saving()" busyLabel="Recording payment…"
                             class="mt-3 block pf-bill-confirm">
                 <span icon-left>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -528,7 +532,8 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
           <p class="pf-pay-modal__sub">{{ invoiceNumber() }} · {{ effectivePayable() | inr }}</p>
 
           <div class="pf-pay-modal__actions">
-            <button type="button" class="pf-pay-modal__btn" (click)="printInvoice()">
+            <button type="button" class="pf-pay-modal__btn" [disabled]="printing()"
+                    [pfBusy]="printing()" pfBusyLabel="Preparing invoice…" (click)="printInvoice()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>
@@ -2309,7 +2314,15 @@ export class BillingComponent implements OnInit, OnChanges {
    *  totals, footer) and trigger a download. Built client-side with
    *  jsPDF so we don't need a server round-trip; the structured output
    *  is sharper and more usable than a window.print() screenshot. */
+  /** The invoice PDF is being built (template, QR, logo, printer routing). */
+  readonly printing = signal(false);
   async printInvoice() {
+    if (this.printing()) return;
+    this.printing.set(true);
+    try { await this.buildAndPrintInvoice(); } finally { this.printing.set(false); }
+  }
+
+  private async buildAndPrintInvoice() {
     const b = this._bill();
     if (!b) { this.toasts.warning('Bill is still loading'); return; }
     try {

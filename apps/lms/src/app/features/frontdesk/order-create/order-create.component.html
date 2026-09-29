@@ -29,7 +29,7 @@
       <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="referralSaving()"
         (click)="cancelReferralEdit()" aria-label="Cancel referral edit">Cancel</button>
       <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="referralSaving()"
-        (click)="saveReferral()" aria-label="Save referral">
+        [pfBusy]="referralSaving()" pfBusyLabel="Saving referral…" (click)="saveReferral()" aria-label="Save referral">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M20 6 9 17l-5-5" />
@@ -876,7 +876,8 @@
         </div>
         }
         <div class="pf-oc-paid-acts">
-          <button type="button" class="pf-oc-act press" (click)="printPaidInvoice()">
+          <button type="button" class="pf-oc-act press" [disabled]="invoiceBusy() === 'print'"
+            [pfBusy]="invoiceBusy() === 'print'" pfBusyLabel="Preparing invoice…" (click)="printPaidInvoice()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -884,7 +885,8 @@
             </svg>
             Print invoice
           </button>
-          <button type="button" class="pf-oc-act press" (click)="printPaidThermal()">
+          <button type="button" class="pf-oc-act press" [disabled]="invoiceBusy() === 'thermal'"
+            [pfBusy]="invoiceBusy() === 'thermal'" pfBusyLabel="Preparing receipt…" (click)="printPaidThermal()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6 9V3h12v6" />
@@ -893,14 +895,16 @@
             </svg>
             Receipt
           </button>
-          <button type="button" class="pf-oc-act pf-oc-act--wa press" (click)="sharePaidInvoice()">
+          <button type="button" class="pf-oc-act pf-oc-act--wa press" [disabled]="invoiceBusy() === 'share'"
+            [pfBusy]="invoiceBusy() === 'share'" pfBusyLabel="Preparing invoice…" (click)="sharePaidInvoice()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z" />
             </svg>
             WhatsApp
           </button>
-          <button type="button" class="pf-oc-act press" [disabled]="reprintLoading()" (click)="printLabels()">
+          <button type="button" class="pf-oc-act press" [disabled]="reprintLoading()"
+            [pfBusy]="reprintLoading()" pfBusyLabel="Printing labels…" (click)="printLabels()">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6 9V2h12v7" />
@@ -921,7 +925,8 @@
             [attr.aria-checked]="refundMode() === m.key" (click)="refundMode.set(m.key)">{{ m.label }}</button>
           }
         </div>
-        <button type="button" class="pf-refund__btn press" [disabled]="refunding()" (click)="doRefund()">
+        <button type="button" class="pf-refund__btn press" [disabled]="refunding()"
+          [pfBusy]="refunding()" pfBusyLabel="Recording refund…" (click)="doRefund()">
           {{ refunding() ? 'Refunding…' : ('Refund ' + (refundDue() | inr)) }}
         </button>
       </div>
@@ -980,7 +985,7 @@
       @if (refundDue() === 0) {
       @if (payPanel(); as pp) {
       <button type="button" class="pf-oc-btn pf-oc-btn--primary press" [disabled]="pp.confirmDisabled()"
-        (click)="onConfirmClick()">{{ pp.confirmLabel() }}</button>
+        [pfBusy]="confirming()" pfBusyLabel="Confirming payment…" (click)="onConfirmClick()">{{ pp.confirmLabel() }}</button>
       } @else {
       <!-- No pay pane yet: without a patient the click points at the Patient
            tile instead of silently doing nothing. -->
@@ -990,7 +995,8 @@
       }
       } @else {
       <button type="button" class="pf-oc-btn pf-oc-btn--primary press" (click)="onProceedClick()"
-        [disabled]="saving() || (!!patient() && selected().length === 0)">
+        [disabled]="saving() || (!!patient() && selected().length === 0)" [pfBusy]="saving()"
+        [pfBusyLabel]="editOrderId() ? 'Updating order…' : 'Creating order…'">
         {{ editOrderId() ? 'Update order & reconcile' : 'Proceed to billing' }}
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -30,6 +30,9 @@ import { CollectBandButtonComponent } from '../../shared/components/collect-band
 import { ScanIconComponent } from '../../shared/components/icons/scan-icon.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { NdDateComponent } from '../../shared/components/nd-date/nd-date.component';
+import { BusyDirective } from '../../shared/directives/busy.directive';
+import { SkeletonCardComponent, SkeletonRowsComponent, SkeletonTableComponent } from '../../shared/primitives/skeleton-kit.component';
+import { heldFlag } from '../../shared/utils/min-duration';
 import {
   InlinePaymentPanelComponent, InlinePaymentResult,
 } from '../frontdesk/order-create/inline-payment-panel.component';
@@ -190,6 +193,7 @@ export function waitingLabel(iso: string | null | undefined, now: number): strin
     DatePipe, NgTemplateOutlet, CurrencyInrPipe,
     HeroBandComponent, CollectBandButtonComponent, ScanIconComponent, BarcodeScannerModalComponent, NdDateComponent,
     InlinePaymentPanelComponent, ZoomSourceDirective, ZoomTargetDirective,
+    BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, SkeletonTableComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './billing-counter.component.html',
@@ -276,6 +280,8 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly _due = signal<OutstandingRow[]>([]);
   private readonly _refundsOwed = signal<OutstandingRow[]>([]);
   protected readonly loadingOutstanding = signal(false);
+  /** Skeleton flag for the queue / balances (held so it never flashes). */
+  protected readonly outstandingSkel = heldFlag(this.loadingOutstanding);
   private outstandingLoaded = false;
   /** Balances due — a balance deferred here this session reads as Pay later
    *  even before the server's flag comes back. */
@@ -474,6 +480,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   protected readonly reconcileDate = signal(BillingCounterComponent.todayIso());
   private readonly _reconcile = signal<ReconcileSummary | null>(null);
   protected readonly loadingReconcile = signal(false);
+  protected readonly reconcileSkel = heldFlag(this.loadingReconcile);
   readonly reconcile = this._reconcile.asReadonly();
 
   /** Today's business date for the day-end reconcile — strictly IST. */
@@ -717,6 +724,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   private readonly _selectedPatient = signal<Patient | null>(null);
   private readonly _orders = signal<Order[]>([]);
   readonly loadingOrders = signal(false);
+  readonly ordersSkel = heldFlag(this.loadingOrders);
   readonly selectedPatient = this._selectedPatient.asReadonly();
   readonly billableOrders = computed(() => this._orders().filter(o => this.isBillable(o)));
 
@@ -724,6 +732,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   readonly selectedOrder = signal<Order | null>(null);
   readonly selectedBill = signal<Bill | null>(null);
   readonly loadingOrder = signal(false);
+  readonly orderSkel = heldFlag(this.loadingOrder);
   private orderSeq = 0;
 
   /** Narrow: something is open in the Billing pane (the cart or a patient). */

@@ -14,6 +14,7 @@ import { AvatarComponent } from '../../primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
 import { AbhaWizardComponent } from '../abha-wizard/abha-wizard.component';
 import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../directives/busy.directive';
 import { heldFlag } from '../../../shared/utils/min-duration';
 import { ageInYears, ageParts } from '../../../shared/utils/patient-age';
 
@@ -62,7 +63,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 @Component({
   selector: 'pf-patient-profile-modal',
   standalone: true,
-  imports: [SkeletonDetailComponent, CommonModule, AvatarComponent, SelectComponent, AbhaWizardComponent],
+  imports: [SkeletonDetailComponent, BusyDirective, CommonModule, AvatarComponent, SelectComponent, AbhaWizardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-pp-root pf-sheet" [class.pf-pp-hidden]="!open()" role="dialog" aria-modal="true" [attr.aria-hidden]="!open()" aria-label="Patient profile">
@@ -181,7 +182,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                   <button type="button" class="pf-pp-btn pf-pp-btn--ghost press"
                           [disabled]="saving()" (click)="cancelEdit()">Cancel</button>
                   <button type="button" class="pf-pp-btn pf-pp-btn--primary press"
-                          [disabled]="saving() || !editValid()"
+                          [disabled]="saving() || !editValid()" [pfBusy]="saving()" pfBusyLabel="Saving…"
                           (click)="saveEdit()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
                 }
                 <button type="button" class="pf-pp-icon-btn press" aria-label="Close" (click)="close()">
@@ -236,7 +237,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                               (click)="openAbhaWizard()">Verify</button>
                     }
                     <button type="button" class="pf-pp-mini-btn pf-pp-mini-btn--rose"
-                            (click)="unlinkAbha()" [disabled]="abhaBusy()">Unlink</button>
+                            (click)="unlinkAbha()" [disabled]="abhaBusy()" [pfBusy]="abhaBusy()" pfBusyLabel="Unlinking…">Unlink</button>
                   } @else {
                     <button type="button" class="pf-pp-mini-btn pf-pp-mini-btn--accent"
                             (click)="openAbhaWizard()">Link / Create ABHA</button>
@@ -348,7 +349,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
             <button type="button" class="pf-pp-btn pf-pp-btn--ghost"
                     (click)="cancelMobileChange()">Cancel</button>
             <button type="button" class="pf-pp-btn pf-pp-btn--primary"
-                    [disabled]="!mobileValid() || mobileBusy()"
+                    [disabled]="!mobileValid() || mobileBusy()" [pfBusy]="mobileBusy()" pfBusyLabel="Saving…"
                     (click)="saveMobile()">{{ mobileBusy() ? 'Saving…' : 'Save' }}</button>
           </div>
         </div>
@@ -371,7 +372,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
             <button type="button" class="pf-pp-btn pf-pp-btn--ghost"
                     (click)="cancelAbhaLink()">Cancel</button>
             <button type="button" class="pf-pp-btn pf-pp-btn--primary"
-                    [disabled]="!abhaValid() || abhaBusy()"
+                    [disabled]="!abhaValid() || abhaBusy()" [pfBusy]="abhaBusy()" pfBusyLabel="Linking…"
                     (click)="saveAbhaLink()">{{ abhaBusy() ? 'Linking…' : 'Link' }}</button>
           </div>
         </div>
@@ -408,7 +409,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
             <button type="button" class="pf-pp-btn pf-pp-btn--ghost"
                     (click)="cancelDelete()">Cancel</button>
             <button type="button" class="pf-pp-btn pf-pp-btn--danger"
-                    [disabled]="deleteBusy()"
+                    [disabled]="deleteBusy()" [pfBusy]="deleteBusy()" pfBusyLabel="Deleting…"
                     (click)="doDelete()">{{ deleteBusy() ? 'Deleting…' : 'Delete' }}</button>
           </div>
         </div>
