@@ -157,8 +157,8 @@ export class ReportActionsService {
     return `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`;
   }
 
-  /** Download PDF — same render as everywhere; native → the share sheet
-   *  (Save to Files), web → a file download. */
+  /** Download PDF — the STORED report (rendered + stored once if it has
+   *  none yet); native → the share sheet (Save to Files), web → a download. */
   async download(rep: ReportRef & Record<string, unknown>): Promise<boolean> {
     const { buildReportBlobUrl } = await import('../../shared/utils/report-blob');
     const url = await buildReportBlobUrl(rep, this.api, this.injector);
@@ -250,16 +250,13 @@ export class ReportActionsService {
     this.recordDelivery(rep, 'whatsapp');
   }
 
+  /** Make sure the report's PDF is STORED (the public link serves the stored
+   *  file). A no-op when it already is; otherwise it is rendered once from
+   *  the saved snapshot and stored. Best-effort. */
   private async archive(rep: ReportRef & Record<string, unknown>): Promise<void> {
     try {
-      const { buildReportBlobUrl } = await import('../../shared/utils/report-blob');
-      const url = await buildReportBlobUrl(rep, this.api, this.injector);
-      if (!url) return;
-      const blob = await (await fetch(url)).blob();
-      URL.revokeObjectURL(url);
-      const fd = new FormData();
-      fd.append('file', blob, `${rep.id}.pdf`);
-      this.api.post(`/api/reports/${rep.id}/pdf`, fd).subscribe({ next: () => {}, error: () => {} });
+      const { storedReportBlob } = await import('../../shared/utils/report-blob');
+      await storedReportBlob(rep, this.api, this.injector);
     } catch { /* best-effort */ }
   }
 

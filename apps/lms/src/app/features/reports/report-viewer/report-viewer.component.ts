@@ -372,7 +372,7 @@ export class ReportViewerComponent implements OnInit {
     if (!r?.orderId || !this.canGenerate()) return;
     const ok = await this.dialog.confirm({
       title: 'Regenerate report?',
-      message: 'Rebuild this report using the current report template. The previous version is replaced.',
+      message: 'Rebuild this report using the current report template and Test Master. The previous version is replaced (it stays in the audit trail).',
       confirmLabel: 'Regenerate',
       tone: 'primary',
     });
@@ -381,11 +381,12 @@ export class ReportViewerComponent implements OnInit {
       next: r2 => {
         this.toasts.success('Report regenerated with the latest template');
         if (!r2?.id) return;
+        // The new version is rendered from its snapshot + the CURRENT
+        // settings and stored the moment the preview paints it (the previous
+        // version is superseded; its stored PDF stays for audit).
         this._pdfBlob = null;
-        this._pdfInput = null;
         this._pdfReady.set(false);
         this._report.set(r2);
-        this.resolveLayouts();
         void this.router.navigate(['/reports/view', r2.id], { replaceUrl: true });
       },
       error: e => this.toasts.error(ApiError.from(e).message),
@@ -416,13 +417,9 @@ export class ReportViewerComponent implements OnInit {
     this.editDialogOpen.set(false);
     const id = this._report()?.id;
     if (!id) return;
-    this._pdfBlob = null;
-    this._pdfInput = null;
-    this.api.get<Report>(`/api/reports/${id}`).subscribe({
-      // Re-arm the preview so the pages are rebuilt from the fresh data.
-      next: r => { this._pdfReady.set(false); this._report.set(r); this.resolveLayouts(); },
-      error: () => { /* the toast from the dialog already told the story */ }
-    });
+    // A corrected result is re-signed into a NEW (amended) report — follow
+    // the chain to the live version and show ITS stored PDF.
+    void this.showLive(id);
   }
 
   // ── Inline PDF view ─────────────────────────────────────
@@ -435,9 +432,6 @@ export class ReportViewerComponent implements OnInit {
   readonly pdfReady = this._pdfReady.asReadonly();
   readonly pdfError = this._pdfError.asReadonly();
   private _pdfBlob: Blob | null = null;
-  /** The prepared render input (template + layouts + images), cached so a
-   *  letterpad print job can re-render without refetching. */
-  private _pdfInput: import('../../../shared/utils/report-pdf').ReportPdfInput | null = null;
   private _pdfRendering = false;
   // Kick the render only once BOTH the report data and the #pdfPages host
   // exist (the host is inside the @if(report()) branch, so it appears a
@@ -849,16 +843,44 @@ export class ReportViewerComponent implements OnInit {
     this.loadError.set(false);
     this.api.get<Report>(`/api/reports/${id}`).subscribe({
       next: r => {
+        // A superseded version (regenerated / amended since) is no longer
+        // what the patient receives — open the live one instead.
+        if (r?.supersededByReportId) { void this.showLive(r.id); return; }
         this._report.set(r);
-        this.resolveLayouts();
         this.loadPartnerReports(r?.orderId);
       },
       error: () => { this.loadError.set(true); this.toasts.error('Could not load report'); }
     });
   }
 
-  /** Build the report PDF (identical to Download) and paint its pages onto
-   *  canvases inside the viewer. Cached: repeated calls reuse the blob. */
+  /** Follow `supersededByReportId` from `id` to the live version (bounded)
+   *  and show it — "the previous report is deleted" means the user no longer
+   *  sees it; its row and stored PDF stay for audit. */
+  private async showLive(id: string): Promise<void> {
+    try {
+      let r = await firstValueFrom(this.api.get<Report>(`/api/reports/${id}`));
+      for (let hops = 0; r?.supersededByReportId && hops < 10; hops++)
+        r = await firstValueFrom(this.api.get<Report>(`/api/reports/${r.supersededByReportId}`));
+      if (!r) throw new Error('not found');
+      const moved = r.id !== this._report()?.id;
+      this._pdfBlob = null;
+      this._pdfReady.set(false);
+      this._report.set(r);
+      this.loadPartnerReports(r.orderId);
+      if (moved && r.id !== id) {
+        this.toasts.info('Showing the latest version of this report');
+        void this.router.navigate(['/reports/view', r.id], { replaceUrl: true });
+      }
+    } catch {
+      this.loadError.set(true);
+      this.toasts.error('Could not load report');
+    }
+  }
+
+  /** Paint the report's STORED PDF (identical to Download / Print / the
+   *  patient link) onto canvases inside the viewer. A report with nothing
+   *  stored yet is rendered once from its saved snapshot and stored here.
+   *  Cached: repeated calls reuse the blob. */
   async renderPdfView() {
     const r = this._report();
     if (!r || this._pdfRendering) return;
@@ -945,15 +967,19 @@ export class ReportViewerComponent implements OnInit {
     if (!r || this.busy() === 'print' || !this.canPrint()) return;
     this.busy.set('print');
     try {
-      const input = await this.buildPdfInput(r);
-      const { askPrintLetterhead } = await import('../../../shared/utils/print-letterhead');
-      const { DialogService } = await import('../../../core/services/dialog.service');
-      const job = await askPrintLetterhead(input.template, this.injector.get(DialogService));
+      const [{ askPrintLetterhead }, { DialogService }, { loadReportTemplate }] = await Promise.all([
+        import('../../../shared/utils/print-letterhead'),
+        import('../../../core/services/dialog.service'),
+        import('../../../shared/utils/report-render-input'),
+      ]);
+      const job = await askPrintLetterhead(await loadReportTemplate(this.api), this.injector.get(DialogService));
       if (!job) return;   // dismissed — print nothing
+      // The STORED copy for the paper: the full report, or its letterhead-
+      // paper variant (header & footer blank) — each stored once.
       let blob: Blob;
       if (job.blankLetterhead) {
-        const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-        blob = buildReportPdf({ ...input, blankLetterhead: true }).output('blob');
+        const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+        blob = await storedReportBlob(r, this.api, this.injector, 'letterpad');
       } else {
         blob = this._pdfBlob ??= await this.buildPdfBlob(r);
       }
@@ -1058,44 +1084,22 @@ export class ReportViewerComponent implements OnInit {
     });
   }
 
-  /** Render the report to the SAME PDF the Download button in the queue
-   *  produces (jsPDF + tenant template + per-test resolved layouts + images).
-   *  Single source for the inline view, Print and the archive upload. Always
-   *  WITH the letterhead — only a letterpad print job leaves it blank. */
+  /** THE report PDF: the stored file (`GET /api/reports/{id}/pdf`); a report
+   *  with nothing stored yet is rendered ONCE from its saved snapshot (the one
+   *  recipe — template + layouts incl. PROFILE layouts + images + trendograms)
+   *  and stored. Single source for the inline view, Download, Print (plain
+   *  paper) and the patient link. Always WITH the letterhead. */
   private async buildPdfBlob(r: Report): Promise<Blob> {
-    const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-    return buildReportPdf(await this.buildPdfInput(r)).output('blob');
+    const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+    return storedReportBlob(r, this.api, this.injector, 'full');
   }
 
-  /** The prepared render input, cached per loaded report. */
-  private async buildPdfInput(r: Report): Promise<import('../../../shared/utils/report-pdf').ReportPdfInput> {
-    if (this._pdfInput && this._pdfInput.report.id === r.id) return this._pdfInput;
-    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-      import('../../../core/services/report-layout.service'),
-      import('../../../core/services/platform.service'),
-      import('../../../shared/utils/report-render-input'),
-    ]);
-    const svc = this.injector.get(ReportLayoutService);
-    const platform = this.injector.get(PlatformService);
-    // The ONE recipe (template + layouts incl. PROFILE layouts + images +
-    // trendograms). Throws instead of silently rendering the default design.
-    const input = await prepareReportPdfInput(r, {
-      api: this.api,
-      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
-      apiUrl: platform.getApiUrl(),
-    });
-    this._pdfInput = input;
-    return input;
-  }
-
-  /** Render + archive the report PDF to storage (best-effort, no download) so
-   *  the public /reports/public/{qrToken} link resolves to a real file. */
+  /** Make sure the report's PDF is STORED (best-effort, no download) so the
+   *  public /reports/public/{qrToken} link serves the real file — a no-op
+   *  when it already is. */
   private async archiveReportPdf(r: Report) {
     try {
       this._pdfBlob ??= await this.buildPdfBlob(r);
-      const fd = new FormData();
-      fd.append('file', this._pdfBlob, `${r.id}.pdf`);
-      this.api.post(`/api/reports/${r.id}/pdf`, fd).subscribe({ next: () => {}, error: () => {} });
     } catch { /* best-effort */ }
   }
 }

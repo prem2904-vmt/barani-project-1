@@ -13,6 +13,14 @@ export interface Report {
   deliveryNote?: string;
   generatedBy?: string;
   createdAt: string;
+  /** Storage key of the STORED report PDF (immutable once set — owner rule
+   *  2026-09-29); null until the report is first rendered + stored. */
+  storedPdfKey?: string | null;
+  /** The letterhead-paper print's stored copy (header & footer blank). */
+  storedLetterpadPdfKey?: string | null;
+  /** Set when a newer version (Regenerate / Amend) replaced this report. */
+  supersededByReportId?: string | null;
+  supersededAt?: string | null;
   /** EF eager-loads Order.Patient on the queue endpoint, so the JSON
    *  carries a nested patient under order. Typed loosely so we can
    *  read displayName for the queue search/list without forcing the

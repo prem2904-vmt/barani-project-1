@@ -37,6 +37,20 @@ export class ApiService {
     return this.wrap(this.http.delete<ApiResponse<T>>(`${this.baseUrl}${path}`));
   }
 
+  /** A binary body (e.g. the stored report PDF). Not wrapped: a failure keeps
+   *  the HttpErrorResponse (its `status` tells "not stored yet" (404) from a
+   *  real failure). Longer ceiling than JSON calls — a report can be MBs. */
+  getBlob(path: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}${path}`, { responseType: 'blob' }).pipe(
+      timeout({
+        each: ApiService.BLOB_TIMEOUT_MS,
+        with: () => throwError(() => new Error('Request timed out — check your connection')),
+      }),
+    );
+  }
+
+  private static readonly BLOB_TIMEOUT_MS = 60_000;
+
   /** Hard ceiling on any API round-trip. Flaky mobile networks otherwise
    *  leave requests hanging forever with spinners that never resolve.
    *  File uploads don't go through ApiService (they post FormData via

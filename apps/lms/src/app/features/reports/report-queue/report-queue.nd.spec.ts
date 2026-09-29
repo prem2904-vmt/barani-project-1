@@ -186,10 +186,10 @@ describe('Reports list — summary rows (DB optimisation phase 2)', () => {
     expect(urls.every((u: string) => u.startsWith('/api/reports/queue?view=summary&'))).toBe(true);
   });
 
-  it('rendering a row (download / print / share / archive) reads the full report by id first', async () => {
+  it('rendering a row with nothing stored yet (download / print / share / archive) reads the full report by id first', async () => {
     const { c, api } = await render();
     const row = { id: 'r-sum', orderId: 'o1', type: 'final', deliveryStatus: 'pending' };
-    await c.buildReportRender(row).catch(() => { /* the render itself needs more than this stub */ });
+    await c.storedPdf(row).catch(() => { /* the render itself needs more than this stub */ });
     expect(api.get).toHaveBeenCalledWith('/api/reports/r-sum');
   });
 });

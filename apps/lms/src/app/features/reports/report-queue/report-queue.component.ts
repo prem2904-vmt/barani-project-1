@@ -44,7 +44,6 @@ import { TouchButtonComponent } from "../../../shared/primitives/touch-button.co
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
 import { waLink } from "../../../shared/utils/whatsapp";
 import {
-  ensureFullReport,
   REPORT_QUEUE_PAGE_SIZE,
   reportQueuePageUrl,
   reportQueueServerStatus,
@@ -744,33 +743,38 @@ export class ReportQueueComponent implements OnInit {
     }
   }
 
-  /** Download the report as a PDF (client-side render via jsPDF). Pulls
-   *  the per-test resolved layouts so the PDF matches the on-screen viewer
-   *  exactly (column widths, row colors + bold from conditions, merged
-   *  rows, paragraphs, charts). */
+  /** Download the report's STORED PDF (owner rule 2026-09-29: the report is
+   *  the file in blob storage). A report with nothing stored yet is rendered
+   *  ONCE from its saved snapshot and stored first. */
   async downloadPdf(r: Report) {
     try {
-      const { generateReportPdf, buildReportPdf } = await import('../../../shared/utils/report-pdf');
-      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-      const blob = buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob');
+      const blob = await this.storedPdf(r);
       if (this.isNativePlatform()) {
         // Capacitor WKWebView: web blob downloads are no-ops. Hand the PDF to
         // the native iOS share sheet (Save to Files, AirDrop, etc.) via the
         // Web Share API — no Capacitor plugin needed.
         await this.sharePdfNative(r, blob, "Download report");
       } else {
-        // Web/desktop: jsPDF's own download path still works.
-        generateReportPdf({ ...baseInput, imageCache, trendograms });
+        const { downloadPdfBlob } = await import('../../../shared/utils/stored-report-pdf');
+        downloadPdfBlob(blob, this.pdfFileName(r));
       }
-      // Archive the rendered PDF to object storage (Spaces) so finished results
-      // are stored and the patient's public report / QR-tracking page can serve
-      // the exact file. Best-effort — never affects the download.
-      this.uploadReportPdf(r, blob);
     } catch (err) {
       console.error("[reports] download failed", err);
       const { reportRenderErrorMessage } = await import("../../../shared/utils/report-render-input");
       this.toasts.error(reportRenderErrorMessage(err, "Could not download report"));
     }
+  }
+
+  /** "REPORT-XXXXXXXX.pdf" / "PRELIM-…" — the name the jsPDF save used. */
+  private pdfFileName(r: Report): string {
+    const shortId = r.id.replace(/-/g, "").slice(-8).toUpperCase();
+    return `${r.type === "partial" ? "PRELIM" : "REPORT"}-${shortId}.pdf`;
+  }
+
+  /** THE report PDF (stored; rendered + stored once when it has none). */
+  private async storedPdf(r: Report, variant: 'full' | 'letterpad' = 'full'): Promise<Blob> {
+    const { storedReportBlob } = await import('../../../shared/utils/report-blob');
+    return storedReportBlob(r, this.api, this.injector, variant);
   }
 
   /** True when running inside the Capacitor native shell (iOS/Android),
@@ -797,9 +801,8 @@ export class ReportQueueComponent implements OnInit {
         await navigator.share({ files: [file], title, text });
       } else {
         // No file-share support — fall back to the web download path.
-        const { generateReportPdf } = await import('../../../shared/utils/report-pdf');
-        const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-        generateReportPdf({ ...baseInput, imageCache, trendograms });
+        const { downloadPdfBlob } = await import('../../../shared/utils/stored-report-pdf');
+        downloadPdfBlob(blob, this.pdfFileName(r));
       }
     } catch (err) {
       // User cancelled the share sheet — not an error.
@@ -808,53 +811,11 @@ export class ReportQueueComponent implements OnInit {
     }
   }
 
-  /** Resolve the tenant template + per-test layouts + images needed to render a
-   *  report PDF from its stored snapshot. Shared by download and archive.
-   *  The template carries the admin-tunable chrome (colours, logo, signatures);
-   *  without it the PDF falls back to the hardcoded Classic defaults. */
-  private async buildReportRender(r: Report) {
-    const [{ ReportLayoutService }, { PlatformService }, { prepareReportPdfInput }] = await Promise.all([
-      import("../../../core/services/report-layout.service"),
-      import("../../../core/services/platform.service"),
-      import("../../../shared/utils/report-render-input"),
-    ]);
-    const svc = this.injector.get(ReportLayoutService);
-    const platform = this.injector.get(PlatformService);
-    // The ONE recipe for every report entry point (template + layouts incl.
-    // PROFILE layouts + images + trendograms). It throws instead of silently
-    // falling back to the default design, so a report that can't be rendered
-    // exactly as the lab designed it is never downloaded or archived.
-    // Queue rows are summaries (no rendered snapshot): read the full report first.
-    const full = await ensureFullReport(this.api, r);
-    const { imageCache = {}, trendograms = [], ...baseInput } = await prepareReportPdfInput(full, {
-      api: this.api,
-      preview: (id, values, images, p) => svc.preview(id, values, images as never, p),
-      apiUrl: platform.getApiUrl(),
-    });
-    return { baseInput, imageCache, trendograms };
-  }
-
-  /** Upload a rendered report PDF blob to storage (best-effort). */
-  private uploadReportPdf(r: Report, blob: Blob) {
-    try {
-      const fd = new FormData();
-      fd.append("file", blob, `${r.id}.pdf`);
-      this.api
-        .post(`/api/reports/${r.id}/pdf`, fd)
-        .subscribe({ next: () => {}, error: () => {} });
-    } catch {
-      /* archive is best-effort */
-    }
-  }
-
-  /** Render + archive the report PDF (no local download) so the public
-   *  /reports/public/{qrToken} link resolves to a real file when shared. */
+  /** Make sure the report's PDF is STORED (no local download) so the public
+   *  /reports/public/{qrToken} link serves the real file — a no-op when it
+   *  already is. Best-effort. */
   private async archiveReportPdf(r: Report) {
-    try {
-      const { buildReportPdf } = await import('../../../shared/utils/report-pdf');
-      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-      this.uploadReportPdf(r, buildReportPdf({ ...baseInput, imageCache, trendograms }).output('blob'));
-    } catch { /* best-effort */ }
+    try { await this.storedPdf(r); } catch { /* best-effort */ }
   }
 
   deliver(r: Report, via: string) {
@@ -917,21 +878,20 @@ export class ReportQueueComponent implements OnInit {
    *  printed (false: letterpad question dismissed, or the render failed). */
   private async printJob(r: Report): Promise<boolean> {
     try {
-      const [{ buildReportPdf }, { askPrintLetterhead }] = await Promise.all([
-        import('../../../shared/utils/report-pdf'),
+      const [{ askPrintLetterhead }, { loadReportTemplate }] = await Promise.all([
         import('../../../shared/utils/print-letterhead'),
+        import('../../../shared/utils/report-render-input'),
       ]);
-      const { baseInput, imageCache, trendograms } = await this.buildReportRender(r);
-      const job = await askPrintLetterhead(baseInput.template, this.dialog);
+      const job = await askPrintLetterhead(await loadReportTemplate(this.api), this.dialog);
       if (!job) return false;   // dismissed — nothing printed, nothing recorded
-      const doc = buildReportPdf({ ...baseInput, imageCache, trendograms, blankLetterhead: job.blankLetterhead });
+      // The STORED copy for the paper (full, or the letterhead-paper variant).
+      const blob = await this.storedPdf(r, job.blankLetterhead ? 'letterpad' : 'full');
       if (this.isNativePlatform()) {
         // Capacitor WKWebView: hand the PDF to the native share sheet (Print).
-        await this.sharePdfNative(r, doc.output('blob'), 'Print report');
+        await this.sharePdfNative(r, blob, 'Print report');
       } else {
         // Web: off-screen A4 iframe via the shared helper; a 0-sized frame printed blank.
-        doc.autoPrint();
-        printPdfBlobUrl(URL.createObjectURL(doc.output('blob')), { revokeOnDone: true });
+        printPdfBlobUrl(URL.createObjectURL(blob), { revokeOnDone: true });
       }
       return true;
     } catch (err) {
@@ -985,13 +945,14 @@ export class ReportQueueComponent implements OnInit {
 
   /** OPS-59: rebuild this order's final report from the CURRENT report template
    *  (admin may have changed columns / layout / signatures since it was issued).
-   *  The backend re-snapshots and supersedes the previous final; we then
-   *  re-render and re-archive the PDF so the stored/QR copy matches too. */
+   *  The backend re-snapshots and supersedes the previous final (kept, with
+   *  its stored PDF, for audit); we then render the NEW report once and store
+   *  it, so every view / the QR link serves the new file. */
   async regenerate(r: Report) {
     if (!r.orderId || !this.canGenerate()) return;
     const ok = await this.dialog.confirm({
       title: "Regenerate report?",
-      message: "Rebuild this report using the current report template. The previous version is replaced.",
+      message: "Rebuild this report using the current report template and Test Master. The previous version is replaced (it stays in the audit trail).",
       confirmLabel: "Regenerate",
       tone: "primary",
     });
