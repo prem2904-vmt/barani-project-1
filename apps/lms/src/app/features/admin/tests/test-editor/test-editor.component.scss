@@ -656,6 +656,8 @@ select.pf-input--compact {
 .pf-te2-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px 24px; }
 .pf-uf { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .pf-uf--span { grid-column: 1 / -1; }
+/* Profile-level print picker sits between the member summary and the picker. */
+.pf-te2-profile-pick { margin: 12px 0 4px; }
 .pf-uf__lbl { font-size: 11px; color: var(--text-tertiary); }
 .pf-uf__in.pf-input {
   background: var(--input-bg);

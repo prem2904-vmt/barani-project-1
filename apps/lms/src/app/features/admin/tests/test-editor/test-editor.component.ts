@@ -1094,6 +1094,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly packageQuery = signal('');
 
   readonly repetitive = signal(false);
+  /** PROFILE-level "Tech picks what prints" (owner 2026-09-29): when this
+   *  profile is ordered, ITS setting decides for every member — overriding
+   *  each test's own. Stored as `printPicker: true` in the profile blob. */
+  readonly profilePrintPicker = signal(false);
+  setProfilePrintPicker(on: boolean) {
+    this.profilePrintPicker.set(on);
+    this.patch({});
+  }
   private readonly _memberRows = signal<MemberRow[]>([]);
   readonly repetitiveActive = computed(() => this._draft().type === 'profile' && this.repetitive());
   readonly packageItems = computed<string[]>(() =>
@@ -1807,6 +1815,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
           .filter((id: string) => id.length > 0);
         this._packageItems.set([...new Set(ids)]);
         this._reportOrder.set(readReportOrder(blob) ?? [...new Set(ids)]);
+        this.profilePrintPicker.set(t.type === 'profile' && blob.printPicker === true);
         if (t.type === 'profile' && blob.repetitive === true) {
           this.repetitive.set(true);
           this._memberRows.set(this.normalizeRows(items
@@ -1826,12 +1835,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         this._reportOrder.set([]);
         this._memberRows.set([]);
         this.repetitive.set(false);
+        this.profilePrintPicker.set(false);
       }
     } else {
       this._packageItems.set([]);
       this._reportOrder.set([]);
       this._memberRows.set([]);
       this.repetitive.set(false);
+      this.profilePrintPicker.set(false);
     }
     // One-page layout: the Report-layout card is always visible, so its columns
     // must be loaded up-front rather than on a tab switch.
@@ -2034,10 +2045,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
               repetitive: true,
               items: this.normalizeRows(this._memberRows()).map(r => ({ testId: r.testId, offsetMin: r.offsetMin })),
               ...withReportOrder(this.reportOrderForSave()),
+              ...(this.profilePrintPicker() ? { printPicker: true } : {}),
             })
           : JSON.stringify({
               items: this._packageItems().map(id => ({ testId: id })),
               ...withReportOrder(this.reportOrderForSave()),
+              // A package never carries it — the profile / test decides.
+              ...(d.type === 'profile' && this.profilePrintPicker() ? { printPicker: true } : {}),
             }))
       // A legacy blob still carrying the old `fields[]` twin is normalised to
       // the single parameters[] list on this save (props folded on load).

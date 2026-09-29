@@ -124,6 +124,10 @@ export interface OrderTest {
   /** Test CODE of the nearest profile (annotated by the samples endpoint) —
    *  picks profile-scoped reference bands at entry. */
   profileCode?: string | null;
+  /** RESOLVED "tech picks what prints" (annotated by the result-entry
+   *  endpoints): the profile's setting when ordered as part of a profile,
+   *  else the test's own. Read via `resolvePrintPicker`. */
+  printPicker?: boolean | null;
   /** Resolved profile/package name (annotated by the samples endpoint). */
   packageName?: string;
   /** Display sequence within the tube (profile-authored order, never alphabetical). */
