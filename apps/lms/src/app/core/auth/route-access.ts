@@ -78,6 +78,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/lab/receive':        { perms: ['receive_sample'], workflow: ['lab_intake'] },
   '/lost-and-found':     { perms: ['receive_sample', 'reject_sample', 'cancel_order', 'manage_users'], workflow: ['lost_and_found'] },
   '/pathologist':        { perms: ['validate_result'], workflow: ['validate'] },
+  // The critical-result acknowledgement register (NABL): bench, validators and the audit reader.
+  '/lab/critical-results': { perms: ['enter_result', 'validate_result', 'view_audit_log'], module: 'lab' },
   // Results. deliver_report = the delivery desk (Share / WhatsApp / Print as a
   // recorded delivery / Generate). view_report alone (Lab Tech, Branch
   // Manager, Quality Manager) opens the SAME branch-scoped list VIEW-ONLY:

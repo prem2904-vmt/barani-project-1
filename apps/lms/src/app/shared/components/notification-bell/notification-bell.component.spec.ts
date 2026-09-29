@@ -5,6 +5,8 @@ import { vi } from 'vitest';
 import { NotificationBellComponent } from './notification-bell.component';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 /**
  * Audit M20: dev holds hundreds of "lms."-prefixed rows (tat_breach,
@@ -64,5 +66,70 @@ describe('NotificationBellComponent — type keys', () => {
     expect(text).toContain('TAT breach');
     expect(text).toContain('report ready');
     expect(text).not.toContain('lms.');
+  });
+});
+
+/**
+ * NABL: a critical bell carries an explicit Acknowledge — reading the bell
+ * is not the record. Only for critical types referencing an order test, only
+ * for users who may act on results; the click posts via 'bell', then the row
+ * is marked read and the button goes.
+ */
+describe('NotificationBellComponent — critical acknowledgement', () => {
+  const row = (id: string, type: string, over: Record<string, unknown> = {}) => ({
+    id, type, title: 't ' + id, body: 'b', isRead: false, createdAt: new Date().toISOString(),
+    referenceId: 'ot-' + id, referenceType: 'order_test', ...over,
+  });
+  const list = [
+    row('1', 'critical_value'),
+    row('2', 'lms.critical_unvalidated'),
+    row('3', 'report_ready', { referenceType: 'report' }),
+    row('4', 'critical_value', { referenceId: null }),
+  ];
+
+  function render(perms: boolean) {
+    const api = { get: vi.fn(() => of(list)), patch: vi.fn(() => of({})) };
+    const critical = { acknowledgeOrderTest: vi.fn(() => of([{ id: 'e1', status: 'acknowledged' }])) };
+    const toasts = { success: vi.fn(), error: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [NotificationBellComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiService, useValue: api },
+        { provide: AuthService, useValue: { hasPermission: () => perms, hasAnyPermission: () => perms } },
+        { provide: CriticalResultsService, useValue: critical },
+        { provide: ToastService, useValue: toasts },
+      ],
+    });
+    const f = TestBed.createComponent(NotificationBellComponent);
+    f.detectChanges();
+    f.componentInstance.toggleOpen();
+    f.detectChanges();
+    return { f, el: f.nativeElement as HTMLElement, api, critical, toasts };
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('offers Acknowledge on critical rows that reference a result, for a result user only', () => {
+    const { el } = render(true);
+    const acks = [...el.querySelectorAll('.pf-bell-ack')];
+    expect(acks.length).toBe(2);
+    expect(acks[0].getAttribute('aria-label')).toContain('t 1');
+    expect(acks[1].getAttribute('aria-label')).toContain('t 2');
+    TestBed.resetTestingModule();
+    expect(render(false).el.querySelectorAll('.pf-bell-ack').length).toBe(0);
+  });
+
+  it('the click records the acknowledgement via the bell, marks the row read, and does not navigate', () => {
+    const { f, el, api, critical, toasts } = render(true);
+    const btn = el.querySelector('.pf-bell-ack') as HTMLButtonElement;
+    btn.click();
+    f.detectChanges();
+    expect(critical.acknowledgeOrderTest).toHaveBeenCalledWith('ot-1', 'bell');
+    expect(api.patch).toHaveBeenCalledWith('/api/notifications/1/read');
+    expect(toasts.success).toHaveBeenCalledWith('Critical result acknowledged');
+    expect(f.componentInstance.open()).toBe(true);
+    expect(f.componentInstance.items().find(n => n.id === '1')?.isRead).toBe(true);
+    expect(el.querySelectorAll('.pf-bell-ack').length).toBe(1);
   });
 });

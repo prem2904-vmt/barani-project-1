@@ -16,6 +16,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Departments:** admin master only, mapped by CatalogKey.
   - **Vendor balance:** the ledger.
   - **Notifications:** `NotificationCatalog`.
+  - **Critical-value acknowledgement / communication:** `critical_result_events` (one row per critical result version), never the bell row.
   - **Licensing:** the platform entitlement.
   - **Reference ranges:** the single sex + age resolver.
   - **Paid (patient release):** `PatientReleaseGate`.
@@ -48,7 +49,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - A signed report never changes. Stored PDFs are immutable; only Regenerate creates a new version (supersede the old one in the same transaction).
 - One live final report per order. "Delivered" comes from the live final report.
 - Print ranges / units from the saved result snapshot, not the live Test Master.
-- Critical-value acknowledgements live in the audit / result records.
+- Critical-value acknowledgements live in `critical_result_events` (written with the result version, audit-logged); an explicit Acknowledge action, never "viewed".
 - Patient-facing report links: identity verification is checked on the SERVER before any patient detail or PDF is returned. No patient data before verification.
 
 ## 5. Auth and security

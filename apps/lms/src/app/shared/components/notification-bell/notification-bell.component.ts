@@ -6,6 +6,9 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { Notification } from '../../models/user.model';
 import { NotifRoute, notificationRoute } from './notification-route';
 import { canonicalNotificationType } from '../../utils/notification-type';
+import { CriticalResultsService } from '../../../core/services/critical-results.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../models/api-response.model';
 
 type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
 
@@ -75,7 +78,16 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
                       {{ n.createdAt | date:'shortTime' }} · {{ typeLabel(n.type) }}
                     </p>
                   </div>
-                  @if (linkFor(n)) {
+                  @if (canAcknowledge(n)) {
+                    <!-- NABL: the explicit acknowledgement — reading the bell is
+                         not it. Records who saw the critical value and when. -->
+                    <button type="button" class="pf-bell-ack press" [disabled]="acking() === n.id"
+                            (click)="$event.stopPropagation(); acknowledge(n)"
+                            [attr.aria-label]="'Acknowledge critical result: ' + n.title">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                      {{ acking() === n.id ? 'Acknowledging…' : 'Acknowledge' }}
+                    </button>
+                  } @else if (linkFor(n)) {
                     <svg class="pf-bell-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
                   }
                 </button>
@@ -227,6 +239,15 @@ type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
     .pf-bell-row.is-unread:hover {
       background: linear-gradient(90deg, rgba(124, 58, 237, 0.1), var(--bg-hover) 60%);
     }
+    .pf-bell-ack {
+      flex-shrink: 0; align-self: center; display: inline-flex; align-items: center; gap: 5px;
+      min-height: 32px; padding: 0 10px; border-radius: 9px; font-size: 12px; font-weight: 600;
+      color: var(--red-text, #b91c1c); background: transparent;
+      border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); cursor: pointer;
+    }
+    .pf-bell-ack:hover:not(:disabled) { background: color-mix(in srgb, var(--red-text, #dc2626) 8%, transparent); }
+    .pf-bell-ack:disabled { opacity: 0.6; cursor: default; }
+    @media (hover: none) and (pointer: coarse) { .pf-bell-ack { min-height: 44px; } }
     .pf-bell-chev { flex-shrink: 0; align-self: center; color: var(--text-muted); opacity: 0.6; }
     .pf-bell-row:hover .pf-bell-chev { opacity: 1; color: var(--text-secondary); }
 
@@ -281,8 +302,13 @@ export class NotificationBellComponent implements OnInit {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly critical = inject(CriticalResultsService);
+  private readonly toasts = inject(ToastService);
 
   private readonly _items = signal<Notification[]>([]);
+  /** Critical rows acknowledged in this session (the button hides once done). */
+  private readonly _acked = signal<Set<string>>(new Set());
+  readonly acking = signal<string | null>(null);
   private readonly _open = signal(false);
   readonly items = this._items.asReadonly();
   readonly open = this._open.asReadonly();
@@ -343,6 +369,34 @@ export class NotificationBellComponent implements OnInit {
    *  screen (see notificationRoute). */
   linkFor(n: Notification): NotifRoute | null {
     return notificationRoute(n.type, n.referenceType, n.referenceId, this.auth.hasPermission('validate_result'));
+  }
+
+  /** Critical bells (critical_value / critical_unvalidated) referencing an
+   *  order test, for a user who may act on results. */
+  canAcknowledge(n: Notification): boolean {
+    const t = canonicalNotificationType(n.type);
+    if (t !== 'critical_value' && t !== 'critical_unvalidated') return false;
+    if (n.referenceType !== 'order_test' || !n.referenceId) return false;
+    if (this._acked().has(n.referenceId)) return false;
+    return this.auth.hasAnyPermission?.(['enter_result', 'validate_result']) ?? false;
+  }
+
+  /** Explicit acknowledgement from the bell: writes the NABL record (via
+   *  'bell'), then the row is read. A record already acknowledged by this
+   *  user (or one that never existed — a legacy bell) just marks read. */
+  acknowledge(n: Notification) {
+    const ref = n.referenceId;
+    if (!ref || this.acking()) return;
+    this.acking.set(n.id);
+    this.critical.acknowledgeOrderTest(ref, 'bell').subscribe({
+      next: touched => {
+        this.acking.set(null);
+        this._acked.update(s => new Set(s).add(ref));
+        this.markRead(n);
+        this.toasts.success(touched.length ? 'Critical result acknowledged' : 'Already acknowledged');
+      },
+      error: e => { this.acking.set(null); this.toasts.error(ApiError.from(e).message); },
+    });
   }
 
   markRead(n: Notification) {

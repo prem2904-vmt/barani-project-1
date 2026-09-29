@@ -1762,6 +1762,46 @@ lazy, and the root skips the idle lock / push / calling boot on
 - `noindex` + `no-referrer` meta while open; API answers are `no-store`.
 - **Specs:** `public-report.component.spec.ts`.
 
+## 25. Critical results (NABL acknowledgement register)
+
+`/lab/critical-results` (`features/lab/critical-results/`) — the record of
+every critical value: who was alerted, who acknowledged it and who was told.
+The record itself is the backend's `critical_result_events` row (one per
+critical result version); the bell is only the alert.
+
+- **Band:** search pill (patient, MRN, order, sample, test, values); quiet
+  ghost **Refresh** + **Export CSV** (the server's CSV, IST stamps, every
+  filtered row). The page has NO primary. Phones: a **Filters** band button
+  opens the companion as a sheet.
+- **FILTERS companion on the LEFT** (filter first): a kit `.nd-seg`
+  radiogroup for the status (Not acknowledged · Acknowledged · Communicated ·
+  All, counts as plain `.nd-num`), the IST detection range as a quick-pick
+  radiogroup (Today · 7 days · 30 days · Custom) + two `pf-nd-date` boxes, and
+  a `pf-select` branch filter ONLY for multi-branch users. Opens on the last
+  30 days of unacknowledged records.
+- **MAIN card:** the Test Master AG-Grid theme; header = icon chip +
+  "CRITICAL RESULTS" + the muted count ("3 records · 1 not acknowledged").
+  Each row: Detected (IST) · Patient (MRN · order under) · Test + the critical
+  values ("Potassium 7.2 mmol/L CH") · ONE status word (dot + colour: red
+  Not acknowledged, amber Acknowledged, green Communicated) · Acknowledged
+  (who, when, from where) · Communicated (method, to whom, by whom, notes) ·
+  Alerted count · row actions as `.nd-rowact` (text on web, 44px icons on
+  touch). Phones keep Detected · Patient · Test · Status · actions.
+- **Acknowledge** is an explicit action everywhere (bell row, tube screen,
+  validate page rail, pathologist queue tile, register row) — viewing never
+  counts. The first acknowledger owns the record; later ones are appended.
+  **Record communication** (`pf-critical-communication-dialog`): `pf-select`
+  method (phone / in person / WhatsApp / other), name + `pf-select` role,
+  notes; saved with the time and the user. No native controls.
+- **On the result screens** the open records of the tube ride in
+  `pf-critical-ack-strip` (red left rule, one line per record with the status
+  word and the two actions); the pathologist tile's status becomes
+  "Critical · not acknowledged" until this user acknowledges.
+- **Specs:** `critical-results.component.spec.ts`,
+  `critical-ack-strip.component.spec.ts`,
+  `critical-communication-dialog.component.spec.ts`,
+  `pending-validation.critical.spec.ts`, the bell spec.
+
 ## API summary
 
 ```
