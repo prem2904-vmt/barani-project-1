@@ -22,6 +22,16 @@ import { testListUrl } from '../../../shared/utils/test-list-url';
 /** Department-filter value for the "Packages" option (packages have no department). */
 export const PACKAGES_FILTER = '__packages__';
 
+/** One allowed specimen of a test with its own price row (owner 2026-09-29:
+ *  price by specimen). `orig` null = the base price applies. */
+export interface SpecimenPriceRow {
+  testId: string;
+  code: string;
+  name: string;
+  orig: number | null;
+  basePrice: number;
+}
+
 export interface PriceRow {
   id: string;
   name: string;
@@ -131,7 +141,7 @@ export interface PriceRow {
           </div>
           <ul class="pf-pricing__list">
             @for (r of filtered(); track r.id) {
-              <li class="nd-row pf-pricing__row" [class.pf-pricing__row--dirty]="isDirty(r.id)"
+              <li class="nd-row pf-pricing__row" [class.pf-pricing__row--dirty]="isDirty(r.id) || specimenDirty(r.id)"
                   [class.pf-pricing__row--off]="!offeredNow(r.id)">
                 <div class="grow min-w-0">
                   <p class="nd-row__name pf-pricing__name">{{ r.name }}</p>
@@ -155,6 +165,24 @@ export interface PriceRow {
                          [ngModel]="edits()[r.id]" (ngModelChange)="setPrice(r.id, $any($event))" />
                 </div>
               </li>
+              <!-- A test with allowed specimens expands into one row per
+                   specimen: its own price, or blank = the test's price. -->
+              @for (sp of specimenRowsOf(r.id); track sp.code) {
+                <li class="nd-row pf-pricing__row pf-pricing__row--spec" [attr.data-spec]="r.id + '|' + sp.code"
+                    [class.pf-pricing__row--dirty]="isSpecimenDirty(r.id, sp.code)">
+                  <div class="grow min-w-0 pf-pricing__spec">
+                    <p class="nd-row__name pf-pricing__name">{{ sp.name }}</p>
+                    <p class="pf-pricing__meta"><span>Specimen of {{ r.name }}</span></p>
+                  </div>
+                  <div class="pf-pricing__offer"></div>
+                  <div class="pf-pricing__price">
+                    <span class="pf-pricing__unit">₹</span>
+                    <input type="number" class="nd-input nd-num pf-pricing__price-in" [attr.aria-label]="'Price of ' + r.name + ' on ' + sp.name"
+                           min="0" step="0.01" inputmode="decimal" [placeholder]="'base ' + round2(edits()[r.id])"
+                           [ngModel]="specimenPriceNow(r.id, sp.code)" (ngModelChange)="setSpecimenPrice(r.id, sp.code, $any($event))" />
+                  </div>
+                </li>
+              }
             }
           </ul>
           <div class="h-2"></div>
@@ -198,6 +226,9 @@ export interface PriceRow {
     .pf-pricing__dept { width: 240px; max-width: 100%; display: inline-block; }
     .pf-pricing__branch { width: 220px; max-width: 100%; display: inline-block; }
     .pf-pricing__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; margin: 2px 0 0; font-size: 12px; color: var(--text-tertiary); }
+    .pf-pricing__row--spec { background: var(--surface-subtle, rgba(0,0,0,.02)); }
+    .pf-pricing__spec { padding-left: 24px; position: relative; }
+    .pf-pricing__spec::before { content: ''; position: absolute; left: 10px; top: 8px; bottom: 8px; border-left: 2px solid var(--border-subtle, rgba(0,0,0,.12)); }
     .pf-pricing__offer-h { width: 64px; text-align: center; }
     .pf-pricing__offer { width: 64px; flex: 0 0 auto; display: flex; justify-content: center; }
     .pf-pricing__row--off { opacity: 0.6; }
@@ -286,6 +317,10 @@ export class PricingComponent implements OnInit {
   readonly pct = signal<number>(10);
 
   private readonly _rows = signal<PriceRow[]>([]);
+  /** The per-specimen rows (GET /api/tests/prices/specimens), by test id. */
+  private readonly _specimenRows = signal<Record<string, SpecimenPriceRow[]>>({});
+  /** `${testId}|${code}` → edited specimen price ('' = back to the base price). */
+  readonly specimenEdits = signal<Record<string, number | ''>>({});
   /** testId → current (possibly edited) price. */
   readonly edits = signal<Record<string, number>>({});
   /** testId → edited "offered here" flag (only rows the user flipped). */
@@ -325,9 +360,48 @@ export class PricingComponent implements OnInit {
   readonly dirtyCount = computed(() => {
     const e = this.edits();
     const o = this.offeredEdits();
-    return this._rows().reduce((n, r) =>
+    const base = this._rows().reduce((n, r) =>
       n + (this.round2(e[r.id]) !== this.round2(r.orig) || (r.id in o && o[r.id] !== r.offered) ? 1 : 0), 0);
+    return base + this.dirtySpecimenWrites().length;
   });
+
+  // ── Price by specimen (owner 2026-09-29) ──
+  specimenRowsOf(testId: string): SpecimenPriceRow[] { return this._specimenRows()[testId] ?? []; }
+  private static specKey(testId: string, code: string): string { return `${testId}|${code}`; }
+  /** The specimen's shown price: the edit, else the saved own price, else '' (base). */
+  specimenPriceNow(testId: string, code: string): number | '' {
+    const k = PricingComponent.specKey(testId, code);
+    const e = this.specimenEdits();
+    if (k in e) return e[k];
+    const row = this.specimenRowsOf(testId).find(s => s.code === code);
+    return row?.orig == null ? '' : row.orig;
+  }
+  setSpecimenPrice(testId: string, code: string, val: number | '' | null) {
+    const k = PricingComponent.specKey(testId, code);
+    const v = val === '' || val == null || !Number.isFinite(Number(val)) ? '' : Math.max(0, Number(val));
+    this.specimenEdits.update(e => ({ ...e, [k]: v }));
+  }
+  isSpecimenDirty(testId: string, code: string): boolean {
+    const k = PricingComponent.specKey(testId, code);
+    const e = this.specimenEdits();
+    if (!(k in e)) return false;
+    const row = this.specimenRowsOf(testId).find(s => s.code === code);
+    const saved = row?.orig == null ? '' : this.round2(row.orig);
+    const now = e[k] === '' ? '' : this.round2(e[k] as number);
+    return saved !== now;
+  }
+  specimenDirty(testId: string): boolean { return this.specimenRowsOf(testId).some(s => this.isSpecimenDirty(testId, s.code)); }
+  /** The specimen writes to send: price (own) or null (= back to the base price). */
+  private dirtySpecimenWrites(): PriceWriteItem[] {
+    const out: PriceWriteItem[] = [];
+    for (const [testId, rows] of Object.entries(this._specimenRows()))
+      for (const s of rows)
+        if (this.isSpecimenDirty(testId, s.code)) {
+          const v = this.specimenPriceNow(testId, s.code);
+          out.push({ testId, specimenCode: s.code, price: v === '' ? null : this.round2(v) } as PriceWriteItem);
+        }
+    return out;
+  }
 
   scopeLabel(): string {
     const dept = this.selectedDeptId();
@@ -403,6 +477,25 @@ export class PricingComponent implements OnInit {
       },
       error: () => { this.loading.set(false); this.toasts.error('Failed to load tests'); },
     });
+    this.loadSpecimenRows();
+  }
+
+  /** The per-specimen expansion for the viewed scope (empty when the tenant
+   *  has no test with allowed specimens, or the micro module is absent). */
+  private loadSpecimenRows() {
+    const scope = this.isolationOn() && this.scope() ? this.scope() : null;
+    const url = scope && scope !== TENANT_PRICE_SCOPE ? `/api/tests/prices/specimens?branchId=${encodeURIComponent(scope)}` : '/api/tests/prices/specimens';
+    this.api.get<Array<{ testId: string; specimenCode: string; specimenName: string; price?: number | null; basePrice: number }>>(url).subscribe({
+      next: list => {
+        const by: Record<string, SpecimenPriceRow[]> = {};
+        for (const r of list ?? []) {
+          (by[r.testId] ??= []).push({ testId: r.testId, code: r.specimenCode, name: r.specimenName, orig: r.price ?? null, basePrice: Number(r.basePrice) });
+        }
+        this._specimenRows.set(by);
+        this.specimenEdits.set({});
+      },
+      error: () => { this._specimenRows.set({}); this.specimenEdits.set({}); },
+    });
   }
 
   setPrice(id: string, val: number) {
@@ -427,6 +520,7 @@ export class PricingComponent implements OnInit {
   discard() {
     this.edits.set(Object.fromEntries(this._rows().map(r => [r.id, r.orig])));
     this.offeredEdits.set({});
+    this.specimenEdits.set({});
   }
 
   async save() {
@@ -442,6 +536,8 @@ export class PricingComponent implements OnInit {
       if (offeredChanged) u.isOffered = o[r.id];
       updates.push(u);
     }
+    const specimenWrites = this.dirtySpecimenWrites();
+    updates.push(...specimenWrites);
     if (updates.length === 0) return;
     this.saving.set(true);
     try {
@@ -449,7 +545,7 @@ export class PricingComponent implements OnInit {
       // Commit: new originals become the saved values (a priced row is no
       // longer at the default).
       this._rows.update(rows => rows.map(r => {
-        const u = updates.find(x => x.testId === r.id);
+        const u = updates.find(x => x.testId === r.id && !x.specimenCode);
         if (!u) return r;
         return {
           ...r,
@@ -459,6 +555,19 @@ export class PricingComponent implements OnInit {
         };
       }));
       this.offeredEdits.set({});
+      // Specimen rows: the saved value becomes the original (null = base).
+      if (specimenWrites.length) {
+        this._specimenRows.update(by => {
+          const next: Record<string, SpecimenPriceRow[]> = {};
+          for (const [testId, rows] of Object.entries(by))
+            next[testId] = rows.map(s => {
+              const w = specimenWrites.find(x => x.testId === testId && x.specimenCode === s.code);
+              return w ? { ...s, orig: w.price ?? null } : s;
+            });
+          return next;
+        });
+        this.specimenEdits.set({});
+      }
       this.toasts.success(`Updated ${updates.length} price${updates.length === 1 ? '' : 's'}`);
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
@@ -467,7 +576,7 @@ export class PricingComponent implements OnInit {
     }
   }
 
-  private round2(n: number | undefined): number {
+  round2(n: number | undefined): number {
     return Math.round((Number(n) || 0) * 100) / 100;
   }
 

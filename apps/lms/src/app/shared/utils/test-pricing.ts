@@ -32,10 +32,15 @@ export interface PricedTestLike {
  *  server (a row may carry only `isOffered`: hiding never prices a test). */
 export interface PriceWriteItem {
   testId: string;
-  price?: number;
+  /** A base row: absent = unchanged. A specimen row (`specimenCode` set):
+   *  null = remove the specimen's own price (back to the base price). */
+  price?: number | null;
   discount?: number;
   taxSlab?: number;
   isOffered?: boolean;
+  /** Price by specimen (owner 2026-09-29): the allowed specimen's master
+   *  code — a price-only row; ignored for profiles / packages (one price). */
+  specimenCode?: string;
 }
 
 /** Body of `PATCH /api/tests/prices/bulk`. `branchId` is sent only when the
@@ -126,7 +131,10 @@ export function lineGst(price: number, taxSlabPct: number): number {
 export function priceBulkBody(items: PriceWriteItem[], branchId?: string | null): PriceBulkBody {
   const updates = items.map(i => {
     const row: PriceWriteItem = { testId: i.testId };
-    if (i.price != null) row.price = round2(Math.max(0, Number(i.price) || 0));
+    // A specimen row (price by specimen): the code rides along and a null
+    // price is sent EXPLICITLY (= remove the specimen's own price).
+    if (i.specimenCode) { row.specimenCode = i.specimenCode; row.price = i.price == null ? null : round2(Math.max(0, Number(i.price) || 0)); }
+    else if (i.price != null) row.price = round2(Math.max(0, Number(i.price) || 0));
     if (i.discount != null) row.discount = round2(Math.max(0, Number(i.discount) || 0));
     if (i.taxSlab != null) row.taxSlab = Math.max(0, Number(i.taxSlab) || 0);
     if (i.isOffered != null) row.isOffered = !!i.isOffered;

@@ -18,6 +18,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Notifications:** `NotificationCatalog`.
   - **Licensing:** the platform entitlement.
   - **Reference ranges:** the single sex + age resolver.
+  - **Specimen of an ordered line:** `order_tests` (code + name), decided by the Test Master's specimen mode + allowed list (`SpecimenRules` / `micro-specimen.ts`); every report path prints the ORDERED specimen, never the Test Master text.
   - **Paid (patient release):** `PatientReleaseGate`.
 - Never match by name or code when an ID / key exists.
 

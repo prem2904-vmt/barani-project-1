@@ -683,18 +683,22 @@
             }
             }
           </div>
-          @if (asksSpecimen(t) && specimenOpts().length) {
-          <!-- Tests that ask for their specimen (culture, and every micro
-               test): the desk picks WHICH specimen (urine vs pus vs blood);
-               the bench can refine it later, and it prints on the report. -->
+          @if (fixedSpecimenName(t); as fixedName) {
+          <!-- A FIXED specimen (Test Master): no picker — the server stamps it. -->
+          <p class="pf-cart-meta">Specimen · {{ fixedName }}</p>
+          } @else if (asksSpecimen(t) && specimenOpts().length) {
+          <!-- A CHOOSE test (or a bundle carrying one): the desk picks ONLY
+               from the test's allowed specimens (the Test Master decides);
+               the bench may move it within that list, and it prints on the
+               report. A specimen with its own price re-prices the line. -->
           @if (orderLocked() || isCollected(t.id)) {
-          @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenOf(t.id) }}</p> }
+          @if (specimenOf(t.id)) { <p class="pf-cart-meta">Specimen · {{ specimenLabel(t.id) }}</p> }
           } @else {
-          <!-- Required: no default unless the test's mapping marks exactly
+          <!-- Required: no default unless the allowed list marks exactly
                one (owner 2026-09-27: "there is no default"). -->
           <div class="pf-cart-spec" [class.pf-cart-spec--err]="specimenError(t.id)" [attr.data-spec-id]="t.id"
             (click)="$event.stopPropagation()">
-            <pf-select size="sm" [searchable]="true" [options]="specimenOpts()" [value]="specimenOf(t.id)"
+            <pf-select size="sm" [searchable]="true" [options]="specimenOptsFor(t.id)" [value]="specimenOf(t.id)"
               placeholder="Choose specimen…" [attr.aria-invalid]="specimenError(t.id) ? 'true' : null"
               (valueChange)="setSpecimen(t.id, $event)"></pf-select>
             @if (specimenError(t.id)) { <p class="pf-field-error" role="alert">Choose the specimen for this test.</p> }
