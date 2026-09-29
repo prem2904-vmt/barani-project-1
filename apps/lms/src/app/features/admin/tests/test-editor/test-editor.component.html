@@ -879,6 +879,20 @@
             </span>
           </div>
 
+          <!-- PROFILE-level print picker (owner 2026-09-29): ordered as this
+               profile, ITS setting decides for every member. -->
+          @if (d.type === 'profile') {
+            <div class="pf-uf pf-uf--span pf-te2-profile-pick">
+              <button type="button" class="nd-toggle pf-te2-toggle" role="switch" [attr.aria-checked]="profilePrintPicker()"
+                  data-testid="profile-print-picker"
+                  (click)="setProfilePrintPicker(!profilePrintPicker())">
+                <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                <span>Tech picks what prints (per report)</span>
+              </button>
+              <p class="pf-hint">Overrides the setting on each test when this profile is ordered.</p>
+            </div>
+          }
+
           @if (d.type === 'profile' && (calcMembers().length > 0 || packageItems().length > 1)) {
             <div class="pf-calc-members">
               <p class="pf-calc-members__hdr">Auto-calculated in this profile</p>

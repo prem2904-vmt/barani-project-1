@@ -13,6 +13,7 @@ import {
   signal,
   viewChild,
 } from "@angular/core";
+import { resolvePrintPicker } from "../../../shared/utils/print-picker";
 import { TrendTest } from "../../../shared/utils/trend-chart";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { combineLatest } from "rxjs";
@@ -2236,14 +2237,14 @@ export class SampleResultEntryComponent {
   // ── Per-REPORT value picker (owner 2026-09-20, culture-checkbox pattern):
   // Test Master's `printPicker: true` marker puts a print checkbox on every
   // value row; unticked names ride order_tests.ReportHiddenJson and the
-  // report renderer drops those rows for THIS order only. ────────────────
+  // report renderer drops those rows for THIS order only. The setting follows
+  // what was ORDERED — the profile's for a profile member, else the test's
+  // (resolved by the server; see resolvePrintPicker). ────────────────────
   private readonly _reportHidden = signal<Record<string, string[]>>({});
   private readonly _printPickerByTest = computed<Set<string>>(() => {
     const out = new Set<string>();
     for (const t of this._sample()?.tests ?? []) {
-      try {
-        if (JSON.parse(t.test?.parameters || "{}")?.printPicker === true) out.add(t.id);
-      } catch { /* malformed parameters — picker stays off */ }
+      if (resolvePrintPicker(t)) out.add(t.id);
     }
     return out;
   });
