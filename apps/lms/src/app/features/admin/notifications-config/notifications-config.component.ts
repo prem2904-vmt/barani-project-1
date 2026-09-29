@@ -9,6 +9,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
+import { DialogService } from '../../../core/services/dialog.service';
 
 /** One catalog event merged with the tenant's override — mirrors the
  *  middleware's NotificationCatalogRow. The catalog itself lives in the
@@ -24,7 +25,12 @@ interface CatalogRow {
   enabled: boolean;
   thresholdMinutes: number | null;
   thresholdConfigurable: boolean;
+  /** Patient-safety event: still sends while the master switch is off. */
+  critical?: boolean;
 }
+
+/** GET/POST /api/config/notifications/master — the lab-wide switch. */
+interface MasterView { enabled: boolean; alwaysSends?: string[] }
 
 const MODULE_LABELS: Record<string, string> = {
   frontdesk:    'Front desk & orders',
@@ -58,10 +64,59 @@ const MODULE_LABELS: Record<string, string> = {
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
         title="Notifications"
-        subtitle="Every in-app alert the platform can raise — switch each one on or off, and set how long to wait before 'didn't happen in time' alerts fire.">
+        subtitle="Every in-app alert the platform can raise — switch them all off at once, switch each one on or off, and set how long to wait before 'didn't happen in time' alerts fire.">
       </pf-screen-header>
 
       <div class="pf-band-body">
+      <!-- Master switch (owner): one lab-wide "All notifications" control above
+           the list. Off = nothing sends (bells, phone / browser pushes, overdue
+           watches) except critical result alerts; the per-alert choices below
+           are kept untouched and come back exactly when it's switched on. -->
+      @if (!loading()) {
+        <div class="nd-card pf-nc-master mb-5" [class.pf-nc-master--off]="!masterOn()">
+          <div class="pf-nc-master__row">
+            <div class="pf-nc-master__icon" aria-hidden="true">
+              @if (masterOn()) {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+                </svg>
+              } @else {
+                <!-- bell-off -->
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/>
+                  <path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/>
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+                  <path d="m2 2 20 20"/>
+                </svg>
+              }
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="pf-nc-master__title">All notifications</p>
+              <p class="pf-nc-master__sub">
+                @if (masterOn()) {
+                  On for the whole lab — {{ enabledTotal() }} of {{ rows().length }} alerts below are switched on.
+                } @else {
+                  Off for the whole lab — no bells, phone or browser alerts. Your choices below are kept and come back when you switch this on.
+                }
+              </p>
+              <p class="pf-nc-master__note">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
+                </svg>
+                Critical result alerts always send.
+              </p>
+            </div>
+            <button type="button" class="nd-toggle pf-nc-switch pf-nc-master__switch" role="switch"
+                    [attr.aria-checked]="masterOn()" [disabled]="masterSaving()"
+                    [attr.aria-label]="'All notifications — ' + (masterOn() ? 'on' : 'off')"
+                    (click)="toggleMaster()">
+              <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+            </button>
+          </div>
+        </div>
+      }
+
       <!-- Module filter chips (classic; the new design has them in the pill) -->
       <div class="pf-nc-chips pf-classic-only mb-5">
         <button type="button" class="pf-nc-chip" [attr.aria-pressed]="moduleFilter() === null"
@@ -83,7 +138,7 @@ const MODULE_LABELS: Record<string, string> = {
       }
 
       @for (m of visibleModules(); track m) {
-        <div class="mb-6">
+        <div class="mb-6" [class.pf-nc-paused]="!masterOn()">
           <div class="pf-nc-section">
             <h3 class="pf-nc-section__title">{{ moduleLabel(m) }}</h3>
             <span class="pf-nc-section__meta nd-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
@@ -114,6 +169,9 @@ const MODULE_LABELS: Record<string, string> = {
                       <p class="font-semibold text-[14.5px]" style="color: var(--text-primary);">{{ r.label }}</p>
                       @if (r.kind === 'overdue') {
                         <span class="nd-chip nd-chip--static pf-nc-badge">Overdue watch</span>
+                      }
+                      @if (r.critical && !masterOn()) {
+                        <span class="nd-chip nd-chip--static pf-nc-badge pf-nc-badge--always">Always sends</span>
                       }
                     </div>
                     <p class="text-[12.5px] mt-0.5 leading-snug" style="color: var(--text-secondary);">{{ r.firesWhen }}</p>
@@ -151,6 +209,29 @@ const MODULE_LABELS: Record<string, string> = {
   `,
   styles: [`
     .pf-nc-modsel { display: block; min-width: 200px; }
+
+    /* Master switch card — the one lab-wide control, above the list. */
+    .pf-nc-master { padding: 14px 16px; }
+    .pf-nc-master__row { display: flex; align-items: center; gap: 14px; }
+    .pf-nc-master__icon {
+      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+      color: var(--violet-text, #7c3aed);
+    }
+    .pf-nc-master--off .pf-nc-master__icon { background: var(--nd-chip-bg); color: var(--text-muted); }
+    .pf-nc-master__title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .pf-nc-master__sub { font-size: 12.5px; line-height: 1.4; margin-top: 2px; color: var(--text-secondary); }
+    .pf-nc-master__note {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
+      font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    }
+    .pf-nc-master__note svg { color: var(--violet-text, #7c3aed); flex: none; }
+    .pf-nc-master__switch { min-width: 44px; min-height: 44px; justify-content: center; }
+    /* Master off: the per-alert list stays editable (choices are kept) but
+       reads as paused; critical rows carry an "Always sends" chip. */
+    .pf-nc-paused .pf-nc-card { opacity: 0.6; }
+    .pf-nc-badge--always { color: var(--text-primary); }
     @media (max-width: 640px) { .pf-nc-modsel { min-width: 0; width: 100%; } }
     .pf-nc-chips {
       display: flex;
@@ -230,7 +311,7 @@ const MODULE_LABELS: Record<string, string> = {
 
     .pf-nc-card { padding: 12px 14px; }
     .pf-nc-badge { height: 22px; font-size: 11px; }
-    .pf-nc-switch { flex: none; min-height: 36px; }
+    .pf-nc-switch { flex: none; min-height: 44px; }
     @media (pointer: coarse) { .pf-nc-switch { min-width: 44px; min-height: 44px; justify-content: center; } }
 
     .pf-nc-threshold {
@@ -260,6 +341,13 @@ const MODULE_LABELS: Record<string, string> = {
 export class NotificationsConfigComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
+
+  /** Lab-wide "All notifications" switch (server-enforced in the single
+   *  notification gate; this only reflects and flips it). */
+  readonly masterOn = signal<boolean>(true);
+  readonly masterSaving = signal<boolean>(false);
+  readonly enabledTotal = computed(() => this._rows().filter(r => r.enabled).length);
 
   private readonly _rows = signal<CatalogRow[]>([]);
   readonly rows = this._rows.asReadonly();
@@ -303,6 +391,40 @@ export class NotificationsConfigComponent implements OnInit {
     this.api.get<CatalogRow[]>('/api/config/notifications/catalog').subscribe({
       next: rows => { this._rows.set(rows ?? []); this.loading.set(false); },
       error: e => { this.loading.set(false); this.toasts.error(ApiError.from(e).message); }
+    });
+    this.api.get<MasterView>('/api/config/notifications/master').subscribe({
+      // Missing / older backend → on (the server default).
+      next: m => this.masterOn.set((m as MasterView | null)?.enabled !== false),
+      error: () => this.masterOn.set(true)
+    });
+  }
+
+  /** Flip the master switch. Turning it OFF asks first (it silences the whole
+   *  lab); ON is instant. Never touches the per-alert rows. */
+  async toggleMaster() {
+    if (this.masterSaving()) return;
+    const next = !this.masterOn();
+    if (!next) {
+      const ok = await this.dialog.confirm({
+        title: 'Turn off all notifications?',
+        message: 'No one in the lab gets bells, phone or browser alerts until you switch this back on. Critical result alerts always send. Your individual alert choices are kept.',
+        confirmLabel: 'Turn off',
+        tone: 'danger'
+      });
+      if (!ok) return;
+    }
+    this.masterSaving.set(true);
+    this.masterOn.set(next);
+    this.api.post('/api/config/notifications/master', { enabled: next }).subscribe({
+      next: () => {
+        this.masterSaving.set(false);
+        this.toasts.success(next ? 'All notifications on' : 'All notifications off — critical result alerts still send');
+      },
+      error: e => {
+        this.masterSaving.set(false);
+        this.masterOn.set(!next);
+        this.toasts.error(ApiError.from(e).message);
+      }
     });
   }
 

@@ -12,6 +12,7 @@ import { NativeRingState } from './native-ring.state';
 import { SignalingService } from './signaling.service';
 import { SessionScopeService } from '../auth/session-scope.service';
 import { environment } from '../../../environments/environment';
+import { canonicalNotificationType } from '../../shared/utils/notification-type';
 
 /**
  * Push notification + CallKit/VoIP orchestration for the Capacitor app.
@@ -391,7 +392,9 @@ export class PushService {
     title?: string,
     body?: string
   ): void {
-    const kind = (data['kind'] as string) ?? '';
+    // Business kinds are matched on the canonical catalog key (M20): old
+    // servers / queued pushes may still send the legacy "lms." spelling.
+    const kind = canonicalNotificationType((data['kind'] as string) ?? '');
     switch (kind) {
       case 'chat-message': {
         const conv = data['conversationId'] as string;
@@ -434,13 +437,13 @@ export class PushService {
         else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
         break;
       }
-      case 'lms.report_ready': {
+      case 'report_ready': {
         if (opened) this.router.navigate(['/reports']);
         else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
         break;
       }
-      case 'lms.sample_rejection':
-      case 'lms.sample_ready_collection': {
+      case 'sample_rejection':
+      case 'sample_ready_collection': {
         if (opened) this.router.navigate(['/frontdesk']);
         else if (title || body) this.toasts.info(`${title ?? ''} — ${body ?? ''}`.trim());
         break;
