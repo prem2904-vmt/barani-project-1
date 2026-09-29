@@ -593,7 +593,7 @@ no new looks:
 | --- | --- | --- |
 | **A button's request** (save, submit, send, print, approve…) | The SAME frame: `aria-busy`, dimmed, repeat presses swallowed. After 150ms: the kit's busy dots inside the button, and its words say what is happening ("Saving…"). | `[pfBusy]="saving()"` on a native button (`shared/directives/busy.directive.ts`), `[busy]` on `pf-touch-btn`; `busyWhile(flag)` (RxJS) sets the flag. Keep the button's own `[disabled]` binding. |
 | **A screen on its way** (lazy chunk, guards) | After 150ms: the thin violet bar at the top of the window, easing toward 90%, running out on arrival. | `<pf-route-progress>` — mounted ONCE in `app.ts`, driven by every navigation (`core/navigation/route-progress.service.ts`). Nothing per screen. |
-| **The thing you tapped opens a screen** (a DOM-built grid row action, a tile) | The pressed element turns "held" (tint + a slow pulse) the same frame, until that navigation settles (cancel included). | `RouteProgressService.markSource(el)` |
+| **The thing you tapped opens a screen** (a DOM-built grid row action, a tile) | The pressed element turns "held" (tint + a slow pulse) the same frame, until that navigation settles (cancel included). When the destination is heavy to build, navigate AFTER that frame is painted so the press is never swallowed. | `RouteProgressService.markSource(el)` + `afterNextPaint(() => router.navigate(…))` (`shared/utils/busy.ts`) |
 | **Opening an editor / drawer / page** | Its OWN layout as a skeleton on the first frame — band + name chip placeholder, the section card as fields, the side card as a block — never a blank form or a frozen previous screen. Save is not offered for a record that isn't on screen yet. | Skeleton kit (`pf-skeleton-form / -card / -detail`), held with `heldFlag(loading)` (600ms minimum). Canonical: the test editor (`recordSkeleton()`). |
 | **A grid / list's first load** | Skeleton rows in the grid's box (over the mounted grid so it keeps its size); later reloads keep the rows on screen. | `pf-skeleton-table` / `pf-skeleton-rows`, `heldFlag`. Canonical: Test Master (`listSkeleton()`). |
 | **A long save / upload / bulk job** | The button stays busy AND the region says so: a progress count when the work is countable ("Saving 3 of 12…"), otherwise the busy dots with the words. | `[pfBusy]` + text; `pf-busy` inline. |
@@ -1817,7 +1817,7 @@ Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit (+ the sec
          .nd-tabs[role=tablist] › .nd-tabs__item[role=tab][aria-selected] › .nd-tabs__dot(--ok) · .nd-savestate(__dot)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
-Loading  [pfBusy] · pf-touch-btn[busy] · busyWhile(flag) · spinDelay · <pf-route-progress> (app.ts, once)
+Loading  [pfBusy] · pf-touch-btn[busy] · busyWhile(flag) · spinDelay · afterNextPaint · <pf-route-progress> (app.ts, once)
          RouteProgressService.markSource(el) · prefetch / prefetchWhenIdle · pf-skeleton-* + heldFlag
 AI       .nd-ai-glow[data-ai-working] · .nd-ai-glow--inset · .nd-ai-glow--ring · .nd-ai-glow-mark · --nd-ai-angle (PF Sense only)
 Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .nd-fullscreen · --nd-nav-h
