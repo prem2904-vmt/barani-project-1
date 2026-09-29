@@ -85,6 +85,7 @@ import {
   tabMark,
   tabPayload,
 } from "./submit-all";
+import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
 
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -1551,6 +1552,8 @@ export class SampleResultEntryComponent {
     catch { return ''; }
   }
 
+  private readonly prestore = inject(ReportPrestoreService);
+
   async validateTube() {
     const targets = this.enteredTests();
     if (!targets.length || this.submitting()) return;
@@ -1561,6 +1564,9 @@ export class SampleResultEntryComponent {
       catch (e) { lastErr = ApiError.from(e).message; }
     }
     this._submitting.set(false);
+    // The tube's validation can complete the final report — store its PDF now
+    // (background) so the patient's WhatsApp carries it.
+    if (ok > 0) this.prestore.afterValidation(this.sample()?.orderId ?? this.sample()?.order?.id);
     if (ok === targets.length) {
       this.toasts.success(ok === 1 ? 'Result validated' : `${ok} results validated`);
       void this.router.navigate(['/pathologist']);

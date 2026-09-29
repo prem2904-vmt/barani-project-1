@@ -20,7 +20,8 @@ export type PublicReportView =
   | 'locked'     // too many wrong answers — wait, or call the lab
   | 'opening'    // verified; preparing the PDF (skeleton)
   | 'ready'      // the report card: Download / View / Share
-  | 'not-ready'; // verified, but the lab has not released a PDF yet
+  | 'not-ready'  // verified, but the lab has not released a PDF yet
+  | 'payment-due'; // verified, but a balance is owed — the lab releases it once paid
 
 interface ApiEnvelope<T> { success?: boolean; data?: T; error?: string; message?: string }
 
@@ -84,6 +85,8 @@ export class PublicReportComponent implements OnInit {
   protected readonly labName = computed(() =>
     this.link()?.lab?.name?.trim() || this.result()?.org?.trim() || 'Your lab');
   protected readonly hasLab = computed(() => !!(this.link()?.lab?.name?.trim() || this.result()?.org?.trim()));
+  /** Outstanding amount shown on the payment-pending screen (null = not billed yet). */
+  protected readonly balanceDue = signal<number | null>(null);
   protected readonly labPhone = computed(() => this.link()?.lab?.phone?.trim() || null);
   protected readonly labTel = computed(() => telHref(this.labPhone()));
   protected readonly logo = computed(() => safeLogoUrl(this.link()?.lab?.logoUrl, this.api));
@@ -180,6 +183,20 @@ export class PublicReportComponent implements OnInit {
       }
       if (res?.error === 'locked') {
         this.startLock(res.data?.retryAfterSeconds ?? 60);
+        return;
+      }
+      if (res?.error === 'payment_due') {
+        // Identity verified, report withheld until the bill is settled (server
+        // rule). No report data came back — only who to contact.
+        const d = res.data as { balanceDue?: number | null; lab?: { name?: string | null; phone?: string | null } | null } | undefined;
+        this.secret.set('');
+        this.balanceDue.set(typeof d?.balanceDue === 'number' && d.balanceDue > 0 ? d.balanceDue : null);
+        if (d?.lab && !this.link()?.lab?.phone && d.lab.phone) {
+          const cur = this.link();
+          this.link.set({ ...(cur ?? {}), lab: { ...(cur?.lab ?? {}), name: cur?.lab?.name ?? d.lab.name ?? undefined, phone: d.lab.phone } } as ReportLinkInfo);
+        }
+        this.view.set('payment-due');
+        setTimeout(() => this.heading()?.nativeElement.focus(), 0);
         return;
       }
       if (this.view() === 'opening') this.view.set('verify');   // hand-off answer no longer matches

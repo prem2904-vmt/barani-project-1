@@ -29,6 +29,7 @@ import { pickReassignee } from '../reassign-picker';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS } from '../../../core/services/report-actions.service';
 import { bandAgeYears } from '../../../shared/utils/patient-age';
+import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -1050,12 +1051,20 @@ export class ValidateResultComponent implements OnInit {
     { value: 'all', label: 'All history' },
   ];
 
+  /** Validation can complete the order's final report — store its PDF now
+   *  (background) so the patient's WhatsApp carries it. */
+  private readonly prestore = inject(ReportPrestoreService);
+  private orderIdOf(t: OrderTest | null | undefined): string | null {
+    return t?.subOrder?.orderId ?? t?.subOrder?.order?.id ?? null;
+  }
+
   approveTest(t: OrderTest) {
     if (this.outcomeOf(t) !== 'pending') return;
     this._outcome.update(m => ({ ...m, [t.id]: 'validating' }));
     this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: null }).subscribe({
       next: () => {
         this._outcome.update(m => ({ ...m, [t.id]: 'validated' }));
+        this.prestore.afterValidation(this.orderIdOf(t));
         this.toasts.success(`${t.test?.name ?? 'Test'} validated`);
         this.finishIfSampleDone();
       },
@@ -1103,6 +1112,7 @@ export class ValidateResultComponent implements OnInit {
       }
     }
     this._saving.set(false);
+    if (ok > 0) this.prestore.afterValidation(this.orderIdOf(pending[0]));
     if (failed.length === 0) this.toasts.success(`Validated ${ok} test${ok === 1 ? '' : 's'}`);
     else this.toasts.warning(`Validated ${ok}; ${failed.length} failed: ${failed.join(', ')}`);
     this.finishIfSampleDone();
@@ -1366,6 +1376,7 @@ export class ValidateResultComponent implements OnInit {
     this.api.post<OrderTest>(`/api/validation/${t.id}/validate`, { note: this._comment() || null }).subscribe({
       next: () => {
         this._saving.set(false);
+        this.prestore.afterValidation(this.orderIdOf(t));
         this.toasts.success('Validated');
         this.back();
       },

@@ -454,18 +454,20 @@ interface AutoAssignConfig {
       <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender
            number + token are platform config on the server. -->
       <section class="nd-card pf-ls__card" data-testid="ls-whatsapp">
-        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Send reports on WhatsApp automatically</h3><span class="nd-card__spacer"></span>
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Send WhatsApp automatically when the report is ready</h3><span class="nd-card__spacer"></span>
           <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.autoSendEnabled"
-                  aria-label="Send reports on WhatsApp automatically" [disabled]="waSaving() || !canManageWa()"
+                  aria-label="Send WhatsApp automatically when the report is ready" [disabled]="waSaving() || !canManageWa()"
                   (click)="saveWa({ autoSendEnabled: !waSettings()!.autoSendEnabled })">
             <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
           <p class="pf-ls__hint">
-            When a patient's <strong>final</strong> report is ready <strong>and nothing is owed</strong>, they get a
-            WhatsApp message with the secure report link (they confirm their date of birth or phone to open it).
-            If the bill is settled later, the message goes out then. Reports made before you turn this on aren't sent.
+            When every test on an order is validated and its <strong>final</strong> report is ready, the patient gets
+            one WhatsApp message on their registered mobile — the report PDF plus the secure report link (they confirm
+            their date of birth or phone to open it). It goes only when <strong>the bill is fully paid</strong>: while
+            anything is owed it waits as <strong>On hold</strong> and sends by itself once the balance is cleared.
+            Partial reports are never sent. Reports made before you turn this on aren't sent.
           </p>
           <!-- Sender: the shared Prefrontal number until the lab connects its own
                WhatsApp Business number (Embedded Signup — coming soon). -->
@@ -495,11 +497,13 @@ interface AutoAssignConfig {
           }
           <div class="pf-ls__wa-row">
             <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.sendUpdatedReports"
+                    data-testid="ls-wa-resend-regen"
                     [disabled]="waSaving() || !canManageWa()"
                     (click)="saveWa({ sendUpdatedReports: !waSettings()!.sendUpdatedReports })">
               <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
-              Also send corrected (amended) reports
+              Send again when a report is regenerated or corrected
             </button>
+            <p class="pf-ls__hint" style="margin-top: 6px;">Off by default — the link the patient already has always opens the latest report.</p>
           </div>
           <div class="mt-4 flex flex-wrap items-end gap-4">
             <label class="block pf-ls__wa-field">
@@ -1054,7 +1058,7 @@ export class LabSettingsComponent implements OnInit {
         this.waSaving.set(false);
         if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s);
         if (patch.autoSendEnabled !== undefined)
-          this.toasts.success(s.autoSendEnabled ? 'Reports will be sent on WhatsApp automatically' : 'Automatic WhatsApp sending turned off');
+          this.toasts.success(s.autoSendEnabled ? 'Reports will be sent on WhatsApp automatically once paid' : 'Automatic WhatsApp sending turned off');
         else this.toasts.success('WhatsApp settings saved');
       },
       error: e => { this.waSaving.set(false); this.applyWa(cur); this.toasts.error(ApiError.from(e).message); },

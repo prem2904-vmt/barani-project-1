@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { ApiService } from './api.service';
-import { WhatsAppService, waStatusLabel, waStatusTone } from './whatsapp.service';
+import { WhatsAppService, waAttachmentLine, waStatusLabel, waStatusTone } from './whatsapp.service';
 
 describe('WhatsApp status words + tones', () => {
   it('maps every message status to a desk-readable word', () => {
@@ -13,6 +13,7 @@ describe('WhatsApp status words + tones', () => {
     expect(waStatusLabel('read')).toBe('Read');
     expect(waStatusLabel('failed')).toBe('Failed');
     expect(waStatusLabel('skipped')).toBe('Not sent');
+    expect(waStatusLabel('held')).toBe('On hold');
     expect(waStatusLabel(null)).toBe('');
   });
 
@@ -23,6 +24,17 @@ describe('WhatsApp status words + tones', () => {
     expect(waStatusTone('queued')).toBe('wait');
     expect(waStatusTone('failed')).toBe('bad');
     expect(waStatusTone('skipped')).toBe('muted');
+    expect(waStatusTone('held')).toBe('wait');
+  });
+});
+
+describe('WhatsApp attachment line', () => {
+  it('says whether the report PDF went, or why it was link-only', () => {
+    expect(waAttachmentLine({ status: 'sent', attachment: 'pdf' })).toBe('Report PDF attached');
+    expect(waAttachmentLine({ status: 'delivered', attachment: 'link', attachmentNote: 'PDF not ready' })).toBe('Link only · PDF not ready');
+    expect(waAttachmentLine({ status: 'sent', attachment: 'link', attachmentNote: null })).toBe('');
+    expect(waAttachmentLine({ status: 'held', attachment: null })).toBe('');
+    expect(waAttachmentLine(null)).toBe('');
   });
 });
 

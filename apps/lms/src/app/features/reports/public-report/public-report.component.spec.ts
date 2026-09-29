@@ -240,6 +240,43 @@ describe('Public report page — states', () => {
     expect(t.q('pr-superseded')!.textContent).toContain('latest version');
   });
 
+  it('payment pending: verified, a balance is owed → no report, the amount and a call to the lab', async () => {
+    const t = await toVerify();
+    await t.type('3210');
+    await t.submit();
+    t.verifyReq().flush({
+      success: false, error: 'payment_due', message: 'Payment pending — please contact Micro World Diagnostics to collect your report.',
+      data: { state: 'payment_due', lab: { name: 'Micro World Diagnostics', phone: '+91 98400 12345' }, balanceDue: 300 },
+    });
+    await settle(t.f);
+    const box = t.q('pr-payment-due');
+    expect(box).not.toBeNull();
+    expect(box!.textContent).toContain('Payment pending');
+    expect(box!.textContent).toContain('Micro World Diagnostics');
+    expect(t.q('pr-balance')!.textContent).toContain('300');
+    expect(t.q('pr-call')!.getAttribute('href')).toContain('tel:');
+    // Nothing about the report: no download, no viewer, no patient name.
+    expect(t.q('pr-download')).toBeNull();
+    expect(t.q('pr-name')).toBeNull();
+    expect(t.q('pr-verify')).toBeNull();
+  });
+
+  it('payment pending on an unbilled order: no amount, still points at the lab', async () => {
+    const t = await toVerify();
+    await t.type('3210');
+    await t.submit();
+    t.verifyReq().flush({ success: false, error: 'payment_due', message: 'x', data: { state: 'payment_due', lab: { name: 'Micro World Diagnostics' } } });
+    await settle(t.f);
+    expect(t.q('pr-payment-due')!.textContent).toContain('your bill');
+    expect(t.q('pr-balance')).toBeNull();
+  });
+
+  it('paid: the same link opens the report', async () => {
+    const t = await toReady();
+    expect(t.q('pr-payment-due')).toBeNull();
+    expect(t.q('pr-download')).not.toBeNull();
+  });
+
   it('not ready yet: verified, but no PDF and no snapshot', async () => {
     const t = await toReady({ reportReady: false, reportPdfUrl: null, reportPdfDownloadUrl: null, report: { id: 'r3', type: 'final', data: null } });
     expect(t.q('pr-not-ready')).not.toBeNull();
