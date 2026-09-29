@@ -226,6 +226,9 @@
           <div class="pf-sre-strip">
             @if (validateMode()) {
               <span class="nd-chip nd-chip--static pf-sre-strip__meta nd-num">Submitted{{ submittedAtLabel() ? " " + submittedAtLabel() : "" }}</span>
+              <!-- The validator signs this report: no registration number
+                   yet → the gentle "add it" line (they fill it themselves). -->
+              <pf-regno-prompt />
             }
             @if (trendEligible().length > 0 && !viewOnly()) {
               <!-- Serial-result trend charts in the report (persists on the order). -->
