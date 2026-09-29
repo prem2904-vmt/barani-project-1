@@ -1,216 +1,227 @@
-import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, computed, inject, signal, viewChild,
+} from '@angular/core';
+import { Meta, Title } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { shareLink } from '../../../shared/utils/report-share';
+import {
+  ReportLinkInfo, ReportSummary, VerifiedReport, clock, mismatchMessage, reportFileName, safeLogoUrl, summarise, telHref,
+} from './public-report.util';
 
-interface PublicReportResult {
-  org?: string; patient?: string; reportReady?: boolean; reportPdfUrl?: string;
-  report?: { id: string; type: string; createdAt?: string; data?: string | null };
-  template?: unknown;
-  /** Outsourced tests' partner-lab reports, delivered alongside ours. */
-  partnerReports?: { testName: string; partnerLabName?: string | null; url: string; fileName?: string | null }[];
-  /** Uploads are private; the verified page gets short-lived signed URLs for
-   *  every "/uploads/…" asset its report needs, keyed by the stored path. */
-  assetUrls?: Record<string, string>;
-}
+/** Every screen the page can be on. */
+export type PublicReportView =
+  | 'loading'    // reading the link (skeleton)
+  | 'invalid'    // unknown token
+  | 'expired'    // the link's 30 days are up
+  | 'verify'     // identity step (the ONLY way in)
+  | 'locked'     // too many wrong answers — wait, or call the lab
+  | 'opening'    // verified; preparing the PDF (skeleton)
+  | 'ready'      // the report card: Download / View / Share
+  | 'not-ready'; // verified, but the lab has not released a PDF yet
+
+interface ApiEnvelope<T> { success?: boolean; data?: T; error?: string; message?: string }
 
 /**
- * Public, no-login report page reached from the WhatsApp/QR link
- * (/reports/public/:token). The patient enters their DOB or phone (the same
- * step-up as the tracking page) and the finished report PDF opens inline — it
- * must NEVER bounce through the staff login. The token is opaque; the PDF is
- * only revealed after the DOB/phone verification.
+ * PUBLIC patient report page — the link patients get on WhatsApp
+ * (`lab_report_ready` → /reports/public/{token}) and the report QR.
+ *
+ * No login, no app chrome: the lab's identity, then the identity step (last
+ * digits of the phone / DOB as DDMM / invoice number — checked on the SERVER,
+ * which counts wrong answers per link and locks it out), then one card with
+ * the report's details and a big Download. Nothing about the patient is on
+ * screen — or fetched — before the server accepts the answer.
  */
 @Component({
   selector: 'pf-public-report',
   standalone: true,
-  imports: [FormsModule],
+  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="wrap">
-      @if (!pdfUrl()) {
-        <div class="card">
-          <div class="brand">Prefrontal</div>
-          <h1 class="h1">View your report</h1>
-          <p class="sub">For your privacy, confirm your date of birth (DD/MM), the last 4 digits of your registered phone, or your invoice number to open the report.</p>
-          <input class="inp" [(ngModel)]="secret" (keyup.enter)="verify()" placeholder="DOB (DD/MM), last 4 of phone, or invoice no." autocomplete="off"/>
-          @if (error()) { <p class="err">{{ error() }}</p> }
-          <button class="btn" [disabled]="busy() || !secret.trim()" (click)="verify()">{{ busy() ? 'Checking…' : 'Open report' }}</button>
-        </div>
-        <p class="foot">Secure report access · Prefrontal</p>
-      } @else {
-        <div class="viewer">
-          <div class="viewer-bar">
-            <span class="viewer-org">{{ result()?.org || 'Your lab' }}</span>
-            <a class="viewer-open" [href]="rawPdfUrl()" target="_blank" rel="noopener">Open in new tab ↗</a>
-          </div>
-          @for (p of result()?.partnerReports ?? []; track p.url) {
-            <div class="viewer-bar viewer-bar--partner">
-              <span class="viewer-org">{{ p.testName }}@if (p.partnerLabName) { · tested at {{ p.partnerLabName }}}</span>
-              <a class="viewer-open" [href]="fileUrl(p.url)" target="_blank" rel="noopener">Partner lab report ↗</a>
-            </div>
-          }
-          @if (isIos) {
-            <!-- iOS (Safari + WKWebView) renders ONLY PAGE 1 of a PDF inside
-                 an iframe — a patient with a 3-page report would never see
-                 pages 2-3 and never know they existed. Hand off to Safari's
-                 own full viewer instead, with the first page framed behind
-                 the CTA so the page still looks like their report. -->
-            <div class="ios-viewer">
-              <iframe class="frame frame--peek" [src]="pdfUrl()!" title="Report preview (first page)"></iframe>
-              <a class="btn ios-open" [href]="rawPdfUrl()" target="_blank" rel="noopener">
-                View full report ({{ '\u2197' }})
-              </a>
-              <p class="ios-note">Preview shows the first page — tap above for all pages.</p>
-            </div>
-          } @else {
-            <iframe class="frame" [src]="pdfUrl()!" title="Report"></iframe>
-          }
-        </div>
-      }
-    </div>
-  `,
-  styles: [`
-    :host { display:block; min-height:100dvh; background:#0a0a15; color:#fff;
-      font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
-    .wrap { min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:14px;
-      background:radial-gradient(680px 420px at 12% -8%, rgba(124,58,237,.18), transparent 70%), radial-gradient(560px 380px at 96% 2%, rgba(236,72,153,.12), transparent 70%); }
-    .card { width:100%; max-width:420px; background:#14141f; border:1px solid rgba(255,255,255,.08); border-radius:18px; padding:30px 26px; box-shadow:0 24px 60px -20px rgba(0,0,0,.6); }
-    .brand { font-weight:800; letter-spacing:-.01em; background:linear-gradient(135deg,#a855f7,#ec4899); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-    .h1 { font-size:22px; font-weight:800; margin:12px 0 4px; }
-    .sub { color:rgba(255,255,255,.6); font-size:14px; margin:0 0 16px; }
-    .inp { width:100%; padding:12px 14px; border-radius:12px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.12); color:#fff; font-size:15px; }
-    .inp:focus { outline:none; border-color:#8b5cf6; }
-    .btn { display:inline-flex; align-items:center; justify-content:center; width:100%; margin-top:14px; padding:12px; border-radius:12px; border:none;
-      background:linear-gradient(135deg,#7c3aed,#ec4899); color:#fff; font-weight:700; font-size:14px; cursor:pointer; text-decoration:none; box-sizing:border-box; }
-    .btn:disabled { opacity:.5; cursor:default; }
-    .err { color:#fca5a5; font-size:13px; margin:6px 0 0; }
-    .foot { color:rgba(255,255,255,.3); font-size:11px; }
-
-    /* ── Inline PDF viewer (post-verify) — full-bleed so the report is readable ── */
-    .viewer { width:100%; max-width:980px; height:100dvh; display:flex; flex-direction:column; }
-    .viewer-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; }
-    .viewer-org { font-weight:700; font-size:14px; }
-    .viewer-open { color:#c4b5fd; font-size:13px; text-decoration:none; font-weight:600; }
-    .frame { flex:1; width:100%; border:0; border-radius:14px 14px 0 0; background:#fff; }
-
-    /* ── Cross-platform additive overrides (do not touch base/desktop rules) ── */
-    :host-context(html.cap-native) .wrap {
-      padding-top:calc(24px + env(safe-area-inset-top));
-      padding-bottom:calc(24px + env(safe-area-inset-bottom));
-      padding-left:calc(24px + env(safe-area-inset-left));
-      padding-right:calc(24px + env(safe-area-inset-right));
-    }
-    @media (max-width:640px) {
-      .inp { font-size:16px; }
-      .btn { min-height:48px; }
-    }
-    /* PDF viewer goes full-bleed on phones AND tablets: the 100dvh viewer
-       inside a 24px-padded flex column overflowed on iPad, cutting the
-       bottom of the report and the viewer bar. Desktop (>1024px) keeps the
-       framed layout. */
-    @media (max-width:1024px) {
-      .wrap:has(.viewer) { padding:0; gap:0; }
-      .viewer { max-width:none; }
-      .frame { border-radius:0; }
-    }
-    @media (pointer:coarse) {
-      .btn { min-height:48px; }
-      .inp { min-height:48px; font-size:16px; }
-      .viewer-open { min-height:44px; display:inline-flex; align-items:center; }
-    }
-    /* Native: keep the PDF viewer clear of the notch + home indicator */
-    :host-context(html.cap-native) .wrap:has(.viewer) { padding:0; gap:0; }
-    :host-context(html.cap-native) .viewer { box-sizing:border-box; padding-bottom:env(safe-area-inset-bottom); }
-    :host-context(html.cap-native) .viewer-bar {
-      padding-top:calc(12px + env(safe-area-inset-top));
-      padding-left:calc(14px + env(safe-area-inset-left));
-      padding-right:calc(14px + env(safe-area-inset-right));
-    }
-    .btn { -webkit-tap-highlight-color:transparent; }
-  
-    .ios-viewer { flex:1; display:flex; flex-direction:column; min-height:0; }
-    .frame--peek { pointer-events:none; }
-    .ios-open { margin:10px 14px calc(10px + env(safe-area-inset-bottom)); width:auto; }
-    .ios-note { text-align:center; color:rgba(255,255,255,.45); font-size:12px; margin:0 0 10px; }
-`]
+  host: { class: 'pr', lang: 'en' },
+  templateUrl: './public-report.component.html',
+  styleUrl: './public-report.component.scss',
 })
-export class PublicReportComponent {
-  /** iOS renders only page 1 of iframe PDFs — route those users to Safari's
-   *  full viewer (see template). */
-  readonly isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
+export class PublicReportComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
-  private readonly sanitizer = inject(DomSanitizer);
+  private readonly meta = inject(Meta);
+  private readonly title = inject(Title);
+  private readonly destroyRef = inject(DestroyRef);
 
-  protected secret = '';
-  protected readonly busy = signal(false);
-  protected readonly error = signal<string | null>(null);
-  protected readonly result = signal<PublicReportResult | null>(null);
-  protected readonly pdfUrl = signal<SafeResourceUrl | null>(null);
-  protected readonly rawPdfUrl = signal<string>('');
-
+  private readonly api = environment.apiUrl.replace(/\/$/, '');
   private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
 
-  /** Partner files live on the API host — already signed by the verify call
-   *  ("/uploads/…?exp=…&sig=…"). */
-  protected fileUrl(url: string): string {
-    return /^https?:\/\//i.test(url) ? url : `${environment.apiUrl.replace(/\/$/, '')}${url}`;
+  protected readonly view = signal<PublicReportView>('loading');
+  protected readonly link = signal<ReportLinkInfo | null>(null);
+  protected readonly result = signal<VerifiedReport | null>(null);
+  protected readonly summary = computed<ReportSummary | null>(() => {
+    const r = this.result();
+    return r ? summarise(r) : null;
+  });
+
+  // ── identity step ──
+  protected readonly secret = signal('');
+  protected readonly mode = signal<'digits' | 'invoice'>('digits');
+  protected readonly busy = signal(false);
+  protected readonly error = signal<string | null>(null);
+  protected readonly lockLeft = signal(0);
+  private lockTimer: ReturnType<typeof setInterval> | null = null;
+
+  // ── report actions ──
+  /** The PDF when we hold its bytes (rendered here, or fetched for Share). */
+  private blob: Blob | null = null;
+  private blobUrl: string | null = null;
+  protected readonly viewUrl = signal<string | null>(null);
+  protected readonly downloading = signal(false);
+  protected readonly note = signal<string | null>(null);
+
+  private readonly input = viewChild<ElementRef<HTMLInputElement>>('secretInput');
+  private readonly heading = viewChild<ElementRef<HTMLElement>>('readyHeading');
+
+  // ── lab identity (from the link, then from the verified payload) ──
+  protected readonly labName = computed(() =>
+    this.link()?.lab?.name?.trim() || this.result()?.org?.trim() || 'Your lab');
+  protected readonly hasLab = computed(() => !!(this.link()?.lab?.name?.trim() || this.result()?.org?.trim()));
+  protected readonly labPhone = computed(() => this.link()?.lab?.phone?.trim() || null);
+  protected readonly labTel = computed(() => telHref(this.labPhone()));
+  protected readonly logo = computed(() => safeLogoUrl(this.link()?.lab?.logoUrl, this.api));
+  protected readonly logoFailed = signal(false);
+  protected readonly initials = computed(() =>
+    this.labName().split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).slice(0, 2).map(w => w[0]!.toUpperCase()).join('') || 'L');
+
+  protected readonly fileName = computed(() => {
+    const r = this.result(); const s = this.summary();
+    return r?.fileName || reportFileName(s?.name, s?.date ?? null);
+  });
+
+  protected readonly placeholder = computed(() => this.mode() === 'digits' ? 'e.g. 3210' : 'e.g. INV-001234');
+
+  ngOnInit(): void {
+    // A private, per-patient page: never indexed, never leak the token-bearing
+    // URL to another site through the Referer header.
+    this.meta.updateTag({ name: 'robots', content: 'noindex, nofollow, noarchive' });
+    this.meta.updateTag({ name: 'referrer', content: 'no-referrer' });
+    this.title.setTitle('Your lab report');
+
+    this.destroyRef.onDestroy(() => {
+      this.stopLockTimer();
+      if (this.blobUrl) URL.revokeObjectURL(this.blobUrl);
+      this.meta.removeTag("name='robots'");
+      this.meta.removeTag("name='referrer'");
+    });
+
+    void this.loadLink();
   }
 
-  constructor() {
-    // Hand-off from the tracking page: the patient already verified there, and
-    // the secret rides along in navigation state — verify silently so "View
-    // report" lands straight on the PDF instead of asking a second time.
-    // (history.state survives only the in-app navigation; a shared/reloaded
-    // link has no state and prompts as usual.)
-    const carried = (history.state as { secret?: unknown } | null)?.secret;
+  /** Lab identity + link state. An older API without this call (404) or a
+   *  network hiccup still lands on the identity step — verify decides. */
+  private async loadLink(): Promise<void> {
+    // Hand-off from the tracking page: the patient already verified there and
+    // the answer rides in navigation state — go straight to the report.
+    const carried = (typeof history !== 'undefined' ? history.state as { secret?: unknown } | null : null)?.secret;
+    const linkCall = firstValueFrom(this.http.get<ApiEnvelope<ReportLinkInfo>>(`${this.api}/api/public/report/${encodeURIComponent(this.token)}`))
+      .then(res => (res?.success && res.data ? res.data : null))
+      .catch(() => null);
+
     if (typeof carried === 'string' && carried.trim()) {
-      this.secret = carried.trim();
-      void this.verify();
+      this.secret.set(carried.trim());
+      this.view.set('opening');
+      void linkCall.then(info => { if (info) this.link.set(info); });
+      await this.verify();
+      return;
     }
+
+    const info = await linkCall;
+    this.link.set(info);
+    if (info?.lab?.name) this.title.setTitle(`Your lab report · ${info.lab.name}`);
+    if (info?.state === 'invalid') { this.view.set('invalid'); return; }
+    if (info?.state === 'expired') { this.view.set('expired'); return; }
+    if ((info?.lockedSeconds ?? 0) > 0) { this.startLock(info!.lockedSeconds!); return; }
+    this.view.set('verify');
   }
 
-  async verify() {
-    if (!this.secret.trim() || this.busy()) return;
-    this.busy.set(true); this.error.set(null);
+  protected setMode(m: 'digits' | 'invoice'): void {
+    if (this.mode() === m) return;
+    this.mode.set(m);
+    this.secret.set('');
+    this.error.set(null);
+    queueMicrotask(() => this.input()?.nativeElement.focus());
+  }
+
+  /** Keep the field above the on-screen keyboard (it opens after focus). */
+  protected onInput(e: Event): void {
+    this.secret.set((e.target as HTMLInputElement).value);
+    if (this.error()) this.error.set(null);
+  }
+
+  protected onSubmit(e: Event): void {
+    e.preventDefault();
+    void this.verify();
+  }
+
+  protected onFocus(): void {
+    setTimeout(() => this.input()?.nativeElement.scrollIntoView?.({ block: 'center', behavior: 'smooth' }), 320);
+  }
+
+  async verify(): Promise<void> {
+    const secret = this.secret().trim();
+    if (!secret || this.busy()) return;
+    this.busy.set(true);
+    this.error.set(null);
     try {
-      const res: any = await firstValueFrom(this.http.post(
-        `${environment.apiUrl}/api/public/report/${this.token}/verify`, { secret: this.secret.trim() }));
+      const res = await firstValueFrom(this.http.post<ApiEnvelope<VerifiedReport & { attemptsLeft?: number; retryAfterSeconds?: number }>>(
+        `${this.api}/api/public/report/${encodeURIComponent(this.token)}/verify`, { secret }));
       if (res?.success && res.data) {
-        this.result.set(res.data);
-        const url = res.data.reportPdfUrl as string | undefined;
-        if (url) {
-          // Best case: serve the exact archived PDF.
-          this.rawPdfUrl.set(url);
-          this.pdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
-        } else if (res.data.report?.data) {
-          // No archived PDF — render it client-side from the snapshot so the
-          // patient still sees their report (same renderer as the staff app).
-          await this.renderFromSnapshot(res.data);
-        } else {
-          this.error.set('Your report is verified but is not available yet. Please contact the lab.');
-        }
-      } else {
-        this.error.set(res?.error?.message ?? 'Could not verify. Check the details and try again.');
+        this.secret.set('');
+        await this.open(res.data);
+        return;
       }
-    } catch (e: any) {
-      this.error.set(e?.error?.error?.message ?? 'Could not verify. Try again in a moment.');
+      if (res?.error === 'locked') {
+        this.startLock(res.data?.retryAfterSeconds ?? 60);
+        return;
+      }
+      if (this.view() === 'opening') this.view.set('verify');   // hand-off answer no longer matches
+      this.error.set(mismatchMessage(res?.data?.attemptsLeft));
+      this.secret.set('');
+      queueMicrotask(() => this.input()?.nativeElement.focus());
+    } catch (e) {
+      if (this.view() === 'opening') this.view.set('verify');
+      const status = (e as HttpErrorResponse)?.status;
+      this.error.set(status === 429
+        ? 'Too many tries from this network. Wait a minute and try again.'
+        : "Couldn't reach the lab right now. Check your connection and try again.");
     } finally {
       this.busy.set(false);
     }
   }
 
-  /** Render the report PDF client-side from the snapshot returned by verify,
-   *  for reports that were never archived to storage. Uses the same renderer
-   *  as the staff app with the legacy per-test table fallback (no
-   *  authenticated layout resolution available on this public page). */
-  private async renderFromSnapshot(data: PublicReportResult) {
+  /** Verified: pick the PDF source, then show the report card. */
+  private async open(data: VerifiedReport): Promise<void> {
+    this.result.set(data);
+    this.view.set('opening');
+    if (data.reportPdfUrl) {
+      this.viewUrl.set(data.reportPdfUrl);
+      this.showReady();
+      void this.prefetchForShare(data.reportPdfUrl);
+      return;
+    }
+    if (data.report?.data) {
+      const ok = await this.renderFromSnapshot(data);
+      if (ok) { this.showReady(); return; }
+    }
+    this.view.set('not-ready');
+  }
+
+  private showReady(): void {
+    this.view.set('ready');
+    setTimeout(() => this.heading()?.nativeElement.focus(), 0);
+  }
+
+  /** No archived PDF: build it here from the verified snapshot with the same
+   *  renderer the staff app uses (lazy — only this rare path loads jsPDF). */
+  private async renderFromSnapshot(data: VerifiedReport): Promise<boolean> {
     try {
       const { buildReportPdf, preloadReportImages } = await import('../../../shared/utils/report-pdf');
       const baseInput = {
@@ -219,13 +230,132 @@ export class PublicReportComponent {
         resolvedLayouts: {},
       };
       const imageCache = await preloadReportImages(baseInput, environment.apiUrl, data.assetUrls);
-      const blob = buildReportPdf({ ...baseInput, imageCache }).output('blob');
-      const url = URL.createObjectURL(blob);
-      this.rawPdfUrl.set(url);
-      this.pdfUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+      this.setBlob(buildReportPdf({ ...baseInput, imageCache }).output('blob'));
+      return true;
     } catch (e) {
       console.error('[public-report] client render failed', e);
-      this.error.set('Your report is verified but could not be displayed. Please contact the lab.');
+      return false;
     }
   }
+
+  private setBlob(blob: Blob): void {
+    this.blob = blob;
+    if (this.blobUrl) URL.revokeObjectURL(this.blobUrl);
+    this.blobUrl = URL.createObjectURL(blob);
+    if (!this.result()?.reportPdfUrl) this.viewUrl.set(this.blobUrl);
+  }
+
+  /** Share-a-file needs the bytes in hand at tap time (iOS drops the user
+   *  gesture across a slow fetch). Only where file sharing exists; a storage
+   *  bucket without CORS simply leaves Share on the link. */
+  private async prefetchForShare(url: string): Promise<void> {
+    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+    if (typeof nav.canShare !== 'function' || typeof File === 'undefined') return;
+    try {
+      const r = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+      if (!r.ok) return;
+      const b = await r.blob();
+      if (b.size > 0) { this.blob = b; }
+    } catch { /* cross-origin without CORS — link share only */ }
+  }
+
+  // ── actions ──
+
+  /** Save the PDF as a real file with a readable name. */
+  protected download(): void {
+    const r = this.result();
+    if (!r || this.downloading()) return;
+    this.downloading.set(true);
+    setTimeout(() => this.downloading.set(false), 1600);
+    if (this.blob) { saveBlob(this.blob, this.fileName()); return; }
+    // The API signs an attachment URL with the file name — a cross-origin
+    // <a download> is ignored by browsers, the Content-Disposition is not.
+    if (r.reportPdfDownloadUrl) { clickLink(r.reportPdfDownloadUrl); return; }
+    if (r.reportPdfUrl) { clickLink(r.reportPdfUrl, true); }
+  }
+
+  protected async share(): Promise<void> {
+    const title = `Lab report · ${this.labName()}`;
+    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+    if (this.blob && typeof File !== 'undefined' && typeof nav.canShare === 'function') {
+      const file = new File([this.blob], this.fileName(), { type: 'application/pdf' });
+      if (nav.canShare({ files: [file] })) {
+        try { await nav.share({ files: [file], title }); return; }
+        catch (e) { if ((e as { name?: string })?.name === 'AbortError') return; }
+      }
+    }
+    // The page link itself is safe to share: it still asks for the answer.
+    const out = await shareLink({ title, text: `${title} — open the link to view it.`, url: location.href });
+    if (out === 'copied') this.flash('Link copied');
+    else if (out === 'failed') this.flash("Couldn't share on this device");
+  }
+
+  protected partnerUrl(url: string): string {
+    return /^https?:\/\//i.test(url) ? url : `${this.api}${url}`;
+  }
+
+  protected onLogoError(): void { this.logoFailed.set(true); }
+
+  // ── lockout ──
+
+  private startLock(seconds: number): void {
+    this.stopLockTimer();
+    this.error.set(null);
+    this.lockLeft.set(Math.max(1, Math.ceil(seconds)));
+    this.view.set('locked');
+    this.lockTimer = setInterval(() => {
+      const left = this.lockLeft() - 1;
+      if (left <= 0) {
+        this.stopLockTimer();
+        this.lockLeft.set(0);
+        this.view.set('verify');
+      } else {
+        this.lockLeft.set(left);
+      }
+    }, 1000);
+  }
+
+  private stopLockTimer(): void {
+    if (this.lockTimer) { clearInterval(this.lockTimer); this.lockTimer = null; }
+  }
+
+  protected readonly lockClock = computed(() => clock(this.lockLeft()));
+
+  private flash(msg: string): void {
+    this.note.set(msg);
+    setTimeout(() => this.note.set(null), 2400);
+  }
+
+  protected formatDate(d: Date | null): string {
+    if (!d) return '';
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+}
+
+/** Save bytes as a file: an object URL + <a download> (iOS 13+ Safari,
+ *  Android Chrome, desktop). */
+export function saveBlob(blob: Blob, fileName: string, doc: Document = document): void {
+  const url = URL.createObjectURL(blob);
+  const a = doc.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  doc.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/** Follow a URL from a tap (keeps the user gesture; attachments download
+ *  without leaving the page, `newTab` opens the browser's viewer). */
+export function clickLink(href: string, newTab = false, doc: Document = document): void {
+  const a = doc.createElement('a');
+  a.href = href;
+  a.rel = 'noopener noreferrer';
+  if (newTab) a.target = '_blank';
+  a.style.display = 'none';
+  doc.body.appendChild(a);
+  a.click();
+  a.remove();
 }

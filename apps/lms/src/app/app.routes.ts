@@ -8,7 +8,6 @@ import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
 import { ADMIN_PERMS } from './core/auth/route-access';
-import { ShellComponent } from './layout/shell/shell.component';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
 // KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
@@ -55,7 +54,10 @@ export const appRoutes: Route[] = [
   },
   {
     path: '',
-    component: ShellComponent,
+    // Lazy: the authed shell (sidebar, navbar, chat, calls…) stays OUT of the
+    // initial bundle, so the public patient pages above (/reports/public,
+    // /track) and /login boot without it. Signed-in users load it once.
+    loadComponent: () => import('./layout/shell/shell.component').then(m => m.ShellComponent),
     canActivate: [authGuard],
     children: [
       // Landing guard routes to /admin, /frontdesk, /lab/my-work, or /pathologist
