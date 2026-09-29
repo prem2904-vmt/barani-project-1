@@ -8,6 +8,7 @@ import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
 import { ADMIN_PERMS } from './core/auth/route-access';
+import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
 // KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
@@ -196,12 +197,12 @@ export const appRoutes: Route[] = [
       {
         path: 'admin/tests/new',
         canActivate: [...routeGuards('/admin/tests/new')],
-        loadComponent: () => import('./features/admin/tests/test-editor/test-editor.component').then(m => m.TestEditorComponent)
+        loadComponent: loadTestEditor
       },
       {
         path: 'admin/tests/:id/edit',
         canActivate: [permissionGuard('manage_tests')],
-        loadComponent: () => import('./features/admin/tests/test-editor/test-editor.component').then(m => m.TestEditorComponent)
+        loadComponent: loadTestEditor
       },
       {
         path: 'admin/branches',

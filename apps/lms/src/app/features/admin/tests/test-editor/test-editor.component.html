@@ -35,7 +35,7 @@
         </span>
         @if (canRevert()) {
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-te2-revert press"
-                  [disabled]="saving() || reverting()" (click)="revertToMaster()"
+                  [disabled]="saving() || reverting()" [pfBusy]="reverting()" pfBusyLabel="Reverting…" (click)="revertToMaster()"
                   [attr.aria-label]="reverting() ? 'Reverting' : 'Revert to master'" title="Revert to master">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
             {{ reverting() ? 'Reverting…' : 'Revert to master' }}
@@ -49,7 +49,7 @@
           Preview
         </button>
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-te2-save press"
-                [disabled]="saving()" (click)="saveTest()"
+                [disabled]="saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveTest()"
                 [attr.aria-label]="saving() ? 'Saving' : 'Save'" title="Save">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
           {{ saving() ? 'Saving…' : 'Save' }}
@@ -60,7 +60,12 @@
            code, dept, sample, price… live in the sections (no duplication). -->
       <div band-search class="nd-ctx pf-te2-ctx">
         <span class="nd-ctx__primary pf-te2-ctx__name">
+          @if (recordSkeleton()) {
+            <!-- The record is on its way: its name's shape, not "Edit test". -->
+            <pf-skeleton class="pf-te2-ctx__nameskel" variant="line" width="180px" height="14px"></pf-skeleton>
+          } @else {
           <span class="pf-te2-ctx__nametext">{{ d.name || ((d.id ? 'Edit ' : 'New ') + (d.type === 'package' ? 'package' : d.type === 'profile' ? 'profile' : 'test')) }}</span>
+          }
           @if (originChip(); as o) {
             <span class="pf-te2-ctx__origin" role="note" [title]="o.hint" [attr.aria-label]="o.label + '. ' + o.hint">{{ o.label }}</span>
           }
@@ -98,7 +103,11 @@
     <div class="pf-te2-head__main">
       <button type="button" class="pf-te2-crumb press" (click)="back()">Test Master</button>
       <h1 class="pf-te2-title">
+        @if (recordSkeleton()) {
+          <pf-skeleton variant="line" width="220px" height="18px"></pf-skeleton>
+        } @else {
         {{ d.name || ((d.id ? 'Edit ' : 'New ') + (d.type === 'package' ? 'package' : d.type === 'profile' ? 'profile' : 'test')) }}
+        }
         <button type="button" class="pf-te2-title__edit" title="Edit name in Basics" (click)="jumpToSection('identity')" aria-label="Edit name">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
         </button>
@@ -116,14 +125,14 @@
     </div>
     <div class="pf-te2-head__save">
       @if (canRevert()) {
-        <pf-touch-btn size="sm" variant="ghost" [disabled]="saving() || reverting()" (pressed)="revertToMaster()">
+        <pf-touch-btn size="sm" variant="ghost" [disabled]="saving() || reverting()" [busy]="reverting()" (pressed)="revertToMaster()">
           <span icon-left aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
           </span>
           {{ reverting() ? 'Reverting…' : 'Revert to master' }}
         </pf-touch-btn>
       }
-      <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" (pressed)="saveTest()">
+      <pf-touch-btn size="sm" variant="primary" [disabled]="saving() || recordSkeleton()" [busy]="saving()" (pressed)="saveTest()">
         {{ saving() ? 'Saving…' : 'Save' }}
       </pf-touch-btn>
     </div>
@@ -176,6 +185,16 @@
         </button>
       }
 
+      @if (recordSkeleton()) {
+        <!-- Opening an existing record: the section card's shape on the first
+             frame (ND-PATTERN "Loading feedback"), never a blank form. -->
+        <section class="pf-te2-sec nd-card pf-te2-loading" aria-label="Loading the test">
+          <div class="nd-card__body">
+            <pf-skeleton-card [lines]="1" [boxed]="false" label="Loading the test…"></pf-skeleton-card>
+            <pf-skeleton-form [fields]="8" [cols]="2" label="Loading the test…"></pf-skeleton-form>
+          </div>
+        </section>
+      } @else {
       @if (section() === 'identity') {
 <!-- 01 Basics -->
       <section id="sec-identity" class="pf-te2-sec nd-card" role="tabpanel">
@@ -1204,6 +1223,7 @@
         </div>
       </section>
       }
+      }
 
     </div>
 
@@ -1239,7 +1259,11 @@
           <span class="pf-livewrap__k">LIVE PREVIEW</span>
         </div>
         }
-        @if (d.id) {
+        @if (recordSkeleton()) {
+          <div class="pf-livewrap__skel" role="status" aria-busy="true" aria-label="Loading the preview…">
+            <pf-skeleton variant="block" height="420px"></pf-skeleton>
+          </div>
+        } @else if (d.id) {
           <pf-report-pdf-preview class="pf-livewrap__pdf"
             [testId]="d.id"
             [testName]="d.name"

@@ -500,3 +500,22 @@ button.nd-ctx__chip:hover { border-color: var(--nd-sel-border); }
 @media (prefers-reduced-motion: reduce) {
   .nd-ai-glow::before, .nd-ai-glow::after, .nd-ai-glow-mark[data-ai-working='true'] { animation: none !important; transition: none !important; }
 }
+
+/* ── Loading feedback (ND-PATTERN "Loading feedback") ──
+   [pfBusy] (shared/directives/busy.directive.ts) puts .pf-is-busy +
+   aria-busy on a button the SAME frame its request starts (instant press
+   feedback) and appends the kit's <pf-busy> dots after 150ms.
+   RouteProgressService.markSource(el) does the same for the element that
+   started a navigation (.pf-nav-pending) until it settles. */
+.pf-is-busy, .pf-nav-pending { cursor: progress !important; }
+.pf-is-busy:not(:disabled) { opacity: 0.85; }
+.pf-busy--inbtn { margin-inline-start: 6px; flex: none; }
+/* The pressed row action / tile: a calm tinted "held" look + a pulse of the
+   label while its screen loads. Reduced motion: the tint only. */
+.pf-nav-pending {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent) !important;
+  border-color: var(--nd-sel-border, rgba(124, 58, 237, 0.4)) !important;
+  animation: pf-nav-pending 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite 150ms;
+}
+@keyframes pf-nav-pending { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .pf-nav-pending { animation: none; } }

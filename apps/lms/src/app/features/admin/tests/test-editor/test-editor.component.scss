@@ -1111,3 +1111,8 @@ select.pf-input--compact {
 
 /* "Advanced — edit every field in a grid" under the plain range table. */
 .pf-rr-adv { align-self: flex-start; margin-top: 10px; font-size: 12.5px; }
+
+/* ── Loading feedback: the editor's own shape while the record loads ── */
+.pf-te2-ctx__nameskel { display: inline-block; vertical-align: middle; }
+.pf-te2-loading .nd-card__body { display: flex; flex-direction: column; gap: 18px; }
+.pf-livewrap__skel { display: block; }

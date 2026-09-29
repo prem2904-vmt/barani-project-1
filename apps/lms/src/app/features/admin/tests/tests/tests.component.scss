@@ -90,6 +90,18 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* First-load skeleton rows sit OVER the (mounted, empty) grid so the grid
+   keeps its size and state; content lands where the rows were. */
+.pf-tm-grid-skel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  background: var(--nd-card-bg, var(--bg-primary));
+  border-radius: inherit;
 }
 
 .pf-tm-deptbtn {

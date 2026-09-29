@@ -13,13 +13,18 @@ import { SwitchScreenComponent } from './shared/components/switch-screen.compone
 import { isPublicPatientPath } from './core/navigation/public-paths';
 import { SessionService } from './core/auth/session.service';
 import { BusyComponent } from './shared/primitives/skeleton-kit.component';
+import { RouteProgressComponent } from './shared/components/route-progress/route-progress.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, BusyComponent],
+  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, BusyComponent, RouteProgressComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <!-- Top progress bar while a screen is on its way (lazy chunk, guards):
+         shows after 150ms, so instant navigations show nothing. -->
+    <pf-route-progress />
+
     <router-outlet></router-outlet>
 
     <!-- 15-minute idle lock (shared lab machines) — PIN to resume. -->

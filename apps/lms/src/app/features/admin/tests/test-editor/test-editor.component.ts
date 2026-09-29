@@ -73,6 +73,9 @@ import {
 } from '../../../../shared/utils/test-code';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { shownDepartmentName } from '../../../../shared/utils/package-department';
+import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../../shared/utils/min-duration';
+import { BusyDirective } from '../../../../shared/directives/busy.directive';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -174,7 +177,9 @@ function makeEmptyDraft(): DraftTest {
     OriginBadgeComponent,
     HeroBandComponent,
     RangeTableComponent,
-    NgTemplateOutlet
+    NgTemplateOutlet,
+    ...SKELETON_KIT,
+    BusyDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-editor.component.html',
@@ -968,6 +973,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly _saving = signal(false);
   readonly saving = this._saving.asReadonly();
 
+  // ── Loading feedback (ND-PATTERN "Loading feedback") ─────────────────
+  /** An existing record is being fetched: true from the first frame of an
+   *  `/:id/edit` route until GET /api/tests/:id answers (or fails). The
+   *  editor draws its own shape (skeleton) instead of a blank "Edit test"
+   *  form that later pops in; Save is not offered for a record that isn't
+   *  on screen yet. New tests never load. */
+  private readonly recordHold = createLoadHold(!!this.route.snapshot.paramMap.get('id'));
+  /** The skeleton: from the first frame, held >= 600ms once shown so a fast
+   *  load reads as one motion (skipped when the record was already there). */
+  readonly recordSkeleton = this.recordHold.active;
+
   // ── Editorial redesign: chips, range visual, sentences, publish checklist ──
 
   /** Glanceable summary chips under the title; clicking scrolls to the field. */
@@ -1698,14 +1714,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.api.get<ReferralLab[]>('/api/referral-labs').subscribe({
       next: l => this._referralLabs.set(l ?? [])
     });
-    this.api.get<Test[]>('/api/tests/?type=individual').subscribe({
-      next: l => this._allIndividualTests.set((l ?? []).filter(t => t.type !== 'package'))
-    });
-    this.api.get<Test[]>('/api/tests/?type=profile').subscribe({
-      next: l => this._allProfiles.set((l ?? []).filter(t => t.type === 'profile'))
-    });
 
     const id = this.route.snapshot.paramMap.get('id');
+    // The two catalogue-wide lists (every test / profile WITH its parameters —
+    // megabytes on a real catalogue) are only pickers + cross-checks for a
+    // single test, so an individual test's own record goes first and they
+    // follow once it is on screen; a profile / package lists its members from
+    // them, so those still load together with the record.
+    const type = this.route.snapshot.queryParamMap.get('type');
+    if (id && type === 'individual') this._afterRecord = () => this.loadCatalogueLists();
+    else this.loadCatalogueLists();
+
     if (id) {
       this.loadTest(id);
     } else {
@@ -1720,13 +1739,32 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   //  section at a time, so there is nothing to spy on.)
   ngAfterViewInit(): void { /* workspace tabs need no post-render wiring */ }
   ngOnDestroy(): void {
+    this.recordHold.cancel();
     if (this._previewTimer) { clearTimeout(this._previewTimer); this._previewTimer = null; }
+  }
+
+  /** Runs once, right after the first record lands (see ngOnInit). */
+  private _afterRecord: (() => void) | null = null;
+
+  private loadCatalogueLists() {
+    this.api.get<Test[]>('/api/tests/?type=individual').subscribe({
+      next: l => this._allIndividualTests.set((l ?? []).filter(t => t.type !== 'package'))
+    });
+    this.api.get<Test[]>('/api/tests/?type=profile').subscribe({
+      next: l => this._allProfiles.set((l ?? []).filter(t => t.type === 'profile'))
+    });
+  }
+
+  private runAfterRecord() {
+    const run = this._afterRecord;
+    this._afterRecord = null;
+    run?.();
   }
 
   private loadTest(id: string) {
     this.api.get<Test>(`/api/tests/${id}`).subscribe({
-      next: t => this.hydrateFrom(t),
-      error: e => this.toasts.error(ApiError.from(e).message)
+      next: t => { this.hydrateFrom(t); this.recordHold.done(); this.runAfterRecord(); },
+      error: e => { this.recordHold.done(); this.runAfterRecord(); this.toasts.error(ApiError.from(e).message); }
     });
   }
 

@@ -245,6 +245,10 @@
         </div>
       </header>
       <div class="pf-tm-main__body">
+        @if (listSkeleton()) {
+          <!-- First load: the grid's shape, not an empty grid. -->
+          <pf-skeleton-table class="pf-tm-grid-skel" [rows]="12" [cols]="6" label="Loading tests…"></pf-skeleton-table>
+        }
         <ag-grid-angular
           [singleClickEdit]="isCoarse"
           class="pf-tm-grid"

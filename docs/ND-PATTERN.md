@@ -582,6 +582,43 @@ tech types only the tail number.
   holds until the new screen's API calls settle (>= 750ms), then the screen
   zooms up. Reduced motion: opacity only.
 
+### Loading feedback
+
+Owner, 2026-09-29: *"Wherever there is an action that takes time, there needs
+to be an animation so the user feels something is happening."* Every tap that
+waits on the network or on a lazy screen gives feedback — one standard set,
+no new looks:
+
+| Wait | What shows | Primitive |
+| --- | --- | --- |
+| **A button's request** (save, submit, send, print, approve…) | The SAME frame: `aria-busy`, dimmed, repeat presses swallowed. After 150ms: the kit's busy dots inside the button, and its words say what is happening ("Saving…"). | `[pfBusy]="saving()"` on a native button (`shared/directives/busy.directive.ts`), `[busy]` on `pf-touch-btn`; `busyWhile(flag)` (RxJS) sets the flag. Keep the button's own `[disabled]` binding. |
+| **A screen on its way** (lazy chunk, guards) | After 150ms: the thin violet bar at the top of the window, easing toward 90%, running out on arrival. | `<pf-route-progress>` — mounted ONCE in `app.ts`, driven by every navigation (`core/navigation/route-progress.service.ts`). Nothing per screen. |
+| **The thing you tapped opens a screen** (a DOM-built grid row action, a tile) | The pressed element turns "held" (tint + a slow pulse) the same frame, until that navigation settles (cancel included). | `RouteProgressService.markSource(el)` |
+| **Opening an editor / drawer / page** | Its OWN layout as a skeleton on the first frame — band + name chip placeholder, the section card as fields, the side card as a block — never a blank form or a frozen previous screen. Save is not offered for a record that isn't on screen yet. | Skeleton kit (`pf-skeleton-form / -card / -detail`), held with `heldFlag(loading)` (600ms minimum). Canonical: the test editor (`recordSkeleton()`). |
+| **A grid / list's first load** | Skeleton rows in the grid's box (over the mounted grid so it keeps its size); later reloads keep the rows on screen. | `pf-skeleton-table` / `pf-skeleton-rows`, `heldFlag`. Canonical: Test Master (`listSkeleton()`). |
+| **A long save / upload / bulk job** | The button stays busy AND the region says so: a progress count when the work is countable ("Saving 3 of 12…"), otherwise the busy dots with the words. | `[pfBusy]` + text; `pf-busy` inline. |
+| **A lazy screen the user is about to open** | Nothing — it is simply fast: the list warms the editor's code while idle and on hover / focus of its action. | `prefetchWhenIdle(key, loader)` + `prefetch(key, loader)` (`shared/utils/prefetch.ts`), with ONE loader shared with the route (e.g. `test-editor.loader.ts`). |
+
+Timing rules (`shared/utils/busy.ts`):
+
+- **Instant press feedback, always** — the pressed control changes in the
+  same frame (busy state, `.press` scale, held tint). Never a dead click.
+- **Moving indicators only after `BUSY_SHOW_AFTER_MS` (150ms)** — dots and
+  the top bar never flicker for a fast answer (`spinDelay` /
+  `createSpinDelay`).
+- **Once shown, held `BUSY_MIN_SHOW_MS` (300ms)**; load-driven skeletons are
+  held 600ms (`heldFlag`, see "Load-driven states hold a minimum").
+- **Reduced motion:** no shimmer, no bar growth, static dots, no pulse — the
+  states still appear (opacity / tint only).
+- **Accessibility:** skeleton presets are the loading region (role=status,
+  aria-busy, polite label); busy buttons carry `aria-busy` + an SR label;
+  the top bar announces "Loading page…" once.
+- **Not a loading look:** the PF logo (`pf-loading-logo`) is sign-in branding
+  only; never spinners that block the whole screen for one button's request.
+- **Tests:** a screen that loads asserts its skeleton on the first render and
+  its busy button (disabled + `aria-busy`) while the request is in flight —
+  see `test-editor.loading.spec.ts`, `busy.directive.spec.ts`.
+
 ## 10. Always
 
 - **No emoji.** Icons are stroked inline SVGs with `aria-hidden="true"`;
@@ -1780,6 +1817,8 @@ Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit (+ the sec
          .nd-tabs[role=tablist] › .nd-tabs__item[role=tab][aria-selected] › .nd-tabs__dot(--ok) · .nd-savestate(__dot)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
+Loading  [pfBusy] · pf-touch-btn[busy] · busyWhile(flag) · spinDelay · <pf-route-progress> (app.ts, once)
+         RouteProgressService.markSource(el) · prefetch / prefetchWhenIdle · pf-skeleton-* + heldFlag
 AI       .nd-ai-glow[data-ai-working] · .nd-ai-glow--inset · .nd-ai-glow--ring · .nd-ai-glow-mark · --nd-ai-angle (PF Sense only)
 Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .nd-fullscreen · --nd-nav-h
 Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line

@@ -46,6 +46,11 @@ import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.compon
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
 import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
+import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.component';
+import { createLoadHold } from '../../../../shared/utils/min-duration';
+import { prefetch, prefetchWhenIdle } from '../../../../shared/utils/prefetch';
+import { RouteProgressService } from '../../../../core/navigation/route-progress.service';
+import { TEST_EDITOR_PREFETCH_KEY, loadTestEditor } from '../test-editor/test-editor.loader';
 // (ViewChild refs let the header Create button drive the active panel)
 
 // AG Grid v33+ requires explicit module registration (once per app).
@@ -136,6 +141,7 @@ type TmStatus = 'all' | 'active' | 'inactive';
   selector: 'pf-tests',
   standalone: true,
   imports: [
+    ...SKELETON_KIT,
     AgGridAngular,
     FormsModule,
     NgTemplateOutlet,
@@ -178,6 +184,12 @@ export class TestsComponent implements OnInit {
   @ViewChild(OptionGroupsPanelComponent) private ogPanel?: OptionGroupsPanelComponent;
   private readonly _type = signal<TestType>('individual');
   private readonly _tests = signal<Test[]>([]);
+  /** The catalogue's FIRST load has answered (later reloads keep the grid). */
+  private _testsLoaded = false;
+  private readonly listHold = createLoadHold(true);
+  /** Skeleton rows over the grid until the first load lands (held, no flash). */
+  readonly listSkeleton = this.listHold.active;
+  private readonly routeProgress = inject(RouteProgressService);
   private readonly _depts = signal<DeptRecord[]>([]);
   private readonly _selectedDept = signal<string | null>(null);
   readonly saving = signal(false);
@@ -822,9 +834,16 @@ export class TestsComponent implements OnInit {
       b.addEventListener('click', e => { e.stopPropagation(); run(); });
       return b;
     };
-    wrap.appendChild(act('Edit', 'Edit ' + (data?.name || 'test'),
+    // "Edit" opens the lazy test editor: warm its code on hover / focus, and
+    // mark the pressed button busy in the same frame (cleared when the
+    // navigation settles — see RouteProgressService.markSource).
+    const warm = () => { void prefetch(TEST_EDITOR_PREFETCH_KEY, loadTestEditor); };
+    const edit = act('Edit', 'Edit ' + (data?.name || 'test'),
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
-      () => { if (data?.id) this.editTest(data.id); }));
+      () => { if (data?.id) { this.routeProgress.markSource(edit); this.editTest(data.id); } });
+    edit.addEventListener('pointerenter', warm);
+    edit.addEventListener('focus', warm);
+    wrap.appendChild(edit);
     if (data && canRevertToMaster(data)) {
       wrap.appendChild(act('Revert', 'Revert ' + (data.name || 'test') + ' to master',
         '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>',
@@ -888,6 +907,7 @@ export class TestsComponent implements OnInit {
       if (params['view'] === 'microbiology') this.microView.set(true);
       if (params['view'] === 'pricing') this.pricingView.set(true);
     });
+    this.destroyRef.onDestroy(() => this.listHold.cancel());
     this.loadTests();
     this.loadDepartments();
     this.loadProposals();
@@ -978,9 +998,19 @@ export class TestsComponent implements OnInit {
   private loadTests() {
     // status=all: every test, switched-off ones included (flagged isEnabled).
     this.api.get<Test[]>(testListUrl({ status: 'all' })).subscribe({
-      next: l => this._tests.set(l ?? []),
-      error: e => this.toasts.error(ApiError.from(e).message),
+      next: l => { this._tests.set(l ?? []); this.onFirstLoad(); },
+      error: e => { this._testsLoaded = true; this.listHold.done(); this.toasts.error(ApiError.from(e).message); },
     });
+  }
+
+  /** Once the grid is on screen, warm the test editor's code while the
+   *  browser is idle, so "Edit" never waits on a chunk download. */
+  private onFirstLoad() {
+    if (this._testsLoaded) return;
+    this._testsLoaded = true;
+    this.listHold.done();
+    const cancel = prefetchWhenIdle(TEST_EDITOR_PREFETCH_KEY, loadTestEditor);
+    this.destroyRef.onDestroy(cancel);
   }
 
   private loadDepartments() {

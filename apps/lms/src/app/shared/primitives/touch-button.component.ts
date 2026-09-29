@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnDestroy, Output, signal } from '@angular/core';
+import { BusyComponent } from './skeleton-kit.component';
+import { createSpinDelay } from '../utils/busy';
 
 export type TouchBtnSize = 'sm' | 'md' | 'lg' | 'xl';
 export type TouchBtnVariant =
@@ -12,15 +14,19 @@ export type TouchBtnVariant =
 @Component({
   selector: 'pf-touch-btn',
   standalone: true,
+  imports: [BusyComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <button type="button"
             [class]="rootClasses"
-            [disabled]="disabled"
+            [disabled]="disabled || isBusy()"
+            [attr.aria-busy]="isBusy() ? 'true' : null"
+            [class.pf-is-busy]="isBusy()"
             (click)="onClick($event)">
       <ng-content select="[icon-left]"></ng-content>
       <ng-content></ng-content>
       <ng-content select="[icon-right]"></ng-content>
+      @if (dotsShown()) { <pf-busy class="pf-busy--inbtn" [label]="busyLabel"></pf-busy> }
     </button>
   `,
   styles: [`
@@ -40,6 +46,9 @@ export type TouchBtnVariant =
     }
     button:active:not(:disabled) { transform: scale(0.97); filter: brightness(1.08); }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
+    /* Busy (a request is running): stays readable — dimmed less than a
+       plain disabled button, progress cursor, dots after 150ms. */
+    button.pf-is-busy:disabled { opacity: 0.8; cursor: progress; }
 
     /* Sizes ---------------------------------------- */
     .sz-sm { height: 44px; padding: 0 16px; font-size: 14px;  border-radius: 14px; gap: 8px; }
@@ -104,8 +113,18 @@ export type TouchBtnVariant =
     .v-success:hover:not(:disabled) { background: #059669; }
   `]
 })
-export class TouchButtonComponent {
+export class TouchButtonComponent implements OnDestroy {
   @Input() size: TouchBtnSize = 'md';
+  /** The button's request is running: disabled + aria-busy at once, the
+   *  kit's busy dots after 150ms (ND-PATTERN "Loading feedback"). */
+  @Input() set busy(v: boolean) { this._busy.set(!!v); this.spin.set(!!v); }
+  get busy(): boolean { return this._busy(); }
+  /** What a screen reader hears while busy. */
+  @Input() busyLabel = 'Working…';
+  private readonly _busy = signal(false);
+  private readonly spin = createSpinDelay();
+  readonly isBusy = this._busy.asReadonly();
+  readonly dotsShown = this.spin.shown;
   @Input() variant: TouchBtnVariant = 'primary';
   @Input() disabled = false;
   @Input() full = false;
@@ -117,7 +136,9 @@ export class TouchButtonComponent {
   }
 
   onClick(ev: MouseEvent): void {
-    if (this.disabled) return;
+    if (this.disabled || this._busy()) return;
     this.pressed.emit(ev);
   }
+
+  ngOnDestroy(): void { this.spin.dispose(); }
 }
