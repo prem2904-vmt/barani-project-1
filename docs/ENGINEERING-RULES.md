@@ -60,6 +60,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - Follow `docs/ND-PATTERN.md`: the new design, light / dark, phone-first, 44px targets, no truncation.
 - No native browser controls (`select`, `datalist`, `window.confirm`): use pf-select and DialogService. SVG icons only, never emoji.
 - Reuse the existing components (AG-Grid, pf-tile, pf-select). Never hand-roll bespoke UI.
+- Report PDF tables (jspdf-autotable): a blank-then-repaint cell stash is keyed `section:row:col` and deleted when painted (the repeated head is row 0 too); rows never split across pages (`rowPageBreak: 'avoid'`); a panel band is glued to its first row and repeated as "— CONTINUED" on the next page.
 - Touch devices: the keyboard must never cover the focused field; inputs are ≥ 16px.
 
 ## 7. Process: definition of done

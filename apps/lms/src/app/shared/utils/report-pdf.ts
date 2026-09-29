@@ -1004,7 +1004,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
         dim: TEXT_DIM, hair: HAIR, flagStyle: theme.flagStyle, flagIndicator: theme.flagIndicator,
         abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor,
         pageW: A4.w, marginX: MARGIN_X, marginBottom: MARGIN_BOTTOM,
-        continueTop: LETTERPAD ? MARGIN_TOP + 24 : 56,
+        continueTop: tablePageMargins().top,
         bodyStyles: tableBodyStyles(), headStyles: tableHeadStyles(), zebra: theme.zebraRows,
         ...summaryCellHooks(doc),
       });
@@ -2336,11 +2336,19 @@ type CellHookArg = {
   cell: { x: number; y: number; width: number; height: number; text?: string[]; styles?: Record<string, unknown> };
 };
 
+/** The one key a blank-then-repaint stash is filed under. It MUST carry the
+ *  section: autotable numbers the head row 0 and body row 0 alike, and the
+ *  repeated column header of every continuation page is drawn AFTER body row
+ *  0 has been stashed. Keyed by row:col alone, the first result's reference
+ *  bands were repainted into the "Reference Range" header cell of page 2+
+ *  (owner's report 2026-09-29, "our major bug"). */
+const cellKey = (d: CellHookArg): string => `${d.section}:${d.row.index}:${d.column.index}`;
+
 function stashSuperscriptCell(store: Map<string, SupCell>, d: CellHookArg): void {
   const raw = Array.isArray(d.cell.text) ? d.cell.text.join(' ') : String(d.cell.text ?? '');
   const safe = pdfSafeText(raw, { keepSymbols: true });
   if (!hasSuperscript(safe)) return;
-  store.set(`${d.section}:${d.row.index}:${d.column.index}`, { text: safe, styles: d.cell.styles ?? {} });
+  store.set(cellKey(d), { text: safe, styles: d.cell.styles ?? {} });
   d.cell.text = [''];
 }
 
@@ -2364,15 +2372,19 @@ function stashQualifiedRangeCell(
   const lines = (Array.isArray(d.cell.text) ? d.cell.text : [String(d.cell.text ?? '')])
     .map(l => pdfSafeText(l, { keepSymbols: true }));
   if (lines.length < 2) return;                       // plain single-band cell
-  store.set(`${d.row.index}:${d.column.index}`, { lines, styles: d.cell.styles ?? {} });
+  store.set(cellKey(d), { lines, styles: d.cell.styles ?? {} });
   d.cell.text = [''];
 }
 
 function drawQualifiedRangeCell(
   doc: jsPDF, store: Map<string, QualCell>, d: CellHookArg
 ): void {
-  const q = store.get(`${d.row.index}:${d.column.index}`);
+  if (d.section !== 'body') return;
+  const q = store.get(cellKey(d));
   if (!q) return;
+  // Painted once, for THIS cell: the stash never outlives the cell it was
+  // blanked for, so nothing can leak onto a later page.
+  store.delete(cellKey(d));
   const st = q.styles as { fontSize?: number; cellPadding?: number };
   const fs = typeof st.fontSize === 'number' ? st.fontSize : 9;
   const padL = typeof st.cellPadding === 'number' ? st.cellPadding : 4;
@@ -2400,8 +2412,9 @@ function drawQualifiedRangeCell(
 }
 
 function drawSuperscriptCell(doc: jsPDF, store: Map<string, SupCell>, d: CellHookArg): void {
-  const sup = store.get(`${d.section}:${d.row.index}:${d.column.index}`);
+  const sup = store.get(cellKey(d));
   if (!sup) return;
+  store.delete(cellKey(d));
   const st = sup.styles as { fontSize?: number; fontStyle?: string; textColor?: unknown; cellPadding?: number };
   const fs = typeof st.fontSize === 'number' ? st.fontSize : 9;
   doc.setFont(PDF_FONT, st.fontStyle === 'bold' ? 'bold' : 'normal');
@@ -3102,17 +3115,32 @@ function drawSentenceCell(doc: jsPDF, store: Map<number, SentenceCell>, d: Sente
 }
 
 /** Autotable has no keep-with-next. Just before drawing row i, look ahead: if
- *  row i+1 is glued to row i+2 and would be the LAST thing on this page (i+2
- *  can't start here), push i+1 to the next page too — temporarily taller than
- *  what is left and unsplittable — and restore it once it draws there. */
-type KeepRow = { index: number; height: number; cells: Record<string, { height: number; styles: { fontSize: number }; padding(side: string): number }> };
+ *  row i+1 is glued to what follows and would be the LAST thing on this page
+ *  (its chain can't start here), push i+1 to the next page too — temporarily
+ *  taller than what is left and unsplittable — and restore it once it draws
+ *  there. A chain is i+1 plus every row glued to the one before it: a panel
+ *  band, its Method/Specimen line and its first result; a value and its
+ *  description; a test's last row and its Sentence. Rows never split
+ *  (rowPageBreak 'avoid'), so every row of the chain must fit whole. */
+type KeepRow = { index: number; height: number; cells: Record<string, { height: number }> };
 type KeepHookArg = {
   row: KeepRow; cursor: { y: number } | null;
   table: { body: KeepRow[]; settings: { rowPageBreak: string; margin: { bottom: number } } };
 };
 const KEEP_HELD = new WeakMap<object, { height: number; cells: number[]; rowPageBreak: string }>();
 
-function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>, kinds: string[]): void {
+/** Height of the rows glued to row `j` (j+1 … the first row not itself glued
+ *  to its successor), 0 when nothing follows. */
+function chainAfter(body: KeepRow[], j: number, keepWithNext: Set<number>): number {
+  let need = 0;
+  for (let k = j + 1; k < body.length; k++) {
+    need += body[k].height;
+    if (!keepWithNext.has(k)) break;
+  }
+  return need;
+}
+
+function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>): void {
   const held = KEEP_HELD.get(d.row);
   if (held) {
     KEEP_HELD.delete(d.row);
@@ -3123,18 +3151,13 @@ function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>,
   const i = d.row.index;
   const j = i + 1;
   if (i < 0 || !d.cursor || !keepWithNext.has(j)) return;
-  const next = d.table.body[j], after = d.table.body[j + 1];
-  if (!next || !after) return;
+  const next = d.table.body[j];
+  if (!next || !d.table.body[j + 1]) return;
   const bottom = doc.internal.pageSize.getHeight() - d.table.settings.margin.bottom;
   const top = d.cursor.y + d.row.height;           // where row j would start
-  const lhf = doc.getLineHeightFactor?.() ?? 1.15;
-  // A Sentence can split across pages, so one line of it is enough to keep
-  // it company; any other row has to fit whole.
-  const need = kinds[j + 1] === 'sentence' || kinds[j + 1] === 'desc'
-    ? Math.max(...Object.values(after.cells).map(c => c.padding('vertical') + c.styles.fontSize * lhf))
-    : after.height;
+  const need = chainAfter(d.table.body, j, keepWithNext);
   if (top + next.height > bottom || top + next.height + need <= bottom) return;
-  // Never on a page that could not hold the pair anyway.
+  // Never on a page that could not hold the chain anyway.
   if (next.height + need > bottom - 80) return;
   const cells = Object.values(next.cells);
   KEEP_HELD.set(next, { height: next.height, cells: cells.map(c => c.height), rowPageBreak: d.table.settings.rowPageBreak });
@@ -3237,6 +3260,10 @@ function renderColumnarTable(
   const keepWithNext = new Set<number>();
   /** Body row kinds, parallel to `body` (glue decisions). */
   const bodyKind: Array<'param' | 'sentence' | 'desc' | 'other'> = [];
+  /** Body row → index into `groups` (continuation heading). */
+  const groupOfRow: number[] = [];
+  /** Group index → its panel band's body row (compact tests have none). */
+  const bandRowOf = new Map<number, number>();
   /** No Description column in this table → each value's description prints
    *  as a full-width row right under that value's row (P1, D1, P2, P3, D3). */
   const descAsRow = !hasDescriptionColumn(cfg);
@@ -3256,6 +3283,7 @@ function renderColumnarTable(
 
     if (!compact) {
       // Panel / profile header band — bold, full width.
+      bandRowOf.set(groups.indexOf(g), body.length);
       body.push([{
         content: g.testName.toUpperCase(),
         colSpan: COLSPAN,
@@ -3282,6 +3310,11 @@ function renderColumnarTable(
         bodyMeta.push(null);
         bodyKind.push('other');
       }
+      // The band and its sub-line(s) open the panel WITH its first row —
+      // never stranded at the foot of a page while every result sits on
+      // the next (owner's report 2026-09-29: "VITAMIN PROFILE 1 / Specimen:
+      // Serum" closed page 2 alone).
+      for (let i = groupStart; i < body.length; i++) keepWithNext.add(i);
     }
 
     let firstParam = true;
@@ -3442,6 +3475,7 @@ function renderColumnarTable(
       if (i > groupStart && (bodyKind[i - 1] === 'param' || bodyKind[i - 1] === 'desc')) keepWithNext.add(i - 1);
       else if (bodyKind[i + 1] === 'param') keepWithNext.add(i);
     }
+    while (groupOfRow.length < body.length) groupOfRow.push(groups.indexOf(g));
   }
 
   const sentenceCells = new Map<number, SentenceCell>();
@@ -3450,12 +3484,65 @@ function renderColumnarTable(
   // the repeated column header — otherwise a reader on page 2 can't tell which
   // department the rows belong to.
   let tablePagesSeen = 0;
+  const margin = tablePageMargins();
+
+  // ── Panel heading on continuation pages ──────────────────────────
+  // A page that opens MID-panel repeats the band as "<PANEL> — CONTINUED"
+  // between the column header and its first row (owner's report 2026-09-29:
+  // page 3 had three vitamins under no heading). autotable repeats only the
+  // head, and which row opens a page is known only when that row draws — so
+  // the head carries one band-height row that autotable never paints
+  // (willDrawCell returns false), and the first body row of every page
+  // either paints the continued band into that space or gives it back by
+  // moving the cursor up. The band's own row opening a page needs no repeat.
+  const CONT_ROW = head.length;
+  head.push([{
+    content: '',
+    colSpan: COLSPAN,
+    styles: { fillColor: false, lineWidth: 0, fontSize: 9.5, fontStyle: 'bold', halign: 'left',
+              cellPadding: { top: 4, right: 6, bottom: 4, left: 6 } },
+  }]);
+  let contH = 0;
+  let pageOpened = -1;
+  let lastRealRow = 0;
+  const openPage = (d: CellHookArg & { cursor: { y: number } | null; pageNumber: number }) => {
+    if (d.pageNumber === pageOpened || !d.cursor) return;
+    pageOpened = d.pageNumber;
+    // A row taller than a page continues as a remainder row with index -1.
+    const idx = d.row.index >= 0 ? d.row.index : lastRealRow;
+    const gi = groupOfRow[idx];
+    const bandRow = bandRowOf.get(gi);
+    const top = d.cursor.y - contH;
+    if (d.pageNumber > 1 && bandRow !== undefined && bandRow !== idx) {
+      // autotable has ALREADY applied this cell's styles and paints its
+      // rect/text with whatever fill, font and colour are current once the
+      // hook returns — so the band's paint state is put back afterwards.
+      const fill = doc.getFillColor(), font = doc.getFont(), size = doc.getFontSize(), color = doc.getTextColor();
+      doc.setFillColor('#eef2f7');
+      doc.rect(MARGIN_X, top, usable, contH, 'F');
+      doc.setFont(PDF_FONT, 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(theme.primary);
+      // autotable's own top-aligned first baseline for the band's font.
+      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, MARGIN_X + 6, top + 4 + 9.5 * 0.85);
+      doc.setFillColor(fill);
+      doc.setFont(font.fontName, font.fontStyle);
+      doc.setFontSize(size);
+      doc.setTextColor(color);
+    } else {
+      d.cursor.y = top;
+      d.cell.y = top;
+    }
+  };
 
   const table = __createTable(doc, {
     startY,
     head: head as unknown as Array<Array<string | Cell>>,
     body: body as unknown as Array<Array<string | Cell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM, top: 56 },
+    margin,
+    // A row never splits mid-cell across pages: one that does not fit moves
+    // WHOLE to the next page (only a row taller than a page still splits).
+    rowPageBreak: 'avoid',
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
@@ -3467,10 +3554,10 @@ function renderColumnarTable(
         doc.setFont(PDF_FONT, 'bold');
         doc.setFontSize(9);
         doc.setTextColor(theme.primary);
-        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, MARGIN_X, 42);
+        doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, MARGIN_X, margin.top - 14);
         doc.setDrawColor(HAIR);
         doc.setLineWidth(0.5);
-        doc.line(MARGIN_X, 46, A4.w - MARGIN_X, 46);
+        doc.line(MARGIN_X, margin.top - 10, A4.w - MARGIN_X, margin.top - 10);
       }
     },
     columnStyles: Object.fromEntries(
@@ -3481,19 +3568,24 @@ function renderColumnarTable(
     // Units like ×10⁹/L survive as "×10^9/L" (cp1252 has no ⁹). Blank those
     // cells here — AFTER layout, so column widths are unaffected — and redraw
     // them with real raised digits in didDrawCell below.
-    willDrawCell: (d: CellHookArg) => {
+    // Returning false skips autotable's own painting of that cell.
+    willDrawCell: (d: CellHookArg): false | undefined => {
+      if (d.section === 'head' && d.row.index === CONT_ROW) return false;
       if (d.section === 'body' && d.column.index === 0) {
+        openPage(d as Parameters<typeof openPage>[0]);
+        if (d.row.index >= 0) lastRealRow = d.row.index;
         fitSignOff(d as unknown as Parameters<typeof fitSignOff>[0], reserveBottom);
-        keepRowsTogether(doc, d as unknown as KeepHookArg, keepWithNext, bodyKind);
+        keepRowsTogether(doc, d as unknown as KeepHookArg, keepWithNext);
       }
       if (d.section === 'body' && sentenceLabels.has(d.row.index)) {
         stashSentenceCell(sentenceCells, d as unknown as SentenceHookArg, sentenceLabels.get(d.row.index)!);
-        return;
+        return undefined;
       }
       // Order matters: a qualified range cell is claimed here first, so the
       // superscript hook doesn't also blank it and fight over the redraw.
       stashQualifiedRangeCell(qualCells, d, rangeColIdx);
       stashSuperscriptCell(supCells, d);
+      return undefined;
     },
     didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number; styles?: Record<string, unknown> } }) => {
       drawSentenceCell(doc, sentenceCells, d as unknown as SentenceHookArg);
@@ -3519,12 +3611,23 @@ function renderColumnarTable(
       else doc.triangle(cx - s, cy - s, cx + s, cy - s, cx, cy + s, 'F');
     },
   } as unknown as Parameters<typeof autoTable>[1]);
+  contH = table.head[CONT_ROW]?.height ?? 0;
+  const floor = A4.h - MARGIN_BOTTOM;
+  // The column header on its own; the continuation reserve is given back.
+  const headH = table.getHeadHeight(table.columns) - contH;
+  // The header and the first glued chain (a panel band, its sub-line and
+  // its first result) open the table together — keepRowsTogether only
+  // looks ahead from a row already drawn, so row 0 is decided here.
+  if (table.body.length > 0) {
+    const lead = headH + table.body[0].height + chainAfter(table.body, 0, keepWithNext);
+    if (startY + lead > floor && lead <= floor - margin.top) {
+      startY = table.settings.startY = newPage(doc, practice);
+    }
+  }
   // A small table that fits here but whose sign-off does not, and that cannot
   // hand even its header + first rows to the next page without leaving them
   // stranded, moves to the next page WHOLE — table and signatures together.
   if (reserveBottom > 0 && table.body.length > 0) {
-    const floor = A4.h - MARGIN_BOTTOM;
-    const headH = table.getHeadHeight(table.columns);
     const end = startY + headH + table.body.reduce((a, r) => a + r.height, 0);
     const lead = headH + table.body.slice(0, 2).reduce((a, r) => a + r.height, 0);
     if (end <= floor && end + reserveBottom > floor && startY + lead > floor - reserveBottom) {
@@ -3753,7 +3856,8 @@ function renderGridSection(
     startY: y,
     head: head as unknown as Array<Array<string | RowCell>>,
     body: body as unknown as Array<Array<string | RowCell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X },
+    margin: tablePageMargins(),
+    rowPageBreak: 'avoid',
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
@@ -3779,6 +3883,15 @@ function summaryCellHooks(doc: jsPDF) {
       drawSuperscriptCell(doc, sup, d as CellHookArg);
     },
   };
+}
+
+/** Page margins for every results table: the body floor (footer band) and,
+ *  on continuation pages, a top that clears the letterhead — in letterpad
+ *  mode the lab's PRE-PRINTED header (45 mm by default), where a fixed 56pt
+ *  put the repeated column header over the stationery. The "— CONTINUED"
+ *  stamp sits 14pt above this top. */
+function tablePageMargins(): { left: number; right: number; top: number; bottom: number } {
+  return { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM, top: LETTERPAD ? MARGIN_TOP + 24 : 56 };
 }
 
 /** Shared body styles for both grid + legacy tables. Honours the
@@ -3994,7 +4107,8 @@ function renderLegacyTest(
     startY: y,
     head: [['Investigation', 'Result', 'Reference Value', 'Unit']],
     body: tableRows as unknown as Array<Array<string | LCell>>,
-    margin: { left: MARGIN_X, right: MARGIN_X },
+    margin: tablePageMargins(),
+    rowPageBreak: 'avoid',
     theme: 'plain',
     styles: tableBodyStyles(),
     headStyles: tableHeadStyles(),
@@ -4162,7 +4276,8 @@ function renderCultureSection(
         startY: y,
         head: [[`Antimicrobial for ${orgLabel(org, idx)}`, 'Interpretation']],
         body: rows as unknown as Array<Array<string>>,
-        margin: { left: MARGIN_X, right: MARGIN_X },
+        margin: tablePageMargins(),
+        rowPageBreak: 'avoid',
         theme: 'plain',
         styles: tableBodyStyles(),
         headStyles: tableHeadStyles(),
