@@ -1,9 +1,9 @@
 import { HttpErrorResponse, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Router } from '@angular/router';
 import { catchError, from, switchMap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
+import { SessionService } from './session.service';
 
 /** Clone the request with the CURRENT access token + active-branch header. */
 function withAuth(req: HttpRequest<unknown>, auth: AuthService): HttpRequest<unknown> {
@@ -44,6 +44,29 @@ export function isBranchRefused(err: unknown): boolean {
     && (err.error as { error?: string } | null)?.error === 'branch_not_permitted';
 }
 
+/** Requests that answer for THEMSELVES — a 401/403 there is the verdict
+ *  (bad credentials, wrong PIN, wrong DOB on a public report link), never a
+ *  stale session to refresh or a reason to leave the page. */
+export function answersForItself(url: string): boolean {
+  return url.includes('/api/auth/')
+    || url.includes('/api/public/')
+    || url.startsWith(environment.auth.supabaseUrl);
+}
+
+/**
+ * Session handling for every API call (login audit 2026-09-29):
+ *  - PROACTIVE refresh: a token within 60s of expiry is refreshed before the
+ *    request goes out (single-flight), so a burst after a wake meets a fresh
+ *    token instead of five 401s.
+ *  - A 401 refreshes once (single-flight — five parallel 401s share one
+ *    exchange) and retries with the new token.
+ *  - Only a DEFINITIVE failure ends the session: the auth server rejecting
+ *    the refresh token. A network blip, a timeout, a 5xx or a deploy window
+ *    surfaces as the request's own error and the session stays.
+ *  - Ending a session is one call into SessionService — ordered clean-up,
+ *    one redirect with "Session expired" and the return URL — however many
+ *    requests fail at once; while it runs nothing retries or redirects.
+ */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   if (!req.url.startsWith('/api') && !req.url.includes('/api/')) {
     return next(req);
@@ -51,59 +74,63 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   const auth = inject(AuthService);
   // Injected HERE: catchError runs outside the injection context.
-  const router = inject(Router);
-
-  /**
-   * The session is gone — stop showing the user a raw 401/403 on a page they
-   * can no longer load, and send them where they can actually do something
-   * (owner: "if the login has failed it has to redirect to the login screen
-   * rather than staying and saying it's a 403"). Clears any half-dead
-   * session first so the login screen starts clean, and carries the current
-   * URL so they land back where they were.
-   */
-  const bounceToLogin = (): void => {
-    if (router.url.startsWith('/login')) return;     // already there — no loop
-    const returnUrl = router.url;
-    void auth.signOut().finally(() => {
-      void router.navigate(['/login'], { queryParams: { returnUrl } });
-    });
-  };
+  const session = inject(SessionService);
+  const skip = answersForItself(req.url);
 
   return from(auth.waitForAuth()).pipe(
-    switchMap(() => next(withAuth(req, auth))),
+    switchMap(() => from(skip ? Promise.resolve('fresh' as const) : auth.ensureFreshToken())),
+    switchMap((pre) => {
+      if (pre === 'dead') {
+        // The refresh token was rejected before we even sent this — don't
+        // fire a request that can only 401.
+        void session.expire('expired');
+        return throwError(() => new HttpErrorResponse({ status: 401, statusText: 'Session expired', url: req.url }));
+      }
+      return next(withAuth(req, auth));
+    }),
     catchError((err: unknown) => {
-      // Auth endpoints and the Supabase token URL answer for THEMSELVES: a
-      // 401/403 there is the verdict (bad credentials, wrong PIN, dead
-      // refresh token), not a stale session to recover or bounce on.
-      const skip = req.url.includes('/api/auth/')
-        || req.url.startsWith(environment.auth.supabaseUrl);
+      if (!(err instanceof HttpErrorResponse) || skip) return throwError(() => err);
 
       // Strict branch access: the active branch is no longer (or never was)
       // one of this user's branches. Drop it and retry ONCE on the default
       // branch — never loop, never bounce to login over it.
-      if (isBranchRefused(err) && !skip && auth.activeBranchId()) {
+      if (isBranchRefused(err) && auth.activeBranchId()) {
         auth.dropActiveBranch();
         return next(withAuth(req, auth));
       }
-      if (err instanceof HttpErrorResponse && isSignedOut403(err.status, {
+      // Mid sign-out: in-flight calls just fail quietly — no refresh, no
+      // second redirect (the "401 storm").
+      if (session.ending()) return throwError(() => err);
+
+      if (isSignedOut403(err.status, {
         skip, authed: auth.isAuthenticated(), hasToken: !!auth.accessToken(),
       })) {
-        bounceToLogin();
+        void session.expire('expired');
         return throwError(() => err);
       }
-      // 401 → the access token likely expired mid-session. Refresh once
-      // (single-flight in AuthService) and retry with the new token.
-      const is401 = err instanceof HttpErrorResponse && err.status === 401;
-      if (!is401 || skip) return throwError(() => err);
-      return from(auth.refreshAccessToken()).pipe(
-        switchMap(ok => {
-          // Errors from this retried request propagate to the caller —
-          // catchError has already fired, so there's no second retry loop.
-          if (ok) return next(withAuth(req, auth));
-          // Refresh failed — the refresh token is dead, so this session can
-          // never recover. Sign out and send them to the login screen instead
-          // of leaving a 401 on screen for a page that will never load.
-          bounceToLogin();
+
+      if (err.status !== 401) return throwError(() => err);
+      // No session at all (a stray call after sign-out): make sure we're on
+      // the login screen, once — nothing to refresh.
+      if (!auth.session()) {
+        void session.expire('expired');
+        return throwError(() => err);
+      }
+      return from(auth.refreshSession()).pipe(
+        switchMap(outcome => {
+          if (outcome === 'ok') {
+            // A 401 even with a freshly minted token: let /me decide whether
+            // the account is really gone (it ends the session only then).
+            return next(withAuth(req, auth)).pipe(
+              catchError((again: unknown) => {
+                if (again instanceof HttpErrorResponse && again.status === 401) void auth.loadProfile();
+                return throwError(() => again);
+              }),
+            );
+          }
+          // Dead refresh token — the session can never recover.
+          if (outcome === 'dead') void session.expire('expired');
+          // Transient — keep the session; the caller sees this request fail.
           return throwError(() => err);
         })
       );

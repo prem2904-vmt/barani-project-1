@@ -10,11 +10,13 @@ import { LockService } from './core/auth/lock.service';
 import { CallRingService } from './core/services/call-ring.service';
 import { LockScreenComponent } from './shared/components/lock-screen.component';
 import { SwitchScreenComponent } from './shared/components/switch-screen.component';
+import { SessionService } from './core/auth/session.service';
+import { LoadingLogoComponent } from './shared/components/loading-logo/loading-logo.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent],
+  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, LoadingLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <router-outlet></router-outlet>
@@ -24,6 +26,15 @@ import { SwitchScreenComponent } from './shared/components/switch-screen.compone
 
     <!-- Full-screen profile switch (Windows-style) — target's PIN gates it. -->
     <pf-switch-screen />
+
+    <!-- Sign-out cover: from the first step of the sign-out sequence until
+         the login screen is in place, so the half-cleared app never paints. -->
+    @if (session.ending()) {
+      <div class="pf-signout-cover" role="status" aria-live="polite">
+        <pf-loading-logo size="sm" [inline]="true"></pf-loading-logo>
+        <span>Signing out…</span>
+      </div>
+    }
 
     <!-- Version gate: shown only when the API's minClientVersion outruns this
          bundle (see VersionService). Persistent + blocking by design — an
@@ -54,6 +65,19 @@ import { SwitchScreenComponent } from './shared/components/switch-screen.compone
     }
   `,
   styles: [`
+    .pf-signout-cover {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
     /* Mirrors the pf-dialog-host card so the gate reads like the app's
        own dialogs — minus the actions row (nothing to confirm/dismiss). */
     .pf-vg-root {
@@ -148,6 +172,9 @@ export class App implements OnInit {
   private readonly _device = inject(DeviceClassService);
   protected readonly version = inject(VersionService);
   private readonly _lock = inject(LockService);
+  /** Owns the ordered sign-out; also registers itself with AuthService so
+   *  an expiry detected there runs the same sequence. */
+  protected readonly session = inject(SessionService);
   /** Root owner of call ringtones — alive on every screen (incl. /login),
    *  so a ring always stops on a terminal call state or account switch. */
   private readonly _ring = inject(CallRingService);

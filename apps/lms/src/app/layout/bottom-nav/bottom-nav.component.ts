@@ -22,7 +22,7 @@ import { DesignModeService } from '../../core/services/design-mode.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
-import { PushService } from '../../core/services/push.service';
+import { SessionService } from '../../core/auth/session.service';
 import { DOCTOR_NAV, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback } from '../nav-items';
 import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
@@ -60,7 +60,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly kbd = inject(KeyboardService);
   /** Push token must be unregistered on sign-out (mirrors the top-strip's
    *  logout) — otherwise the device keeps receiving this user's pushes. */
-  private readonly push = inject(PushService);
+  private readonly session = inject(SessionService);
   /** Scroll listener is registered runOutsideAngular (it fires very often),
    *  so signal writes that must trigger OnPush re-render re-enter the zone. */
   private readonly zone = inject(NgZone);
@@ -229,11 +229,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   protected async onMoreLogout(): Promise<void> {
     this.closeMore();
-    // Unregister push BEFORE the auth session is cleared (the call needs
-    // a valid token) — same order as the top-strip's logout.
-    await this.push.unregister().catch(() => undefined);
-    await this.auth.signOut();
-    void this.router.navigateByUrl('/login');
+    // The ONE ordered sign-out (revoke → push → sockets → timers → clear →
+    // /login, history replaced) — same as the avatar menu.
+    await this.session.logout();
   }
 
   // ─── Multi-account switching + PIN (mobile/iPad — mirrors the top strip) ──

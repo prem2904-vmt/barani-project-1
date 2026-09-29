@@ -55,10 +55,7 @@ import {
   PresenceOption,
   presenceLabel,
 } from "../../shared/models/presence.model";
-import { PushService } from "../../core/services/push.service";
-import { WebrtcService } from "../../core/services/webrtc.service";
-import { PatientProfileService } from "../../core/services/patient-profile.service";
-import { AppointmentBookingService } from "../../core/services/appointment-booking.service";
+import { SessionService } from "../../core/auth/session.service";
 import {
   DOCTOR_NAV,
   ADMIN_NAV,
@@ -283,10 +280,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly chat = inject(ChatService);
   protected readonly signaling = inject(SignalingService);
   protected readonly presence = inject(PresenceService);
-  private readonly push = inject(PushService);
-  private readonly webrtc = inject(WebrtcService);
-  private readonly patientProfile = inject(PatientProfileService);
-  private readonly appointmentBooking = inject(AppointmentBookingService);
+  private readonly session = inject(SessionService);
   private readonly process = inject(ProcessWorkflowService);
   private readonly dialog = inject(DialogService);
 
@@ -598,29 +592,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
 
   async logout() {
     this.profileOpen.set(false);
-
-    // ── (1) Unregister push notifications ──────────────────────────
-    await this.push.unregister().catch(() => undefined);
-
-    // ── (2) Disconnect realtime hubs ───────────────────────────────
-    await this.chat.disconnect().catch(() => undefined);
-    await this.signaling.disconnect().catch(() => undefined);
-
-    // ── (3) Reset WebRTC ───────────────────────────────────────────
-    this.webrtc.reset();
-
-    // ── (4) Close open modals/modeless overlays ─────────────────────
-    this.patientProfile.close();
-    this.appointmentBooking.close();
-
-    // ── (5) Reset cached tenant/config data ────────────────────────
-    this.tenantState.reset();
-    this.labCfg.reset();
-    this.entitlements.reset();
-
-    // ── (6) Final auth sign-out + redirect ─────────────────────────
-    await this.auth.signOut();
-    this.router.navigateByUrl("/login");
+    // The ONE ordered sign-out (SessionService): revoke → push → sockets →
+    // timers / overlays / tenant caches → clear → /login (history replaced).
+    await this.session.logout();
   }
 
   // ── Multi-account switching + PIN (shared lab machines) ───────────

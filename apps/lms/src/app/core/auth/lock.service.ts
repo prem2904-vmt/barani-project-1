@@ -1,6 +1,7 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { StoredAccount } from './accounts.service';
+import { SessionService } from './session.service';
 
 /** 15-minute idle lock for shared lab machines. Arms only while a PIN-enabled
  *  account is signed in (locking a PIN-less user would strand them). The lock
@@ -11,6 +12,7 @@ export class LockService {
   private static readonly LOCKED_KEY = 'pf.lockedAt';
 
   private readonly auth = inject(AuthService);
+  private readonly injector = inject(Injector);
   private readonly _locked = signal<boolean>(this.restoreLocked());
   /** The lock only counts when a PIN-enabled account is signed in. A PIN-less
    *  user (or a signed-out state) is NEVER locked, even if a stale pf.lockedAt
@@ -93,8 +95,10 @@ export class LockService {
   async abandonToLogin(): Promise<void> {
     this._locked.set(false);
     try { localStorage.removeItem(LockService.LOCKED_KEY); } catch { /* */ }
-    await this.auth.signOut();
-    location.assign('/login');
+    // The full sign-out sequence (revoke, push, sockets, clear, /login with
+    // history replaced) — resolved lazily: SessionService pulls in services
+    // that inject this one.
+    await this.injector.get(SessionService).logout();
   }
 
   private restoreLocked(): boolean {
