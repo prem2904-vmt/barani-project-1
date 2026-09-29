@@ -41,6 +41,8 @@ export function notificationRoute(
     case 'appointment':      return { commands: ['/frontdesk/appointments'] };
     case 'user':             return { commands: id ? ['/admin/users', id, 'edit'] : ['/admin/users'] };
     case 'vendor':           return { commands: ['/admin/vendors'] };
+    // WhatsApp billing / credits alerts → Lab settings → Report (the WhatsApp cards).
+    case 'whatsapp_billing': return { commands: ['/admin/lab-settings'], queryParams: { tab: 'report' } };
     case 'process_workflow': return { commands: ['/admin/process'] };
     // Generic order → open its collection drawer (the common actionable case);
     // a bare bill has no per-order screen, so land on the frontdesk queue.

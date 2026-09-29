@@ -244,7 +244,7 @@ describe('WhatsApp connect card — Embedded Signup (FB.login + postMessage)', (
     await settle(p.f);
 
     expect(completeCalls(p.api)).toEqual([{
-      state: 'signed-state', code: 'code-9', wabaId: 'waba-9', phoneNumberId: 'pn-9', event: 'FINISH', errorMessage: null,
+      state: 'signed-state', code: 'code-9', wabaId: 'waba-9', phoneNumberId: 'pn-9', businessId: 'b', event: 'FINISH', errorMessage: null,
     }]);
     expect(p.toasts.success).toHaveBeenCalledWith('Your WhatsApp number is connected');
     expect(p.changed).toHaveBeenCalled();
@@ -258,7 +258,7 @@ describe('WhatsApp connect card — Embedded Signup (FB.login + postMessage)', (
     cb({ authResponse: { code: 'code-x' } });
     expect(completeCalls(p.api)).toEqual([]);
     vi.advanceTimersByTime(WA_INFO_WAIT_MS + 10);
-    expect(completeCalls(p.api)).toEqual([{ state: 'signed-state', code: 'code-x', wabaId: null, phoneNumberId: null, event: 'FINISH', errorMessage: null }]);
+    expect(completeCalls(p.api)).toEqual([{ state: 'signed-state', code: 'code-x', wabaId: null, phoneNumberId: null, businessId: null, event: 'FINISH', errorMessage: null }]);
   });
 
   it('CANCEL from Meta closes the attempt without a code and without an error toast', async () => {
@@ -271,7 +271,7 @@ describe('WhatsApp connect card — Embedded Signup (FB.login + postMessage)', (
     (p.q('wac-connect') as HTMLButtonElement).click();
     fbMessage({ type: 'WA_EMBEDDED_SIGNUP', event: 'CANCEL', data: { current_step: 'PHONE_NUMBER_SETUP' } });
     await settle(p.f);
-    expect(completeCalls(p.api)).toEqual([{ state: 'signed-state', code: null, wabaId: null, phoneNumberId: null, event: 'CANCEL', errorMessage: null }]);
+    expect(completeCalls(p.api)).toEqual([{ state: 'signed-state', code: null, wabaId: null, phoneNumberId: null, businessId: null, event: 'CANCEL', errorMessage: null }]);
     expect(p.toasts.error).not.toHaveBeenCalled();
     expect(p.q('ls-wa-connect-card')!.getAttribute('data-state')).toBe('not_connected');
   });
@@ -297,7 +297,10 @@ describe('Embedded Signup helpers', () => {
 
   it('parses the WA_EMBEDDED_SIGNUP message (string or object), rejects everything else', () => {
     const ok = parseEmbeddedSignupMessage({ origin: 'https://www.facebook.com', data: JSON.stringify({ type: 'WA_EMBEDDED_SIGNUP', event: 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING', data: { waba_id: '123' } }) });
-    expect(ok).toEqual({ event: 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING', wabaId: '123', phoneNumberId: null, errorMessage: null, currentStep: null });
+    expect(ok).toEqual({ event: 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING', wabaId: '123', phoneNumberId: null, businessId: null, errorMessage: null, currentStep: null });
+    // The business id (billing deep links) rides along when Meta sends it.
+    const withBiz = parseEmbeddedSignupMessage({ origin: 'https://www.facebook.com', data: { type: 'WA_EMBEDDED_SIGNUP', event: 'FINISH', data: { waba_id: '1', phone_number_id: '2', business_id: 1234567890 } } });
+    expect(withBiz!.businessId).toBe('1234567890');
     const err = parseEmbeddedSignupMessage({ origin: 'https://www.facebook.com', data: { type: 'WA_EMBEDDED_SIGNUP', event: 'ERROR', data: { error_message: 'Boom' } } });
     expect(err!.errorMessage).toBe('Boom');
     expect(parseEmbeddedSignupMessage({ origin: 'https://evil.example', data: { type: 'WA_EMBEDDED_SIGNUP', event: 'FINISH' } })).toBeNull();

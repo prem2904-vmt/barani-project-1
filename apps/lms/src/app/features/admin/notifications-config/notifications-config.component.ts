@@ -38,6 +38,7 @@ const MODULE_LABELS: Record<string, string> = {
   lab:          'Lab bench',
   results:      'Results & validation',
   reports:      'Reports',
+  whatsapp:     'WhatsApp billing',
   inventory:    'Inventory',
   appointments: 'Appointments & home collection',
   team:         'Team & platform'
