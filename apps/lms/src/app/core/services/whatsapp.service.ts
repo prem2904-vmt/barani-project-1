@@ -46,20 +46,61 @@ export interface WaReportStatus {
   history: WaMessage[];
 }
 
+/** One of our templates on the lab's own WABA (Meta review status). */
+export interface WaTenantTemplate {
+  kind: 'link' | 'pdf';
+  name: string;
+  /** PENDING | APPROVED | REJECTED | PAUSED | DISABLED | ERROR | NOT_FOUND, or null (not submitted). */
+  status?: string | null;
+  reason?: string | null;
+}
+
+/** The "Your WhatsApp number" card state, decided by the server. */
+export type WaConnectState = 'not_connected' | 'connecting' | 'connected' | 'action_needed';
+
 /** Who the patient's WhatsApp comes from. The lab's token is never sent to the client. */
 export interface WaSender {
   source: 'tenant' | 'platform';
+  /** Card state (older servers omit it → derived from status). */
+  state?: WaConnectState;
   displayName?: string | null;
+  verifiedName?: string | null;
+  displayPhoneNumber?: string | null;
   status: 'not_connected' | 'pending' | 'connected' | 'error';
   wabaId?: string | null;
   phoneNumberId?: string | null;
   tokenStored: boolean;
   connectedAt?: string | null;
+  healthCheckedAt?: string | null;
+  /** GREEN | YELLOW | RED | UNKNOWN */
+  qualityRating?: string | null;
+  /** e.g. TIER_2K, TIER_10K, TIER_UNLIMITED */
+  messagingLimitTier?: string | null;
   error?: string | null;
   templateStatus?: string | null;
   templateStatusReason?: string | null;
+  templates?: WaTenantTemplate[];
   /** WhatsApp:EmbeddedSignupEnabled on the server (off until Meta App Review). */
   canConnect: boolean;
+}
+
+/** What FB.init / FB.login need (read-only; no attempt is opened). */
+export interface WaSignupConfig {
+  appId: string;
+  configId: string;
+  graphVersion: string;
+  /** Embedded Signup extras (version, featureType, sessionInfoVersion, setup = the lab's pre-fill). */
+  extras: Record<string, unknown>;
+}
+
+/** What the browser got back from Meta (never a token). */
+export interface WaSignupResult {
+  state: string;
+  code?: string | null;
+  wabaId?: string | null;
+  phoneNumberId?: string | null;
+  event?: string | null;
+  errorMessage?: string | null;
 }
 
 /** "Prefrontal (shared)" or "<lab display name> (connected)". */
@@ -156,9 +197,29 @@ export class WhatsAppService {
     return this.api.post<WaMessage>(`/api/whatsapp/reports/${reportId}/resend`, {});
   }
 
-  /** Embedded Signup: a signed, short-lived link the browser follows to Meta. */
-  startOnboarding(): Observable<{ connectUrl: string; hostedUrl: string; redirectUri: string }> {
+  /** Embedded Signup — FB.init / FB.login config for this lab (no side effect). */
+  signupConfig(): Observable<WaSignupConfig> {
+    return this.api.get<WaSignupConfig>('/api/whatsapp/onboarding/config');
+  }
+
+  /** Embedded Signup — open an attempt: a signed state bound to this lab + user. */
+  startOnboarding(): Observable<{ state: string; expiresAt: string }> {
     return this.api.post('/api/whatsapp/onboarding/start', {});
+  }
+
+  /** Embedded Signup — hand Meta's code + ids to the server (also CANCEL / ERROR). */
+  completeOnboarding(r: WaSignupResult): Observable<WaSettings> {
+    return this.api.post<WaSettings>('/api/whatsapp/onboarding/complete', r);
+  }
+
+  /** Re-read the lab's number (quality, limit) and template statuses from Meta. */
+  refreshOnboarding(): Observable<WaSettings> {
+    return this.api.post<WaSettings>('/api/whatsapp/onboarding/refresh', {});
+  }
+
+  /** Back to the shared Prefrontal number. */
+  disconnect(): Observable<WaSettings> {
+    return this.api.post<WaSettings>('/api/whatsapp/onboarding/disconnect', {});
   }
 
   setOptOut(patientId: string, optOut: boolean): Observable<{ patientId: string; optOut: boolean }> {

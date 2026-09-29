@@ -12,8 +12,9 @@ import { LabSettingsComponent } from './lab-settings.component';
  * Lab settings → Report → "Send WhatsApp automatically when the report is
  * ready" (Meta Cloud API). Tenant switch (server default ON; paid orders only)
  * + "send again when a report is regenerated" (default OFF) +
- * template override; the sender line says whose number the patient sees, and
- * "Connect your WhatsApp number" (Embedded Signup) is disabled — coming soon.
+ * template override; the sender line says whose number the patient sees. The
+ * lab's OWN number (Embedded Signup) lives in the "Your WhatsApp number" card
+ * right below (wa-connect-card.spec.ts covers its states and the SDK flow).
  */
 const providers = [
   {
@@ -51,15 +52,18 @@ function make(settings: unknown) {
 }
 
 describe('Lab settings — WhatsApp auto-send', () => {
-  it('is an ND switch card under the Report tab, OFF by default, shared sender, Connect disabled', () => {
+  it('is an ND switch card under the Report tab, OFF by default, shared sender; the number card follows it', () => {
     const p = make(SETTINGS());
     expect(p.card()).not.toBeNull();
     expect(p.main().classList.contains('nd-toggle')).toBe(true);
     expect(p.main().getAttribute('aria-checked')).toBe('false');
     expect(p.card()!.querySelector('[data-testid="ls-wa-sender"]')!.textContent).toContain('Prefrontal (shared)');
-    const connect = p.card()!.querySelector<HTMLButtonElement>('[data-testid="ls-wa-connect"]')!;
-    expect(connect.disabled).toBe(true);   // WhatsApp:EmbeddedSignupEnabled is off
-    expect(p.card()!.textContent).toContain('Coming soon');
+    // Embedded Signup off → the number card shows the shared number and NO Connect button.
+    const numberCard = p.el.querySelector<HTMLElement>('[data-testid="ls-wa-connect-card"]')!;
+    expect(numberCard).not.toBeNull();
+    expect(numberCard.getAttribute('data-state')).toBe('not_connected');
+    expect(numberCard.querySelector('[data-testid="wac-connect"]')).toBeNull();
+    expect(document.getElementById('pf-facebook-jssdk')).toBeNull();   // SDK not loaded
     // No native controls.
     expect(p.card()!.querySelector('select, datalist, input[type="checkbox"]')).toBeNull();
   });
@@ -74,15 +78,17 @@ describe('Lab settings — WhatsApp auto-send', () => {
     expect(p.toasts.success).toHaveBeenCalledWith('Reports will be sent on WhatsApp automatically once paid');
   });
 
-  it('a connected lab number shows the lab\'s own name and hides Connect', () => {
+  it('a connected lab number shows the lab\'s own name; the number card says Connected', () => {
     const p = make(SETTINGS({
       autoSendEnabled: true,
-      sender: { source: 'tenant', displayName: 'Micro World Labs', status: 'connected', tokenStored: true, canConnect: false },
+      sender: { source: 'tenant', state: 'connected', displayName: 'Micro World Labs', status: 'connected', tokenStored: true, phoneNumberId: 'pn-1', canConnect: false },
     }));
     expect(p.card()!.querySelector('[data-testid="ls-wa-sender"]')!.textContent).toContain('Micro World Labs (connected)');
-    expect([...p.card()!.querySelectorAll('button')].some(b => b.textContent!.includes('Connect your WhatsApp number'))).toBe(false);
+    const numberCard = p.el.querySelector<HTMLElement>('[data-testid="ls-wa-connect-card"]')!;
+    expect(numberCard.getAttribute('data-state')).toBe('connected');
+    expect([...p.el.querySelectorAll('button')].some(b => b.textContent!.includes('Connect WhatsApp'))).toBe(false);
     // The token never reaches the page.
-    expect(p.card()!.textContent).not.toMatch(/token/i);
+    expect(p.el.textContent).not.toMatch(/token/i);
   });
 
   it('warns when the shared sender is not configured on the server', () => {
@@ -93,22 +99,6 @@ describe('Lab settings — WhatsApp auto-send', () => {
   it('no permission / older server → no card', () => {
     const p = make([]);
     expect(p.card()).toBeNull();
-  });
-
-  it('with Embedded Signup enabled, Connect asks the server for the signed link and follows it', () => {
-    const p = make(SETTINGS({ sender: { source: 'platform', displayName: 'Prefrontal', status: 'not_connected', tokenStored: false, canConnect: true } }));
-    const assign = vi.fn();
-    const orig = window.location;
-    Object.defineProperty(window, 'location', { value: { ...orig, assign }, configurable: true, writable: true });
-    p.api.post.mockImplementation(((url: string) => url === '/api/whatsapp/onboarding/start'
-      ? of({ connectUrl: 'https://api.example/api/whatsapp/onboarding/begin?state=abc', hostedUrl: 'https://business.facebook.com/x', redirectUri: 'r' })
-      : of({})) as never);
-    const connect = p.card()!.querySelector<HTMLButtonElement>('[data-testid="ls-wa-connect"]')!;
-    expect(connect.disabled).toBe(false);
-    connect.click();
-    expect(p.api.post).toHaveBeenCalledWith('/api/whatsapp/onboarding/start', {});
-    expect(assign).toHaveBeenCalledWith('https://api.example/api/whatsapp/onboarding/begin?state=abc');
-    Object.defineProperty(window, 'location', { value: orig, configurable: true, writable: true });
   });
 
   it('says the message waits for payment, carries the PDF, and the regenerate re-send is a switch (off by default)', () => {
