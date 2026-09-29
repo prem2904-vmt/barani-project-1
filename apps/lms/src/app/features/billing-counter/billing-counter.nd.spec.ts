@@ -124,6 +124,11 @@ function render(opts: Opts = {}) {
         bal[id] = Math.max(0, (bal[id] ?? 0) - body.amount);
         return of(billNow(id));
       }
+      if (url.endsWith('/wallet-payment')) {
+        const id = url.split('/')[3];
+        bal[id] = Math.max(0, (bal[id] ?? 0) - body.amount);
+        return of({ bill: billNow(id), vendor: { id: body.vendorId, name: 'Apollo', usedCredit: body.amount, totalCredit: 0, balance: -body.amount, outstanding: body.amount, isActive: true } });
+      }
       if (url.endsWith('/pay-later')) {
         const id = url.split('/')[3];
         stamped.add(id);
@@ -378,6 +383,20 @@ describe('Billing counter — select → cart → pay here', () => {
     await c.confirmPayment({ mode: 'split', splitParts: [{ mode: 'cash', amount: 400 }, { mode: 'upi', amount: 600 }] });
     expect(api.post).toHaveBeenCalledWith('/api/billing/b1/payment', { amount: 400, mode: 'cash' });
     expect(api.post).toHaveBeenCalledWith('/api/billing/b1/payment', { amount: 600, mode: 'upi' });
+  });
+
+  it('Credit Wallet is ONE call (H8): the payment and the partner charge commit together on the server', async () => {
+    const { f, c, api } = render();
+    c.selectRow(c.queue()[1]);
+    f.detectChanges();
+    await flush();
+    await c.confirmPayment({ mode: 'wallet', vendorId: 'v1' });
+    const posts = api.post.mock.calls.map((x: any[]) => x[0]);
+    expect(api.post).toHaveBeenCalledWith('/api/billing/b1/wallet-payment',
+      { vendorId: 'v1', amount: 1000, referenceNo: 'v1', reason: 'Bill #INV-000123' });
+    expect(posts.filter((u: string) => u.includes('/api/vendors/'))).toEqual([]);
+    expect(posts.filter((u: string) => u.endsWith('/payment'))).toEqual([]);
+    expect(c.paid()?.mode).toBe('wallet');
   });
 });
 

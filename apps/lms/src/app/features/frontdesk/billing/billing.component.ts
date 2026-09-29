@@ -10,6 +10,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { PrinterService } from '../../../core/printer/printer.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Bill } from '../../../shared/models/bill.model';
+import { payBillFromWallet, VendorWalletBalance } from '../../../shared/utils/wallet-payment';
 import { Order } from '../../../shared/models/order.model';
 import { Test } from '../../../shared/models/test.model';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from './invoice-pdf';
@@ -36,18 +37,9 @@ interface PayModeDef {
   iconPath: string;
 }
 
-/** Slim shape of /api/vendors used by the billing wallet picker. */
-interface VendorWallet {
-  id: string;
-  name: string;
-  code?: string;
-  totalCredit: number;
-  usedCredit: number;
-  balance: number;
-  outstanding: number;
-  notifyThreshold?: number | null;
-  isActive: boolean;
-}
+/** Slim shape of /api/vendors used by the billing wallet picker (balances
+ *  are ledger-derived on the server). */
+type VendorWallet = VendorWalletBalance;
 
 /** Slim shape of /api/billing/config used to read the
  *  FrontdeskCanSeeWalletBalance flag. */
@@ -2198,45 +2190,36 @@ export class BillingComponent implements OnInit, OnChanges {
       }
       return;
     }
-    // 'wallet' mode charges the selected vendor's credit BEFORE
-    // recording the payment. If the charge fails (insufficient
-    // balance / inactive wallet), abort without recording payment so
-    // reception can pick a different vendor or mode.
+    // 'wallet' mode bills the selected partner's tab and records the payment
+    // in ONE server transaction (H8). If it fails (inactive wallet,
+    // overpayment), nothing is written, so reception can pick a different
+    // vendor or mode.
     if (this._mode() === 'wallet') {
       const vendor = this.selectedVendor();
       if (!vendor) { this._saving.set(false); this.toasts.warning('Pick a vendor first'); return; }
       const applyAndPay = (currentBill: Bill) => {
         // Charge the SERVER's outstanding on the (recomputed) bill.
         const amount = Math.max(0, currentBill.balance);
-        this.api.post<VendorWallet>(`/api/vendors/${vendor.id}/charge`, {
-          amount, billId: currentBill.id,
-          reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`
+        // H8: ONE call — the bill payment, the partner's charge ledger row and
+        // the wallet cache commit in one server transaction. It returns the
+        // settled bill AND the partner with its new ledger-derived balance.
+        payBillFromWallet(this.api, currentBill.id, vendor.id, amount, {
+          referenceNo: this._referenceNo() || vendor.code || vendor.name,
+          reason: `Bill #${currentBill.id.substring(0, 8)} — ${vendor.name}`,
         }).subscribe({
-          next: (updatedVendor) => {
-            // The /charge endpoint returns the vendor with its NEW balance —
-            // patch the cached list so every bound view (selected card, wallet
+          next: ({ bill: updated, vendor: updatedVendor }) => {
+            // Patch the cached list so every bound view (selected card, wallet
             // rows) reflects the raised outstanding immediately, no refetch.
             if (updatedVendor?.id) {
               this._vendors.update(list => (list ?? []).map(v => v.id === updatedVendor.id ? { ...v, ...updatedVendor } : v));
             }
-            // Wallet charge succeeded → record the bill payment so the
-            // bill is marked paid and the running totals on the FD
-            // landing pick it up.
-            this.api.post<Bill>(`/api/billing/${currentBill.id}/payment`, {
-              amount, mode: 'wallet',
-              referenceNo: this._referenceNo() || vendor.code || vendor.name
-            }).subscribe({
-              next: (updated) => {
-                if (updated) this._bill.set(updated);
-                this._saving.set(false);
-                this._paid.set(true);
-                this.clearDraft();
-                this.toasts.success(`Charged ₹${amount} to ${vendor.name}`);
-                this.billingEvents.notifyPaid();
-                this._paymentDoneOpen.set(true);
-              },
-              error: e => { this._saving.set(false); this.toasts.error(ApiError.from(e).message); }
-            });
+            if (updated) this._bill.set(updated);
+            this._saving.set(false);
+            this._paid.set(true);
+            this.clearDraft();
+            this.toasts.success(`Charged ₹${amount} to ${vendor.name}`);
+            this.billingEvents.notifyPaid();
+            this._paymentDoneOpen.set(true);
           },
           error: e => {
             this._saving.set(false);
