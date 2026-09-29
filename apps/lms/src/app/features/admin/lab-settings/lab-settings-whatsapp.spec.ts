@@ -10,7 +10,7 @@ import { LabSettingsComponent } from './lab-settings.component';
 
 /**
  * Lab settings → Report → "Send WhatsApp automatically when the report is
- * ready" (Meta Cloud API). Tenant switch (server default ON; paid orders only)
+ * ready" (Meta Cloud API). Tenant switch (server default OFF; paid orders only)
  * + "send again when a report is regenerated" (default OFF) +
  * template override; the sender line says whose number the patient sees, and
  * "Connect your WhatsApp number" (Embedded Signup) is disabled — coming soon.
