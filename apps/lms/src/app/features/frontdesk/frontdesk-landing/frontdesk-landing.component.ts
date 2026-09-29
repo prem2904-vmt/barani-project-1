@@ -34,7 +34,7 @@ import { Order, OrderSample } from '../../../shared/models/order.model';
 import { countdownLabel, dueClockLabel, offsetLabel, seriesState } from '../../../shared/utils/series-schedule';
 import { DialogService } from '../../../core/services/dialog.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../billing/invoice-pdf';
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printTubeLabels } from '../../../shared/utils/print-label';
 import { LabelPrintService } from '../../../core/printer/label-print.service';
@@ -1968,7 +1968,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
           address: tpl?.address || undefined,
           phone: tpl?.phone || undefined,
           email: tpl?.email || undefined,
-          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+          gstin: invoiceGstinFrom(bill, tpl),   // the bill's branch-GST snapshot
         },
         action: 'blob',
       });

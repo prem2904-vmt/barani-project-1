@@ -12,6 +12,7 @@ import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { phoneLast10 } from '../../../shared/utils/indian-phone';
 
 type DateRangePreset = 'any' | 'today' | 'yesterday' | '7d' | 'month' | 'custom';
 type SexFilter = '' | 'male' | 'female' | 'other';
@@ -1483,10 +1484,12 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   }
 
   // ── Result-row helpers ─────────────────────────────────────
+  /** Same mobile = same last 10 digits (indian-phone.ts), so 9876543210,
+   *  09876543210 and +91 98765-43210 all mark +919876543210 as exact. */
   isExactMobile(h: SearchHit): boolean {
     const filter = this.filters().phone.replace(/\D/g, '');
     if (!filter || !h.patient.phone) return false;
-    return h.patient.phone.replace(/\D/g, '') === filter;
+    return phoneLast10(h.patient.phone) === phoneLast10(filter);
   }
 
   highlightedName(p: Patient): string {
@@ -1498,7 +1501,7 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
 
   highlightedPhone(p: Patient): string {
     const phone = p.phone ?? '';
-    const q = this.filters().phone.replace(/\D/g, '');
+    const q = phoneLast10(this.filters().phone);
     if (!q) return this.escapeHtml(phone);
     // Highlight the digit-run match within the formatted phone.
     const idx = phone.replace(/\D/g, '').indexOf(q);

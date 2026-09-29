@@ -1,5 +1,6 @@
 import { Appointment } from '../../../shared/models/appointment.model';
 import { patientDisplayName } from '../../../shared/models/patient.model';
+import { phoneMatches } from '../../../shared/utils/indian-phone';
 
 /**
  * Appointments calendar — NEW DESIGN helpers + styles (ND-PATTERN §21).
@@ -39,8 +40,9 @@ export function apptTypeWord(type: string): string {
   return w[type] ?? (type ? type[0].toUpperCase() + type.slice(1) : 'Appointment');
 }
 
-/** The pill's search: case-insensitive name / MRN substring, or the phone's
- *  digits (3+). */
+/** The pill's search: case-insensitive name / MRN substring, or the phone —
+ *  a full number matches on its last 10 digits whatever the format, a
+ *  partial one (3+ digits) as a substring (indian-phone.ts). */
 export function matchesAppointment(a: Appointment, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -48,8 +50,7 @@ export function matchesAppointment(a: Appointment, query: string): boolean {
   if (!p) return false;
   if (patientDisplayName(p).toLowerCase().includes(q)) return true;
   if ((p.mrn ?? '').toLowerCase().includes(q)) return true;
-  const digits = q.replace(/\D/g, '');
-  return digits.length >= 3 && (p.phone ?? '').replace(/\D/g, '').includes(digits);
+  return phoneMatches(p.phone, q);
 }
 
 export interface NdPlaced { appt: Appointment; top: number; left: number; width: number; }

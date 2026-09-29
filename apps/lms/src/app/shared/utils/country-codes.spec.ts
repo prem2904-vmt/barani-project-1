@@ -9,7 +9,7 @@ describe('country-codes', () => {
     });
 
     it('has expected length and structure', () => {
-      expect(COUNTRY_CODES.length).toBe(11);
+      expect(COUNTRY_CODES.length).toBe(1);   // Indian mobiles only (IndianPhone)
       COUNTRY_CODES.forEach((cc) => {
         expect(cc).toHaveProperty('code');
         expect(cc).toHaveProperty('country');
@@ -47,10 +47,7 @@ describe('country-codes', () => {
 
   describe('getCountryDigitLength', () => {
     it('returns correct digit length for known country code', () => {
-      expect(getCountryDigitLength('+91')).toBe(10); // India
-      expect(getCountryDigitLength('+1')).toBe(10);  // USA/Canada
-      expect(getCountryDigitLength('+65')).toBe(8);  // Singapore
-      expect(getCountryDigitLength('+971')).toBe(9); // UAE
+      expect(getCountryDigitLength('+91')).toBe(10); // India — the only code offered
     });
 
     it('returns default 10 for unknown country code', () => {

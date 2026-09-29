@@ -12,6 +12,7 @@ import { TouchButtonComponent } from '../../shared/primitives/touch-button.compo
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../core/services/theme.service';
 import { bandFilter } from '../../shared/utils/band-search';
+import { labToday } from '../../shared/utils/lab-clock';
 
 interface ModeTotal { mode: string; count: number; total: number; }
 
@@ -402,7 +403,8 @@ export class DailyStatementComponent implements OnInit {
     c.shift,
   ]));
 
-  readonly todayStr = new Date().toLocaleDateString('en-CA'); // yyyy-MM-dd, local
+  /** Today's business date — strictly IST (lab-clock), never the device's day. */
+  readonly todayStr = labToday();
 
   readonly dateStr = signal<string>(this.todayStr);
   readonly shiftName = signal<string>('');

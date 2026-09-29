@@ -1504,6 +1504,20 @@ export function invoiceTemplateFieldsFrom(
   };
 }
 
+/** The GSTIN an invoice prints: the BILL's GST snapshot (bills.SupplierGstin,
+ *  taken from the branch's GST config when the bill was raised; the server
+ *  fills old bills from the branch config). Never the invoice template —
+ *  the branch GST config is the only GST source. The template's "Show
+ *  GSTIN" toggle still hides it. */
+export function invoiceGstinFrom(
+  bill: { supplierGstin?: string | null } | null | undefined,
+  tpl: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (tpl?.["showGstin"] === false) return undefined;
+  const g = (bill?.supplierGstin ?? "").trim();
+  return g || undefined;
+}
+
 /** Fetch an image URL and return a PNG/JPEG data URL for jsPDF.addImage (which
  *  can't take a remote URL). Server-relative paths ("/uploads/…") are resolved
  *  against `baseUrl` (the API origin) so uploaded logos load in dev + prod.

@@ -12,9 +12,9 @@ import {
 } from './validate';
 
 describe('COUNTRY_PHONE_RULES', () => {
-  it('exports an array of phone rules for 8 countries', () => {
+  it('offers India (+91) only — phones are Indian mobiles (IndianPhone)', () => {
     expect(Array.isArray(COUNTRY_PHONE_RULES)).toBe(true);
-    expect(COUNTRY_PHONE_RULES.length).toBe(8);
+    expect(COUNTRY_PHONE_RULES.length).toBe(1);
   });
 
   it('each rule has required properties', () => {
@@ -43,14 +43,10 @@ describe('getCountryPhoneRule', () => {
     expect(getCountryPhoneRule(undefined).code).toBe('+91');
   });
 
-  it('returns the matching rule for a valid country code', () => {
-    expect(getCountryPhoneRule('+1').country).toBe('US');
-    expect(getCountryPhoneRule('+44').country).toBe('GB');
-    expect(getCountryPhoneRule('+971').country).toBe('AE');
-    expect(getCountryPhoneRule('+966').country).toBe('SA');
-    expect(getCountryPhoneRule('+65').country).toBe('SG');
-    expect(getCountryPhoneRule('+61').country).toBe('AU');
-    expect(getCountryPhoneRule('+49').country).toBe('DE');
+  it('returns India for +91 and for any other code (Indian mobiles only)', () => {
+    expect(getCountryPhoneRule('+91').country).toBe('IN');
+    expect(getCountryPhoneRule('+1').country).toBe('IN');
+    expect(getCountryPhoneRule('+44').country).toBe('IN');
   });
 
   it('returns India (+91) as fallback for unknown country code', () => {
@@ -108,76 +104,21 @@ describe('validatePhoneNumber', () => {
     });
   });
 
-  describe('US/Canada (+1) validation', () => {
-    it('accepts valid US phone numbers when prefixed', () => {
-      expect(validatePhoneNumber('+1 2025551234')).toBeNull();
-      expect(validatePhoneNumber('+12025551234')).toBeNull();
+  describe('other countries (Indian mobiles only)', () => {
+    const msg = 'Must be a valid 10-digit Indian phone number starting with 6, 7, 8, or 9';
+    it('rejects foreign numbers even when valid in their own country', () => {
+      expect(validatePhoneNumber('+1 2025551234')).toBe(msg);
+      expect(validatePhoneNumber('+44 7123456789')).toBe(msg);
+      expect(validatePhoneNumber('+971501234567')).toBe(msg);
+      expect(validatePhoneNumber('+6581234567')).toBe(msg);
+      expect(validatePhoneNumber('2025551234', '+1')).toBe(msg);
     });
 
-    it('rejects US numbers starting with 0 or 1', () => {
-      expect(validatePhoneNumber('+1 1025551234')).toBe(
-        'Must be a valid 10-digit US/Canada phone number'
-      );
-      expect(validatePhoneNumber('+1 0125551234')).toBe(
-        'Must be a valid 10-digit US/Canada phone number'
-      );
-    });
-
-    it('uses forcedCode to interpret as US when no prefix', () => {
-      expect(validatePhoneNumber('2025551234', '+1')).toBeNull();
-      expect(validatePhoneNumber('1025551234', '+1')).toBe(
-        'Must be a valid 10-digit US/Canada phone number'
-      );
-    });
-  });
-
-  describe('UK (+44) validation', () => {
-    it('accepts valid UK phone numbers when prefixed', () => {
-      expect(validatePhoneNumber('+44 7123456789')).toBeNull();
-      expect(validatePhoneNumber('+44 10234567890')).toBeNull();
-    });
-
-    it('rejects UK numbers with wrong format', () => {
-      expect(validatePhoneNumber('+44 812345678')).toBe(
-        'Must be a valid UK phone number (10-11 digits)'
-      );
-    });
-  });
-
-  describe('UAE (+971) validation', () => {
-    it('accepts valid UAE phone numbers when prefixed', () => {
-      expect(validatePhoneNumber('+971 501234567')).toBeNull();
-      expect(validatePhoneNumber('+971 521234567')).toBeNull();
-    });
-
-    it('rejects UAE numbers not starting with 50/52/54/55/58', () => {
-      expect(validatePhoneNumber('+971 601234567')).toBe(
-        'Must be a valid 9-digit UAE mobile number'
-      );
-    });
-  });
-
-  describe('Saudi Arabia (+966) validation', () => {
-    it('accepts valid Saudi phone numbers when prefixed', () => {
-      expect(validatePhoneNumber('+966 512345678')).toBeNull();
-      expect(validatePhoneNumber('+966 591234567')).toBeNull();
-    });
-
-    it('rejects numbers not starting with 5', () => {
-      expect(validatePhoneNumber('+966 612345678')).toBe(
-        'Must be a valid 9-digit Saudi mobile number'
-      );
-    });
-  });
-
-  describe('with forcedCode', () => {
-    it('applies the forced country rule regardless of prefix', () => {
-      expect(validatePhoneNumber('+1 2025551234', '+44')).toBeNull();
-      expect(validatePhoneNumber('7123456789', '+44')).toBeNull();
-    });
-
-    it('strips the country code prefix if forcedCode matches', () => {
+    it('accepts every Indian form the server normalises', () => {
       expect(validatePhoneNumber('+91 9876543210', '+91')).toBeNull();
+      expect(validatePhoneNumber('919876543210')).toBeNull();
+      expect(validatePhoneNumber('09876543210')).toBeNull();
+      expect(validatePhoneNumber('+91 98765-43210')).toBeNull();
     });
   });
 

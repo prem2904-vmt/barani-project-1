@@ -32,7 +32,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { AuthService } from '../../../core/auth/auth.service';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../billing/invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../billing/invoice-pdf';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
@@ -2220,7 +2220,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         address: tpl?.address || undefined,
         phone: tpl?.phone || undefined,
         email: tpl?.email || undefined,
-        gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+        gstin: invoiceGstinFrom(bill, tpl),   // the bill's branch-GST snapshot
       },
     };
 

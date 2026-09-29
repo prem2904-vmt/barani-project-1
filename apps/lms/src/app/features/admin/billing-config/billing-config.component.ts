@@ -634,13 +634,22 @@ interface GstRow {
                     />
                   </div>
                   <div>
-                    <label class="pf-label">GSTIN</label
-                    ><input
-                      class="nd-input"
-                      [ngModel]="tpl().gstin"
-                      (ngModelChange)="patchTpl({ gstin: $event })"
-                      placeholder="Optional"
-                    />
+                    <!-- GSTIN is not a template field: every invoice prints its
+                         branch's GSTIN (GST Setup), snapshotted on the bill. -->
+                    <span class="pf-label">GSTIN</span>
+                    @if (branchGstins().length === 0) {
+                      <p class="pf-bc-gstin-ro">No branch GSTIN set</p>
+                    } @else {
+                      @for (g of branchGstins(); track g.branchId) {
+                        <p class="pf-bc-gstin-ro">
+                          <span class="nd-num">{{ g.gstin }}</span>
+                          @if (branchGstins().length > 1) { <span class="pf-bc-gstin-br">· {{ g.branchName }}</span> }
+                        </p>
+                      }
+                    }
+                    <button type="button" class="pf-bc-gstin-link" (click)="setTab('gst')">
+                      Set per branch in GST Setup
+                    </button>
                   </div>
                   <div class="col-span-1 sm:col-span-2">
                     <label class="pf-label">Address</label
@@ -926,6 +935,13 @@ interface GstRow {
         box-shadow: var(--nd-shadow-sm);
       }
       .pf-bc-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
+      .pf-bc-gstin-ro { margin: 6px 0 0; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
+      .pf-bc-gstin-br { color: var(--text-muted); font-size: 12px; }
+      .pf-bc-gstin-link {
+        margin-top: 4px; padding: 6px 0; min-height: 32px; background: none; border: 0;
+        font-size: 12px; font-weight: 500; color: var(--color-primary); cursor: pointer;
+        text-decoration: underline; text-underline-offset: 2px;
+      }
       .pf-bc-sub {
         margin: 0 0 8px;
         font-size: 12px;
@@ -1114,6 +1130,19 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   readonly branches = this._branches.asReadonly();
 
   private readonly _gstinByBranch = signal<Map<string, GstRow>>(new Map());
+  /** SAVED branch GSTINs (GET /api/config/gst) — what invoices print. The
+   *  editable map above also holds unsaved typing. */
+  private readonly _savedGst = signal<GstRow[]>([]);
+  readonly branchGstins = computed(() => {
+    const names = new Map(this._branches().map((b) => [b.id, b.name]));
+    return this._savedGst()
+      .filter((g) => (g.gstin ?? "").trim())
+      .map((g) => ({ ...g, branchName: names.get(g.branchId) ?? "Branch" }));
+  });
+  /** The preview prints a real branch GSTIN (the first), as invoices do. */
+  previewGstin(): string | undefined {
+    return this.branchGstins()[0]?.gstin || undefined;
+  }
 
   readonly invoicePreview = computed(() => {
     const c = this._config();
@@ -1245,7 +1274,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
           address: t.address,
           phone: t.phone,
           email: t.email,
-          gstin: t.gstin,
+          gstin: this.previewGstin(),
         },
         template: (t.template ?? "classic") as InvoiceTemplateStyle,
         paperSize: (t.paperSize ?? "a4") as
@@ -1326,7 +1355,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
       branchId: "br",
       type: withTax ? "tax_invoice" : "bill_of_supply",
       invoiceNumber: "PREVIEW",
-      supplierGstin: this._tpl().gstin,
+      supplierGstin: this.previewGstin(),
       placeOfSupply: "Tamil Nadu (33)",
       isInterstate: false,
       subTotal,
@@ -1395,6 +1424,19 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     this.api.get<Branch[]>("/api/tenants/branches").subscribe({
       next: (l) => this._branches.set(l ?? []),
     });
+    this.loadGst();
+  }
+
+  /** Saved branch GST configs — GST Setup showed blank inputs for GSTINs
+   *  that were already saved (there was no GET). */
+  private loadGst() {
+    this.api.get<GstRow[]>("/api/config/gst").subscribe({
+      next: (rows) => {
+        const list = rows ?? [];
+        this._savedGst.set(list);
+        this._gstinByBranch.set(new Map(list.map((r) => [r.branchId, { ...r }])));
+      },
+    });
   }
 
   gstinFor(bid: string): string {
@@ -1429,7 +1471,10 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
         stateCode: row.stateCode,
       })
       .subscribe({
-        next: () => this.toasts.success("GSTIN saved"),
+        next: () => {
+          this.toasts.success("GSTIN saved");
+          this.loadGst();
+        },
         error: (e) => this.toasts.error(ApiError.from(e).message),
       });
   }

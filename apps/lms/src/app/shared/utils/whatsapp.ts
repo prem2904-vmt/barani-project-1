@@ -7,14 +7,13 @@
  * link (e.g. the report's QR verify URL) in the text instead.
  */
 
-/** Normalise a stored phone number to wa.me's expected form: digits only,
- *  no leading "+". A bare 10-digit Indian number gets a 91 country code. */
+import { whatsAppPhone } from './indian-phone';
+
+/** The wa.me recipient: 91 + the 10-digit Indian mobile, no "+" — the one
+ *  phone rule (indian-phone.ts, mirror of the server's IndianPhone). '' when
+ *  the number isn't a valid Indian mobile (the link then opens the picker). */
 export function normalizeWaPhone(phone: string | null | undefined): string {
-  const digits = (phone ?? '').replace(/[^\d]/g, '');
-  if (!digits) return '';
-  if (digits.length === 10) return `91${digits}`;       // bare Indian mobile
-  if (digits.length === 11 && digits.startsWith('0')) return `91${digits.slice(1)}`;
-  return digits;                                          // already has a country code
+  return whatsAppPhone(phone);
 }
 
 /** Build a wa.me URL. When the phone is missing/invalid, returns the

@@ -14,6 +14,7 @@ import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/seg
 import { ThemeService } from '../../core/services/theme.service';
 import { bandFilter } from '../../shared/utils/band-search';
 import { SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
+import { labDaysAgo } from '../../shared/utils/lab-clock';
 
 type Module = 'overall' | 'lab' | 'credit' | 'ipd' | 'opd' | 'pharmacy';
 
@@ -407,10 +408,10 @@ export class FinanceHubComponent implements OnInit {
 
   ngOnInit() { this.load(); }
 
+  /** IST business date n days ago (lab-clock) — the server reads these as
+   *  IST days; the UTC date was yesterday's until 05:30 IST. */
   private isoDaysAgo(n: number): string {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
+    return labDaysAgo(n);
   }
 
   /** A date typed by hand leaves the quick-range chips. */

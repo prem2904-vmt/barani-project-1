@@ -16,6 +16,7 @@ import { ApiService } from "../../core/services/api.service";
 import { ApiError } from "../../shared/models/api-response.model";
 import { ToastService } from "../../core/services/toast.service";
 import { testListUrl } from '../../shared/utils/test-list-url';
+import { addDays, istDayRange, labToday } from "../../shared/utils/lab-clock";
 
 interface SeedSummary {
   tenants: number;
@@ -1424,24 +1425,14 @@ export class AdminOverviewComponent implements OnInit {
     });
   }
 
-  /** Local-midnight window boundaries for the chosen range, as ISO instants. */
+  /** IST-midnight window boundaries for the chosen range, as ISO instants
+   *  (lab-clock — the business day is strictly IST, whatever the device). */
   private windowFor(r: RangeKey): { from: string; to: string } {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-
-    let from = new Date(startOfToday);
-    let to = new Date(startOfTomorrow);
-    if (r === "yesterday") {
-      from.setDate(from.getDate() - 1);
-      to = new Date(startOfToday);
-    } else if (r === "7d") {
-      from.setDate(from.getDate() - 6);
-    } else if (r === "30d") {
-      from.setDate(from.getDate() - 29);
-    }
-    return { from: from.toISOString(), to: to.toISOString() };
+    const today = labToday();
+    if (r === "yesterday") return istDayRange(addDays(today, -1));
+    if (r === "7d") return istDayRange(addDays(today, -6), today);
+    if (r === "30d") return istDayRange(addDays(today, -29), today);
+    return istDayRange(today);
   }
 
   formatCard(c: KpiCard): string {
