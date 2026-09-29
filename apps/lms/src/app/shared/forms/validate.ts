@@ -6,6 +6,7 @@
 
 import { FormField, FormFieldType, ValidationConfig } from './form-field.model';
 import { identityKind, isContactNumberField, validateEmail, validateIdentity } from './patient-fields';
+import { indianNational } from '../utils/indian-phone';
 
 export interface CountryPhoneRule {
   code: string;
@@ -18,6 +19,9 @@ export interface CountryPhoneRule {
   errorMessage: string;
 }
 
+/** Phones are Indian mobiles only (owner rule 2026-09-29 — the server's
+ *  IndianPhone rejects anything else), so the dialling-code pickers offer
+ *  +91 alone. The normaliser / search rules live in utils/indian-phone.ts. */
 export const COUNTRY_PHONE_RULES: CountryPhoneRule[] = [
   {
     code: '+91',
@@ -29,76 +33,6 @@ export const COUNTRY_PHONE_RULES: CountryPhoneRule[] = [
     placeholder: '98765 43210',
     errorMessage: 'Must be a valid 10-digit Indian phone number starting with 6, 7, 8, or 9'
   },
-  {
-    code: '+1',
-    country: 'US',
-    flag: '🇺🇸',
-    name: 'US / Canada',
-    maxDigits: 10,
-    pattern: /^[2-9]\d{9}$/,
-    placeholder: '(555) 123-4567',
-    errorMessage: 'Must be a valid 10-digit US/Canada phone number'
-  },
-  {
-    code: '+44',
-    country: 'GB',
-    flag: '🇬🇧',
-    name: 'UK',
-    maxDigits: 11,
-    pattern: /^(7\d{9}|\d{10,11})$/,
-    placeholder: '7123 456789',
-    errorMessage: 'Must be a valid UK phone number (10-11 digits)'
-  },
-  {
-    code: '+971',
-    country: 'AE',
-    flag: '🇦🇪',
-    name: 'UAE',
-    maxDigits: 9,
-    pattern: /^5[024568]\d{7}$/,
-    placeholder: '50 123 4567',
-    errorMessage: 'Must be a valid 9-digit UAE mobile number'
-  },
-  {
-    code: '+966',
-    country: 'SA',
-    flag: '🇸🇦',
-    name: 'Saudi Arabia',
-    maxDigits: 9,
-    pattern: /^5\d{8}$/,
-    placeholder: '50 123 4567',
-    errorMessage: 'Must be a valid 9-digit Saudi mobile number'
-  },
-  {
-    code: '+65',
-    country: 'SG',
-    flag: '🇸🇬',
-    name: 'Singapore',
-    maxDigits: 8,
-    pattern: /^[89]\d{7}$/,
-    placeholder: '8123 4567',
-    errorMessage: 'Must be a valid 8-digit Singapore mobile number'
-  },
-  {
-    code: '+61',
-    country: 'AU',
-    flag: '🇦🇺',
-    name: 'Australia',
-    maxDigits: 9,
-    pattern: /^4\d{8}$/,
-    placeholder: '412 345 678',
-    errorMessage: 'Must be a valid 9-digit Australian mobile number'
-  },
-  {
-    code: '+49',
-    country: 'DE',
-    flag: '🇩🇪',
-    name: 'Germany',
-    maxDigits: 11,
-    pattern: /^(1[567]\d{8,9}|\d{10,11})$/,
-    placeholder: '171 1234567',
-    errorMessage: 'Must be a valid German phone number'
-  }
 ];
 
 export function getCountryPhoneRule(code?: string): CountryPhoneRule {
@@ -106,36 +40,17 @@ export function getCountryPhoneRule(code?: string): CountryPhoneRule {
   return COUNTRY_PHONE_RULES.find(r => r.code === code) ?? COUNTRY_PHONE_RULES[0];
 }
 
+/** Error for a phone value, or null when valid / empty. The one Indian
+ *  mobile rule (indian-phone.ts): 9876543210, 09876543210, 919876543210,
+ *  +91 98765-43210 … are valid; other countries and malformed numbers are
+ *  not. `forcedCode` is accepted for existing callers (only +91 exists). */
 export function validatePhoneNumber(raw: unknown, forcedCode?: string): string | null {
   if (raw == null || raw === '') return null;
   const str = String(raw).trim();
   if (!str) return null;
-
-  let rule: CountryPhoneRule;
-  let digits: string;
-
-  if (forcedCode) {
-    rule = getCountryPhoneRule(forcedCode);
-    digits = str.replace(/\D/g, '');
-    if (str.startsWith(rule.code)) {
-      digits = str.slice(rule.code.length).replace(/\D/g, '');
-    }
-  } else {
-    const matched = COUNTRY_PHONE_RULES.find(r => str.startsWith(r.code));
-    if (matched) {
-      rule = matched;
-      digits = str.slice(matched.code.length).replace(/\D/g, '');
-    } else {
-      rule = COUNTRY_PHONE_RULES[0]; // default to +91
-      digits = str.replace(/\D/g, '');
-    }
-  }
-
-  if (!digits) return 'Phone number required';
-  if (!rule.pattern.test(digits)) {
-    return rule.errorMessage;
-  }
-  return null;
+  const rule = getCountryPhoneRule(forcedCode);
+  if (!str.replace(/\D/g, '')) return 'Phone number required';
+  return indianNational(str) ? null : rule.errorMessage;
 }
 
 export interface GenericValidationRule {

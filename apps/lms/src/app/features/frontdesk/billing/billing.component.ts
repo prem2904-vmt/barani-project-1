@@ -12,7 +12,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { Bill } from '../../../shared/models/bill.model';
 import { Order } from '../../../shared/models/order.model';
 import { Test } from '../../../shared/models/test.model';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from './invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from './invoice-pdf';
 import { environment } from '../../../../environments/environment';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { upiLink, upiQrDataUrl } from '../../../shared/utils/upi';
@@ -2377,7 +2377,7 @@ export class BillingComponent implements OnInit, OnChanges {
           name: ((tpl?.labName) || this.auth.user()?.tenantName) || undefined,
           address: tpl?.address || undefined,
           phone: tpl?.phone || undefined, email: tpl?.email || undefined,
-          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+          gstin: invoiceGstinFrom(b, tpl),   // the bill's branch-GST snapshot
         },
       };
       if (this.isNativePlatform()) {

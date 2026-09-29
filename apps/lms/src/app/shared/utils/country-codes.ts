@@ -5,18 +5,10 @@ export interface CountryCode {
   digitsLength: number;
 }
 
+/** Staff phones follow the same rule as patients (server IndianPhone):
+ *  Indian mobiles only, so the dialling-code picker offers +91 alone. */
 export const COUNTRY_CODES: CountryCode[] = [
   { code: '+91', country: 'India', flag: '🇮🇳', digitsLength: 10 },
-  { code: '+1', country: 'USA/Canada', flag: '🇺🇸', digitsLength: 10 },
-  { code: '+44', country: 'United Kingdom', flag: '🇬🇧', digitsLength: 10 },
-  { code: '+971', country: 'UAE', flag: '🇦🇪', digitsLength: 9 },
-  { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦', digitsLength: 9 },
-  { code: '+65', country: 'Singapore', flag: '🇸🇬', digitsLength: 8 },
-  { code: '+61', country: 'Australia', flag: '🇦🇺', digitsLength: 9 },
-  { code: '+60', country: 'Malaysia', flag: '🇲🇾', digitsLength: 9 },
-  { code: '+49', country: 'Germany', flag: '🇩🇪', digitsLength: 10 },
-  { code: '+33', country: 'France', flag: '🇫🇷', digitsLength: 9 },
-  { code: '+81', country: 'Japan', flag: '🇯🇵', digitsLength: 10 },
 ];
 
 export function getCountryDigitLength(code: string): number {

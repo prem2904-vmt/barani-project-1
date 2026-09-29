@@ -9,6 +9,7 @@ import { AGE_LIMITS, AgeUnit, dobFromAge, isContactNumberField, validateAge } fr
 import { ageParts } from '../../utils/patient-age';
 import { normalizeSex, selectReferenceRange } from '../../utils/reference-range';
 import { liveFlag } from '../../utils/result-flag';
+import { labToday } from '../../utils/lab-clock';
 
 export type DynamicFieldType =
   | 'text' | 'number' | 'numeric' | 'numeric_with_range' | 'critical_numeric'
@@ -1357,7 +1358,7 @@ export class DynamicInputComponent {
 
   /** Today (yyyy-MM-dd) — caps the DOB picker so a future birth date can't be
    *  chosen (OPS-34). */
-  readonly todayIso = new Date().toISOString().slice(0, 10);
+  readonly todayIso = labToday();   // IST (lab-clock), not UTC's date
 
   /** The current DOB value's calendar age — the shared patient-age helper,
    *  so the box shows exactly what every other screen shows. */

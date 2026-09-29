@@ -32,8 +32,10 @@ import { NdDateComponent } from '../../shared/components/nd-date/nd-date.compone
 import {
   InlinePaymentPanelComponent, InlinePaymentResult,
 } from '../frontdesk/order-create/inline-payment-panel.component';
-import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl } from '../frontdesk/billing/invoice-pdf';
+import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../frontdesk/billing/invoice-pdf';
 import { environment } from '../../../environments/environment';
+import { phoneMatches } from '../../shared/utils/indian-phone';
+import { labToday } from '../../shared/utils/lab-clock';
 
 /** One row of GET /api/billing/outstanding — a bill with money still moving
  *  (balance > 0 → patient owes; balance < 0 → lab owes a refund). */
@@ -416,7 +418,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
       r.name.toLowerCase().includes(q)
       || (r.orderLabel ?? '').toLowerCase().includes(q)
       || (r.mrn ?? '').toLowerCase().includes(q)
-      || (digits.length >= 3 && (r.phone ?? '').replace(/\D/g, '').includes(digits))
+      || phoneMatches(r.phone, digits)   // last 10 digits for a full number, else partial
       || r.orderId.toLowerCase().startsWith(q));
   });
 
@@ -473,9 +475,9 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   protected readonly loadingReconcile = signal(false);
   readonly reconcile = this._reconcile.asReadonly();
 
+  /** Today's business date for the day-end reconcile — strictly IST. */
   static todayIso(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return labToday();
   }
 
   setReconcileDate(date: string | null) {
@@ -1102,7 +1104,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
           address: tpl?.address || undefined,
           phone: tpl?.phone || undefined,
           email: tpl?.email || undefined,
-          gstin: tpl?.showGstin === false ? undefined : (tpl?.gstin || undefined),
+          gstin: invoiceGstinFrom(bill, tpl),   // the bill's branch-GST snapshot
         },
         action: 'print',
       });
