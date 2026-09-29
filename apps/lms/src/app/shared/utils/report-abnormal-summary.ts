@@ -248,6 +248,8 @@ export function renderAbnormalSummary(doc: jsPDF, depts: AbnormalSummaryDept[], 
     head: head as never,
     body: body as never,
     margin: { left: x0, right: ctx.marginX, bottom: ctx.marginBottom, top: ctx.continueTop },
+    // A row never splits mid-cell across pages (same rule as the report table).
+    rowPageBreak: 'avoid',
     theme: 'plain',
     styles: ctx.bodyStyles,
     headStyles: ctx.headStyles,
