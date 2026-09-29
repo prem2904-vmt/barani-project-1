@@ -186,11 +186,9 @@ import { ApiError } from '../../../shared/models/api-response.model';
               @else if (v.credits.isLow) { <span class="nd-chip nd-chip--static pf-wab__flag" data-tone="wait">Running low</span> }
             </div>
             <p class="pf-wab__big" data-testid="wab-credits-balance">{{ v.credits.balance ?? 0 }} <span class="pf-wab__src">credits left</span></p>
-            <p class="pf-wab__hint">{{ v.credits.usedThisMonth }} used this month
-              @if (v.credits.monthlyAllowance) { · {{ v.credits.monthlyAllowance }} granted every month }
-              · one credit per message sent from the shared number.
+            <p class="pf-wab__hint">{{ v.credits.usedThisMonth }} used this month · one credit per message sent from the shared number.
               @if (v.credits.isExhausted) { <strong>Report messages are on hold and Send WhatsApp is paused until Prefrontal adds credits.</strong> }
-              Contact Prefrontal support for more credits.</p>
+              Contact Prefrontal to add credits.</p>
           </div>
         } @else if (!v.billing.own) {
           <p class="pf-wab__hint" data-testid="wab-credits-untracked">Prefrontal pays for these messages. Connect your own WhatsApp number (card above) to see Meta's charges here.</p>

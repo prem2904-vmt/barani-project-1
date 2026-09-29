@@ -68,7 +68,7 @@ const SHARED_BILLING = (): WaBilling => OWN_BILLING({
   links: { ...LINKS, paymentMethods: 'https://business.facebook.com/billing_hub', precise: false },
 });
 const CREDITS = (over: Partial<WaCredits> = {}): WaCredits => ({
-  tracked: false, balance: null, monthlyAllowance: null, allowanceMonth: null, lowThreshold: null,
+  tracked: false, balance: null, lowThreshold: null,
   usedThisMonth: 0, grantedTotal: 0, usedTotal: 0, isLow: false, isExhausted: false, ledger: [], ...over,
 });
 const VIEW = (billing: WaBilling, credits: WaCredits = CREDITS()): WaBillingView => ({ billing, credits });
@@ -269,13 +269,15 @@ describe('WhatsApp billing card — shared Prefrontal number', () => {
     expect(p.q('wab-credits-untracked')!.textContent).toContain('Prefrontal pays for these messages');
   });
 
-  it('with credits granted: balance, used, allowance; low and exhausted flags with the hold notice', () => {
-    const ok = make(VIEW(SHARED_BILLING(), CREDITS({ tracked: true, balance: 180, monthlyAllowance: 200, lowThreshold: 20, usedThisMonth: 20 })), { sender: SENDER() });
+  it('with credits granted: balance, used, "Contact Prefrontal"; nothing the lab can change; low and exhausted flags with the hold notice', () => {
+    const ok = make(VIEW(SHARED_BILLING(), CREDITS({ tracked: true, balance: 180, lowThreshold: 20, usedThisMonth: 20 })), { sender: SENDER() });
     const c = ok.q('wab-credits')!;
     expect(c.getAttribute('data-state')).toBe('ok');
     expect(ok.q('wab-credits-balance')!.textContent).toContain('180');
     expect(c.textContent).toContain('20 used this month');
-    expect(c.textContent).toContain('200 granted every month');
+    expect(c.textContent).toContain('Contact Prefrontal to add credits');
+    expect(c.textContent).not.toMatch(/every month|allowance/i);
+    expect(c.querySelector('button, input, a')).toBeNull();
     expect(c.textContent).not.toContain('on hold');
     TestBed.resetTestingModule();
 
@@ -288,7 +290,7 @@ describe('WhatsApp billing card — shared Prefrontal number', () => {
     expect(out.q('wab-credits')!.getAttribute('data-state')).toBe('exhausted');
     expect(out.q('wab-credits')!.textContent).toContain('Used up');
     expect(out.q('wab-credits')!.textContent).toContain('on hold');
-    expect(out.q('wab-credits')!.textContent).toContain('Contact Prefrontal support');
+    expect(out.q('wab-credits')!.textContent).toContain('Contact Prefrontal to add credits');
   });
 
   it('a connected lab whose payment is failing (sending from the shared number meanwhile) sees its credits too', () => {

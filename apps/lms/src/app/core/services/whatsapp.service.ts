@@ -144,12 +144,13 @@ export interface WaBilling {
   rates: { currency: string; utility: number; marketing: number; authentication: number; authenticationInternational: number; service: number; note: string; url: string };
 }
 export interface WaCreditLedgerRow {
-  id: string; type: 'allowance' | 'topup' | 'adjustment' | 'charge' | 'expiry'; amount: number; balanceAfter: number;
-  month?: string | null; reason?: string | null; actor?: string | null; at: string;
+  id: string; type: 'topup' | 'adjustment' | 'charge'; amount: number; balanceAfter: number;
+  reason?: string | null; actor?: string | null; at: string;
 }
-/** Shared-number message credits (tracking only). `tracked` false = no allowance set (unlimited). */
+/** Shared-number message credits (tracking only, STRICTLY manual: only the platform admin adds or
+ *  takes back credits; nothing is granted by the system). `tracked` false = no credit record (unlimited). */
 export interface WaCredits {
-  tracked: boolean; balance: number | null; monthlyAllowance: number | null; allowanceMonth?: string | null; lowThreshold: number | null;
+  tracked: boolean; balance: number | null; lowThreshold: number | null;
   usedThisMonth: number; grantedTotal: number; usedTotal: number; isLow: boolean; isExhausted: boolean;
   updatedAt?: string | null; updatedBy?: string | null; ledger: WaCreditLedgerRow[];
 }
@@ -357,8 +358,9 @@ export class WhatsAppService {
 
   // ── Shared-number credits (platform console only — the lab route has no such endpoint) ──
 
-  setCreditAllowance(monthlyAllowance: number | null, lowThreshold: number | null): Observable<WaBillingView> {
-    return this.api.put<WaBillingView>('/api/whatsapp/credits/allowance', { monthlyAllowance, lowThreshold });
+  /** The lab's low-credit alert level (a lab that already has credits). */
+  setCreditThreshold(lowThreshold: number): Observable<WaBillingView> {
+    return this.api.put<WaBillingView>('/api/whatsapp/credits/threshold', { lowThreshold });
   }
 
   adjustCredits(amount: number, reason: string | null): Observable<WaBillingView> {
