@@ -19,6 +19,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Licensing:** the platform entitlement.
   - **Reference ranges:** the single sex + age resolver.
   - **Paid (patient release):** `PatientReleaseGate`.
+  - **Outsourced or in-house:** the tube's `OutsourcedVendorId`, frozen at order time from the lab's effective test; every lab surface filters through `OutsourcingRules` (`InHouseTube` for tubes, `InHouseWork` for lines), never a bare status check.
 - Never match by name or code when an ID / key exists.
 
 ## 2. Tenant and branch isolation
