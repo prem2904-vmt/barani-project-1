@@ -9,6 +9,8 @@
  * can't disambiguate the right destination on its own. Falls back to
  * `referenceType`. `referenceId` is the entity id.
  */
+import { canonicalNotificationType } from '../../utils/notification-type';
+
 export interface NotifRoute {
   commands: unknown[];
   queryParams?: Record<string, string>;
@@ -21,7 +23,7 @@ export function notificationRoute(
   canValidate: boolean,
 ): NotifRoute | null {
   const id = referenceId || undefined;
-  const t = (type || '').replace(/^lms\./, '');
+  const t = canonicalNotificationType(type);
 
   // Type-specific: open the exact action screen for the order.
   if ((t === 'billed_not_collected' || t === 'sample_not_collected') && id) {

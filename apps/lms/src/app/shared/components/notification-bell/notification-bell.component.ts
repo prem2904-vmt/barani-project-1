@@ -5,6 +5,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Notification } from '../../models/user.model';
 import { NotifRoute, notificationRoute } from './notification-route';
+import { canonicalNotificationType } from '../../utils/notification-type';
 
 type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
 
@@ -358,8 +359,11 @@ export class NotificationBellComponent implements OnInit {
     this._items.update(list => list.map(n => ({ ...n, isRead: true })));
   }
 
+  // Icon / tone / label match the CANONICAL key, so legacy "lms."-prefixed
+  // rows (most of dev's tat_breach / report_ready / sample_rejection) render
+  // like new ones instead of as a generic bell.
   toneFor(type: string): TypeTone {
-    switch (type) {
+    switch (canonicalNotificationType(type)) {
       case 'critical_value':   return 'rose';
       case 'result_rejected':  return 'rose';
       case 'sample_rejection': return 'amber';
@@ -370,18 +374,19 @@ export class NotificationBellComponent implements OnInit {
   }
 
   typeLabel(type: string): string {
-    switch (type) {
+    const t = canonicalNotificationType(type);
+    switch (t) {
       case 'critical_value':   return 'critical value';
       case 'sample_rejection': return 'sample rejected';
       case 'report_ready':     return 'report ready';
       case 'tat_breach':       return 'TAT breach';
       case 'result_rejected':  return 'result rejected';
-      default:                 return type.replace(/_/g, ' ');
+      default:                 return t.replace(/_/g, ' ');
     }
   }
 
   pathFor(type: string): string {
-    switch (type) {
+    switch (canonicalNotificationType(type)) {
       // critical value — heart-pulse
       case 'critical_value':
         return '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4 1-2 1.5 1h5.27"/>';
