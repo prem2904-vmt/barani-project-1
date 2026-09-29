@@ -120,3 +120,16 @@ export function prefersReducedMotion(): boolean {
     return false;
   }
 }
+
+/**
+ * Run `fn` right after the browser has painted the current frame — for a tap
+ * whose work is heavy and synchronous (a navigation that instantiates a big
+ * screen from an already-loaded chunk): set the pressed / busy state first,
+ * then `afterNextPaint(() => router.navigate(...))`, so the press is on
+ * screen BEFORE the main thread gets busy. Falls back to a macrotask where
+ * requestAnimationFrame is missing.
+ */
+export function afterNextPaint(fn: () => void): void {
+  if (typeof requestAnimationFrame !== 'function') { setTimeout(fn, 0); return; }
+  requestAnimationFrame(() => setTimeout(fn, 0));
+}

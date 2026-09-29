@@ -96,6 +96,8 @@ describe('RouteProgressService + <pf-route-progress> (loading feedback)', () => 
     const btn = document.createElement('button');
     svc.markSource(btn);
     await tick(1);
+    expect(btn.getAttribute('aria-busy')).toBe('true');       // room for afterNextPaint
+    await tick(250);
     expect(btn.getAttribute('aria-busy')).toBeNull();
   });
 });

@@ -50,6 +50,7 @@ import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.compone
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { prefetch, prefetchWhenIdle } from '../../../../shared/utils/prefetch';
 import { RouteProgressService } from '../../../../core/navigation/route-progress.service';
+import { afterNextPaint } from '../../../../shared/utils/busy';
 import { TEST_EDITOR_PREFETCH_KEY, loadTestEditor } from '../test-editor/test-editor.loader';
 // (ViewChild refs let the header Create button drive the active panel)
 
@@ -840,7 +841,14 @@ export class TestsComponent implements OnInit {
     const warm = () => { void prefetch(TEST_EDITOR_PREFETCH_KEY, loadTestEditor); };
     const edit = act('Edit', 'Edit ' + (data?.name || 'test'),
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
-      () => { if (data?.id) { this.routeProgress.markSource(edit); this.editTest(data.id); } });
+      () => {
+        if (!data?.id) return;
+        const id = data.id;
+        // Paint the pressed state FIRST, then navigate: opening the editor
+        // is heavy synchronous work that would otherwise swallow the frame.
+        this.routeProgress.markSource(edit);
+        afterNextPaint(() => this.editTest(id));
+      });
     edit.addEventListener('pointerenter', warm);
     edit.addEventListener('focus', warm);
     wrap.appendChild(edit);

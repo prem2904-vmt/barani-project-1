@@ -100,7 +100,7 @@ describe('Test Master grid — loading feedback', () => {
     expect(el.querySelector('.pf-tm-grid-skel')).toBeNull();
   });
 
-  it('"Edit": busy the same frame it is pressed, then navigates', () => {
+  it('"Edit": busy the same frame it is pressed, navigates after that frame is painted', async () => {
     const { c } = render();
     const router = TestBed.inject(Router) as unknown as { navigate: ReturnType<typeof vi.fn> };
     const wrap: HTMLElement = c.actionsRenderer({ data: TESTS[0], context: {} });
@@ -109,6 +109,8 @@ describe('Test Master grid — loading feedback', () => {
     edit.click();
     expect(edit.getAttribute('aria-busy')).toBe('true');
     expect(edit.classList.contains('pf-nav-pending')).toBe(true);
+    expect(router.navigate).not.toHaveBeenCalled();           // the press paints first
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 5)));
     expect(router.navigate).toHaveBeenCalledWith(['/admin/tests', 't1', 'edit'], { queryParams: { type: 'individual' } });
   });
 

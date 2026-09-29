@@ -140,3 +140,14 @@ describe('busy (loading feedback timing)', () => {
     }
   });
 });
+
+describe('afterNextPaint', () => {
+  it('runs after the next frame, never synchronously', async () => {
+    const { afterNextPaint } = await import('./busy');
+    let ran = false;
+    afterNextPaint(() => { ran = true; });
+    expect(ran).toBe(false);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 5)));
+    expect(ran).toBe(true);
+  });
+});

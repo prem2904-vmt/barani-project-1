@@ -49,11 +49,12 @@ export class RouteProgressService {
     el.setAttribute('aria-busy', 'true');
     el.classList.add('pf-nav-pending');
     this.sources.add(el);
-    // A tap that never produced a navigation (a guard that answers before
-    // NavigationStart is impossible, but a no-op navigate to the same URL
-    // is) must not stay busy: clear after a frame if nothing started.
+    // A tap that never produced a navigation (a no-op navigate to the same
+    // URL) must not stay busy: clear shortly after if nothing started.
+    // (Callers may start the navigation after a paint — afterNextPaint — so
+    // allow a couple of frames before deciding nothing started.)
     const id = this.navId;
-    setTimeout(() => { if (!this._pending() && this.navId === id) this.clearSources(); }, 0);
+    setTimeout(() => { if (!this._pending() && this.navId === id) this.clearSources(); }, 250);
   }
 
   private onEvent(e: RouterEvent): void {
