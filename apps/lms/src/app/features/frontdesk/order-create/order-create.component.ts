@@ -15,6 +15,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { Order } from '../../../shared/models/order.model';
 import { Bill } from '../../../shared/models/bill.model';
+import { payBillFromWallet } from '../../../shared/utils/wallet-payment';
 import { Patient, formatPatientInfo, patientDisplayName } from '../../../shared/models/patient.model';
 import { Test } from '../../../shared/models/test.model';
 import { filterTestList as sharedFilterTestList, filterTestListStrict } from '../../../shared/utils/test-search';
@@ -1871,13 +1872,10 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         const amount = bill.balance;
         if (d.mode === 'wallet') {
           if (!d.vendorId) throw new Error('No vendor selected');
-          await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
-            amount, billId: bill.id,
-            reason: `Bill #${bill.id.substring(0, 8)}`
-          }));
-          const updated = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
-          }));
+          // H8: ONE call — the payment and the partner's charge commit together.
+          const updated = (await firstValueFrom(payBillFromWallet(this.api, bill.id, d.vendorId, amount, {
+            referenceNo: d.referenceNo, reason: `Bill #${bill.id.substring(0, 8)}`
+          }))).bill;
           this.currentBill.set(updated);
         } else if (d.mode === 'split' && d.splitParts?.length) {
           for (const part of d.splitParts) {
@@ -1981,16 +1979,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
             latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, { amount: part.amount, mode: part.mode }));
           }
         } else if (d.mode === 'wallet') {
-          // Credit Wallet: accrue the charge to the vendor's tab FIRST, then
-          // record the bill payment.
+          // Credit Wallet (H8): ONE call — the bill payment and the charge to
+          // the partner's tab commit together (never one without the other).
           if (!d.vendorId) throw new Error('No vendor selected');
           const payAmt = owed(targetAmount);
-          await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
-            amount: payAmt, billId: bill.id, reason: `Bill #${bill.id.substring(0, 8)}`
-          }));
-          latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-            amount: payAmt, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId
-          }));
+          latest = (await firstValueFrom(payBillFromWallet(this.api, bill.id, d.vendorId, payAmt, {
+            referenceNo: d.referenceNo, reason: `Bill #${bill.id.substring(0, 8)}`
+          }))).bill;
         } else {
           const payAmt = owed(targetAmount);
           latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {

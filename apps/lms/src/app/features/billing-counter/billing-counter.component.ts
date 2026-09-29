@@ -18,6 +18,7 @@ import { ZoomTransitionService } from '../../core/navigation/zoom-transition';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../core/navigation/zoom.directive';
 import { ApiError } from '../../shared/models/api-response.model';
 import { Bill } from '../../shared/models/bill.model';
+import { payBillFromWallet } from '../../shared/utils/wallet-payment';
 import { billRoundOff } from '../../shared/utils/bill-math';
 import { Order } from '../../shared/models/order.model';
 import { Patient, formatPatientMeta, patientDisplayName } from '../../shared/models/patient.model';
@@ -941,12 +942,10 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
       let latest: Bill = bill;
       if (d.mode === 'wallet') {
         if (!d.vendorId) throw new Error('Pick a vendor to bill');
-        await firstValueFrom(this.api.post<unknown>(`/api/vendors/${d.vendorId}/charge`, {
-          amount, billId: bill.id, reason: `Bill #${bill.invoiceNumber || bill.id.substring(0, 8)}`,
-        }));
-        latest = await firstValueFrom(this.api.post<Bill>(`/api/billing/${bill.id}/payment`, {
-          amount, mode: 'wallet', referenceNo: d.referenceNo || d.vendorId,
-        }));
+        // H8: ONE call — the payment and the partner's charge commit together.
+        latest = (await firstValueFrom(payBillFromWallet(this.api, bill.id, d.vendorId, amount, {
+          referenceNo: d.referenceNo, reason: `Bill #${bill.invoiceNumber || bill.id.substring(0, 8)}`,
+        }))).bill;
       } else if (d.mode === 'split' && d.splitParts?.length) {
         for (const part of d.splitParts) {
           if (!(part.amount > 0)) continue;
