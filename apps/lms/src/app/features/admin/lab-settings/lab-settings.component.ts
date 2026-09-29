@@ -19,6 +19,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ReportTemplate } from '../../../shared/models/report.model';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/services/whatsapp.service';
+import { WaConnectCardComponent } from './wa-connect-card.component';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
 
@@ -41,7 +42,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent],
+  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -469,28 +470,12 @@ interface AutoAssignConfig {
             anything is owed it waits as <strong>On hold</strong> and sends by itself once the balance is cleared.
             Partial reports are never sent. Reports made before you turn this on aren't sent.
           </p>
-          <!-- Sender: the shared Prefrontal number until the lab connects its own
-               WhatsApp Business number (Embedded Signup — coming soon). -->
+          <!-- Sender: the shared Prefrontal number until the lab's own number is
+               connected AND its template approved (the card below manages it). -->
           <div class="pf-ls__wa-sender">
             <span class="nd-chip nd-chip--static pf-ls__chipm" data-testid="ls-wa-sender">
               Sender — <strong style="color: var(--text-primary);">{{ waSender() }}</strong>
             </span>
-            @if (waSettings()!.sender?.source !== 'tenant') {
-              <button type="button" class="nd-btn nd-btn--secondary pf-ls__wfbtn" data-testid="ls-wa-connect"
-                      [disabled]="!waSettings()!.sender?.canConnect || waConnecting() || !canManageWa()"
-                      [attr.aria-describedby]="waSettings()!.sender?.canConnect ? null : 'pf-ls-wa-soon'"
-                      (click)="connectWa()">
-                Connect your WhatsApp number
-              </button>
-              @if (!waSettings()!.sender?.canConnect) {
-                <span class="pf-ls__wa-soon" id="pf-ls-wa-soon">Coming soon — send reports from your lab's own WhatsApp number and name.</span>
-              } @else {
-                <span class="pf-ls__wa-soon">You'll sign in with Meta and pick your WhatsApp Business number. You can keep using the WhatsApp Business app on it.</span>
-              }
-            }
-            @if (waSettings()!.sender?.error) {
-              <p class="pf-ls__warn" style="flex-basis: 100%;">{{ waSettings()!.sender?.error }}</p>
-            }
           </div>
           @if (waSettings()!.sender?.source !== 'tenant' && !waSettings()!.platform?.configured) {
             <p class="pf-ls__warn">WhatsApp sending isn't set up on the server yet — messages wait in the queue until it is.</p>
@@ -529,6 +514,8 @@ interface AutoAssignConfig {
           </p>
         </div>
       </section>
+      <!-- The lab's OWN WhatsApp number (Meta Embedded Signup). -->
+      <pf-wa-connect-card [settings]="waSettings()!" (changed)="applyWa($event)"></pf-wa-connect-card>
       }
 
       @if (showSec('queues')) {
@@ -1005,38 +992,10 @@ export class LabSettingsComponent implements OnInit {
   protected readonly waTemplateName = signal('');
   protected readonly waTemplateLanguage = signal('');
   readonly waSender = computed(() => waSenderLine(this.waSettings()?.sender));
-  protected readonly waConnecting = signal(false);
-
-  /** Embedded Signup: the server signs a short-lived state and hands back the
-   *  link (API begin hop → Meta's hosted page → back to this page). */
-  connectWa() {
-    if (this.waConnecting() || !this.waSettings()?.sender?.canConnect) return;
-    this.waConnecting.set(true);
-    this.wa.startOnboarding().subscribe({
-      next: r => { if (r?.connectUrl) window.location.assign(r.connectUrl); else this.waConnecting.set(false); },
-      error: e => { this.waConnecting.set(false); this.toasts.error(ApiError.from(e).message); },
-    });
-  }
-
-  /** Back from Meta: ?tab=report&whatsapp=connected|failed&reason=… */
-  private readWaReturn() {
-    const q = this.router.parseUrl(this.router.url).queryParams;
-    if (q['tab'] === 'report') this.tab.set('report');
-    if (q['whatsapp'] === 'connected') this.toasts.success('Your WhatsApp number is connected');
-    else if (q['whatsapp'] === 'failed') {
-      const why: Record<string, string> = {
-        cancelled: 'The WhatsApp connection was cancelled.',
-        invalid_state: 'That connection link expired — please try again.',
-        state_used: 'That connection link was already used — please start again.',
-        number_in_use: 'This WhatsApp number is already connected to another lab.',
-      };
-      this.toasts.error(why[q['reason']] ?? 'Could not connect your WhatsApp number. Please try again.');
-    }
-  }
   readonly canManageWa = computed(() =>
     this.auth.hasPermission('manage_lab_settings') || this.auth.hasPermission('manage_notifications'));
 
-  private applyWa(s: WaSettings) {
+  protected applyWa(s: WaSettings) {
     this.waSettings.set(s);
     this.waTemplateName.set(s.templateName ?? '');
     this.waTemplateLanguage.set(s.templateLanguage ?? '');
@@ -1074,7 +1033,8 @@ export class LabSettingsComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.readWaReturn();
+    // Deep link: …/lab-settings?tab=report opens the Report tab (WhatsApp lives there).
+    if (this.router.parseUrl(this.router.url).queryParams['tab'] === 'report') this.tab.set('report');
     this.wa.settings().subscribe({
       next: s => { if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s); },
       error: () => this.waSettings.set(null),   // no permission / older server → card hidden
