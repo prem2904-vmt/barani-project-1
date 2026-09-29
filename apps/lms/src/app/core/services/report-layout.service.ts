@@ -9,6 +9,7 @@ import {
   ResolvedReportLayout,
   TestReportLayoutResponse,
 } from '../../shared/models/report-layout.model';
+import { AgeSource, bandAgeYears } from '../../shared/utils/patient-age';
 
 /**
  * HTTP wrapper around ReportLayoutController. ApiService already unwraps
@@ -92,14 +93,16 @@ export class ReportLayoutService {
     testId: string,
     values: Record<string, unknown>,
     imageUrls: string[] = [],
-    patient?: { sex?: string | null; age?: number | null },
+    patient?: { sex?: string | null } & AgeSource,
     parametersJson?: string | null,
   ): Promise<ResolvedReportLayout> {
     // Pass the patient's sex/age so the engine picks the matching reference range
-    // (male/female/age-specific) instead of always the first one.
+    // (male/female/age-specific) instead of always the first one. The age is
+    // the DOB-derived FRACTIONAL band age (shared helper), so an infant's
+    // newborn / infant bands resolve — a whole-years 0 never could.
     return firstValueFrom(this.api.post<ResolvedReportLayout>(
       `/api/report-layout/preview/${testId}`,
-      { values, imageUrls, sex: patient?.sex ?? null, age: patient?.age ?? null, parametersJson: parametersJson ?? null },
+      { values, imageUrls, sex: patient?.sex ?? null, age: bandAgeYears(patient), parametersJson: parametersJson ?? null },
     ));
   }
 }

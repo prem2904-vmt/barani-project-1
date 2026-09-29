@@ -34,7 +34,7 @@ export type PreviewFn = (
   testId: string,
   values: Record<string, unknown>,
   conditions: unknown[],
-  patient?: { sex?: string | null; age?: number | null },
+  patient?: { sex?: string | null; age?: number | null; ageYears?: number | null; ageDisplay?: string | null },
 ) => Promise<unknown>;
 
 /** Snapshot values are the flagged wrapper { value, unit, range, flag };
@@ -67,7 +67,7 @@ export function isAccessFailure(e: unknown): boolean {
 export async function resolveReportLayouts<T>(
   preview: PreviewFn,
   tests: readonly LayoutSnapshotTest[],
-  patient?: { sex?: string | null; age?: number | null },
+  patient?: { sex?: string | null; age?: number | null; ageYears?: number | null; ageDisplay?: string | null },
 ): Promise<Record<string, T>> {
   const layouts: Record<string, T> = {};
 

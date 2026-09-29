@@ -20,6 +20,7 @@ import { waLink } from '../../../shared/utils/whatsapp';
 import { tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { formatAge } from '../../../shared/utils/patient-age';
 
 @Component({
   selector: 'pf-post-payment',
@@ -212,9 +213,8 @@ export class PostPaymentComponent implements OnInit {
 
   ageSex(p: Patient | null | undefined): string {
     if (!p) return '';
-    const age = p.age ?? (p.dateOfBirth ? this.calcAge(p.dateOfBirth) : null);
     const s = p.sex ? p.sex.charAt(0).toUpperCase() : '';
-    return [age ? `${age}Y` : null, s].filter(Boolean).join(' · ');
+    return [formatAge(p, 'Y') || null, s].filter(Boolean).join(' · ');
   }
 
   mrn(p: Patient | null | undefined): string {
@@ -226,12 +226,4 @@ export class PostPaymentComponent implements OnInit {
   tubeDeptLabel(s: OrderSample): string { return tubeDepartmentLabel(s); }
   tubeVol(s: OrderSample): string   { return tubeSpec(s).volume; }
 
-  private calcAge(dob: string): number {
-    const d = new Date(dob);
-    const now = new Date();
-    let age = now.getFullYear() - d.getFullYear();
-    const m = now.getMonth() - d.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-    return age;
-  }
 }

@@ -27,6 +27,7 @@ import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-stri
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { ScanIconComponent } from '../../../shared/components/icons/scan-icon.component';
+import { formatAge } from '../../../shared/utils/patient-age';
 
 const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
@@ -1452,12 +1453,12 @@ export class ReceiveSamplesComponent implements OnInit {
 }
 
 function formatPatientNameAgeSex(
-  p: { firstName?: string; fathersName?: string; displayName?: string; age?: number; sex?: string } | null | undefined
+  p: { firstName?: string; fathersName?: string; displayName?: string; age?: number; dateOfBirth?: string | null; sex?: string } | null | undefined
 ): string {
   if (!p) return '—';
   const name = patientDisplayName(p as any);
   const truncatedName = name.length > 15 ? name.substring(0, 15) + '..' : name;
-  const age = p.age != null ? p.age : '—';
+  const age = formatAge(p, 'num', '—');
   let sexCode = '—';
   if (p.sex) {
     const s = p.sex.trim().toLowerCase();

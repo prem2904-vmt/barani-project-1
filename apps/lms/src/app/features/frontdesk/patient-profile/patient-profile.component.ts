@@ -38,6 +38,7 @@ import { LabOrdersComponent } from './lab-orders.component';
 import { CumulativeResultsComponent } from './cumulative-results.component';
 import { AbhaWizardComponent } from '../../../shared/components/abha-wizard/abha-wizard.component';
 import { LabelCardComponent } from '../post-payment/label-card.component';
+import { formatAge } from '../../../shared/utils/patient-age';
 
 /** matchMedia as a live boolean (same helper shape as the report view). */
 function mq(query: string, ref: DestroyRef, on: (m: boolean) => void): boolean {
@@ -354,19 +355,10 @@ export class PatientProfileComponent implements OnInit {
     }).catch(() => this.toasts.error('Failed to copy to clipboard'));
   }
 
-  /** "37y" — a DOB always wins so the age stays live; else the stored age. */
+  /** "37y" (infants "8m" / "12d") — the shared patient-age helper: a DOB
+   *  always wins so the age stays live; else the stored age. */
   ageLabel(p: Patient): string {
-    const yrs = p.dateOfBirth ? this.ageFromDob(p.dateOfBirth) : (p.age ?? null);
-    return yrs == null ? '—' : `${yrs}y`;
-  }
-  private ageFromDob(dob: string | undefined): number | null {
-    if (!dob) return null;
-    const d = new Date(dob);
-    if (isNaN(d.getTime())) return null;
-    const now = new Date();
-    let a = now.getFullYear() - d.getFullYear();
-    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) a--;
-    return Math.max(0, a);
+    return formatAge(p, 'y', '—');
   }
 
   // ── Edit patient ────────────────────────────────────────────────────────

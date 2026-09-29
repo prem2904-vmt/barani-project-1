@@ -22,6 +22,7 @@ import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/
 import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { FittedLine, QUIET_MODULES, TubeLabelGeometry, code128Modules, fitLabelText, tubeLabelGeometry } from '../../../core/printer/label-layout';
 import { LabelData, labelTextLines } from '../../../core/printer/label-render';
+import { formatAgeParts, patientAge } from '../../../shared/utils/patient-age';
 
 export interface TubeSpec {
   label: string;
@@ -657,9 +658,12 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
   get agesex(): string {
     const p = this.patient;
     if (!p) return '';
-    const age = p.age ?? (p.dateOfBirth ? this.calcAge(p.dateOfBirth) : null);
+    // Shared patient-age helper: DOB first (live). Adults keep "34M"; an
+    // infant prints "8M F" / "12D M" (never a bare "0").
+    const a = patientAge(p);
     const s = p.sex ? p.sex.charAt(0).toUpperCase() : '';
-    return [age, s].filter(Boolean).join('');
+    if (a && a.years < 1) return [formatAgeParts(a, 'Y'), s].filter(Boolean).join(' ');
+    return [a ? String(a.years) : '', s].filter(Boolean).join('');
   }
 
   get mrnStr(): string {
@@ -721,12 +725,4 @@ export class LabelCardComponent implements AfterViewInit, OnChanges {
     }
   }
 
-  private calcAge(dob: string): number {
-    const d = new Date(dob);
-    const now = new Date();
-    let age = now.getFullYear() - d.getFullYear();
-    const m = now.getMonth() - d.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-    return age;
-  }
 }

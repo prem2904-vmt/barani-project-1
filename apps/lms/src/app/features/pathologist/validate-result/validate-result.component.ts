@@ -28,6 +28,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { pickReassignee } from '../reassign-picker';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS } from '../../../core/services/report-actions.service';
+import { bandAgeYears } from '../../../shared/utils/patient-age';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -1148,7 +1149,8 @@ export class ValidateResultComponent implements OnInit {
 
     const patient = t.subOrder?.order?.patient;
     const sex = normalizeSex(patient?.sex);
-    const ageYears = typeof patient?.age === 'number' ? patient.age : null;
+    // DOB-derived fractional age — the server's band-pick metric.
+    const ageYears = bandAgeYears(patient);
 
     return params.map(p => {
       const v = snap.values![p.name];

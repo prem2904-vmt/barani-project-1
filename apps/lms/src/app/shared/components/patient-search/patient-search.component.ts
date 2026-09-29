@@ -7,6 +7,7 @@ import { extractAbhaNumber } from '../abha-wizard/abha-prefill.component';
 import { ScanIconComponent } from '../icons/scan-icon.component';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { PfKeysDirective } from '../numpad/pf-keys.directive';
+import { formatAge } from '../../utils/patient-age';
 
 type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
 
@@ -114,7 +115,7 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
                         <p class="row-name">{{ name(p) }}</p>
                         <p class="row-meta">
                           @if (p.phone) { {{ p.phone }} · }
-                          {{ p.sex ?? '—' }} · {{ p.age ?? '—' }}y
+                          {{ p.sex ?? '—' }} · {{ ageLabel(p) }}
                         </p>
                       </div>
                       @if (i === _highlight()) {
@@ -380,6 +381,8 @@ type SearchState = 'idle' | 'hint' | 'loading' | 'empty' | 'results';
   `]
 })
 export class PatientSearchComponent {
+  /** "34y" (infants "8m" / "12d") — the shared patient-age helper, DOB first. */
+  ageLabel(p: { age?: number | null; dateOfBirth?: string | null } | null | undefined): string { return formatAge(p, 'y', '—'); }
   private readonly api = inject(ApiService);
   protected readonly name = patientDisplayName;
 

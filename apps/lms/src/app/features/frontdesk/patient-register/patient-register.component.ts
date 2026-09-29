@@ -7,6 +7,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
 import {
   WorkflowRendererComponent,
+  DOB_ESTIMATED_SUFFIX,
   splitByStorage
 } from '../../../shared/components/workflow-renderer/workflow-renderer.component';
 import { BABY_OF_TITLE, Patient, isBabyOfTitle } from '../../../shared/models/patient.model';
@@ -24,6 +25,8 @@ import { PATIENT_REGISTER_ND_STYLES } from './patient-register.nd.styles';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { COUNTRY_PHONE_RULES } from '../../../shared/forms/validate';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { ageParts } from '../../../shared/utils/patient-age';
+import { dobFromAge } from '../../../shared/forms/patient-fields';
 
 @Component({
   selector: 'pf-patient-register',
@@ -566,13 +569,17 @@ export class PatientRegisterComponent implements OnInit {
     const v = this.values();
     const dobKey = Object.keys(v).find(k => k.endsWith('::date_of_birth'));
     const dob = dobKey ? v[dobKey] : undefined;
-    const age = dob ? this.yearsBetween(String(dob), new Date()) : undefined;
+    // The shared patient-age helper: whole years for workflow rules
+    // ("age < 18"), fractional for any reference-band pick.
+    const parts = dob ? ageParts(String(dob)) : null;
+    const age = parts?.years;
     const sexKey = Object.keys(v).find(k => k.endsWith('::sex'));
     return {
       userId: user?.id,
       tenantId: user?.tenantId,
       branchId: user?.branchId,
       patientAge: age,
+      patientBandAge: parts?.fractionalYears,
       patientSex: sexKey ? String(v[sexKey]) : undefined,
       'user.permissions': user?.permissions ?? [],
       // New design: the phone field's default country (the tenant's own).
@@ -750,6 +757,8 @@ export class PatientRegisterComponent implements OnInit {
     }
 
     this.applyHybridDob(body);
+    // The DOB came from the age box → tell the server it is an estimate.
+    if (body['dateOfBirth'] && this.dobEstimated(values)) body['dobEstimated'] = true;
     // "Baby of": the name boxes hold the MOTHER's name — mirror it into the
     // guardian column (the display form asks once). Plain "Baby" is the
     // baby's own name: no mirroring.
@@ -862,6 +871,7 @@ export class PatientRegisterComponent implements OnInit {
           if (val !== undefined && val !== null) {
             if (camelKey === 'dateOfBirth' && typeof val === 'string') {
               initial[key] = val.slice(0, 10);
+              if (p.dobEstimated) initial[key + DOB_ESTIMATED_SUFFIX] = true;
             } else {
               initial[key] = val;
             }
@@ -882,22 +892,20 @@ export class PatientRegisterComponent implements OnInit {
     if ((dob === undefined || dob === null || dob === '') && ageRaw != null && `${ageRaw}` !== '') {
       const age = Math.floor(Number(ageRaw));
       if (Number.isFinite(age) && age >= 0 && age < 150) {
-        const d = new Date(); d.setHours(0, 0, 0, 0);
-        d.setFullYear(d.getFullYear() - age);
-        body['dateOfBirth'] = d.toISOString();
+        // A calendar date (yyyy-MM-dd), never toISOString() of local midnight
+        // (that is the PREVIOUS day in UTC for IST). Flagged as an estimate.
+        body['dateOfBirth'] = dobFromAge(age, 'years');
+        body['dobEstimated'] = true;
       }
     }
+    // DOB is the single source: the server derives Age from it.
     if (body['dateOfBirth']) delete body['age'];
   }
 
-  private yearsBetween(dobIso: string, now: Date): number {
-    const dob = new Date(dobIso);
-    if (Number.isNaN(dob.getTime())) return 0;
-    let age = now.getFullYear() - dob.getFullYear();
-    if (now.getMonth() < dob.getMonth() ||
-        (now.getMonth() === dob.getMonth() && now.getDate() < dob.getDate())) {
-      age--;
-    }
-    return Math.max(0, age);
+  /** Did the DOB field's value come from the age box (an estimate)? */
+  private dobEstimated(values: WorkflowFormValues): boolean {
+    const v = values as Record<string, unknown>;
+    const key = Object.keys(v).find(k => k.endsWith(DOB_ESTIMATED_SUFFIX) && /date_of_birth|(^|_|::)dob|birth_?date/i.test(k));
+    return !!key && v[key] === true;
   }
 }

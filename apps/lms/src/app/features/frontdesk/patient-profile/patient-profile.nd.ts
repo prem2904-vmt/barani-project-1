@@ -7,22 +7,15 @@
 import { Order, OrderTest } from '../../../shared/models/order.model';
 import { Patient } from '../../../shared/models/patient.model';
 import { workRowTone, WorkRowTone } from '../frontdesk-landing/work-selection';
+import { ageInYears, formatAge } from '../../../shared/utils/patient-age';
 
 export type PpView = 'orders' | 'trends' | 'timeline';
 export type PpRange = 'all' | '30' | '90' | 'custom';
 
-/** Years from a DOB (live), else the stored age, else null. */
+/** Whole years from the DOB (live), else the stored age, else null —
+ *  the shared patient-age helper. */
 export function ageYears(p: Pick<Patient, 'dateOfBirth' | 'age'> | null | undefined, now = new Date()): number | null {
-  if (!p) return null;
-  if (p.dateOfBirth) {
-    const d = new Date(p.dateOfBirth);
-    if (!isNaN(d.getTime())) {
-      let a = now.getFullYear() - d.getFullYear();
-      if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) a--;
-      return Math.max(0, a);
-    }
-  }
-  return p.age ?? null;
+  return ageInYears(p, now);
 }
 
 /** M / F / O (or the first letter), '—' when unknown. */
@@ -38,8 +31,7 @@ export function sexInitial(sex: string | null | undefined): string {
 /** The band's quiet meta line: "22/M · AA0006 · +91 98765 43210". */
 export function patientMetaLine(p: Patient | null | undefined, now = new Date()): string {
   if (!p) return '';
-  const yrs = ageYears(p, now);
-  const parts = [`${yrs == null ? '—' : yrs}/${sexInitial(p.sex)}`, p.mrn?.trim() || '—'];
+  const parts = [`${formatAge(p, 'num', '—', now)}/${sexInitial(p.sex)}`, p.mrn?.trim() || '—'];
   if (p.phone?.trim()) parts.push(p.phone.trim());
   return parts.join(' · ');
 }
@@ -47,8 +39,7 @@ export function patientMetaLine(p: Patient | null | undefined, now = new Date())
 /** "37 years · Male" for the summary card. */
 export function ageSexLong(p: Patient | null | undefined, now = new Date()): string {
   if (!p) return '—';
-  const yrs = ageYears(p, now);
-  const age = yrs == null ? '' : `${yrs} ${yrs === 1 ? 'year' : 'years'}`;
+  const age = formatAge(p, 'long', '', now);
   const sex = (p.sex || '').trim();
   const sexLabel = sex ? sex.charAt(0).toUpperCase() + sex.slice(1).toLowerCase() : '';
   return [age, sexLabel].filter(Boolean).join(' · ') || '—';

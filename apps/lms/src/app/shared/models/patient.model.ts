@@ -1,3 +1,5 @@
+import { formatAge } from '../utils/patient-age';
+
 export interface Patient {
   id: string;
   tenantId: string;
@@ -18,8 +20,19 @@ export interface Patient {
   displayName?: string;
   phone?: string;
   email?: string;
+  /** The single source of age (server-canonical: UTC midnight of the date).
+   *  An ESTIMATE when only an age was entered (`dobEstimated`). */
   dateOfBirth?: string;
+  /** Whole years, server-derived from the DOB on every write. For display
+   *  use `formatAge(p)` (shared/utils/patient-age) — it stays current and
+   *  shows infants in months / days. */
   age?: number;
+  /** The DOB was estimated from an entered age. */
+  dobEstimated?: boolean;
+  /** Server: live age, "34 Y" / "8 M" / "12 D". */
+  ageDisplay?: string | null;
+  /** Server: live FRACTIONAL age (days / 365.25) — the band-pick metric. */
+  ageYears?: number | null;
   sex?: string;
   /** ABO/Rh blood group, e.g. "O+". Optional. */
   bloodGroup?: string;
@@ -71,12 +84,12 @@ export function patientMrnLabel(p: Pick<Patient, 'mrn'> | null | undefined): str
 
 /** Formats patient details consistently: <Name(First 15 characters followed by ellipsis)> | <age> /<sex> | <P-ID> */
 export function formatPatientInfo(
-  p: Pick<Patient, 'firstName' | 'fathersName' | 'displayName' | 'age' | 'sex' | 'mrn'> | null | undefined
+  p: Pick<Patient, 'firstName' | 'fathersName' | 'displayName' | 'age' | 'sex' | 'mrn'> & { dateOfBirth?: string | null } | null | undefined
 ): string {
   if (!p) return '—';
   const name = patientDisplayName(p);
   const truncatedName = name.length > 15 ? name.substring(0, 15) + '..' : name;
-  const age = p.age != null ? p.age : '—';
+  const age = formatAge(p, 'num', '—');
   let sexCode = '—';
   if (p.sex) {
     const s = p.sex.trim().toLowerCase();
@@ -93,10 +106,10 @@ export function formatPatientInfo(
  *  patient's name its own emphasis and trail the identifiers behind it, where
  *  formatPatientInfo's single "Name | 23/M | AA0040" string would repeat it. */
 export function formatPatientMeta(
-  p: Pick<Patient, 'age' | 'sex' | 'mrn'> | null | undefined
+  p: Pick<Patient, 'age' | 'sex' | 'mrn'> & { dateOfBirth?: string | null } | null | undefined
 ): string {
   if (!p) return '';
-  const age = p.age != null ? String(p.age) : '—';
+  const age = formatAge(p, 'num', '—');
   let sexCode = '—';
   if (p.sex) {
     const t = p.sex.trim().toLowerCase();

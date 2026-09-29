@@ -9,6 +9,7 @@ import { OrderSample } from '../../shared/models/order.model';
 import { Patient, patientDisplayName } from '../../shared/models/patient.model';
 import { tubeDepartmentCodes } from '../../shared/utils/shared-tube';
 import { labelTubeLine } from '../../features/frontdesk/post-payment/label-card.component';
+import { formatAge } from '../../shared/utils/patient-age';
 
 /** The route of the per-station Printing setup (label printer, label size). */
 export const PRINTING_SETTINGS_ROUTE = '/printing';
@@ -168,15 +169,10 @@ export class LabelPrintService {
 }
 
 /** "52Y M" — age + sex initial for the label's name line. */
-export function labelAgeSex(p: Pick<Patient, 'age' | 'dateOfBirth' | 'sex'> | null | undefined): string {
+export function labelAgeSex(p: Pick<Patient, 'age' | 'dateOfBirth' | 'sex'> | null | undefined, now: Date = new Date()): string {
   if (!p) return '';
-  let age = p.age ?? null;
-  if (age == null && p.dateOfBirth) {
-    const d = new Date(p.dateOfBirth), now = new Date();
-    age = now.getFullYear() - d.getFullYear();
-    const m = now.getMonth() - d.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-  }
+  // Shared patient-age helper: the DOB wins (a stale stored age never
+  // prints); infants print "8M" / "12D", never "0Y".
   const s = p.sex ? p.sex.charAt(0).toUpperCase() : '';
-  return [age != null ? `${age}Y` : null, s].filter(Boolean).join(' ');
+  return [formatAge(p, 'Y', '', now) || null, s].filter(Boolean).join(' ');
 }

@@ -21,7 +21,7 @@ import { effectiveMethodology } from '../../../shared/utils/methodology';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
 import { choiceOptionsFor, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
 import { paramToField, readParameters } from '../../../shared/utils/test-parameters';
-import { CalcContext, ageYearsFromDob, evaluateCalc, parseCalc } from '../../../shared/utils/calculation';
+import { CalcContext, evaluateCalc, parseCalc } from '../../../shared/utils/calculation';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
@@ -31,6 +31,7 @@ import { TileComponent, TileTone } from '../../../shared/primitives/tile.compone
 import { SelectComponent } from '../../../shared/primitives/select.component';
 import { NumpadDirective, NumpadScopeDirective } from '../../../shared/components/numpad/numpad.directive';
 import { NumpadService } from '../../../shared/components/numpad/numpad.service';
+import { ageInYears, bandAgeYears, formatAge } from '../../../shared/utils/patient-age';
 
 interface EnterResponse {
   orderTest: OrderTest;
@@ -3123,7 +3124,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
 
   readonly patientName = computed(() => patientDisplayName(this._ot()?.subOrder?.order?.patient) || '—');
   readonly patientSex  = computed(() => this._ot()?.subOrder?.order?.patient?.sex ?? '—');
-  readonly patientAge  = computed(() => this._ot()?.subOrder?.order?.patient?.age ?? '—');
+  readonly patientAge  = computed(() => formatAge(this._ot()?.subOrder?.order?.patient, 'num', '—'));
   readonly patientInfoString = computed(() => formatPatientInfo(this._ot()?.subOrder?.order?.patient));
 
   readonly subtitle = computed(() => {
@@ -3410,8 +3411,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
    * every patient against whatever band happened to be first.
    */
   private rangeFor(p: TestParameter): ReferenceRange | undefined {
-    const ageRaw = this._ot()?.subOrder?.order?.patient?.age;
-    const ageYears = typeof ageRaw === 'number' ? ageRaw : null;
+    // DOB-derived fractional age — the server's band-pick metric.
+    const ageYears = bandAgeYears(this._ot()?.subOrder?.order?.patient);
     const sex = normalizeSex(this._ot()?.subOrder?.order?.patient?.sex);
     return selectReferenceRange(p.referenceRanges, sex, ageYears);
   }
@@ -3443,9 +3444,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       return null;
     }
 
-    const ageRaw = ot?.subOrder?.order?.patient?.age;
     const lf = liveFlag(p, v, normalizeSex(ot?.subOrder?.order?.patient?.sex),
-      typeof ageRaw === 'number' ? ageRaw : null, ot?.profileCode);
+      bandAgeYears(ot?.subOrder?.order?.patient), ot?.profileCode);
     if (!lf) return null;
     if (lf.code === 'CL' || lf.code === 'CH') return { tone: 'critical', label: `${lf.code} · ${lf.code === 'CL' ? 'below' : 'above'} ${lf.limit}` };
     if (lf.code === 'L') return { tone: 'low',  label: 'Low' };
@@ -3855,7 +3855,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const siblings = this._calcSiblings() ?? [];
     const consts = this._calcConstants();
     const patient = self?.subOrder?.order?.patient;
-    const age = typeof patient?.age === 'number' ? patient.age : ageYearsFromDob(patient?.dateOfBirth);
+    // Formula AGE: whole years from the DOB (shared helper; as before for
+    // every patient with a stored age), never a stale stored value.
+    const age = ageInYears(patient);
     const findSibling = (code: string) =>
       siblings.find(t => t.test?.testCode?.trim().toUpperCase() === code) ?? null;
     return {
@@ -3889,10 +3891,9 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
           const params = (JSON.parse(raw) as TestParametersBlob).parameters ?? [];
           const p = params.find(x => (x.referenceRanges?.length ?? 0) > 0);
           if (!p) return null;
-          const ageRaw = this._ot()?.subOrder?.order?.patient?.age;
           const sex = normalizeSex(this._ot()?.subOrder?.order?.patient?.sex);
           return selectReferenceRange(p.referenceRanges, sex,
-            typeof ageRaw === 'number' ? ageRaw : null)?.max ?? null;
+            bandAgeYears(this._ot()?.subOrder?.order?.patient))?.max ?? null;
         } catch { return null; }
       },
     };

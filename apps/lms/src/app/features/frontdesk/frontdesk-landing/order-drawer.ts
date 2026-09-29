@@ -1,8 +1,9 @@
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { Order, OrderSample } from '../../../shared/models/order.model';
 import { isDrawn, isNotCollected, notCollectedSamples } from '../../../shared/utils/sample-not-collected';
+import { formatAge } from '../../../shared/utils/patient-age';
 
-type DrawerPatient = Pick<Patient, 'firstName' | 'fathersName' | 'displayName' | 'age' | 'sex'> | null | undefined;
+type DrawerPatient = Pick<Patient, 'firstName' | 'fathersName' | 'displayName' | 'age' | 'sex'> & { dateOfBirth?: string | null } | null | undefined;
 
 /** The patient's FULL display name for a drawer header — never shortened
  *  (formatPatientInfo cuts at 15 chars; ND §5 forbids that here). */
@@ -13,7 +14,7 @@ export function drawerName(p: DrawerPatient): string {
 /** "22/M" for the quiet meta line; '' when neither age nor sex is known. */
 export function drawerAgeSex(p: DrawerPatient): string {
   if (!p) return '';
-  const age = p.age != null && `${p.age}`.trim() !== '' ? `${p.age}` : '';
+  const age = formatAge(p, 'num');
   const t = (p.sex ?? '').trim().toLowerCase();
   const sex = !t ? '' : t.startsWith('m') ? 'M' : t.startsWith('f') ? 'F' : t.startsWith('o') ? 'O' : t.charAt(0).toUpperCase();
   if (!age && !sex) return '';

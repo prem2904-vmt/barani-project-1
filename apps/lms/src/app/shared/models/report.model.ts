@@ -17,7 +17,7 @@ export interface Report {
    *  carries a nested patient under order. Typed loosely so we can
    *  read displayName for the queue search/list without forcing the
    *  full Patient shape on every consumer of Report. */
-  order?: { id: string; createdAt?: string; patient?: { displayName?: string; phone?: string; mrn?: string; sex?: string | null; age?: number | null } | null };
+  order?: { id: string; createdAt?: string; patient?: { displayName?: string; phone?: string; mrn?: string; sex?: string | null; age?: number | null; dateOfBirth?: string | null; ageDisplay?: string | null } | null };
 }
 
 /** One sign-off block in the report footer. Up to three may be present

@@ -15,6 +15,7 @@ import { PfSelectOption, SelectComponent } from '../../primitives/select.compone
 import { AbhaWizardComponent } from '../abha-wizard/abha-wizard.component';
 import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { ageInYears, ageParts } from '../../../shared/utils/patient-age';
 
 interface HistoryRow {
   id: string;
@@ -143,7 +144,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                                  (valueChange)="setDraftField('sex', $event)"></pf-select>
                     </label>
                   </div>
-                  <p class="pf-pp-hint">DOB → age auto-calculates. Setting age leaves DOB untouched.</p>
+                  <p class="pf-pp-hint">DOB → age auto-calculates. Entering only an age stores an estimated DOB.</p>
                 }
               </div>
 
@@ -1138,8 +1139,11 @@ export class PatientProfileModalComponent {
       firstName: p.firstName ?? '',
       fathersName: p.fathersName ?? '',
       dateOfBirth: p.dateOfBirth ? p.dateOfBirth.slice(0, 10) : '',
-      age: p.age != null ? String(p.age) : '',
-      sex: p.sex ?? ''
+      // The DOB-derived whole years (shared helper), never a stale stored age —
+      // echoing it back on save must not re-estimate a real DOB.
+      age: ageInYears(p) != null ? String(ageInYears(p)) : '',
+      sex: p.sex ?? '',
+      dobTouched: false
     });
   }
 
@@ -1151,23 +1155,21 @@ export class PatientProfileModalComponent {
   }
 
   /**
-   * Setting DOB auto-calculates age (per spec). Setting age does NOT
-   * auto-calculate DOB — DOB is left untouched in that direction.
+   * DOB is the single source of age (owner, 2026-09-29). Setting the DOB
+   * auto-calculates the age (shared patient-age helper). Setting only an age
+   * sends the age alone — the server stores an estimated DOB when it differs
+   * from the current DOB's age.
    */
   setDob(value: string) {
     if (!value) {
-      this._draft.update(d => ({ ...d, dateOfBirth: '' }));
+      this._draft.update(d => ({ ...d, dateOfBirth: '', dobTouched: false }));
       return;
     }
-    const dob = new Date(value);
-    const today = new Date();
-    let age = today.getFullYear() - dob.getFullYear();
-    const m = today.getMonth() - dob.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-    this._draft.update(d => ({ ...d, dateOfBirth: value, age: String(Math.max(0, age)) }));
+    const years = ageParts(value)?.years;
+    this._draft.update(d => ({ ...d, dateOfBirth: value, dobTouched: true, age: years != null ? String(years) : d.age }));
   }
   setAge(value: string) {
-    this._draft.update(d => ({ ...d, age: value }));
+    this._draft.update(d => ({ ...d, age: value, dobTouched: false }));
   }
 
   saveEdit() {
@@ -1182,8 +1184,9 @@ export class PatientProfileModalComponent {
       fathersName: d.fathersName.trim(),
       sex: d.sex || null
     };
-    if (d.dateOfBirth) body['dateOfBirth'] = new Date(d.dateOfBirth).toISOString();
-    if (d.age) body['age'] = parseInt(d.age, 10);
+    // A calendar date string (yyyy-MM-dd) — the server reads it as that date.
+    if (d.dateOfBirth && d.dobTouched) body['dateOfBirth'] = d.dateOfBirth;
+    else if (d.age) body['age'] = parseInt(d.age, 10);
     this.api.patch<Patient>(`/api/patients/${p.id}`, body).subscribe({
       next: updated => {
         this._patient.set(updated);
@@ -1373,5 +1376,7 @@ interface DraftPatient {
   fathersName: string;
   dateOfBirth: string; // yyyy-MM-dd
   age: string;
+  /** The DOB box was edited in this session (else only the age is sent). */
+  dobTouched?: boolean;
   sex: string;
 }
