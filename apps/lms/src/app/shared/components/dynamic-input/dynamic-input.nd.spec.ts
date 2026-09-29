@@ -74,13 +74,16 @@ describe('DynamicInputComponent — new-design markup', () => {
     expect(input.getAttribute('aria-describedby')).toBe(msg.id);
   });
 
-  it('phone: the default country code (the tenant\'s) applies while empty', () => {
+  it('phone: the code is +91 — a non-Indian tenant default is not offered (Indian mobiles only)', () => {
     const f = TestBed.createComponent(DynamicInputComponent);
     f.componentRef.setInput('field', { name: 'phone', title: 'Phone', type: 'phone' });
     f.componentRef.setInput('nd', true);
     f.componentRef.setInput('defaultCountryCode', '+971');
     f.detectChanges();
-    expect(f.componentInstance.selectedCountryCode()).toBe('+971');
+    expect(f.componentInstance.selectedCountryCode()).toBe('+91');
+    f.componentRef.setInput('defaultCountryCode', '+91');
+    f.detectChanges();
+    expect(f.componentInstance.selectedCountryCode()).toBe('+91');
   });
 
   it('5+ options stay a searchable pf-select (no native select)', () => {

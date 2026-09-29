@@ -435,9 +435,9 @@ describe('Patient registration — errors + behaviour kept', () => {
     expect((r.api.post.mock.calls[1] as unknown[])[1]).toMatchObject({ force: true });
   });
 
-  it('the phone country code defaults to the tenant\'s', () => {
+  it('the phone country code is +91 — Indian mobiles only, whatever the tenant\'s own number', () => {
     const { el } = render({ tenantPhone: '+44 20 7946 0000' });
-    expect(el.querySelector('[data-field="phone"] .pf-dd__value')!.textContent!.trim()).toBe('+44');
+    expect(el.querySelector('[data-field="phone"] .pf-dd__value')!.textContent!.trim()).toBe('+91');
   });
 
   it('edit mode: "Verify / create ABHA" rides in the pill', async () => {

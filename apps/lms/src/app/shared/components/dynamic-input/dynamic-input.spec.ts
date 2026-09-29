@@ -195,15 +195,15 @@ describe('DynamicInputComponent phone digits', () => {
     expect(emitted).toBe('+919876543210');
   });
 
-  it('the rendered input carries maxlength = the country\'s digit count', () => {
+  it('the rendered input carries maxlength = 10 (the +91 mobile; no other code exists)', () => {
     const fixture = TestBed.createComponent(DynamicInputComponent);
     fixture.componentRef.setInput('field', { name: 'additional_contact', title: 'Additional contact', type: 'number' });
     fixture.componentRef.setInput('nd', true);
     fixture.detectChanges();
     const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[type="tel"]')!;
     expect(input.getAttribute('maxlength')).toBe('10');
-    fixture.componentInstance.onCountryCodeChange('+65');
+    fixture.componentInstance.onCountryCodeChange('+65');   // not offered → the +91 rule
     fixture.detectChanges();
-    expect(input.getAttribute('maxlength')).toBe('8');
+    expect(input.getAttribute('maxlength')).toBe('10');
   });
 });
