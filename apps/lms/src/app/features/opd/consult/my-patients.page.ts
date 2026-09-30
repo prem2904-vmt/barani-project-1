@@ -124,7 +124,7 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
                   <span class="mp__main">
                     <span class="mp__name">{{ r.patientName }} @if (r.ageSex) { <em>{{ r.ageSex }}</em> } @if (r.isFollowUp) { <span class="mp__tag">Follow-up</span> }
                       @if (r.allergyCount) { <span class="mp__tag mp__tag--warn">Allergy</span> }</span>
-                    <span class="mp__sub">{{ r.purpose || 'No purpose noted' }}@if (r.departmentName) { · {{ r.departmentName }}}@if (r.serviceName) { · {{ r.serviceName }}}@if (showDoctorName() && r.doctorName) { · Dr {{ r.doctorName }}}</span>
+                    <span class="mp__sub">{{ r.purpose || 'No purpose noted' }}@if (r.departmentName) { · {{ r.departmentName }}}@if (r.serviceName) { · {{ r.serviceName }}}@if (showDoctorName() && r.doctorName) { · {{ r.doctorName }}}</span>
                   </span>
                   <span class="mp__side">
                     <span class="mp__status" [attr.data-status]="r.status">{{ statusLabel(r.status) }}</span>
