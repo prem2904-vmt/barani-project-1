@@ -4,12 +4,15 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
 
 interface LabTile {
   title: string;
   href: string;
   subtitle: string;
   iconPath: string;
+  /** Shown only while this lab feature is on (core/modules/lab-features). */
+  feature?: 'homeCollection';
 }
 
 /**
@@ -99,7 +102,12 @@ export class LabSettingsHubComponent {
   protected readonly theme = inject(ThemeService);
   /** Band pill search over the tiles (title + subtitle). */
   readonly q = signal('');
-  readonly visibleTiles = computed(() => bandFilter(this.tiles, this.q(), (t) => [t.title, t.subtitle]));
+  /** Home collection off (entitlement OR workflow — the ONE lab-feature rule)
+   *  ⇒ its agents tile is gone too, like its route. */
+  private readonly features = inject(LabFeaturesService);
+  readonly visibleTiles = computed(() => bandFilter(
+    this.tiles.filter(t => t.feature !== 'homeCollection' || this.features.homeCollectionEnabled()),
+    this.q(), (t) => [t.title, t.subtitle]));
 
   readonly tiles: LabTile[] = [
     { title: 'Tests & Packages', href: '/admin/tests',
@@ -120,7 +128,7 @@ export class LabSettingsHubComponent {
     { title: 'Referring Network', href: '/admin/referring-network',
       subtitle: 'Hospitals + doctors that send patients to your lab',
       iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01' },
-    { title: 'Home-collection agents', href: '/admin/home-collection',
+    { title: 'Home-collection agents', href: '/admin/home-collection', feature: 'homeCollection',
       subtitle: 'Agents · coverage areas · weightage',
       iconPath: 'M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6' },
     { title: 'Notifications', href: '/admin/notifications',

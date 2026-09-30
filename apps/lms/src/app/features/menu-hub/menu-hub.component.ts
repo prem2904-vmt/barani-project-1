@@ -4,6 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
+import { LabFeaturesService } from '../../core/services/lab-features.service';
 import { ActionCatalogEntry, catalogFor } from '../../shared/models/process-workflow.model';
 import { SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
 import { PageOpenService } from '../../core/navigation/page-open.service';
@@ -68,6 +69,7 @@ export class MenuHubComponent {
   private readonly pageOpen = inject(PageOpenService);
   private readonly auth = inject(AuthService);
   private readonly process = inject(ProcessWorkflowService);
+  private readonly features = inject(LabFeaturesService);
 
   private readonly menuId = toSignal(this.route.paramMap.pipe(map(p => p.get('menuId') ?? '')), { initialValue: '' });
 
@@ -80,7 +82,8 @@ export class MenuHubComponent {
     if (!cfg || !menu) return [];
     const isSuper = this.auth.permissions().includes('*');
     return cfg.actions
-      .filter(a => a.categoryId === menu.id && a.enabled)
+      // Enabled here AND its module entitled (Home Visits ⇒ home collection).
+      .filter(a => a.categoryId === menu.id && a.enabled && this.features.actionAvailable(a.type))
       .sort((a, b) => a.order - b.order)
       .map(a => ({ action: a, entry: catalogFor(a.type) }))
       .filter((t): t is { action: typeof t.action; entry: ActionCatalogEntry } =>

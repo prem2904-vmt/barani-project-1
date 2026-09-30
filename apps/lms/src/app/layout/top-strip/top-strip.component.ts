@@ -318,6 +318,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
       hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
       hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
       isSuper: this.auth.permissions().includes("*"),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
     };
   }
   // The live nav is built from the active workflow's WORK-AREAS (the admin's

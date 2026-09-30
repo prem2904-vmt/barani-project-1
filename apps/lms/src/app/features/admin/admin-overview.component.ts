@@ -13,6 +13,8 @@ import { RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
 import { canOpenRoute } from "../../core/auth/route-access";
 import { ApiService } from "../../core/services/api.service";
+import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
+import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 import { ApiError } from "../../shared/models/api-response.model";
 import { ToastService } from "../../core/services/toast.service";
 import { testListUrl } from '../../shared/utils/test-list-url';
@@ -946,6 +948,8 @@ export class AdminOverviewComponent implements OnInit {
   /** Design gate: new design hides the big overview title. */
   readonly theme = inject(ThemeService);
   private readonly auth = inject(AuthService);
+  private readonly process = inject(ProcessWorkflowService);
+  private readonly entitlements = inject(TenantEntitlementsService);
   private readonly toasts = inject(ToastService);
 
   readonly today = new Date();
@@ -1042,8 +1046,14 @@ export class AdminOverviewComponent implements OnInit {
   /** Route-access context for filtering links (ROUTE_ACCESS — same rule as the
    *  guards), so a custom admin role never sees a card that lands on /403. */
   protected canOpen(href: string): boolean {
-    // hasAnyPermission already honours '*' (super-admin).
-    return canOpenRoute(href, { hasAny: (p) => this.auth.hasAnyPermission(p) });
+    // hasAnyPermission already honours '*' (super-admin). Workflow actions and
+    // module entitlements too (the same ROUTE_ACCESS the guards read), so a
+    // switched-off feature — e.g. Home collection — never surfaces here.
+    return canOpenRoute(href, {
+      hasAny: (p) => this.auth.hasAnyPermission(p),
+      isEnabled: (a) => this.process.isEnabled(a),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
+    });
   }
   private openable<T extends { href?: string }>(items: T[]): T[] {
     return items.filter((i) => !i.href || this.canOpen(i.href));
@@ -1380,13 +1390,15 @@ export class AdminOverviewComponent implements OnInit {
   readonly results = computed(() => {
     const term = this._q().trim().toLowerCase();
     if (!term) return [];
+    // Re-checked live: the workflow / entitlements may load after construction.
+    const pages = this.pages.filter((p) => this.canOpen(p.href));
     // Rank: label/hint matches first, then keyword-only matches (a nested setting
     // name surfacing its page) — so the most relevant page leads.
-    const head = this.pages.filter((p) =>
+    const head = pages.filter((p) =>
       `${p.label} ${p.hint}`.toLowerCase().includes(term),
     );
     const headSet = new Set(head);
-    const kwOnly = this.pages.filter(
+    const kwOnly = pages.filter(
       (p) => !headSet.has(p) && p.kw.toLowerCase().includes(term),
     );
     return [...head, ...kwOnly];

@@ -12,6 +12,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { ThemeService } from '../../../core/services/theme.service';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
 
 /** Band pill tabs — one per section card. */
 export type AppointmentsTab = 'mode' | 'slots' | 'priority';
@@ -118,7 +119,7 @@ const MODES: ModeOption[] = [
         <section class="nd-card pf-ap-card">
           <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="nd-card__label pf-section-title">Queue mode</h3></div>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pf-ap-body" role="radiogroup" aria-label="Queue mode">
-            @for (m of modes; track m.value) {
+            @for (m of modes(); track m.value) {
               <!-- Neutral selected tile (ND-PATTERN §3), never a violet tile. -->
               <button type="button" class="pf-mode-btn nd-tile-sel text-left" role="radio"
                       [attr.aria-checked]="cfg()!.queueMode === m.value" (click)="setMode(m.value)">
@@ -220,7 +221,11 @@ export class AppointmentsConfigComponent implements OnInit {
     return !this.theme.isNewDesign() || this.tab() === key;
   }
 
-  readonly modes = MODES;
+  /** Home collection off (the ONE lab-feature rule) ⇒ its queue mode is not
+   *  offered — unless it is the stored mode, so the admin can see and change it. */
+  private readonly features = inject(LabFeaturesService);
+  readonly modes = computed(() => MODES.filter(m => m.value !== 'home_collection'
+    || this.features.homeCollectionEnabled() || this.cfg()?.queueMode === 'home_collection'));
   readonly optionFields: { key: keyof AppointmentConfig['queueOptions']; label: string; step: number }[] = [
     { key: 'baseAppointment', label: 'Appointment base', step: 50 },
     { key: 'baseWalkin', label: 'Walk-in base', step: 50 },
