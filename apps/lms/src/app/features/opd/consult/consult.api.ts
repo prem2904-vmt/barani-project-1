@@ -104,8 +104,14 @@ export function mediaRefOf(f: ConsultStoredFile): OpdMediaRef {
   return { id: f.id, name: f.name, kind: f.kind, url: f.url ?? undefined };
 }
 
-export interface ConsultDxSuggestion { code?: string | null; label: string; source: 'mine' | 'common'; }
-export interface ConsultUsual { rx: OpdRxLineDto[]; tests: { testId: string; name: string }[]; fromVisitDate?: string | null; }
+/** 'template' = a diagnosis template (critic §1 #6), ranked after 'mine'. */
+export interface ConsultDxSuggestion { code?: string | null; label: string; source: 'mine' | 'template' | 'common'; }
+/** A past completed consult's Rx/tests, or (no past consult) a diagnosis
+ *  template fallback: fromVisitDate is null and source is 'template'. */
+export interface ConsultUsual {
+  rx: OpdRxLineDto[]; tests: { testId: string; name: string }[]; fromVisitDate?: string | null;
+  source?: 'template' | null; advice?: string | null;
+}
 export interface ConsultPastConsult {
   visitId: string; visitDate: string; doctorName?: string | null; departmentName?: string | null;
   diagnoses: OpdDiagnosis[]; chiefComplaint?: string | null; advice?: string | null;

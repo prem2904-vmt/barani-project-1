@@ -81,23 +81,26 @@ export function usualsFrom(...sets: (readonly OpdRxLineDto[] | undefined | null)
   return out;
 }
 
-/** Apply a "usual" set: adds its lines (skipping drugs already on the Rx) and its
- *  tests (skipping ordered ones). Returns the new state + what was added (for undo). */
+/** Apply a "usual" set: adds its lines (skipping drugs already on the Rx), its
+ *  tests (skipping ordered ones) and — a template fallback only (critic §1 #6)
+ *  — its advice, but ONLY when the doctor hasn't written any yet. Returns the
+ *  new state + what was added (for undo). */
 export function applyUsual(s: ConsultEditState, u: ConsultUsual, drugs: readonly ConsultDrugRef[]):
-  { next: ConsultEditState; addedKeys: string[]; addedTests: string[] } {
+  { next: ConsultEditState; addedKeys: string[]; addedTests: string[]; addedAdvice: boolean } {
   const have = new Set(s.lines.map(l => l.drug.id));
   const add = u.rx.map(d => fromDto({ ...d, id: undefined }, drugs)).filter(l => !have.has(l.drug.id));
   const haveT = new Set(s.tests.map(t => t.testId));
   const addT = u.tests.filter(t => !haveT.has(t.testId));
+  const addedAdvice = !!u.advice && !s.advice.trim();
   return {
-    next: { ...s, lines: [...s.lines, ...add], tests: [...s.tests, ...addT] },
-    addedKeys: add.map(l => l.key), addedTests: addT.map(t => t.testId),
+    next: { ...s, lines: [...s.lines, ...add], tests: [...s.tests, ...addT], advice: addedAdvice ? u.advice! : s.advice },
+    addedKeys: add.map(l => l.key), addedTests: addT.map(t => t.testId), addedAdvice,
   };
 }
 
 /** Undo a usual set. */
-export function undoUsual(s: ConsultEditState, keys: readonly string[], tests: readonly string[]): ConsultEditState {
-  return { ...s, lines: s.lines.filter(l => !keys.includes(l.key)), tests: s.tests.filter(t => !tests.includes(t.testId)) };
+export function undoUsual(s: ConsultEditState, keys: readonly string[], tests: readonly string[], addedAdvice = false): ConsultEditState {
+  return { ...s, lines: s.lines.filter(l => !keys.includes(l.key)), tests: s.tests.filter(t => !tests.includes(t.testId)), advice: addedAdvice ? '' : s.advice };
 }
 
 /** Days between two yyyy-MM-dd dates (local). */
