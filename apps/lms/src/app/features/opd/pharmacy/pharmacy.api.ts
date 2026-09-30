@@ -188,6 +188,9 @@ export class PharmacyApi {
     return this.api.get(`${P}/dispenses${qs({ date, kind, status })}`);
   }
   dispense(id: string): Observable<DispenseView> { return this.api.get(`${P}/dispenses/${id}`); }
+  /** Collect a later payment on a DISPENSED sale (an Rx given "bill later", or
+   *  any completed sale still carrying a balance). */
+  payDispense(id: string, body: PaymentBody): Observable<DispenseView> { return this.api.post(`${P}/dispenses/${id}/pay`, body); }
 
   // Counter
   counterCreate(body: CounterBody): Observable<DispenseView> { return this.api.post(`${P}/counter`, body); }

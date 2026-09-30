@@ -88,6 +88,8 @@
 .ph-note > svg { flex: none; margin-top: 1px; color: var(--violet-text, #7c3aed); }
 .ph-note[data-tone='bad'] { background: color-mix(in srgb, var(--red-text, #dc2626) 6%, var(--nd-card-bg)); }
 .ph-note[data-tone='bad'] > svg { color: var(--red-text, #dc2626); }
+.ph-note[data-tone='warn'] { background: color-mix(in srgb, var(--amber-text, #d97706) 8%, var(--nd-card-bg)); }
+.ph-note[data-tone='warn'] > svg { color: var(--amber-text, #d97706); }
 
 // Qty stepper.
 .ph-qty { display: inline-flex; align-items: center; border: 1px solid var(--nd-line); border-radius: 10px; overflow: hidden; background: var(--nd-card-bg); }

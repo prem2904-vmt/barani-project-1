@@ -236,6 +236,21 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                 </span>
               </header>
               <div class="nd-card__body">
+                @if (dueNow(); as due) {
+                  <div class="ph-note" data-tone="warn" role="status">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+                    <span>Billed later — {{ inr(due, false) }} still due.</span>
+                  </div>
+                  <div class="nd-field">
+                    <span class="nd-field__lbl" id="ph-cp-l">Collect payment</span>
+                    <div class="nd-seg" role="radiogroup" aria-labelledby="ph-cp-l" style="width:100%">
+                      @for (m of modes; track m.v) {
+                        <button type="button" class="nd-seg__item" style="flex:1" role="radio" [attr.aria-checked]="mode() === m.v" (click)="mode.set(m.v)">{{ m.l }}</button>
+                      }
+                    </div>
+                  </div>
+                  <button type="button" class="nd-btn nd-btn--primary" style="width:100%" [disabled]="collecting()" [pfBusy]="collecting()" pfBusyLabel="Collecting…" (click)="collectPayment()">Collect {{ inr(due, false) }}</button>
+                }
                 @for (i of instructions(); track $index) {
                   <div class="ph-instr">
                     <div class="ph-instr__t"><b>{{ i.name }}</b>{{ i.say }}</div>
@@ -286,6 +301,9 @@ export class PharmacyDispensePage {
   protected readonly mode = signal<PayMode>('upi');
   protected readonly saving = signal(false);
   protected readonly done = signal<DispenseView | null>(null);
+  /** Pay later (P0 money gap): a "Give, bill later" sale still carries a
+   *  balance on its bill — collect it from the same instructions screen. */
+  protected readonly collecting = signal(false);
   private readonly today = labToday();
   protected readonly modes: { v: PayMode; l: string }[] = [{ v: 'cash', l: 'Cash' }, { v: 'upi', l: 'UPI' }, { v: 'card', l: 'Card' }];
   protected readonly inr = inr;
@@ -482,6 +500,22 @@ export class PharmacyDispensePage {
     if (!b) return 'Given';
     return b.balance <= 0 ? 'Paid ' + inr(b.totalPaid, false) : 'Due ' + inr(b.balance, false);
   });
+  /** Balance still owed on the just-given sale (null once it's fully paid). */
+  protected readonly dueNow = computed(() => {
+    const b = this.done()?.bill;
+    return b && b.balance > 0 ? b.balance : null;
+  });
+
+  protected collectPayment(): void {
+    const v = this.done();
+    const due = this.dueNow();
+    if (!v || !due || this.collecting()) return;
+    this.collecting.set(true);
+    this.api.payDispense(v.id, { mode: this.mode(), amount: due }).subscribe({
+      next: updated => { this.collecting.set(false); this.done.set(updated); this.toast.success(`${inr(due, false)} collected`); },
+      error: e => { this.collecting.set(false); this.toast.error(errText(e)); },
+    });
+  }
 
   protected print(): void {
     const v = this.done(), d = this.rx();

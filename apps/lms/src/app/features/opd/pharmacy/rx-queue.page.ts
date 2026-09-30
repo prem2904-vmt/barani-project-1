@@ -2,8 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { Router } from '@angular/router';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { heldFlag } from '../../../shared/utils/min-duration';
-import { PharmacyApi, type DispenseSummary, type RxQueueRow } from './pharmacy.api';
+import { DialogService } from '../../../core/services/dialog.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { PharmacyApi, type DispenseSummary, type PayMode, type RxQueueRow } from './pharmacy.api';
 import { PharmacySectionsComponent } from './pharmacy-sections.component';
 import { errText, inr } from './pharmacy-math';
 
@@ -25,7 +28,7 @@ export function waitingFor(iso: string | null | undefined, now = Date.now()): st
 @Component({
   selector: 'pf-pharmacy-rx-queue',
   standalone: true,
-  imports: [HeroBandComponent, PharmacySectionsComponent, SkeletonRowsComponent],
+  imports: [HeroBandComponent, PharmacySectionsComponent, SkeletonRowsComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./pharmacy.scss'],
   template: `
@@ -103,6 +106,9 @@ export function waitingFor(iso: string | null | undefined, now = Date.now()): st
                 <span class="ph-row__end">
                   <span class="nd-num ph-strong">{{ inr(d.total) }}</span>
                   <span class="ph-dot" [attr.data-tone]="d.status === 'completed' ? 'done' : d.status === 'cancelled' ? 'bad' : 'warn'">{{ statusWord(d) }}</span>
+                  @if (due(d) > 0) {
+                    <button type="button" class="nd-btn nd-btn--tertiary" [disabled]="collecting() === d.id" [pfBusy]="collecting() === d.id" pfBusyLabel="Collecting…" (click)="collect(d)">Collect payment</button>
+                  }
                 </span>
               </div>
             } @empty {
@@ -117,6 +123,8 @@ export function waitingFor(iso: string | null | undefined, now = Date.now()): st
 export class PharmacyRxQueuePage {
   private readonly api = inject(PharmacyApi);
   private readonly router = inject(Router);
+  private readonly dialog = inject(DialogService);
+  private readonly toast = inject(ToastService);
 
   protected readonly q = signal('');
   private readonly all = signal<RxQueueRow[]>([]);
@@ -125,6 +133,8 @@ export class PharmacyRxQueuePage {
   protected readonly showSkeleton = heldFlag(this.loading);
   protected readonly error = signal<string | null>(null);
   protected readonly inr = inr;
+  /** The dispense id currently collecting a payment (disables its own button only). */
+  protected readonly collecting = signal<string | null>(null);
 
   protected readonly rows = computed(() => {
     const t = this.q().trim().toLowerCase();
@@ -154,4 +164,27 @@ export class PharmacyRxQueuePage {
   }
   protected open(r: RxQueueRow): void { void this.router.navigate(['/opd/pharmacy/dispense', r.visitId]); }
   protected go(path: string): void { void this.router.navigateByUrl(path); }
+
+  /** Balance still owed on a completed sale (0 for a draft / cancelled one). */
+  protected due(d: DispenseSummary): number { return d.status === 'completed' ? Math.max(0, d.total - d.paid) : 0; }
+
+  /** Collect the full balance of a "bill later" sale (P0 money gap) — pick a
+   *  mode (no native controls: DialogService), then the SAME pay endpoint the
+   *  dispense / counter screens use. */
+  protected async collect(d: DispenseSummary): Promise<void> {
+    const amount = this.due(d);
+    if (amount <= 0 || this.collecting()) return;
+    const mode = await this.dialog.choose({
+      title: `Collect ${inr(amount, false)}`,
+      message: d.customerName ? `From ${d.customerName} · ${d.number ?? 'this sale'}` : d.number ?? 'This sale',
+      choices: [{ value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' }, { value: 'card', label: 'Card' }],
+      confirmLabel: 'Collect',
+    });
+    if (!mode) return;
+    this.collecting.set(d.id);
+    this.api.payDispense(d.id, { mode: mode as PayMode, amount }).subscribe({
+      next: () => { this.collecting.set(null); this.toast.success(`${inr(amount, false)} collected`); this.load(); },
+      error: e => { this.collecting.set(null); this.toast.error(errText(e)); },
+    });
+  }
 }
