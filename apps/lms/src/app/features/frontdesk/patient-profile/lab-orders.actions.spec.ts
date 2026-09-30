@@ -33,10 +33,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(o: { perms?: string[]; withReport?: boolean; waCloud?: boolean } = {}) {
+async function render(o: { perms?: string[]; withReport?: boolean; waCloud?: boolean; rep?: unknown } = {}) {
   const perms = o.perms ?? ['view_order', 'deliver_report', 'view_report'];
   const api = {
-    get: vi.fn((url: string) => url === '/api/reports/by-order/o1' ? of(REP)
+    get: vi.fn((url: string) => url === '/api/reports/by-order/o1' ? of(o.rep ?? REP)
       : url === '/api/whatsapp/settings' ? of({ canSend: !!o.waCloud }) : of(null)),
     post: vi.fn(() => of({})),
   };
@@ -134,5 +134,13 @@ describe('Patient profile order detail — ⋮ report actions', () => {
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Nair', phone: '9876543210' });
     await c.runDetailAction(o, 'whatsapp-mine');
     expect(mine).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Nair', phone: '9876543210' });
+  });
+
+  it('WhatsApp goes to the CURRENT patient on file (profile correction), not the issued snapshot', async () => {
+    const { c } = await render({ waCloud: true, rep: { ...REP, patient: { displayName: 'Priya Menon', phone: '9000000001' } } });
+    const svc = TestBed.inject(ReportActionsService);
+    const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(() => {});
+    await c.runDetailAction(c.openOrder(), 'whatsapp');
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Menon', phone: '9000000001' });
   });
 });

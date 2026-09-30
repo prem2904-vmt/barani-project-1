@@ -14,6 +14,7 @@ import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigati
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { currentRecipient } from '../../../shared/utils/report-recipient';
 import { REPORT_BY_ORDER_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
 import {
   filterOrders, orderStatusLabel, orderTests, orderTitle, orderTone, testStatusLabel, testTone,
@@ -481,11 +482,10 @@ export class LabOrdersComponent implements OnDestroy {
   }
 
   /** Patient name + phone from the report snapshot (for the message). */
-  private snapshotPatient(rep: { data?: string }): { name: string | null; phone: string | null } {
-    try {
-      const p = JSON.parse(rep.data ?? '{}')?.patient ?? {};
-      return { name: p.displayName || p.name || null, phone: p.phone || null };
-    } catch { return { name: null, phone: null }; }
+  private snapshotPatient(rep: { data?: string; patient?: unknown }): { name: string | null; phone: string | null } {
+    let snap: { displayName?: string; name?: string; phone?: string } | undefined;
+    try { snap = JSON.parse(rep.data ?? '{}')?.patient; } catch { snap = undefined; }
+    return currentRecipient(rep as never, snap);
   }
 
   ngOnDestroy() { for (const u of this.blobUrls) { try { URL.revokeObjectURL(u); } catch { /* */ } } }

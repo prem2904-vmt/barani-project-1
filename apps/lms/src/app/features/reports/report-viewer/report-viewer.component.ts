@@ -32,6 +32,7 @@ import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from
 import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { WhatsAppSendService, waSendLabel } from '../../../core/services/whatsapp-send.service';
+import { currentRecipient } from '../../../shared/utils/report-recipient';
 import { formatAge } from '../../../shared/utils/patient-age';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -234,6 +235,9 @@ export class ReportViewerComponent implements OnInit {
     if (!formatAge(ageSrc) && !sex && !mrn) return '';
     return formatPatientMeta({ ...(ageSrc ?? {}), sex: sex as never, mrn: mrn as never } as never);
   });
+  /** Who the report is SENT to — the current patient record (a profile
+   *  correction reaches the share / WhatsApp message), else the snapshot. */
+  readonly recipient = computed(() => currentRecipient(this._report(), this.data()?.patient));
   readonly orderLabel = computed(() => {
     const o = this.data()?.order;
     if (o?.orderNumber) return o.orderNumber;
@@ -328,7 +332,7 @@ export class ReportViewerComponent implements OnInit {
     const r = this._report();
     if (!r) return;
     switch (id) {
-      case 'share': void this.reportActions.share(r, this.patientName()); break;
+      case 'share': void this.reportActions.share(r, this.recipient().name ?? this.patientName()); break;
       case 'copy-link': void this.reportActions.copyLink(r); break;
       case 'whatsapp': this.deliverWhatsApp(); break;
       case 'whatsapp-mine': this.shareViaMyWhatsApp(); break;
@@ -1072,10 +1076,9 @@ export class ReportViewerComponent implements OnInit {
    *  secondary ⋮ row when it does. */
   shareViaMyWhatsApp() {
     const r = this._report();
-    const d = this.data();
     if (!r || !this.canDeliver()) return;
     const lab = this.tpl()?.labName || 'our lab';
-    const name = d?.patient?.name ?? '';
+    const name = this.recipient().name ?? '';
     const link = r.qrToken ? this.verifyCode(r.qrToken) : '';
     const lines = [
       name ? `Hi ${name},` : 'Hi,',
@@ -1089,7 +1092,7 @@ export class ReportViewerComponent implements OnInit {
     // resolves to a real file when the patient opens it. Fire before the
     // synchronous window.open so the popup isn't blocked.
     if (r.qrToken) this.archiveReportPdf(r);
-    const url = waLink(d?.patient?.phone, lines.join('\n\n'));
+    const url = waLink(this.recipient().phone, lines.join('\n\n'));
     window.open(url, '_blank', 'noopener');
     this.flash('whatsapp');
     this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'wa.me link' }).subscribe({
