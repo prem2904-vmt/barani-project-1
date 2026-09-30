@@ -145,7 +145,9 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/process':           { perms: ['manage_workflows'] },
   '/admin/audit':             { perms: ['view_audit_log'] },
   '/admin/appointments':      { perms: ['manage_tenant'] },
-  '/admin/home-collection':   { perms: ['manage_home_collection'], module: 'homeCollection' },
+  // Home collection = entitlement AND the workflow's Home Visits action (the
+  // ONE rule, core/modules/lab-features) — same pair as its work screens.
+  '/admin/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
 };
 
 /** Strip query/fragment and a trailing slash: '/admin/manage?cat=x' → '/admin/manage'. */

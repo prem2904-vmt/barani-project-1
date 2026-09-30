@@ -1397,3 +1397,30 @@
     padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Status chips are TOGGLE filters (aria-pressed): a visible focus ring for
+   keyboard users; the pressed look is .pf-tabs__btn--on above. */
+.pf-tabs__btn:focus-visible {
+  outline: 2px solid var(--accent, #7c3aed);
+  outline-offset: 2px;
+}
+
+/* "All statuses" (no status chip on): a quiet section label above each
+   status's rows so the combined list stays scannable. */
+.pf-wsec {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 4px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.pf-wsec:first-child { margin-top: 4px; }
+.pf-wsec__n {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}

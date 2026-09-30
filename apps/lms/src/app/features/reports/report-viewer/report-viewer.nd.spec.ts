@@ -38,7 +38,7 @@ const REPORT = {
   }),
 };
 
-type Opts = { narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean; waCloud?: boolean; waStatus?: string };
+type Opts = { current?: { displayName?: string; phone?: string }; narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean; waCloud?: boolean; waStatus?: string };
 
 const realMatchMedia = (window as any).matchMedia;
 beforeEach(() => {
@@ -65,9 +65,10 @@ async function render(opts: Opts = {}) {
   // The real PDF paint (jsPDF + pdf.js) can't run here: the tests drive
   // the ready / error signals themselves.
   const renderSpy = vi.spyOn(ReportViewerComponent.prototype, 'renderPdfView').mockResolvedValue(undefined);
-  const report = opts.partial
+  const report0 = opts.partial
     ? { ...REPORT, type: 'partial', data: JSON.stringify({ ...JSON.parse(REPORT.data), isPartial: true, pendingDepts: ['Microbiology'] }) }
     : REPORT;
+  const report = opts.current ? { ...report0, patient: opts.current } : report0;
   const api = {
     get: vi.fn((url: string) => {
       if (url.startsWith('/api/reports/')) return opts.fail ? throwError(() => new Error('boom')) : of(report);
@@ -529,6 +530,16 @@ describe('Report view (nd) — Send WhatsApp through the lab\'s WhatsApp Cloud A
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     c.runAction('whatsapp-mine');
     expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+  });
+
+  it('wa.me goes to the patient AS ON FILE (a corrected name / mobile), not the issued snapshot', async () => {
+    const { c } = await render({ waCloud: true, current: { displayName: 'Ms. Yamini Rao', phone: '9123456789' } });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    c.runAction('whatsapp-mine');
+    const url = decodeURIComponent(String(open.mock.calls[0][0]));
+    expect(url).toContain('9123456789');
+    expect(url).not.toContain('9876543210');
+    expect(url).toContain('Hi Ms. Yamini Rao,');
   });
 
   it('lab without a sender: today\'s wa.me flow, one WhatsApp row', async () => {

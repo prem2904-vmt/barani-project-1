@@ -25,6 +25,11 @@ export interface Report {
    *  carries a nested patient under order. Typed loosely so we can
    *  read displayName for the queue search/list without forcing the
    *  full Patient shape on every consumer of Report. */
+  /** The CURRENT patient record (GET /api/reports/{id} and by-order include
+   *  it). Delivery surfaces outside the PDF — share name, WhatsApp number —
+   *  read THIS, never the snapshot: a profile correction must reach the
+   *  message even though the stored PDF is immutable (2026-09-30). */
+  patient?: { displayName?: string; firstName?: string; fathersName?: string; phone?: string | null; guardianPhone?: string | null } | null;
   order?: { id: string; createdAt?: string; patient?: { displayName?: string; phone?: string; mrn?: string; sex?: string | null; age?: number | null; dateOfBirth?: string | null; ageDisplay?: string | null } | null };
 }
 

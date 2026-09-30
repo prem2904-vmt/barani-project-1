@@ -12,8 +12,10 @@ import {
   inject,
   signal,
   effect,
+  untracked,
   viewChild,
 } from "@angular/core";
+import { LabFeaturesService } from "../../../core/services/lab-features.service";
 import { FormsModule } from "@angular/forms";
 import flatpickr from "flatpickr";
 import { ActivatedRoute, Router } from "@angular/router";
@@ -390,6 +392,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                 }
               </div>
 
+              @if (features.homeCollectionEnabled()) {
               <div class="nd-field">
                 <span class="nd-field__lbl" id="pf-bka-l-coll">Collection</span>
                 <div class="nd-seg pf-bka-coll" role="radiogroup" aria-labelledby="pf-bka-l-coll" data-nav (keydown)="onCollKey($event)">
@@ -399,6 +402,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
                           [attr.tabindex]="collectionType() === 'home_collection' ? 0 : -1" (click)="collectionType.set('home_collection')">Home collection</button>
                 </div>
               </div>
+              }
               @if (collectionType() === 'home_collection') {
                 <div class="pf-bka-home">
                   <label class="nd-field pf-bka-span">
@@ -881,7 +885,9 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
             </div>
           </section>
 
-          <!-- Collection type -->
+          <!-- Collection type (only while home collection is on — else every
+               booking is a walk-in) -->
+          @if (features.homeCollectionEnabled()) {
           <section class="flex flex-col shrink-0">
             <div class="flex items-center gap-2 mb-2">
               <span
@@ -981,6 +987,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
               </p>
             }
           </section>
+          }
 
           <!-- Step 5: Notes -->
           <section class="flex flex-col shrink-0">
@@ -1648,6 +1655,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   onCollKey(e: KeyboardEvent) {
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
     e.preventDefault();
+    if (!this.features.homeCollectionEnabled()) return;
     const next = this.collectionType() === "walkin" ? "home_collection" : "walkin";
     this.collectionType.set(e.key === "Home" ? "walkin" : e.key === "End" ? "home_collection" : next);
     setTimeout(() => this.host()
@@ -1672,6 +1680,13 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   protected readonly collectionType = signal<"walkin" | "home_collection">(
     "walkin",
   );
+  /** Home collection on? (the ONE lab-feature rule: entitlement AND workflow).
+   *  Off ⇒ no Collection choice; a booking is always a walk-in. */
+  protected readonly features = inject(LabFeaturesService);
+  private readonly _walkinWhenHomeOff = effect(() => {
+    if (!this.features.homeCollectionEnabled() && untracked(() => this.collectionType()) === "home_collection")
+      this.collectionType.set("walkin");
+  });
   protected readonly hcAddress = signal<string>("");
   protected readonly hcPincode = signal<string>("");
   protected readonly hcLat = signal<number | null>(null);

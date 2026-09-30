@@ -515,6 +515,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       hasAnyPermission: (p) => this.auth.hasAnyEffectivePermission(p),
       hasAnyRawPermission: (p) => this.auth.hasAnyPermission(p),
       isSuper: this.auth.permissions().includes('*'),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
     };
   }
   // Live nav = the active workflow's work-areas (admin names + order, role-gated),

@@ -32,6 +32,7 @@ import {
   TimelineEvent, activeOrders, buildCumulative, buildTimeline, lastVisit, needsAttention, quickActions, shortDate,
 } from './patient-profile.clinical';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
 import { LabTrendsComponent } from './lab-trends.component';
 import { PatientTimelineService } from './patient-timeline.service';
@@ -93,6 +94,8 @@ export type PpDetail =
 export class PatientProfileComponent implements OnInit {
   private readonly api = inject(ApiService);
   protected readonly entitlements = inject(TenantEntitlementsService);
+  /** Appointments on? (the ONE lab-feature rule) — hides Book appointment. */
+  protected readonly features = inject(LabFeaturesService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly orderEntry = inject(OrderEntryService);
