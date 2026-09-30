@@ -336,7 +336,7 @@ const EMPTY: ConsultEditState = {
         </section>
 
         @if (completeOpen()) {
-          <pf-consult-complete-sheet [patientName]="w.patient.name" [token]="w.visit.token" [diagnoses]="st().diagnoses" [lines]="st().lines"
+          <pf-consult-complete-sheet [patientName]="w.patient.name" [token]="w.visit.tokenLabel" [diagnoses]="st().diagnoses" [lines]="st().lines"
                                      [tests]="st().tests" [followUpDays]="st().followUpDays" [followUpRule]="w.followUpRule ?? null" [visitDate]="visitDay()"
                                      [unresolved]="unresolved().length" [busy]="completing()"
                                      (followUpDaysChange)="patch({ followUpDays: $event })" (cancel)="completeOpen.set(false)" (confirm)="complete()"></pf-consult-complete-sheet>
@@ -436,7 +436,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const w = this.ws();
     if (!w) return '';
     return [w.patient.ageDisplay && w.patient.sex ? `${w.patient.ageDisplay} ${w.patient.sex.charAt(0).toUpperCase()}` : w.patient.ageDisplay,
-      w.patient.mrn, 'Token ' + w.visit.token, w.visit.departmentName, w.visit.doctorName].filter(Boolean).join(' · ');
+      w.patient.mrn, 'Token ' + w.visit.tokenLabel, w.visit.departmentName, w.visit.doctorName].filter(Boolean).join(' · ');
   });
   readonly visibilityText = computed(() => {
     const v = this.st().privateNotesVisibility;
@@ -720,7 +720,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       practice: { name: tpl?.labName || user?.tenantName, address: tpl?.address, phone: tpl?.phone, email: tpl?.email },
       patient: { name: w.patient.name, ageSex: [w.patient.ageDisplay, w.patient.sex].filter(Boolean).join(' '), mrn: w.patient.mrn, phone: w.patient.phone },
       doctor: { name: w.visit.doctorName, department: w.visit.departmentName, regNo: w.visit.doctorUserId === user?.id ? user?.registrationId : null },
-      visit: { date: this.visitDay(), token: w.visit.token, visitNumber: w.visit.visitNumber },
+      visit: { date: this.visitDay(), tokenLabel: w.visit.tokenLabel, visitNumber: w.visit.visitNumber },
       vitals: vit, chiefComplaint: this.st().chiefComplaint, diagnoses: this.st().diagnoses,
       lines: this.st().lines, tests: this.st().tests, advice: this.st().advice, followUp: fu,
     });

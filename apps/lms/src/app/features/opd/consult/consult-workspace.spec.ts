@@ -86,7 +86,7 @@ describe('Complete consult sheet', () => {
     TestBed.configureTestingModule({ imports: [ConsultCompleteSheetComponent] });
     const f = TestBed.createComponent(ConsultCompleteSheetComponent);
     f.componentRef.setInput('patientName', 'Kavitha Ramesh');
-    f.componentRef.setInput('token', 3);
+    f.componentRef.setInput('token', 'E3');
     f.componentRef.setInput('diagnoses', [{ label: 'Acute rhinosinusitis' }]);
     f.componentRef.setInput('lines', [LINE]);
     f.componentRef.setInput('tests', [{ testId: 't1', name: 'AEC (eosinophils)', price: 150 }, { testId: 't2', name: 'Total IgE', price: 900 }]);
@@ -99,6 +99,7 @@ describe('Complete consult sheet', () => {
   it('summarises the outputs and sends on confirm', () => {
     const f = sheet(0);
     const el: HTMLElement = f.nativeElement;
+    expect(el.textContent).toContain('Token E3'); // the desk's doctor-prefixed label, never the bare token number
     expect(el.textContent).toContain('Acute rhinosinusitis');
     expect(el.textContent).toContain('Clavumox 625');
     expect(el.textContent).toContain('1 tab · 1-0-1 · 5 days · after food');
@@ -142,7 +143,7 @@ describe('Vitals strip rules', () => {
 
 describe('My patients queue', () => {
   const row = (token: number, status: ConsultQueueRow['status']): ConsultQueueRow => ({
-    visitId: 'v' + token, patientId: 'p', patientName: 'P' + token, token, status, isFollowUp: false, hasVitals: true, allergyCount: 0, doctorUserId: 'd',
+    visitId: 'v' + token, patientId: 'p', patientName: 'P' + token, token, tokenLabel: 'T' + token, status, isFollowUp: false, hasVitals: true, allergyCount: 0, doctorUserId: 'd',
   });
   it('buckets statuses and calls the lowest waiting token next', () => {
     expect([tabOf('booked'), tabOf('vitals'), tabOf('waiting'), tabOf('in_consult'), tabOf('completed'), tabOf('cancelled')])
