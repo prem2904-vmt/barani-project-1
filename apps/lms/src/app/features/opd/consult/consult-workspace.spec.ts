@@ -9,7 +9,7 @@ import { bmiOf, vitalFlag } from './vitals-strip.component';
 import { nextToCall, tabOf } from './my-patients.page';
 import type { ConsultQueueRow } from './consult.api';
 import { ConsultDrugRef, ConsultRxLine } from './rx/rx-model';
-import { addMedia } from './consult-workspace.page';
+import { addMedia, withoutConsultOwned } from './consult-workspace.page';
 import { mediaRefOf } from './consult.api';
 import { allQuestions, normalizeSchema } from '../admin/forms/renderer';
 import { recentResultsOf } from './glance-panel.component';
@@ -157,6 +157,11 @@ describe('Form renderer + media + glance + print helpers', () => {
   it('the consult renders through A\'s renderer: a v1 form still normalises to questions', () => {
     const doc = normalizeSchema({ sections: [{ key: 's', title: 'ENT', fields: [{ key: 'a', label: 'A', type: 'text' }] }] });
     expect(allQuestions(doc).map(q => q.key)).toEqual(['a']);
+  });
+  it('the consult drops form questions it owns (chief complaint) so nothing is asked twice', () => {
+    const doc = withoutConsultOwned({ schemaVersion: 2, sections: [{ key: 'f', title: 'F', fields: [
+      { key: 'chief_complaints', label: 'Chief complaints', type: 'short' }, { key: 'duration', label: 'Duration', type: 'num' }] }] });
+    expect(allQuestions(doc).map(q => q.key)).toEqual(['duration']);
   });
   it('addMedia appends a stored file to the answer, per side for a left & right question', () => {
     const ref = mediaRefOf({ id: 'tenants/t/opd/consult/v/f.jpg', name: 'ear.jpg', kind: 'image', contentType: 'image/jpeg', size: 10, url: 'https://x' });

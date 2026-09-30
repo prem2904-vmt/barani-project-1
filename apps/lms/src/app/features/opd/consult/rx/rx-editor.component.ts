@@ -201,7 +201,7 @@ export function durLabel(n: number): string {
     .rxe { display: flex; flex-direction: column; gap: 12px; }
     .rxe__card { border-radius: var(--nd-radius-card, 16px); background: var(--nd-card-bg); border: 1px solid var(--nd-line); padding: 4px 14px 8px; }
     .rxe__head, .rxe__row { display: grid; align-items: start; column-gap: 10px;
-      grid-template-columns: 26px minmax(170px, 1.6fr) 74px minmax(0, 0.9fr) minmax(92px, 1fr) 76px 84px 56px 76px 30px; }
+      grid-template-columns: 26px minmax(150px, 1.6fr) 74px minmax(76px, 0.9fr) minmax(92px, 1fr) 76px 84px 56px 76px 30px; }
     .rxe__head { padding: 12px 0 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary); border-bottom: 1px solid var(--nd-line); }
     .r { text-align: right; justify-self: end; }
     .rxe__line { padding: 12px 0 10px; border-bottom: 1px solid var(--nd-line); }
@@ -276,14 +276,14 @@ export function durLabel(n: number): string {
 
     /* Tablet: fold Food/+then under the line; phone: one card per medicine. */
     @media (max-width: 1280px) {
-      .rxe__head, .rxe__row { grid-template-columns: 24px minmax(140px, 1.4fr) 66px minmax(0, 0.9fr) minmax(84px, 1fr) 70px 78px 50px 68px 28px; column-gap: 8px; }
+      .rxe__head, .rxe__row { grid-template-columns: 24px minmax(130px, 1.4fr) 66px minmax(70px, 0.9fr) minmax(84px, 1fr) 70px 78px 50px 68px 28px; column-gap: 8px; }
     }
     @media (max-width: 760px) {
       .rxe__card { padding: 2px 12px 6px; }
       .rxe__head { display: none; }
       .rxe__row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
       .rxe__drug { flex: 1 1 calc(100% - 70px); }
-      .rxe__row > .rxe__c:last-child { position: absolute; right: 0; }
+      .rxe__row > .rxe__c:last-child { position: absolute; right: 0; top: 8px; }
       .rxe__line { position: relative; }
       .rxe__c:empty { display: none; }
       .rxe__say, .rxe__allergy, .rxe__acked { margin-left: 0; }

@@ -21,7 +21,7 @@ import {
 import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
 import { ConsultGlanceComponent, RecentResult, recentResultsOf } from './glance-panel.component';
 import { ConsultCompleteSheetComponent, addDaysIso } from './complete-sheet.component';
-import { OpdFormRendererComponent, type OpdAnswers, type OpdMediaRef, type OpdMediaRequest } from '../admin/forms/renderer';
+import { OpdFormRendererComponent, normalizeSchema, type OpdAnswers, type OpdFormDoc, type OpdMediaRef, type OpdMediaRequest } from '../admin/forms/renderer';
 import { RxEditorComponent } from './rx/rx-editor.component';
 import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies } from './rx/rx-model';
 import { newRxLine } from '../shared/rx-schedule';
@@ -150,7 +150,7 @@ const EMPTY: ConsultEditState = {
                       </label>
                       @if (w.form) {
                         <!-- Agent A's ONE form renderer (schema v2); media questions upload through the consult. -->
-                        <pf-opd-form-renderer [schema]="w.form.schema" [addons]="w.form.addonFields" [answers]="st().answers"
+                        <pf-opd-form-renderer [schema]="formSchema()" [addons]="w.form.addonFields" [answers]="st().answers"
                                               [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'"
                                               (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
                         <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
@@ -402,6 +402,9 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly hasJourney = computed(() => (this.tl()?.visits().length ?? 0) > 0 || this.dockOpen());
 
   private readonly save$ = new Subject<void>();
+
+  /** The service's form without the questions the consult owns (chief complaint). */
+  readonly formSchema = computed(() => withoutConsultOwned(this.ws()?.form?.schema));
 
   /** Phone layout for the form renderer (one column) — the renderer's own ≤760px rule. */
   readonly phone = signal(typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches);
@@ -753,4 +756,14 @@ export function addMedia(answers: OpdAnswers, req: OpdMediaRequest, ref: OpdMedi
     return { ...cur, [req.key]: { ...sided, [req.side]: [...list(sided[req.side]), ref] } };
   }
   return { ...cur, [req.key]: [...list(cur[req.key]), ref] };
+}
+
+/** Question keys the consult owns as built-in fields (a form that asks them too
+ *  would ask twice — the consult's chief complaint is pre-filled from the desk). */
+export const CONSULT_OWNED_KEYS = new Set(['chief_complaints', 'chief_complaint']);
+
+/** The form's schema v2 minus consult-owned questions. Pure. */
+export function withoutConsultOwned(schema: unknown): OpdFormDoc {
+  const doc = normalizeSchema(schema);
+  return { ...doc, sections: doc.sections.map(s => ({ ...s, fields: s.fields.filter(q => !CONSULT_OWNED_KEYS.has(q.key)) })) };
 }

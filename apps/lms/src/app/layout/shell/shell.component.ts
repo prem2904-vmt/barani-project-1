@@ -620,6 +620,11 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
         backdrop-filter: blur(18px) saturate(1.3);
         -webkit-backdrop-filter: blur(18px) saturate(1.3);
       }
+      /* OPD dark build: the full-screen consult owns the viewport even under
+         the bottom-navbar experiment (the rule above out-specifies the plain
+         immersive hide). Only ever matches while html.pf-opd-immersive is set. */
+      :host-context(html.pf-opd-immersive.design-new.nav-bottom) .pf-chrome { display: none !important; }
+
       /* Phones: the home-indicator space goes UNDER the icons (not split
          above/below), and the ends keep clear of the rounded screen corners. */
       :host-context(html.device-phone.design-new.nav-bottom) .pf-chrome {
