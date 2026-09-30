@@ -45,6 +45,7 @@
     },
     "files": [
       "electron/**/*",
+      "!electron/test/**",
       "dist/apps/lms/browser/**/*"
     ],
     "asarUnpack": [

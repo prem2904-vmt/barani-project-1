@@ -74,6 +74,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - Reuse the existing components (AG-Grid, pf-tile, pf-select). Never hand-roll bespoke UI.
 - Report PDF tables (jspdf-autotable): a blank-then-repaint cell stash is keyed `section:row:col` and deleted when painted (the repeated head is row 0 too); rows never split across pages (`rowPageBreak: 'avoid'`); a panel band is glued to its first row and repeated as "— CONTINUED" on the next page.
 - Touch devices: the keyboard must never cover the focused field; inputs are ≥ 16px.
+- Desktop (Electron): the page ALWAYS reports `document.visibilityState === 'visible'` (background throttling is off so sockets live in the tray). "Is the user looking" comes from the main window's state (`pageShown()` / `desktopInFront()` in `desktop-notify.service.ts`), never from document visibility; native notification assets resolve via `path.join(__dirname, …)` in main, never a root-absolute URL.
 - Report PDF typography: every text draw takes font / size / weight from the report-theme token table (`report-theme.ts`), never a literal size; the Classic table is pinned byte-for-byte by golden hashes (`report-theme-classic.spec.ts`, `report-header-legacy.spec.ts`). An embedded theme font loads lazily in `preloadReportImages`, never in the bundle.
 - Report print order has ONE home: the template's `sequencing` (applyReportSequencing) — never re-sort report sections elsewhere.
 

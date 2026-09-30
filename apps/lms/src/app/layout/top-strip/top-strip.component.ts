@@ -1,3 +1,4 @@
+import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -119,6 +120,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.closeProfile();
     void this.desktopWindow.setFullScreen(true);
   }
+  /** Desktop app: notification switches in the avatar menu. */
+  protected readonly desktopNotify = inject(DesktopNotifyService);
+  protected readonly desktopItems = DESKTOP_NOTIFY_ITEMS;
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);
   private readonly auth = inject(AuthService);

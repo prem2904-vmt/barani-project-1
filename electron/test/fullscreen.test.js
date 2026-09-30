@@ -14,6 +14,8 @@ Module._load = function (req, ...rest) { return req === 'electron' ? fakeElectro
 const fullscreen = require('../fullscreen');
 Module._load = origLoad;
 
+const tick = () => new Promise((r) => setImmediate(r));
+
 function fakeWindow(full = false) {
   const win = new EventEmitter();
   const wc = new EventEmitter();
@@ -31,11 +33,29 @@ function fakeWindow(full = false) {
     win.emit(on ? 'enter-full-screen' : 'leave-full-screen');
   };
   win.hide = () => { win.hidden = true; };
+  win.isVisible = () => !win.hidden;
   return win;
 }
 
 test('main window opens full screen (constructor options)', () => {
   assert.deepEqual(fullscreen.windowOptions(), { fullscreen: true, fullscreenable: true });
+  assert.deepEqual(fullscreen.windowOptions({ hidden: false }), { fullscreen: true, fullscreenable: true });
+});
+
+test('started hidden at login: created windowed, no full-screen pop, full screen on first show', async () => {
+  assert.deepEqual(fullscreen.windowOptions({ hidden: true }), { fullscreen: false, fullscreenable: true });
+  const win = fakeWindow(false);
+  fullscreen.attach(win, { hidden: true });
+  win.emit('ready-to-show');
+  await new Promise((r) => setImmediate(r));
+  assert.equal(win.full, false, 'stays windowed (and hidden) in the tray');
+  win.emit('show');
+  await tick();
+  assert.equal(win.full, true, 'opened from tray / dock / a notification → full screen');
+  win.setFullScreen(false);           // user pressed Esc
+  win.emit('show');                   // a later notification click re-shows / focuses
+  await tick();
+  assert.equal(win.full, false, 'a later restore does not override the user\'s Esc');
 });
 
 test('IPC: only the main window may query / set; payload must be a boolean', async () => {
@@ -93,13 +113,22 @@ test('F11 (Windows / Linux) and Ctrl+Cmd+F (macOS) toggle; nothing else does', (
   assert.equal(prevented, 2, 'only the toggle key is swallowed');
 });
 
-test('close-to-hide: macOS leaves full screen first and re-enters on the next show', () => {
+test('close-to-hide: macOS leaves full screen first and re-enters on the next show', async () => {
   const win = fakeWindow(true);
   fullscreen.attach(win);
   fullscreen.hide(win, 'darwin');
   assert.equal(win.full, false);
+  win.emit('show');                   // macOS fires 'show' inside the transition
+  await tick();
+  assert.equal(win.full, false, 'transition show ignored while the close is pending');
+  await new Promise((r) => setTimeout(r, 80));
   assert.equal(win.hidden, true);
+  win.emit('show');                   // spurious show while still hidden
+  await tick();
+  assert.equal(win.full, false, 'not re-entered while the window is hidden');
+  win.hidden = false;                 // real restore (tray / dock / notification)
   win.emit('show');
+  await tick();
   assert.equal(win.full, true, 'restored from tray / dock → full screen again');
 
   const w2 = fakeWindow(true);
