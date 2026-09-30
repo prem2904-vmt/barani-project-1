@@ -5,8 +5,8 @@ being built **dark**. It exists in the code and database but is invisible to
 every tenant and user until the owner opens it. The lab must behave exactly as
 before while OPD is hidden.
 
-- UI branch: `prefrontal-ui` `feat/opd-dark`
-- Backend branch: `prefrontal-mw` `feat/opd-dark`
+- UI branch: `prefrontal-ui` `feat/opd-dark` (foundation) → **`feat/opd-integrated`** (foundation + A + B + C + D, integrated; see §8)
+- Backend branch: `prefrontal-mw` `feat/opd-dark` → **`feat/opd-integrated`**
 - UX source of truth: the clickable mockup (`opd-mockup/index.html`; screens
   hub, opd-master, service-editor, form-builder, workflow, drug-master,
   frontdesk, vitals, doctor-queue, consult, pharmacy, patient).
@@ -170,7 +170,8 @@ in `OpdConstants.cs`.
 | D | `pharmacy_batches`, `pharmacy_stock_moves`, `pharmacy_reorder_levels` | Stock per branch by batch, expiry and MRP, with a signed ledger |
 | D | `pharmacy_suppliers`, `pharmacy_purchase_orders`, `pharmacy_purchase_order_lines` | |
 | D | `pharmacy_dispenses`, `pharmacy_dispense_lines` | Kind `rx` or `walk_in` (the design's "WalkInSale") |
-| D | `pharmacy_h1_register` | The legal H1 register; never deleted |
+| D | `pharmacy_h1_register` | The legal H1 register; never deleted. `Schedule` (H1 / X) snapshotted at sale (integration) |
+| Integration | `opd_refunds` | Credit notes (`CN-yyMM-000000`) for a cancelled paid visit / a pharmacy return; Σ ≤ bill `TotalPaid`; the bill is never rewritten |
 
 The legacy `opd_consults` (`OpdConsultationEntity`) is left untouched. It is
 superseded by `opd_visits` plus `opd_consult_records`.
@@ -243,8 +244,11 @@ and `Prefrontal.Tests.Integration/Opd<Area>*`. Integration tests must call
   both use it. **Never re-implement it.**
 - **Models:** `features/opd/shared/opd.models.ts` is the TS mirror of the
   entities and the JSON configs (`OpdWorkflowConfig`, `OpdQueueConfig`,
-  `PharmacyConfig`, `OpdFormSchema`), plus `canMoveVisit` (which mirrors C#
-  `OpdVisitStatus.CanMove`).
+  `PharmacyConfig`), plus `canMoveVisit` (which mirrors C#
+  `OpdVisitStatus.CanMove`). The consult-form contract is **schema v2**
+  (`OpdFormDoc`, A's `admin/forms/form-schema.ts`, re-exported here); the
+  foundation's v1 `OpdFormSchema` / `OpdFormField` are gone (the renderer and
+  the server still read a v1 schema).
 - **Counters:** `OpdTokenService.NextTokenAsync` and `NextSequenceAsync`.
 - **Money:** `BillMath.Compute` (C#) and its TS mirror. Discount comes before
   GST, round-off is to the rupee (below .50 rounds down), and there is no
@@ -280,3 +284,109 @@ and `Prefrontal.Tests.Integration/Opd<Area>*`. Integration tests must call
    the end. Do not push.
 8. Out of scope for this phase: consent and the other outputs (procedure note,
    referral, IPD admission, certificate). Show them as "not built yet".
+
+---
+
+## 8. Integration (`feat/opd-integrated`, 2026-09-30)
+
+`feat/opd-integrated` = latest `origin/dev` + `feat/opd-dark` + A (admin) + B
+(desk) + C (consult) + D (pharmacy), `--no-ff`. Still **dark**: every surface
+behind `OpdAccess` / `[RequireOpd]` (server) and `OpdGateService` /
+`pf.opd()` (UI). No lab table, lab endpoint or lab behaviour changed.
+
+### Merges
+
+- Foundation × dev: `AppDbContext.cs` (dev's expense-tracker config + the
+  `ConfigureOpd(b)` call — both kept) and `admin-overview.component.ts` (dev's
+  workflow / entitlement route-access + the OPD gate on `/admin/opd` cards —
+  both kept). `20260930120000_OpdFoundation` sorts between dev's instruments
+  (110000) and referral / expense (140000 / 150000); the model snapshot
+  merged cleanly and `has-pending-model-changes` is clean.
+- A, B, C, D merged without conflicts (disjoint folders by design).
+- The lab route / nav snapshot (`opd-dark.routes-nav.spec.ts.snap`) was updated
+  **only** for dev's new lab routes (instruments, analyzer results, expenses).
+
+### Single sources after integration
+
+| Fact | One home |
+|---|---|
+| Consult / procedure fee (price, follow-up window, per-doctor fee, `FollowUpPercent`, tenant tiers, desk override kept beside the quote) | `Services/Opd/Admin/OpdFeeRules.Quote` + `OpdFeeInputs` (index visit, tenant tiers). Callers: `GET /api/opd/admin/quote`, the desk's `GET /api/opd/visits/quote` + checkout, the consult's follow-up booking. B's own fee rule was removed (`OpdDeskFees` keeps only the exact override + bill-line text). |
+| Visit token + number | `OpdTokenService.IssueVisitAsync` (token from the queue's counter key, `OPD-yyMM-000000`). Desk checkout and the consult's follow-up use it. |
+| Settings JSON (workflow / queue / pharmacy) | `Admin/OpdSettingsJson` — the desk's `OpdDeskWorkflow` / `OpdDeskQueue` parse through it (per_room, per-doctor token prefix). |
+| Private-notes default | `WorkflowJson.privateNotesVisibility` (A's editor writes it, C reads it; A's draft key `privateNotes` is read once and migrated). |
+| Drug catalogue (tenant view) | D's `DrugCatalogResolver` — the consult's drug search delegates to it (stable ids, aliases). |
+| Drug master screen | D's `<pf-pharmacy-drug-master>` at `/admin/opd/pharmacy?tab=drugs`; `/admin/opd/drugs` forwards there. |
+| Consult form rendering | A's `<pf-opd-form-renderer>` (C's `form-slot/` deleted). The consult drops questions it owns (`chief_complaints`). |
+| Refunds | `opd_refunds` via `OpdRefunds.AddAsync` inside the caller's transaction, bill row-locked. |
+
+### Integration additions
+
+- Migration **`20260930200000_OpdIntegration`** (additive, OPD tables only):
+  `opd_refunds`; `pharmacy_drugs.SiteKind`, `UsualJson`;
+  `pharmacy_dispenses.PrescriptionStorageKey / FileName / ContentType`;
+  `pharmacy_h1_register.Schedule`; `opd_services.FollowUpPercent`.
+  `opd_refunds` is tenant + strict-branch filtered.
+- Uploads on the private storage pipeline (`IStorageService`, `OpdMediaStore`):
+  consult media `POST/GET /api/opd/consult/{visitId}/media` (any format ≤ 50 MB;
+  known types sniffed; keys `tenants/{t}/opd/consult/{visit}/…`; URLs re-signed on
+  every read) and a walk-in's paper prescription
+  `POST/GET /api/opd/pharmacy/counter/{id}/prescription` (photo / PDF ≤ 15 MB).
+- Desk cancel of a paid visit: refund cash / UPI / card or keep → credit note.
+  Pharmacy patient return → credit note (refund mode), capped to what was paid.
+- H1 register: `?schedule=H1|X` (UI: All / H1 / Schedule X).
+- `PharmacyStarterMaster` (fictional drug master, platform rows) seeds on boot
+  **only** when `ASPNETCORE_ENVIRONMENT=Development` **and**
+  `OpdDev:SeedPharmacyStarter=true` (no appsettings sets it) — never on a deploy.
+- A's starter forms no longer ask the chief complaint (the consult owns it).
+- Shell: `html.pf-opd-immersive` also hides the chrome under the bottom-navbar
+  experiment (OPD-only selector). NOTE for the lab: `pf-collect-immersive` has
+  the same specificity gap under `nav-bottom` on dev — not changed here.
+
+### Decisions / notes
+
+- **Doctor → department:** A's Doctors screen has no explicit department link
+  (room, token prefix, days and fees only), so the desk keeps B's derivation:
+  a doctor belongs to a department through their per-doctor prices, else by
+  matching `DoctorProfile.Department` text to an OPD department name / code.
+  Go-live: add an explicit `departmentId` (QueueJson `doctors{}` or a column).
+- **Permissions:** OPD still reuses lab codes (front desk `create_order` /
+  `register_patient` / `view_order` / `collect_payment`; admin `manage_users` /
+  `manage_billing_config`; pharmacy `manage_inventory` / `create_bill`). New
+  OPD codes were NOT added: seeding them writes `permissions` rows on deploy
+  and the admin console's role editors (prefrontal-admin-ui) would list them
+  with no OPD gate. Add them at go-live (seeder + `opd-permissions.ts` + the
+  admin console).
+- **Consult form resolution** stays C's (`service form ?? department default`,
+  active forms only) — the same rule as A's `forms/resolve`.
+
+### Verification (on the integrated branch)
+
+- mw: unit + integration (throwaway local DB, dropped after); OPD integration
+  suite incl. `OpdIntegrationTests` (one resolver, credit notes, H1/X snapshot,
+  resolver drug search, numbering, notes key, uploads).
+- UI: all OPD specs incl. C's never-run `rx-model`, `rx-editor`,
+  `consult-workspace`; full `nx test lms`; production `nx build lms`.
+- Lab non-regression: nav / route snapshot (gate closed), new-order-with-OPD-hidden,
+  `RequireOpd` coverage (no lab controller carries it).
+- Screenshots: `OpdIntegratedE2EHost` (local Kestrel, fictional clinic, throwaway
+  DB) → `scratchpad/shots/opdint-*` at 1440 light / dark and 390.
+
+## 9. Go-live checklist (remaining)
+
+1. Owner click-through on the integrated branch (desk → vitals → queue →
+   consult → complete → pharmacy) with `pf.opd()`; then merge to dev.
+2. OPD permission codes (seeder, `opd-permissions.ts`, admin console role
+   editor) — replace the reused lab codes.
+3. Explicit doctor → OPD department link (replace the text derivation).
+4. Admin console per-tenant OPD toggle (defaults off) + LMS `SetFeatures`
+   writing only an explicit `opd: true` (§2 open question).
+5. Finance: roll `opd_bills` / `opd_payments` / `opd_refunds` into the Finance
+   hub and day closure (today they are separate from lab bills by design).
+6. Refund UI polish: a credit-note PDF / print; partial refunds at the desk.
+7. Consult: use `pharmacy_drugs.UsualJson` for doctor favourites in the Rx
+   picker and `SiteKind` for the site picker (the data + API are in place).
+8. Waiting-room token screen (`QueueJson.showOnScreen`) — not built.
+9. Out of scope so far: consent, procedure note, referral, IPD admission,
+   certificate ("not built yet" in the complete sheet).
+10. Legacy `opd_consults` / `OpdConsultationsController` retirement (C's
+    workspace supersedes them) in a later cleanup migration.
