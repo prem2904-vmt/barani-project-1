@@ -17,6 +17,23 @@ export function isPrivateUploadPath(url: string | null | undefined): url is stri
   return !!url && url.startsWith('/uploads/') && !/[?&]sig=/.test(url);
 }
 
+/** OPD's own authenticated file endpoints (consult media, a walk-in's
+ *  prescription) — a DIFFERENT url shape from "/uploads/…" (the endpoint
+ *  IS the path, already carrying its own query string), but the SAME rule:
+ *  never a bare `fetch()`, always through the app's authenticated fetcher
+ *  (the X-PF-OPD / auth interceptors only run on HttpClient requests). */
+export function isOpdMediaPath(url: string | null | undefined): url is string {
+  if (!url) return false;
+  const path = url.split('?')[0];
+  return /^\/api\/opd\/consult\/[^/]+\/media\/file$/.test(path)
+    || /^\/api\/opd\/pharmacy\/counter\/[^/]+\/prescription\/file$/.test(path);
+}
+
+/** Any path that must go through the authenticated fetcher — never a bare `fetch()`. */
+export function isAuthedApiFilePath(url: string | null | undefined): url is string {
+  return isPrivateUploadPath(url) || isOpdMediaPath(url);
+}
+
 /** A stored reference to one of OUR uploads, as its "/uploads/…" path. Older
  *  rows (e.g. a tenant logo) may hold the resolved absolute link on the API
  *  host ("https://api…/uploads/…"), which the server now refuses unsigned —

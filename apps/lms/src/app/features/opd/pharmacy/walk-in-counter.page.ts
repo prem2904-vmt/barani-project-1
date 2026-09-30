@@ -7,6 +7,7 @@ import { PatientSearchComponent } from '../../../shared/components/patient-searc
 import type { Patient } from '../../../shared/models/patient.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { labToday } from '../../../shared/utils/lab-clock';
@@ -248,6 +249,7 @@ export class PharmacyWalkInCounterPage {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  private readonly uploads = inject(UploadsService);
   private readonly auth = inject(AuthService);
   private readonly tenant = inject(TenantStateService);
 
@@ -451,11 +453,15 @@ export class PharmacyWalkInCounterPage {
     });
   }
 
+  /** The prescription is served only through the authenticated API (never a
+   *  presigned link): fetch its bytes through UploadsService's authed cache
+   *  and open/download them from a local blob: URL — never window.open of
+   *  the raw API path (no Authorization header would reach it). */
   protected viewRx(): void {
     const id = this.editingId();
     if (!id) return;
     this.api.prescriptionUrl(id).subscribe({
-      next: url => window.open(url, '_blank', 'noopener'),
+      next: url => { void this.uploads.open(url); },
       error: e => this.toast.error(errText(e)),
     });
   }

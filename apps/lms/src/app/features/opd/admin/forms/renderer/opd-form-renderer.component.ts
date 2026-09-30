@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
 import { NgTemplateOutlet } from '@angular/common';
 import { NdDateComponent } from '../../../../../shared/components/nd-date/nd-date.component';
 import { PfSelectOption, SelectComponent } from '../../../../../shared/primitives/select.component';
+import { AuthedMediaDirective } from '../../../shared/authed-media.directive';
 import {
   OpdAnswers, OpdMark, OpdMediaRef, OpdQuestion, OpdSided, Side, YES_NO, allQuestions, computeCalc, conditionMet, isWide,
   normalizeQuestion, normalizeSchema, printRows, typeName,
@@ -41,7 +42,7 @@ const SHAPES: Record<string, string[]> = {
 @Component({
   selector: 'pf-opd-form-renderer',
   standalone: true,
-  imports: [NgTemplateOutlet, NdDateComponent, SelectComponent],
+  imports: [NgTemplateOutlet, NdDateComponent, SelectComponent, AuthedMediaDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (mode() === 'print') {
@@ -201,7 +202,8 @@ const SHAPES: Record<string, string[]> = {
           <span class="ofr-media">
             @for (m of mediaOf(v); track $index) {
               <span class="ofr-shot">
-                @if (m.url && m.kind !== 'video') { <img [src]="m.url" [alt]="m.name"> }
+                @if (m.url && m.kind === 'image') { <img [pfAuthedSrc]="m.url" [alt]="m.name"> }
+                @else if (m.url && m.kind === 'video') { <video [pfAuthedSrc]="m.url" muted playsinline preload="metadata"></video> }
                 <span class="ofr-shot__n">{{ m.name }}</span>
                 @if (live()) {
                   <button type="button" class="ofr-shot__x" (click)="set(q, side, removeAt(v, $index))" [attr.aria-label]="'Remove ' + m.name">
@@ -314,7 +316,7 @@ const SHAPES: Record<string, string[]> = {
     .ofr-media { display: flex; flex-wrap: wrap; gap: 8px; }
     .ofr-shot { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 112px; height: 84px;
       border-radius: 10px; border: 1px solid var(--nd-line); background: color-mix(in srgb, var(--text-primary) 5%, var(--nd-card-bg)); overflow: hidden; font-size: 11px; color: var(--text-secondary); }
-    .ofr-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .ofr-shot img, .ofr-shot video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .ofr-shot__n { position: relative; padding: 0 6px; text-align: center; }
     .ofr-shot--add { border-style: dashed; cursor: pointer; font: inherit; font-size: 11.5px; color: var(--violet-text, #6d28d9); }
     .ofr-shot__x { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--nd-line);
