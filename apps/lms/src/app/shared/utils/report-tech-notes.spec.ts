@@ -175,6 +175,22 @@ describe('technician report notes — Classic (Helvetica)', () => {
     expect(exact(runs, 'confirmed').font).toBe('Helvetica-Oblique');
   });
 
+  it('department notes follow the order the report prints its departments, not the order they were written', () => {
+    // Two sections without a results table (culture / narrative only): their
+    // notes print after the results, in the report's department order.
+    const snap = snapWithNotes();
+    const tn = (snap as Record<string, any>)['techNotes'];
+    tn.departments = [
+      { department: 'Microbiology', note: 'Deptmicro checked.' },
+      { department: 'Biochemistry', note: 'Deptbio __calibrated__ today.' },
+    ];
+    const { runs } = render(snap);
+    const at = (text: string) => runs.map(r => r.text).lastIndexOf(text);
+    expect(at('Deptbio')).toBeGreaterThan(-1);
+    expect(at('Deptbio')).toBeLessThan(at('Deptmicro'));
+    expect(at('Deptmicro')).toBeLessThan(at('Overall note:'));
+  });
+
   it('a single-analyte test keeps its compact row (the note never adds a panel band)', () => {
     const { runs } = render(snapWithNotes());
     expect(runs.some(r => r.text === 'Tshremark')).toBe(true);

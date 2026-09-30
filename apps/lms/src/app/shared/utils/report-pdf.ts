@@ -797,9 +797,16 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
 
   WM_LOGO_URL = template?.logoUrl ?? null;
   TECH_DEPT_NOTES = new Map();
-  for (const d of snap.techNotes?.departments ?? []) {
-    const name = (d.department ?? '').trim();
-    if (name && (d.note ?? '').trim()) TECH_DEPT_NOTES.set(name.toUpperCase(), { name, note: d.note! });
+  // In the order the report prints its departments (the tests' order — the
+  // lab's Sequencing when set), so the notes of sections without a table,
+  // drawn after the results, follow the same sequence; then any others.
+  const deptNotes = (snap.techNotes?.departments ?? [])
+    .map(d => ({ name: (d.department ?? '').trim(), note: (d.note ?? '').trim() ? d.note! : '' }))
+    .filter(d => d.name && d.note);
+  const printOrder = [...new Set((snap.tests ?? []).map(t => (t.department ?? '').trim().toUpperCase()).filter(Boolean))];
+  const rank = (n: string) => { const i = printOrder.indexOf(n.toUpperCase()); return i < 0 ? printOrder.length : i; };
+  for (const d of [...deptNotes].sort((x, y) => rank(x.name) - rank(y.name))) {
+    TECH_DEPT_NOTES.set(d.name.toUpperCase(), d);
   }
   drawLetterhead(doc);
   const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
