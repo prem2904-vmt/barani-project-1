@@ -1,0 +1,162 @@
+<section class="pf-band-page pf-vd">
+  @if (theme.isNewDesign()) {
+    <pf-hero-band [back]="true" backTo="/opd/desk" [customSearch]="true" [contextBar]="true">
+      <div band-search class="nd-ctx pf-ob-ctx">
+        @if (visit(); as v) {
+          <span class="nd-ctx__primary">{{ v.patient.name }}</span>
+          <span class="nd-ctx__chip"><span class="nd-ctx__k">Token</span><span class="nd-num">{{ v.tokenLabel }}</span></span>
+          @if (v.visitNumber) { <span class="nd-ctx__chip pf-ob-hide-phone"><span class="nd-num">{{ v.visitNumber }}</span></span> }
+          <span class="nd-ctx__chip"><span [class]="'pf-ob-status pf-ob-status--' + v.status">{{ statusWord(v.status) }}</span></span>
+        } @else {
+          <span class="nd-ctx__primary">Visit</span>
+        }
+      </div>
+      <ng-container band-actions>
+        <a class="pf-hb-btn pf-hb-btn--ghost press" routerLink="/opd/queue" aria-label="Token queue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h6"/></svg>
+          <span class="pf-ob-hide-phone">Queue</span>
+        </a>
+      </ng-container>
+    </pf-hero-band>
+  } @else {
+    <pf-screen-header eyebrow="OPD" [title]="visit()?.patient?.name ?? 'Visit'" [subtitle]="visit() ? 'Token ' + visit()!.tokenLabel : ''"></pf-screen-header>
+  }
+
+  <div class="pf-band-body pf-band-body--fill">
+    @if (error(); as err) {
+      <div class="nd-card"><div class="nd-empty"><p class="nd-empty__title">This visit could not be opened</p><p class="nd-empty__body">{{ err }}</p>
+        <a class="nd-btn nd-btn--secondary nd-empty__action" routerLink="/opd/desk">Back to the OPD desk</a></div></div>
+    } @else if (!visit()) {
+      <pf-skeleton-detail label="Opening the visit…"></pf-skeleton-detail>
+    } @else {
+    @let v = visit()!;
+    <div class="pf-ob-split">
+      <!-- ══ MAIN: the visit ══ -->
+      <section class="nd-card" aria-label="Visit">
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7h18v12H3zM3 11h18M8 3v4M16 3v4"/></svg>
+          </span>
+          <span class="nd-card__label">Visit</span>
+          <span class="nd-card__spacer"></span>
+          <span class="pf-vd-date nd-num">{{ fmtDate(v.visitDate) }}</span>
+        </header>
+        <div class="nd-card__body pf-vd-body">
+          <div class="pf-vd-token" [class.pf-vd-token--new]="issued()" data-token>
+            <span class="pf-vd-token__k">{{ issued() ? 'Token issued' : 'Token' }}</span>
+            <span class="pf-vd-token__n nd-num">{{ v.tokenLabel }}</span>
+            <span class="pf-vd-token__who">{{ v.doctor.name }}@if (v.doctor.department) { · {{ v.doctor.department }} }</span>
+            @if (issued()) {
+              <span class="pf-vd-token__next">
+                @if (v.status === 'vitals') { Next: the vitals station, then {{ v.doctor.name }}'s queue. }
+                @else if (v.status === 'waiting') { Next: {{ v.doctor.name }}'s queue. }
+                @if (v.labOrder) { Lab tests: go to sample collection. }
+              </span>
+            }
+          </div>
+
+          <ol class="pf-vd-tl" aria-label="Status timeline">
+            @for (s of v.timeline; track s.key) {
+              <li class="pf-vd-tl__step" [attr.data-state]="s.state">
+                <span class="pf-vd-tl__mark" aria-hidden="true">
+                  @if (s.state === 'done') {
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  }
+                </span>
+                <span class="pf-vd-tl__t">{{ s.label }}</span>
+                <span class="pf-vd-tl__at nd-num">{{ s.state === 'skipped' ? 'Skipped' : fmtTime(s.at) }}</span>
+              </li>
+            }
+          </ol>
+
+          <dl class="pf-ob-kv">
+            <dt>Patient</dt><dd>{{ v.patient.name }} <span class="pf-vd-muted nd-num">{{ v.patient.age }}{{ v.patient.sex ? '/' + v.patient.sex.charAt(0) : '' }} · {{ v.patient.mrn ?? '—' }}</span></dd>
+            <dt>Doctor</dt><dd>{{ v.doctor.name }}</dd>
+            @if (v.service) { <dt>Service</dt><dd>{{ v.service.name }}@if (v.isFollowUp) { · follow-up }</dd> }
+            @if (v.purpose) { <dt>Complaint</dt><dd>{{ v.purpose }}</dd> }
+            @if (v.cancelReason) { <dt>Reason</dt><dd>{{ v.cancelReason }}</dd> }
+          </dl>
+
+          @if (vitals(); as vt) {
+            <div class="pf-ob-box" data-box="vitals">
+              <div class="pf-ob-box__row"><span class="pf-ob-box__t">Vitals</span><span class="nd-card__spacer"></span>
+                <span class="pf-vd-muted nd-num">{{ fmtTime(vt.recordedAt) }}@if (vt.recordedByName) { · {{ vt.recordedByName }} }</span></div>
+              <div class="pf-vd-vitals nd-num">
+                @if (vt.bpSys != null) { <span><b>{{ vt.bpSys }}/{{ vt.bpDia }}</b> BP</span> }
+                @if (vt.pulse != null) { <span><b>{{ vt.pulse }}</b> pulse</span> }
+                @if (vt.tempF != null) { <span><b>{{ vt.tempF }}</b> °F</span> }
+                @if (vt.spo2 != null) { <span><b>{{ vt.spo2 }}%</b> SpO₂</span> }
+                @if (vt.respRate != null) { <span><b>{{ vt.respRate }}</b> RR</span> }
+                @if (vt.bmi != null) { <span><b>{{ vt.bmi }}</b> BMI</span> }
+              </div>
+              @if (vt.flags.length) {
+                <div class="pf-vd-flags">@for (f of vt.flags; track f.key) { <span class="nd-chip nd-chip--static"><span class="pf-vd-flagdot" aria-hidden="true"></span>{{ f.label }}</span> }</div>
+              }
+            </div>
+          } @else if (v.status === 'vitals') {
+            <a class="nd-btn nd-btn--secondary pf-vd-link" [routerLink]="['/opd/vitals', v.id]">Take vitals now</a>
+          }
+        </div>
+      </section>
+
+      <!-- ══ SIDE: BILL ══ -->
+      <aside class="nd-card" aria-label="Bill">
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+          </span>
+          <span class="nd-card__label">Bill</span>
+          <span class="nd-card__spacer"></span>
+          @if (v.bill?.invoiceNumber) { <span class="pf-vd-muted nd-num">{{ v.bill!.invoiceNumber }}</span> }
+        </header>
+        <div class="nd-card__body">
+          @if (v.bill; as b) {
+            <div class="pf-ob-lines">
+              @for (l of b.lines; track $index) {
+                <div class="pf-ob-line">
+                  <span class="pf-ob-line__txt"><span class="pf-ob-line__name">{{ l.description }}</span>
+                    @if (l.taxSlab > 0) { <span class="pf-ob-line__meta nd-num">GST {{ l.taxSlab }}%</span> }</span>
+                  <span class="pf-ob-line__amt nd-num">{{ l.unitPrice | inr }}</span>
+                </div>
+              }
+            </div>
+            @if (v.feeOverrideReason) { <p class="pf-vd-muted">Set at the desk: {{ v.feeOverrideReason }}</p> }
+            <div class="pf-vd-sums nd-num">
+              @if (b.tax > 0) { <div><span>GST</span><span>{{ b.tax | inr }}</span></div> }
+              @if (b.roundOff !== 0) { <div><span>Round-off</span><span>{{ b.roundOff | inr }}</span></div> }
+              <div class="pf-vd-sums__total"><span>OPD bill</span><span>{{ b.totalPayable | inr }}</span></div>
+              @for (p of b.payments; track $index) { <div><span>Paid · {{ modeWord(p.mode) }}</span><span>{{ p.amount | inr }}</span></div> }
+              <div><span>Balance</span><span>{{ b.balance | inr }}</span></div>
+            </div>
+          }
+          @if (v.labOrder; as lab) {
+            <div class="pf-ob-box" data-box="lab">
+              <div class="pf-ob-box__row"><span class="pf-ob-box__t">Lab order</span><span class="nd-card__spacer"></span><span class="nd-num pf-vd-muted">{{ lab.orderNumber }}</span></div>
+              <p class="pf-ob-box__p">An ordinary lab order with its own lab bill{{ lab.invoiceNumber ? ' (' + lab.invoiceNumber + ')' : '' }}: {{ lab.tests }} {{ lab.tests === 1 ? 'test' : 'tests' }}, {{ lab.payable | inr }} · paid {{ lab.paid | inr }}@if (lab.balance > 0) { · <strong>{{ lab.balance | inr }} due at the lab counter</strong> }.</p>
+            </div>
+          }
+        </div>
+        <div class="pf-ob-foot">
+          <div class="pf-ob-foot__two">
+            <button type="button" class="nd-btn nd-btn--secondary" [pfBusy]="printing()" (click)="print()">Print token slip</button>
+            @if (open()) {
+              <button type="button" class="nd-btn nd-btn--secondary" [disabled]="busy()" (click)="reassign()">Change doctor</button>
+            } @else {
+              <a class="nd-btn nd-btn--secondary" routerLink="/opd/desk">Today's visits</a>
+            }
+          </div>
+          @if (issued() || !open()) {
+            <button type="button" class="nd-btn nd-btn--primary" (click)="nextPatient()">Next patient</button>
+          }
+          @if (open()) {
+            <div class="pf-vd-danger">
+              <button type="button" class="nd-btn nd-btn--tertiary" [disabled]="busy()" (click)="noShow()">Did not come</button>
+              <button type="button" class="nd-btn nd-btn--danger" [disabled]="busy()" (click)="cancel()">Cancel visit</button>
+            </div>
+          }
+        </div>
+      </aside>
+    </div>
+    }
+  </div>
+</section>

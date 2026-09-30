@@ -1,20 +1,20 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { OpdStubPageComponent } from '../shared/opd-stub-page.component';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute } from '@angular/router';
+import { map } from 'rxjs';
+import { OpdVitalsWorkspaceComponent } from './vitals-workspace.component';
 
-/**
- * OPD FOUNDATION STUB — owned by Agent B (vitals). Routed and gated already
- * (features/opd/opd.routes.ts); replace this component's body, keep the
- * class name + file path (the route imports them).
- */
+/** OPD → Vitals for one visit (`/opd/vitals/:visitId`) — AGENT B. The same
+ *  station workspace with that visit open (desk / visit screen deep link). */
 @Component({
   selector: 'pf-opd-vitals-capture',
   standalone: true,
-  imports: [OpdStubPageComponent],
+  imports: [OpdVitalsWorkspaceComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<pf-opd-stub-page [title]="title" [subtitle]="subtitle" [plan]="plan"></pf-opd-stub-page>`,
+  template: `<pf-opd-vitals-workspace [visitId]="visitId()"></pf-opd-vitals-workspace>`,
+  styles: [':host { display: block; height: 100%; min-height: 0; }'],
 })
 export class OpdVitalsCapturePage {
-  readonly title = "Vitals";
-  readonly subtitle = "Capture vitals for a visit.";
-  readonly plan: string[] = ["BP, pulse, SpO2, temperature, respiratory rate", "Weight, height, BMI, GRBS, pain score", "Sends the patient to the doctor queue"];
+  private readonly route = inject(ActivatedRoute);
+  readonly visitId = toSignal(this.route.paramMap.pipe(map(p => p.get('visitId'))), { initialValue: null });
 }
