@@ -5,6 +5,7 @@ import { AccountsService, StoredAccount } from './accounts.service';
 import { BranchRef, CurrentUser } from './mock-user';
 import { SessionScopeService } from './session-scope.service';
 import { purgeSupabaseIndexedDb, purgeSupabaseLocalStorage } from './supabase-storage';
+import { opdPreviewHeaders } from '../../features/opd/shared/opd-gate';
 
 interface MeResponse {
   id: string;
@@ -28,6 +29,11 @@ interface MeResponse {
   registrationId?: string;
   /** Caller has a DoctorProfile — unlocks the OPD Consult Room. */
   isDoctor?: boolean;
+  /** OPD dark build: the server admits this user's OPD calls (tenant explicitly
+   *  entitled OR the request carried X-PF-OPD: 1 after pf.opd()). See OpdGateService. */
+  opdAccess?: boolean;
+  /** The tenant EXPLICITLY has OPD on — visible without the console flag. */
+  opdEntitled?: boolean;
 }
 
 /**
@@ -357,7 +363,7 @@ export class AuthService {
   private async profileIdFor(token: string): Promise<string | null> {
     try {
       const res = await fetch(`${environment.apiUrl}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+        headers: { Authorization: `Bearer ${token}`, ...opdPreviewHeaders() }, cache: 'no-store',
       });
       if (!res.ok) return null;
       const json = await res.json().catch(() => null);
@@ -992,7 +998,8 @@ export class AuthService {
       // stuck on "Signing in…" whenever DevTools was closed (DevTools auto-
       // disables the cache, which is why it worked with inspect open).
       res = await fetch(`${environment.apiUrl}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        // opdPreviewHeaders: /me.opdAccess reflects pf.opd() (OPD dark build).
+        headers: { Authorization: `Bearer ${token}`, ...opdPreviewHeaders() },
         cache: 'no-store'
       });
     } catch {
@@ -1042,7 +1049,10 @@ export class AuthService {
       hasPin: data.hasPin ?? false,
       signatureDataUrl: data.signatureDataUrl ?? undefined,
       registrationId: data.registrationId ?? undefined,
-      isDoctor: data.isDoctor ?? false
+      isDoctor: data.isDoctor ?? false,
+      // OPD dark build — older servers omit both → OPD stays hidden.
+      opdAccess: data.opdAccess ?? false,
+      opdEntitled: data.opdEntitled ?? false
     };
     this.applyProfile(user, { fromCache: false });
     this.cacheProfile(user);

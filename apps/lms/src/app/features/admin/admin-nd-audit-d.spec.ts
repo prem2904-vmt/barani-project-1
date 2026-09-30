@@ -56,7 +56,7 @@ const renderModules = () => renderBandPage(AdminModulesComponent, {
 describe('ND audit D — Modules', () => {
   it('module + feature toggles are slate switches (role=switch); the On/Off filter is a neutral kit segment', () => {
     const p = renderModules();
-    p.cmp.state.set({ opd: { enabled: true, features: {} } });
+    p.cmp.state.set({ ipd: { enabled: true, features: {} } }); // (OPD is dark → not listed)
     p.f.detectChanges();
     const sw = p.el.querySelectorAll('.pf-mod .nd-toggle[role="switch"]');
     expect(sw.length).toBeGreaterThan(3);

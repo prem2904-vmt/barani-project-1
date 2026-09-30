@@ -12,6 +12,7 @@ import { downloadCsv } from '../../shared/utils/export-csv';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
 import { ThemeService } from '../../core/services/theme.service';
+import { OpdGateService } from '../opd/shared/opd-gate.service';
 import { bandFilter } from '../../shared/utils/band-search';
 import { SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
 import { labDaysAgo } from '../../shared/utils/lab-clock';
@@ -356,12 +357,14 @@ export class FinanceHubComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
 
+  /** OPD dark build: the OPD line appears only when the OPD gate is open. */
+  private readonly opdVisible = inject(OpdGateService).visible();
   readonly modules: { key: Module; label: string }[] = [
     { key: 'overall', label: 'Overall' },
     { key: 'lab', label: 'Lab' },
     { key: 'credit', label: 'Credit Wallet' },
     { key: 'ipd', label: 'IPD' },
-    { key: 'opd', label: 'OPD' },
+    ...(this.opdVisible ? [{ key: 'opd' as Module, label: 'OPD' }] : []),
     { key: 'pharmacy', label: 'Pharmacy' },
   ];
   /** Band pill: product-line switch (lines without billing are marked "soon"). */
@@ -370,7 +373,7 @@ export class FinanceHubComponent implements OnInit {
     { value: 'lab', label: 'Lab' },
     { value: 'credit', label: 'Credit Wallet' },
     { value: 'ipd', label: 'IPD', hint: 'IPD finance — coming soon' },
-    { value: 'opd', label: 'OPD', hint: 'OPD finance — coming soon' },
+    ...(this.opdVisible ? [{ value: 'opd' as Module, label: 'OPD', hint: 'OPD finance — coming soon' }] : []),
     { value: 'pharmacy', label: 'Pharmacy', hint: 'Pharmacy finance — coming soon' },
   ];
   /** Band pill: quick ranges. 0 = a custom from/to. */

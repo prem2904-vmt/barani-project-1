@@ -468,6 +468,10 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
          html.pf-collect-immersive; bottom-nav hides itself in its own stylesheet. */
       :host-context(html.pf-collect-immersive) .pf-chrome { display: none !important; }
       :host-context(html.pf-collect-immersive) .shell-main { padding-bottom: 0 !important; }
+      /* OPD dark build: the full-screen consult (features/opd/consult) toggles
+         html.pf-opd-immersive while open — same chrome hide as collection. */
+      :host-context(html.pf-opd-immersive) .pf-chrome { display: none !important; }
+      :host-context(html.pf-opd-immersive) .shell-main { padding-bottom: 0 !important; }
 
       /* iPad band (641–1279px): the bottom-nav docks as a vertical
          icon-only rail on the left edge (see bottom-nav.component).
@@ -616,6 +620,11 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
         backdrop-filter: blur(18px) saturate(1.3);
         -webkit-backdrop-filter: blur(18px) saturate(1.3);
       }
+      /* OPD dark build: the full-screen consult owns the viewport even under
+         the bottom-navbar experiment (the rule above out-specifies the plain
+         immersive hide). Only ever matches while html.pf-opd-immersive is set. */
+      :host-context(html.pf-opd-immersive.design-new.nav-bottom) .pf-chrome { display: none !important; }
+
       /* Phones: the home-indicator space goes UNDER the icons (not split
          above/below), and the ends keep clear of the rounded screen corners. */
       :host-context(html.device-phone.design-new.nav-bottom) .pf-chrome {

@@ -1,6 +1,7 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, Injector, inject, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
+import { OpdGateService } from '../../features/opd/shared/opd-gate.service';
 import {
   ModuleId, ModulesState, catalogDefaults, defaultModuleEnabled,
 } from '../modules/module-catalog';
@@ -34,6 +35,7 @@ interface ModulesWire {
 @Injectable({ providedIn: 'root' })
 export class TenantEntitlementsService {
   private readonly api = inject(ApiService);
+  private readonly injector = inject(Injector);
 
   /** null until loaded — callers fall back to catalog defaults meanwhile. */
   private readonly _modules = signal<ModulesState | null>(null);
@@ -45,6 +47,10 @@ export class TenantEntitlementsService {
 
   /** Master switch for a module. Defaults to the catalog default until loaded. */
   moduleOn(id: ModuleId): boolean {
+    // OPD dark build: OPD is on ONLY through the OPD gate (explicit tenant
+    // entitlement or the owner's console preview) — never through the stored
+    // map or a catalog default. Resolved lazily (the gate reads AuthService).
+    if (id === 'opd') return this.injector.get(OpdGateService).visible();
     const state = this._modules();
     if (!state) return defaultModuleEnabled(id);
     return state[id]?.enabled ?? defaultModuleEnabled(id);

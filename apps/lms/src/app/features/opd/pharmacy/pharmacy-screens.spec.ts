@@ -1,0 +1,223 @@
+import { signal, type Type } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
+import { of } from 'rxjs';
+import { vi } from 'vitest';
+import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { NavBackService } from '../../../core/services/nav-back.service';
+import { TenantStateService } from '../../../core/services/tenant-state.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { PharmacyApi, type RxDetail } from './pharmacy.api';
+import { PharmacyRxQueuePage } from './rx-queue.page';
+import { PharmacyDispensePage } from './dispense.page';
+import { PharmacyWalkInCounterPage } from './walk-in-counter.page';
+import { PharmacySettingsPage } from './pharmacy-settings.page';
+import { PharmacySectionsComponent, PHARMACY_SECTIONS } from './pharmacy-sections.component';
+
+/**
+ * Pharmacy screens (ND pattern): band + main card + side card, ONE primary per
+ * state, no native select / datalist / confirm, SVG icons only; the dispense
+ * cart and the counter cart price exactly like the server (BillMath).
+ */
+const DRUG_AMC = { id: 'amc', name: 'Amoclav-PF 625', generic: 'Amoxicillin 500 mg + Clavulanic acid 125 mg', strength: '625 mg', form: 'tab', unit: 'tab', schedule: 'H1', hsnCode: '3004', taxSlab: 12, defaultMrp: 22.4, onHand: 46 } as const;
+const DRUG_ALT = { ...DRUG_AMC, id: 'alt', name: 'Clinic Amoclav 625', onHand: 20 };
+const RX: RxDetail = {
+  visitId: 'v1', visitNumber: 'OPD-2609-0142', token: 7,
+  patient: { id: 'p1', name: 'Kavitha Ramesh', meta: '42/F · AA0112', phone: '9841022000' },
+  doctor: { id: 'd1', name: 'Dr. Ananya Rao' }, doctorRegNo: 'TNMC 77201', completedAt: '2026-09-30T05:22:00Z', consultStatus: 'completed',
+  settings: { batchPick: 'earliest_expiry', walkInBillEditable: true, enforceSchedules: true }, dispenses: [],
+  lines: [
+    {
+      rxLineId: 'r1', drugId: 'amc', drugName: 'Amoclav-PF 625', form: 'tab', dose: 1, site: null, schedule: { type: 'times', pat: [1, 0, 1] },
+      durationDays: 5, food: 'After', quantity: 10, dispensed: 0, remaining: 10, dispenseStatus: 'pending', notes: null,
+      drug: DRUG_AMC as never, substitutes: [DRUG_ALT as never],
+      batches: [{ id: 'b-soon', batchNo: 'AC-SOON', expiryDate: '2099-01-28', mrp: 22.4, qtyOnHand: 6 }, { id: 'b-late', batchNo: 'AC-LATE', expiryDate: '2099-12-28', mrp: 22.4, qtyOnHand: 40 }],
+    },
+  ],
+};
+
+function apiMock(over: Partial<Record<keyof PharmacyApi, unknown>> = {}) {
+  return {
+    rxQueue: vi.fn(() => of([{ visitId: 'v1', visitNumber: 'OPD-2609-0142', token: 7, patientId: 'p1', patientName: 'Kavitha Ramesh', patientMeta: '42/F', doctorUserId: 'd1', doctorName: 'Dr. Ananya Rao', completedAt: new Date().toISOString(), lines: 3, pending: 3, status: 'pending' }])),
+    dispenses: vi.fn(() => of([])),
+    rx: vi.fn(() => of(RX)),
+    dispenseRx: vi.fn(() => of({ id: 'x1', kind: 'rx', number: 'PD-2609-00001', status: 'completed', createdAt: '', editable: false,
+      lines: [{ id: 'l1', rxLineId: 'r1', drugId: 'amc', drugName: 'Amoclav-PF 625', form: 'tab', schedule: 'H1', batchId: 'b-soon', batchNo: 'AC-SOON', expiryDate: '2099-01-28', qty: 10, mrp: 22.4, total: 224, returnedQty: 0 }],
+      bill: { id: 'bill', invoiceNumber: 'PH-2609-00001', subTotal: 200, discount: 0, totalTaxable: 200, totalCgst: 12, totalSgst: 12, totalTax: 24, roundOff: 0, totalPayable: 224, totalPaid: 224, balance: 0, status: 'paid', payments: [] } })),
+    settings: vi.fn(() => of({ batchPick: 'earliest_expiry', walkInBillEditable: true, enforceSchedules: true })),
+    saveSettings: vi.fn((s: unknown) => of(s)),
+    batches: vi.fn(() => of([])),
+    searchDrugs: vi.fn(() => of([])),
+    drugMaster: vi.fn(() => of([])),
+    suppliers: vi.fn(() => of([])),
+    ...over,
+  };
+}
+
+function render<T>(cmp: Type<T>, api = apiMock(), dialogOk = true) {
+  const dialog = { confirm: vi.fn(async () => dialogOk), prompt: vi.fn(async () => null) };
+  const toast = { success: vi.fn(), error: vi.fn() };
+  TestBed.resetTestingModule();
+  TestBed.configureTestingModule({
+    imports: [cmp],
+    providers: [
+      provideRouter([]),
+      { provide: PharmacyApi, useValue: api },
+      { provide: ApiService, useValue: { get: vi.fn(() => of([])) } },
+      { provide: ToastService, useValue: toast },
+      { provide: DialogService, useValue: dialog },
+      { provide: AuthService, useValue: { user: () => ({ id: 'u1', tenantName: 'Micro World Clinic' }) } },
+      { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World Clinic' }) } },
+      { provide: NavBackService, useValue: { showBack: () => true, back: vi.fn(), backTo: vi.fn() } },
+      { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => true } },
+      { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ visitId: 'v1' }), queryParamMap: convertToParamMap({}) } } },
+    ],
+  });
+  const f = TestBed.createComponent(cmp);
+  f.detectChanges();
+  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, api, dialog, toast };
+}
+
+const primaries = (el: HTMLElement) => el.querySelectorAll('.nd-btn--primary, .pf-hb-btn--primary');
+const noNative = (el: HTMLElement) => {
+  expect(el.querySelectorAll('select, datalist').length).toBe(0);
+  expect(el.innerHTML).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u); // no emoji icons
+};
+const flush = () => new Promise(r => setTimeout(r, 0));
+
+describe('Pharmacy screens', () => {
+  it('sections: one neutral segmented nav, the current section marked', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ imports: [PharmacySectionsComponent], providers: [provideRouter([])] });
+    const f = TestBed.createComponent(PharmacySectionsComponent);
+    f.componentRef.setInput('active', 'stock');
+    f.detectChanges();
+    const links = (f.nativeElement as HTMLElement).querySelectorAll('a.nd-seg__item');
+    expect(links.length).toBe(PHARMACY_SECTIONS.length);
+    const cur = (f.nativeElement as HTMLElement).querySelector('[aria-current="page"]');
+    expect(cur?.textContent?.trim()).toBe('Stock');
+  });
+
+  it('Rx queue lists waiting prescriptions and opens one', async () => {
+    const { el, f, api } = render(PharmacyRxQueuePage);
+    await f.whenStable(); f.detectChanges();
+    expect(api.rxQueue).toHaveBeenCalled();
+    expect(el.textContent).toContain('Kavitha Ramesh');
+    expect(el.textContent).toContain('Waiting to dispense');
+    const router = TestBed.inject(Router);
+    const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    (el.querySelector('.ph-list .ph-row') as HTMLButtonElement).click();
+    expect(nav).toHaveBeenCalledWith(['/opd/pharmacy/dispense', 'v1']);
+    expect(primaries(el).length).toBe(0);
+    noNative(el);
+  });
+
+  it('dispense: the Rx arrives with its quantity + earliest batch, prices like the server, ONE primary', async () => {
+    const { el, f, c, api } = render(PharmacyDispensePage);
+    await f.whenStable(); f.detectChanges();
+    expect(el.textContent).toContain('AC-SOON');           // earliest expiry first
+    expect(el.textContent).toContain('AC-LATE');           // 10 = 6 + 4 split
+    expect(c.totals().payable).toBe(224);                  // 10 × 22.40 incl. 12% GST
+    expect(el.textContent).toContain('Take payment ₹224');
+    expect(el.textContent).toContain('covered by this prescription');
+    expect(el.textContent).toContain('H1 register');
+    expect(primaries(el).length).toBe(1);
+    noNative(el);
+
+    // Partial: 4 now, the rest later.
+    c.setQty(RX.lines[0], '4');
+    f.detectChanges();
+    expect(el.textContent).toContain('6 later');
+
+    // Pay → the server call carries the line + payment; the side card becomes the instructions.
+    c.give(true);
+    await flush(); f.detectChanges();
+    expect(api.dispenseRx).toHaveBeenCalledWith('v1', expect.objectContaining({
+      lines: [{ rxLineId: 'r1', drugId: 'amc', qty: 4, batchId: null }],
+      payment: expect.objectContaining({ mode: 'upi' }),
+    }));
+    expect(el.textContent).toContain('Instructions');
+    expect(el.textContent).toContain('Take 1 tablet');
+    expect(el.textContent).toContain('Send on WhatsApp');
+    const wa = el.querySelector('a[href^="https://wa.me/919841022000"]');
+    expect(wa).toBeTruthy();
+    expect(primaries(el).length).toBe(1);
+  });
+
+  it('dispense: skipping every line disables payment; a substitute is offered from the same generic', async () => {
+    const { el, f, c } = render(PharmacyDispensePage);
+    await f.whenStable(); f.detectChanges();
+    expect(c.subOptions(RX.lines[0]).map((o: { label: string }) => o.label)).toEqual(['Amoclav-PF 625 (prescribed)', 'Clinic Amoclav 625']);
+    c.toggleSkip(RX.lines[0]);
+    f.detectChanges();
+    expect(c.canGive()).toBe(false);
+    expect(primaries(el).length).toBe(0);
+  });
+
+  it('dispense: pharmacist-pick mode needs a named batch per line', async () => {
+    const api = apiMock({ rx: vi.fn(() => of({ ...RX, settings: { ...RX.settings, batchPick: 'pharmacist' } })) });
+    const { f, c } = render(PharmacyDispensePage, api);
+    await f.whenStable(); f.detectChanges();
+    expect(c.canGive()).toBe(false);
+    c.setBatch(RX.lines[0], 'b-late');
+    expect(c.canGive()).toBe(true);
+    expect(c.takes(RX.lines[0])).toEqual([expect.objectContaining({ batchNo: 'AC-LATE', qty: 10 })]);
+  });
+
+  it('counter: OTC sells freely; an H1 drug blocks payment until the prescription + buyer are entered', async () => {
+    const { el, f, c } = render(PharmacyWalkInCounterPage);
+    await f.whenStable(); f.detectChanges();
+    const batches = [{ id: 'b1', batchNo: 'AZ1', expiryDate: '2099-01-28', mrp: 23.8, qtyOnHand: 30 }];
+    c.items.set([{ drug: { ...DRUG_AMC, id: 'azi', name: 'Azithro-PF 500', rowId: 'azi', catalogKey: 'k', origin: 'master', isMaster: true, aliases: [], isActive: true }, qty: 3, batchId: null, batches }]);
+    f.detectChanges();
+    expect(c.gate()).toMatch(/prescription-only/);
+    expect(c.ready()).toBe(false);
+    expect(primaries(el).length).toBe(0);
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('prescription-only');
+    c.prescriber.set('Dr. Menon');
+    f.detectChanges();
+    expect(c.gate()).toMatch(/customer/);
+    c.name.set('Anand');
+    f.detectChanges();
+    expect(c.gate()).toBeNull();
+    expect(c.ready()).toBe(true);
+    expect(c.totals().payable).toBe(71); // 3 × 23.80 = 71.40 → 71
+    expect(primaries(el).length).toBe(1);
+    noNative(el);
+  });
+
+  it('counter: save parks an open bill, then payment completes it', async () => {
+    const view = { id: 's1', kind: 'walk_in', status: 'draft', editable: true, createdAt: '', lines: [], bill: { totalPayable: 42, totalPaid: 0, balance: 42 } };
+    const api = apiMock({
+      counterCreate: vi.fn(() => of(view)),
+      counterPay: vi.fn(() => of({ ...view, status: 'completed', editable: false, bill: { ...view.bill, totalPaid: 42, invoiceNumber: 'PH-1' } })),
+    });
+    const { f, c } = render(PharmacyWalkInCounterPage, api);
+    await f.whenStable();
+    c.items.set([{ drug: { id: 'ors', name: 'Hydra-PF ORS', form: 'sachet', unit: 'sachet', schedule: 'none', taxSlab: 12, rowId: 'ors', catalogKey: 'k', origin: 'master', isMaster: true, aliases: [], isActive: true }, qty: 2, batchId: null, batches: [{ id: 'b', batchNo: 'OR1', expiryDate: '2099-01-01', mrp: 21, qtyOnHand: 30 }] }]);
+    c.pay();
+    await flush(); f.detectChanges();
+    expect(api.counterCreate).toHaveBeenCalledWith(expect.objectContaining({ lines: [{ drugId: 'ors', qty: 2, batchId: null }] }));
+    expect(api.counterPay).toHaveBeenCalledWith('s1', { mode: 'upi', amount: 42 });
+    expect(c.paid()).toBeTruthy();
+    expect((f.nativeElement as HTMLElement).textContent).toContain('New sale');
+  });
+
+  it('settings: switching Schedule enforcement OFF asks first; Save is the one primary once changed', async () => {
+    const { el, f, c, dialog, api } = render(PharmacySettingsPage, apiMock(), false);
+    await f.whenStable(); f.detectChanges();
+    expect(primaries(el).length).toBe(0); // nothing changed yet
+    await c.toggleEnforce();
+    expect(dialog.confirm).toHaveBeenCalled();
+    expect(c.cfg().enforceSchedules).toBe(true); // declined → unchanged
+    c.set('batchPick', 'pharmacist');
+    f.detectChanges();
+    expect(primaries(el).length).toBe(1);
+    c.save();
+    expect(api.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ batchPick: 'pharmacist', enforceSchedules: true }));
+    noNative(el);
+  });
+});

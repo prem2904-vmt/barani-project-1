@@ -33,6 +33,11 @@
 :host-context(html.cap-native.pf-chat-immersive) .pf-bottom-nav,
 :host-context(html.device-touch.pf-chat-immersive) .pf-bottom-nav { display: none !important; }
 
+/* OPD dark build: the full-screen consult owns the viewport (html.pf-opd-immersive). */
+:host-context(html.pf-opd-immersive) .pf-bottom-nav,
+:host-context(html.cap-native.pf-opd-immersive) .pf-bottom-nav,
+:host-context(html.device-touch.pf-opd-immersive) .pf-bottom-nav { display: none !important; }
+
 /* Hidden state for Lock Screen: hide the bottom nav entirely. */
 .pf-bottom-nav--hidden,
 :host-context(html) .pf-bottom-nav.pf-bottom-nav--hidden,

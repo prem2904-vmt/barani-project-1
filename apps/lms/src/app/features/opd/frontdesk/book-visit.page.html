@@ -1,0 +1,411 @@
+<section class="pf-band-page pf-ov">
+  @if (theme.isNewDesign()) {
+    <pf-hero-band [back]="true" backTo="/opd/desk" [customSearch]="true">
+      <div band-search class="pf-ob-pill">
+        <pf-patient-search placeholder="Search patient by name, MRN, phone or ABHA" (picked)="pickPatient($event)"></pf-patient-search>
+      </div>
+      <ng-container band-tools>
+        <a class="nd-btn nd-btn--quiet pf-ov-register" routerLink="/frontdesk/patients/new" aria-label="Register a new patient">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="pf-ob-hide-phone">Register</span>
+        </a>
+      </ng-container>
+      <ng-container band-actions>
+        <a class="pf-hb-btn pf-hb-btn--ghost press" routerLink="/opd/queue" aria-label="Token queue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h6"/></svg>
+          <span class="pf-ob-hide-phone">Queue</span>
+        </a>
+      </ng-container>
+    </pf-hero-band>
+  } @else {
+    <pf-screen-header eyebrow="OPD" title="New visit" subtitle="Patient, doctor, purpose, tests, vitals."></pf-screen-header>
+    <div class="pf-ov-classic-search">
+      <pf-patient-search placeholder="Search patient by name, MRN, phone or ABHA" (picked)="pickPatient($event)"></pf-patient-search>
+    </div>
+  }
+
+  <div class="pf-band-body pf-band-body--fill">
+    @if (loadError(); as err) {
+      <div class="nd-card"><div class="nd-empty"><p class="nd-empty__title">The OPD desk could not load</p><p class="nd-empty__body">{{ err }}</p></div></div>
+    } @else {
+    <div class="pf-ob-split">
+      <!-- ══ MAIN: NEW VISIT — five aligned steps ══ -->
+      <section class="nd-card pf-ov-main" aria-label="New visit">
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2v2M5 2v2M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></svg>
+          </span>
+          <span class="nd-card__label">New visit</span>
+          <span class="nd-card__spacer"></span>
+          <span class="pf-ov-date nd-num">OPD · {{ today() }}</span>
+        </header>
+
+        <div class="nd-card__body pf-ov-body">
+          @if (!data()) {
+            <pf-skeleton-rows [rows]="6" label="Loading the OPD desk…"></pf-skeleton-rows>
+          } @else {
+          <!-- 1 · Patient -->
+          <div class="pf-ob-step" data-step="patient">
+            <span class="pf-ob-step__n">1</span>
+            <div class="pf-ob-step__head">
+              <h2 class="pf-ob-step__t">Patient</h2>
+              <span class="pf-ob-step__hint">Found with the search above</span>
+            </div>
+            <div class="pf-ob-step__body">
+              @if (patientLoading()) {
+                <pf-skeleton-rows [rows]="1" label="Opening the patient…"></pf-skeleton-rows>
+              } @else if (patient(); as p) {
+                <div class="pf-ov-patient" aria-live="polite">
+                  <span class="pf-ob-initials" aria-hidden="true">{{ initials(patientName(p)) }}</span>
+                  <span class="pf-ov-patient__txt">
+                    <span class="pf-ov-patient__name">{{ patientName(p) }}</span>
+                    <span class="pf-ov-patient__meta nd-num">
+                      @for (b of patientBits(p); track b) { <span>{{ b }}</span> }
+                    </span>
+                  </span>
+                  @if (lastVisitText(); as lv) {
+                    <span class="pf-ov-patient__last pf-ob-hide-phone"><span class="pf-ov-k">Last visit</span>{{ lv }}</span>
+                  }
+                  <button type="button" class="nd-btn nd-btn--secondary pf-ov-change" (click)="clearPatient()">Change</button>
+                </div>
+              } @else {
+                <div class="pf-ov-empty">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <span>Search the patient in the bar above, or <a routerLink="/frontdesk/patients/new">register a new patient</a>.</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- 2 · Doctor or department -->
+          <div class="pf-ob-step" data-step="doctor">
+            <span class="pf-ob-step__n">2</span>
+            <div class="pf-ob-step__head">
+              <h2 class="pf-ob-step__t">Doctor or department</h2>
+              <div class="nd-seg pf-ov-seg" role="radiogroup" aria-label="Pick by">
+                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === 'doctor'" (click)="setMode('doctor')">By doctor</button>
+                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === 'department'" (click)="setMode('department')">By department</button>
+              </div>
+            </div>
+            <div class="pf-ob-step__body">
+              @if (mode() === 'doctor') {
+                <div class="pf-ob-tiles" role="radiogroup" aria-label="Doctor">
+                  @for (d of doctors(); track d.id) {
+                    <button type="button" class="pf-ob-tile" role="radio" [attr.aria-checked]="doctorId() === d.id" (click)="pickDoctor(d)">
+                      <span class="pf-ob-tile__top">
+                        <span class="pf-ob-initials" aria-hidden="true">{{ initials(d.name) }}</span>
+                        <span class="pf-ob-tile__txt">
+                          <span class="pf-ob-tile__name">{{ d.name }}</span>
+                          <span class="pf-ob-tile__meta">{{ d.department || 'OPD' }} · token {{ d.tokenPrefix }}</span>
+                        </span>
+                        <span class="pf-ob-radio" aria-hidden="true"></span>
+                      </span>
+                      <span class="pf-ob-tile__foot">
+                        <span class="pf-ob-dot" [class]="'pf-ob-dot ' + waitClass(d)" aria-hidden="true"></span>
+                        <span class="nd-num">{{ waitText(d) }}</span>
+                        @if (d.fee != null) { <span class="pf-ob-tile__price nd-num">{{ d.fee | inr }}</span> }
+                      </span>
+                    </button>
+                  } @empty {
+                    <p class="pf-ov-muted">No doctors are set up for OPD yet. An admin adds them under OPD settings.</p>
+                  }
+                </div>
+              } @else {
+                <div class="pf-ob-tiles" role="radiogroup" aria-label="Department">
+                  @for (dep of departments(); track dep.id) {
+                    <button type="button" class="pf-ob-tile" role="radio" [attr.aria-checked]="departmentId() === dep.id" (click)="pickDepartment(dep)">
+                      <span class="pf-ob-tile__top">
+                        <span class="pf-ob-initials" aria-hidden="true">{{ dep.code }}</span>
+                        <span class="pf-ob-tile__txt">
+                          <span class="pf-ob-tile__name">{{ dep.name }}</span>
+                          <span class="pf-ob-tile__meta">{{ deptDoctorsText(dep) }}</span>
+                        </span>
+                        <span class="pf-ob-radio" aria-hidden="true"></span>
+                      </span>
+                      <span class="pf-ob-tile__foot">
+                        <span [class]="'pf-ob-dot ' + waitClass(dep)" aria-hidden="true"></span>
+                        <span class="nd-num">{{ waitText(dep) }}</span>
+                      </span>
+                    </button>
+                  } @empty {
+                    <p class="pf-ov-muted">No OPD departments yet.</p>
+                  }
+                </div>
+                @if (department() && doctor()) {
+                  <p class="pf-ov-muted">Goes to <strong>{{ doctor()!.name }}</strong> — the shortest queue in {{ department()!.name }}.</p>
+                }
+              }
+            </div>
+          </div>
+
+          <!-- 3 · Visit purpose -->
+          <div class="pf-ob-step" data-step="purpose">
+            <span class="pf-ob-step__n">3</span>
+            <div class="pf-ob-step__head">
+              <h2 class="pf-ob-step__t">Visit purpose</h2>
+              <span class="pf-ob-step__hint">Price follows the doctor</span>
+            </div>
+            <div class="pf-ob-step__body">
+              @if (!doctor()) {
+                <p class="pf-ov-muted">Pick a doctor or department to see the services and fees.</p>
+              } @else if (quoting() && !quote()) {
+                <pf-skeleton-rows [rows]="2" label="Loading fees…"></pf-skeleton-rows>
+              } @else {
+                <div class="pf-ov-choices" role="radiogroup" aria-label="Visit purpose">
+                  @for (s of services(); track s.serviceId ?? 'fee') {
+                    <button type="button" class="pf-ob-choice" role="radio" [attr.aria-checked]="serviceId() === s.serviceId" (click)="pickService(s)">
+                      <span class="pf-ob-radio" aria-hidden="true"></span>
+                      <span class="pf-ob-choice__txt">
+                        <span class="pf-ob-choice__name">{{ s.name }}@if (s.isFollowUp) { (follow-up) }</span>
+                        <span class="pf-ob-choice__meta">{{ serviceMeta(s) }}</span>
+                      </span>
+                      <span class="pf-ob-choice__price nd-num">
+                        @if (s.isFollowUp && s.price !== s.quoted) { <span class="pf-ob-strike">{{ s.price | inr }}</span> }
+                        {{ s.quoted | inr }}
+                      </span>
+                    </button>
+                  }
+                </div>
+                <label class="nd-field pf-ov-purpose">
+                  <span class="nd-field__lbl">Complaint / reason <span class="pf-ov-muted">· optional, goes to the doctor</span></span>
+                  <input class="nd-input" type="text" maxlength="500" [value]="purpose()" (input)="purpose.set($any($event.target).value)"
+                         placeholder="e.g. Nasal block for 10 days" />
+                </label>
+              }
+            </div>
+          </div>
+
+          <!-- 4 · Lab tests (workflow) -->
+          @if (workflow().labTestsAtDesk) {
+          <div class="pf-ob-step" data-step="lab">
+            <span class="pf-ob-step__n">4</span>
+            <div class="pf-ob-step__head">
+              <h2 class="pf-ob-step__t">Lab tests</h2>
+              <span class="pf-ob-tag">Optional</span>
+              <span class="pf-ob-step__hint">A normal lab order · go to Collect after payment</span>
+            </div>
+            <div class="pf-ob-step__body">
+              <div class="pf-ov-labsearch">
+                <svg class="pf-ov-labsearch__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input class="nd-input pf-ov-labsearch__in" type="text" autocomplete="off" spellcheck="false"
+                       aria-label="Search lab tests" placeholder="Search tests — name, code or panel (LFT, CBC, TFT)"
+                       role="combobox" aria-controls="pf-ov-labres" [attr.aria-expanded]="labResults().length > 0"
+                       [value]="labQuery()" (input)="labQuery.set($any($event.target).value)" (keydown)="onLabKey($event)" />
+              </div>
+              @if (labQuery().trim()) {
+                <ul class="pf-ov-labres" id="pf-ov-labres" role="listbox" aria-label="Matching tests">
+                  @for (t of labResults(); track t.id) {
+                    <li>
+                      <button type="button" class="nd-row pf-ov-labrow" role="option" aria-selected="false" (click)="addLab(t)">
+                        @if (testCode(t)) { <span class="nd-row__code nd-num">{{ testCode(t) }}</span> }
+                        <span class="nd-row__name">{{ t.name }}</span>
+                        <span class="nd-row__value nd-num">{{ t.price | inr }}</span>
+                      </button>
+                    </li>
+                  } @empty {
+                    <li class="pf-ov-muted">No test matches “{{ labQuery().trim() }}”.</li>
+                  }
+                </ul>
+              }
+              @if (labTests().length) {
+                <div class="pf-ov-labchips">
+                  @for (l of labTests(); track l.id) {
+                    <span class="nd-row nd-row--in pf-ov-labchip">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" class="pf-ov-check"><path d="M20 6 9 17l-5-5"/></svg>
+                      <span class="nd-row__name">{{ l.name }}</span>
+                      <span class="nd-row__value nd-num">{{ l.price | inr }}</span>
+                      <button type="button" class="nd-btn nd-btn--icon pf-ov-x" (click)="removeLab(l.id)" [attr.aria-label]="'Remove ' + l.name">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                      </button>
+                    </span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+          }
+
+          <!-- 5 · Vitals (workflow) -->
+          @if (workflow().vitals !== 'off') {
+          <div class="pf-ob-step" data-step="vitals">
+            <span class="pf-ob-step__n">{{ vitalsStep() }}</span>
+            <div class="pf-ob-step__head">
+              <h2 class="pf-ob-step__t">Vitals</h2>
+              @if (workflow().vitals === 'station') {
+                <button type="button" class="nd-toggle pf-ov-toggle" role="switch" [attr.aria-checked]="vitalsHere()" (click)="vitalsHere.set(!vitalsHere())">
+                  <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
+                  Take vitals here
+                </button>
+              } @else {
+                <span class="pf-ob-step__hint">Taken at the desk (OPD workflow)</span>
+              }
+            </div>
+            <div class="pf-ob-step__body">
+              @if (takeVitalsHere()) {
+                <pf-opd-vitals-form [compact]="true" [withNote]="false"></pf-opd-vitals-form>
+                @if (workflow().vitals === 'station') {
+                  <p class="pf-ov-muted">Vitals taken here — the vitals station is skipped for this visit.</p>
+                }
+              } @else {
+                <p class="pf-ov-muted">The workflow sends {{ objectPronoun() }} to the <strong>vitals station</strong> after payment. Switch on to take them at the desk instead.</p>
+              }
+            </div>
+          </div>
+          }
+          }
+        </div>
+      </section>
+
+      <!-- ══ SIDE: BILLING — follows every choice ══ -->
+      <aside class="nd-card pf-ov-bill" aria-label="Billing">
+        <header class="nd-card__head">
+          <span class="nd-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+          </span>
+          <span class="nd-card__label">{{ stage() === 'pay' ? 'Payment' : 'Billing' }}</span>
+          <span class="nd-card__spacer"></span>
+          @if (labTests().length && stage() === 'build') {
+            <button type="button" class="nd-toggle nd-toggle--urgent" role="switch" [attr.aria-checked]="urgent()" (click)="urgent.set(!urgent())"
+                    title="Priority of the lab order">
+              <span class="nd-toggle__track"><span class="nd-toggle__knob"></span></span>
+              Urgent
+            </button>
+          }
+        </header>
+
+        <div class="nd-card__body">
+          @if (stage() === 'build') {
+            <div class="pf-ob-lines">
+              <div class="pf-ob-lines__head">
+                <span class="nd-num">{{ (service() ? 1 : 0) + labTests().length }} {{ ((service() ? 1 : 0) + labTests().length) === 1 ? 'item' : 'items' }}</span>
+                @if (labTests().length) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="clearLabs()">Clear tests</button> }
+              </div>
+              @if (service(); as s) {
+                <div class="pf-ob-line" data-line="consult">
+                  <span class="pf-ob-line__txt">
+                    <span class="pf-ob-line__name">{{ lineName() }}</span>
+                    <span class="pf-ob-line__meta">{{ lineMeta() }}</span>
+                  </span>
+                  <span class="pf-ob-line__amt nd-num">{{ preview().opd.subTotal | inr }}</span>
+                </div>
+              }
+              @if (labTests().length) {
+                <span class="pf-ob-group">Lab tests · their own lab bill</span>
+                @for (l of labTests(); track l.id) {
+                  <div class="pf-ob-line" data-line="lab">
+                    <span class="pf-ob-line__txt">
+                      <span class="pf-ob-line__name">{{ l.name }}</span>
+                      <span class="pf-ob-line__meta">Lab test</span>
+                    </span>
+                    <span class="pf-ob-line__amt nd-num">{{ l.price | inr }}</span>
+                    <button type="button" class="nd-btn nd-btn--icon pf-ov-x" (click)="removeLab(l.id)" [attr.aria-label]="'Remove ' + l.name">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                  </div>
+                }
+              }
+              @if (!service() && !labTests().length) {
+                <p class="pf-ov-muted pf-ov-billempty">The bill fills in as you pick the doctor and the visit purpose.</p>
+              }
+            </div>
+
+            @if (service(); as s) {
+              <div class="pf-ob-box" data-box="fee">
+                <div class="pf-ob-box__row">
+                  <span class="pf-ob-box__t">{{ s.isFollowUp ? 'Follow-up fee' : 'Consultation fee' }}</span>
+                  <span class="nd-card__spacer"></span>
+                  @if (override() != null && override() !== s.quoted) {
+                    <span class="nd-num pf-ov-fee">{{ override()! | inr }}</span>
+                    <span class="pf-ob-strike nd-num">rule {{ s.quoted | inr }}</span>
+                    <button type="button" class="nd-btn nd-btn--tertiary" (click)="clearOverride()">Use rule</button>
+                  } @else {
+                    <span class="pf-ov-muted nd-num">rule {{ s.quoted | inr }}</span>
+                    @if (!overrideOpen()) { <button type="button" class="nd-btn nd-btn--tertiary" (click)="openOverride()">Override</button> }
+                  }
+                </div>
+                @if (overrideOpen()) {
+                  <div class="pf-ov-override">
+                    <label class="nd-field">
+                      <span class="nd-field__lbl">Exact amount (₹)</span>
+                      <input class="nd-input nd-num" type="text" inputmode="decimal" [class.nd-input--error]="overrideInvalid()"
+                             [attr.aria-invalid]="overrideInvalid()" [value]="overrideRaw()" (input)="onOverride($any($event.target).value)" />
+                    </label>
+                    <label class="nd-field">
+                      <span class="nd-field__lbl">Reason <span class="pf-ov-muted">· on the bill</span></span>
+                      <input class="nd-input" type="text" maxlength="300" [value]="overrideReason()" (input)="overrideReason.set($any($event.target).value)" placeholder="e.g. Senior citizen" />
+                    </label>
+                  </div>
+                }
+                <p class="pf-ob-box__p">
+                  @if (s.isFollowUp) {
+                    Today is a follow-up with {{ doctor()?.name }}. The desk can set the exact amount; it is noted on the bill.
+                  } @else if (s.followUpWithinDays) {
+                    If {{ pronoun() === 'they' ? 'the patient returns' : pronoun() + ' returns' }} to {{ doctor()?.name }} within {{ s.followUpWithinDays }} days, the follow-up fee is {{ (s.followUpFee ?? 0) | inr }}.
+                  } @else {
+                    The desk can set the exact amount; it is noted on the bill.
+                  }
+                </p>
+              </div>
+            }
+
+            <div class="pf-ob-note">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <span>
+                @if (payFirst()) { <strong>Pay at booking</strong> (OPD workflow). The token is issued after payment, {{ nextStepText() }} }
+                @else { <strong>Pay after the consult</strong> (OPD workflow). The token is issued now, {{ nextStepText() }} }
+              </span>
+            </div>
+          } @else {
+            <pf-inline-payment-panel [amount]="preview().total" [allowLater]="false" [externalFooter]="true"
+                                     [busy]="submitting()" [patientPhone]="patient()?.phone" (confirm)="onPaid($event)"></pf-inline-payment-panel>
+          }
+        </div>
+
+        @if (preview().lab) {
+          <div class="pf-ob-sum">
+            <div class="pf-ob-sum__row"><span>Consultation · OPD bill</span><span class="nd-num">{{ preview().opd.payable | inr }}</span></div>
+            <div class="pf-ob-sum__row"><span>Lab tests · lab bill</span><span class="nd-num">{{ preview().lab!.payable | inr }}</span></div>
+          </div>
+        }
+        <div class="pf-ob-total">
+          <span class="pf-ob-total__k">Total</span>
+          <span class="pf-ob-total__v nd-num" data-total>{{ preview().total | inr }}</span>
+        </div>
+        <div class="pf-ob-foot">
+          @if (stage() === 'build') {
+            @if (!phone()) {
+            <button type="button" class="nd-btn" [class.nd-btn--primary]="ready()" [class.nd-btn--secondary]="!ready()"
+                    [pfBusy]="submitting()" [disabled]="submitting()" (click)="continueToPayment()" data-cta>
+              {{ ctaLabel() }}
+            </button>
+            }
+            <span class="pf-ob-saved">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Draft saves automatically
+              @if (patient() || doctorId()) { · <button type="button" class="nd-btn nd-btn--tertiary pf-ov-discard" (click)="discardDraft()">Discard</button> }
+            </span>
+          } @else {
+            <div class="pf-ob-foot__two">
+              <button type="button" class="nd-btn nd-btn--secondary" [disabled]="submitting()" (click)="backToBuild()">Back</button>
+              <button type="button" class="nd-btn" data-cta
+                      [class.nd-btn--primary]="!payPanel()?.confirmDisabled()" [class.nd-btn--secondary]="payPanel()?.confirmDisabled()"
+                      [disabled]="payPanel()?.confirmDisabled()" [pfBusy]="submitting()" (click)="payPanel()?.emit()">
+                {{ payPanel()?.confirmLabel() ?? 'Confirm' }}
+              </button>
+            </div>
+          }
+        </div>
+      </aside>
+    </div>
+    }
+  </div>
+
+  <!-- Phones: the billing card's summary + its ONE primary dock above the navbar. -->
+  @if (phone() && stage() === 'build' && data()) {
+    <div class="nd-bottombar pf-ov-bottombar">
+      <span class="nd-bottombar__info nd-num">Total {{ preview().total | inr }}</span>
+      <button type="button" class="nd-btn" [class.nd-btn--primary]="ready()" [class.nd-btn--secondary]="!ready()"
+              [pfBusy]="submitting()" [disabled]="submitting()" (click)="continueToPayment()" data-cta>{{ ctaLabel() }}</button>
+    </div>
+  }
+</section>

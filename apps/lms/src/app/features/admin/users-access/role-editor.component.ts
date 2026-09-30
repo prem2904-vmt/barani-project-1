@@ -16,6 +16,8 @@ import { USER_FORM_STYLES } from './user-form.styles';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
+import { OPD_PERMISSION_CODES } from '../../opd/shared/opd-permissions';
 
 /** A permission joined with its plain-language catalog entry. */
 interface PermRow {
@@ -128,17 +130,20 @@ interface PermGroupView {
                     @if (nameError()) { <p class="pf-uf-err">{{ nameError() }}</p> }
                   </label>
                   <!-- Role type (OPD build): 'Doctor' reveals the doctor-details
-                       section in Create User for anyone given this role. -->
-                  <div class="nd-field">
-                    <span class="nd-field__lbl">Role type</span>
-                    <span class="nd-seg re-type" role="radiogroup" aria-label="Role type">
-                      @for (o of roleTypeOptions; track o.value) {
-                        <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="roleType() === o.value"
-                                (click)="roleType.set($any(o.value))">{{ o.label }}</button>
-                      }
-                    </span>
-                    <p class="nd-field__hint">Choose “Doctor” for a clinician role — users given it will capture registration &amp; specialisation.</p>
-                  </div>
+                       section in Create User. OPD dark build: shown only while the
+                       OPD gate is open (a new role is 'general' otherwise, as today). -->
+                  @if (opdGate.visible()) {
+                    <div class="nd-field">
+                      <span class="nd-field__lbl">Role type</span>
+                      <span class="nd-seg re-type" role="radiogroup" aria-label="Role type">
+                        @for (o of roleTypeOptions; track o.value) {
+                          <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="roleType() === o.value"
+                                  (click)="roleType.set($any(o.value))">{{ o.label }}</button>
+                        }
+                      </span>
+                      <p class="nd-field__hint">Choose “Doctor” for a clinician role — users given it will capture registration &amp; specialisation.</p>
+                    </div>
+                  }
                 </div>
               </section>
             } @else {
@@ -315,6 +320,8 @@ export class RoleEditorComponent implements OnInit {
   private readonly navBack = inject(NavBackService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly theme = inject(ThemeService);
+  /** OPD dark build: Doctor role type + OPD permission codes only when OPD is visible. */
+  protected readonly opdGate = inject(OpdGateService);
 
   private readonly _editing = signal<Role | null>(null);
   private readonly _permissions = signal<Permission[]>([]);
@@ -412,7 +419,12 @@ export class RoleEditorComponent implements OnInit {
       .map(g => RoleEditorComponent.CHIP_LABELS[g.key] ?? g.label);
   });
 
-  readonly grantedCount = computed(() => this._grantedIds().size);
+  /** Granted among the LISTED permissions (hidden OPD codes stay granted —
+   *  saves send every granted id — but are not counted while OPD is dark). */
+  readonly grantedCount = computed(() => {
+    const g = this._grantedIds();
+    return this._permissions().filter(p => g.has(p.id)).length;
+  });
 
   ngOnInit() {
     const backHandler = () => {
@@ -431,7 +443,7 @@ export class RoleEditorComponent implements OnInit {
     this.destroyRef.onDestroy(() => this.recordHold.cancel());
 
     this.api.get<Permission[]>('/api/permissions').subscribe({
-      next: l => { this._permissions.set(l ?? []); landed(); },
+      next: l => { this._permissions.set((l ?? []).filter(p => this.opdGate.visible() || !OPD_PERMISSION_CODES.has(p.code))); landed(); },
       error: () => landed(),
     });
 

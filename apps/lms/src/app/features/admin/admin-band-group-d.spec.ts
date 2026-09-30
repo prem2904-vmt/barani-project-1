@@ -283,8 +283,10 @@ describe('Admin band — Modules', () => {
     expect(all).toBeGreaterThan(3);
     p.type('pharmacy');
     expect(titles(p.el)).toEqual(['Pharmacy']);
-    p.type('prescriptions'); // an OPD feature
-    expect(titles(p.el)).toEqual(['OPD (Outpatient)']);
+    p.type('discharge'); // an IPD feature
+    expect(titles(p.el)).toEqual(['IPD (Inpatient)']);
+    p.type('prescriptions'); // an OPD feature — OPD is dark (not listed) unless the OPD gate is open
+    expect(titles(p.el)).toEqual([]);
     p.type('zzz');
     expect(titles(p.el)).toEqual([]);
     expect(p.el.querySelector('.pf-band-empty')).not.toBeNull();

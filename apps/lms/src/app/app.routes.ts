@@ -10,6 +10,7 @@ import { routeGuards } from './core/auth/route-guards';
 import { ADMIN_PERMS, TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
+import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
 // KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
@@ -136,20 +137,9 @@ export const appRoutes: Route[] = [
       // "coming soon" hub listing that module's planned config, so the module-
       // first admin shows the full roadmap. adminGuard (not moduleGuard) so the
       // placeholder is visible regardless of entitlement.
-      {
-        path: 'admin/opd', canActivate: [adminGuard], data: { moduleId: 'opd' },
-        loadComponent: () => import('./features/opd/admin/opd-admin.component').then(m => m.OpdAdminComponent)
-      },
-      {
-        // OPD → Doctors: per-doctor consultation-fee grid.
-        path: 'admin/opd/doctors', canActivate: [adminGuard],
-        loadComponent: () => import('./features/opd/admin/doctors-admin.component').then(m => m.DoctorsAdminComponent)
-      },
-      {
-        // OPD → Settings: the follow-up policy.
-        path: 'admin/opd/settings', canActivate: [adminGuard],
-        loadComponent: () => import('./features/opd/admin/opd-settings.component').then(m => m.OpdSettingsComponent)
-      },
+      // OPD admin (OPD dark build) — every route adminGuard + opdGuard; defined
+      // ONCE in features/opd/opd.routes.ts (feature agents never edit here).
+      ...OPD_ADMIN_ROUTES,
       {
         path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
@@ -378,12 +368,8 @@ export const appRoutes: Route[] = [
             canActivate: [...routeGuards('/frontdesk/order')],
             loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
           },
-          {
-            // OPD consult screen (separate from lab order-create). Reached only
-            // via the module-scope fork; dormant until OPD is enabled + scoped.
-            path: 'consult',
-            loadComponent: () => import('./features/opd/consult-page/consult-page.component').then(m => m.ConsultPageComponent)
-          },
+          // Legacy OPD desk consult page — OPD-gated (OPD dark build).
+          ...OPD_FRONTDESK_CHILD_ROUTES,
           {
             path: 'billing',
             redirectTo: 'order'
@@ -510,17 +496,9 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/lab/culture-workbench/culture-workbench.component').then(m => m.CultureWorkbenchComponent)
       },
 
-      // OPD Consult Room — the doctor's day (token queue + room). Access is
-      // profile-based (auth.me.isDoctor) — the backend Forbids non-doctors,
-      // so the route carries no permission guard.
-      {
-        path: 'doctor',
-        loadComponent: () => import('./features/opd/doctor/doctor-queue.component').then(m => m.DoctorQueueComponent)
-      },
-      {
-        path: 'doctor/consult/:id',
-        loadComponent: () => import('./features/opd/doctor/consult-room.component').then(m => m.ConsultRoomComponent)
-      },
+      // OPD (OPD dark build): every OPD work-area route incl. the legacy doctor
+      // Consult Room, each behind opdGuard — see features/opd/opd.routes.ts.
+      ...OPD_SHELL_ROUTES,
 
       // Critical results — the NABL acknowledgement register (lab + pathologist
       // + quality). Reads: enter_result / validate_result / view_audit_log.
@@ -560,12 +538,7 @@ export const appRoutes: Route[] = [
       // gated purely on tenant entitlement. When a module is off the guard
       // bounces to landing; when on, its "coming soon" shell renders until the
       // real screens ship. Each supplies its catalog id via route data.
-      {
-        path: 'opd',
-        canActivate: [moduleGuard('opd')],
-        data: { moduleId: 'opd' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
+      // (OPD's /opd lives in OPD_SHELL_ROUTES above — gated by the OPD gate.)
       {
         path: 'ipd',
         canActivate: [moduleGuard('ipd')],
