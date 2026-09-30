@@ -3,6 +3,11 @@ const path = require('path');
 const labelPrinter = require('./printer');
 const calls = require('./calls');
 const chatNotify = require('./chat-notify');
+// Kiosk-style full screen: opens full screen, Esc (renderer-decided) leaves,
+// F11 / Ctrl+Cmd+F / avatar menu re-enter. See fullscreen.js.
+const fullscreen = require('./fullscreen');
+// Desktop notifications: settings, bell alerts, badge, login item, wake-up.
+const notify = require('./notify');
 // Lab analyzer connector (serial / TCP / folder → LMS). Core is plain Node
 // under ./instruments/core; this host just wires it to IPC + app lifecycle.
 const instruments = require('./instruments/host-electron');
@@ -53,13 +58,23 @@ if (!gotSingleInstanceLock) app.quit();
 let mainWindow;
 // Latest pending Web-Bluetooth chooser callback (see select-bluetooth-device).
 let bluetoothCallback = null;
+// Only the FIRST window of a login-item launch starts hidden in the tray; a
+// window re-created later (macOS dock click) is always shown.
+let firstWindow = true;
 
 function createWindow() {
+  // Auto-started at login → stay in the tray / dock, and do NOT go full screen
+  // yet (macOS would pop a full-screen Space). It enters full screen on its
+  // first show instead (tray / dock / notification click) — see fullscreen.js.
+  const startHidden = firstWindow && notify.launchedHidden();
+  firstWindow = false;
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 768,
     minHeight: 600,
+    // Opens full screen on every launch (owner) — see fullscreen.js.
+    ...fullscreen.windowOptions({ hidden: startHidden }),
     webPreferences: {
       // Sandbox the renderer — Angular code never gets Node access.
       nodeIntegration: false,
@@ -112,9 +127,11 @@ function createWindow() {
   mainWindow.loadURL(url);
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    // Auto-started at login → stay in the tray / dock until opened.
+    if (!startHidden) mainWindow.show();
     if (isDev) mainWindow.webContents.openDevTools();
   });
+  fullscreen.attach(mainWindow, { hidden: startHidden });
 
   // External links open in the user's default browser, not in
   // the Electron window — keeps OAuth / docs / nudges out of
@@ -135,10 +152,12 @@ function createWindow() {
   mainWindow.on('close', (e) => {
     if (calls.isQuitting()) return;
     e.preventDefault();
-    mainWindow.hide();
+    // macOS: leaves native full screen first (no black Space left behind).
+    fullscreen.hide(mainWindow);
   });
 
   calls.attach(mainWindow);
+  notify.attach(mainWindow);
 }
 
 // ── Label printer (USB) IPC — the desktop counterpart to the iPad's BLE
@@ -146,8 +165,11 @@ function createWindow() {
 //    Detonger/Dothantech printer over USB. ────────────────────────────────
 // Chat notifications with inline Reply (macOS) — see chat-notify.js.
 chatNotify.register(() => mainWindow);
+notify.register(() => mainWindow);
 // Analyzer connectors: IPC for the Instruments page (pair / status / listen).
 instruments.register(() => mainWindow);
+// Full screen: query / set from the main window only; changes pushed back.
+fullscreen.register(() => mainWindow);
 
 ipcMain.handle('printer:status', async () => labelPrinter.status());
 ipcMain.handle('printer:print', async (_e, payload) => labelPrinter.print(payload));
@@ -226,6 +248,7 @@ app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   createWindow();
   calls.createTray(() => mainWindow);
+  notify.start();
   // Paired analyzers start with the app and keep running in the tray.
   instruments.start();
 

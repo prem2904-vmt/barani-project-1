@@ -539,6 +539,29 @@
         </button>
         }
 
+        @if (desktopNotify.active) {
+        <!-- Desktop app: notification switches (calls / messages / alerts /
+               sound / open at login). Menu stays open so they read as settings. -->
+        <div class="pf-profile-divider"></div>
+        <p class="pf-profile-eyebrow">Desktop notifications</p>
+        @for (it of desktopItems; track it.key) {
+        @if (!it.loginOnly || desktopNotify.loginSupported()) {
+        <button type="button" class="pf-profile-item press" role="switch"
+          [attr.aria-checked]="desktopNotify.settings()[it.key]"
+          (click)="desktopNotify.set(it.key, !desktopNotify.settings()[it.key])">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            @for (d of it.paths; track $index) { <path [attr.d]="d" /> }
+          </svg>
+          <span class="flex-1 text-left">{{ it.label }}</span>
+          <span class="pf-dm-pill" [class.pf-dm-pill--on]="desktopNotify.settings()[it.key]">
+            {{ desktopNotify.settings()[it.key] ? 'On' : 'Off' }}
+          </span>
+        </button>
+        }
+        }
+        }
+
         <div class="pf-profile-divider"></div>
 
         <!-- Multi-account (shared lab machines): tapping a profile leaves this
@@ -617,6 +640,18 @@
           <span>My signature</span>
         </button>
 
+        @if (desktopWindow.available && !desktopWindow.isFullScreen()) {
+        <!-- Desktop app, windowed: back to kiosk full screen (Esc leaves it). -->
+        <button type="button" class="pf-profile-item press" (click)="enterFullScreen()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+          </svg>
+          <span class="flex-1">Full screen</span>
+          <span class="pf-kbd-hint">{{ fullScreenKey }}</span>
+        </button>
+        }
+
         @if (hasPin()) {
         <button type="button" class="pf-profile-item press" (click)="lockNow()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -642,6 +677,13 @@
       </div>
       }
     </div>
+
+    @if (desktopWindow.showClock()) {
+    <!-- Desktop app, full screen: the OS clock is hidden, so the bar ends
+         with a Windows-taskbar-style clock (time over dd/mm/yyyy, IST,
+         minute ticks). Windowed / web / iPad: never. -->
+    <pf-desktop-clock />
+    }
   </div><!-- /right cluster -->
 </div>
 

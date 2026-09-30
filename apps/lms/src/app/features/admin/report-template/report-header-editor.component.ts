@@ -1325,7 +1325,12 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   }
 
   onKey(ev: KeyboardEvent) {
-    if (ev.key === 'Escape') { this.select(null); return; }
+    if (ev.key === 'Escape') {
+      // A deselect uses the Esc (desktop full screen stays — desktop-fullscreen-esc.ts).
+      if (this.selected()) ev.preventDefault();
+      this.select(null);
+      return;
+    }
     const dirs: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const d = dirs[ev.key];
     if (!d || !this.selected()) return;

@@ -89,6 +89,21 @@ export class ChatNotifyService implements OnDestroy {
   }
 
   /**
+   * Desktop app: a native chat notification (inline Reply on macOS). The
+   * caller (ChatService, via decideChatAlert) has already decided it should
+   * show; returns false when the bridge is missing so the caller can fall back
+   * to the in-app pop-up. No title flashing — the desktop title is fixed.
+   */
+  notifyDesktop(title: string, body: string, conversationId: string): boolean {
+    const desktop = electronChatNotify();
+    if (!desktop) return false;
+    try {
+      desktop.show({ conversationId, title, body: body.length > 140 ? body.slice(0, 140) + '…' : body });
+      return true;
+    } catch { return false; }
+  }
+
+  /**
    * OS-level notification for a BUSINESS event (bell catalog types), not chat.
    * This is the desktop/browser delivery rail: in Electron the Notification
    * API renders through macOS Notification Center / Windows toasts natively,

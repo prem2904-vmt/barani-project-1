@@ -1,3 +1,4 @@
+import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -71,6 +72,8 @@ import {
 import { RouteAccessCtx } from "../../core/auth/route-access";
 import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
 import { pickLanding } from "../../core/auth/landing.guard";
+import { DesktopWindowService } from "../../core/services/desktop-window.service";
+import { DesktopClockComponent } from "./desktop-clock.component";
 
 @Component({
   selector: "pf-top-strip",
@@ -82,6 +85,7 @@ import { pickLanding } from "../../core/auth/landing.guard";
     NotificationBellComponent,
     PresenceAvatarComponent,
     ZoomSourceDirective,
+    DesktopClockComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./top-strip.component.html",
@@ -105,6 +109,20 @@ export class TopStripComponent implements OnInit, OnDestroy {
     return !!id && this.draftShelf.items().findIndex((d) => d.id === id) >= 3;
   });
   protected readonly designMode = inject(DesignModeService);
+  /** Desktop app: full-screen clock on the bar + "Full screen" menu item. */
+  protected readonly desktopWindow = inject(DesktopWindowService);
+  /** macOS writes the shortcut its own way. */
+  protected readonly fullScreenKey =
+    typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent)
+      ? "⌃⌘F"
+      : "F11";
+  enterFullScreen(): void {
+    this.closeProfile();
+    void this.desktopWindow.setFullScreen(true);
+  }
+  /** Desktop app: notification switches in the avatar menu. */
+  protected readonly desktopNotify = inject(DesktopNotifyService);
+  protected readonly desktopItems = DESKTOP_NOTIFY_ITEMS;
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);
   private readonly auth = inject(AuthService);

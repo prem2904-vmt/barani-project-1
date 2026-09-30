@@ -44,7 +44,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
     @if (openOrder(); as o) {
       <!-- ── ORDER (zoomed in from its row) ─────────────────────────── -->
       <section class="pf-lo-detail" [pfZoomTarget]="[o.id]" aria-label="Order details"
-               (keydown.escape)="close()">
+               (keydown.escape)="close(); $event.preventDefault()">
         <header class="pf-lo-detail__head">
           <button type="button" class="nd-btn nd-btn--icon pf-lo-detail__back" (click)="close()"
                   [attr.aria-label]="detailId() ? 'Back' : 'Back to orders'" [title]="detailId() ? 'Back' : 'Back to orders'">

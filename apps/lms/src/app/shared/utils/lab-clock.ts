@@ -7,7 +7,8 @@
  */
 
 export const LAB_TIME_ZONE = 'Asia/Kolkata';
-const IST_OFFSET_MS = 330 * 60_000;
+/** IST = UTC+05:30, no DST. Exported for the desktop top-strip clock. */
+export const IST_OFFSET_MS = 330 * 60_000;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 

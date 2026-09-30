@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -9,6 +9,7 @@ import { canonicalNotificationType } from '../../utils/notification-type';
 import { CriticalResultsService } from '../../../core/services/critical-results.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../models/api-response.model';
+import { DesktopNotifyService } from '../../../core/services/desktop-notify.service';
 
 type TypeTone = 'rose' | 'amber' | 'emerald' | 'violet' | 'sky';
 
@@ -318,6 +319,19 @@ export class NotificationBellComponent implements OnInit {
     return n > 99 ? '99+' : n.toString();
   });
 
+  constructor() {
+    // Desktop app: unread bell rows → dock / taskbar badge (0 when the bell
+    // goes away, i.e. sign-out).
+    const desktop = inject(DesktopNotifyService);
+    if (desktop.active) {
+      effect(() => {
+        const n = this.unreadCount();
+        untracked(() => desktop.setBellUnread(n));
+      });
+      inject(DestroyRef).onDestroy(() => desktop.setBellUnread(0));
+    }
+  }
+
   ngOnInit(): void { this.load(); }
 
   load(): void {
@@ -337,6 +351,22 @@ export class NotificationBellComponent implements OnInit {
   @HostListener('window:pf-open-bell')
   onOpenRequest() {
     if (!this._open()) { this._open.set(true); this.load(); }
+  }
+
+  /** Desktop app: a click on a native bell notification → open that event's
+   *  screen (same routing as tapping the row) and mark it read; no dedicated
+   *  screen → open the bell. One bell instance handles it. */
+  @HostListener('window:pf-open-notification', ['$event'])
+  onOpenNotification(ev: Event) {
+    ev.stopImmediatePropagation();
+    const d = (ev as CustomEvent<{ type: string; referenceType: string | null; referenceId: string | null }>).detail
+      ?? { type: '', referenceType: null, referenceId: null };
+    const row = this._items().find(n => !n.isRead && (n.referenceId ?? null) === d.referenceId
+      && canonicalNotificationType(n.type) === canonicalNotificationType(d.type));
+    const link = notificationRoute(d.type, d.referenceType, d.referenceId, this.auth.hasPermission('validate_result'));
+    if (row) this.markRead(row);
+    if (link) this.router.navigate(link.commands, link.queryParams ? { queryParams: link.queryParams } : {});
+    else this.onOpenRequest();
   }
 
   /** Live badge: ChatService broadcasts this when a BusinessNotification
