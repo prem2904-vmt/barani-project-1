@@ -480,6 +480,29 @@ interface AutoAssignConfig {
       </section>
       }
 
+      @if (showSec('report')) {
+      <!-- Technician notes on the report (per branch, like the other
+           result-entry switches): the bench writes rich-text notes that print
+           under a test, a profile, a department section or the whole report. -->
+      <section class="nd-card pf-ls__card" data-testid="ls-tech-notes">
+        <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Technician notes on report</h3><span class="nd-card__spacer"></span>
+          <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
+                  aria-label="Technician notes on report" (click)="setTechReportNotes(!techReportNotes())">
+            <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+          </button>
+        </div>
+        <div class="pf-ls__cardbody">
+          <p class="pf-ls__hint">
+            When ON, technicians entering results can add a note that <strong>prints on the final report</strong> (and an amended final; never on a preliminary / partial release) —
+            under a test (also each test inside a profile), under a profile, at the end of a department section,
+            or for the whole report. Notes can be <strong>bold</strong>, <em>italic</em>, underlined, or bulleted /
+            numbered lists, and stay editable until the test is validated (after that, through Edit result).
+            The validating pathologist sees every note on the validation screen. Turning it OFF hides the notes on result entry; notes already written still print.
+          </p>
+        </div>
+      </section>
+      }
+
       @if (showSec('report') && waSettings()) {
       <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender
            number + token are platform config on the server. -->
@@ -918,6 +941,8 @@ export class LabSettingsComponent implements OnInit {
     { value: 'report', label: 'Block at report', desc: "Dispatch is allowed, but the report can't be shared until the bill is fully paid." },
   ];
   protected readonly requireValidation = signal(false);
+  /** Technician notes on the report (per branch, off by default). */
+  protected readonly techReportNotes = signal(false);
   protected readonly showPaymentsDue = signal(true);
   /** The SINGLE code that prints on a specimen label. A tube label can't fit
    *  more than one, so this is a mutually-exclusive choice. */
@@ -986,6 +1011,16 @@ export class LabSettingsComponent implements OnInit {
     this.api.patch('/api/tenants/branch-lab-config', { requireValidationForAllResults: v }).pipe(this.tracked()).subscribe({
       next: () => this.toasts.success(v ? 'All results now require validation' : 'Direct-flow tests auto-validate again'),
       error: e => { this.requireValidation.set(!v); this.toasts.error(ApiError.from(e).message); }
+    });
+  }
+  setTechReportNotes(v: boolean) {
+    this.techReportNotes.set(v);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { techReportNotes: v }).pipe(this.tracked()).subscribe({
+      next: cfg => {
+        if (cfg) this.labCfg.update(cfg);
+        this.toasts.success(v ? 'Technicians can now add notes that print on the report' : 'Technician report notes turned off — saved notes still print');
+      },
+      error: e => { this.techReportNotes.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
   setShowPaymentsDue(v: boolean) {
@@ -1084,6 +1119,7 @@ export class LabSettingsComponent implements OnInit {
         this.paymentGateStage.set(c?.paymentGateStage ?? (c?.requireBillBeforeCollection ? 'dispatch' : 'none'));
         this.labelCodeMode.set(c?.labelCodeMode === 'both' ? 'barcode' : (c?.labelCodeMode ?? 'barcode'));
         this.requireValidation.set(c?.requireValidationForAllResults === true);
+        this.techReportNotes.set(c?.techReportNotes === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
         this.autoAssignValidatorsEnabled.set(c?.autoAssignValidatorsEnabled === true);
         this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);

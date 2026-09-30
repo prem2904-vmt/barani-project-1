@@ -12,6 +12,7 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
+import { ReportSequencingEditorComponent } from './report-sequencing-editor.component';
 import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
@@ -27,7 +28,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 
-type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
+type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer';
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -44,6 +45,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     SelectComponent,
     TouchButtonComponent,
     ReportColumnsEditorComponent,
+    ReportSequencingEditorComponent,
     HeroBandComponent,
     ReportHeaderEditorComponent,
   ],
@@ -505,6 +507,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
               </pf-report-columns-editor>
             }
 
+            <!-- ══ SEQUENCING — department + test print order ══ -->
+            @case ('sequence') {
+              <pf-report-sequencing-editor [template]="tpl()"
+                (metadataChange)="patch({ metadata: $event })"
+                (previewTests)="seqPreviewTests.set($event)"></pf-report-sequencing-editor>
+            }
+
           }
         </div>
 
@@ -870,6 +879,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'patient',    label: 'Patient strip', desc: 'Which patient fields print, arranged how, with the date format' },
     { value: 'columns',    label: 'Table columns', desc: 'Per-department table columns & widths' },
     { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments' },
+    { value: 'sequence',   label: 'Sequencing',    desc: 'The order departments and tests print in' },
     { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
   ];
   /** The same sections as the band pill's tabs (new design). The
@@ -1124,6 +1134,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   // Live columns being edited in the Columns tab + their department, so the
   // preview can apply them to that department's sample tests before save.
   private readonly editedCols = signal<ReportColumn[]>([]);
+  /** Sequencing tab: a sample order from the lab's own departments + tests. */
+  readonly seqPreviewTests = signal<Array<Record<string, unknown>>>([]);
+  /** Entering / leaving Sequencing swaps the preview's sample order. */
+  private readonly onSequenceTab = computed(() => this._tab() === 'sequence');
   private readonly editedDeptName = signal<string>('');
   private readonly editedDeptCode = signal<string>('');
   onColumnsState(s: { departmentName: string; departmentCode: string; columns: ReportColumn[] }) {
@@ -1207,6 +1221,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       // draft so a department arrangement previews as you drag.
       this.editedCols(); this.editedDeptName(); this.editedDeptCode();
       this.patientScope(); this.patientCols(); this.deptPatientLayout();
+      // Sequencing tab: the preview runs on the lab's own departments/tests.
+      this.seqPreviewTests(); this.onSequenceTab();
       if (this.renderTimer) clearTimeout(this.renderTimer);
       this.rendering.set(true);
       this.renderTimer = setTimeout(() => this.renderPreview(tpl), 300);
@@ -1256,7 +1272,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       // Columns tab: relabel the whole sample report to the department being
       // edited so ONE section — titled with that department — previews the
       // strip exactly; empty configured columns stay visible.
-      let data = this.sampleSnapshot();
+      let data = this.tab() === 'sequence' ? sequencePreviewSnapshot(this.sampleSnapshot(), this.seqPreviewTests()) : this.sampleSnapshot();
       const onColumns = this.tab() === 'columns';
       if (onColumns && (this.editedDeptName() || this.editedDeptCode())) {
         try {
@@ -1714,6 +1730,19 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); },
     });
   }
+}
+
+/** Sequencing tab: the sample report with the lab's own departments and
+ *  tests (a desk order), so every move shows on the page. Falls back to the
+ *  standard sample until those load. */
+export function sequencePreviewSnapshot(sample: string, tests: Array<Record<string, unknown>>): string {
+  if (!tests.length) return sample;
+  try {
+    const snap = JSON.parse(sample) as Record<string, unknown>;
+    const depts = [...new Set(tests.map(t => String(t['department'] ?? '')).filter(Boolean))];
+    const order = { ...(snap['order'] as Record<string, unknown>), departments: depts.join(', ') };
+    return JSON.stringify({ ...snap, order, tests });
+  } catch { return sample; }
 }
 
 /** Table columns tab: the preview must open on the department table being
