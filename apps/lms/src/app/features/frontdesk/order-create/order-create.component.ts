@@ -39,7 +39,7 @@ import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoic
 import { waLink } from '../../../shared/utils/whatsapp';
 import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
-import { SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES } from './unified-search';
+import { SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES, DoctorOption, doctorOptionLabel, toDoctorOptions } from './unified-search';
 
 import { LabelCardComponent } from '../post-payment/label-card.component';
 import { printTubeLabels } from '../../../shared/utils/print-label';
@@ -542,7 +542,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   private refHospitalDebounce: ReturnType<typeof setTimeout> | null = null;
 
   readonly refDoctorName = signal<string>('');
-  readonly refDoctorSuggestions = signal<string[]>([]);
+  /** Doctor matches — one per (doctor, hospital) affiliation, or one
+   *  hospital-less row for an independent doctor. */
+  readonly refDoctorSuggestions = signal<DoctorOption[]>([]);
   private refDoctorDebounce: ReturnType<typeof setTimeout> | null = null;
 
   // ── Inline field-level errors from field-tagged API validation ────
@@ -2543,8 +2545,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const h = this.refHospitalName().trim();
     if (h) params.set('hospital', h);
     const qs = params.toString();
-    this.api.get<string[]>(`/api/test-picker/doctors${qs ? `?${qs}` : ''}`).subscribe({
-      next: names => this.refDoctorSuggestions.set(names ?? []),
+    this.api.get<Array<DoctorOption | string>>(`/api/test-picker/doctors/options${qs ? `?${qs}` : ''}`).subscribe({
+      next: list => this.refDoctorSuggestions.set(toDoctorOptions(list)),
       error: () => this.refDoctorSuggestions.set([])
     });
   }
@@ -2806,13 +2808,27 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         ].filter(Boolean).join(' · '),
       }));
     }
-    if (k === 'doctor' || k === 'hospital') {
-      const names = k === 'doctor' ? this.refDoctorSuggestions() : this.refHospitalSuggestions();
+    if (k === 'doctor') {
+      // Doctor-first: a doctor is found with or without a hospital; a linked
+      // doctor reads "Dr X · Hospital Y" (one row per hospital they refer from).
+      const opts = this.refDoctorSuggestions();
       const hosp = this.refHospitalName().trim();
-      const meta = k === 'doctor' ? (hosp ? `Refers from ${hosp}` : 'Referring doctor') : 'Referring hospital';
+      const rows: ScopeRow[] = opts.map(o => ({
+        key: `${o.doctorId ?? o.name}|${o.hospitalName ?? ''}`, kind: 'match' as const,
+        title: doctorOptionLabel(o), value: o.name, hospital: o.hospitalName ?? null,
+        meta: o.hospitalName ? 'Referring doctor' : (hosp ? `Refers from ${hosp}` : 'Referring doctor · no hospital'),
+      }));
+      if (q && !opts.some(o => o.name.trim().toLowerCase() === q.toLowerCase())) {
+        rows.push({ key: '__new__', kind: 'new', title: q, meta: 'Add as a new referring doctor' });
+      }
+      return rows;
+    }
+    if (k === 'hospital') {
+      const names = this.refHospitalSuggestions();
+      const meta = 'Referring hospital';
       const rows: ScopeRow[] = names.map(n => ({ key: n, kind: 'match' as const, title: n, meta }));
       if (q && !names.some(n => n.trim().toLowerCase() === q.toLowerCase())) {
-        rows.push({ key: '__new__', kind: 'new', title: q, meta: `Add as a new ${k === 'doctor' ? 'referring doctor' : 'referring hospital'}` });
+        rows.push({ key: '__new__', kind: 'new', title: q, meta: 'Add as a new referring hospital' });
       }
       return rows;
     }
@@ -2844,7 +2860,13 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       const p = this.patientResults().find(x => x.id === row.key);
       if (p) this.attachPatient(p);
     } else if (k === 'doctor') {
-      this.pickRefDoctor(row.title.trim());
+      this.pickRefDoctor((row.value ?? row.title).trim());
+      // A linked doctor's row also fills an empty Hospital tile (never
+      // overrides one the receptionist already picked).
+      if (row.hospital && !this.refHospitalName().trim()) {
+        this.refHospitalName.set(row.hospital);
+        this.refHospitalError.set(null);
+      }
     } else if (k === 'hospital') {
       this.pickRefHospital(row.title.trim());
     }

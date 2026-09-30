@@ -83,7 +83,7 @@ describe('Unified search — scope switching', () => {
     expect(c.scope()).toBe('doctor');
     expect(c.scopeOpen()).toBe(true);
     expect(c.pillPlaceholder()).toBe('Find the referring doctor');
-    expect(api.get).toHaveBeenCalledWith('/api/test-picker/doctors');
+    expect(api.get).toHaveBeenCalledWith('/api/test-picker/doctors/options');
     expect(c.scopeRows().map((r: any) => r.title)).toEqual(['Dr. A. Sharma', 'Dr. R. Iyer']);
   });
 
