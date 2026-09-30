@@ -73,6 +73,7 @@ function register(windowGetter) {
     return manager.pair({ instrumentId: str(o.instrumentId, 64), deviceKey: str(o.deviceKey, 512), apiUrl: str(o.apiUrl, 512), name: str(o.name, 200) || undefined });
   });
   handle('instruments:unpair', (id) => manager.unpair(str(id, 64)));
+  handle('instruments:reload', (id) => manager.reload(str(id, 64)));
   handle('instruments:rawLog', (id, limit) => manager.rawLog(str(id, 64), Number(limit) || 200));
   handle('instruments:listSerialPorts', () => manager.listSerialPorts());
   handle('instruments:listenStart', (opts) => {

@@ -40,6 +40,7 @@ function fakeBridge() {
     listenStop: vi.fn(async () => ({ raw: '', detect: undefined as never, messages: [] })),
     onListen: vi.fn((cb: (e: ListenEvent) => void) => { listen = cb; return () => { listen = null; }; }),
     preview: vi.fn(async () => ({ raw: 'x', detect: undefined as never, messages: [] })),
+    reload: vi.fn(async () => ({ ok: true, changed: true, restarted: false })),
   };
   return { api, emit: (e: ListenEvent) => listen?.(e) };
 }
@@ -172,6 +173,38 @@ describe('Instrument editor — web vs Electron', () => {
     await p.cmp.pairThisPc();
     expect(p.api.post).toHaveBeenCalledWith('/api/instruments/i1/device-key', {});
     expect(b.api.pair).toHaveBeenCalledWith({ instrumentId: 'i1', deviceKey: 'dk-secret', apiUrl: 'https://api.example', name: 'Sysmex XN' });
+  });
+
+  it('save while paired on this PC live-reloads the running connector (no re-pair); not paired → no reload', async () => {
+    const b = fakeBridge();
+    b.api.list.mockImplementation((async () => [{ instrumentId: 'i1', apiUrl: 'https://api.example', pairedAt: 't', status: null }]) as never);
+    const p = render({ id: 'i1', bridge: b.api });
+    await flush();
+    p.api.put.mockImplementation((() => of(instrument())) as never);
+    p.cmp.patch({ name: 'Sysmex XN (lab 2)' });
+    await p.cmp.save();
+    expect(b.api.reload).toHaveBeenCalledWith('i1');
+    expect(b.api.pair).not.toHaveBeenCalled();
+
+    TestBed.resetTestingModule();
+    const b2 = fakeBridge();
+    const p2 = render({ id: 'i1', bridge: b2.api });
+    await flush();
+    p2.api.put.mockImplementation((() => of(instrument())) as never);
+    p2.cmp.patch({ name: 'Sysmex XN (lab 3)' });
+    await p2.cmp.save();
+    expect(b2.api.reload).not.toHaveBeenCalled();
+  });
+
+  it('a wizard instrument with default Text settings reads "SAMPLE ID: 2609-00013" tickets', () => {
+    const f = emptyInstrumentForm();
+    f.protocol = 'text';
+    const text = buildInstrumentConfig(f).parser.text!;
+    // The connector core runs these case-insensitively.
+    const m = new RegExp(text.sampleIdPattern!, 'i').exec('SAMPLE ID: 2609-00013');
+    expect(m?.groups?.['id']).toBe('2609-00013');
+    expect(new RegExp(text.linePattern!, 'i').exec('WBC        7.8  10^3/uL H')?.groups).toMatchObject({ code: 'WBC', value: '7.8', unit: '10^3/uL', flag: 'H' });
+    expect(new RegExp(text.qcPattern!, 'i').test('QC LEVEL 1  LOT 24117')).toBe(true);
   });
 
   it('rotating an existing key asks first (DialogService) and stops on cancel', async () => {

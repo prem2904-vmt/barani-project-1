@@ -322,6 +322,13 @@ export class InstrumentEditorComponent {
         this.mapsDirty.set(false);
       }
       this.toasts.success(id ? 'Instrument saved' : 'Instrument created');
+      // Paired here? Apply the saved settings to the running connector now
+      // (live reload — no re-pair / restart; other PCs pick it up on heartbeat).
+      if (id && this.bridge.available && this.paired()) {
+        const r = await this.bridge.reload(id);
+        if (r.ok && r.changed) this.toasts.success(r.restarted ? 'Connection restarted with the new settings' : 'New settings applied on this PC');
+        await this.loadPaired(id);
+      }
       if (!id) {
         this.id.set(saved.id);
         void this.router.navigate(['/admin/instruments', saved.id], { replaceUrl: true });

@@ -50,6 +50,13 @@ export class InstrumentBridgeService {
     try { return await a.unpair(instrumentId); } catch { return { ok: false }; }
   }
 
+  /** Tell this PC's running connector to apply a just-saved config now
+   *  (no re-pair / restart). No-op on the web or when not paired here. */
+  async reload(instrumentId: string): Promise<{ ok: boolean; changed?: boolean; restarted?: boolean; error?: string }> {
+    const a = this.api; if (!a || typeof a.reload !== 'function') return { ok: false };
+    try { return await a.reload(instrumentId); } catch (e) { return { ok: false, error: errText(e) }; }
+  }
+
   async status(): Promise<ConnectorStatus[]> {
     const a = this.api; if (!a) return [];
     try { return (await a.status()) ?? []; } catch { return []; }

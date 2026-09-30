@@ -12,9 +12,14 @@ import type {
 } from './instrument.models';
 
 // ── Defaults (from the contract) ─────────────────────────────────────────
-export const DEFAULT_TEXT_LINE_PATTERN = '^(?<code>[A-Z#%\\-]+)\\s+(?<value>[\\d.]+)\\s*(?<unit>\\S+)?\\s*(?<flag>[HL*]*)?$';
-export const DEFAULT_TEXT_SAMPLE_ID_PATTERN = '^(?:SAMPLE|ID)\\s*[:#]?\\s*(?<id>\\S+)';
-export const DEFAULT_TEXT_QC_PATTERN = '^QC\\b';
+// Text-template defaults — MUST equal the connector core's TEXT_DEFAULTS
+// (electron/instruments/core/parsers/text.js), the parser that actually runs
+// them (case-insensitive). electron/instruments/test/text-defaults-sync.test.js
+// fails when they drift (a drifted sample-ID default once read the ticket
+// line "SAMPLE ID: 2609-00013" as the sample "ID:").
+export const DEFAULT_TEXT_LINE_PATTERN = '^\\s*(?<code>[A-Za-z][A-Za-z0-9#%\\-_/]*)\\s+(?<value>[<>]?-?\\d+(?:\\.\\d+)?)\\s*(?<unit>(?![HL*]{1,2}\\s*$)\\S+)?\\s*(?<flag>[HL*]{0,2})\\s*$';
+export const DEFAULT_TEXT_SAMPLE_ID_PATTERN = '^\\s*(?:SAMPLE|SPECIMEN|SAMPLE\\s*ID|ID)\\s*(?:NO\\.?)?\\s*[:#]?\\s*(?<id>[A-Za-z0-9\\-]+)\\s*$';
+export const DEFAULT_TEXT_QC_PATTERN = '^\\s*(?:QC|CONTROL)\\b';
 export const DEFAULT_ACK_TIMEOUT_MS = 15000;
 export const DEFAULT_FRAME_TIMEOUT_MS = 30000;
 export const DEFAULT_IDLE_MS = 1500;

@@ -84,6 +84,9 @@ class Connector extends EventEmitter {
     this.draining = false;
     this.cfgTimer = null;
     this.idleWaiters = [];
+    this.active = null;           // the config the running transport / links use
+    this.transportKey = null;     // JSON of the effective transport settings that are running
+    this.reloading = null;        // in-flight reload() (serialised)
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────────
@@ -114,15 +117,56 @@ class Connector extends EventEmitter {
     this._setState('stopped');
   }
 
-  /** Re-pull config; restart the transport if its settings changed. */
-  async reload() {
-    const before = JSON.stringify(this.remote && this.remote.config);
+  /**
+   * Live reload: re-pull the config and apply what changed, without a
+   * re-pair or an app restart. Called by the host when an instrument is saved
+   * and on every heartbeat (poll), so an edit reaches a running connector.
+   *   transport changed      → stop + start the transport (new port / serial path …)
+   *   only link/parser changed → keep the transport; drop the per-session links
+   *                              so the next bytes use the new framing/parser
+   * Serialised; a no-op when stopped or when nothing changed.
+   * @returns {Promise<{ changed: boolean, restarted: boolean }>}
+   */
+  reload() {
+    if (this.reloading) return this.reloading.then(() => this.reload());
+    this.reloading = this._reload().finally(() => { this.reloading = null; });
+    return this.reloading;
+  }
+
+  async _reload() {
+    const none = { changed: false, restarted: false };
+    if (this.stopped) return none;
+    const before = this.active;
     const cfg = await this._loadConfig();
-    if (cfg && JSON.stringify(cfg) !== before) {
+    if (!cfg || this.stopped) return none;
+    const tKey = this._transportKey(cfg);
+    if (!this.transport || tKey !== this.transportKey) {
       if (this.transport) { try { await this.transport.stop(); } catch { /* ignore */ } }
-      this.links.clear();
-      await this._startTransport(cfg);
+      this.transport = null;
+      this._closeLinks();
+      this.rawlog.write('note', 'configuration changed — restarting the connection');
+      try { await this._startTransport(cfg); } catch { /* _startTransport recorded the failure; the next reload retries */ }
+      this._emitStatus();
+      return { changed: true, restarted: true };
     }
+    if (JSON.stringify(before) === JSON.stringify(cfg)) return none;
+    this.active = cfg;
+    const framing = JSON.stringify([before && before.link, before && before.parser]) !== JSON.stringify([cfg.link, cfg.parser]);
+    if (framing) {
+      this._closeLinks();
+      this.rawlog.write('note', 'configuration changed — protocol settings applied');
+    }
+    this._emitStatus();
+    return { changed: true, restarted: false };
+  }
+
+  _transportKey(cfg) {
+    return JSON.stringify({ ...((cfg && cfg.transport) || {}), ...(this.o.transportOverride || {}) });
+  }
+
+  _closeLinks() {
+    for (const l of this.links.values()) { try { l.flush(); } catch { /* ignore */ } try { l.close(); } catch { /* ignore */ } }
+    this.links.clear();
   }
 
   async _loadConfig() {
@@ -132,6 +176,7 @@ class Connector extends EventEmitter {
       this.remote = remote;
       if (remote && remote.name) this.name = remote.name;
       fs.writeFileSync(cacheFile, JSON.stringify(remote, null, 2));
+      if (typeof this.lastError === 'string' && this.lastError.startsWith('config:')) this.lastError = null;
       return remote.config;
     } catch (e) {
       this.lastError = `config: ${e.message}`;
@@ -149,12 +194,17 @@ class Connector extends EventEmitter {
   async _startTransport(cfg) {
     const t = createTransport({ ...(cfg.transport || {}), ...(this.o.transportOverride || {}) }, this.deps);
     this.transport = t;
-    const linkCfg = cfg.link || { type: 'auto' };
+    this.active = cfg;
+    this.transportKey = null;
+    // Links read the CURRENT config when a session opens, so a live reload of
+    // the link/parser applies without restarting the transport.
+    const linkCfg = () => (this.active && this.active.link) || { type: 'auto' };
+    const parserCfg = () => (this.active && this.active.parser) || {};
     t.on('status', (s) => this._setState(s));
     t.on('error', (e) => { this.lastError = e.message; this.rawlog.write('note', `transport error: ${e.message}`); this._emitStatus(); });
     t.on('session-start', (id, info) => {
       this.rawlog.write('note', `session ${id} opened ${info && info.remote ? `(${info.remote})` : ''}`);
-      this.links.set(id, this._makeLink(linkCfg, cfg.parser || {}, id));
+      this.links.set(id, this._makeLink(linkCfg(), parserCfg(), id));
     });
     t.on('session-end', (id) => {
       const l = this.links.get(id);
@@ -166,16 +216,17 @@ class Connector extends EventEmitter {
       this.rawlog.write('in', buf);
       this.emit('raw', { dir: 'in', bytes: buf });
       let l = this.links.get(id);
-      if (!l) { l = this._makeLink(linkCfg, cfg.parser || {}, id); this.links.set(id, l); }
+      if (!l) { l = this._makeLink(linkCfg(), parserCfg(), id); this.links.set(id, l); }
       l.feed(buf);
     });
     t.on('file', (text, name) => {
       this.rawlog.write('note', `file ${name}`);
       this.rawlog.write('in', text);
-      this._onFile(text, cfg.parser || {});
+      this._onFile(text, parserCfg());
     });
     try {
       await t.start();
+      this.transportKey = this._transportKey(cfg);
       this.rawlog.write('note', `started ${t.describe()}`);
     } catch (e) {
       this._fail(`${t.describe()}: ${e.message}`);
@@ -298,8 +349,9 @@ class Connector extends EventEmitter {
     clearTimeout(this.hbTimer);
     if (this.stopped) return;
     this.hbTimer = setTimeout(async () => {
+      let hb = null;
       try {
-        await this.uploader.heartbeat({
+        hb = await this.uploader.heartbeat({
           status: this._wireState(),
           queueLength: this.queue.length,
           lastMessageAt: this.lastMessageAt,
@@ -308,6 +360,13 @@ class Connector extends EventEmitter {
           host: os.hostname(),
         });
       } catch { /* heartbeat is best-effort */ }
+      // Config poll: a heartbeat answer that carries a config version only
+      // triggers a pull when it differs; without one, pull every beat (one
+      // small GET) — either way a saved edit reaches the connector.
+      const ver = hb && (hb.configVersion ?? hb.configUpdatedAt);
+      if (!this.stopped && (ver == null || ver !== this.configVersion)) {
+        try { await this.reload(); if (ver != null) this.configVersion = ver; } catch { /* next beat retries */ }
+      }
       const secs = (this.remote && this.remote.heartbeatSeconds) || 30;
       this._scheduleHeartbeat(this.o.heartbeatMs || secs * 1000);
     }, ms);

@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     list: () => ipcRenderer.invoke('instruments:list'),
     pair: (p) => ipcRenderer.invoke('instruments:pair', p),
     unpair: (instrumentId) => ipcRenderer.invoke('instruments:unpair', instrumentId),
+    reload: (instrumentId) => ipcRenderer.invoke('instruments:reload', instrumentId),
     status: () => ipcRenderer.invoke('instruments:status'),
     onStatus: (cb) => {
       const h = (_e, s) => cb(s);

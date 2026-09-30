@@ -253,6 +253,9 @@ export interface ElectronInstrumentsApi {
   list(): Promise<PairedInstrument[]>;
   pair(p: { instrumentId: string; deviceKey: string; apiUrl: string; name?: string }): Promise<{ ok: boolean; error?: string }>;
   unpair(instrumentId: string): Promise<{ ok: boolean }>;
+  /** Live reload: the running connector re-pulls its config (after a save).
+   *  Optional — an older desktop build without it still polls on heartbeat. */
+  reload?(instrumentId: string): Promise<{ ok: boolean; changed?: boolean; restarted?: boolean; error?: string }>;
   status(): Promise<ConnectorStatus[]>;
   onStatus(cb: (s: ConnectorStatus) => void): () => void;
   rawLog(instrumentId: string, limit?: number): Promise<RawLogEntry[]>;

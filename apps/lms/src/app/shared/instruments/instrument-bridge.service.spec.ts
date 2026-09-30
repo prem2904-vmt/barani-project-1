@@ -49,4 +49,16 @@ describe('InstrumentBridgeService — web vs Electron', () => {
     b.onStatus(() => undefined)();
     expect(unsub).toHaveBeenCalled();
   });
+
+  it('reload: passes through; an older preload without reload (or a throwing one) is a safe no-op', async () => {
+    const reload = vi.fn(async () => ({ ok: true, changed: true, restarted: true }));
+    expect(await withSource({ list: vi.fn(async () => []), reload }).reload('i1')).toEqual({ ok: true, changed: true, restarted: true });
+    expect(reload).toHaveBeenCalledWith('i1');
+    TestBed.resetTestingModule();
+    expect(await withSource({ list: vi.fn(async () => []) }).reload('i1')).toEqual({ ok: false });
+    TestBed.resetTestingModule();
+    expect((await withSource({ list: vi.fn(async () => []), reload: vi.fn(async () => { throw new Error('x'); }) }).reload('i1')).ok).toBe(false);
+    TestBed.resetTestingModule();
+    expect(await withSource(undefined).reload('i1')).toEqual({ ok: false });
+  });
 });

@@ -15,6 +15,18 @@ const isDev = !app.isPackaged;
 // electron falls back to package.json `name` which is the npm slug;
 // this forces the human-friendly name everywhere regardless of host.
 app.setName('Prefrontal');
+// Optional isolated data profile for side-by-side test builds: a build made
+// with `-c.extraMetadata.pfDataProfile=<name>` (or PF_DATA_PROFILE=<name> at
+// launch) keeps its session, connector pairing and single-instance lock in
+// "<appData>/Prefrontal (<name>)" instead of the real app's folder. Absent in
+// the normal build → userData is untouched. Must run before the lock / ready.
+{
+  let profile = process.env.PF_DATA_PROFILE;
+  if (!profile) { try { profile = require('../package.json').pfDataProfile; } catch { profile = undefined; } }
+  if (typeof profile === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(profile)) {
+    app.setPath('userData', path.join(app.getPath('appData'), `Prefrontal (${profile})`));
+  }
+}
 // Windows toasts are attributed by AppUserModelID and are silently DROPPED
 // when it doesn't match the installed app's identity. Must equal
 // electron-builder's build.appId in package.json. No-op on macOS/Linux.

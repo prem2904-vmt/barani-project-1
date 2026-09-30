@@ -115,6 +115,14 @@ class ConnectorManager extends EventEmitter {
     return { ok: true };
   }
 
+  /** Live reload one paired connector (the instrument was saved in the UI):
+   *  pulls the config and applies it without re-pairing. */
+  async reload(instrumentId) {
+    const c = this.connectors.get(instrumentId);
+    if (!c) return { ok: false, error: 'not paired on this PC' };
+    try { return { ok: true, ...(await c.reload()) }; } catch (e) { return { ok: false, error: e.message }; }
+  }
+
   list() {
     return this.paired.map((p) => ({
       instrumentId: p.instrumentId, name: p.name, apiUrl: p.apiUrl, pairedAt: p.pairedAt,
