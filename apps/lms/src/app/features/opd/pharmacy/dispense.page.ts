@@ -13,7 +13,7 @@ import { labToday } from '../../../shared/utils/lab-clock';
 import { shortSched } from '../shared/rx-schedule';
 import {
   PharmacyApi, type BatchRow, type DispenseLineInput, type DispenseView, type DrugBrief, type PayMode, type PickBatch,
-  type PharmacyDrugRow, type RxDetail, type RxLineView,
+  type PharmacyDrugRow, type PharmacyInvoiceHeader, type RxDetail, type RxLineView,
 } from './pharmacy.api';
 import { cartTotals, errText, expiryBand, expiryChip, expiryLabel, inr, needsPrescription, needsRegister, scheduleLabel, unitWords, type CartLine } from './pharmacy-math';
 import { instructionFor, whatsAppText, type InstructionLine } from './pharmacy-instructions';
@@ -530,14 +530,28 @@ export class PharmacyDispensePage {
     });
   }
 
+  /** The GST tax-invoice letterhead (critic item #4) — fetched once, on the
+   *  first print, and reused after (branch GSTIN doesn't change mid-session). */
+  private readonly practice = signal<PharmacyInvoiceHeader | null>(null);
+
   protected print(): void {
+    if (this.practice()) { this.printNow(); return; }
+    this.api.invoiceHeader().subscribe({
+      next: h => { this.practice.set(h); this.printNow(); },
+      error: () => this.printNow(), // print still works without the letterhead
+    });
+  }
+
+  private printNow(): void {
     const v = this.done(), d = this.rx();
     if (!v || !d) return;
     printPharmacySheet({
       clinic: this.clinic(), patientName: d.patient.name, patientMeta: d.patient.meta, doctor: d.doctor.name, doctorRegNo: d.doctorRegNo,
       number: v.bill?.invoiceNumber ?? v.number, instructions: this.instructions(), lines: v.lines, bill: v.bill,
+      practice: this.practice(),
     });
   }
+
   protected afterSend(): void { this.toast.success('WhatsApp opened with the instructions'); }
   protected back(): void { void this.router.navigateByUrl('/opd/pharmacy'); }
 }
