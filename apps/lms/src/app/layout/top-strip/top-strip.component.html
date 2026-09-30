@@ -176,12 +176,6 @@
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
   <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
 
-    @if (desktopWindow.showClock()) {
-    <!-- Desktop app, full screen: the OS clock is hidden, so the bar shows
-         the date + time (IST, minute ticks). Windowed / web / iPad: never. -->
-    <pf-desktop-clock />
-    }
-
     @if (!themeService.isNewDesign()) {
     <!-- CLASSIC primary nav — icon-first hybrid on the right: the active
            item shows its label, the others slide theirs out on hover. -->
@@ -660,6 +654,13 @@
       </div>
       }
     </div>
+
+    @if (desktopWindow.showClock()) {
+    <!-- Desktop app, full screen: the OS clock is hidden, so the bar ends
+         with a Windows-taskbar-style clock (time over dd/mm/yyyy, IST,
+         minute ticks). Windowed / web / iPad: never. -->
+    <pf-desktop-clock />
+    }
   </div><!-- /right cluster -->
 </div>
 

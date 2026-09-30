@@ -651,10 +651,11 @@ Timing rules (`shared/utils/busy.ts`):
   when the app did not use the Esc (rule above); back in with F11 (Windows /
   Linux), ⌃⌘F or the green button (macOS), or **Full screen** in the avatar
   menu (shown only when windowed).
-- While full screen the top strip's right cluster starts with the date + time
-  (`pf-desktop-clock`: "Wed, 30 Sep · 4:32 PM", IST, 12 / 24 h per locale,
-  minute ticks, `<time datetime>`, time only below 1100px). Windowed, web and
-  the iPad / phone apps never show it.
+- While full screen the top strip ends (right end, after the avatar) with a
+  Windows-taskbar-style clock (`pf-desktop-clock`): two right-aligned lines,
+  time on top ("12:39 PM") and the dd/mm/yyyy date under it ("30/09/2026"),
+  IST, Indian locale (12 h), tabular numbers, minute ticks, `<time datetime>`.
+  Windowed, web and the iPad / phone apps never show it.
 
 ### The ⋮ actions menu (`pf-actions-menu`)
 

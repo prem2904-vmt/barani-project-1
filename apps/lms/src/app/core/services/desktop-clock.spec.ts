@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { formatClock, localeUses12h, msToNextMinute, startMinuteTicker } from './desktop-clock';
+import { CLOCK_LOCALE, formatClock, localeUses12h, msToNextMinute, startMinuteTicker } from './desktop-clock';
 import { IST_OFFSET_MS, istDateOf } from '../../shared/utils/lab-clock';
 
 /** Full-screen top-strip clock: IST (the lab's one clock), minute ticks. */
 describe('Desktop clock — face', () => {
-  it('owner example: Wed, 30 Sep · 4:32 PM (IST), 12 h', () => {
+  it('Windows-taskbar style: 4:32 PM over 30/09/2026 (IST, dd/mm/yyyy), 12 h', () => {
     const f = formatClock(new Date('2026-09-30T11:02:10Z'), true); // 16:32 IST
-    expect(f.date).toBe('Wed, 30 Sep');
     expect(f.time).toBe('4:32 PM');
+    expect(f.date).toBe('30/09/2026');
     expect(f.iso).toBe('2026-09-30T16:32+05:30');
-    expect(f.label).toBe('Wed, 30 Sep 2026, 4:32 PM IST');
+    expect(f.label).toBe('4:32 PM, Wed, 30 Sep 2026 IST');
   });
 
   it('24 h locale: zero-padded hours', () => {
@@ -25,14 +25,20 @@ describe('Desktop clock — face', () => {
   it('the IST date flips at IST midnight, whatever the device zone — same day as labToday()', () => {
     const before = new Date('2026-09-30T18:29:00Z'); // 23:59 IST 30 Sep
     const after = new Date('2026-09-30T18:30:00Z');  // 00:00 IST 1 Oct
-    expect(formatClock(before, true).date).toBe('Wed, 30 Sep');
-    expect(formatClock(after, true).date).toBe('Thu, 1 Oct');
+    expect(formatClock(before, true).date).toBe('30/09/2026');
+    expect(formatClock(after, true).date).toBe('01/10/2026');
+    expect(formatClock(new Date('2026-12-31T18:30:00Z'), true).date).toBe('01/01/2027');
     // Single source: the clock's day == lab-clock's IST day.
     for (const t of [before, after]) expect(formatClock(t, false).iso.slice(0, 10)).toBe(istDateOf(t));
     expect(IST_OFFSET_MS).toBe(330 * 60_000);
   });
 
-  it('12 / 24 h follows the locale', () => {
+  it('the clock uses the Indian locale → 12 h (owner: "12:39 PM"), even when the UI language is en-GB', () => {
+    expect(CLOCK_LOCALE).toBe('en-IN');
+    expect(localeUses12h(CLOCK_LOCALE)).toBe(true);
+  });
+
+  it('localeUses12h reads the locale\'s hour cycle', () => {
     expect(localeUses12h('en-US')).toBe(true);
     expect(localeUses12h('en-IN')).toBe(true);
     expect(localeUses12h('en-GB')).toBe(false);

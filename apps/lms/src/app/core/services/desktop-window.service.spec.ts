@@ -107,8 +107,11 @@ describe('Top-strip clock — markup', () => {
     expect(t.getAttribute('aria-live')).toBe('off');
     expect(t.getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}\+05:30$/);
     expect(t.getAttribute('aria-label')).toMatch(/IST$/);
-    expect(t.querySelector('.pf-dclock__date')!.textContent).toMatch(/^[A-Z][a-z]{2}, \d{1,2} [A-Z][a-z]{2}$/);
+    // Windows-taskbar order: time line first, dd/mm/yyyy date line under it.
+    const lines = Array.from(t.children).map(c => c.className);
+    expect(lines).toEqual(['pf-dclock__time', 'pf-dclock__date']);
     expect(t.querySelector('.pf-dclock__time')!.textContent).toMatch(/^\d{1,2}:\d{2}( [AP]M)?$/);
+    expect(t.querySelector('.pf-dclock__date')!.textContent).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
     f.destroy();
   });
 
@@ -116,6 +119,8 @@ describe('Top-strip clock — markup', () => {
     const html = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/layout/top-strip/top-strip.component.html'), 'utf8');
     expect(html).toMatch(/@if \(desktopWindow\.showClock\(\)\) \{\s*(<!--[\s\S]*?-->\s*)?<pf-desktop-clock \/>/);
     expect(html.match(/<pf-desktop-clock/g)).toHaveLength(1);
+    // The LAST thing in the right cluster (right end of the bar).
+    expect(html).toMatch(/<pf-desktop-clock \/>\s*\}\s*<\/div><!-- \/right cluster -->/);
     expect(html).toMatch(/@if \(desktopWindow\.available && !desktopWindow\.isFullScreen\(\)\)[\s\S]{0,400}enterFullScreen\(\)/);
   });
 });

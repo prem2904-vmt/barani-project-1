@@ -1,9 +1,10 @@
 /**
  * The top-strip clock shown while the desktop app is FULL SCREEN (the OS
- * taskbar / menu-bar clock is hidden then). Business time, not device time:
+ * taskbar / menu-bar clock is hidden then). Looks like the Windows taskbar
+ * clock (owner): time on top, dd/mm/yyyy date underneath. Business time, not device time:
  * the lab's ONE clock is IST (lab-clock.ts, LAB_TIME_ZONE), so a desktop in
- * another zone still shows the lab's day and hour. 12 / 24 h follows the
- * user's locale. Pure functions + a minute-aligned ticker (no per-second
+ * another zone still shows the lab's day and hour. Indian locale: 12 h
+ * time, dd/mm/yyyy date. Pure functions + a minute-aligned ticker (no per-second
  * re-render) so the spec can pin both.
  */
 import { IST_OFFSET_MS } from '../../shared/utils/lab-clock';
@@ -13,7 +14,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const pad = (n: number) => String(n).padStart(2, '0');
 
 export interface ClockFace {
-  /** "Wed, 30 Sep" */
+  /** "30/09/2026" — Indian dd/mm/yyyy, the Windows-taskbar second line. */
   date: string;
   /** "4:32 PM" (12 h) or "16:32" (24 h) */
   time: string;
@@ -22,6 +23,9 @@ export interface ClockFace {
   /** <time datetime>: the IST wall time with its offset, minute precision. */
   iso: string;
 }
+
+/** The clock's locale: India (the lab's), whatever the UI language. */
+export const CLOCK_LOCALE = 'en-IN';
 
 /** Does this locale write the time on a 12-hour clock? */
 export function localeUses12h(locale?: string | readonly string[]): boolean {
@@ -43,14 +47,15 @@ export function formatClock(now: Date, hour12: boolean): ClockFace {
   const d = ist.getUTCDate();
   const h = ist.getUTCHours();
   const mi = ist.getUTCMinutes();
-  const date = `${DAYS[ist.getUTCDay()]}, ${d} ${MONTHS[mo]}`;
+  const date = `${pad(d)}/${pad(mo + 1)}/${y}`;
+  const spoken = `${DAYS[ist.getUTCDay()]}, ${d} ${MONTHS[mo]} ${y}`;
   const time = hour12
     ? `${h % 12 === 0 ? 12 : h % 12}:${pad(mi)} ${h < 12 ? 'AM' : 'PM'}`
     : `${pad(h)}:${pad(mi)}`;
   return {
     date,
     time,
-    label: `${date} ${y}, ${time} IST`,
+    label: `${time}, ${spoken} IST`,
     iso: `${y}-${pad(mo + 1)}-${pad(d)}T${pad(h)}:${pad(mi)}+05:30`,
   };
 }
