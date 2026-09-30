@@ -81,7 +81,10 @@
   @if (themeService.isNewDesign()) {
   <nav class="pf-topnav-center hidden xl:flex" aria-label="Work areas">
     @for (n of primary(); track n.id) {
-    <a [routerLink]="n.href" routerLinkActive="pf-topnav-link--on" [routerLinkActiveOptions]="{ exact: !!n.exact }"
+    <a [routerLink]="n.href"
+      [routerLinkActive]="(n.id === 'opd' || n.id === 'doctor') ? [] : 'pf-topnav-link--on'"
+      [routerLinkActiveOptions]="{ exact: !!n.exact }"
+      [class.pf-topnav-link--on]="(n.id === 'opd' || n.id === 'doctor') && opdActive(n)"
       class="pf-topnav-link press">
       @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
       <span class="pf-collect-nav-icon w-3.5 h-3.5" aria-hidden="true"></span>
@@ -181,7 +184,10 @@
            item shows its label, the others slide theirs out on hover. -->
     <nav class="pf-topnav-classic hidden xl:flex" aria-label="Work areas">
       @for (n of primary(); track n.id) {
-      <a [routerLink]="n.href" routerLinkActive="pf-topnav-active" [routerLinkActiveOptions]="{ exact: !!n.exact }"
+      <a [routerLink]="n.href"
+        [routerLinkActive]="(n.id === 'opd' || n.id === 'doctor') ? [] : 'pf-topnav-active'"
+        [routerLinkActiveOptions]="{ exact: !!n.exact }"
+        [class.pf-topnav-active]="(n.id === 'opd' || n.id === 'doctor') && opdActive(n)"
         class="pf-topnav-btn press" [title]="n.label" [attr.aria-label]="n.label">
         @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
         <span class="pf-collect-nav-icon w-4 h-4" aria-hidden="true"></span>

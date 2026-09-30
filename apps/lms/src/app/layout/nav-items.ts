@@ -68,6 +68,37 @@ export const DOCTOR_NAV: NavItem = {
              'M8 15a6 6 0 0 0 12 0v-3', 'M20 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z']
 };
 
+/** OPD home hub — the general "OPD" tab, shown alongside Consults (never
+ *  replacing it) whenever the OPD gate is open AND the user can open at
+ *  least one OPD area (OPD_AREAS' own permission rule — see
+ *  `features/opd/shared/opd-nav.ts` `opdAreasFor`, reused by the shells so the
+ *  hub's tiles and this tab never drift apart). Same icon as the legacy
+ *  MORE_NAV 'm-opd' entry. Appended by the nav shells rather than
+ *  permission-gated here, exactly like DOCTOR_NAV. */
+export const OPD_NAV: NavItem = {
+  id: 'opd',
+  label: 'OPD',
+  href: '/opd',
+  iconPath: ['M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2'],
+};
+
+/**
+ * Active-state rule shared by every nav surface for the two OPD tabs:
+ * Consults ('/opd/consult') owns /opd/consult/**; OPD ('/opd') owns every
+ * other /opd/** route PLUS /admin/opd/** (OPD's own settings hub) — never
+ * both lit at once. Pure (no Angular DI) so the top strip, the bottom nav
+ * and specs all share it instead of re-deriving prefix matching.
+ */
+export function opdNavActive(item: Pick<NavItem, 'id' | 'href'>, url: string): boolean {
+  const u = (url ?? '').split('?')[0];
+  if (item.id === 'doctor') return u === item.href || u.startsWith(item.href + '/');
+  if (item.id === 'opd') {
+    if (u === '/opd/consult' || u.startsWith('/opd/consult/')) return false;
+    return u === '/opd' || u.startsWith('/opd/') || u === '/admin/opd' || u.startsWith('/admin/opd/');
+  }
+  return u === item.href || u.startsWith(item.href + '/');
+}
+
 export const ADMIN_NAV: NavItem = {
   id: 'admin',
   label: 'Settings',

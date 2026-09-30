@@ -40,3 +40,32 @@ export const OPD_AREAS: OpdArea[] = [
   { id: 'settings', title: 'OPD settings', subtitle: 'Departments, services, forms, flow', href: '/admin/opd', permissions: ADMIN_PERMS,
     iconPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM4 12h2M18 12h2M12 4v2M12 18v2' },
 ];
+
+/**
+ * THE "can this user open at least one OPD area" rule — the OPD home hub's own
+ * tile filter, reused (not duplicated) by the shell nav (the primary "OPD" tab)
+ * so the two never drift. Pure (no Angular DI): pass `AuthService.hasAnyPermission`
+ * (or an equivalent OR-check). Several areas (Consults, Pharmacy, the walk-in
+ * counter, Pharmacy stock) carry no permission at all, so this is `true` for
+ * almost every signed-in user once the OPD gate itself is open — that is
+ * intentional (their own route guard is only `opdGuard`, same as the hub).
+ */
+export function opdAreasFor(hasAnyPermission: (perms: string[]) => boolean): OpdArea[] {
+  return OPD_AREAS.filter(a => !a.permissions?.length || hasAnyPermission(a.permissions));
+}
+
+/**
+ * Display order for the OPD hub's tiles: a doctor's main reason to be in OPD
+ * is their own patient queue, so Consults leads for them; everyone else keeps
+ * OPD_AREAS' declared order (front-desk flow first). Pure, stable (no other
+ * tile's relative order changes).
+ */
+export function orderOpdAreas(areas: OpdArea[], isDoctor: boolean): OpdArea[] {
+  if (!isDoctor) return areas;
+  const idx = areas.findIndex(a => a.id === 'consult');
+  if (idx <= 0) return areas;
+  const copy = areas.slice();
+  const [consult] = copy.splice(idx, 1);
+  copy.unshift(consult);
+  return copy;
+}
