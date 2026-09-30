@@ -46,6 +46,10 @@ export interface CheckoutRequest {
   patientId: string; doctorUserId?: string | null; departmentId?: string | null; serviceId?: string | null;
   purpose?: string | null; feeOverride?: number | null; feeOverrideReason?: string | null;
   labTestIds?: string[]; urgent?: boolean; vitals?: VitalsInput | null; payments?: PaymentPart[];
+  /** testId → the picked specimen (choose-mode tests only) — see
+   *  `features/opd/shared/opd-specimen.ts`. Missing for a choose-mode test →
+   *  400 `specimen_required`, thrown before anything OPD is written. */
+  labTestSpecimens?: Record<string, string> | null;
 }
 
 export interface OpdBillLineRow { sourceType: string; sourceId?: string | null; description: string; qty: number; unitPrice: number; discount: number; taxSlab: number; total: number; }

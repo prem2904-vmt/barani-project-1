@@ -24,6 +24,8 @@ import {
   InlinePaymentPanelComponent, type InlinePaymentResult,
 } from '../../frontdesk/order-create/inline-payment-panel.component';
 import { OpdVitalsFormComponent } from '../vitals/vitals-form.component';
+import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
+import { missingSpecimens, specimenPayload, type OpdInvestigationItem, type OpdTestLookup } from '../shared/opd-specimen';
 import { OpdDeskApi } from './desk-api.service';
 import type { DeskData, DeskDepartment, DeskDoctor, DeskQuote, ServiceQuote } from './desk.models';
 import {
@@ -54,7 +56,7 @@ type CatalogTab = 'doctors' | 'departments' | 'labs';
   standalone: true,
   imports: [
     RouterLink, HeroBandComponent, PatientSearchComponent, ScreenHeaderComponent, SkeletonRowsComponent,
-    CurrencyInrPipe, BusyDirective, InlinePaymentPanelComponent, OpdVitalsFormComponent,
+    CurrencyInrPipe, BusyDirective, InlinePaymentPanelComponent, OpdVitalsFormComponent, OpdSpecimenPickerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './book-visit.page.html',
@@ -104,6 +106,11 @@ export class OpdBookVisitPage {
   readonly overrideOpen = signal(false);
   readonly labIds = signal<string[]>([]);
   readonly labQuery = signal('');
+  /** testId → the picked specimen (choose-mode tests only) — see
+   *  `features/opd/shared/opd-specimen.ts` / `pf-opd-specimen-picker`. */
+  readonly labSpecimens = signal<Record<string, string>>({});
+  /** Cart rows a blocked Checkout must point at (cleared as each is picked). */
+  readonly specimenErr = signal<Record<string, true>>({});
   readonly urgent = signal(false);
   readonly vitalsHere = signal(false);
 
@@ -144,8 +151,9 @@ export class OpdBookVisitPage {
     return v != null && Number.isNaN(v) ? null : v;
   });
   readonly overrideInvalid = computed(() => Number.isNaN(parseOverride(this.overrideRaw()) as number));
+  readonly testById = computed<Map<string, Test>>(() => new Map(this.tests().map(t => [t.id, t])));
   readonly labTests = computed<LabLine[]>(() => {
-    const byId = new Map(this.tests().map(t => [t.id, t]));
+    const byId = this.testById();
     return this.labIds().map(id => byId.get(id)).filter((t): t is Test => !!t)
       .map(t => ({ id: t.id, name: t.name, price: t.price ?? 0, slab: this.gstOn() ? t.taxSlab ?? 0 : 0 }));
   });
@@ -378,17 +386,57 @@ export class OpdBookVisitPage {
 
   // ── Lab tests ────────────────────────────────────────────────────────
   addLab(t: Test): void { this.labIds.update(l => (l.includes(t.id) ? l : [...l, t.id])); this.labQuery.set(''); }
-  removeLab(id: string): void { this.labIds.update(l => l.filter(x => x !== id)); }
-  clearLabs(): void { this.labIds.set([]); }
+  removeLab(id: string): void {
+    this.labIds.update(l => l.filter(x => x !== id));
+    this.labSpecimens.update(m => { if (!(id in m)) return m; const n = { ...m }; delete n[id]; return n; });
+    this.specimenErr.update(m => { if (!(id in m)) return m; const n = { ...m }; delete n[id]; return n; });
+  }
+  clearLabs(): void { this.labIds.set([]); this.labSpecimens.set({}); this.specimenErr.set({}); }
   onLabKey(ev: KeyboardEvent): void {
     if (ev.key === 'Enter' && this.labResults().length) { ev.preventDefault(); this.addLab(this.labResults()[0]); }
     if (ev.key === 'Escape') this.labQuery.set('');
   }
   testCode(t: Test): string { return t.shortName || t.testCode || ''; }
 
+  // ── Specimen (choose-mode lab tests) ────────────────────────────────────
+  testForPicker(id: string): { id: string; name: string; parameters?: string | null } {
+    const t = this.testById().get(id);
+    return { id, name: t?.name ?? '', parameters: t?.parameters ?? null };
+  }
+  specimenOf(id: string): string | null { return this.labSpecimens()[id] ?? null; }
+  specimenInvalid(id: string): boolean { return !!this.specimenErr()[id]; }
+  setSpecimen(id: string, v: string): void {
+    this.labSpecimens.update(m => ({ ...m, [id]: v }));
+    if (v) this.specimenErr.update(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n; });
+  }
+  /** Picked lab tests as `opd-specimen.ts` items — the same shape Complete
+   *  (consult) will build from `ItemDto`. */
+  private specimenItems(): OpdInvestigationItem[] {
+    return this.labTests().map(l => ({ testId: l.id, name: l.name, specimen: this.labSpecimens()[l.id] }));
+  }
+  /** Blocks Checkout the same way `order-create`'s `requireSpecimens()`
+   *  blocks Save/Pay — a choose-mode test with nothing picked yet would
+   *  otherwise make the server refuse the WHOLE booking (400
+   *  `specimen_required`, thrown before anything OPD is written). */
+  private requireLabSpecimens(): boolean {
+    const byId = this.testById();
+    const testsById: OpdTestLookup = {};
+    for (const l of this.labTests()) { const t = byId.get(l.id); if (t) testsById[l.id] = t; }
+    const missing = missingSpecimens(this.specimenItems(), testsById);
+    if (!missing.length) return true;
+    this.specimenErr.set(Object.fromEntries(missing.map(m => [m.testId, true as const])));
+    this.catalogTab.set('labs');
+    setTimeout(() => {
+      const host = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('.pf-opd-spec--err') : null;
+      host?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }, 0);
+    return false;
+  }
+
   // ── Checkout ─────────────────────────────────────────────────────────
   continueToPayment(): void {
     if (!this.ready()) { this.toasts.info(this.missing()); return; }
+    if (!this.requireLabSpecimens()) { this.toasts.error('Choose the specimen for the highlighted lab test(s).'); return; }
     if (this.phone()) queueMicrotask(() => document.querySelector('.pf-ov-bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     if (this.takeVitalsHere()) {
       const f = this.vitalsForm();
@@ -416,7 +464,8 @@ export class OpdBookVisitPage {
         patientId: p.id, doctorUserId: d.id, departmentId: this.mode() === 'department' ? this.departmentId() : null,
         serviceId: s.serviceId, purpose: this.purpose().trim() || null,
         feeOverride: this.override(), feeOverrideReason: this.overrideReason().trim() || null,
-        labTestIds: this.labIds(), urgent: this.urgent(), vitals, payments,
+        labTestIds: this.labIds(), labTestSpecimens: specimenPayload(this.specimenItems()) ?? undefined,
+        urgent: this.urgent(), vitals, payments,
       }));
       writeDraft(this.draftStorage, this.key(), null);
       this.toasts.success(`Token ${v.tokenLabel} issued for ${v.patient.name}`);
@@ -431,7 +480,7 @@ export class OpdBookVisitPage {
   discardDraft(): void {
     writeDraft(this.draftStorage, this.key(), null);
     this.patient.set(null); this.doctorId.set(null); this.departmentId.set(null); this.serviceId.set(undefined);
-    this.purpose.set(''); this.clearOverride(); this.labIds.set([]); this.urgent.set(false);
+    this.purpose.set(''); this.clearOverride(); this.labIds.set([]); this.labSpecimens.set({}); this.specimenErr.set({}); this.urgent.set(false);
     this.deptFilterId.set(null); this.catalogQuery.set(''); this.catalogTab.set('doctors');
     this.vitalsForm()?.reset(); this.stage.set('build');
   }

@@ -281,6 +281,11 @@
                     <span class="pf-ob-line__txt">
                       <span class="pf-ob-line__name">{{ l.name }}</span>
                       <span class="pf-ob-line__meta">Lab test</span>
+                      <!-- Choose-mode test (KOH Mount, C&S, …): the ONE specimen
+                           rule (micro-specimen.ts / SpecimenRules) — without this
+                           the whole Checkout is refused (specimen_required). -->
+                      <pf-opd-specimen-picker [test]="testForPicker(l.id)" [value]="specimenOf(l.id)"
+                        [invalid]="specimenInvalid(l.id)" (valueChange)="setSpecimen(l.id, $event)"></pf-opd-specimen-picker>
                     </span>
                     <span class="pf-ob-line__amt nd-num">{{ l.price | inr }}</span>
                     <button type="button" class="nd-btn nd-btn--icon pf-ov-x" (click)="removeLab(l.id)" [attr.aria-label]="'Remove ' + l.name">
