@@ -56,7 +56,7 @@ import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.c
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
-import { MIN_LOAD_MS, heldFlag } from '../../../shared/utils/min-duration';
+import { MIN_LOAD_MS, createLoadHold, heldFlag } from '../../../shared/utils/min-duration';
 import { memberDepartmentNames, shownDepartmentName } from '../../../shared/utils/package-department';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { formatAge } from '../../../shared/utils/patient-age';
@@ -133,6 +133,12 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._openingZoom.set(keys.length > 0);
   }
   private readonly _tests = signal<Test[]>([]);
+  /** First open: the orderable catalogue has not answered yet. Held so a
+   *  fast answer never flashes; skipped when it answers in the same turn. */
+  private readonly testsHold = createLoadHold(true);
+  /** Catalogue skeleton: first load only (a background resync keeps the
+   *  rows on screen). */
+  readonly catalogSkeleton = computed(() => this.testsHold.active() && this._tests().length === 0);
   private readonly _saving = signal(false);
   private readonly _selected = signal<string[]>([]);
   // ── Specimen choice at the desk: testId → specimen CODE ──
@@ -398,8 +404,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       // inactive row through, it never reaches the picker.
       // A test the tenant/branch doesn't offer (pricing table `is_offered`
       // = false) is not orderable either — ordering it would 409.
-      next: l => this._tests.set((l ?? []).filter(t => t.isActive !== false && isOffered(t))),
-      error: e => this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`)
+      next: l => { this._tests.set((l ?? []).filter(t => t.isActive !== false && isOffered(t))); this.testsHold.done(); },
+      error: e => { this.testsHold.done(); this.toasts.error(`Could not load tests: ${e?.message ?? 'unknown error'}`); }
     });
   }
 

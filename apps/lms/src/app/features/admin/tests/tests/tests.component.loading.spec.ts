@@ -18,7 +18,7 @@ import { AuthService } from '../../../../core/auth/auth.service';
 /**
  * Test Master LIST — loading feedback (ND-PATTERN "Loading feedback"): the
  * first load draws skeleton rows in the grid's box, "Edit" turns busy the
- * same frame it is pressed (RouteProgressService.markSource) and warms the
+ * same frame it is pressed (PageOpenService.markSource) and warms the
  * test editor's code on hover / focus so the tap doesn't wait on a download.
  */
 const KEY = 'pf:tm:depts-collapsed:u1';
@@ -86,6 +86,10 @@ describe('Test Master grid — loading feedback', () => {
       const skel = el.querySelector('.pf-tm-main__body .pf-tm-grid-skel');
       expect(skel).not.toBeNull();
       expect(skel!.getAttribute('label')).toBe('Loading tests…');
+      // The department side card is a skeleton too — never "All · 0" /
+      // "No departments yet." before the catalogue has answered.
+      expect(el.querySelector('pf-skeleton-rows[label="Loading departments…"]')).not.toBeNull();
+      expect(el.textContent).not.toContain('No departments yet.');
       await Promise.resolve();
       tests$.next(TESTS); tests$.complete();
       vi.advanceTimersByTime(600);

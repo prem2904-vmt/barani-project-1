@@ -586,6 +586,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly apptHold = createLoadHold(true);
   private readonly homeHold = createLoadHold(true);
   private readonly ordersHold = createLoadHold(true);
+  /** Payments due (outstanding bills) — first answer. */
+  private readonly billsHold = createLoadHold(true);
+  readonly billsSkel = this.billsHold.active;
   readonly apptSkel = this.apptHold.active;
   readonly homeSkel = this.homeHold.active;
   readonly ordersSkel = this.ordersHold.active;
@@ -1281,8 +1284,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         const bills = [...(r?.due ?? []), ...(r?.refundsOwed ?? [])];
         this._bills.set(bills);
         this.fetchOrdersForBills(bills);
+        this.billsHold.done();
       },
-      error: () => { /* endpoint may not exist; silently ignore */ }
+      error: () => { this.billsHold.done(); /* endpoint may not exist; silently ignore */ }
     });
 
     // Fetch open home-collection requests for the Home Collection tab.

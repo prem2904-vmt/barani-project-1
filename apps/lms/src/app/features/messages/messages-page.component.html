@@ -112,10 +112,14 @@
           </button>
         </li>
       } @empty {
+        @if (convSkeleton()) {
+          <li><pf-skeleton-rows [rows]="6" [trailing]="false" label="Loading conversations…"></pf-skeleton-rows></li>
+        } @else {
         <li class="pf-msgs__empty-rail">
           <p>No conversations yet.</p>
           <button type="button" class="pf-msgs__link-btn" (click)="openNewChatModal()">Start one</button>
         </li>
+        }
       }
     </ul>
     } @else {

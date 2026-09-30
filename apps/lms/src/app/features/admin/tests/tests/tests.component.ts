@@ -49,7 +49,7 @@ import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
 import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { prefetch, prefetchWhenIdle } from '../../../../shared/utils/prefetch';
-import { RouteProgressService } from '../../../../core/navigation/route-progress.service';
+import { PageOpenService } from '../../../../core/navigation/page-open.service';
 import { afterNextPaint } from '../../../../shared/utils/busy';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { TEST_EDITOR_PREFETCH_KEY, loadTestEditor } from '../test-editor/test-editor.loader';
@@ -192,7 +192,7 @@ export class TestsComponent implements OnInit {
   private readonly listHold = createLoadHold(true);
   /** Skeleton rows over the grid until the first load lands (held, no flash). */
   readonly listSkeleton = this.listHold.active;
-  private readonly routeProgress = inject(RouteProgressService);
+  private readonly pageOpen = inject(PageOpenService);
   private readonly _depts = signal<DeptRecord[]>([]);
   private readonly _selectedDept = signal<string | null>(null);
   readonly saving = signal(false);
@@ -839,7 +839,7 @@ export class TestsComponent implements OnInit {
     };
     // "Edit" opens the lazy test editor: warm its code on hover / focus, and
     // mark the pressed button busy in the same frame (cleared when the
-    // navigation settles — see RouteProgressService.markSource).
+    // navigation settles — see PageOpenService.markSource).
     const warm = () => { void prefetch(TEST_EDITOR_PREFETCH_KEY, loadTestEditor); };
     const edit = act('Edit', 'Edit ' + (data?.name || 'test'),
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
@@ -848,7 +848,7 @@ export class TestsComponent implements OnInit {
         const id = data.id;
         // Paint the pressed state FIRST, then navigate: opening the editor
         // is heavy synchronous work that would otherwise swallow the frame.
-        this.routeProgress.markSource(edit);
+        this.pageOpen.markSource(edit);
         afterNextPaint(() => this.editTest(id));
       });
     edit.addEventListener('pointerenter', warm);
