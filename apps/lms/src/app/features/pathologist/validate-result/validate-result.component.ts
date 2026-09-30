@@ -1028,7 +1028,6 @@ export class ValidateResultComponent implements OnInit {
       ?? `${t.subOrder?.orderId ?? t.subOrder?.order?.id ?? ''}|${t.test?.department?.id ?? ''}`;
   }
 
-  /** Every queued test on the same tube as the focused test (self as fallback). */
   /** Technician report notes of this tube's order — re-read when a line's
    *  status moves (validate / reject lock or unlock them). */
   protected readonly notes = inject(ReportNotesStore);
@@ -1043,6 +1042,7 @@ export class ValidateResultComponent implements OnInit {
     void this.notes.load(oid);
   });
 
+  /** Every queued test on the same tube as the focused test (self as fallback). */
   readonly sampleTests = computed<OrderTest[]>(() => {
     const sel = this._selected();
     if (!sel) return [];

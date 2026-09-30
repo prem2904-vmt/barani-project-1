@@ -52,7 +52,7 @@ import { ReportNoteViewComponent } from './report-note-view.component';
                 [attr.aria-label]="label()"
                 [attr.aria-invalid]="over() ? 'true' : null"
                 [value]="draft()"
-                placeholder="Write the note that prints on the report"
+                placeholder="Write the note that prints on the final report"
                 (input)="onInput($event)"
                 (keydown)="onKey($event)"></textarea>
       @if (over()) {

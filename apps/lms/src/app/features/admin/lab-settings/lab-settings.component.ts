@@ -493,11 +493,11 @@ interface AutoAssignConfig {
         </div>
         <div class="pf-ls__cardbody">
           <p class="pf-ls__hint">
-            When ON, technicians entering results can add a note that <strong>prints on the report</strong> —
+            When ON, technicians entering results can add a note that <strong>prints on the final report</strong> (and an amended final; never on a preliminary / partial release) —
             under a test (also each test inside a profile), under a profile, at the end of a department section,
             or for the whole report. Notes can be <strong>bold</strong>, <em>italic</em>, underlined, or bulleted /
             numbered lists, and stay editable until the test is validated (after that, through Edit result).
-            Turning it OFF hides the notes on result entry; notes already written still print.
+            The validating pathologist sees every note on the validation screen. Turning it OFF hides the notes on result entry; notes already written still print.
           </p>
         </div>
       </section>

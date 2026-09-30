@@ -84,4 +84,22 @@ describe('Validate — technician report notes', () => {
     expect(card.querySelector('.pf-rns__add')).toBeNull();
     expect(card.querySelector('[data-rnc="department:d1"]')).toBeNull();   // empty + frozen → nothing to show
   });
+
+  it('every level that prints is visible to the validator — line, profile, section, whole report — final report only', async () => {
+    const v = notes(true);
+    v.profiles = [{ id: 'pk1', name: 'CBC', text: '1. profile **note**', editable: true }];
+    v.tests = v.tests.map(t => ({ ...t, profileId: 'pk1' }));
+    v.departments = [{ id: 'd1', name: 'Haematology', text: 'Section _note_', editable: true }];
+    const { el } = await render(v);
+    const card = el.querySelector('.pf-rnc')!;
+    expect(card.textContent).toContain('final report');
+    for (const k of ['test:t1', 'profile:pk1', 'department:d1', 'order:']) {
+      const row = card.querySelector(`[data-rnc="${k}"]`);
+      expect(row, k).not.toBeNull();
+      expect(row!.querySelector('pf-report-note-view'), k).not.toBeNull();
+      expect(row!.querySelector('.pf-rns__edit'), k).not.toBeNull();
+    }
+    expect(card.querySelector('[data-rnc="profile:pk1"] .pf-rnv__b')!.textContent).toBe('note');
+    expect(card.querySelector('[data-rnc="department:d1"] .pf-rnv__i')!.textContent).toBe('note');
+  });
 });

@@ -59,7 +59,7 @@ function view(enabled: boolean, editable: boolean, texts: Partial<Record<'ot1' |
   };
 }
 
-async function render(notes: ReportNotesView, status = 'in_progress') {
+async function render(notes: ReportNotesView, status = 'in_progress', query: Record<string, string> = {}) {
   const sample = sampleFixture(status);
   const api = {
     get: vi.fn((url: string) => {
@@ -75,7 +75,7 @@ async function render(notes: ReportNotesView, status = 'in_progress') {
       : of({})),
   };
   const params$ = new BehaviorSubject(convertToParamMap({ sampleId: 'smp-1' }));
-  const query$ = new BehaviorSubject(convertToParamMap({}));
+  const query$ = new BehaviorSubject(convertToParamMap(query));
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
@@ -159,5 +159,30 @@ describe('Result entry — technician report notes', () => {
     expect(el.querySelector('pf-report-note-button button')).toBeNull();
     expect(el.querySelector('.pf-rns__add')).toBeNull();
     expect(el.querySelector('.pf-rnc [data-rnc="department:d1"]')!.textContent).toContain('Section note');
+  });
+
+  // Owner 2026-09-30: the validator sees the notes when they view the case —
+  // the tube's validate mode (?validate=1) shows every level that prints.
+  it('validate mode: every note that will print is visible; editable while the server says so', async () => {
+    const { el } = await render(view(true, true, { ot1: '**Haemolysed**', dept: 'Section note', order: 'Whole note' }),
+      'entered', { validate: '1' });
+    const lineNote = el.querySelector('.pf-rns__saved')!;
+    expect(lineNote.querySelector('.pf-rnv__b')!.textContent).toBe('Haemolysed');
+    expect(lineNote.querySelector('.pf-rns__edit')).not.toBeNull();          // awaiting validation → adjustable
+    expect(noteBtn(el, 'test:ot2')).not.toBeNull();
+    const card = el.querySelector('.pf-rnc')!;
+    expect(card.textContent).toContain('final report');
+    expect(card.querySelector('[data-rnc="department:d1"]')!.textContent).toContain('Section note');
+    expect(card.querySelector('[data-rnc="order:"]')!.textContent).toContain('Whole note');
+  });
+
+  it('validate mode on a signed-off tube: the notes stay visible, read-only', async () => {
+    const { el } = await render(view(true, false, { ot1: '_kept_', dept: 'Section note', order: 'Whole note' }),
+      'validated', { validate: '1' });
+    expect(el.querySelector('.pf-rns__saved .pf-rnv__i')!.textContent).toBe('kept');
+    expect(el.querySelector('.pf-rns__edit')).toBeNull();
+    expect(el.querySelector('pf-report-note-button button')).toBeNull();
+    expect(el.querySelector('.pf-rnc [data-rnc="department:d1"]')!.textContent).toContain('Section note');
+    expect(el.querySelector('.pf-rnc [data-rnc="order:"]')!.textContent).toContain('Whole note');
   });
 });

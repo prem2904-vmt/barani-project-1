@@ -83,7 +83,7 @@ export class ReportNoteSlotComponent {
     @if (canEdit()) {
       <button type="button" class="pf-rnb" [class.pf-rnb--has]="has()" [class.pf-rnb--text]="withText()"
               [attr.aria-pressed]="open()" [attr.aria-label]="(has() ? 'Edit' : 'Add') + ' report note — ' + label()"
-              [title]="(has() ? 'Edit the report note' : 'Add a note that prints on the report') + ' — ' + label()"
+              [title]="(has() ? 'Edit the report note' : 'Add a note that prints on the final report') + ' — ' + label()"
               [attr.data-rnb]="scope() + ':' + (key() ?? '')"
               (mousedown)="$event.preventDefault()" (click)="store.toggle(scope(), key())">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>

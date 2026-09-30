@@ -47,7 +47,7 @@ describe('Lab settings — technician notes on report', () => {
     expect(p.sw()).not.toBeNull();
     expect(p.sw()!.classList.contains('nd-toggle')).toBe(true);
     expect(p.sw()!.getAttribute('aria-checked')).toBe('false');
-    expect(p.el.querySelector('[data-testid="ls-tech-notes"]')!.textContent).toContain('prints on the report');
+    expect(p.el.querySelector('[data-testid="ls-tech-notes"]')!.textContent).toContain('prints on the final report');
   });
 
   it('reads the saved switch and PATCHes only techReportNotes', () => {

@@ -24,7 +24,7 @@ interface Row { scope: ReportNoteScope; id: string | null; title: string; hint: 
           </span>
           <h2 class="nd-card__label pf-rnc__label">Report notes</h2>
           <span class="nd-card__note pf-rnc__note">
-            {{ store.enabled() ? 'Printed on the report where each belongs.' : 'Technician notes are off in Lab settings — saved notes still print.' }}
+            {{ store.enabled() ? 'Printed on the final report where each belongs — not on a preliminary.' : 'Technician notes are off in Lab settings — saved notes still print on the final report.' }}
           </span>
         </header>
         <div class="nd-card__body pf-rnc__body">
