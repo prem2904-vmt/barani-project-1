@@ -1413,7 +1413,7 @@ function formatDateTime(iso: string | undefined | null): string {
 }
 
 /** Integer rupees → English words, Indian numbering (lakh/crore). */
-function numberToWordsINR(num: number): string {
+export function numberToWordsINR(num: number): string {
   if (!isFinite(num) || num <= 0) return "Zero";
   const ones = [
     "",

@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { OPD_API } from '../shared/opd-api';
-import type { DrugForm, DrugSchedule, OpdRefund, PharmacyConfig } from '../shared/opd.models';
+import type { DrugForm, DrugSchedule, OpdPregnancy, OpdRefund, PharmacyConfig } from '../shared/opd.models';
 import type { RxSchedule } from '../shared/rx-schedule';
 
 /**
@@ -16,6 +16,9 @@ import type { RxSchedule } from '../shared/rx-schedule';
 
 export type DrugOrigin = 'master' | 'override' | 'local';
 
+/** Pregnancy-safety guard (night/safety, critic P0 #1a) — the ONE vocabulary. */
+export type PregnancyRisk = 'safe' | 'caution' | 'avoid' | 'contraindicated';
+
 /** A drug as this tenant sees it (copy-on-write). `id` is the STABLE id (the
  *  master row's when one exists) — stock, bills and Rx lines use it. */
 export interface PharmacyDrugRow {
@@ -25,6 +28,8 @@ export interface PharmacyDrugRow {
   taxSlab: number; defaultMrp?: number | null; aliases: string[]; isActive: boolean; onHand?: number | null;
   /** Integrator (pharmacy_drugs): topical site kind + the usual Rx for doctor favourites. */
   siteKind?: string | null; usual?: Record<string, unknown> | null;
+  /** Pregnancy-safety guard — null = not assessed. */
+  pregnancyRisk?: PregnancyRisk | null; pregnancyNote?: string | null;
 }
 
 /** One grid row's edit (null/undefined fields are left as they are). */
@@ -34,6 +39,8 @@ export interface DrugEdit {
   defaultMrp?: number; isActive?: boolean; aliases?: string[]; revert?: boolean;
   /** "" clears. */
   siteKind?: string; usual?: Record<string, unknown> | null;
+  /** "" clears. */
+  pregnancyRisk?: PregnancyRisk | ''; pregnancyNote?: string;
 }
 
 export interface StockRow {
@@ -68,6 +75,8 @@ export interface RxQueueRow {
 export interface DrugBrief {
   id: string; name: string; generic?: string | null; strength?: string | null; form: DrugForm; unit?: string | null;
   schedule: DrugSchedule; hsnCode?: string | null; taxSlab: number; defaultMrp?: number | null; onHand: number;
+  /** Pregnancy-safety guard (night/safety, critic P0 #1d). */
+  pregnancyRisk?: PregnancyRisk | null; pregnancyNote?: string | null;
 }
 
 export interface PickBatch { id: string; batchNo: string; expiryDate: string; mrp: number; qtyOnHand: number }
@@ -82,6 +91,8 @@ export interface RxLineView {
 export interface RxDetail {
   visitId: string; visitNumber?: string | null; token: number; patient: PersonRef; doctor: PersonRef; doctorRegNo?: string | null;
   completedAt?: string | null; consultStatus: string; lines: RxLineView[]; settings: PharmacyConfig; dispenses: DispenseSummary[];
+  /** Pregnancy-safety guard (night/safety, critic P0 #1d) — appended at the END. */
+  pregnancy?: OpdPregnancy | null;
 }
 
 /** `overrideReason` is required when `qty` is more than the Rx line's
@@ -104,7 +115,13 @@ export interface DispenseLineView {
   overrideReason?: string | null;
   /** night/pharm — critic #8: strength + GST slab for the "generic-first" bill print, and what was ORDERED when a substitute was given. */
   strength?: string | null; taxSlab?: number; rxDrugName?: string | null;
+  /** night/money — the GST tax invoice print's per-line HSN (critic item #4). */
+  hsnCode?: string | null;
 }
+
+/** night/money — the GST tax invoice print's letterhead: name/address/phone off
+ *  the branch, GSTIN off the branch's GST config (the ONE GST home). */
+export interface PharmacyInvoiceHeader { pharmacyName: string; address?: string | null; phone?: string | null; email?: string | null; gstin?: string | null }
 
 export interface BillView {
   id: string; invoiceNumber?: string | null; subTotal: number; discount: number; totalTaxable: number; totalCgst: number;
@@ -176,6 +193,8 @@ export class PharmacyApi {
   // Settings
   settings(): Observable<PharmacyConfig> { return this.api.get(`${P}/settings`); }
   saveSettings(s: PharmacyConfig): Observable<PharmacyConfig> { return this.api.put(`${P}/settings`, s); }
+  /** The GST tax invoice print's letterhead (name/address/phone/GSTIN). */
+  invoiceHeader(): Observable<PharmacyInvoiceHeader> { return this.api.get(`${P}/invoice-header`); }
 
   // Rx
   rxQueue(): Observable<RxQueueRow[]> { return this.api.get(`${P}/rx-queue`); }
@@ -188,6 +207,9 @@ export class PharmacyApi {
     return this.api.get(`${P}/dispenses${qs({ date, kind, status })}`);
   }
   dispense(id: string): Observable<DispenseView> { return this.api.get(`${P}/dispenses/${id}`); }
+  /** Collect a later payment on a DISPENSED sale (an Rx given "bill later", or
+   *  any completed sale still carrying a balance). */
+  payDispense(id: string, body: PaymentBody): Observable<DispenseView> { return this.api.post(`${P}/dispenses/${id}/pay`, body); }
 
   // Counter
   counterCreate(body: CounterBody): Observable<DispenseView> { return this.api.post(`${P}/counter`, body); }
