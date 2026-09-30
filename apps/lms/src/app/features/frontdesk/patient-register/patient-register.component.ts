@@ -5,6 +5,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
 import {
   WorkflowRendererComponent,
   DOB_ESTIMATED_SUFFIX,
@@ -83,6 +84,14 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
               Save &amp; Book appointment
             </button>
             }
+            @if (opdGate.visible()) {
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-consult press" [disabled]="saving() || !config()"
+                    [pfBusy]="saving() && savingAs() === 'consult'" pfBusyLabel="Saving patient…"
+                    (click)="submit('create_consult')" aria-label="Save & book consultation" title="Register, then book a consultation">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M10 3H6M18 3h-4"/><path d="M12 15v3a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="14" r="2"/></svg>
+              Save &amp; Book consult
+            </button>
+            }
           }
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-reg-primary press" [disabled]="saving() || !config()"
                   [pfBusy]="saving() && savingAs() === 'profile'" pfBusyLabel="Saving patient…"
@@ -142,7 +151,7 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
             [initialValues]="initialValues()"
             [submitting]="saving()"
             [finishLabel]="primaryLabel()"
-            [extraActions]="patientId() ? [] : registerActions"
+            [extraActions]="patientId() ? [] : registerActions()"
             (enterSubmit)="submit(null)"
             (valuesChange)="onValuesChange($event)"
             (extraActionClicked)="onExtraAction($event)"
@@ -215,7 +224,7 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
             [initialValues]="initialValues()"
             [submitting]="saving()"
             [finishLabel]="patientId() ? 'Save changes' : 'Register patient'"
-            [extraActions]="patientId() ? [] : registerActions"
+            [extraActions]="patientId() ? [] : registerActions()"
             (valuesChange)="onValuesChange($event)"
             (extraActionClicked)="onExtraAction($event)"
             (workflowComplete)="onComplete($event)"></pf-workflow-renderer>
@@ -275,6 +284,7 @@ export class PatientRegisterComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
   private readonly orderEntry = inject(OrderEntryService);
+  protected readonly opdGate = inject(OpdGateService);
   private readonly route = inject(ActivatedRoute);
   protected readonly theme = inject(ThemeService);
   /** Web pointer (autofocus only on web — never pop the phone keyboard). */
@@ -332,7 +342,7 @@ export class PatientRegisterComponent implements OnInit {
 
   /** Band actions (and Enter on the last field / Ctrl-⌘+Enter) → the
    *  renderer, which validates EVERY field first. */
-  submit(action: 'create_order' | 'create_appointment' | null): void {
+  submit(action: 'create_order' | 'create_appointment' | 'create_consult' | null): void {
     const r = this.renderer();
     if (!r || this._saving()) return;
     if (action) r.triggerExtraAction(action); else r.finish();
@@ -367,10 +377,17 @@ export class PatientRegisterComponent implements OnInit {
   private readonly _config = signal<WorkflowConfig | null>(null);
   private readonly _saving = signal(false);
   protected readonly values = signal<WorkflowFormValues>({});
-  protected readonly registerActions: Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }> = [
-    { id: 'create_order', label: 'Create Order', variant: 'ghost' },
-    { id: 'create_appointment', label: 'Create Appointment', variant: 'ghost' }
-  ];
+  /** OPD dark build: "create_consult" only appears while OPD is visible —
+   *  computed so it reacts to the console flag / entitlement, not a static
+   *  array. */
+  protected readonly registerActions = computed<Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }>>(() => {
+    const actions: Array<{ id: string; label: string; variant?: 'primary' | 'ghost' }> = [
+      { id: 'create_order', label: 'Create Order', variant: 'ghost' },
+      { id: 'create_appointment', label: 'Create Appointment', variant: 'ghost' },
+    ];
+    if (this.opdGate.visible()) actions.push({ id: 'create_consult', label: 'Book Consultation', variant: 'ghost' });
+    return actions;
+  });
 
   readonly record = this._record.asReadonly();
   readonly config = this._config.asReadonly();
@@ -378,7 +395,7 @@ export class PatientRegisterComponent implements OnInit {
   /** Which band action started the save in flight (only that button shows busy). */
   /** Appointments on? (the ONE lab-feature rule) — hides Save & Book appointment. */
   protected readonly features = inject(LabFeaturesService);
-  private readonly _savingAs = signal<'profile' | 'order' | 'appointment'>('profile');
+  private readonly _savingAs = signal<'profile' | 'order' | 'appointment' | 'consult'>('profile');
   readonly savingAs = this._savingAs.asReadonly();
 
   /** True while the "Baby of" title is selected (an unnamed newborn — the
@@ -747,10 +764,12 @@ export class PatientRegisterComponent implements OnInit {
       this.savePatient(event.values, 'order');
     } else if (event.actionId === 'create_appointment') {
       this.savePatient(event.values, 'appointment');
+    } else if (event.actionId === 'create_consult') {
+      this.savePatient(event.values, 'consult');
     }
   }
 
-  private savePatient(values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment') {
+  private savePatient(values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment' | 'consult') {
     const cfg = this._config();
     if (!cfg || this._saving()) return;
     const { standard, metadata } = splitByStorage(cfg, values);
@@ -814,6 +833,8 @@ export class PatientRegisterComponent implements OnInit {
             ? this.returnToOrder(patient.id)
             : target === 'order'
             ? this.orderEntry.startNewOrder(patient.id)
+            : target === 'consult'
+            ? this.orderEntry.startConsult(patient.id)
             : target === 'appointment'
               ? this.router.navigate(['/frontdesk/appointments/new'], { queryParams: { patientId: patient.id } })
               : this.router.navigate(['/frontdesk/patients', patient.id]);
@@ -848,7 +869,7 @@ export class PatientRegisterComponent implements OnInit {
 
   /** OPS-49: same name + phone already registered — confirm before creating
    *  a genuine namesake (retries with force=true). */
-  private async confirmDuplicate(message: string, values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment') {
+  private async confirmDuplicate(message: string, values: WorkflowFormValues, target: 'profile' | 'order' | 'appointment' | 'consult') {
     const ok = await this.dialog.confirm({
       title: 'Patient already registered?',
       message,

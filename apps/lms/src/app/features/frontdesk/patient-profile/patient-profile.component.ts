@@ -9,6 +9,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import type { RouteAccessCtx } from '../../../core/auth/route-access';
@@ -99,6 +100,7 @@ export class PatientProfileComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly orderEntry = inject(OrderEntryService);
+  protected readonly opdGate = inject(OpdGateService);
   private readonly locationSvc = inject(Location);
   private readonly chat = inject(ChatService);
   private readonly dialog = inject(DialogService);
@@ -413,8 +415,13 @@ export class PatientProfileComponent implements OnInit {
   back() { this.navBack.backTo('/frontdesk'); }
 
   startOrder(p: Patient) {
-    // Routes lab/OPD by module scope; 'lab' (today's default) → order-create.
     void this.orderEntry.startNewOrder(p.id);
+  }
+
+  /** OPD dark build: the "New consultation" button next to New order —
+   *  only rendered when {@link OpdGateService.visible} is true. */
+  startConsult(p: Patient) {
+    void this.orderEntry.startConsult(p.id);
   }
 
   /** Re-order the same tests from a prior order (order-create preselects them). */

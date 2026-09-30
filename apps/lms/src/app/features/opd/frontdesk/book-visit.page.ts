@@ -31,17 +31,23 @@ import {
 } from './desk-rules';
 
 type PickMode = 'doctor' | 'department';
+type CatalogTab = 'doctors' | 'departments' | 'labs';
 
 /**
- * OPD → New visit (`/opd/visit/new?patientId=`) — AGENT B. Where the lab
- * front desk's new-order choice lands for OPD. Five aligned steps in the main
- * card (Patient · Doctor or department · Visit purpose · Lab tests · Vitals)
- * and the BILLING side card that follows every choice: the consult line (with
- * the follow-up rule and an exact desk override), the lab tests' own lab bill,
- * one total and ONE primary — Continue to payment. The draft saves itself
- * (per user × branch). Payment reuses Order & Payments' inline payment panel;
- * the server books, bills and issues the token in one call, then the visit
- * screen shows the token.
+ * OPD → New visit (`/opd/visit/new?patientId=`). SAME shell as the lab's
+ * Order & Payments (`features/frontdesk/order-create`): a band with chips
+ * (Consultation / patient) + a catalogue search, a left catalogue card with
+ * tabs (Doctors / Departments / Lab tests) and department filter chips, and
+ * a right BILLING card that follows every choice — the consult line (with
+ * the follow-up rule and an exact desk override), the lab tests' own lab
+ * bill, one total and Save as draft + Continue to payment. The draft saves
+ * itself (per user × branch). Payment reuses Order & Payments' inline
+ * payment panel; the server books, bills and issues the token in one call,
+ * then the visit screen shows the token.
+ *
+ * "Any doctor in <department>" is always an EXPLICIT tile the receptionist
+ * taps (never a silent auto-pick on choosing the department) — see
+ * {@link pickAnyInDepartment}.
  */
 @Component({
   selector: 'pf-opd-book-visit',
@@ -82,6 +88,15 @@ export class OpdBookVisitPage {
   readonly mode = signal<PickMode>('doctor');
   readonly doctorId = signal<string | null>(null);
   readonly departmentId = signal<string | null>(null);
+  /** Catalogue card (order-create shell): Doctors / Departments / Lab tests. */
+  readonly catalogTab = signal<CatalogTab>('doctors');
+  /** Department filter chip selected in the Doctors tab (also the expanded
+   *  row in the Departments tab) — `null` = all departments. */
+  readonly deptFilterId = signal<string | null>(null);
+  /** Band search once a patient is picked: "Search doctors, departments or
+   *  services" — filters the Doctors / Departments tabs only (Lab tests
+   *  keeps its own search, unchanged). */
+  readonly catalogQuery = signal('');
   readonly serviceId = signal<string | null | undefined>(undefined); // undefined = not picked; null = plain consultation
   readonly purpose = signal('');
   readonly overrideRaw = signal('');
@@ -102,6 +117,22 @@ export class OpdBookVisitPage {
   readonly departments = computed(() => this.data()?.departments ?? []);
   readonly doctor = computed<DeskDoctor | null>(() => this.doctors().find(d => d.id === this.doctorId()) ?? null);
   readonly department = computed<DeskDepartment | null>(() => this.departments().find(d => d.id === this.departmentId()) ?? null);
+  /** Doctors tab: department chip filter, then the band's catalogue search. */
+  readonly deptFilter = computed<DeskDepartment | null>(() => this.departments().find(d => d.id === this.deptFilterId()) ?? null);
+  readonly filteredDoctors = computed(() => {
+    const dep = this.deptFilter();
+    const q = this.catalogQuery().trim().toLowerCase();
+    return this.doctors().filter(d => {
+      if (dep && !dep.doctorIds.includes(d.id)) return false;
+      if (!q) return true;
+      return d.name.toLowerCase().includes(q) || (d.department ?? '').toLowerCase().includes(q);
+    });
+  });
+  readonly filteredDepartments = computed(() => {
+    const q = this.catalogQuery().trim().toLowerCase();
+    if (!q) return this.departments();
+    return this.departments().filter(d => d.name.toLowerCase().includes(q) || d.code.toLowerCase().includes(q));
+  });
   readonly services = computed(() => this.quote()?.services ?? []);
   readonly service = computed<ServiceQuote | null>(() => {
     const id = this.serviceId();
@@ -215,7 +246,7 @@ export class OpdBookVisitPage {
       this.restoring = true;
       this.doctorId.set(draft.doctorId ?? null);
       this.departmentId.set(draft.departmentId ?? null);
-      if (draft.departmentId && !draft.doctorId) this.mode.set('department');
+      if (draft.departmentId) { this.mode.set('department'); this.deptFilterId.set(draft.departmentId); }
       this.serviceId.set(draft.serviceId === null && draft.doctorId ? null : draft.serviceId ?? undefined);
       this.purpose.set(draft.purpose ?? '');
       this.overrideRaw.set(draft.override ?? '');
@@ -284,21 +315,34 @@ export class OpdBookVisitPage {
     return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   }
 
+  // ── Catalogue tabs ───────────────────────────────────────────────────
+  setCatalogTab(t: CatalogTab): void { this.catalogTab.set(t); }
+  /** Department chip / tile: only FILTERS the Doctors tab — picking a
+   *  doctor is always its own, separate, explicit click (never silent). */
+  filterByDepartment(dep: DeskDepartment | null): void {
+    this.deptFilterId.set(dep?.id ?? null);
+    this.catalogTab.set('doctors');
+  }
   // ── Doctor / department ──────────────────────────────────────────────
-  setMode(m: PickMode): void { this.mode.set(m); }
   pickDoctor(d: DeskDoctor): void {
     if (this.doctorId() !== d.id) { this.serviceId.set(undefined); this.clearOverride(); }
     this.doctorId.set(d.id);
-    if (this.mode() === 'doctor') this.departmentId.set(null);
+    const dep = this.deptFilterId();
+    if (dep) { this.mode.set('department'); this.departmentId.set(dep); } else { this.mode.set('doctor'); this.departmentId.set(null); }
   }
-  /** By department: the least-waiting doctor of the department (the server's rule). */
-  pickDepartment(dep: DeskDepartment): void {
-    this.departmentId.set(dep.id);
+  /** The EXPLICIT "Any doctor in <department>" tile — the least-waiting
+   *  doctor of the department (the server's rule), never picked silently
+   *  just because the department was selected. */
+  pickAnyInDepartment(dep: DeskDepartment): void {
     const docs = this.doctors().filter(d => dep.doctorIds.includes(d.id))
       .sort((a, b) => a.waiting - b.waiting || a.name.localeCompare(b.name));
-    if (!docs.length) { this.toasts.info(`No doctor is set up in ${dep.name} yet.`); this.doctorId.set(null); return; }
+    if (!docs.length) { this.toasts.info(`No doctor is set up in ${dep.name} yet.`); return; }
     if (this.doctorId() !== docs[0].id) { this.serviceId.set(undefined); this.clearOverride(); }
     this.doctorId.set(docs[0].id);
+    this.mode.set('department');
+    this.departmentId.set(dep.id);
+    this.deptFilterId.set(dep.id);
+    this.catalogTab.set('doctors');
   }
   waitText(d: { waiting: number; estWaitMinutes?: number }): string { return waitLabel(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
   waitClass(d: { waiting: number; estWaitMinutes?: number }): string { return 'pf-ob-dot--' + waitTone(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
@@ -388,6 +432,16 @@ export class OpdBookVisitPage {
     writeDraft(this.draftStorage, this.key(), null);
     this.patient.set(null); this.doctorId.set(null); this.departmentId.set(null); this.serviceId.set(undefined);
     this.purpose.set(''); this.clearOverride(); this.labIds.set([]); this.urgent.set(false);
+    this.deptFilterId.set(null); this.catalogQuery.set(''); this.catalogTab.set('doctors');
     this.vitalsForm()?.reset(); this.stage.set('build');
+  }
+
+  /** Footer "Save as draft" (order-create parity): the draft already
+   *  autosaves on every change — this just confirms it and sends the
+   *  receptionist back to the OPD desk to pick up the next patient. */
+  saveDraftAndExit(): void {
+    if (!this.patient()) { this.toasts.warning('Pick a patient first'); return; }
+    this.toasts.success('Saved as draft');
+    void this.router.navigateByUrl('/opd/desk');
   }
 }
