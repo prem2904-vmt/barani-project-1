@@ -109,7 +109,7 @@ export class NavBackService {
     }
 
     // Finance (cat=finance)
-    if (normUrl === '/admin/billing' || normUrl === '/finance' || normUrl === '/finance/daily') {
+    if (normUrl === '/admin/billing' || normUrl === '/finance' || normUrl === '/finance/daily' || normUrl === '/finance/expenses') {
       return '/admin/manage?cat=finance';
     }
 

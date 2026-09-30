@@ -1,0 +1,761 @@
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
+import { NgTemplateOutlet, formatDate } from '@angular/common';
+import { firstValueFrom } from 'rxjs';
+import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry } from 'ag-grid-community';
+import { AgGridAngular } from 'ag-grid-angular';
+import { AuthService } from '../../../core/auth/auth.service';
+import { ExpenseService } from '../../../core/services/expense.service';
+import { ThemeService } from '../../../core/services/theme.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
+import { ApiError } from '../../../shared/models/api-response.model';
+import {
+  EXPENSE_MODES, ExpenseBook, ExpenseCategory, ExpenseDay, ExpenseEntry, ExpenseFilter, ExpenseKind, ExpenseMode,
+  expenseAbilities, expenseHaystack, expenseKindLabel, expenseModeLabel,
+} from '../../../shared/models/expense.model';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
+import { NdDateComponent } from '../../../shared/components/nd-date/nd-date.component';
+import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
+import { ModalPortalDirective } from '../../../shared/directives/modal-portal.directive';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
+import { bandFilter } from '../../../shared/utils/band-search';
+import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
+import { plural } from '../../../shared/utils/plural';
+import { spinDelay } from '../../../shared/utils/busy';
+import { ExpenseEntryDialogComponent } from './expense-entry-dialog.component';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+type View = 'entries' | 'days';
+type QuickRange = 'today' | '7d' | '30d' | 'month' | 'custom';
+
+const INR = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
+export const inr = (n: number | null | undefined) => (n == null ? '—' : INR.format(n));
+
+/** yyyy-MM-dd (an IST business date) → "Tue, 29 Sep". */
+export function dayLabel(ymd: string, withWeekday = true): string {
+  try { return formatDate(ymd + 'T12:00:00Z', withWeekday ? 'EEE, d MMM' : 'd MMM', 'en-US', LAB_TIME_ZONE); } catch { return ymd; }
+}
+
+/** The loaded entries that match the band search. */
+export function searchExpenses(rows: readonly ExpenseEntry[], q: string): ExpenseEntry[] {
+  return bandFilter(rows, q, expenseHaystack);
+}
+
+/** First day of the IST month of `ymd`. */
+function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
+
+/**
+ * Finance → Expense tracker. ND pattern: band (search pill over the loaded
+ * entries; Filters on narrow screens, Export CSV, and the ONE primary — Add
+ * expense, an icon on phones), a FILTERS companion on the LEFT (range, type,
+ * category, mode + the range's category totals) and the EXPENSE BOOK as the
+ * main card: the range's opening · cash in · expenses · closing, then either
+ * the entries grid or the DAY BOOK (every IST day's opening / cash in /
+ * expenses / closing, open or closed, with the admin's day actions). The
+ * server decides every permission; the screen only reflects its verdicts.
+ */
+@Component({
+  selector: 'pf-expense-tracker',
+  standalone: true,
+  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, NdDateComponent, SelectComponent,
+    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <section class="pf-xt pf-band-page px-4 md:px-8 pt-6 pb-10">
+      @if (theme.isNewDesign()) {
+        <pf-hero-band [back]="true" placeholder="Search item, category, vendor, notes…"
+                      [value]="q()" (valueChange)="q.set($event)">
+          <ng-container band-actions>
+            @if (narrow()) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="sheetOpen.set(true)"
+                      aria-haspopup="dialog" [attr.aria-expanded]="sheetOpen()" aria-label="Filters" title="Filters">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
+                Filters
+              </button>
+            }
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-xt__export" [disabled]="exporting()" [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…"
+                    (click)="exportCsv()" aria-label="Export CSV" title="Download the entries as CSV">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              Export CSV
+            </button>
+            @if (can().canAdd) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openAdd()" aria-label="Add expense" title="Add expense">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add expense
+              </button>
+            }
+          </ng-container>
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only" eyebrow="Finance" title="Expense tracker" subtitle="Daily expenses, bills and the day's opening / closing balance.">
+        <div actions>
+          <button type="button" class="nd-btn nd-btn--secondary" [disabled]="exporting()" (click)="exportCsv()">Export CSV</button>
+          @if (can().canAdd) { <button type="button" class="nd-btn nd-btn--primary" (click)="openAdd()">Add expense</button> }
+        </div>
+      </pf-screen-header>
+
+      <div class="pf-band-body pf-band-body--fill pf-xt__body">
+        <div class="pf-xt__panels" [class.pf-xt__panels--narrow]="narrow()">
+          @if (narrow()) {
+            @if (sheetOpen()) {
+              <div class="nd-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
+              <aside class="nd-card pf-xt__side pf-xt__side--sheet" role="dialog" aria-modal="true" aria-label="Filters" (keydown.escape)="sheetOpen.set(false)">
+                <span class="nd-sheet__handle" aria-hidden="true"></span>
+                <ng-container *ngTemplateOutlet="filterHead; context: { sheet: true }"></ng-container>
+                <ng-container *ngTemplateOutlet="filterBody"></ng-container>
+              </aside>
+            }
+          } @else {
+            <aside class="nd-card pf-xt__side" aria-label="Filters">
+              <ng-container *ngTemplateOutlet="filterHead; context: { sheet: false }"></ng-container>
+              <ng-container *ngTemplateOutlet="filterBody"></ng-container>
+            </aside>
+          }
+
+          <section class="nd-card pf-xt__main" aria-label="Expense book">
+            <header class="nd-card__head pf-xt__head">
+              <span class="nd-card__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+              </span>
+              <h2 class="nd-card__label">Expense book</h2>
+              @if (seesAll()) {
+                <span class="nd-seg pf-xt__view" role="radiogroup" aria-label="View">
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === 'entries'" (click)="view.set('entries')">Entries</button>
+                  <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === 'days'" (click)="view.set('days')">Day book</button>
+                </span>
+              }
+              <span class="pf-xt__count nd-num" aria-live="polite">{{ countLabel() }}</span>
+            </header>
+
+            @if (book(); as b) {
+              <div class="pf-xt__stats" role="group" aria-label="Range totals">
+                @if (seesAll()) {
+                  <div class="pf-xt__stat"><span class="pf-xt__statk">Opening</span><span class="pf-xt__statv nd-num">{{ b.opening ?? 0 | inr }}</span><span class="pf-xt__stath">{{ dayShort(b.from) }}</span></div>
+                }
+                <div class="pf-xt__stat"><span class="pf-xt__statk">Cash in</span><span class="pf-xt__statv nd-num">{{ b.totalCashIn | inr }}</span><span class="pf-xt__stath">{{ seesAll() ? 'Top-ups in range' : 'You entered' }}</span></div>
+                <div class="pf-xt__stat"><span class="pf-xt__statk">Expenses</span><span class="pf-xt__statv nd-num">{{ b.totalExpenses | inr }}</span><span class="pf-xt__stath">{{ seesAll() ? 'All modes' : 'You entered' }}</span></div>
+                @if (seesAll()) {
+                  <div class="pf-xt__stat"><span class="pf-xt__statk">Closing</span><span class="pf-xt__statv nd-num" [class.pf-xt__neg]="(b.closing ?? 0) < 0">{{ b.closing ?? 0 | inr }}</span><span class="pf-xt__stath">{{ dayShort(b.to) }}</span></div>
+                }
+              </div>
+            }
+
+            <div class="pf-xt__grid-wrap">
+              @if (listSkeleton()) {
+                <pf-skeleton-table class="pf-xt__skel" [rows]="8" [cols]="5" label="Loading expenses…"></pf-skeleton-table>
+              } @else if (view() === 'entries' && !loading() && visibleEntries().length === 0) {
+                <div class="nd-empty nd-empty--compact">
+                  <span class="nd-empty__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z"/></svg>
+                  </span>
+                  <p class="nd-empty__title">{{ q().trim() ? 'No entries match "' + q().trim() + '"' : 'No expenses in this range' }}</p>
+                  <p class="nd-empty__body">{{ q().trim() ? 'Try another item, vendor or category.' : (can().canAdd ? 'Add the first one — snap the bill on your phone.' : 'Widen the date range.') }}</p>
+                  @if (can().canAdd && !q().trim()) {
+                    <button type="button" class="nd-btn nd-btn--secondary nd-empty__action" (click)="openAdd()">Add expense</button>
+                  }
+                </div>
+              } @else if (view() === 'entries') {
+                <ag-grid-angular class="pf-xt__grid" [theme]="gridTheme()" [rowData]="visibleEntries()" [columnDefs]="entryCols()"
+                                 [defaultColDef]="defaultColDef" [getRowId]="entryRowId" [animateRows]="true" [suppressCellFocus]="true"
+                                 (cellClicked)="onEntryClicked($event)"></ag-grid-angular>
+              } @else {
+                <ag-grid-angular class="pf-xt__grid" [theme]="gridTheme()" [rowData]="book()?.days ?? []" [columnDefs]="dayCols()"
+                                 [defaultColDef]="defaultColDef" [getRowId]="dayRowId" [animateRows]="true" [suppressCellFocus]="true"
+                                 (cellClicked)="onDayClicked($event)"></ag-grid-angular>
+              }
+              @if (book()?.truncated && view() === 'entries') {
+                <p class="pf-xt__more nd-num">Showing the latest {{ book()!.entries.length }} entries — narrow the dates, or Export CSV for every row.</p>
+              }
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <ng-template #filterHead let-sheet="sheet">
+      <header class="nd-card__head">
+        <span class="nd-card__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
+        </span>
+        <h2 class="nd-card__label">Filters</h2>
+        <span class="nd-card__spacer"></span>
+        @if (sheet) {
+          <button type="button" class="nd-btn nd-btn--icon" (click)="sheetOpen.set(false)" aria-label="Close filters">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        }
+      </header>
+    </ng-template>
+
+    <ng-template #filterBody>
+      <div class="nd-card__body pf-xt__filters">
+        <div class="nd-field">
+          <span class="nd-field__lbl" id="pf-xt-range-lbl">Dates (IST)</span>
+          <span class="nd-seg pf-xt__seg" role="radiogroup" aria-labelledby="pf-xt-range-lbl">
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'today'" (click)="setQuick('today')">Today</button>
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === '7d'" (click)="setQuick('7d')">7 days</button>
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'month'" (click)="setQuick('month')">This month</button>
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="quick() === 'custom'" (click)="setQuick('custom')">Custom</button>
+          </span>
+          <div class="pf-xt__dates">
+            <label class="pf-xt__dates-lbl" for="pf-xt-from">From</label>
+            <pf-nd-date label="From" inputId="pf-xt-from" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-nd-date>
+            <label class="pf-xt__dates-lbl" for="pf-xt-to">To</label>
+            <pf-nd-date label="To" inputId="pf-xt-to" [value]="to()" [min]="from()" [max]="today" (valueChange)="setTo($event)"></pf-nd-date>
+          </div>
+        </div>
+        <div class="nd-field">
+          <span class="nd-field__lbl" id="pf-xt-kind-lbl">Type</span>
+          <span class="nd-seg pf-xt__seg" role="radiogroup" aria-labelledby="pf-xt-kind-lbl">
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === ''" (click)="kind.set('')">All</button>
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === 'expense'" (click)="kind.set('expense')">Expenses</button>
+            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="kind() === 'cash_in'" (click)="kind.set('cash_in')">Cash in</button>
+          </span>
+        </div>
+        <div class="nd-field">
+          <label class="nd-field__lbl" for="pf-xt-cat">Category</label>
+          <pf-select id="pf-xt-cat" size="sm" [options]="categoryFilterOptions()" [value]="categoryId()" [searchable]="true"
+                     (valueChange)="categoryId.set($event)"></pf-select>
+        </div>
+        <div class="nd-field">
+          <label class="nd-field__lbl" for="pf-xt-mode">Payment mode</label>
+          <pf-select id="pf-xt-mode" size="sm" [options]="modeFilterOptions" [value]="mode()" (valueChange)="mode.set($any($event) ?? '')"></pf-select>
+        </div>
+
+        @if (book(); as b) {
+          <div class="nd-field">
+            <span class="nd-field__lbl">By category</span>
+            @if (b.byCategory.length === 0) {
+              <p class="nd-field__hint">No expenses in this range.</p>
+            } @else {
+              <ul class="pf-xt__totals" aria-label="Expenses by category">
+                @for (c of b.byCategory; track c.key) {
+                  <li>
+                    <button type="button" class="nd-row pf-xt__totrow" [attr.aria-pressed]="categoryId() === c.key" (click)="toggleCategory(c.key)">
+                      <span class="nd-row__name">{{ c.label }}</span>
+                      <span class="nd-row__meta nd-num">{{ c.count }}</span>
+                      <span class="nd-row__value nd-num">{{ c.total | inr }}</span>
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+            @if (b.byMode.length > 0) {
+              <p class="nd-field__hint nd-num">{{ modeSummary() }}</p>
+            }
+          </div>
+        }
+
+        @if (can().isAdmin) {
+          <button type="button" class="nd-btn nd-btn--tertiary pf-xt__managecats" (click)="catsOpen.set(true)">Manage categories</button>
+        }
+        <p class="nd-field__hint">
+          @if (seesAll()) {
+            Opening + cash in − expenses = closing (all payment modes). A closed day is locked for everyone until an admin reopens it.
+          } @else {
+            You see the entries you added. You can change them until the day is closed.
+          }
+        </p>
+      </div>
+    </ng-template>
+
+    @if (dialog(); as d) {
+      <pf-expense-entry-dialog [entry]="d.entry" [categories]="categories()" [today]="today" [closedThrough]="book()?.closedThrough ?? null"
+                               [isAdmin]="can().isAdmin" [initialKind]="d.kind" [initialDate]="d.date"
+                               (closed)="dialog.set(null)" (changed)="load()" (categoryCreated)="addCategory($event)"></pf-expense-entry-dialog>
+    }
+
+    @if (billsFor(); as e) {
+      <div class="pf-xt-modal" role="dialog" aria-modal="true" aria-labelledby="pf-xt-bills-title" pfModalPortal>
+        <div class="pf-xt-modal__backdrop" (click)="billsFor.set(null)"></div>
+        <div class="pf-xt-modal__card">
+          <header class="pf-xt-modal__head">
+            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></span>
+            <h2 id="pf-xt-bills-title" class="nd-card__label pf-xt-modal__title">Bills · {{ e.description }}</h2>
+            <button type="button" class="nd-btn nd-btn--icon" (click)="billsFor.set(null)" aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </header>
+          <ul class="pf-xt-modal__bills">
+            @for (a of e.attachments; track a.id) {
+              <li>
+                <a class="pf-xt-modal__bill" [href]="a.url" target="_blank" rel="noopener">
+                  <span class="pf-xt-modal__thumb">
+                    @if (a.contentType.startsWith('image/')) { <img [src]="a.url" alt="" loading="lazy" /> }
+                    @else { <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> }
+                  </span>
+                  <span class="pf-xt-modal__name">{{ a.fileName }}</span>
+                </a>
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    @if (catsOpen()) {
+      <div class="pf-xt-modal" role="dialog" aria-modal="true" aria-labelledby="pf-xt-cats-title" pfModalPortal>
+        <div class="pf-xt-modal__backdrop" (click)="catsOpen.set(false)"></div>
+        <div class="pf-xt-modal__card">
+          <header class="pf-xt-modal__head">
+            <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><path d="M7 7h.01"/></svg></span>
+            <h2 id="pf-xt-cats-title" class="nd-card__label pf-xt-modal__title">Expense categories</h2>
+            <button type="button" class="nd-btn nd-btn--icon" (click)="catsOpen.set(false)" aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </header>
+          <form class="pf-xt-modal__add" (submit)="$event.preventDefault(); createCategory()">
+            <input class="nd-input" type="text" maxlength="80" placeholder="New category — e.g. Generator diesel" aria-label="New category name"
+                   [value]="newCat()" (input)="newCat.set($any($event.target).value)" />
+            <button type="submit" class="nd-btn nd-btn--secondary" [disabled]="!newCat().trim() || catBusy()" [pfBusy]="catBusy()" pfBusyLabel="Adding…">Add</button>
+          </form>
+          <ul class="pf-xt-modal__cats">
+            @for (c of categories(); track c.id) {
+              <li class="nd-row pf-xt-modal__cat">
+                <span class="nd-row__name" [class.pf-xt__off]="!c.isActive">{{ c.name }}</span>
+                @if (!c.isActive) { <span class="nd-chip nd-chip--static">Off</span> }
+                <button type="button" class="nd-toggle" role="switch" [attr.aria-checked]="c.isActive"
+                        [attr.aria-label]="'Use ' + c.name" (click)="toggleCategoryActive(c)">
+                  <span class="nd-toggle__track" aria-hidden="true"><span class="nd-toggle__knob"></span></span>
+                </button>
+              </li>
+            }
+          </ul>
+          <p class="pf-xt-modal__hint">Switched-off categories stay on past entries; they just can't be picked for new ones.</p>
+        </div>
+      </div>
+    }
+  `,
+  styles: [`
+    :host { display: block; min-height: 0; }
+    .pf-xt__body { display: flex; flex-direction: column; min-height: 0; }
+    .pf-xt__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+    .pf-xt__panels--narrow { grid-template-columns: minmax(0, 1fr); }
+    .pf-xt__side { min-height: 0; }
+    .pf-xt__side--sheet {
+      position: fixed; left: 0; right: 0; bottom: var(--nd-nav-h, 0px); z-index: 80; max-height: 80dvh;
+      border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .pf-xt__side--sheet .nd-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--nd-line); }
+    .pf-xt__filters { gap: 16px; overflow-y: auto; }
+    .pf-xt__seg { flex-wrap: wrap; }
+    .pf-xt__dates { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; }
+    .pf-xt__dates-lbl { font-size: 12px; color: var(--text-tertiary); }
+    .pf-xt__totals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pf-xt__totrow { width: 100%; min-height: 44px; cursor: pointer; }
+    .pf-xt__totrow[aria-pressed='true'] { background: var(--nd-in-tint); border-color: var(--nd-sel-border); }
+    .pf-xt__managecats { align-self: flex-start; }
+    .pf-xt__main { min-width: 0; min-height: 0; }
+    .pf-xt__head { flex-wrap: wrap; row-gap: 8px; }
+    .pf-xt__view { margin-left: 8px; }
+    .pf-xt__count { flex: none; margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-xt__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--nd-line); }
+    .pf-xt__stat { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--nd-line); background: var(--glass-bg); min-width: 0; }
+    .pf-xt__statk { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); }
+    .pf-xt__statv { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+    .pf-xt__stath { font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-xt__neg { color: var(--red-text, #dc2626); }
+    .pf-xt__off { color: var(--text-tertiary); }
+    .pf-xt__grid-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .pf-xt__skel { display: block; }
+    .pf-xt__grid { display: block; width: 100%; flex: 1 1 auto; height: calc(100dvh - 380px); min-height: 320px; }
+    :host-context(.design-new) .pf-xt__grid { height: auto; min-height: 300px; }
+    .pf-xt__main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
+    .pf-xt__main ::ng-deep .ag-pinned-right-header, .pf-xt__main ::ng-deep .ag-pinned-right-cols-container { border-left: 1px solid var(--nd-line); }
+    .pf-xt__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--nd-line); }
+    .pf-xt__main ::ng-deep .pf-xt-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 6px 0; }
+    .pf-xt__main ::ng-deep .pf-xt-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-xt__main ::ng-deep .pf-xt-cell--end { align-items: flex-end; text-align: right; }
+    .pf-xt__main ::ng-deep .pf-xt-amt { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; display: block; }
+    .pf-xt__main ::ng-deep .pf-xt-amt--in { color: var(--text-secondary); }
+    .pf-xt__main ::ng-deep .pf-xt-amt--neg { color: var(--red-text, #dc2626); }
+    .pf-xt__main ::ng-deep .pf-xt-num { font-variant-numeric: tabular-nums; text-align: right; display: block; }
+    .pf-xt__main ::ng-deep .pf-xt-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; color: var(--text-secondary); }
+    .pf-xt__main ::ng-deep .pf-xt-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--nd-toggle-off, #cbd5e1); flex: none; }
+    .pf-xt__main ::ng-deep .pf-xt-status[data-closed='true'] .pf-xt-status__dot { background: var(--violet-text, #7c3aed); }
+    .pf-xt__main ::ng-deep .pf-xt-acts { display: inline-flex; gap: 6px; align-items: center; height: 100%; }
+    .pf-xt__main ::ng-deep .ag-cell.pf-xt-actcell { padding-left: 6px; padding-right: 6px; }
+    .pf-xt__main ::ng-deep .pf-xt-acts .nd-rowact--icon { width: 44px; height: 44px; }
+    .pf-xt__main ::ng-deep .pf-xt-billbtn { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--nd-line); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+    .pf-xt-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .pf-xt-modal__backdrop { position: absolute; inset: 0; background: rgba(5, 5, 15, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .pf-xt-modal__card { position: relative; width: 100%; max-width: 32rem; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; overflow-y: auto;
+      border-radius: var(--nd-radius-card, 18px); background: var(--nd-card-bg, var(--bg-card-solid)); border: 1px solid var(--nd-line); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45); }
+    .pf-xt-modal__head { display: flex; align-items: center; gap: 12px; }
+    .pf-xt-modal__title { margin: 0; flex: 1 1 auto; }
+    .pf-xt-modal__bills { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+    .pf-xt-modal__bill { display: flex; flex-direction: column; gap: 6px; color: inherit; text-decoration: none; }
+    .pf-xt-modal__thumb { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--nd-line); background: var(--glass-bg); color: var(--text-tertiary); }
+    .pf-xt-modal__thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .pf-xt-modal__name { font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+    .pf-xt-modal__add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .pf-xt-modal__cats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pf-xt-modal__cat { gap: 10px; }
+    .pf-xt-modal__hint { margin: 0; font-size: 12px; color: var(--text-tertiary); }
+    @media (max-width: 640px) {
+      .pf-xt__stats { grid-template-columns: 1fr 1fr; padding: 10px; gap: 8px; }
+      .pf-xt__statv { font-size: 16px; }
+      .pf-xt__view { margin-left: 0; order: 3; }
+      .pf-xt__main ::ng-deep .pf-xt-acts { gap: 4px; }
+      .pf-xt-modal { align-items: flex-end; padding: 0; bottom: var(--nd-nav-h, 0px); }
+      .pf-xt-modal__card { max-width: none; border-radius: 18px 18px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+      .pf-xt-modal__add .nd-input { font-size: 16px; min-height: 44px; }
+    }
+  `],
+})
+export class ExpenseTrackerComponent {
+  private readonly svc = inject(ExpenseService);
+  private readonly toasts = inject(ToastService);
+  private readonly dialogs = inject(DialogService);
+  private readonly auth = inject(AuthService);
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly theme = inject(ThemeService);
+
+  readonly today = labToday();
+  readonly isPhone = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+  readonly isCoarse = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  readonly narrow = signal(this.mq('(max-width: 900px)'));
+  readonly sheetOpen = signal(false);
+
+  readonly can = computed(() => expenseAbilities(c => this.auth.hasPermission(c)));
+
+  // ── Filters ───────────────────────────────────────────────────────────
+  readonly q = signal('');
+  readonly quick = signal<QuickRange>('7d');
+  readonly from = signal<string | null>(labDaysAgo(6));
+  readonly to = signal<string | null>(labToday());
+  readonly kind = signal<ExpenseKind | ''>('');
+  readonly categoryId = signal<string>('');
+  readonly mode = signal<ExpenseMode | ''>('');
+  readonly view = signal<View>('entries');
+
+  // ── Data ──────────────────────────────────────────────────────────────
+  readonly book = signal<ExpenseBook | null>(null);
+  readonly categories = signal<ExpenseCategory[]>([]);
+  readonly loading = signal(true);
+  readonly exporting = signal(false);
+  readonly listSkeleton = spinDelay(computed(() => this.loading() && !this.book()));
+  readonly seesAll = computed(() => (this.book()?.scope ?? (this.can().seesAll ? 'all' : 'own')) === 'all');
+  readonly visibleEntries = computed(() => searchExpenses(this.book()?.entries ?? [], this.q()));
+  readonly dialog = signal<{ entry: ExpenseEntry | null; kind: ExpenseKind; date: string | null } | null>(null);
+  readonly billsFor = signal<ExpenseEntry | null>(null);
+  readonly catsOpen = signal(false);
+  readonly newCat = signal('');
+  readonly catBusy = signal(false);
+  private readonly busyDays = new Set<string>();
+
+  readonly countLabel = computed(() => {
+    const b = this.book();
+    if (!b) return '';
+    if (this.view() === 'days') return plural(b.days.length, 'day');
+    const n = this.visibleEntries().length;
+    return plural(n, 'entry', 'entries');
+  });
+
+  readonly categoryFilterOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: 'All categories' },
+    ...this.categories().map(c => ({ value: c.id, label: c.isActive ? c.name : `${c.name} (off)` })),
+  ]);
+  readonly modeFilterOptions: PfSelectOption<string>[] = [{ value: '', label: 'All modes' }, ...EXPENSE_MODES.map(m => ({ value: m.value, label: m.label }))];
+  readonly modeSummary = computed(() => (this.book()?.byMode ?? []).map(m => `${m.label} ${inr(m.total)}`).join(' · '));
+
+  // ── Grids ─────────────────────────────────────────────────────────────
+  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  readonly entryRowId = (p: GetRowIdParams<ExpenseEntry>) => p.data.id;
+  readonly dayRowId = (p: GetRowIdParams<ExpenseDay>) => p.data.date;
+  readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, minWidth: 100, autoHeight: true, wrapText: true };
+
+  private readonly esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
+  private cell(main: string, sub?: string) {
+    return `<div class="pf-xt-cell"><span>${this.esc(main)}</span>${sub ? `<span class="pf-xt-cell__sub">${this.esc(sub)}</span>` : ''}</div>`;
+  }
+  private amountHtml(e: ExpenseEntry) {
+    const cls = e.kind === 'cash_in' ? 'pf-xt-amt pf-xt-amt--in' : 'pf-xt-amt';
+    return `<span class="${cls}">${e.kind === 'cash_in' ? '+' : ''}${this.esc(inr(e.amount))}</span>`;
+  }
+  private rowBtn(act: string, label: string, path: string, aria: string, web: boolean) {
+    return `<button type="button" class="nd-rowact${web ? '' : ' nd-rowact--icon'}" data-act="${act}" aria-label="${this.esc(aria)}" title="${this.esc(label)}">` +
+      `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>` +
+      `<span class="nd-rowact__t">${this.esc(label)}</span></button>`;
+  }
+  private billsHtml(e: ExpenseEntry) {
+    const n = e.attachments.length;
+    if (!n) return '';
+    return `<button type="button" class="pf-xt-billbtn" data-act="bills" aria-label="${n} bill${n === 1 ? '' : 's'} — ${this.esc(e.description)}">` +
+      `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>${n}</button>`;
+  }
+
+  readonly entryCols = computed<ColDef<ExpenseEntry>[]>(() => {
+    const web = !this.isCoarse && !this.isPhone;
+    const canAdd = this.can().canAdd;
+    const edit = '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>';
+    const actions: ColDef<ExpenseEntry> = {
+      colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
+      width: web ? 84 : 60, minWidth: web ? 84 : 60, flex: 0, cellClass: 'pf-xt-actcell',
+      cellRenderer: (p: { data?: ExpenseEntry }) => p.data?.canEdit
+        ? `<span class="pf-xt-acts">${this.rowBtn('edit', 'Edit', edit, 'Edit — ' + p.data.description, web)}</span>` : '',
+    };
+    if (this.isPhone) {
+      return [
+        { colId: 'date', headerName: 'Day', width: 92, minWidth: 92, flex: 0, sort: 'desc',
+          valueGetter: p => p.data?.date ?? '', cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '', false)) },
+        { colId: 'record', headerName: 'Entry', flex: 1, minWidth: 150, valueGetter: p => p.data?.description ?? '',
+          cellRenderer: (p: { data?: ExpenseEntry }) => {
+            const e = p.data; if (!e) return '';
+            return `<div class="pf-xt-cell"><span>${this.esc(e.description)}</span>` +
+              `<span class="pf-xt-cell__sub">${this.esc([e.kind === 'cash_in' ? 'Cash in' : e.categoryName, expenseModeLabel(e.paymentMode), e.paidTo].filter(Boolean).join(' · '))}</span>` +
+              `${this.amountHtml(e)}${this.billsHtml(e)}</div>`;
+          } },
+        ...(canAdd ? [actions] : []),
+      ];
+    }
+    const cols: ColDef<ExpenseEntry>[] = [
+      { colId: 'date', headerName: 'Date', width: 120, minWidth: 110, flex: 0, sort: 'desc',
+        valueGetter: p => p.data?.date ?? '', cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '')) },
+      { colId: 'item', headerName: 'Item', flex: 1.6, minWidth: 180, valueGetter: p => p.data?.description ?? '',
+        cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.description ?? '', [p.data?.paidTo, p.data?.notes].filter(Boolean).join(' · ')) },
+      { colId: 'category', headerName: 'Category', flex: 1, minWidth: 140,
+        valueGetter: p => (p.data?.kind === 'cash_in' ? expenseKindLabel('cash_in') : p.data?.categoryName) ?? '',
+        cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.kind === 'cash_in' ? 'Cash in' : p.data?.categoryName ?? '') },
+      { colId: 'mode', headerName: 'Mode', width: 120, minWidth: 100, flex: 0, valueGetter: p => expenseModeLabel(p.data?.paymentMode) },
+      { colId: 'amount', headerName: 'Amount', width: 130, minWidth: 120, flex: 0, type: 'rightAligned',
+        valueGetter: p => (p.data ? (p.data.kind === 'cash_in' ? p.data.amount : -p.data.amount) : 0),
+        cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.amountHtml(p.data) : '') },
+      { colId: 'bills', headerName: 'Bills', width: 84, minWidth: 80, flex: 0, sortable: false,
+        cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.billsHtml(p.data) : '') },
+      { colId: 'by', headerName: 'Entered by', flex: 1, minWidth: 140, valueGetter: p => p.data?.createdByName ?? '',
+        cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.createdByName ?? '',
+          p.data ? formatDate(p.data.createdAt, 'd MMM, h:mm a', 'en-US', LAB_TIME_ZONE) : '') },
+    ];
+    return canAdd ? [...cols, actions] : cols;
+  });
+
+  readonly dayCols = computed<ColDef<ExpenseDay>[]>(() => {
+    const web = !this.isCoarse && !this.isPhone;
+    const b = this.book();
+    const admin = this.can().isAdmin;
+    const status = (d?: ExpenseDay) => d ? `<span class="pf-xt-status" data-closed="${d.isClosed}"><span class="pf-xt-status__dot" aria-hidden="true"></span>${d.isClosed ? 'Closed' : 'Open'}</span>` +
+      (d.isClosed && d.closedByName ? `<span class="pf-xt-cell__sub">by ${this.esc(d.closedByName)}</span>` : '') : '';
+    const num = (v: number | null | undefined, neg = false) => `<span class="pf-xt-num${neg && (v ?? 0) < 0 ? ' pf-xt-amt--neg' : ''}">${this.esc(inr(v ?? 0))}</span>`;
+    const actions: ColDef<ExpenseDay> = {
+      colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
+      width: web ? (admin ? 258 : 96) : (admin ? 150 : 60), minWidth: web ? (admin ? 258 : 96) : (admin ? 150 : 60), flex: 0, cellClass: 'pf-xt-actcell',
+      cellRenderer: (p: { data?: ExpenseDay }) => {
+        const d = p.data; if (!d) return '';
+        const acts: string[] = [this.rowBtn('entries', 'Entries', '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', 'Entries of ' + dayLabel(d.date), web)];
+        if (admin && b) {
+          const locked = !!b.closedThrough && d.date <= b.closedThrough;
+          if (!locked) acts.push(this.rowBtn('opening', 'Opening', '<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 'Set opening balance — ' + dayLabel(d.date), web));
+          if (!d.isClosed && !locked && d.date <= b.today) acts.push(this.rowBtn('close', 'Close day', '<path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4"/>', 'Close ' + dayLabel(d.date), web));
+          if (d.isClosed && d.date === b.closedThrough) acts.push(this.rowBtn('reopen', 'Reopen', '<path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.9-1"/>', 'Reopen ' + dayLabel(d.date), web));
+        }
+        return `<span class="pf-xt-acts">${acts.join('')}</span>`;
+      },
+    };
+    if (this.isPhone) {
+      return [
+        { colId: 'date', headerName: 'Day', flex: 1, minWidth: 140, valueGetter: p => p.data?.date ?? '',
+          cellRenderer: (p: { data?: ExpenseDay }) => {
+            const d = p.data; if (!d) return '';
+            return `<div class="pf-xt-cell"><span>${this.esc(dayLabel(d.date))}</span>` +
+              `<span class="pf-xt-cell__sub">Open ${this.esc(inr(d.opening))} · In ${this.esc(inr(d.cashIn))} · Out ${this.esc(inr(d.expenses))}</span>` +
+              `<span>Close ${this.esc(inr(d.closing))}</span>${status(d)}</div>`;
+          } },
+        actions,
+      ];
+    }
+    return [
+      { colId: 'date', headerName: 'Day', width: 140, minWidth: 130, flex: 0, valueGetter: p => p.data?.date ?? '',
+        cellRenderer: (p: { data?: ExpenseDay }) => this.cell(dayLabel(p.data?.date ?? ''), p.data ? plural(p.data.entryCount, 'entry', 'entries') : '') },
+      { colId: 'opening', headerName: 'Opening', flex: 1, minWidth: 120, type: 'rightAligned', valueGetter: p => p.data?.opening ?? 0,
+        cellRenderer: (p: { data?: ExpenseDay }) => `<div class="pf-xt-cell pf-xt-cell--end">${num(p.data?.opening)}${p.data?.openingSet ? '<span class="pf-xt-cell__sub">set by admin</span>' : ''}</div>` },
+      { colId: 'cashIn', headerName: 'Cash in', flex: 1, minWidth: 110, type: 'rightAligned', valueGetter: p => p.data?.cashIn ?? 0,
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.cashIn) },
+      { colId: 'expenses', headerName: 'Expenses', flex: 1, minWidth: 110, type: 'rightAligned', valueGetter: p => p.data?.expenses ?? 0,
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.expenses) },
+      { colId: 'closing', headerName: 'Closing', flex: 1, minWidth: 120, type: 'rightAligned', valueGetter: p => p.data?.closing ?? 0,
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.closing, true) },
+      { colId: 'status', headerName: 'Status', width: 130, minWidth: 110, flex: 0, valueGetter: p => (p.data?.isClosed ? 'closed' : 'open'),
+        cellRenderer: (p: { data?: ExpenseDay }) => `<div class="pf-xt-cell">${status(p.data)}</div>` },
+      actions,
+    ];
+  });
+
+  constructor() {
+    effect(() => {
+      this.from(); this.to(); this.kind(); this.categoryId(); this.mode();
+      untracked(() => this.load());
+    });
+    this.loadCategories();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    if (this.billsFor()) this.billsFor.set(null);
+    else if (this.catsOpen()) this.catsOpen.set(false);
+    else if (this.sheetOpen()) this.sheetOpen.set(false);
+  }
+
+  private mq(query: string): boolean {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    const m = window.matchMedia(query);
+    const on = (ev: MediaQueryListEvent) => this.narrow?.set(ev.matches);
+    try { m.addEventListener('change', on); this.destroyRef.onDestroy(() => m.removeEventListener('change', on)); } catch { /* old Safari */ }
+    return m.matches;
+  }
+
+  dayShort(ymd: string) { return dayLabel(ymd, false); }
+
+  filter(): ExpenseFilter {
+    return {
+      from: this.from() ?? labDaysAgo(6), to: this.to() ?? labToday(),
+      categoryId: this.categoryId() || null, kind: this.kind() || null, mode: this.mode() || null,
+    };
+  }
+
+  load() {
+    this.loading.set(true);
+    this.svc.book(this.filter()).subscribe({
+      next: b => { this.book.set(b); this.loading.set(false); },
+      error: err => { this.loading.set(false); this.toasts.error(ApiError.from(err).message); },
+    });
+  }
+
+  private loadCategories() {
+    this.svc.categories().subscribe({ next: c => this.categories.set(c ?? []), error: () => this.categories.set([]) });
+  }
+
+  addCategory(c: ExpenseCategory) {
+    this.categories.update(l => (l.some(x => x.id === c.id) ? l.map(x => (x.id === c.id ? c : x)) : [...l, c]));
+  }
+
+  setQuick(r: QuickRange) {
+    this.quick.set(r);
+    const t = labToday();
+    if (r === 'today') { this.from.set(t); this.to.set(t); }
+    else if (r === '7d') { this.from.set(labDaysAgo(6)); this.to.set(t); }
+    else if (r === '30d') { this.from.set(labDaysAgo(29)); this.to.set(t); }
+    else if (r === 'month') { this.from.set(monthStart(t)); this.to.set(t); }
+  }
+  setFrom(v: string | null) { if (v && v !== this.from()) { this.quick.set('custom'); this.from.set(v); } }
+  setTo(v: string | null) { if (v && v !== this.to()) { this.quick.set('custom'); this.to.set(v); } }
+  toggleCategory(id: string) { this.categoryId.set(this.categoryId() === id ? '' : id); }
+
+  openAdd(kind: ExpenseKind = 'expense', date: string | null = null) {
+    this.sheetOpen.set(false);
+    this.dialog.set({ entry: null, kind, date });
+  }
+
+  onEntryClicked(ev: CellClickedEvent<ExpenseEntry>) {
+    const target = (ev.event?.target as HTMLElement | null)?.closest?.('[data-act]') as HTMLElement | null;
+    const e = ev.data;
+    if (!e) return;
+    const act = target?.dataset['act'];
+    if (act === 'bills') this.billsFor.set(e);
+    else if (act === 'edit' || (!act && e.canEdit)) this.dialog.set({ entry: e, kind: e.kind, date: e.date });
+    else if (!act && e.attachments.length) this.billsFor.set(e);
+  }
+
+  onDayClicked(ev: CellClickedEvent<ExpenseDay>) {
+    const target = (ev.event?.target as HTMLElement | null)?.closest?.('[data-act]') as HTMLElement | null;
+    const d = ev.data;
+    if (!d || !target) return;
+    const act = target.dataset['act'];
+    if (act === 'entries') { this.quick.set('custom'); this.from.set(d.date); this.to.set(d.date); this.view.set('entries'); }
+    else if (act === 'opening') void this.setOpening(d);
+    else if (act === 'close') void this.closeDay(d);
+    else if (act === 'reopen') void this.reopenDay(d);
+  }
+
+  private async dayAction(d: ExpenseDay, run: () => Promise<unknown>, ok: string) {
+    if (this.busyDays.has(d.date)) return;
+    this.busyDays.add(d.date);
+    try { await run(); this.toasts.success(ok); this.load(); }
+    catch (err) { this.toasts.error(ApiError.from(err).message); }
+    finally { this.busyDays.delete(d.date); }
+  }
+
+  async setOpening(d: ExpenseDay) {
+    const v = await this.dialogs.prompt({
+      title: `Opening balance · ${dayLabel(d.date)}`,
+      message: 'The money in the expense account at the start of the day. Leave it empty to carry the previous day\'s closing forward.',
+      inputType: 'number', initialValue: d.openingSet ? String(d.opening ?? '') : '', placeholder: '₹ 0.00', confirmLabel: 'Save opening', required: false,
+    });
+    if (v === null) return;
+    const t = v.trim();
+    const n = t === '' ? null : Number(t);
+    if (n !== null && (!Number.isFinite(n) || Math.round(n * 100) / 100 !== n)) { this.toasts.error('Enter the amount in rupees (up to 2 decimals).'); return; }
+    await this.dayAction(d, () => firstValueFrom(this.svc.setOpening(d.date, n)), n === null ? 'Opening carried forward' : 'Opening balance saved');
+  }
+
+  async closeDay(d: ExpenseDay) {
+    const note = await this.dialogs.prompt({
+      title: `Close ${dayLabel(d.date)}?`,
+      message: `Closing balance ${inr(d.closing)} (opening ${inr(d.opening)} + cash in ${inr(d.cashIn)} − expenses ${inr(d.expenses)}). The day and every earlier day become read-only until an admin reopens it.`,
+      placeholder: 'Note (optional) — e.g. counted and tallied', confirmLabel: 'Close day', required: false,
+    });
+    if (note === null) return;
+    await this.dayAction(d, () => firstValueFrom(this.svc.closeDay(d.date, note.trim() || null)), 'Day closed');
+  }
+
+  async reopenDay(d: ExpenseDay) {
+    const ok = await this.dialogs.confirm({
+      title: `Reopen ${dayLabel(d.date)}?`, message: 'Entries on this day can be changed again. Close it again once it is corrected.',
+      confirmLabel: 'Reopen', tone: 'danger',
+    });
+    if (!ok) return;
+    await this.dayAction(d, () => firstValueFrom(this.svc.reopenDay(d.date)), 'Day reopened');
+  }
+
+  async createCategory() {
+    const name = this.newCat().trim();
+    if (!name || this.catBusy()) return;
+    this.catBusy.set(true);
+    try {
+      const c = await firstValueFrom(this.svc.createCategory(name));
+      this.addCategory(c);
+      this.newCat.set('');
+      this.toasts.success(`Category "${c.name}" added`);
+    } catch (err) {
+      this.toasts.error(ApiError.from(err).message);
+    } finally {
+      this.catBusy.set(false);
+    }
+  }
+
+  async toggleCategoryActive(c: ExpenseCategory) {
+    if (c.isActive) {
+      const ok = await this.dialogs.confirm({
+        title: `Switch off "${c.name}"?`, message: 'It stays on past entries but can\'t be picked for new ones.', confirmLabel: 'Switch off',
+      });
+      if (!ok) return;
+    }
+    try { this.addCategory(await firstValueFrom(this.svc.updateCategory(c.id, { isActive: !c.isActive }))); }
+    catch (err) { this.toasts.error(ApiError.from(err).message); }
+  }
+
+  exportCsv() {
+    if (this.exporting()) return;
+    this.exporting.set(true);
+    const f = this.filter();
+    this.svc.exportCsv(f).subscribe({
+      next: blob => {
+        this.exporting.set(false);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `expenses-${f.from}_to_${f.to}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      },
+      error: err => { this.exporting.set(false); this.toasts.error(ApiError.from(err).message); },
+    });
+  }
+}
