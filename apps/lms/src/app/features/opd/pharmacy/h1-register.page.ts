@@ -93,7 +93,10 @@ export class PharmacyH1RegisterPage {
     return !t ? this.all() : this.all().filter(r => [r.drugName, r.generic, r.patientName, r.prescriberName, r.prescriberRegNo, r.dispenseNumber, r.batchNo]
       .filter(Boolean).join(' ').toLowerCase().includes(t));
   });
+  // Statutory column order (GSR 588(E), Rule 65): serial, date, prescriber
+  // name + reg. no. + address, patient name + address, drug, batch, qty.
   protected readonly cols: ColDef<H1Row>[] = [
+    { field: 'serial', headerName: 'Sl. no.', width: 90, type: 'rightAligned' },
     { field: 'at', headerName: 'Date', width: 150, valueFormatter: p => new Date(p.value).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) },
     { field: 'dispenseNumber', headerName: 'Bill no.', width: 140 },
     { field: 'drugName', headerName: 'Drug', flex: 1.5, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
@@ -101,8 +104,10 @@ export class PharmacyH1RegisterPage {
     { field: 'batchNo', headerName: 'Batch', width: 110 },
     { field: 'qty', headerName: 'Qty', width: 80, type: 'rightAligned' },
     { field: 'patientName', headerName: 'Patient', flex: 1.2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
+    { field: 'patientAddress', headerName: 'Patient address', flex: 1.4, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
     { field: 'prescriberName', headerName: 'Prescriber', flex: 1.2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
     { field: 'prescriberRegNo', headerName: 'Reg. no.', width: 130 },
+    { field: 'prescriberAddress', headerName: 'Prescriber address', flex: 1.4, minWidth: 160, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
     { field: 'byName', headerName: 'Pharmacist', width: 140 },
   ];
 

@@ -1,6 +1,6 @@
-import { cartTotals, expiryLabel, monthsToExpiry, needsPrescription, needsRegister, scheduleLabel, taxableFromMrp, unitWords } from './pharmacy-math';
+import { cartTotals, expiryBand, expiryChip, expiryLabel, monthsToExpiry, needsPrescription, needsRegister, scheduleLabel, taxableFromMrp, unitWords } from './pharmacy-math';
 import { instructionFor, needsStrip, stripGlyphs, toRxLine, whatsAppText } from './pharmacy-instructions';
-import { previewFefo } from './dispense.page';
+import { needsOverrideReason, overrideCeiling, previewFefo } from './dispense.page';
 import { counterGate } from './walk-in-counter.page';
 import { buildDrugEdits, originWord, type DrugGridRow } from './drug-master.component';
 import { filterStock } from './stock.page';
@@ -8,7 +8,7 @@ import { poLineTotal } from './purchase-orders.page';
 import { gstinOk } from './suppliers.page';
 import { returnable } from './returns.page';
 import { waitingFor } from './rx-queue.page';
-import { buildPharmacyPdf } from './pharmacy-print';
+import { buildPharmacyPdf, itemLabel } from './pharmacy-print';
 import { sayRx, stripDays } from '../shared/rx-schedule';
 import type { RxLineView, StockRow } from './pharmacy.api';
 
@@ -55,6 +55,17 @@ describe('pharmacy math (mirror of PharmacyRules / PharmacyBilling)', () => {
     expect(unitWords(1, 'bottle')).toBe('1 bottle');
     expect(unitWords(117, 'tab')).toBe('117 tabs');
   });
+
+  it('expiry chip band (critic #10): expired / <30d / <90d / ok', () => {
+    expect(expiryBand('2026-09-29', '2026-09-30')).toBe('expired'); // yesterday
+    expect(expiryBand('2026-09-30', '2026-09-30')).toBe('soon30'); // sellable TODAY, but < 30d away
+    expect(expiryBand('2026-10-20', '2026-09-30')).toBe('soon30'); // 20 days out
+    expect(expiryBand('2026-12-20', '2026-09-30')).toBe('soon90'); // ~81 days out
+    expect(expiryBand('2028-01-01', '2026-09-30')).toBe('ok');
+    expect(expiryChip('2026-09-29', '2026-09-30')).toEqual({ label: '09/2026', cls: 'pf-exp-red' });
+    expect(expiryChip('2026-12-20', '2026-09-30').cls).toBe('pf-exp-amber');
+    expect(expiryChip('2028-01-01', '2026-09-30').cls).toBe('pf-exp-ok');
+  });
 });
 
 describe('picking and gates', () => {
@@ -74,7 +85,29 @@ describe('picking and gates', () => {
     expect(counterGate([d('H')], '', '', false)).toBeNull();
     expect(counterGate([d('H1')], 'Dr. Rao', '', false)).toMatch(/customer/);
     expect(counterGate([d('H1')], '', 'Anand', false)).toMatch(/prescribing doctor/);
-    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true)).toBeNull();
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '12 MG Road')).toBeNull();
+  });
+
+  it('counter gate: H1 / X needs the buyer\'s address too, only when schedules are enforced (critic #1)', () => {
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '')).toMatch(/address/);
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', true, '12 MG Road')).toBeNull();
+    expect(counterGate([d('H1')], 'Dr. Rao', 'Anand', false, '')).toBeNull(); // enforcement off
+    expect(counterGate([d('H')], 'Dr. Rao', '', true, '')).toBeNull(); // plain Schedule H never needs an address
+  });
+
+  it('quantity-correction ceiling + reason gate (critic #4)', () => {
+    expect(overrideCeiling(10)).toBe(50);
+    expect(overrideCeiling(1)).toBe(5);
+    expect(overrideCeiling(0)).toBe(1); // never below 1
+    expect(needsOverrideReason(5, 5)).toBe(false);
+    expect(needsOverrideReason(6, 5)).toBe(true);
+    expect(needsOverrideReason(3, 5)).toBe(false); // partial, no reason needed
+  });
+
+  it('bill print is generic-first (critic #8 / NMC 2002 Reg 1.5)', () => {
+    expect(itemLabel({ drugName: 'Augmentin 625', generic: 'Amoxicillin + Clavulanate', strength: '625 mg', form: 'tab' }))
+      .toBe('Amoxicillin + Clavulanate (Augmentin 625) 625 mg tab');
+    expect(itemLabel({ drugName: 'House linctus', generic: null, strength: null, form: 'syrup' })).toBe('House linctus syrup');
   });
 });
 

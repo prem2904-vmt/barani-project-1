@@ -67,6 +67,11 @@
 .ph-dot[data-tone='warn']::before { background: var(--amber-text, #d97706); }
 .ph-dot[data-tone='bad']::before { background: var(--red-text, #dc2626); }
 
+// Expiry chip (critic #10) — batch pickers + stock: expired / <30d red, <90d amber.
+.pf-exp-red { color: var(--red-text, #dc2626); font-weight: 600; }
+.pf-exp-amber { color: var(--amber-text, #d97706); font-weight: 600; }
+.pf-exp-ok { color: var(--text-tertiary); }
+
 // Totals block (side card foot).
 .ph-sum { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; color: var(--text-secondary); grid-column: 1 / -1; }
 .ph-sum > :nth-child(2n) { text-align: right; font-variant-numeric: tabular-nums; }

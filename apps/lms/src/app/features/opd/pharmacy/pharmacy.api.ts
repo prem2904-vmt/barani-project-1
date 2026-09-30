@@ -84,18 +84,26 @@ export interface RxDetail {
   completedAt?: string | null; consultStatus: string; lines: RxLineView[]; settings: PharmacyConfig; dispenses: DispenseSummary[];
 }
 
-export interface DispenseLineInput { rxLineId?: string | null; drugId?: string | null; qty: number; batchId?: string | null; skip?: boolean }
+/** `overrideReason` is required when `qty` is more than the Rx line's
+ *  remaining quantity (critic #4). */
+export interface DispenseLineInput { rxLineId?: string | null; drugId?: string | null; qty: number; batchId?: string | null; skip?: boolean; overrideReason?: string | null }
 export interface PaymentBody { mode: PayMode; amount: number; reference?: string | null }
 export type PayMode = 'cash' | 'upi' | 'card';
 
+/** `patientAddress` / `prescriberAddress` are required only when an H1 / X
+ *  line is on the Rx / cart and the tenant enforces schedules (critic #1). */
 export interface CounterBody {
   patientId?: string | null; walkInName?: string | null; walkInPhone?: string | null;
   prescriberName?: string | null; prescriberRegNo?: string | null; lines: DispenseLineInput[]; discount?: number; notes?: string | null;
+  patientAddress?: string | null; prescriberAddress?: string | null;
 }
 
 export interface DispenseLineView {
   id: string; rxLineId?: string | null; drugId: string; drugName: string; generic?: string | null; form: DrugForm; unit?: string | null;
   schedule: DrugSchedule; batchId: string; batchNo: string; expiryDate: string; qty: number; mrp: number; total: number; returnedQty: number;
+  overrideReason?: string | null;
+  /** night/pharm — critic #8: strength + GST slab for the "generic-first" bill print, and what was ORDERED when a substitute was given. */
+  strength?: string | null; taxSlab?: number; rxDrugName?: string | null;
 }
 
 export interface BillView {
@@ -113,6 +121,9 @@ export interface DispenseView {
   prescriptionFileName?: string | null;
   /** Integrator: credit notes on this sale's bill (patient returns). */
   refunds?: OpdRefund[] | null;
+  /** night/pharm — critic #1: the address entered for an H1 / X line (re-shown when the draft is reopened). */
+  patientAddress?: string | null;
+  prescriberAddress?: string | null;
 }
 
 export interface DispenseSummary {
@@ -123,7 +134,7 @@ export interface DispenseSummary {
 export interface H1Row {
   id: string; at: string; drugName: string; generic?: string | null; schedule: DrugSchedule; batchNo: string; qty: number;
   patientName: string; patientAddress?: string | null; prescriberName: string; prescriberRegNo?: string | null;
-  dispenseNumber?: string | null; byName?: string | null;
+  dispenseNumber?: string | null; byName?: string | null; serial?: number | null; prescriberAddress?: string | null;
 }
 
 export interface SupplierRow {
@@ -169,7 +180,8 @@ export class PharmacyApi {
   // Rx
   rxQueue(): Observable<RxQueueRow[]> { return this.api.get(`${P}/rx-queue`); }
   rx(visitId: string): Observable<RxDetail> { return this.api.get(`${P}/rx/${visitId}`); }
-  dispenseRx(visitId: string, body: { lines: DispenseLineInput[]; discount?: number; payment?: PaymentBody | null; notes?: string | null }): Observable<DispenseView | null> {
+  dispenseRx(visitId: string, body: { lines: DispenseLineInput[]; discount?: number; payment?: PaymentBody | null; notes?: string | null;
+    patientAddress?: string | null; prescriberAddress?: string | null }): Observable<DispenseView | null> {
     return this.api.post(`${P}/rx/${visitId}/dispense`, body);
   }
   dispenses(date?: string | null, kind?: string | null, status?: string | null): Observable<DispenseSummary[]> {

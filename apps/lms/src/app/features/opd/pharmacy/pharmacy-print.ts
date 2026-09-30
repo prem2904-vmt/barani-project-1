@@ -28,6 +28,13 @@ export interface PharmacyPrintInput {
 
 const rs = (n: number) => 'Rs. ' + (Number(n) || 0).toFixed(2);
 
+/** "Generic (Brand) strength form" — generic first, NMC 2002 Reg 1.5
+ *  (critic #8). Falls back to the brand alone when there is no generic. */
+export function itemLabel(l: Pick<DispenseLineView, 'drugName' | 'generic' | 'strength' | 'form'>): string {
+  if (!l.generic) return l.drugName + (l.strength ? ' ' + l.strength : '') + ' ' + l.form;
+  return `${l.generic} (${l.drugName}) ${l.strength ? l.strength + ' ' : ''}${l.form}`;
+}
+
 /** Build the PDF document (exported for tests). */
 export function buildPharmacyPdf(input: PharmacyPrintInput): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a5' });
@@ -85,16 +92,21 @@ export function buildPharmacyPdf(input: PharmacyPrintInput): jsPDF {
   });
   if (input.instructions.length) y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
 
-  // Bill.
+  // Bill — generic-first (critic #8 / NMC 2002 Reg 1.5): "Generic (Brand)
+  // strength form", batch, expiry MM/YY, qty, MRP, GST%; a substituted line
+  // says what was actually prescribed.
   if (input.lines.length) {
     autoTable(doc, {
       startY: y,
       margin: { left: M, right: M },
-      head: [['Item', 'Batch · Exp', 'Qty', 'MRP', 'Amount']],
-      body: input.lines.map(l => [l.drugName, `${l.batchNo} · ${l.expiryDate.slice(5, 7)}/${l.expiryDate.slice(0, 4)}`, String(l.qty), rs(l.mrp), rs(l.total)]),
-      styles: { fontSize: 8.5, cellPadding: 1.5 },
+      head: [['Item', 'Batch · Exp', 'Qty', 'MRP', 'GST%', 'Amount']],
+      body: input.lines.map(l => {
+        const item = itemLabel(l) + (l.rxDrugName ? `\nSubstituted for ${l.rxDrugName}` : '');
+        return [item, `${l.batchNo} · ${l.expiryDate.slice(5, 7)}/${l.expiryDate.slice(0, 4)}`, String(l.qty), rs(l.mrp), `${l.taxSlab ?? 0}%`, rs(l.total)];
+      }),
+      styles: { fontSize: 8.5, cellPadding: 1.5, overflow: 'linebreak' },
       headStyles: { fillColor: [245, 245, 245], textColor: 40 },
-      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
       rowPageBreak: 'avoid',
     });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;

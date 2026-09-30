@@ -15,15 +15,28 @@ import {
   PharmacyApi, type BatchRow, type DispenseLineInput, type DispenseView, type DrugBrief, type PayMode, type PickBatch,
   type PharmacyDrugRow, type RxDetail, type RxLineView,
 } from './pharmacy.api';
-import { cartTotals, errText, expiryLabel, inr, needsPrescription, needsRegister, scheduleLabel, unitWords, type CartLine } from './pharmacy-math';
+import { cartTotals, errText, expiryBand, expiryChip, expiryLabel, inr, needsPrescription, needsRegister, scheduleLabel, unitWords, type CartLine } from './pharmacy-math';
 import { instructionFor, whatsAppText, type InstructionLine } from './pharmacy-instructions';
 import { printPharmacySheet } from './pharmacy-print';
 import { PharmacyDrugPickerComponent } from './drug-picker.component';
 import { phoneSignal } from './phone';
 
-interface LineState { drugId: string | null; qty: number; batchId: string | null; skip: boolean }
+interface LineState { drugId: string | null; qty: number; batchId: string | null; skip: boolean; overrideReason: string }
 
 export interface Take { batchId: string; batchNo: string; expiryDate: string; qty: number; mrp: number }
+
+/** Sane ceiling for a corrected quantity (critic #4): 5× the Rx quantity —
+ *  mirror of the server's OverrideCeilingMultiplier. Stock is the OTHER,
+ *  tighter cap, applied separately (never more than what's on the shelf). */
+export function overrideCeiling(rxQuantity: number): number {
+  return Math.max(1, Math.ceil(rxQuantity * 5));
+}
+
+/** A reason is required only once the dispensed qty passes what's left on
+ *  the prescription (mirror of the server's over_prescribed / OverrideReason gate). */
+export function needsOverrideReason(qty: number, remaining: number): boolean {
+  return qty > remaining;
+}
 
 /** Earliest-expiry split of `qty` over sellable batches (mirror of
  *  PharmacyRules.PickFefo for the PREVIEW; the server picks for real). */
@@ -97,11 +110,11 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                       @let drug = given(l);
                       <tr [attr.data-skip]="s.skip || l.remaining <= 0">
                         <td style="min-width:220px">
-                          <div class="ph-row__name" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{{ drug?.name || l.drugName }}
+                          <div class="ph-row__name" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{{ drug?.generic || drug?.name || l.drugName }}
                             @if (drug) { <span class="ph-sch" [attr.data-rx]="isRx(drug.schedule)">{{ schLabel(drug.schedule) }}</span> }
                           </div>
-                          <div class="ph-sub">{{ drug?.generic || '' }}{{ drug?.generic ? ' · ' : '' }}{{ sched(l) }}</div>
-                          @if (drug && drug.id !== l.drug?.id) { <div class="ph-sub">Substitute for {{ l.drugName }}</div> }
+                          <div class="ph-sub">{{ brandLine(drug) }}{{ brandLine(drug) ? ' · ' : '' }}{{ sched(l) }}</div>
+                          @if (drug && drug.id !== l.drug?.id) { <div class="ph-sub">Substituted for {{ l.drugName }}</div> }
                           @if (l.remaining <= 0) { <div class="ph-sub">{{ l.dispenseStatus === 'not_dispensed' ? 'Not given' : 'Already given' }}</div> }
                           @else if (subOptions(l).length > 1 && !s.skip) {
                             <div style="margin-top:6px;max-width:280px">
@@ -117,7 +130,7 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                           @else if (pharmacistPick()) {
                             <pf-select size="sm" [options]="batchOptions(l)" [value]="s.batchId ?? ''" (valueChange)="setBatch(l, $event)" placeholder="Pick a batch"></pf-select>
                           } @else {
-                            @for (t of takes(l); track t.batchId) { <div>{{ t.batchNo }} <span class="ph-sub">exp {{ exp(t.expiryDate) }}{{ $first ? ' · earliest' : '' }}{{ takes(l).length > 1 ? ' · ' + t.qty : '' }}</span></div> }
+                            @for (t of takes(l); track t.batchId) { <div>{{ t.batchNo }} <span class="ph-sub" [class]="expChip(t.expiryDate).cls">exp {{ expChip(t.expiryDate).label }}{{ $first ? ' · earliest' : '' }}{{ takes(l).length > 1 ? ' · ' + t.qty : '' }}</span></div> }
                             @if (!takes(l).length) { <span class="ph-low">No stock</span> }
                           }
                         </td>
@@ -126,9 +139,13 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                             <span class="ph-qty">
                               <button type="button" (click)="bump(l, -1)" [disabled]="s.qty <= 1" [attr.aria-label]="'Less ' + l.drugName"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
                               <input type="number" inputmode="numeric" [value]="s.qty" [attr.aria-label]="'Quantity of ' + l.drugName" (change)="setQty(l, $any($event.target).value)" />
-                              <button type="button" (click)="bump(l, 1)" [disabled]="s.qty >= l.remaining" [attr.aria-label]="'More ' + l.drugName"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                              <button type="button" (click)="bump(l, 1)" [disabled]="s.qty >= maxQty(l)" [attr.aria-label]="'More ' + l.drugName"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
                             </span>
                             @if (s.qty < l.remaining) { <div class="ph-sub">{{ l.remaining - s.qty }} later</div> }
+                            @else if (s.qty > l.remaining) {
+                              <div class="ph-sub pf-exp-amber">{{ s.qty - l.remaining }} more than prescribed ({{ l.quantity }})</div>
+                              <input class="nd-input" type="text" style="font-size:12.5px;padding:4px 8px;margin-top:4px;width:180px" placeholder="Reason (required)" [value]="s.overrideReason" [attr.aria-label]="'Reason for giving more of ' + l.drugName" (input)="setOverrideReason(l, $any($event.target).value)" />
+                            }
                           } @else { <span class="ph-muted nd-num">{{ l.remaining <= 0 ? l.dispensed : 0 }}</span> }
                         </td>
                         <td class="r" data-l="Left after" [class.ph-low]="leftAfter(l) < 0">{{ drug && !s.skip && l.remaining > 0 ? units(leftAfter(l), drug) : '' }}</td>
@@ -177,6 +194,12 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                 @if (rxOnly() > 0) {
                   <div class="ph-note" role="note"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
                     <span>{{ rxOnly() }} prescription-only (Schedule H / H1 / X) — covered by this prescription.{{ h1Count() ? ' ' + h1Count() + ' will be entered in the H1 register.' : '' }}</span></div>
+                }
+                @if (h1Count() > 0) {
+                  <div class="nd-field">
+                    <label class="nd-field__lbl" for="ph-h1-addr">Patient's address (Schedule H1 / X register — required)</label>
+                    <input id="ph-h1-addr" class="nd-input" type="text" [value]="patientAddress()" (input)="patientAddress.set($any($event.target).value)" placeholder="House no., street, city" />
+                  </div>
                 }
               </div>
               <div class="nd-card__foot">
@@ -258,6 +281,8 @@ export class PharmacyDispensePage {
   private readonly extraBatches = signal<Record<string, PickBatch[]>>({});
   private readonly extraDrugs = signal<Record<string, DrugBrief>>({});
   protected readonly discount = signal(0);
+  /** Schedule H1 / X register (critic #1) — asked only when such a line is on the cart. */
+  protected readonly patientAddress = signal('');
   protected readonly mode = signal<PayMode>('upi');
   protected readonly saving = signal(false);
   protected readonly done = signal<DispenseView | null>(null);
@@ -283,12 +308,12 @@ export class PharmacyDispensePage {
 
   private resetState(d: RxDetail) {
     const s: Record<string, LineState> = {};
-    for (const l of d.lines) s[l.rxLineId] = { drugId: l.drug?.id ?? null, qty: Math.max(0, Math.ceil(l.remaining)), batchId: null, skip: l.remaining <= 0 };
+    for (const l of d.lines) s[l.rxLineId] = { drugId: l.drug?.id ?? null, qty: Math.max(0, Math.ceil(l.remaining)), batchId: null, skip: l.remaining <= 0, overrideReason: '' };
     this.state.set(s);
   }
 
   // ── Per line ──────────────────────────────────────────────────────────────
-  protected st(l: RxLineView): LineState { return this.state()[l.rxLineId] ?? { drugId: null, qty: 0, batchId: null, skip: true }; }
+  protected st(l: RxLineView): LineState { return this.state()[l.rxLineId] ?? { drugId: null, qty: 0, batchId: null, skip: true, overrideReason: '' }; }
   private patch(l: RxLineView, p: Partial<LineState>) { this.state.update(s => ({ ...s, [l.rxLineId]: { ...this.st(l), ...p } })); }
 
   protected given(l: RxLineView): DrugBrief | null {
@@ -317,6 +342,23 @@ export class PharmacyDispensePage {
   protected units(n: number, d: DrugBrief) { return unitWords(n, d.unit, d.form); }
   protected sched(l: RxLineView) { try { return shortSched(l.schedule); } catch { return ''; } }
   protected exp(iso: string) { return expiryLabel(iso); }
+  protected expChip(iso: string) { return expiryChip(iso, this.today); }
+  /** Secondary line under the generic-first drug name (critic #8): the brand + strength, when there's a generic to lead with. */
+  protected brandLine(drug: DrugBrief | null): string {
+    if (!drug?.generic) return '';
+    return drug.name + (drug.strength ? ' ' + drug.strength : '');
+  }
+  /** Ceiling for a corrected quantity (critic #4): 5× the Rx quantity, never
+   *  more than the sellable stock. */
+  protected maxQty(l: RxLineView): number {
+    const ceiling = overrideCeiling(l.quantity);
+    if (this.pharmacistPick()) {
+      const b = this.batchesOf(l).find(x => x.id === this.st(l).batchId);
+      return Math.min(ceiling, b?.qtyOnHand || l.remaining || ceiling);
+    }
+    const stock = this.batchesOf(l).filter(b => b.qtyOnHand > 0 && b.expiryDate.slice(0, 10) >= this.today).reduce((a, b) => a + b.qtyOnHand, 0);
+    return Math.min(ceiling, stock || l.remaining || ceiling);
+  }
   protected isRx(s: string) { return needsPrescription(s); }
   protected schLabel(s: string) { return scheduleLabel(s); }
   protected time(iso: string) { return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }); }
@@ -327,7 +369,11 @@ export class PharmacyDispensePage {
     return all.map(d => ({ value: d.id, label: d.name + (d.id === l.drug?.id ? ' (prescribed)' : ''), hint: d.onHand ? unitWords(d.onHand, d.unit, d.form) + ' in stock' : 'No stock' }));
   }
   protected batchOptions(l: RxLineView): PfSelectOption<string>[] {
-    return this.batchesOf(l).map((b, i) => ({ value: b.id, label: `${b.batchNo} · exp ${expiryLabel(b.expiryDate)}${i === 0 ? ' · earliest' : ''}`, hint: `${b.qtyOnHand} left · ${inr(b.mrp)}` }));
+    return this.batchesOf(l).map((b, i) => {
+      const band = expiryBand(b.expiryDate, this.today);
+      const warn = band === 'expired' ? ' · EXPIRED' : band === 'soon30' ? ' · expires <30d' : band === 'soon90' ? ' · expires <90d' : '';
+      return { value: b.id, label: `${b.batchNo} · exp ${expiryLabel(b.expiryDate)}${i === 0 ? ' · earliest' : ''}${warn}`, hint: `${b.qtyOnHand} left · ${inr(b.mrp)}` };
+    });
   }
 
   protected setDrug(l: RxLineView, id: string) {
@@ -348,8 +394,11 @@ export class PharmacyDispensePage {
   protected bump(l: RxLineView, d: number) { this.setQty(l, String(this.st(l).qty + d)); }
   protected setQty(l: RxLineView, v: string) {
     const n = Math.floor(Number(v));
-    this.patch(l, { qty: Number.isFinite(n) ? Math.max(1, Math.min(l.remaining, n)) : this.st(l).qty });
+    const max = this.maxQty(l);
+    const qty = Number.isFinite(n) ? Math.max(1, Math.min(max, n)) : this.st(l).qty;
+    this.patch(l, { qty, overrideReason: needsOverrideReason(qty, l.remaining) ? this.st(l).overrideReason : '' });
   }
+  protected setOverrideReason(l: RxLineView, v: string) { this.patch(l, { overrideReason: v }); }
   protected toggleSkip(l: RxLineView) { this.patch(l, { skip: !this.st(l).skip }); }
   protected setDiscount(v: string) { const n = Number(v); this.discount.set(Number.isFinite(n) && n > 0 ? n : 0); }
 
@@ -371,9 +420,13 @@ export class PharmacyDispensePage {
     if (!d || d.consultStatus !== 'completed') return false;
     const g = this.giving();
     if (!g.length) return false;
+    if (this.h1Count() > 0 && !this.patientAddress().trim()) return false;
     return g.every(l => {
       const t = this.takes(l);
-      return t.length > 0 && t.reduce((a, x) => a + x.qty, 0) === this.st(l).qty;
+      const s = this.st(l);
+      if (t.length === 0 || t.reduce((a, x) => a + x.qty, 0) !== s.qty) return false;
+      if (needsOverrideReason(s.qty, l.remaining) && !s.overrideReason.trim()) return false;
+      return true;
     });
   });
 
@@ -387,18 +440,23 @@ export class PharmacyDispensePage {
       const s = this.st(l);
       if (s.skip) { lines.push({ rxLineId: l.rxLineId, qty: 0, skip: true }); continue; }
       if (!this.given(l)) continue;
-      lines.push({ rxLineId: l.rxLineId, drugId: s.drugId, qty: s.qty, batchId: this.pharmacistPick() ? s.batchId : null });
+      lines.push({
+        rxLineId: l.rxLineId, drugId: s.drugId, qty: s.qty, batchId: this.pharmacistPick() ? s.batchId : null,
+        overrideReason: needsOverrideReason(s.qty, l.remaining) ? s.overrideReason.trim() : null,
+      });
     }
     const payable = this.totals().payable;
     this.saving.set(true);
     this.api.dispenseRx(d.visitId, {
       lines, discount: this.discount(),
       payment: pay && payable > 0 ? { mode: this.mode(), amount: payable } : null,
+      patientAddress: this.h1Count() > 0 ? this.patientAddress().trim() : null,
     }).subscribe({
       next: v => {
         this.saving.set(false);
         if (!v) { this.toast.success('Saved — nothing was given.'); this.back(); return; }
         this.done.set(v);
+        this.patientAddress.set('');
         this.api.rx(d.visitId).subscribe({ next: fresh => { this.rx.set(fresh); this.resetState(fresh); }, error: () => undefined });
         this.toast.success(pay ? `${inr(v.bill?.totalPaid ?? 0, false)} received · instructions ready` : 'Given · bill saved');
       },

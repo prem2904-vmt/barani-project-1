@@ -13,7 +13,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
 import { PharmacyApi, type BatchRow, type MoveRow, type PharmacyDrugRow, type StockRow, type SupplierRow } from './pharmacy.api';
-import { errText, expiryLabel, inr, monthsToExpiry, needsPrescription, scheduleLabel, unitWords } from './pharmacy-math';
+import { errText, expiryBand, expiryChip, expiryLabel, inr, monthsToExpiry, needsPrescription, scheduleLabel, unitWords } from './pharmacy-math';
 import { PharmacyDrugPickerComponent } from './drug-picker.component';
 import { PharmacySectionsComponent } from './pharmacy-sections.component';
 
@@ -138,7 +138,7 @@ export function filterStock(rows: StockRow[], f: StockFilter, todayIso: string):
                   <div class="ph-row" style="cursor:default;align-items:flex-start">
                     <span class="ph-row__main">
                       <span class="ph-row__name nd-num">{{ b.batchNo }}</span>
-                      <span class="ph-row__meta nd-num">exp {{ exp(b.expiryDate) }} · {{ inr(b.mrp) }} MRP{{ i === 0 && !b.expired ? ' · sold first' : '' }}</span>
+                      <span class="ph-row__meta nd-num">exp <span [class]="expChip(b.expiryDate).cls">{{ expChip(b.expiryDate).label }}</span> · {{ inr(b.mrp) }} MRP{{ i === 0 && !b.expired ? ' · sold first' : '' }}</span>
                       <span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
                         <button type="button" class="nd-btn nd-btn--tertiary" (click)="adjust(b)">Adjust</button>
                         <button type="button" class="nd-btn nd-btn--tertiary" (click)="toSupplier(b)" [disabled]="b.qtyOnHand <= 0">Return to supplier</button>
@@ -146,7 +146,7 @@ export function filterStock(rows: StockRow[], f: StockFilter, todayIso: string):
                       </span>
                     </span>
                     <span class="ph-row__end"><span class="nd-num ph-strong">{{ b.qtyOnHand }}</span>
-                      <span class="ph-dot" [attr.data-tone]="b.expired ? 'bad' : expSoon(b) ? 'warn' : null">{{ b.expired ? 'Expired' : expSoon(b) ? 'Expires in ' + monthsLeft(b) + ' mo' : 'In date' }}</span></span>
+                      <span class="ph-dot" [attr.data-tone]="dotTone(b)">{{ b.expired ? 'Expired' : band(b) !== 'ok' ? 'Expires ' + exp(b.expiryDate) : 'In date' }}</span></span>
                   </div>
                 } @empty { <p class="ph-sub">No batches in stock.</p> }
                 <p class="ph-title">Ledger</p>
@@ -218,7 +218,8 @@ export class PharmacyStockPage {
     { field: 'generic', headerName: 'Generic', flex: 2, minWidth: 150, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
     { field: 'schedule', headerName: 'Sch', width: 76, valueFormatter: p => scheduleLabel(p.value) },
     { field: 'onHand', headerName: 'On hand', width: 104, type: 'rightAligned', valueFormatter: p => unitWords(p.value, p.data?.unit, p.data?.form) },
-    { field: 'nearestExpiry', headerName: 'Next expiry', width: 106, valueFormatter: p => expiryLabel(p.value) },
+    { field: 'nearestExpiry', headerName: 'Next expiry', width: 106, valueFormatter: p => expiryLabel(p.value),
+      cellClass: p => p.value ? expiryChip(p.value, labToday()).cls : '' },
     { field: 'expiredQty', headerName: 'Expired', width: 86, type: 'rightAligned', valueFormatter: p => (p.value ? String(p.value) : '') },
     { field: 'minQty', headerName: 'Reorder at', width: 100, type: 'rightAligned', editable: true, valueParser: p => Math.max(0, Number(p.newValue) || 0) },
     { field: 'reorderQty', headerName: 'Order qty', width: 94, type: 'rightAligned', editable: true, valueParser: p => Math.max(0, Number(p.newValue) || 0) },
@@ -273,8 +274,13 @@ export class PharmacyStockPage {
   protected schLabel(s: string) { return scheduleLabel(s); }
   protected units(n: number, r: StockRow) { return unitWords(n, r.unit, r.form); }
   protected exp(iso: string) { return expiryLabel(iso); }
-  protected monthsLeft(b: BatchRow) { return monthsToExpiry(b.expiryDate, this.today); }
-  protected expSoon(b: BatchRow) { return !b.expired && this.monthsLeft(b) < 3; }
+  protected expChip(iso: string) { return expiryChip(iso, this.today); }
+  /** Chip band (critic #10) — expired / <30d / <90d / ok, mirror of the server's IsExpired. */
+  protected band(b: BatchRow) { return expiryBand(b.expiryDate, this.today); }
+  protected dotTone(b: BatchRow): 'bad' | 'warn' | null {
+    if (b.expired || this.band(b) === 'expired' || this.band(b) === 'soon30') return 'bad';
+    return this.band(b) === 'soon90' ? 'warn' : null;
+  }
   protected moveWord(m: MoveRow) { return MOVE_WORDS[m.kind] ?? m.kind; }
   protected when(iso: string) { return new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); }
 
