@@ -94,6 +94,9 @@ test('mapper: non-numeric values pass through; rounding is half away from zero',
   assert.equal(convertValue('-2.5', { decimals: 0 }), '-3');
   assert.equal(convertValue('0.1', { factor: 3 }), '0.3');
   assert.equal(roundAway(2.345, 2), 2.35);
+  assert.equal(convertValue(' 7.80 ', {}), '7.80');                 // identity → as sent
+  assert.equal(convertValue('7.80', { factor: 1000 }), '7800');
+  assert.equal(convertValue('1e3', { factor: 2 }), '2000');
 });
 
 // ── queue ───────────────────────────────────────────────────────────────

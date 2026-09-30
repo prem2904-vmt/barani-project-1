@@ -12,7 +12,8 @@
  *
  * Rounding is half AWAY from zero (MidpointRounding.AwayFromZero on the
  * server). Non-numeric values ("Positive", ">1000") pass through unchanged.
- * Codes match case-insensitively after trimming.
+ * Codes match case-insensitively after trimming. An identity map with no
+ * decimals returns the analyzer's text unchanged (server: InstrumentMapping.ConvertValue).
  */
 
 function normCode(c) { return String(c ?? '').trim().toUpperCase(); }
@@ -41,11 +42,15 @@ function formatNumber(x, decimals) {
  */
 function convertValue(raw, map = {}) {
   const s = String(raw ?? '').trim();
-  if (!/^[-+]?\d+(\.\d+)?$/.test(s)) return s;
+  // Same acceptance as the server's decimal.TryParse(NumberStyles.Float).
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(s)) return s;
   const factor = map.factor == null || map.factor === '' ? 1 : Number(map.factor);
   const offset = map.offset == null || map.offset === '' ? 0 : Number(map.offset);
+  const noDecimals = map.decimals == null || map.decimals === '' || !(Number(map.decimals) >= 0);
+  // Identity map with no rounding: the analyzer's text exactly as sent ("7.80").
+  if (factor === 1 && offset === 0 && noDecimals) return s;
   const v = Number(s) * factor + offset;
-  return formatNumber(v, map.decimals);
+  return formatNumber(v, noDecimals ? null : Math.min(10, Number(map.decimals)));
 }
 
 /**
