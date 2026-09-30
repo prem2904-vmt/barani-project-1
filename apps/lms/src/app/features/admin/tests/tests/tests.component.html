@@ -289,6 +289,12 @@
   </ng-template>
 
   <ng-template #deptBody>
+    @if (listSkeleton()) {
+    <!-- First open: the departments are on their way with the grid. -->
+    <div class="nd-card__body">
+      <pf-skeleton-rows [rows]="6" [avatar]="false" [dense]="true" [trailing]="false" label="Loading departments…"></pf-skeleton-rows>
+    </div>
+    } @else {
     <ul class="nd-card__body pf-tm-dept-list">
       <li class="pf-tm-dept-row">
         <button type="button" class="pf-tm-dept" [attr.aria-pressed]="!selectedDept()" (click)="pickDept(null)">
@@ -324,6 +330,7 @@
         <li class="pf-tm-dept-empty">No departments yet.</li>
       }
     </ul>
+    }
   </ng-template>
   }
   </div>

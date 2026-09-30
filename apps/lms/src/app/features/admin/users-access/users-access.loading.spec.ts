@@ -14,7 +14,7 @@ import { TenantEntitlementsService } from '../../../core/services/tenant-entitle
 import { WebrtcService } from '../../../core/services/webrtc.service';
 import { SignalingService } from '../../../core/services/signaling.service';
 import { PresenceService } from '../../../core/services/presence.service';
-import { RouteProgressService } from '../../../core/navigation/route-progress.service';
+import { PageOpenService } from '../../../core/navigation/page-open.service';
 import { UserEditComponent } from './user-edit.component';
 import { RoleEditorComponent } from './role-editor.component';
 import { UsersAccessComponent } from './users-access.component';
@@ -55,7 +55,7 @@ function render<T>(cmp: Type<T>, opts: { id?: string; slow?: Record<string, Subj
     post: vi.fn(() => of({})), patch: vi.fn(() => of({})), delete: vi.fn(() => of({})),
     put: vi.fn(() => opts.put$ ?? of({})),
   };
-  const routeProgress = { markSource: vi.fn(), pending: signal(false), shown: signal(false) };
+  const pageOpen = { markSource: vi.fn(), pending: signal(false), frame: signal(null) };
   TestBed.configureTestingModule({
     imports: [cmp],
     providers: [
@@ -74,13 +74,13 @@ function render<T>(cmp: Type<T>, opts: { id?: string; slow?: Record<string, Subj
       { provide: SignalingService, useValue: { onlineUserIds: signal(new Set<string>()), userPresences: signal(new Map<string, string>()) } },
       { provide: PresenceService, useValue: { seedFromUsers: vi.fn() } },
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true } },
-      { provide: RouteProgressService, useValue: routeProgress },
+      { provide: PageOpenService, useValue: pageOpen },
     ],
   });
   const f = TestBed.createComponent(cmp);
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
-  return { f, el, api, c: f.componentInstance as any, routeProgress };
+  return { f, el, api, c: f.componentInstance as any, pageOpen };
 }
 
 describe('Users & access — loading feedback', () => {
@@ -148,11 +148,11 @@ describe('Users & access — loading feedback', () => {
   });
 
   it('Users list: a row\'s Edit marks the pressed button busy (held until the editor opens)', () => {
-    const { c, routeProgress } = render(UsersAccessComponent);
+    const { c, pageOpen } = render(UsersAccessComponent);
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     const btn = document.createElement('button');
     c.gridContext.editUser(users[0], btn);
-    expect(routeProgress.markSource).toHaveBeenCalledWith(btn);
+    expect(pageOpen.markSource).toHaveBeenCalledWith(btn);
     expect(navigate).toHaveBeenCalledWith(['/admin/users', 'u1', 'edit']);
   });
 });

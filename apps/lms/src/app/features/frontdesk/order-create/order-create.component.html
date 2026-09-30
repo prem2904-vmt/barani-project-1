@@ -406,7 +406,12 @@
       <div class="pf-oc-cat__list">
         <!-- Rows: code · name (2 lines) · price · star. Neutral border; the
              type lives in the title / aria-label; in-cart = tint + check. -->
-        @if (categoryTab() === 'recent') {
+        <!-- First open: the catalogue is on its way → its rows as a skeleton,
+             never "No recent tests yet" / "No tests configured". -->
+        @if (catalogSkeleton()) {
+        <pf-skeleton-rows [rows]="8" [avatar]="false" [dense]="true" label="Loading tests…"></pf-skeleton-rows>
+        }
+        @if (!catalogSkeleton() && categoryTab() === 'recent') {
         @if (recentTests().length === 0) {
         <p class="pf-empty-line">No recent tests yet. They appear here once you create your first order.</p>
         } @else {
@@ -416,7 +421,7 @@
         }
         }
 
-        @if (categoryTab() === 'favourites') {
+        @if (!catalogSkeleton() && categoryTab() === 'favourites') {
         @if (favouriteTests().length === 0) {
         <p class="pf-empty-line">No favourites yet. Click the star on any test to pin it here.</p>
         } @else {
@@ -426,7 +431,7 @@
         }
         }
 
-        @if (categoryTab() === 'packages') {
+        @if (!catalogSkeleton() && categoryTab() === 'packages') {
         @if (packages().length === 0) {
         <p class="pf-empty-line">No packages configured.</p>
         } @else {
@@ -436,7 +441,7 @@
         }
         }
 
-        @if (categoryTab() === 'profiles') {
+        @if (!catalogSkeleton() && categoryTab() === 'profiles') {
         @if (profiles().length === 0) {
         <p class="pf-empty-line">No profiles configured.</p>
         } @else {
@@ -456,7 +461,7 @@
         }
         }
 
-        @if (categoryTab() === 'all') {
+        @if (!catalogSkeleton() && categoryTab() === 'all') {
         @if (filteredTests().length === 0 && individualTests().length > 0) {
         <p class="pf-empty-line">No tests in this department.</p>
         } @else if (individualTests().length === 0) {

@@ -72,26 +72,30 @@ class FakeRecorder {
   stop() { this.ondataavailable?.({ data: new Blob(['x'], { type: 'audio/webm' }) }); this.onstop?.(); }
 }
 
-function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
+function setup(opts: { narrow?: boolean; deepLink?: string; cold?: boolean } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: (q.includes('900px') || q.includes('640px')) ? !!opts.narrow : false,
     addEventListener() {}, removeEventListener() {},
   });
-  const conversations = signal<Conversation[]>(structuredClone(CONVS));
+  const conversations = signal<Conversation[]>(opts.cold ? [] : structuredClone(CONVS));
+  // Cold start: the list has never answered and this page's load hangs.
+  const conversationsLoaded = signal(!opts.cold);
+  let answer: () => void = () => undefined;
+  const firstLoad = new Promise<void>(r => { answer = () => { conversations.set(structuredClone(CONVS)); conversationsLoaded.set(true); r(); }; });
   const activeConversationId = signal<string | null>(null);
   const activeMessages = signal<ChatMessage[]>([]);
   const loadingHistory = signal(false);
   const readReceipts = signal(new Map<string, Map<string, string>>());
   const chat = {
     isConnected: signal(true),
-    conversations, activeConversationId, activeMessages, loadingHistory, readReceipts,
+    conversations, conversationsLoaded, activeConversationId, activeMessages, loadingHistory, readReceipts,
     loadingOlder: signal(false),
     hasMoreHistory: signal(false),
     typingByConversation: signal(new Map<string, Set<string>>()),
     activeConversation: computed(() => conversations().find(c => c.id === activeConversationId()) ?? null),
     totalUnread: computed(() => conversations().reduce((n, c) => n + c.unreadCount, 0)),
     connect: vi.fn(async () => {}),
-    loadConversations: vi.fn(async () => {}),
+    loadConversations: vi.fn(async () => { if (opts.cold) await firstLoad; }),
     openConversation: vi.fn(async (id: string) => {
       activeConversationId.set(id);
       loadingHistory.set(true);
@@ -158,7 +162,7 @@ function setup(opts: { narrow?: boolean; deepLink?: string } = {}) {
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
   const c = f.componentInstance as any;
-  return { f, el, c, chat, api, navBack, uploads };
+  return { f, el, c, chat, api, navBack, uploads, answer };
 }
 
 const flush = () => new Promise(r => setTimeout(r, 0));
@@ -186,6 +190,18 @@ afterEach(() => {
 });
 
 describe('Messages — new design (ND-PATTERN §17)', () => {
+  it('first open (cold): the conversation list is a skeleton, never "No conversations yet"', async () => {
+    const { f, el, answer } = setup({ cold: true });
+    await settle(f);
+    const side = q(el, '.pf-mnd-side')!;
+    expect(side.querySelector('pf-skeleton-rows')).not.toBeNull();
+    expect(side.textContent).not.toContain('No conversations yet');
+    answer();
+    await settle(f);
+    expect(side.querySelector('pf-skeleton-rows')).toBeNull();
+    expect(rows(el).length).toBeGreaterThan(0);
+  });
+
   it('band: back + actions (New chat is secondary) and the pill is the search', async () => {
     const { f, el } = setup();
     await settle(f);

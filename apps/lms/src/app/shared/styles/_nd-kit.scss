@@ -505,7 +505,7 @@ button.nd-ctx__chip:hover { border-color: var(--nd-sel-border); }
    [pfBusy] (shared/directives/busy.directive.ts) puts .pf-is-busy +
    aria-busy on a button the SAME frame its request starts (instant press
    feedback) and appends the kit's <pf-busy> dots after 150ms.
-   RouteProgressService.markSource(el) does the same for the element that
+   PageOpenService.markSource(el) does the same for the element that
    started a navigation (.pf-nav-pending) until it settles. */
 .pf-is-busy, .pf-nav-pending { cursor: progress !important; }
 .pf-is-busy:not(:disabled) { opacity: 0.85; }

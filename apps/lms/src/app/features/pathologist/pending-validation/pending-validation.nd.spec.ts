@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { signal } from '@angular/core';
-import { of, EMPTY } from 'rxjs';
+import { of, EMPTY, Subject } from 'rxjs';
 import { vi } from 'vitest';
 import { PendingValidationComponent } from './pending-validation.component';
 import { departmentsIn, enrich, groupBySample, nextTile, tileStatus } from './pending-validation.logic';
@@ -70,7 +70,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean; touch?: boolean; admin?: boolean } = {}) {
+async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean; touch?: boolean; admin?: boolean; queue$?: Subject<OrderTest[]> } = {}) {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   (window as any).matchMedia = (q: string) => ({
@@ -79,7 +79,7 @@ async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean
   });
   const api = {
     get: vi.fn((url: string) => {
-      if (url.startsWith('/api/validation/queue')) return of(opts.queue ?? QUEUE);
+      if (url.startsWith('/api/validation/queue')) return opts.queue$ ?? of(opts.queue ?? QUEUE);
       if (url === '/api/validation/scope') return of(opts.scope ?? SCOPE_ALL);
       return of([]);
     }),
@@ -231,6 +231,19 @@ describe('Pathologist queue (nd) — tiles', () => {
     TestBed.resetTestingModule();
     const one = await render({ queue: QUEUE.filter(q => q.subOrder?.departmentId === HAEM.id), scope: SCOPE_HAEM });
     expect(one.el.querySelector('.pv-depts')).toBeNull();
+  });
+
+  it('first load: the side card numbers are placeholders and Review next says it is loading', async () => {
+    const queue$ = new Subject<OrderTest[]>();
+    const { f, el } = await render({ queue$ });
+    const stats = el.querySelector('.pv-stats')!;
+    expect(stats.querySelectorAll('pf-skeleton').length).toBe(4);
+    expect(el.querySelector('.pv-next')!.textContent).toContain('Loading the queue');
+    expect(el.textContent).not.toContain('Nothing to review');
+    queue$.next(QUEUE); queue$.complete();
+    f.detectChanges();
+    expect(stats.querySelectorAll('pf-skeleton').length).toBe(0);
+    expect(el.querySelector('.pv-next')!.textContent).toContain('Review next');
   });
 
   it('empty queue: the kit empty state and a disabled, non-primary Review next', async () => {

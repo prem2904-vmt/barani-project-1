@@ -24,12 +24,12 @@ const CATALOGUE = [
   { id: 't1', name: 'Haemoglobin', testCode: 'HEM011', type: 'individual', price: 10, tatHours: 2, isActive: true, department: { name: 'Haematology' } },
 ];
 
-function render(opts: { patch$?: Subject<any> } = {}) {
+function render(opts: { patch$?: Subject<any>; tests$?: Subject<any> } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover') ? true : q.includes('min-width: 1024px') ? true : q.includes('max-width: 640px') ? false : true,
     addEventListener() {}, removeEventListener() {} });
   const api = {
-    get: vi.fn((url: string) => of(url.startsWith('/api/tests/') ? CATALOGUE : [])),
+    get: vi.fn((url: string) => url.startsWith('/api/tests/?') && opts.tests$ ? opts.tests$ : of(url.startsWith('/api/tests/') ? CATALOGUE : [])),
     post: vi.fn(() => of({})), patch: vi.fn(() => opts.patch$ ?? of({})), delete: vi.fn(() => of({})),
   };
   TestBed.configureTestingModule({
@@ -58,6 +58,19 @@ const footBtn = (el: HTMLElement, text: RegExp) =>
 describe('Order & Payments — loading feedback', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
+
+  it('first open: the test catalogue is a skeleton of its rows, never "No recent tests yet"', () => {
+    const tests$ = new Subject<any>();
+    const { f, el } = render({ tests$ });
+    const list = () => el.querySelector('.pf-oc-cat__list')!;
+    expect(list().querySelector('pf-skeleton-rows')).not.toBeNull();
+    expect(list().textContent).not.toMatch(/No recent tests yet|No tests configured/);
+    tests$.next(CATALOGUE);
+    tests$.complete();
+    vi.advanceTimersByTime(700);                           // the 600ms hold
+    f.detectChanges();
+    expect(list().querySelector('pf-skeleton-rows')).toBeNull();
+  });
 
   it('Modify → "Update order & reconcile": disabled + aria-busy at once, dots after 150ms, released on answer', () => {
     const patch$ = new Subject<any>();

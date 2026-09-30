@@ -545,8 +545,8 @@ tech types only the tail number.
   (a confirm tap, e.g. a drawn vial), `.nd-anim-rise` (a sheet).
 - Stagger list rows by about 18ms.
 - Everything is off under `prefers-reduced-motion`.
-- **Navigation motion — one rule: list → detail = ZOOM, step → step =
-  SLIDE.**
+- **Navigation motion — list → detail = ZOOM, step → step = SLIDE,
+  everything else OPENS AS A PAGE.**
   - **Zoom** (`core/navigation/zoom-transition.ts` + `zoom.directive.ts`):
     put `[pfZoomSource]="keys"` on the tile/row that opens a detail and
     `[pfZoomTarget]="keys"` on the detail's main card AND its loading
@@ -563,7 +563,17 @@ tech types only the tail number.
     a reason prompt) call `zoom.rearm(key)` right before navigating.
   - **Slide** (`core/navigation/slide-transition.ts`): a flow's next step
     (Order & Payments / front desk → Collect) slides forward; back
-    reverses. Everything else swaps instantly.
+    reverses.
+  - **Page open** (`core/navigation/page-open.service.ts`, `pf-vt-page`):
+    every other move to a different screen. Only the shell's `<main>`
+    moves (app bar + nav stay still): the old screen eases out (150ms),
+    the new one eases in with a 10px rise + 0.992 scale (240ms,
+    `--nd-spring`). A slow navigation first draws the destination's frame
+    (`<pf-page-frame>`: band + skeleton in that screen's layout, from
+    `page-skeleton.ts`), and the screen then cross-fades from it
+    (`pf-vt-settle`) — nothing rises twice. Same screen with new query
+    params and the branch hop swap instantly. No View Transitions API →
+    the shell plays the same entrance in CSS (`data-po-enter`).
   - Real-browser proof: `apps/lms-e2e/src/zoom-transition.rbac.spec.ts`
     (every module pair, 5 taps each).
   - Order & Payments is a zoom destination too: a parked draft (In progress
@@ -592,8 +602,8 @@ no new looks:
 | Wait | What shows | Primitive |
 | --- | --- | --- |
 | **A button's request** (save, submit, send, print, approve…) | The SAME frame: `aria-busy`, dimmed, repeat presses swallowed. After 150ms: the kit's busy dots inside the button, and its words say what is happening ("Saving…"). | `[pfBusy]="saving()"` on a native button (`shared/directives/busy.directive.ts`), `[busy]` on `pf-touch-btn`; `busyWhile(flag)` (RxJS) sets the flag. Keep the button's own `[disabled]` binding. |
-| **A screen on its way** (lazy chunk, guards) | After 150ms: the thin violet bar at the top of the window, easing toward 90%, running out on arrival. | `<pf-route-progress>` — mounted ONCE in `app.ts`, driven by every navigation (`core/navigation/route-progress.service.ts`). Nothing per screen. |
-| **The thing you tapped opens a screen** (a DOM-built grid row action, a tile) | The pressed element turns "held" (tint + a slow pulse) the same frame, until that navigation settles (cancel included). When the destination is heavy to build, navigate AFTER that frame is painted so the press is never swallowed. | `RouteProgressService.markSource(el)` + `afterNextPaint(() => router.navigate(…))` (`shared/utils/busy.ts`) |
+| **A screen on its way** (lazy chunk, guards) | The screen OPENS at the tap (owner, 2026-09-30: "not a loading bar — a page-open animation and skeletons"). After 90ms: the DESTINATION's frame (its band + a skeleton of its body in that screen's layout) eases in over the screen being left, which eases out. On arrival the view transition opens the screen (fade + small rise, 240ms, nd spring; a pure cross-fade when the frame was up). Zoom / slide pairs keep their own motion (frame only after 400ms). No View Transitions (older WebKit): the same entrance in CSS. Reduced motion: instant. **Never a top progress bar.** | `PageOpenService` + `<pf-page-frame>` (shell, once) + `slideTransition` (`pf-vt-page`). Layout per destination: ONE table, `core/navigation/page-skeleton.ts` — add a row when you add a screen. |
+| **The thing you tapped opens a screen** (a DOM-built grid row action, a tile) | The pressed element turns "held" (tint + a slow pulse) the same frame, until that navigation settles (cancel included). When the destination is heavy to build, navigate AFTER that frame is painted so the press is never swallowed. | `PageOpenService.markSource(el)` + `afterNextPaint(() => router.navigate(…))` (`shared/utils/busy.ts`) |
 | **Opening an editor / drawer / page** | Its OWN layout as a skeleton on the first frame — band + name chip placeholder, the section card as fields, the side card as a block — never a blank form or a frozen previous screen. Save is not offered for a record that isn't on screen yet. | Skeleton kit (`pf-skeleton-form / -card / -detail`), held with `heldFlag(loading)` (600ms minimum). Canonical: the test editor (`recordSkeleton()`). |
 | **A grid / list's first load** | Skeleton rows in the grid's box (over the mounted grid so it keeps its size); later reloads keep the rows on screen. | `pf-skeleton-table` / `pf-skeleton-rows`, `heldFlag`. Canonical: Test Master (`listSkeleton()`). |
 | **A long save / upload / bulk job** | The button stays busy AND the region says so: a progress count when the work is countable ("Saving 3 of 12…"), otherwise the busy dots with the words. | `[pfBusy]` + text; `pf-busy` inline. |
@@ -603,16 +613,16 @@ Timing rules (`shared/utils/busy.ts`):
 
 - **Instant press feedback, always** — the pressed control changes in the
   same frame (busy state, `.press` scale, held tint). Never a dead click.
-- **Moving indicators only after `BUSY_SHOW_AFTER_MS` (150ms)** — dots and
-  the top bar never flicker for a fast answer (`spinDelay` /
-  `createSpinDelay`).
+- **Moving indicators only after `BUSY_SHOW_AFTER_MS` (150ms)** — dots
+  never flicker for a fast answer (`spinDelay` / `createSpinDelay`); the
+  destination frame waits `FRAME_AFTER_MS` (90ms).
 - **Once shown, held `BUSY_MIN_SHOW_MS` (300ms)**; load-driven skeletons are
   held 600ms (`heldFlag`, see "Load-driven states hold a minimum").
-- **Reduced motion:** no shimmer, no bar growth, static dots, no pulse — the
+- **Reduced motion:** no shimmer, no page-open motion, static dots, no pulse — the
   states still appear (opacity / tint only).
 - **Accessibility:** skeleton presets are the loading region (role=status,
   aria-busy, polite label); busy buttons carry `aria-busy` + an SR label;
-  the top bar announces "Loading page…" once.
+  the destination frame announces "Opening <screen>…" once.
 - **Not a loading look:** the PF logo (`pf-loading-logo`) is sign-in branding
   only; never spinners that block the whole screen for one button's request.
 - **Tests:** a screen that loads asserts its skeleton on the first render and
@@ -1857,8 +1867,8 @@ Editors  pf-hero-band[contextBar] › .nd-ctx › __primary · __edit (+ the sec
          .nd-tabs[role=tablist] › .nd-tabs__item[role=tab][aria-selected] › .nd-tabs__dot(--ok) · .nd-savestate(__dot)
 Motion   --nd-spring · --nd-spring-bounce · --nd-dur-fast · --nd-dur · --nd-dur-sheet
          .nd-anim-in · .nd-anim-pop · .nd-anim-rise
-Loading  [pfBusy] · pf-touch-btn[busy] · busyWhile(flag) · spinDelay · afterNextPaint · <pf-route-progress> (app.ts, once)
-         RouteProgressService.markSource(el) · prefetch / prefetchWhenIdle · pf-skeleton-* + heldFlag
+Loading  [pfBusy] · pf-touch-btn[busy] · busyWhile(flag) · spinDelay · afterNextPaint · <pf-page-frame> + PageOpenService (shell, once; page-skeleton.ts)
+         PageOpenService.markSource(el) · prefetch / prefetchWhenIdle · pf-skeleton-* + heldFlag
 AI       .nd-ai-glow[data-ai-working] · .nd-ai-glow--inset · .nd-ai-glow--ring · .nd-ai-glow-mark · --nd-ai-angle (PF Sense only)
 Mobile   .nd-bottombar(__info) · .nd-sheet(__handle) · .nd-sheet-backdrop · .nd-fullscreen · --nd-nav-h
 Tokens   --nd-radius-card · --nd-radius · --nd-radius-sm · --nd-radius-chip · --nd-card-bg · --nd-line

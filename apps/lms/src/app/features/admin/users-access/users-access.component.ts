@@ -38,7 +38,7 @@ import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { prefetch, prefetchWhenIdle } from '../../../shared/utils/prefetch';
-import { RouteProgressService } from '../../../core/navigation/route-progress.service';
+import { PageOpenService } from '../../../core/navigation/page-open.service';
 import {
   ROLE_EDITOR_PREFETCH_KEY, USER_EDIT_PREFETCH_KEY, USER_INVITE_PREFETCH_KEY,
   loadRoleEditor, loadUserEdit, loadUserInvite,
@@ -663,7 +663,7 @@ export class UsersAccessComponent implements OnInit {
   };
 
   // ── Loading feedback (ND-PATTERN "Loading feedback") ──
-  private readonly routeProgress = inject(RouteProgressService);
+  private readonly pageOpen = inject(PageOpenService);
   private readonly destroyRef = inject(DestroyRef);
   /** First load: skeleton rows over the grid until users + roles land. */
   private readonly listHold = createLoadHold(true);
@@ -741,11 +741,11 @@ export class UsersAccessComponent implements OnInit {
   /** Row actions are DOM-built: the pressed button turns "held" the same
    *  frame, until the editor's navigation settles. */
   openRole(r: Role, el?: HTMLElement) {
-    this.routeProgress.markSource(el);
+    this.pageOpen.markSource(el);
     this.router.navigate(['/admin/roles', r.id, 'edit']);
   }
   editUser(u: User, el?: HTMLElement) {
-    this.routeProgress.markSource(el);
+    this.pageOpen.markSource(el);
     this.router.navigate(['/admin/users', u.id, 'edit']);
   }
 

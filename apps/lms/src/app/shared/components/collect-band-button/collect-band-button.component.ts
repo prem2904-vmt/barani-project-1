@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { Router } from '@angular/router';
-import { RouteProgressService } from '../../../core/navigation/route-progress.service';
+import { PageOpenService } from '../../../core/navigation/page-open.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { BILLING_COUNTER_SCREEN, areasWithCollection, screenWorkArea } from '../../models/process-workflow.model';
@@ -68,7 +68,7 @@ import { BILLING_COUNTER_SCREEN, areasWithCollection, screenWorkArea } from '../
 })
 export class CollectBandButtonComponent {
   private readonly router = inject(Router);
-  private readonly routeProgress = inject(RouteProgressService);
+  private readonly pageOpen = inject(PageOpenService);
   private readonly auth = inject(AuthService);
   // Optional + duck-typed: host screens' specs stub these services partially,
   // and a missing workflow simply means "no band button".
@@ -111,7 +111,7 @@ export class CollectBandButtonComponent {
     if (local) { local(); return; }
     // The Collect screen is a lazy route: the pressed button turns "held"
     // the same frame, until the navigation settles (ND-PATTERN "Loading feedback").
-    this.routeProgress.markSource(ev?.currentTarget as HTMLElement | null);
+    this.pageOpen.markSource(ev?.currentTarget as HTMLElement | null);
     const t = this.target();
     this.router.navigate(t.commands, { queryParams: t.queryParams });
   }

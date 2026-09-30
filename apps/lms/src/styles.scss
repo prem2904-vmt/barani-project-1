@@ -774,21 +774,12 @@ button {
   animation: pageSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Auto-apply enter animation to the active route component. Angular inserts
-   the activated component as a sibling after <router-outlet>, so this rule
-   re-triggers on every navigation without extra wiring.
-   NOTE: intentionally omitting `will-change: transform` — it would create a
-   new containing block and break `position: fixed` children (like the
-   sticky action bar on result-entry). The animation is cheap enough without it. */
-pf-shell main>router-outlet+* {
-  animation: pageSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  pf-shell main>router-outlet+* {
-    animation: none;
-  }
-}
+/* The routed screen's ENTRANCE is the page-open view transition
+   (core/navigation/page-open.service.ts + slide-transition.ts, `pf-vt-page`
+   below), with a CSS fallback on the shell where the API is missing. The old
+   auto fade on `main > router-outlet + *` is gone: it ran UNDER the view
+   transition (the live new snapshot faded from 0 a second time — a double
+   animation) and its filled opacity pinned the leaving screen visible. */
 
 .pulse-dot {
   animation: pulseDot 1.8s infinite;
@@ -2854,6 +2845,31 @@ html.pf-vt-back::view-transition-old(root)    { animation: pf-vt-out-right 300ms
 html.pf-vt-back::view-transition-new(root)    { animation: pf-vt-in-left 300ms cubic-bezier(0.32, 0.72, 0, 1) both; }
 @media (prefers-reduced-motion: reduce) {
   html::view-transition-old(root), html::view-transition-new(root) { animation: none !important; }
+}
+
+/* ═══ Page OPEN (core/navigation/page-open.service.ts) ═══
+   Every other move to a different screen: only the content area (the
+   shell's <main>, named for the transition) moves; the app bar and the nav
+   stay put. The old screen eases out quickly, the new one eases in with a
+   small rise + scale on the nd spring. When the destination frame (its band
+   + skeleton) was already up, the screen cross-fades from it instead
+   (pf-vt-settle) — nothing rises twice. Reduced motion: instant (the hook
+   skips the transition; the rule below is the belt and braces). */
+html.pf-vt-page .shell-main { view-transition-name: pf-page; }
+@keyframes pf-vt-page-in  { from { opacity: 0; transform: translateY(10px) scale(0.992); } }
+@keyframes pf-vt-page-out { to   { opacity: 0; transform: scale(0.996); } }
+html.pf-vt-page::view-transition-group(pf-page) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+html.pf-vt-page::view-transition-old(pf-page) { animation: pf-vt-page-out 150ms cubic-bezier(0.4, 0, 1, 1) both; }
+html.pf-vt-page::view-transition-new(pf-page) { animation: pf-vt-page-in 240ms 40ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+html.pf-vt-page.pf-vt-settle::view-transition-old(pf-page) { animation: pf-vt-fade-out 200ms ease-out both; }
+html.pf-vt-page.pf-vt-settle::view-transition-new(pf-page) { animation: pf-vt-fade-in 200ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  html.pf-vt-page::view-transition-group(*),
+  html.pf-vt-page::view-transition-old(*),
+  html.pf-vt-page::view-transition-new(*) { animation: none !important; }
 }
 
 /* ═══ List → detail ZOOM (core/navigation/zoom-transition.ts) ═══
