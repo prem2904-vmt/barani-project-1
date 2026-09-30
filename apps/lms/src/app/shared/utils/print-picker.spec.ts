@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveHidden, printPickerDefaultOf, printPickerFlag, resolvePrintPicker, resolvePrintPickerDefault } from './print-picker';
+import { effectiveHidden, hasEnteredValue, printPickerDefaultOf, printPickerFlag, resolvePrintPicker, resolvePrintPickerDefault } from './print-picker';
 
 const ON = JSON.stringify({ printPicker: true, parameters: [] });
 const OFF = JSON.stringify({ parameters: [] });
@@ -54,5 +54,14 @@ describe('print picker "Start with" (all | none)', () => {
     expect(effectiveHidden('["PCV"]', 'none', names)).toEqual(['PCV']);
     expect(effectiveHidden(null, 'all', names)).toEqual([]);
     expect(effectiveHidden('["Hb"]', 'all', names)).toEqual(['Hb']);
+  });
+});
+
+describe('hasEnteredValue (entering a value ticks its print box)', () => {
+  it('numbers (0 too), text, a non-empty multi-select count', () => {
+    for (const v of [0, 13, '5', 'Pale yellow', ['Pus cells'], [' ', 'RBC'], true]) expect(hasEnteredValue(v)).toBe(true);
+  });
+  it('null / undefined / blank / empty or blank-only multi-select / NaN do not', () => {
+    for (const v of [null, undefined, '', '   ', [], ['', ' '], NaN]) expect(hasEnteredValue(v)).toBe(false);
   });
 });
