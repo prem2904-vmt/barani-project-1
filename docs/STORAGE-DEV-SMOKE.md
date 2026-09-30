@@ -40,7 +40,7 @@ Where to get the inputs:
 | `uploads-file-304` | same request with `If-None-Match: <etag>` → 304 | ETag revalidation regressed (would mean every render re-fetches from storage) |
 | `uploads-file-range` | same request with `Range: bytes=0-15` → 206 | range support regressed (audio/video seeking would break) |
 | `uploads-file-missing` | a sibling path that can't exist → 410 `file_missing`, never 500 | the dev incident class: a missing object leaking a raw SDK/500 instead of the friendly 410 |
-| `report-pdf` | `GET /api/reports/{id}/pdf` → 200 `application/pdf` | the report's stored PDF is missing or storage is down |
+| `report-pdf` | `GET /api/reports/{id}/pdf` → 200 `application/pdf` | the report's stored PDF is missing or storage is down (note: for a report with an attached partner file, the first GET may cache the combined PDF in Spaces — the app's normal view behaviour; pass a report without partner files for a strictly read-only probe) |
 | `public-report-link` | `GET /api/public/report/{token}` → 200 | the public link route is broken (this probe does not submit identity, so it proves reachability only, not that patient data unlocks correctly) |
 
 A FAIL that shows **500** anywhere is worse than a FAIL that shows **503**:
