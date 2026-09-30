@@ -288,8 +288,8 @@ const EMPTY: ConsultEditState = {
                           @if (t.price) { <span class="nd-row__value">₹{{ t.price }}</span> }
                           @if (editable()) { <button type="button" class="cw__x" (click)="toggleTest(t)" [attr.aria-label]="'Remove ' + t.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button> }
                         </div>
-                      } @empty { <p class="cw__muted">No tests yet.</p> }
-                      @if (w.visit.labOrderId && !editable()) { <p class="cw__muted">Sent to the lab as a normal order.</p> }
+                      } @empty { <p class="cw__muted">{{ editable() ? 'No tests yet.' : 'No tests were ordered.' }}</p> }
+                      @if (w.visit.labOrderId && !editable() && st().tests.length) { <p class="cw__muted">Sent to the lab as a normal order.</p> }
                     </div>
                   }
                   @case (4) {

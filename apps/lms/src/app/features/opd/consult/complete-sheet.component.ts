@@ -28,7 +28,7 @@ export function addDaysIso(start: Date, days: number): string {
  * "Complete consult" — the summary of everything the consult sends out
  * (Agent C): diagnosis, pharmacy lines, lab tests + price, follow-up (quick
  * picks + the fee rule), an unresolved-allergy warning (blocks sending), and
- * the next-phase outputs shown as not built yet. A right-side sheet on
+ * (no roadmap copy for unbuilt outputs). A right-side sheet on
  * desktop, a bottom sheet on phones.
  */
 @Component({
@@ -105,13 +105,6 @@ export function addDaysIso(start: Date, days: number): string {
           </div>
         </section>
 
-        <section class="cs__row cs__row--later">
-          <span class="cs__ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
-          <div class="cs__c">
-            <span class="cs__k">Next phase</span>
-            <span class="cs__m">Procedure note · Referral · IPD admission · Certificate · Consent — not built yet.</span>
-          </div>
-        </section>
       </div>
 
       <footer class="cs__foot">

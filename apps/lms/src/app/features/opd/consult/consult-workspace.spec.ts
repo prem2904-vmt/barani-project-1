@@ -109,7 +109,7 @@ describe('Complete consult sheet', () => {
     expect(el.textContent).toContain('Clavumox 625');
     expect(el.textContent).toContain('1 tab · 1-0-1 · 5 days · after food');
     expect(el.textContent).toContain('₹1050');
-    expect(el.textContent).toContain('not built yet');
+    expect(el.textContent).not.toContain('not built yet');   // no roadmap copy in front of doctors
     let sent = 0; f.componentInstance.confirm.subscribe(() => sent++);
     const btn = [...el.querySelectorAll('button')].find(b => b.textContent!.includes('Complete & send')) as HTMLButtonElement;
     expect(btn.disabled).toBe(false);
