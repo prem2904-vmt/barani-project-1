@@ -32,6 +32,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { finalize } from 'rxjs';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
@@ -39,6 +40,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   selector: 'pf-receive-samples',
   standalone: true,
   imports: [
+    DailyNoComponent,
     PfKeysDirective,
     SamplePresetDirective,
     FormsModule,
@@ -229,7 +231,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             <ul class="pkg-preview__list">
               @for (o of pkg.orders; track o.id) {
                 <li class="pkg-preview__row">
-                  <span class="pkg-preview__name">{{ o.patientName }}</span>
+                  <span class="pkg-preview__name"><pf-daily-no [of]="o" />{{ o.patientName }}</span>
                   <span class="pkg-preview__meta">
                     #{{ o.id.slice(0, 8) }} · {{ o.sampleCount }} sample{{ o.sampleCount === 1 ? '' : 's' }} · {{ o.status }}
                   </span>
@@ -343,10 +345,10 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 <pf-avatar [name]="g.patientName" [size]="32"></pf-avatar>
                 @if (!labCfg.sampleFocused()) {
                   <!-- Desktop view (single line) -->
-                  <span class="pf-rs-row__name pf-rs-row__name--desktop" [title]="g.patientInfo">{{ g.patientInfo }}</span>
+                  <span class="pf-rs-row__name pf-rs-row__name--desktop" [title]="g.patientInfo"><pf-daily-no [of]="g" />{{ g.patientInfo }}</span>
                   <!-- Mobile view (split into 2 lines) -->
                   <div class="pf-rs-row__name-group--mobile">
-                    <span class="pf-rs-row__name-main" [title]="g.patientNameAndAgeSex">{{ g.patientNameAndAgeSex }}</span>
+                    <span class="pf-rs-row__name-main" [title]="g.patientNameAndAgeSex"><pf-daily-no [of]="g" />{{ g.patientNameAndAgeSex }}</span>
                     @if (g.patientMrn) {
                       <span class="pf-rs-row__name-sub">{{ g.patientMrn }}</span>
                     }
@@ -354,7 +356,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 } @else {
                   <span class="pf-rs-row__id">
                     <span class="pf-rs-row__sample">{{ g.sampleId || ('#' + g.orderId.slice(0,8)) }}@if (g.totalTubes > 1) { · {{ g.totalTubes }} tubes}</span>
-                    <span class="pf-rs-row__patient">{{ g.patientName }}</span>
+                    <span class="pf-rs-row__patient"><pf-daily-no [of]="g" />{{ g.patientName }}</span>
                   </span>
                 }
                 @if (g.state === 'awaiting') {
@@ -548,7 +550,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                 <div class="flex-1 min-w-0">
                   @if (!labCfg.sampleFocused()) {
                   <p class="font-semibold text-[14.5px] truncate"
-                     style="color: var(--text-primary);">{{ s.order?.patient?.displayName ?? 'Patient' }}</p>
+                     style="color: var(--text-primary);"><pf-daily-no [of]="s" />{{ s.order?.patient?.displayName ?? 'Patient' }}</p>
                   <p class="text-[11.5px] font-mono mt-0.5 truncate"
                      style="color: var(--text-tertiary);">
                     {{ s.department?.name }} · {{ s.barcode }}
@@ -562,7 +564,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
                      style="color: var(--text-primary);">{{ s.barcode || (s.order?.patient?.displayName ?? 'Patient') }}</p>
                   <p class="text-[11.5px] font-mono mt-0.5 truncate"
                      style="color: var(--text-tertiary);">
-                    {{ s.order?.patient?.displayName ?? 'Patient' }} · {{ s.department?.name }}
+                    <pf-daily-no [of]="s" />{{ s.order?.patient?.displayName ?? 'Patient' }} · {{ s.department?.name }}
                     · Arrived {{ s.pickedUpAt ? (s.pickedUpAt | date:'shortTime') : '—' }}
                   </p>
                   }
@@ -1046,6 +1048,7 @@ export class ReceiveSamplesComponent implements OnInit {
     }, null) ?? o.createdAt ?? null;
     return {
       orderId: o.id,
+      dailyNo: o.dailyNo ?? null, dailyNoDay: o.dailyNoDay ?? null,
       patientName: patientDisplayName(o.patient ?? null) || 'Patient',
       patientInfo: o.patient ? formatPatientInfo(o.patient) : 'Patient',
       patientMrn: o.patient?.mrn?.trim() || '',
@@ -1082,6 +1085,7 @@ export class ReceiveSamplesComponent implements OnInit {
       orderId: o.id,
       sampleDbId: sm.id ?? null,
       key: o.id + ':' + (sm.id ?? sm.barcode ?? ''),
+      dailyNo: o.dailyNo ?? null, dailyNoDay: o.dailyNoDay ?? null,
       patientName: patientDisplayName(o.patient ?? null) || 'Patient',
       patientInfo: o.patient ? formatPatientInfo(o.patient) : 'Patient',
       patientMrn: o.patient?.mrn?.trim() || '',

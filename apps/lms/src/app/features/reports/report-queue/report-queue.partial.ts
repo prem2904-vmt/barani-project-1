@@ -65,6 +65,9 @@ export interface PrelimOrder {
   patientMeta: string;
   /** For the search box. */
   searchText: string;
+  /** The order's daily patient number (on-screen only). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
   totalDepts: number;
   readyDepts: number;
   partialDepts: number;
@@ -243,6 +246,8 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
       id: o.id,
       patientName: name,
       patientMeta: meta,
+      dailyNo: o.dailyNo ?? null,
+      dailyNoDay: o.dailyNoDay ?? null,
       searchText: [name, p?.mrn, p?.phone, o.orderNumber, o.id].filter(Boolean).join(' ').toLowerCase(),
       totalDepts: all.length,
       readyDepts,

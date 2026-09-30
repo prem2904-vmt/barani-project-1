@@ -939,7 +939,7 @@
                     }
                     }
                     <div class="pf-wrow__body">
-                      <p class="pf-wrow__name">{{ drawerName(o.patient) }}</p>
+                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ drawerName(o.patient) }}</p>
                       <p class="pf-wrow__meta nd-num">
                         @if (drawerAgeSex(o.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
                         <span class="pf-wrow__mi">{{ o.patient?.mrn || '—' }}</span>
@@ -1093,7 +1093,7 @@
                     [class.pf-wrow--menu]="activeShareMenuOrderId() === o.id" tabindex="0" (click)="openOrder(o)"
                     (keydown.enter)="$event.target === $event.currentTarget && openOrder(o)">
                     <div class="pf-wrow__body">
-                      <p class="pf-wrow__name">{{ drawerName(o.patient) }}</p>
+                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ drawerName(o.patient) }}</p>
                       <p class="pf-wrow__meta nd-num">
                         @if (drawerAgeSex(o.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
                         <span class="pf-wrow__mi">{{ o.patient?.mrn || '—' }}</span>
@@ -1215,7 +1215,7 @@
                   <div class="pf-wrow" [attr.data-priority]="o.priority" [attr.data-order-id]="o.id" tabindex="0"
                     (click)="openOrder(o)" (keydown.enter)="$event.target === $event.currentTarget && openOrder(o)">
                     <div class="pf-wrow__body">
-                      <p class="pf-wrow__name">{{ drawerName(o.patient) }}</p>
+                      <p class="pf-wrow__name"><pf-daily-no [of]="o" />{{ drawerName(o.patient) }}</p>
                       <p class="pf-wrow__meta nd-num">
                         @if (drawerAgeSex(o.patient); as ageSex) {<span class="pf-wrow__mi">{{ ageSex }}</span>}
                         <span class="pf-wrow__mi">{{ o.patient?.mrn || '—' }}</span>
@@ -1300,7 +1300,7 @@
     <header class="pf-drawer__hdr">
       <pf-avatar [name]="so.patient?.displayName ?? 'Patient'" [size]="44"></pf-avatar>
       <div class="pf-drawer__hdr-info">
-        <h2 class="pf-drawer__hdr-name" id="pf-od-name">{{ drawerName(so.patient) }}</h2>
+        <h2 class="pf-drawer__hdr-name" id="pf-od-name"><pf-daily-no [of]="so" />{{ drawerName(so.patient) }}</h2>
         <p class="pf-drawer__hdr-meta nd-num">
           @if (drawerAgeSex(so.patient); as ageSex) {
             <span class="pf-drawer__mi">{{ ageSex }}</span>
@@ -1987,7 +1987,7 @@
   <header class="pf-drawer__hdr">
     <pf-avatar [name]="bo.patient?.displayName ?? 'Patient'" [size]="44"></pf-avatar>
     <div class="pf-drawer__hdr-info">
-      <h2 class="pf-drawer__hdr-name">{{ drawerName(bo.patient) }}</h2>
+      <h2 class="pf-drawer__hdr-name"><pf-daily-no [of]="bo" />{{ drawerName(bo.patient) }}</h2>
       <p class="pf-drawer__hdr-meta nd-num">
         @if (drawerAgeSex(bo.patient); as ageSex) {<span class="pf-drawer__mi">{{ ageSex }}</span>}
         <!-- <span class="pf-drawer__mi">{{ bo.patient?.mrn || '—' }}</span><span class="pf-drawer__mi">Order #{{
@@ -2101,7 +2101,7 @@
   <header class="pf-drawer__hdr">
     <pf-avatar [name]="bo.patient?.displayName ?? 'Patient'" [size]="44"></pf-avatar>
     <div class="pf-drawer__hdr-info">
-      <h2 class="pf-drawer__hdr-name">{{ drawerName(bo.patient) }}</h2>
+      <h2 class="pf-drawer__hdr-name"><pf-daily-no [of]="bo" />{{ drawerName(bo.patient) }}</h2>
     </div>
     <button type="button" class="pf-drawer__close" (click)="closePaymentDrawer()" aria-label="Close">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"

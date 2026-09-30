@@ -125,6 +125,7 @@ import { isNotCollected, notCollectedLabel, notCollectedSamples } from '../../..
 import { canBulkDispatch, canRecollect, createWorkSelection, workRowTone } from './work-selection';
 import { tubeDepartmentCodes, tubeDepartmentLabel } from '../../../shared/utils/shared-tube';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
 /** Sample statuses at/past the lab — the only series time points that can
@@ -163,7 +164,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',

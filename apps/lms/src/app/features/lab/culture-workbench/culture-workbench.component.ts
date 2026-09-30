@@ -21,6 +21,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 /** A per-user reusable findings template (mirrors the backend TemplateDto). */
 interface ResultTemplate { id: string; scope: string; name: string; body: string; }
@@ -42,7 +43,7 @@ interface StageField { name: string; title: string; type: string; options: strin
 @Component({
   selector: 'pf-culture-workbench',
   standalone: true,
-  imports: [FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent, HeroBandComponent, ZoomTargetDirective, LogoMarkComponent, BusyDirective],
+  imports: [DailyNoComponent, FormsModule, CultureEntryComponent, DelegateModalComponent, CommentThreadComponent, SelectComponent, HeroBandComponent, ZoomTargetDirective, LogoMarkComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cse">
@@ -93,7 +94,7 @@ interface StageField { name: string; title: string; type: string; options: strin
             <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--id" title="Case / sample ID">
               <span class="nd-num">{{ cc.barcode || cc.sampleId || 'Culture case' }}</span>
             </span>
-            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--patient" title="Patient">{{ cc.patientName || 'Patient' }}</span>
+            <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--patient" title="Patient"><pf-daily-no [of]="cc" />{{ cc.patientName || 'Patient' }}</span>
             <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--test" title="Test">{{ cc.testName || 'Culture' }}</span>
             <span class="nd-chip nd-chip--static pf-cse-chip pf-cse-chip--day"><span class="nd-num">Day {{ dayNo() }}</span></span>
             <span class="pf-cse-ctx__grow"></span>

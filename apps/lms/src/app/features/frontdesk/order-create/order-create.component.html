@@ -65,6 +65,7 @@
             <!-- Opening a draft / order: the patient lands here. -->
             <pf-skeleton class="pf-us__tile-skel" variant="line" width="84px" height="10px"></pf-skeleton>
             } @else {
+            @if (k === 'patient' && tilePick(k)) { <pf-daily-no [of]="order()" /> }
             <span class="pf-us__tile-label">{{ tileLabel(k) }}</span>
             }
             <!-- Phones: icons only; a filled scope shows a small dot (the
@@ -227,6 +228,7 @@
       <button type="button" class="pf-oc-pick__btn" [disabled]="!scopeEnabled(k)" (click)="selectScope(k)"
         [attr.aria-label]="'Change ' + scopeLabels[k].toLowerCase() + ': ' + tilePick(k)">
         <ng-container *ngTemplateOutlet="scopeIcon; context: { $implicit: k }"></ng-container>
+        @if (k === 'patient') { <pf-daily-no [of]="order()" /> }
         <span>{{ tilePick(k) }}</span>
       </button>
       @if (tileClearable(k)) {

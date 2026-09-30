@@ -122,10 +122,10 @@
                   @if (embedded) {
                   <!-- My Work's Collection card: the FULL name (never the
                        15-char cut), age/sex · MRN underneath. -->
-                  <p class="pf-sc__who-name">{{ patientFullName(g) }}</p>
+                  <p class="pf-sc__who-name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</p>
                   <p class="pf-sc__who-meta">{{ patientSub(g.patientName) }}</p>
                   } @else {
-                  <p class="pf-sc__who-name">{{ g.patientName }}</p>
+                  <p class="pf-sc__who-name"><pf-daily-no [of]="g" />{{ g.patientName }}</p>
                   <p class="pf-sc__who-meta">{{ g.patientMeta }}</p>
                   }
                 </div>
@@ -212,12 +212,12 @@
               @if (canOpenPatient(g)) {
                 <button type="button" class="nd-chip pf-sc-chip pf-sc-chip--patient" (click)="openPatient(g)"
                         [attr.aria-label]="'Open patient ' + patientFullName(g)">
-                  <span class="pf-sc-chip__name">{{ patientFullName(g) }}</span>
+                  <span class="pf-sc-chip__name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</span>
                   @if (patientSub(g.patientName); as sub) { <span class="pf-sc-chip__meta">{{ sub }}</span> }
                 </button>
               } @else {
                 <span class="nd-chip nd-chip--static pf-sc-chip pf-sc-chip--patient">
-                  <span class="pf-sc-chip__name">{{ patientFullName(g) }}</span>
+                  <span class="pf-sc-chip__name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</span>
                   @if (patientSub(g.patientName); as sub) { <span class="pf-sc-chip__meta">{{ sub }}</span> }
                 </span>
               }
@@ -932,7 +932,7 @@
           <div class="pf-wl" role="dialog" aria-modal="true" (click)="writeUpOpen.set(false)">
             <div class="pf-wl__panel" (click)="$event.stopPropagation()">
               <p class="pf-wl__title">Write on each container</p>
-              <p class="pf-wl__sub">{{ g.patientName }} · {{ g.orderNo }}</p>
+              <p class="pf-wl__sub"><pf-daily-no [of]="g" />{{ g.patientName }} · {{ g.orderNo }}</p>
               <ul class="pf-wl__list">
                 @for (s of g.samples; track s.id) {
                   <li class="pf-wl__row">

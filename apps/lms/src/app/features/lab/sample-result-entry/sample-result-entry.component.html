@@ -28,7 +28,7 @@
       @if (sample(); as s) {
         <span class="nd-chip nd-chip--static pf-sre-chip pf-sre-chip--patient"
               [title]="patientName() + (patientMeta() ? ' · ' + patientMeta() : '')">
-          <span class="pf-sre-chip__name">{{ patientName() }}</span>
+          <span class="pf-sre-chip__name"><pf-daily-no [of]="s" />{{ patientName() }}</span>
           @if (patientMeta()) { <span class="pf-sre-chip__meta nd-num">{{ patientMeta() }}</span> }
         </span>
         <!-- PHONES only: the current sample ID. With more than one tube it
