@@ -17,10 +17,52 @@ export function printPickerFlag(parametersJson: string | null | undefined): bool
 
 export interface PrintPickerLine {
   printPicker?: boolean | null;
+  printPickerDefault?: string | null;
   test?: { parameters?: string | null } | null;
 }
 
 export function resolvePrintPicker(t: PrintPickerLine): boolean {
   if (typeof t.printPicker === 'boolean') return t.printPicker;
   return printPickerFlag(t.test?.parameters);
+}
+
+/**
+ * "Start with" for the picker (owner 2026-09-30) — `printPickerDefault` in
+ * the same Parameters wrapper: 'none' = every value starts UNTICKED and the
+ * tech ticks what prints; absent / anything else = 'all' (every value starts
+ * ticked — the behaviour before the setting). Resolved by the SAME ordered
+ * rule as the switch (mw `PrintPickerRules.ResolveDefault`, stamped as
+ * `printPickerDefault`); this mirror falls back to the test's own value.
+ */
+export type PrintPickerDefault = 'all' | 'none';
+
+export function printPickerDefaultOf(parametersJson: string | null | undefined): PrintPickerDefault {
+  if (!parametersJson) return 'all';
+  try {
+    const v = JSON.parse(parametersJson)?.printPickerDefault;
+    return typeof v === 'string' && v.toLowerCase() === 'none' ? 'none' : 'all';
+  } catch { return 'all'; }
+}
+
+export function resolvePrintPickerDefault(t: PrintPickerLine): PrintPickerDefault {
+  if (typeof t.printPickerDefault === 'string') return t.printPickerDefault.toLowerCase() === 'none' ? 'none' : 'all';
+  return printPickerDefaultOf(t.test?.parameters);
+}
+
+/**
+ * The value names hidden from THIS order's report, as result entry shows
+ * them: a SAVED pick (`reportHiddenJson` present — even `[]`) always wins;
+ * never picked + 'none' → every value hidden (all boxes unticked); never
+ * picked + 'all' → nothing hidden. Mirrors mw `PrintPickerRules.EffectiveHidden`.
+ */
+export function effectiveHidden(
+  saved: string | null | undefined,
+  start: PrintPickerDefault,
+  allNames: readonly string[],
+): string[] {
+  if (saved != null && saved.trim() !== '') {
+    try { const a = JSON.parse(saved); return Array.isArray(a) ? a.filter((x): x is string => typeof x === 'string') : []; }
+    catch { return []; }
+  }
+  return start === 'none' ? [...allNames] : [];
 }

@@ -71,6 +71,7 @@ import { shownDepartmentName } from '../../../../shared/utils/package-department
 import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
+import { printPickerDefaultOf, type PrintPickerDefault } from '../../../../shared/utils/print-picker';
 
 const SELECTED_GROUP = 'Selected';
 
@@ -562,7 +563,24 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
     })();
     if (on) existing.printPicker = true;
-    else delete existing.printPicker;
+    else { delete existing.printPicker; delete existing.printPickerDefault; }
+    this.patch({ parametersJson: JSON.stringify(existing) });
+  }
+  /** "Start with" for the picker (owner 2026-09-30): 'all' = every value
+   *  starts ticked (absent key — the original behaviour); 'none' = every
+   *  value starts unticked and the tech ticks what prints. Stored as
+   *  `printPickerDefault: 'none'` in the same wrapper. */
+  readonly printPickerStartOptions: ReadonlyArray<{ value: PrintPickerDefault; label: string }> = [
+    { value: 'all', label: 'All ticked' },
+    { value: 'none', label: 'None ticked' },
+  ];
+  readonly printPickerDefault = computed<PrintPickerDefault>(() => printPickerDefaultOf(this._draft().parametersJson));
+  setPrintPickerDefault(v: PrintPickerDefault) {
+    const existing = (() => {
+      try { return JSON.parse(this._draft().parametersJson || '{}'); } catch { return {}; }
+    })();
+    if (v === 'none') existing.printPickerDefault = 'none';
+    else delete existing.printPickerDefault;
     this.patch({ parametersJson: JSON.stringify(existing) });
   }
 
@@ -1072,6 +1090,20 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   setProfilePrintPicker(on: boolean) {
     this.profilePrintPicker.set(on);
     this.patch({});
+  }
+  /** The profile's "Start with" — overrides each member's when ordered as
+   *  this profile (same rule as the switch). Saved only while the switch is
+   *  on and only when 'none' (absent = all). */
+  readonly profilePrintPickerDefault = signal<PrintPickerDefault>('all');
+  setProfilePrintPickerDefault(v: PrintPickerDefault) {
+    this.profilePrintPickerDefault.set(v);
+    this.patch({});
+  }
+  private profilePickerKeys(): Record<string, unknown> {
+    if (!this.profilePrintPicker()) return {};
+    return this.profilePrintPickerDefault() === 'none'
+      ? { printPicker: true, printPickerDefault: 'none' }
+      : { printPicker: true };
   }
   private readonly _memberRows = signal<MemberRow[]>([]);
   readonly repetitiveActive = computed(() => this._draft().type === 'profile' && this.repetitive());
@@ -1809,6 +1841,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         this._packageItems.set([...new Set(ids)]);
         this._reportOrder.set(readReportOrder(blob) ?? [...new Set(ids)]);
         this.profilePrintPicker.set(t.type === 'profile' && blob.printPicker === true);
+        this.profilePrintPickerDefault.set(t.type === 'profile' ? printPickerDefaultOf(t.parameters) : 'all');
         if (t.type === 'profile' && blob.repetitive === true) {
           this.repetitive.set(true);
           this._memberRows.set(this.normalizeRows(items
@@ -1829,6 +1862,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         this._memberRows.set([]);
         this.repetitive.set(false);
         this.profilePrintPicker.set(false);
+        this.profilePrintPickerDefault.set('all');
       }
     } else {
       this._packageItems.set([]);
@@ -1836,6 +1870,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this._memberRows.set([]);
       this.repetitive.set(false);
       this.profilePrintPicker.set(false);
+      this.profilePrintPickerDefault.set('all');
     }
     // One-page layout: the Report-layout card is always visible, so its columns
     // must be loaded up-front rather than on a tab switch.
@@ -2038,13 +2073,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
               repetitive: true,
               items: this.normalizeRows(this._memberRows()).map(r => ({ testId: r.testId, offsetMin: r.offsetMin })),
               ...withReportOrder(this.reportOrderForSave()),
-              ...(this.profilePrintPicker() ? { printPicker: true } : {}),
+              ...this.profilePickerKeys(),
             })
           : JSON.stringify({
               items: this._packageItems().map(id => ({ testId: id })),
               ...withReportOrder(this.reportOrderForSave()),
               // A package never carries it — the profile / test decides.
-              ...(d.type === 'profile' && this.profilePrintPicker() ? { printPicker: true } : {}),
+              ...(d.type === 'profile' ? this.profilePickerKeys() : {}),
             }))
       // A legacy blob still carrying the old `fields[]` twin is normalised to
       // the single parameters[] list on this save (props folded on load).

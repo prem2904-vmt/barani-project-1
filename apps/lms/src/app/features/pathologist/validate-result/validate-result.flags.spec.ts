@@ -89,3 +89,13 @@ describe('ValidateResult.valueRowsFor — saved flag (Phase 0)', () => {
     expect(rows(t)[0].flag).toBe('critical');
   });
 });
+
+describe('ValidateResult.valueRowsFor — "print in bold" (owner 2026-09-30)', () => {
+  it('the reviewer sees which values the tech marked to print bold', () => {
+    const pcv = { name: 'pcv', title: 'PCV', type: 'numeric' };
+    const r = rows(ot({ hb: '13', pcv: '41' }, [hb, pcv], undefined, { bold: ['pcv'] }));
+    expect(r.find((x: any) => x.name === 'pcv').printBold).toBe(true);
+    expect(r.find((x: any) => x.name === 'hb').printBold).toBe(false);
+    expect(rows(ot({ hb: '13' }, [hb]))[0].printBold).toBe(false);
+  });
+});

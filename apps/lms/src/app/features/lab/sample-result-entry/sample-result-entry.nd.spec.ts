@@ -559,7 +559,7 @@ describe('Result entry — switching drafts on the SAME route (draft shelf)', ()
     // Flushed synchronously on the switch — not left to the debounce.
     expect(JSON.parse(localStorage.getItem('pf-lms.sre-draft.smp-1')!)).toEqual({ ot1: { target: 'Detected' } });
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results/draft',
-      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined }] });
+      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined, bold: [] }] });
     await settle(f);
     expect(c.sample().id).toBe('smp-2');
     expect(c._values()['ot1']).toBeUndefined();           // A's typing never bleeds into B
@@ -646,7 +646,7 @@ describe('Result entry — Submit all (2+ tube tabs of one order)', () => {
     expect(dialog.confirm).not.toHaveBeenCalled();
     expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results']);
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results',
-      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined }] });
+      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined, bold: [] }] });
   });
 
   it('"Submit this sample" is the per-tab submit: only the open tube', async () => {
@@ -673,9 +673,9 @@ describe('Result entry — Submit all (2+ tube tabs of one order)', () => {
     expect(dialog.confirm).not.toHaveBeenCalled();
     // The same per-tab payloads — the sibling's saved draft rides along.
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results',
-      { results: [{ orderTestId: 'ot1', values: FULL, note: undefined }] });
+      { results: [{ orderTestId: 'ot1', values: FULL, note: undefined, bold: [] }] });
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-2/results',
-      { results: [{ orderTestId: 'ot2', values: FULL, note: undefined }] });
+      { results: [{ orderTestId: 'ot2', values: FULL, note: undefined, bold: [] }] });
     expect(toasts.success).toHaveBeenCalledWith('2 samples submitted — back to your queue');
     expect(shelf.drop).toHaveBeenCalledWith('lab', ['lab:smp-1', 'lab:smp-2']);
     expect(localStorage.getItem('pf-lms.sre-draft.smp-1')).toBeNull();
@@ -709,9 +709,9 @@ describe('Result entry — Submit all (2+ tube tabs of one order)', () => {
     await clickSubmitAll(f, el);
     expect(resultPosts(api)).toEqual(['/api/samples/smp-1/results', '/api/samples/smp-2/results']);
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-1/results',
-      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined }] });
+      { results: [{ orderTestId: 'ot1', values: { target: 'Detected' }, note: undefined, bold: [] }] });
     expect(api.post).toHaveBeenCalledWith('/api/samples/smp-2/results',
-      { results: [{ orderTestId: 'ot2', values: {}, note: undefined }] });
+      { results: [{ orderTestId: 'ot2', values: {}, note: undefined, bold: [] }] });
   });
 
   it('"Go back" focuses the first empty field on the open tab', async () => {

@@ -17,7 +17,7 @@ import {
   signal,
   viewChild,
 } from "@angular/core";
-import { resolvePrintPicker } from "../../../shared/utils/print-picker";
+import { effectiveHidden, resolvePrintPicker, resolvePrintPickerDefault } from "../../../shared/utils/print-picker";
 import { TrendTest } from "../../../shared/utils/trend-chart";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { combineLatest } from "rxjs";
@@ -89,6 +89,8 @@ import {
   prefillFromTests,
   tabMark,
   tabPayload,
+  boldFromTests,
+  type BoldMap,
 } from "./submit-all";
 import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
 
@@ -932,6 +934,8 @@ export class SampleResultEntryComponent {
   /** Load each test's last saved values into the form (used on first load and
    *  after a re-open, so the prior submitted values come back for editing). */
   private prefillValues(sample: OrderSample | null) {
+    // "Print in bold" picks come back with the saved result, like its values.
+    this._bold.set(boldFromTests(sample?.tests ?? []));
     if (!sample?.tests) {
       this._values.set({});
       return;
@@ -1212,6 +1216,7 @@ export class SampleResultEntryComponent {
           orderTestId: t.id,
           values: all[t.id],
           note: undefined,
+          bold: this.boldFor(t.id),
         })),
     };
     if (payload.results.length === 0) return;
@@ -1591,6 +1596,7 @@ export class SampleResultEntryComponent {
   async validateTube() {
     const targets = this.enteredTests();
     if (!targets.length || this.submitting()) return;
+    if (!(await this.confirmNothingPrints(targets, "validate"))) return;
     this.submitAct.set('validate');
     this._submitting.set(true);
     let ok = 0, lastErr = '';
@@ -1855,6 +1861,10 @@ export class SampleResultEntryComponent {
       this._submitting.set(false);
       return;
     }
+    if (!(await this.confirmNothingPrints(writable.filter((t) => !!all[t.id] && Object.keys(all[t.id]).length > 0), "submit"))) {
+      this._submitting.set(false);
+      return;
+    }
     const payload = {
       results: writable
         .filter((t) => all[t.id] && Object.keys(all[t.id]).length > 0)
@@ -1862,6 +1872,7 @@ export class SampleResultEntryComponent {
           orderTestId: t.id,
           values: all[t.id],
           note: undefined,
+          bold: this.boldFor(t.id),
         })),
     };
     if (payload.results.length === 0) {
@@ -1936,6 +1947,7 @@ export class SampleResultEntryComponent {
           orderTestId: t.id,
           values: all[t.id],
           note: undefined,
+          bold: this.boldFor(t.id),
         })),
     };
     if (payload.results.length === 0) {
@@ -1989,7 +2001,7 @@ export class SampleResultEntryComponent {
 
   private readonly liveSnap = computed<TabSnapshot | null>(() => {
     const s = this._sample();
-    return s ? { sampleId: s.id, barcode: s.barcode || "", tests: s.tests ?? [], values: this._values() } : null;
+    return s ? { sampleId: s.id, barcode: s.barcode || "", tests: s.tests ?? [], values: this._values(), bold: this._bold() } : null;
   });
 
   /** One snapshot per tab, in tab order (null = that tube not fetched yet). */
@@ -2030,6 +2042,7 @@ export class SampleResultEntryComponent {
       barcode: s.barcode || "",
       tests,
       values: overlayDraft(prefillFromTests(tests), this.readLocalDraft(s.id)),
+      bold: boldFromTests(tests),
     };
   }
 
@@ -2176,6 +2189,13 @@ export class SampleResultEntryComponent {
         this.submitAct.set('all');
         this._submitting.set(true);
       }
+      // 4b. A test with every value unticked prints nothing — ask first.
+      this._submitting.set(false);
+      const printOk = await this.confirmNothingPrints(
+        targets.flatMap((snap) => snap.tests.filter(isWritableTest)), "submit");
+      if (!printOk) return;
+      this.submitAct.set('all');
+      this._submitting.set(true);
       // 5. Tab by tab, the per-tab endpoint. One tab failing never stops
       //    the others; its data stays (local copy kept, not cleared).
       const report: Array<{ sampleId: string; barcode: string; ok: boolean; message?: string }> = [];
@@ -2294,23 +2314,79 @@ export class SampleResultEntryComponent {
   printPickerEnabled(t: { id: string }): boolean {
     return this._printPickerByTest().has(t.id);
   }
-  private reportHiddenFor(t: { id: string }): string[] {
+  /** Hidden value names as the tech sees them: this session's pick, else
+   *  the SAVED pick (even "[]" — a saved choice is never reset on reload),
+   *  else the resolved "Start with": 'none' → every value unticked. */
+  private reportHiddenFor(t: OrderTest): string[] {
     const local = this._reportHidden()[t.id];
     if (local) return local;
     const raw = (t as { reportHiddenJson?: string | null }).reportHiddenJson;
-    if (!raw) return [];
-    try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch { return []; }
+    return effectiveHidden(raw, resolvePrintPickerDefault(t), this.parametersFor(t).map(p => p.name));
   }
-  isValuePrinted(t: { id: string }, p: { name: string }): boolean {
+  isValuePrinted(t: OrderTest, p: { name: string }): boolean {
     return !this.reportHiddenFor(t).includes(p.name);
   }
-  toggleValuePrinted(t: { id: string }, p: { name: string }) {
+  /** The picker is on and EVERY value is unticked: nothing from this test
+   *  reaches the report (warned inline and before submit / validate). */
+  nothingPrints(t: OrderTest): boolean {
+    if (!this.printPickerEnabled(t)) return false;
+    const params = this.parametersFor(t);
+    return params.length > 0 && params.every(p => !this.isValuePrinted(t, p));
+  }
+  /** Ask before a submit / validate that would leave a test off the report.
+   *  True = go ahead (nothing to warn about, or the user confirmed). */
+  private async confirmNothingPrints(tests: readonly OrderTest[], verb: "submit" | "validate"): Promise<boolean> {
+    const empty = tests.filter(t => this.nothingPrints(t));
+    if (!empty.length) return true;
+    return this.dialog.confirm({
+      title: "Nothing will print for " + (empty.length === 1 ? "this test" : "these tests"),
+      message: "Every value is unticked, so the report will leave out:",
+      items: empty.map(t => t.test?.name ?? "Test"),
+      question: `Tick the values that should print, or ${verb} anyway?`,
+      cancelLabel: "Go back",
+      confirmLabel: verb === "submit" ? "Submit anyway" : "Validate anyway",
+    });
+  }
+  toggleValuePrinted(t: OrderTest, p: { name: string }) {
     const cur = this.reportHiddenFor(t);
     const next = cur.includes(p.name) ? cur.filter(n => n !== p.name) : [...cur, p.name];
     this._reportHidden.update(m => ({ ...m, [t.id]: next }));
     this.api.put(`/api/results/${t.id}/report-hidden`, { hidden: next }).subscribe({
       error: () => this.toasts.error("Could not save the print choice — retry."),
     });
+  }
+  // ── "Print in bold" per value (owner 2026-09-30) ─────────────────────
+  // A B toggle beside every result input (and Ctrl/Cmd+B inside it) makes
+  // THAT value print bold on the report even when it is normal. It only ADDS
+  // bold — an abnormal value prints bold regardless (Test Master rules).
+  // The picks ride the result snapshot as `bold[]` (value names), sent with
+  // every draft / submit; the report snapshot copies them (mw
+  // BuildResultPayload) and report-pdf bolds the value cell.
+  private readonly _bold = signal<BoldMap>({});
+  boldFor(testId: string): string[] {
+    return this._bold()[testId] ?? [];
+  }
+  isBold(t: { id: string }, p: { name: string }): boolean {
+    return this.boldFor(t.id).includes(p.name);
+  }
+  /** The toggle writes only where the values can still be written. */
+  canBold(t: OrderTest): boolean {
+    return !this.viewOnly() && !this.isCultureTest(t)
+      && t.status !== "entered" && t.status !== "validated" && t.status !== "rejected";
+  }
+  toggleBold(t: OrderTest, p: { name: string }) {
+    if (!this.canBold(t)) return;
+    const cur = this.boldFor(t.id);
+    const next = cur.includes(p.name) ? cur.filter(n => n !== p.name) : [...cur, p.name];
+    this._bold.update(m => ({ ...m, [t.id]: next }));
+    this.scheduleServerAutosave();
+  }
+  /** Ctrl/Cmd+B while focus is inside a result's input toggles its bold. */
+  onBoldKey(ev: KeyboardEvent, t: OrderTest, p: { name: string }) {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.shiftKey) return;
+    if (ev.key !== "b" && ev.key !== "B") return;
+    ev.preventDefault();
+    this.toggleBold(t, p);
   }
   /** Chip prefix for a value-tagged attachment — the value's display title. */
   attachParamTitle(t: OrderTest, a: ResultAttachment): string | null {
