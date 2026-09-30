@@ -29,6 +29,7 @@ import { AgeStyle, formatAge } from './patient-age';
 import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
 import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
 import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
+import { drawReportNote, drawReportNoteLine, layoutReportNote, type NoteLayout, type NoteTypeset } from './report-note-pdf';
 
 /**
  * Render an A4 lab report PDF in the Classic template style — blue
@@ -279,6 +280,10 @@ interface ReportSnapshot {
     /** Tech's overall observation(s) written at result entry (OPS-56) —
      *  clinical notes rendered as italic lines under the test's rows. */
     observations?: string[] | null;
+    /** The technician's report note on THIS ordered line (markup — see
+     *  report-note-markup.ts). Printed under its rows, before its
+     *  interpretation. */
+    techNote?: string | null;
     /** NABL accreditation scope for this test. When `false`, the test is
      *  segregated into a separate "Tests not under NABL scope" section
      *  (NABL 133 — non-accredited tests must be separated, not asterisked).
@@ -309,6 +314,14 @@ interface ReportSnapshot {
    *  drawn at the end of each department's block. When present, the global
    *  per-page signature row is suppressed. */
   deptSignatures?: Array<{ department?: string; signatures?: ReportSignature[] }>;
+  /** Technician notes above the line level (Lab settings → "Technician notes
+   *  on report"): the whole order's (end of the report), each department
+   *  section's (end of that section) and each profile block's. */
+  techNotes?: {
+    order?: string | null;
+    departments?: Array<{ department?: string | null; departmentId?: string; note?: string | null }> | null;
+    profiles?: Array<{ profileTestId?: string; name?: string | null; note?: string | null }> | null;
+  } | null;
 }
 
 // ── Page geometry ─────────────────────────────────────────────────
@@ -388,6 +401,11 @@ let LAYOUT: ReportLayoutResult | null = null;
 let NEXT_PAGE_IS_FIRST = false;
 /** Patient-strip QR targets for the current render (see patient-strip-qr.ts). */
 let STRIP_QR: { base: string; trackToken: string | null } = { base: '', trackToken: null };
+
+/** Technician department notes of the current render, keyed by the
+ *  department name as printed (trimmed, upper-cased) — drawn at the end of
+ *  that department's section; any not drawn there print after the results. */
+let TECH_DEPT_NOTES = new Map<string, { name: string; note: string }>();
 
 /** Per-render theme — frozen once at the start of buildReportPdf.
  *  Functions read from these closure-captured vars at draw time. */
@@ -778,6 +796,11 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   }
 
   WM_LOGO_URL = template?.logoUrl ?? null;
+  TECH_DEPT_NOTES = new Map();
+  for (const d of snap.techNotes?.departments ?? []) {
+    const name = (d.department ?? '').trim();
+    if (name && (d.note ?? '').trim()) TECH_DEPT_NOTES.set(name.toUpperCase(), { name, note: d.note! });
+  }
   drawLetterhead(doc);
   const patientBottom = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report));
 
@@ -899,7 +922,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       ?? (legacy ? t.packageTestId : null)
       ?? null;
     const pkgName = t.profileTestId ? (t.profileName || t.packageName) : t.packageName;
-    if (!pkg) { g.rows.push(...obsRowsFor(t)); groups.push(g); continue; }
+    if (!pkg) { insertTechNote(g.rows, techNoteRow(t.techNote, 'Note:')); g.rows.push(...obsRowsFor(t)); groups.push(g); continue; }
     // Stash this member's observations for the profile block (appended below).
     const memberObs = obsRowsFor(t);
     if (memberObs.length) {
@@ -964,6 +987,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     } else {
       merged.rows.push(...memberRows);
     }
+    // The member's own technician note sits right under ITS rows, named —
+    // inside the profile block several members share one band.
+    const memberNote = techNoteRow(t.techNote, `Note (${(g.testName || t.name || 'Test').trim()}):`);
+    if (memberNote) merged.rows.push(memberNote);
   }
   // The profile block's methods come from its members' rows (each row carries
   // its value's effective method): one method for every member → "Method: X";
@@ -971,6 +998,13 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // band used to claim none, so a member's methodology never reached the
   // report (RCA 2026-09-28).
   for (const panel of byPkg.values()) applyValueMethods(panel);
+  // The profile's technician note closes its member rows — before the
+  // profile's own notes (interpretation), like a line note.
+  for (const pn of snap.techNotes?.profiles ?? []) {
+    const panel = pn.profileTestId ? byPkg.get(pn.profileTestId) : undefined;
+    const row = techNoteRow(pn.note, 'Note:');
+    if (panel && row) panel.rows.push(row);
+  }
   // Append each profile's own notes AFTER its member rows.
   for (const [pkg, notes] of profileNotes) {
     const panel = byPkg.get(pkg);
@@ -1143,6 +1177,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
         cursorY = drawImagesBlock(doc, imgs, cursorY + 2, practice, `${t.name ?? 'Test'} — images`);
       }
     }
+    // Its technician note (a narrative / culture test has no table row for it).
+    if (tests.includes(t) && (t.techNote ?? '').trim()) {
+      cursorY = drawTechNoteBlock(doc, t.techNote!, 'Note:', cursorY + 4, practice);
+    }
     cursorY += 10;
   }
 
@@ -1170,6 +1208,17 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   if (input.trendograms?.length) {
     if (cursorY > A4.h - MARGIN_BOTTOM - 200) { cursorY = newPage(doc, practice); }
     cursorY = renderTrendogramSection(doc, input.trendograms, cursorY, practice);
+  }
+
+  // Department notes whose section never printed as a table (a culture /
+  // narrative-only department), then the whole order's note — the last
+  // words before the End-of-Report marker and the sign-off.
+  for (const d of TECH_DEPT_NOTES.values()) {
+    cursorY = drawTechNoteBlock(doc, d.note, `${titleCaseHeader(d.name)} note:`, cursorY + 6, practice);
+  }
+  TECH_DEPT_NOTES.clear();
+  if ((snap.techNotes?.order ?? '').trim()) {
+    cursorY = drawTechNoteBlock(doc, snap.techNotes!.order!, 'Overall note:', cursorY + 8, practice);
   }
 
   // ── "****End of Report****" line ────
@@ -2624,6 +2673,11 @@ function drawRealBarcode(doc: jsPDF, value: string, x: number, y: number, w: num
 
 interface PanelRowData {
   kind: 'param' | 'note';
+  /** A technician report note (markup) — a full-width row painted with real
+   *  bold / italic / underline and lists (report-note-pdf.ts). */
+  techNote?: string;
+  /** Its bold opening label ("Note:", "Note (SGOT):"). */
+  techLabel?: string;
   /** The row's test is not validated yet — kept off the abnormal-results sheet. */
   unvalidated?: boolean;
   name?: string;
@@ -3072,7 +3126,13 @@ function renderContinuousTable(
     // Only the signatories actually present count (7 configured, 2 resolved →
     // one row of 2), and a department with none reserves nothing.
     const sigH = signatureBlockHeight(sigs);
-    const reserve = sigH > 0 ? sigH + SIGN_OFF_SLACK + (isLast && deferLastSigs ? 26 : 0) : 0;
+    // This department's technician note prints after its last table run,
+    // before its sign-off — the sign-off reserve makes room for it too.
+    const deptNote = TECH_DEPT_NOTES.get(dept.toUpperCase());
+    if (deptNote) TECH_DEPT_NOTES.delete(dept.toUpperCase());
+    const deptNoteLabel = deptNote ? `${titleCaseHeader(deptNote.name)} note:` : '';
+    const deptNoteH = deptNote ? techNoteBlockHeight(doc, deptNote.note, deptNoteLabel) : 0;
+    const reserve = sigH > 0 ? sigH + SIGN_OFF_SLACK + deptNoteH + (isLast && deferLastSigs ? 26 : 0) : 0;
     // Partition the department's groups into consecutive RUNS sharing an
     // effective column set — a group with its own column override renders
     // in its own table run. With zero overrides there is exactly ONE run
@@ -3108,6 +3168,7 @@ function renderContinuousTable(
       y = renderColumnarTable(doc, runs[ri].groups, runs[ri].cols, y, practice, dept || null, runReserve,
         runs[ri].overridden);
     }
+    if (deptNote) y = drawTechNoteBlock(doc, deptNote.note, deptNoteLabel, y + 2, practice);
     // This department's OWN technician + consultant sign at the end of its
     // block — never the global set, never the downloader. The report's LAST
     // department defers its signatures to after the End-of-Report marker.
@@ -3130,6 +3191,67 @@ function renderContinuousTable(
     rendered++;
   }
   return y;
+}
+
+// ── Technician report notes (owner 2026-09-30) ───────────────────
+// A note row inside the results table (line / profile) or a free block that
+// breaks across pages line by line (department / whole order). Type from
+// the theme's `techNote` token; bold / italic runs in the theme's faces.
+
+function noteTypeset(): NoteTypeset {
+  const size = tsz('techNote');
+  return {
+    size,
+    lineHeight: size * 1.32,
+    face: (doc, st) => setFace(doc, st.b && st.i ? 'bolditalic' : st.b ? 'bold' : st.i ? 'italic' : twt('techNote')),
+  };
+}
+
+/** The table row for a technician note, or null when there is none. */
+function techNoteRow(note: string | null | undefined, label: string): PanelRowData | null {
+  return (note ?? '').trim() ? { kind: 'note', techNote: note!, techLabel: label } : null;
+}
+
+/** Put a line's note right after its results (last value / description),
+ *  ahead of its Sentences and other notes — "before its interpretation". */
+function insertTechNote(rows: PanelRowData[], row: PanelRowData | null): void {
+  if (!row) return;
+  let at = -1;
+  rows.forEach((r, i) => { if (r.kind === 'param') at = i; });
+  if (at < 0) {
+    // No values yet: after any lead Sentence rows, before the closing ones.
+    rows.push(row);
+    return;
+  }
+  rows.splice(at + 1, 0, row);
+}
+
+function techNoteBlockHeight(doc: jsPDF, note: string, label: string): number {
+  return layoutReportNote(doc, note, A4.w - 2 * MARGIN_X - 12, noteTypeset(), label).height + 4;
+}
+
+/** A free-standing note block from `startY`, wrapping across pages line by
+ *  line (never clipped at the footer). Returns the y below it. */
+function drawTechNoteBlock(
+  doc: jsPDF, note: string, label: string, startY: number, practice: NonNullable<ReportPdfInput['practice']>,
+): number {
+  const t = noteTypeset();
+  // Aligned with the results tables' text (their 6 pt cell padding).
+  const lay = layoutReportNote(doc, note, A4.w - 2 * MARGIN_X - 12, t, label);
+  if (!lay.lines.length) return startY;
+  const floor = A4.h - MARGIN_BOTTOM;
+  // Keep at least the first two lines together with the block's start.
+  let top = startY;
+  if (top + Math.min(lay.height, t.lineHeight * 2) > floor) top = newPage(doc, practice);
+  let base = top + t.size * 0.8;
+  let prevDy = 0;
+  for (const line of lay.lines) {
+    base += line.dy - prevDy;
+    prevDy = line.dy;
+    if (base + t.size * 0.3 > floor) { base = newPage(doc, practice) + t.size * 0.8; }
+    drawReportNoteLine(doc, line, MARGIN_X + 6, base, t, TEXT);
+  }
+  return base + t.size * 0.4 + 4;
 }
 
 /** Room kept between a table's last row and its sign-off: renderColumnarTable
@@ -3452,6 +3574,8 @@ function renderColumnarTable(
   const qualCells = new Map<string, QualCell>();
   /** Body row index → the bold label its Sentence row opens with. */
   const sentenceLabels = new Map<number, string>();
+  /** Body row index → a technician note's layout (painted in didDrawCell). */
+  const techCells = new Map<number, NoteLayout>();
   /** Body rows that must share a page with the NEXT row: a test's last row
    *  and the Sentence under it, or a Sentence and the row it introduces. */
   const keepWithNext = new Set<number>();
@@ -3474,7 +3598,8 @@ function renderColumnarTable(
     // the name the Investigation cell already prints.
     // A test's Sentences don't count: they are merged rows under (or above)
     // the one analyte row, not parameters.
-    const coreRows = g.rows.filter(r => !r.sentence);
+    // Nor does a technician note (a row under the value, never a band).
+    const coreRows = g.rows.filter(r => !r.sentence && !r.techNote);
     const compact = coreRows.length === 1 && coreRows[0].kind === 'param' && !g.referralLab;
     const groupStart = body.length;
 
@@ -3534,6 +3659,22 @@ function renderColumnarTable(
         }]);
         bodyMeta.push(null);
         bodyKind.push('sentence');
+        continue;
+      }
+      if (r.techNote) {
+        // Technician note: sized from its own layout, painted in didDrawCell
+        // (a cell has one font; the note mixes bold / italic / underline).
+        const lay = layoutReportNote(doc, r.techNote, usable - 12, noteTypeset(), r.techLabel);
+        techCells.set(body.length, lay);
+        body.push([{
+          content: '',
+          colSpan: COLSPAN,
+          styles: { fillColor: '#ffffff', textColor: TEXT, ...cellType('techNote'), halign: 'left', valign: 'top',
+                    minCellHeight: lay.height + 8 },
+        }]);
+        bodyMeta.push(null);
+        // Glued to the row above (the test's last result) like a description.
+        bodyKind.push('desc');
         continue;
       }
       if (r.kind === 'note') {
@@ -3794,6 +3935,10 @@ function renderColumnarTable(
     },
     didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number; styles?: Record<string, unknown> } }) => {
       drawSentenceCell(doc, sentenceCells, d as unknown as SentenceHookArg);
+      if (d.section === 'body' && techCells.has(d.row.index)) {
+        const t = noteTypeset();
+        drawReportNote(doc, techCells.get(d.row.index)!, d.cell.x + 6, d.cell.y + 4 + t.size * 0.8, t, TEXT);
+      }
       drawQualifiedRangeCell(doc, qualCells, d as CellHookArg);
       drawSuperscriptCell(doc, supCells, d as CellHookArg);
       if (d.section !== 'body' || d.column.index !== resultColIdx) return;

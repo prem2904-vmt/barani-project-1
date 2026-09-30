@@ -106,6 +106,9 @@ import {
   planPrefill,
   runOptions,
 } from "../../../shared/instruments/instrument-prefill";
+import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
+import { ReportNoteButtonComponent, ReportNoteSlotComponent } from '../../../shared/components/report-note/report-note-slot.component';
+import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
 
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -159,7 +162,12 @@ function calcKey(testId: string, paramName: string): string {
     NumpadDirective,
     NumpadScopeDirective,
     BusyDirective,
+    ReportNoteButtonComponent,
+    ReportNoteSlotComponent,
+    ReportNotesCardComponent,
   ],
+  // Technician report notes (Lab settings switch) — one store per screen.
+  providers: [ReportNotesStore],
   templateUrl: "./sample-result-entry.component.html",
   styleUrl: "./sample-result-entry.component.scss",
 })
@@ -171,6 +179,9 @@ export class SampleResultEntryComponent {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
+  /** Technician notes that print on the report (per line, profile,
+   *  department and the whole order) — see ReportNotesStore. */
+  protected readonly notes = inject(ReportNotesStore);
   private readonly router = inject(Router);
   protected readonly navBack = inject(NavBackService);
   private readonly auth = inject(AuthService);
@@ -868,7 +879,28 @@ export class SampleResultEntryComponent {
   readonly trendogramDuration = signal("5");
   private trendPatientId: string | null = null;
 
+  /** This tube's lines — the report-notes card lists their departments. */
+  readonly noteLineIds = computed(() => (this.sample()?.tests ?? []).map((t) => t.id));
+
+  /** The profile a flat block prints under (server-resolved), for its
+   *  "profile note" — null for a run of single tests. */
+  blockProfileId(blk: { title?: string | null; tests: OrderTest[] }): string | null {
+    if (!blk.title || !blk.tests.length) return null;
+    return this.notes.line(blk.tests[0].id)?.profileId ?? null;
+  }
+
   constructor() {
+    // Report notes follow the order, and re-read whenever a line's status
+    // changes (submit / validate / Edit result lock or unlock them).
+    let notesKey = "";
+    effect(() => {
+      const s = this.sample();
+      const oid = s?.orderId ?? s?.order?.id ?? null;
+      const key = oid ? `${oid}|${(s?.tests ?? []).map((t) => `${t.id}:${t.status}`).join(",")}` : "";
+      if (key === notesKey) return;
+      notesKey = key;
+      void this.notes.load(oid);
+    });
     afterRenderEffect(() => {
       this.tubeTabs();
       this.activeTubeId();

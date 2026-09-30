@@ -740,6 +740,16 @@ unit of work. It follows the band rules above with these specifics
 - **Notes in ONE step:** the pencil (or "+ Note") opens an inline
   textarea under that row with focus in it. Enter or blur saves,
   Shift+Enter is a new line, Esc cancels.
+- **Report notes** (Lab settings → "Technician notes on report", per
+  branch): a quiet document-icon button (`pf-report-note-button`) on each
+  test row / test card header / profile header opens the inline editor
+  (`pf-report-note-editor`: textarea + B / I / U / bullets / numbers,
+  Ctrl/Cmd+B/I/U, live "Prints as" preview, 1000 cap); a saved note shows
+  read-only under its row with Edit. Department + whole-report notes live in
+  the "Report notes" card (`pf-report-notes-card`) after the results. One
+  `ReportNotesStore` per screen; the server decides what is editable. Never
+  a second "Note" button style — the comment "+ Note" stays for the bench
+  conversation.
 - **Type scale:** card label 13px / 600 uppercase (12px on phones — it
   must beat the global phone `h2` cap), parameter 14px / 500, chips and
   tabs 13px, buttons 14px, meta 12px. Watch global phone rules with

@@ -38,6 +38,8 @@ import { ReportPrestoreService } from '../../../core/services/report-prestore.se
 import { CriticalAckStripComponent } from '../../../shared/components/critical-ack-strip/critical-ack-strip.component';
 import { CriticalResultsService } from '../../../core/services/critical-results.service';
 import { CriticalResultEvent } from '../../../shared/models/critical-result.model';
+import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
+import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
 
 interface ResultSnapshot {
   values?: Record<string, unknown>;
@@ -88,7 +90,10 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent, ReportNotesCardComponent],
+  // Technician report notes: the reviewer sees what will print (and, while
+  // a line awaits validation, may adjust it — the server decides).
+  providers: [ReportNotesStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -333,6 +338,9 @@ interface ValueRow {
                   </ul>
                 </div>
               }
+
+              <!-- Technician notes that print on the report (Lab settings). -->
+              <pf-report-notes-card class="pf-rail-notes" [lineIds]="noteLineIds()" [showLines]="true" [showProfiles]="true"></pf-report-notes-card>
 
               @if (printChart(); as pc) {
                 <div class="pf-rail-card pf-printchart">
@@ -1021,6 +1029,20 @@ export class ValidateResultComponent implements OnInit {
   }
 
   /** Every queued test on the same tube as the focused test (self as fallback). */
+  /** Technician report notes of this tube's order — re-read when a line's
+   *  status moves (validate / reject lock or unlock them). */
+  protected readonly notes = inject(ReportNotesStore);
+  readonly noteLineIds = computed(() => this.sampleTests().map(t => t.id));
+  private notesKey = '';
+  private readonly _notesSync = effect(() => {
+    const tests = this.sampleTests();
+    const oid = this.orderIdOf(tests[0] ?? this.selected());
+    const key = oid ? `${oid}|${tests.map(t => `${t.id}:${t.status}`).join(',')}` : '';
+    if (key === this.notesKey) return;
+    this.notesKey = key;
+    void this.notes.load(oid);
+  });
+
   readonly sampleTests = computed<OrderTest[]>(() => {
     const sel = this._selected();
     if (!sel) return [];
