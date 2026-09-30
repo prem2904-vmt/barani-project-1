@@ -124,6 +124,9 @@ describe('Pharmacy screens', () => {
     expect(el.textContent).toContain('Take payment ₹224');
     expect(el.textContent).toContain('covered by this prescription');
     expect(el.textContent).toContain('H1 register');
+    expect(primaries(el).length).toBe(0); // H1 register needs the patient's address first (critic #1)
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
     expect(primaries(el).length).toBe(1);
     noNative(el);
 
@@ -136,7 +139,7 @@ describe('Pharmacy screens', () => {
     c.give(true);
     await flush(); f.detectChanges();
     expect(api.dispenseRx).toHaveBeenCalledWith('v1', expect.objectContaining({
-      lines: [{ rxLineId: 'r1', drugId: 'amc', qty: 4, batchId: null }],
+      lines: [{ rxLineId: 'r1', drugId: 'amc', qty: 4, batchId: null, overrideReason: null }],
       payment: expect.objectContaining({ mode: 'upi' }),
     }));
     expect(el.textContent).toContain('Instructions');
@@ -163,6 +166,8 @@ describe('Pharmacy screens', () => {
     await f.whenStable(); f.detectChanges();
     expect(c.canGive()).toBe(false);
     c.setBatch(RX.lines[0], 'b-late');
+    expect(c.canGive()).toBe(false); // H1 register still needs the patient's address (critic #1)
+    c.patientAddress.set('12 MG Road, Chennai');
     expect(c.canGive()).toBe(true);
     expect(c.takes(RX.lines[0])).toEqual([expect.objectContaining({ batchNo: 'AC-LATE', qty: 10 })]);
   });
@@ -181,6 +186,9 @@ describe('Pharmacy screens', () => {
     f.detectChanges();
     expect(c.gate()).toMatch(/customer/);
     c.name.set('Anand');
+    f.detectChanges();
+    expect(c.gate()).toMatch(/address/); // H1 register still needs the customer's address (critic #1)
+    c.address.set('12 MG Road, Chennai');
     f.detectChanges();
     expect(c.gate()).toBeNull();
     expect(c.ready()).toBe(true);
