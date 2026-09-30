@@ -273,6 +273,29 @@ describe('RBAC matrix — landing after login', () => {
   });
 });
 
+describe('RBAC matrix — OPD doctor landing (opdDoctor)', () => {
+  // A user with NO permission that matches any LANDINGS row — the exact case
+  // that used to fall through to '/403'.
+  const NO_LANDING: RouteAccessCtx = { hasAny: () => false, isEnabled: () => true };
+
+  it('a doctor with no other landing lands on /opd/consult when opdDoctor is set', () => {
+    expect(pickLanding({ ...NO_LANDING, opdDoctor: true })).toBe('/opd/consult');
+  });
+
+  it('lab behaviour is IDENTICAL when opdDoctor is false or omitted (still /403)', () => {
+    expect(pickLanding({ ...NO_LANDING, opdDoctor: false })).toBe('/403');
+    expect(pickLanding(NO_LANDING)).toBe('/403');
+  });
+
+  for (const role of Object.keys(ROLES)) {
+    it(`${role}: opdDoctor never changes an already-admitted landing (an admin who is also a doctor keeps /admin)`, () => {
+      const w = who(role);
+      const ctx: RouteAccessCtx = { hasAny: p => has(w)(p), hasAnyEffective: p => hasEffective(w)(p), isEnabled: () => true, isSuper: w.perms.includes('*') };
+      expect(pickLanding({ ...ctx, opdDoctor: true })).toBe(pickLanding(ctx));
+    });
+  }
+});
+
 describe('canOpenRoute', () => {
   const ctx = (perms: string[]): RouteAccessCtx => ({ hasAny: p => p.some(c => perms.includes(c)), isEnabled: () => true });
   it('ANDs a guarded parent with the child (queue needs a front-desk perm too)', () => {

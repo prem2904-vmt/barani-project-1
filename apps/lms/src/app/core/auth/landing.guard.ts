@@ -3,6 +3,7 @@ import { CanActivateFn, Router, UrlTree } from '@angular/router';
 import { AuthService } from './auth.service';
 import { ProcessWorkflowService } from '../services/process-workflow.service';
 import { TenantEntitlementsService } from '../services/tenant-entitlements.service';
+import { OpdGateService } from '../../features/opd/shared/opd-gate.service';
 import { RouteAccessCtx, canOpenRoute } from './route-access';
 
 // Picks a landing page so a logged-in user hitting '/' goes to a screen they can
@@ -29,13 +30,26 @@ export const LANDINGS: Array<{ perm: string; path: string }> = [
   { perm: 'manage_test_master', path: '/lab/settings' },
 ];
 
-/** First landing the user can open, else '/403'. Pure — shared by the guard,
- *  the top strip's "home" and the RBAC matrix spec. */
-export function pickLanding(ctx: RouteAccessCtx): string {
+/** Landing context, plus the OPD dark-build doctor rule: when set, a user who
+ *  would otherwise fall through every LANDINGS row lands on their OPD queue
+ *  instead of /403. Only doctors with NO other landing take this path — a
+ *  user who is a doctor AND holds a lab permission (e.g. an admin who is also
+ *  a doctor) matches a LANDINGS row first and never reaches this rule, so
+ *  their landing is unchanged. `opdDoctor` false/undefined ⇒ identical to
+ *  today (the '/403' fallback), so lab behaviour never changes. */
+export interface LandingCtx extends RouteAccessCtx {
+  /** True only when the OPD gate is open AND the user is a doctor. */
+  opdDoctor?: boolean;
+}
+
+/** First landing the user can open, else '/403' (or '/opd/consult' for an
+ *  OPD doctor with no other landing — see `opdDoctor`). Pure — shared by the
+ *  guard, the top strip's "home" and the RBAC matrix spec. */
+export function pickLanding(ctx: LandingCtx): string {
   for (const l of LANDINGS) {
     if (canOpenRoute(l.path, ctx)) return l.path;
   }
-  return '/403';
+  return ctx.opdDoctor ? '/opd/consult' : '/403';
 }
 
 export const landingGuard: CanActivateFn = async (): Promise<UrlTree | boolean> => {
@@ -43,6 +57,7 @@ export const landingGuard: CanActivateFn = async (): Promise<UrlTree | boolean> 
   const router = inject(Router);
   const process = inject(ProcessWorkflowService);
   const entitlements = inject(TenantEntitlementsService);
+  const opdGate = inject(OpdGateService);
   await auth.waitForAuth();
   await Promise.all([
     process.ensureLoaded().catch(() => undefined),
@@ -54,5 +69,6 @@ export const landingGuard: CanActivateFn = async (): Promise<UrlTree | boolean> 
     isEnabled: a => process.isEnabled(a),
     isSuper: auth.permissions().includes('*'),
     moduleEnabled: m => entitlements.moduleEnabled(m),
+    opdDoctor: auth.isDoctor() && opdGate.visible(),
   })]);
 };
