@@ -209,6 +209,10 @@
 
 /* One-step note: an inline textarea under the row, focused on open. */
 .pf-sre__grow-note td { padding: 8px 12px 12px; border-bottom: 1px solid var(--nd-line); background: var(--nd-in-tint); }
+// Technician report note under a test's rows / at the top of a card body.
+.pf-sre__grow-rnote td { padding: 6px 12px 10px; border-bottom: 1px solid var(--nd-line); }
+.pf-sre__rnote:empty { display: none; }
+.pf-sre-rnotes { margin-top: 2px; }
 .pf-sre__test-note { margin: 12px 14px 0; }
 .pf-sre-quicknote {
   display: block; box-sizing: border-box; width: 100%; min-height: 64px; padding: 10px 12px; resize: vertical;
@@ -493,7 +497,7 @@
   .pf-sre__gc-result .pf-sre__gselect { width: 100%; }
   :host ::ng-deep .pf-sre__gc-result .pf-sre__gselect .pf-dd__trigger { min-height: 44px; width: 100%; }
   .pf-sre__gunit-inline { display: none; }
-  .pf-sre__grow-comments td, .pf-sre__grow-note td, .pf-sre__grow-reject td, .pf-sre__gsub td, .pf-sre__grow-attach td { display: block; width: 100%; box-sizing: border-box; }
+  .pf-sre__grow-comments td, .pf-sre__grow-note td, .pf-sre__grow-rnote td, .pf-sre__grow-reject td, .pf-sre__gsub td, .pf-sre__grow-attach td { display: block; width: 100%; box-sizing: border-box; }
 }
 
 @media (prefers-reduced-motion: reduce) {
