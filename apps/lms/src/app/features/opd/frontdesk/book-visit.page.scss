@@ -105,3 +105,6 @@
   background: color-mix(in srgb, var(--amber-text, #b45309) 10%, transparent); color: var(--text-primary);
   border: 1px solid color-mix(in srgb, var(--amber-text, #b45309) 30%, transparent); }
 .pf-ov-duplink { display: inline-block; margin-left: 6px; font-weight: 600; color: var(--brand); min-height: 44px; line-height: 44px; }
+
+.pf-ob-tile--away { opacity: 0.62; }
+.pf-ob-dot--away { background: var(--text-tertiary); }

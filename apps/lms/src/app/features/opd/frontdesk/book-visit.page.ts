@@ -364,7 +364,8 @@ export class OpdBookVisitPage {
     this.deptFilterId.set(dep.id);
     this.catalogTab.set('doctors');
   }
-  waitText(d: { waiting: number; estWaitMinutes?: number }): string { return waitLabel(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
+  dayName(k: string): string { return DAY_NAMES[k] ?? k; }
+    waitText(d: { waiting: number; estWaitMinutes?: number }): string { return waitLabel(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
   waitClass(d: { waiting: number; estWaitMinutes?: number }): string { return 'pf-ob-dot--' + waitTone(d.waiting, d.estWaitMinutes ?? d.waiting * 10); }
   deptDoctorsText(dep: DeskDepartment): string {
     const n = dep.doctorIds.length;
@@ -512,3 +513,5 @@ export function sameDoctorOpenVisit(rows: readonly OpdVisitRow[], doctorId: stri
   if (!doctorId) return null;
   return rows.find(r => r.doctorUserId === doctorId && !['cancelled', 'no_show', 'completed'].includes(r.status)) ?? null;
 }
+
+const DAY_NAMES: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };

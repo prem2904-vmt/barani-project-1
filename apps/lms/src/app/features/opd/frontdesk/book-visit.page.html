@@ -112,7 +112,7 @@
             }
             <div class="pf-ob-tiles" role="radiogroup" aria-label="Doctor">
               @for (d of filteredDoctors(); track d.id) {
-                <button type="button" class="pf-ob-tile" role="radio" [attr.aria-checked]="doctorId() === d.id" (click)="pickDoctor(d)">
+                <button type="button" class="pf-ob-tile" [class.pf-ob-tile--away]="d.sitsToday === false" role="radio" [attr.aria-checked]="doctorId() === d.id" (click)="pickDoctor(d)">
                   <span class="pf-ob-tile__top">
                     <span class="pf-ob-initials" aria-hidden="true">{{ initials(d.name) }}</span>
                     <span class="pf-ob-tile__txt">
@@ -122,8 +122,13 @@
                     <span class="pf-ob-radio" aria-hidden="true"></span>
                   </span>
                   <span class="pf-ob-tile__foot">
-                    <span class="pf-ob-dot" [class]="'pf-ob-dot ' + waitClass(d)" aria-hidden="true"></span>
-                    <span class="nd-num">{{ waitText(d) }}</span>
+                    @if (d.sitsToday === false) {
+                      <span class="pf-ob-dot pf-ob-dot--away" aria-hidden="true"></span>
+                      <span>Not in today{{ d.nextSitting ? ' · next ' + dayName(d.nextSitting) : '' }}</span>
+                    } @else {
+                      <span class="pf-ob-dot" [class]="'pf-ob-dot ' + waitClass(d)" aria-hidden="true"></span>
+                      <span class="nd-num">{{ waitText(d) }}</span>
+                    }
                     @if (d.fee != null) { <span class="pf-ob-tile__price nd-num">{{ d.fee | inr }}</span> }
                   </span>
                 </button>

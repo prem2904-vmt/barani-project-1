@@ -12,6 +12,10 @@ export interface DeskQueueCfg { organise: 'per_doctor' | 'per_room' | 'per_depar
 export interface DeskDoctor {
   id: string; name: string; department?: string | null; departmentIds: string[];
   waiting: number; estWaitMinutes: number; fee?: number | null; tokenPrefix: string; nowServing?: string | null;
+  /** False when the doctor doesn't sit today (admin Doctors → days); older servers omit it. */
+  sitsToday?: boolean;
+  /** Next sitting day ('thu') when not in today. */
+  nextSitting?: string | null;
 }
 export interface DeskDepartment { id: string; name: string; code: string; waiting: number; doctorIds: string[]; }
 export interface DeskData { today: string; config: { workflow: DeskWorkflow; queue: DeskQueueCfg }; doctors: DeskDoctor[]; departments: DeskDepartment[]; }
