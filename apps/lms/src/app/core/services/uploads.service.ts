@@ -1,7 +1,8 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Injector, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PlatformService } from './platform.service';
+import { ToastService } from './toast.service';
 import { absoluteApiUrl, isPrivateUploadPath, registerUploadFetcher, uploadPathOf } from '../../shared/utils/upload-fetch';
 
 /**
@@ -15,7 +16,15 @@ import { absoluteApiUrl, isPrivateUploadPath, registerUploadFetcher, uploadPathO
  *  - `open(url)`  — open a file in a new tab (signed URL: a new tab / the
  *                   system viewer can't carry the bearer token).
  * Non-upload URLs (absolute, data:, blob:, already-signed) pass through.
+ *
+ * Files live in object storage on the server. One uploaded before that move
+ * may be gone for good (it sat on a container disk a deploy wiped): the server
+ * answers 410 `file_missing`; `isMissing(url)` then says so, and `open()`
+ * tells the user to upload it again instead of opening an error page.
  */
+/** Shown when the server no longer has a file (410 file_missing). */
+export const FILE_MISSING_MESSAGE = 'This file is no longer available on the server. Upload it again.';
+
 @Injectable({ providedIn: 'root' })
 export class UploadsService {
   private readonly http = inject(HttpClient);
@@ -26,6 +35,17 @@ export class UploadsService {
   /** path → blob: URL (kept for the session; uploads are immutable). */
   private readonly urls = signal<Record<string, string>>({});
   private readonly inflight = new Map<string, Promise<string | null>>();
+  /** Paths the server answered 410 file_missing for. */
+  private readonly missing = signal<ReadonlySet<string>>(new Set());
+
+  /** True once the server said this file no longer exists (re-upload it). */
+  isMissing(url: string | null | undefined): boolean {
+    return !!url && this.missing().has(this.path(url));
+  }
+
+  private markMissing(path: string): void {
+    if (!this.missing().has(path)) this.missing.update(s => new Set(s).add(path));
+  }
 
   constructor() {
     registerUploadFetcher(path => this.blob(path));
@@ -46,7 +66,8 @@ export class UploadsService {
     try {
       return await firstValueFrom(this.http.get(
         `${this.apiBase}/api/uploads/file`, { params: { path: url }, responseType: 'blob' }));
-    } catch {
+    } catch (e) {
+      if (e instanceof HttpErrorResponse && e.status === 410) this.markMissing(url);
       return null;
     }
   }
@@ -100,17 +121,42 @@ export class UploadsService {
 
   /** Open a file in a new tab. The tab is opened synchronously (inside the
    *  click, so popup blockers allow it) and pointed at the signed URL once
-   *  it arrives. */
-  async open(url: string | null | undefined): Promise<void> {
-    if (!url) return;
+   *  it arrives. A file the server no longer has (410) closes the tab and
+   *  says "upload it again" instead of showing an error page.
+   *  Resolves 'opened' | 'missing' | 'failed'. */
+  async open(url: string | null | undefined): Promise<'opened' | 'missing' | 'failed'> {
+    if (!url) return 'failed';
     url = this.path(url);
-    if (!isPrivateUploadPath(url)) { window.open(absoluteApiUrl(url, this.apiBase), '_blank', 'noopener'); return; }
+    if (!isPrivateUploadPath(url)) { window.open(absoluteApiUrl(url, this.apiBase), '_blank', 'noopener'); return 'opened'; }
     const tab = window.open('', '_blank');
     const target = (await this.signed([url]))[url];
-    if (!target) { tab?.close(); return; }
+    if (!target) { tab?.close(); return 'failed'; }
+    if (this.isMissing(url) || await this.gone(target)) {
+      tab?.close();
+      this.markMissing(url);
+      this.toast()?.error(FILE_MISSING_MESSAGE, 6000);
+      return 'missing';
+    }
     if (tab) { tab.opener = null; tab.location.href = target; }
     else window.open(target, '_blank', 'noopener');
+    return 'opened';
   }
+
+  /** HEAD the signed URL: true only on a definite 410 (any network / CORS
+   *  problem = let the tab try; it shows the real outcome). */
+  private async gone(signedUrl: string): Promise<boolean> {
+    try {
+      const r = await fetch(signedUrl, { method: 'HEAD', mode: 'cors' });
+      return r.status === 410;
+    } catch {
+      return false;
+    }
+  }
+
+  private toast(): ToastService | null {
+    try { return this.injector.get(ToastService, null); } catch { return null; }
+  }
+  private readonly injector = inject(Injector);
 }
 
 /**

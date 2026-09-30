@@ -31,7 +31,7 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(p.bandInput()).toBeNull();
     expect(p.el.querySelector('.pf-hb__search--tabs')).not.toBeNull();
     expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label')))
-      .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Footer']);
+      .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Sequencing', 'Footer']);
     expect(p.el.querySelector('.pf-rt-rail')).toBeNull();
     expect(p.el.querySelector('.pf-rt-work__title')).toBeNull();
     expect(p.el.querySelector('.pf-rt-head')?.classList.contains('pf-classic-only')).toBe(true);

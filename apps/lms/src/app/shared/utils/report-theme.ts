@@ -63,6 +63,7 @@ export type TypeEl =
   | 'testName' | 'result' | 'resultAbnormal' | 'unit' | 'range'
   | 'methodology' | 'specimen' | 'referral' | 'cellText' | 'methodColumn' | 'specimenColumn' | 'narrativeResult'
   | 'description' | 'interpretation' | 'interpretationLabel' | 'note'
+  | 'techNote'
   | 'testHeading' | 'sectionLabel' | 'narrativeName' | 'narrative' | 'narrativeMerged'
   | 'imagesHeading' | 'imagesPlaceholder' | 'chartAxis' | 'trendHeading'
   // ── Microbiology ──
@@ -124,6 +125,7 @@ const CLASSIC_TOKENS: Record<TypeEl, TypeToken> = {
   methodColumn: t(9, 'normal', S), specimenColumn: t(9, 'normal', S), narrativeResult: t(9, 'bold', S),
   description: t(8.5, 'normal', S), interpretation: t(8.5, 'normal', S), interpretationLabel: t(8.5, 'bold', S),
   note: t(8.5, 'italic'),
+  techNote: t(8.5, 'normal', S),
   testHeading: t(13, 'bold'), sectionLabel: t(8.5, 'bold'), narrativeName: t(9, 'bold'), narrative: t(9, 'normal'),
   narrativeMerged: t(8.5, 'italic'),
   imagesHeading: t(8.5, 'bolditalic'), imagesPlaceholder: t(8.5, 'italic'), chartAxis: t(8, 'normal'),
@@ -190,6 +192,7 @@ const SOURCE_SANS_TOKENS: Record<TypeEl, TypeToken> = {
   description: t(8.5, 'normal'),                                           // Test description 8–8.5
   interpretation: t(9, 'normal'), interpretationLabel: t(9, 'semibold'),   // Profile interpretation 8.5–9
   note: t(8.5, 'italic'),                                                  // (tech observation ≈ description)
+  techNote: t(9, 'normal'),                                                // (technician report note ≈ interpretation)
   testHeading: t(11, 'bold'),                                              // (standalone test title ≈ profile name)
   sectionLabel: t(9.5, 'semibold'),                                        // (≈ column heading)
   narrativeName: t(10, 'semibold'), narrative: t(9, 'normal'),             // (test name / interpretation)

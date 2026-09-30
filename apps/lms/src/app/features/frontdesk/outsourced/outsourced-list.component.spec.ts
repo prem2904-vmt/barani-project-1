@@ -5,6 +5,7 @@ import { OutsourcedListComponent } from './outsourced-list.component';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { OutsourcedTube, countByStatus, filterOutsourced, partnerOptions } from './outsourced-view';
 
 const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
@@ -78,6 +79,23 @@ describe('Frontdesk Outsourced tab', () => {
     expect(chip.getAttribute('style') ?? '').not.toMatch(/green|#10b981|#22c55e/i);
     const labels = [...el.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim());
     expect(labels).toEqual(expect.arrayContaining(['View', 'Undo', 'Replace report']));
+  });
+
+  it('a partner file the server no longer has (410) is flagged on the row with "upload it again"', () => {
+    const tube = () => row({ status: 'completed', hasReport: true, tests: [
+      { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
+        report: { orderTestId: 't1', testName: 'Vitamin D', url: '/uploads/t/p.pdf' } }] });
+    expect(setup([tube()]).el.querySelector('[data-testid="out-file-missing"]')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const spy = vi.spyOn(UploadsService.prototype, 'isMissing').mockImplementation(u => u === '/uploads/t/p.pdf');
+    try {
+      const { el } = setup([tube()]);
+      expect(el.querySelector('[data-testid="out-file-missing"]')?.textContent).toContain('upload it again');
+      expect([...el.querySelectorAll('.nd-rowact')].map(b => b.textContent?.trim())).toContain('Replace report');
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('upload → complete: uploads the file then marks the open lines Completed', async () => {

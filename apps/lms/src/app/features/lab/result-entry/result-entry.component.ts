@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, QueryList, ViewChildren, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, QueryList, ViewChildren, computed, effect, inject, signal } from '@angular/core';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
@@ -36,6 +36,8 @@ import { SelectComponent } from '../../../shared/primitives/select.component';
 import { NumpadDirective, NumpadScopeDirective } from '../../../shared/components/numpad/numpad.directive';
 import { NumpadService } from '../../../shared/components/numpad/numpad.service';
 import { ageInYears, bandAgeYears, formatAge } from '../../../shared/utils/patient-age';
+import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
+import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
 
 interface EnterResponse {
   orderTest: OrderTest;
@@ -99,7 +101,10 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
     NumpadScopeDirective,
     BusyDirective,
     SkeletonCardComponent,
+    ReportNotesCardComponent,
   ],
+  // Technician report notes (Lab settings switch) — one store per screen.
+  providers: [ReportNotesStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- pfNumpadScope: the touch numpad's Next walks the parameters down the
@@ -893,6 +898,13 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                      placeholder="Optional · visible to the validating pathologist"/>
             </div>
           </pf-tile>
+
+          <!-- Technician notes that PRINT on the report (Lab settings switch):
+               this test's, its profile's, its department's and the whole
+               report's. Hidden when off and nothing was written. -->
+          @if (orderTest(); as ot) {
+            <pf-report-notes-card class="pf-col-static" [lineIds]="[ot.id]" [showLines]="true" [showProfiles]="true"></pf-report-notes-card>
+          }
         </div>
 
         <!-- RIGHT RAIL: always rendered. On lg+ lives in the grid column.
@@ -2894,6 +2906,19 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   readonly mobileRailOpen = this._mobileRailOpen.asReadonly();
 
   readonly orderTest = this._ot.asReadonly();
+
+  /** Technician report notes of this test's order (re-read when its status
+   *  changes: submit / validate / Edit result lock or unlock them). */
+  protected readonly notes = inject(ReportNotesStore);
+  private notesKey = '';
+  private readonly _notesSync = effect(() => {
+    const ot = this._ot();
+    const oid = ot?.subOrder?.orderId ?? ot?.subOrder?.order?.id ?? null;
+    const key = oid ? `${oid}|${ot?.id}:${ot?.status}` : '';
+    if (key === this.notesKey) return;
+    this.notesKey = key;
+    void this.notes.load(oid);
+  });
   readonly saving = this._saving.asReadonly();
   readonly activeParam = this._active.asReadonly();
   readonly note = this._note.asReadonly();

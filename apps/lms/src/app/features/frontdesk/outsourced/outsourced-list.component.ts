@@ -79,6 +79,14 @@ import {
                 <span class="nd-chip nd-chip--static pf-out__attach" [attr.data-attach]="attachState(r)"
                       [attr.title]="attachState(r) === 'problem' ? rowReport(r)?.attachProblem : null">{{ al }}</span>
               }
+              @if (rowReport(r); as rep) {
+                @if (uploads.isMissing(rep.url)) {
+                  <!-- The server no longer has this file (it sat on a disk a
+                       deploy wiped): say so, and point at Replace. -->
+                  <span class="nd-chip nd-chip--static pf-out__attach" data-attach="problem" data-testid="out-file-missing"
+                        role="status">File no longer available — upload it again</span>
+                }
+              }
             </div>
             <div class="pf-out__acts">
               @if (rowReport(r); as rep) {
@@ -202,8 +210,10 @@ export class OutsourcedListComponent implements OnInit {
 
   testNames(r: OutsourcedTube): string { return r.tests.map(t => t.testName).join(', '); }
 
-  private readonly uploads = inject(UploadsService);
+  protected readonly uploads = inject(UploadsService);
   /** Partner files are private uploads — opened through a signed URL. */
+  /** Open the partner file; one the server no longer has (410) toasts
+   *  "upload it again" and flags the row (see isMissing in the template). */
   view(url: string) { void this.uploads.open(url); }
 
   pick(r: OutsourcedTube) {

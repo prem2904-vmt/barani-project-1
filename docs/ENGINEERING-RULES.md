@@ -24,7 +24,10 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Which tube / pot a line is drawn into:** ONE key, `OutsourcingRules.VialKey` + `ColourKey` (`TubeType`: blank container = sterile pot) — destination + space + tube type, and for a non-blood pot the line's specimen (fixed / chosen, else the Test Master text). Create, add-tests and outsourcing reconcile all use it, in-house and outsourced alike: same specimen + same container = one pot, never one pot per test.
   - **Partner report in the patient's PDF:** the `attachToReport` flag on the line's `external_report` attachment; the combined PDF is DERIVED on read (`CombinedReportPdf`, content-addressed cache) from the immutable stored report — never written into the stored report, never a second copy of the flag.
   - **Outsourced or in-house:** the tube's `OutsourcedVendorId`, frozen at order time from the lab's effective test; every lab surface filters through `OutsourcingRules` (`InHouseTube` for tubes, `InHouseWork` for lines), never a bare status check.
+  - **Technician report notes (all four levels — line, profile, department, order):** `orders.ReportNotesJson`, written only through `ReportNotesService` (row-locked, audited); the report snapshot copies them; the Lab-settings switch (`techReportNotes`, per branch) gates new text only — saved notes always print.
 - Never match by name or code when an ID / key exists.
+- User files live only in Spaces via the storage service — never on the container disk (wiped on every deploy).
+- A tenant's storage folder has ONE home: `tenants.StoragePrefix`, set once by `TenantStorageKeys` (handle, else `<name>-<id8>`) — every storage key is built through it; authorization is always by tenant ID, never by folder name.
 - A feature switch has ONE resolver (UI lab-features / server LabFeatureGate); never gate a surface on the workflow or the entitlement alone.
 
 ## 2. Tenant and branch isolation
@@ -60,6 +63,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - Print ranges / units from the saved result snapshot, not the live Test Master.
 - Critical-value acknowledgements live in `critical_result_events` (written with the result version, audit-logged); an explicit Acknowledge action, never "viewed".
 - Patient-facing report links: identity verification is checked on the SERVER before any patient detail or PDF is returned. No patient data before verification.
+- A derived delivery file (the combined report + partner PDF) is served from the bytes just built, never only via a storage round-trip; a cache probe treats ANY storage error as a miss (S3-compatible stores may answer a missing key with 403); staff screens say what the SERVED file contains (`GET /api/reports/{id}/pdf-parts`), never infer it from a flag. Test storage failures with the fake store's fault knobs.
 
 ## 5. Auth and security
 - The server decides access; the UI only reflects it (guards + a not-authorised screen, no screen without access).
@@ -74,6 +78,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - Report PDF tables (jspdf-autotable): a blank-then-repaint cell stash is keyed `section:row:col` and deleted when painted (the repeated head is row 0 too); rows never split across pages (`rowPageBreak: 'avoid'`); a panel band is glued to its first row and repeated as "— CONTINUED" on the next page.
 - Touch devices: the keyboard must never cover the focused field; inputs are ≥ 16px.
 - Report PDF typography: every text draw takes font / size / weight from the report-theme token table (`report-theme.ts`), never a literal size; the Classic table is pinned byte-for-byte by golden hashes (`report-theme-classic.spec.ts`, `report-header-legacy.spec.ts`). An embedded theme font loads lazily in `preloadReportImages`, never in the bundle.
+- Report print order has ONE home: the template's `sequencing` (applyReportSequencing) — never re-sort report sections elsewhere.
 
 ## 7. Process: definition of done
 1. Fetch and merge the latest remote before starting.
