@@ -4225,9 +4225,11 @@ function isReportChart(s: ResolvedSection): boolean {
 
 /** The report theme values a chart block needs (report-chart.pdf.ts). The
  *  chart prints in the theme's family: Source Sans 3 when the Modern theme
- *  embedded it (the chart only uses normal / bold / italic, all registered). */
+ *  embedded it. `face` is the ONE weight → face resolver the tables use
+ *  (faceOf), so a bold italic chart label maps to a registered face too. */
 function chartTheme() {
-  return { font: EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT, fontScale: theme.fontScale, accent: BLUE, text: TEXT, ink: BLACK, dim: TEXT_DIM,
+  return { font: EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT, face: (w: TypeWeight) => faceOf(w) as [string, string],
+    fontScale: theme.fontScale, accent: BLUE, text: TEXT, ink: BLACK, dim: TEXT_DIM,
     hair: HAIR, abnormalColored: theme.flagStyle === 'bold_color',
     abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor };
 }
