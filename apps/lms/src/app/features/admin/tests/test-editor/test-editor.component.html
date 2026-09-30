@@ -830,6 +830,18 @@
               for EACH order which values reach that report. The bench record keeps everything.
               (The per-value “Prints on the report” switch above stays the fixed default.)
             </p>
+            @if (printPickerEnabled()) {
+              <div class="pf-te2-pickstart">
+                <span class="pf-uf__lbl" id="te-pickstart-lbl">Start with</span>
+                <span class="nd-seg pf-te2-seg" role="radiogroup" aria-labelledby="te-pickstart-lbl" data-testid="print-picker-default">
+                  @for (o of printPickerStartOptions; track o.value) {
+                    <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="printPickerDefault() === o.value"
+                            (click)="setPrintPickerDefault(o.value)">{{ o.label }}</button>
+                  }
+                </span>
+                <p class="pf-hint">None ticked: nothing prints until the tech ticks it. A saved choice is never reset.</p>
+              </div>
+            }
           </div>
 
           @if (isSingleValue()) {
@@ -893,6 +905,17 @@
                 <span>Tech picks what prints (per report)</span>
               </button>
               <p class="pf-hint">Overrides the setting on each test when this profile is ordered.</p>
+              @if (profilePrintPicker()) {
+                <div class="pf-te2-pickstart">
+                  <span class="pf-uf__lbl" id="te-profile-pickstart-lbl">Start with</span>
+                  <span class="nd-seg pf-te2-seg" role="radiogroup" aria-labelledby="te-profile-pickstart-lbl" data-testid="profile-print-picker-default">
+                    @for (o of printPickerStartOptions; track o.value) {
+                      <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="profilePrintPickerDefault() === o.value"
+                              (click)="setProfilePrintPickerDefault(o.value)">{{ o.label }}</button>
+                    }
+                  </span>
+                </div>
+              }
             </div>
           }
 

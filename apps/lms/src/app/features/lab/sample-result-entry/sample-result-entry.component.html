@@ -451,6 +451,11 @@
                             </tr>
                           }
                         }
+                        @if (nothingPrints(t)) {
+                          <tr class="pf-sre__grow-warn" role="status">
+                            <td colspan="6"><ng-container *ngTemplateOutlet="nothingPrintsNote; context: { $implicit: t }"></ng-container></td>
+                          </tr>
+                        }
                         @if (attachmentsFor(t).length > 0) {
                           <tr class="pf-sre__grow-attach">
                             <td colspan="6"><ng-container *ngTemplateOutlet="attachStrip; context: { $implicit: t }"></ng-container></td>
@@ -482,6 +487,12 @@
       }
 
       <!-- ── Shared pieces ───────────────────────────────────────────── -->
+      <ng-template #nothingPrintsNote let-t>
+        <p class="pf-sre__nothing-prints">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+          Nothing from {{ t.test?.name ?? "this test" }} will print — tick the values that should reach the report.
+        </p>
+      </ng-template>
       <ng-template #commentMark>
         <span class="pf-sre__param-flag" title="Pathologist commented">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
@@ -590,86 +601,102 @@
 
       <!-- The ONE result-input control (grid tables). -->
       <ng-template #resultInput let-t="t" let-p="p">
-        @switch (inputKindFor(p)) {
-          @case ("number") {
-            <!-- Touch: the in-app numpad (keys replay through
-                 allowOnlyNumbers); Next skips calculated fields. -->
-            <input type="text" inputmode="decimal"
-                   class="pf-sre__ginput pf-sre__ginput--num"
-                   [pfNumpad]="!viewOnly()"
-                   [pfNumpadLabel]="p.title || p.name"
-                   [pfNumpadUnit]="p.unit ?? null"
-                   [pfNumpadFlag]="flagFor(t, p)"
-                   [attr.data-numpad-skip]="calcChip(t, p) ? '' : null"
-                   [attr.aria-label]="p.title || p.name"
-                   [attr.data-sre-field]="t.id + '::' + p.name"
-                   [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                   [class.pf-sre__input--outr]="isOutOfRange(t, p)"
-                   [class.pf-sre__input--crit]="isCriticalValue(t, p)"
-                   [class.pf-sre__input--invalid]="isInvalidNumber(t, p)"
-                   [ngModel]="getValue(t.id, p.name)"
-                   (ngModelChange)="setValue(t.id, p.name, $event)"
-                   (keydown)="allowOnlyNumbers($event)"
-                   (keydown.enter)="onEnterKey($event)"
-                   (paste)="onNumericPaste($event, t.id, p.name)" />
+        <!-- The value + its "print in bold" toggle (B, or Ctrl/Cmd+B inside
+             the field). Bold only ADDS emphasis on the report — an abnormal
+             value prints bold anyway. -->
+        <span class="pf-sre__rv" [class.pf-sre__rv--bold]="isBold(t, p)" (keydown)="onBoldKey($event, t, p)">
+          @switch (inputKindFor(p)) {
+            @case ("number") {
+              <!-- Touch: the in-app numpad (keys replay through
+                   allowOnlyNumbers); Next skips calculated fields. -->
+              <input type="text" inputmode="decimal"
+                     class="pf-sre__ginput pf-sre__ginput--num"
+                     [pfNumpad]="!viewOnly()"
+                     [pfNumpadLabel]="p.title || p.name"
+                     [pfNumpadUnit]="p.unit ?? null"
+                     [pfNumpadFlag]="flagFor(t, p)"
+                     [attr.data-numpad-skip]="calcChip(t, p) ? '' : null"
+                     [attr.aria-label]="p.title || p.name"
+                     [attr.data-sre-field]="t.id + '::' + p.name"
+                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                     [class.pf-sre__input--outr]="isOutOfRange(t, p)"
+                     [class.pf-sre__input--crit]="isCriticalValue(t, p)"
+                     [class.pf-sre__input--invalid]="isInvalidNumber(t, p)"
+                     [ngModel]="getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)"
+                     (keydown)="allowOnlyNumbers($event)"
+                     (keydown.enter)="onEnterKey($event)"
+                     (paste)="onNumericPaste($event, t.id, p.name)" />
+            }
+            @case ("select") {
+              <div class="pf-sre__gselect" [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                   [attr.data-sre-param]="t.id + '::' + p.name">
+                @if (isMultiSelect(p)) {
+                  <!-- Several answers may apply (e.g. morphology findings). -->
+                  <pf-select size="sm" [multiple]="true" [compactMulti]="true" placeholder="—"
+                             [options]="selectOptionsFor(p).map((o) => ({ value: o, label: o }))"
+                             [values]="multiValuesOf(t.id, p.name)"
+                             (valuesChange)="onMultiSelectChange(t.id, p.name, $event)"></pf-select>
+                } @else {
+                  <pf-select size="sm"
+                             [options]="[{ value: '', label: '—' }, ...selectOptionsFor(p).map((o) => ({ value: o, label: o }))]"
+                             [value]="getValue(t.id, p.name)"
+                             (valueChange)="onSelectChange(t.id, p.name, $event)"></pf-select>
+                }
+              </div>
+            }
+            @case ("textarea") {
+              <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
+                        (input)="autoGrow($event)"
+                        [attr.aria-label]="p.title || p.name"
+                     [attr.data-sre-field]="t.id + '::' + p.name"
+                        [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                        [ngModel]="getValue(t.id, p.name)"
+                        (ngModelChange)="setValue(t.id, p.name, $event)"
+                        (keydown.enter)="onEnterKey($event)"></textarea>
+            }
+            @case ("checkbox") {
+              <input type="checkbox" class="pf-sre__cb"
+                     [attr.aria-label]="p.title || p.name"
+                     [attr.data-sre-field]="t.id + '::' + p.name"
+                     [ngModel]="!!getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)"
+                     (keydown.enter)="onEnterKey($event)" />
+            }
+            @case ("date") {
+              <input type="date" class="pf-sre__ginput"
+                     [attr.aria-label]="p.title || p.name"
+                     [attr.data-sre-field]="t.id + '::' + p.name"
+                     [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                     [ngModel]="getValue(t.id, p.name)"
+                     (ngModelChange)="setValue(t.id, p.name, $event)"
+                     (keydown.enter)="onEnterKey($event)" />
+            }
+            @default {
+              <!-- Free text: a multi-line box that grows with the text (tall on
+                   phones); Enter still moves to the next field. -->
+              <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
+                        [attr.aria-label]="p.title || p.name"
+                     [attr.data-sre-field]="t.id + '::' + p.name"
+                        [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
+                        [ngModel]="getValue(t.id, p.name)"
+                        (ngModelChange)="setValue(t.id, p.name, $event)"
+                        (input)="autoGrow($event)"
+                        (keydown.enter)="onEnterKey($event)"></textarea>
+            }
           }
-          @case ("select") {
-            <div class="pf-sre__gselect" [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                 [attr.data-sre-param]="t.id + '::' + p.name">
-              @if (isMultiSelect(p)) {
-                <!-- Several answers may apply (e.g. morphology findings). -->
-                <pf-select size="sm" [multiple]="true" [compactMulti]="true" placeholder="—"
-                           [options]="selectOptionsFor(p).map((o) => ({ value: o, label: o }))"
-                           [values]="multiValuesOf(t.id, p.name)"
-                           (valuesChange)="onMultiSelectChange(t.id, p.name, $event)"></pf-select>
-              } @else {
-                <pf-select size="sm"
-                           [options]="[{ value: '', label: '—' }, ...selectOptionsFor(p).map((o) => ({ value: o, label: o }))]"
-                           [value]="getValue(t.id, p.name)"
-                           (valueChange)="onSelectChange(t.id, p.name, $event)"></pf-select>
-              }
-            </div>
+          @if (canBold(t) || isBold(t, p)) {
+            <button type="button" class="pf-sre__bold"
+                    [attr.aria-pressed]="isBold(t, p)"
+                    [disabled]="!canBold(t)"
+                    title="Print in bold"
+                    [attr.aria-label]="'Print ' + (p.title || p.name) + ' in bold'"
+                    [attr.data-sre-bold]="t.id + '::' + p.name"
+                    (click)="toggleBold(t, p)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7z"/><path d="M7 12h7.5a3.5 3.5 0 0 1 0 7H7z"/></svg>
+            </button>
           }
-          @case ("textarea") {
-            <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
-                      (input)="autoGrow($event)"
-                      [attr.aria-label]="p.title || p.name"
-                   [attr.data-sre-field]="t.id + '::' + p.name"
-                      [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                      [ngModel]="getValue(t.id, p.name)"
-                      (ngModelChange)="setValue(t.id, p.name, $event)"
-                      (keydown.enter)="onEnterKey($event)"></textarea>
-          }
-          @case ("checkbox") {
-            <input type="checkbox" class="pf-sre__cb"
-                   [attr.aria-label]="p.title || p.name"
-                   [attr.data-sre-field]="t.id + '::' + p.name"
-                   [ngModel]="!!getValue(t.id, p.name)"
-                   (ngModelChange)="setValue(t.id, p.name, $event)"
-                   (keydown.enter)="onEnterKey($event)" />
-          }
-          @case ("date") {
-            <input type="date" class="pf-sre__ginput"
-                   [attr.aria-label]="p.title || p.name"
-                   [attr.data-sre-field]="t.id + '::' + p.name"
-                   [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                   [ngModel]="getValue(t.id, p.name)"
-                   (ngModelChange)="setValue(t.id, p.name, $event)"
-                   (keydown.enter)="onEnterKey($event)" />
-          }
-          @default {
-            <!-- Free text: a multi-line box that grows with the text (tall on
-                 phones); Enter still moves to the next field. -->
-            <textarea class="pf-sre__ginput pf-sre__ginput--ta pf-sre__ginput--text" rows="1"
-                      [attr.aria-label]="p.title || p.name"
-                   [attr.data-sre-field]="t.id + '::' + p.name"
-                      [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"
-                      [ngModel]="getValue(t.id, p.name)"
-                      (ngModelChange)="setValue(t.id, p.name, $event)"
-                      (input)="autoGrow($event)"
-                      (keydown.enter)="onEnterKey($event)"></textarea>
-          }
-        }
+        </span>
       </ng-template>
 
       <!-- One RESULTS card per test: multi-value / culture / schema-less
@@ -829,6 +856,9 @@
                     </tbody>
                   </table>
                 </div>
+                @if (nothingPrints(t)) {
+                  <div role="status"><ng-container *ngTemplateOutlet="nothingPrintsNote; context: { $implicit: t }"></ng-container></div>
+                }
               }
             </div>
           </section>

@@ -658,6 +658,10 @@ select.pf-input--compact {
 .pf-uf--span { grid-column: 1 / -1; }
 /* Profile-level print picker sits between the member summary and the picker. */
 .pf-te2-profile-pick { margin: 12px 0 4px; }
+/* "Start with: All ticked | None ticked" under the print-picker switch. */
+.pf-te2-pickstart { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+.pf-te2-pickstart .pf-uf__lbl { margin: 0; }
+.pf-te2-pickstart .pf-hint { flex-basis: 100%; margin: 0; }
 .pf-uf__lbl { font-size: 11px; color: var(--text-tertiary); }
 .pf-uf__in.pf-input {
   background: var(--input-bg);
