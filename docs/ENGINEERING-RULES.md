@@ -22,6 +22,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Specimen of an ordered line:** `order_tests` (code + name), decided by the Test Master's specimen mode + allowed list (`SpecimenRules` / `micro-specimen.ts`); every report path prints the ORDERED specimen, never the Test Master text.
   - **Paid (patient release):** `PatientReleaseGate`.
   - **Which tube / pot a line is drawn into:** ONE key, `OutsourcingRules.VialKey` + `ColourKey` (`TubeType`: blank container = sterile pot) — destination + space + tube type, and for a non-blood pot the line's specimen (fixed / chosen, else the Test Master text). Create, add-tests and outsourcing reconcile all use it, in-house and outsourced alike: same specimen + same container = one pot, never one pot per test.
+  - **Partner report in the patient's PDF:** the `attachToReport` flag on the line's `external_report` attachment; the combined PDF is DERIVED on read (`CombinedReportPdf`, content-addressed cache) from the immutable stored report — never written into the stored report, never a second copy of the flag.
   - **Outsourced or in-house:** the tube's `OutsourcedVendorId`, frozen at order time from the lab's effective test; every lab surface filters through `OutsourcingRules` (`InHouseTube` for tubes, `InHouseWork` for lines), never a bare status check.
 - Never match by name or code when an ID / key exists.
 

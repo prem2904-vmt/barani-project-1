@@ -56,6 +56,20 @@ describe('stored report PDF — fetch from storage only', () => {
     expect(again).not.toHaveBeenCalled();
   });
 
+  it('after the first store it shows what the server serves — our report + attached partner pages (one PDF)', async () => {
+    const api = apiDouble();
+    let calls = 0;
+    api.getBlob.mockImplementation(() => (calls++ === 0 ? throwError(() => http(404)) : of(pdf('ours+partner'))));
+    const blob = await ensureStoredReportPdf(api, 'rep-m', async () => pdf('ours-only'));
+    expect(await text(blob)).toContain('ours+partner');
+    expect(api.post).toHaveBeenCalledTimes(1);
+    // The read-back failing falls back to our own render (never an error).
+    const api2 = apiDouble();
+    let c2 = 0;
+    api2.getBlob.mockImplementation(() => (c2++ === 0 ? throwError(() => http(404)) : throwError(() => http(500))));
+    expect(await text(await ensureStoredReportPdf(api2, 'rep-n', async () => pdf('ours-only')))).toContain('ours-only');
+  });
+
   it('lost the race (409 already_stored): shows the file the other screen stored', async () => {
     const api = apiDouble({ postError: new ApiError('stored', 'already_stored') });
     let calls = 0;

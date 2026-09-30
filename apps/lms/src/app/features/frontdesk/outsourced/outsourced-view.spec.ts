@@ -1,6 +1,6 @@
 import {
   OutsourcedTube, absoluteFileUrl, actionLines, countByStatus, filterOutsourced, partnerFileProblem,
-  partnerOptions, partnerReportShareLine, rowReport,
+  partnerOptions, partnerReportShareLine, rowReport, attachState, firstAttachProblem, ATTACH_DEFAULT,
 } from './outsourced-view';
 
 const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
@@ -63,5 +63,36 @@ describe('Outsourced tab — upload flow helpers', () => {
     expect(partnerReportShareLine([])).toBeNull();
     expect(partnerReportShareLine([{ orderTestId: 't', testName: 'Vitamin D', partnerLabName: 'Apollo', url: '/u' }]))
       .toContain('Vitamin D (tested at Apollo)');
+  });
+});
+
+describe('Outsourced tab — attach to our report', () => {
+  const withRep = (rep: Record<string, unknown> | null) => row({ hasReport: !!rep, tests: [
+    { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
+      report: rep ? { orderTestId: 't1', testName: 'Vitamin D', url: '/u', ...rep } : null },
+  ] });
+
+  it('defaults ON at upload', () => expect(ATTACH_DEFAULT).toBe(true));
+
+  it('attach state: none / in-report / separate (legacy = no flag) / problem', () => {
+    expect(attachState(withRep(null))).toBe('none');
+    expect(attachState(withRep({ attachToReport: true, inReport: true }))).toBe('in-report');
+    expect(attachState(withRep({}))).toBe('separate');
+    expect(attachState(withRep({ attachToReport: false }))).toBe('separate');
+    expect(attachState(withRep({ attachToReport: true, attachProblem: 'locked' }))).toBe('problem');
+    expect(firstAttachProblem([withRep({ attachToReport: true, attachProblem: 'locked' })])).toBe('locked');
+    expect(firstAttachProblem([withRep({ attachToReport: false, attachProblem: 'stale' })])).toBeNull();
+    expect(firstAttachProblem(null)).toBeNull();
+  });
+
+  it('share line: joined reports are "in your report PDF", the rest ride on the link', () => {
+    const line = partnerReportShareLine([
+      { orderTestId: 'a', testName: 'Vitamin D', partnerLabName: 'Apollo', url: '/u1', attachToReport: true, inReport: true },
+      { orderTestId: 'b', testName: 'HbA1c', url: '/u2' },
+    ])!;
+    expect(line).toContain('Your report PDF also includes the partner lab report for Vitamin D (tested at Apollo).');
+    expect(line).toContain('Also included on the same link: the partner lab report for HbA1c.');
+    expect(partnerReportShareLine([{ orderTestId: 'a', testName: 'X', url: '/u', inReport: true }]))
+      .not.toContain('same link');
   });
 });

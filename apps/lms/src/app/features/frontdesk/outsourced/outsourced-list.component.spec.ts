@@ -28,11 +28,15 @@ function setup(rows: OutsourcedTube[], confirm = true) {
     apiBase: 'https://api.test',
     load: vi.fn(async () => {}),
     upload: vi.fn(async () => '/uploads/t/p.pdf'),
-    complete: vi.fn(async () => {}),
+    complete: vi.fn(async (): Promise<OutsourcedTube[]> => []),
+    setAttachToReport: vi.fn(async (): Promise<OutsourcedTube[]> => []),
     reopen: vi.fn(async () => {}),
   };
   const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
-  const dialog = { confirm: vi.fn(async () => confirm) };
+  const dialog = {
+    confirm: vi.fn(async () => confirm),
+    actions: vi.fn(async (): Promise<{ action: string | null; checked: boolean }> => ({ action: 'upload', checked: true })),
+  };
   TestBed.configureTestingModule({
     imports: [OutsourcedListComponent],
     providers: [
@@ -81,8 +85,60 @@ describe('Frontdesk Outsourced tab', () => {
     const file = new File(['%PDF'], 'vitd.pdf', { type: 'application/pdf' });
     await c.uploadAndComplete(row(), file);
     expect(svc.upload).toHaveBeenCalledWith(file);
-    expect(svc.complete).toHaveBeenCalledWith(['t1'], { url: '/uploads/t/p.pdf', name: 'vitd.pdf', type: 'application/pdf' });
+    expect(svc.complete).toHaveBeenCalledWith(['t1'], { url: '/uploads/t/p.pdf', name: 'vitd.pdf', type: 'application/pdf' }, true);
     expect(toasts.success).toHaveBeenCalled();
+  });
+
+  it('upload asks "Attach to our report" (default ON) and passes the choice; cancel uploads nothing', async () => {
+    const { c, svc, dialog } = setup([row()]);
+    const file = new File(['%PDF'], 'vitd.pdf', { type: 'application/pdf' });
+    const input = { files: [file], value: 'x' } as unknown as HTMLInputElement;
+    c.pick(row());
+    dialog.actions.mockResolvedValueOnce({ action: 'upload', checked: false });
+    await c.onFile({ target: input } as unknown as Event);
+    const req = dialog.actions.mock.calls[0] as unknown as [{ checkbox: { initial: boolean; label: string } }];
+    expect(req[0].checkbox.initial).toBe(true);
+    expect(req[0].checkbox.label).toContain('Attach to our report');
+    expect(svc.complete).toHaveBeenCalledWith(['t1'], expect.objectContaining({ url: '/uploads/t/p.pdf' }), false);
+
+    svc.upload.mockClear();
+    c.pick(row());
+    dialog.actions.mockResolvedValueOnce({ action: null, checked: true });
+    await c.onFile({ target: { files: [file], value: 'x' } } as unknown as Event);
+    expect(svc.upload).not.toHaveBeenCalled();
+  });
+
+  it('a partner file that can\'t be joined is flagged with a dialog (no window.confirm) and a chip', async () => {
+    const problem = 'This PDF is password-protected, so it can’t be joined to our report. It will be sent as a separate file.';
+    const locked = row({ status: 'completed', hasReport: true, tests: [
+      { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
+        report: { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf', attachToReport: true, attachProblem: problem, inReport: false } },
+    ] });
+    const { c, el, svc, dialog } = setup([locked]);
+    svc.complete.mockResolvedValueOnce([locked]);
+    await c.uploadAndComplete(row(), new File(['%PDF'], 'v.pdf', { type: 'application/pdf' }));
+    expect(dialog.actions).toHaveBeenCalledWith(expect.objectContaining({ message: problem }));
+    const chip = el.querySelector('.pf-out__attach') as HTMLElement;
+    expect(chip.textContent?.trim()).toBe('Separate file');
+    expect(chip.getAttribute('data-attach')).toBe('problem');
+  });
+
+  it('attach / detach later from the row', async () => {
+    const withReport = (attach: boolean) => row({ status: 'completed', hasReport: true, tests: [
+      { orderTestId: 't1', testId: 'x', testName: 'Vitamin D', status: 'completed', completed: true,
+        report: { orderTestId: 't1', testName: 'Vitamin D', url: '/u/r.pdf', attachToReport: attach, inReport: attach } },
+    ] });
+    const a = setup([withReport(true)]);
+    expect(a.el.querySelector('.pf-out__attach')?.textContent?.trim()).toBe('In our report');
+    expect(a.el.querySelector('.pf-out__attach-btn')?.textContent).toContain('Detach from report');
+    await a.c.toggleAttach(withReport(true));
+    expect(a.svc.setAttachToReport).toHaveBeenCalledWith(['t1'], false);
+    expect(a.toasts.success).toHaveBeenCalled();
+    TestBed.resetTestingModule();
+    const b = setup([withReport(false)]);
+    expect(b.el.querySelector('.pf-out__attach-btn')?.textContent).toContain('Attach to report');
+    await b.c.toggleAttach(withReport(false));
+    expect(b.svc.setAttachToReport).toHaveBeenCalledWith(['t1'], true);
   });
 
   it('rejects a non-PDF / non-image file before uploading', async () => {
