@@ -1,3 +1,4 @@
+import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import {
   AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, NgZone, OnDestroy,
   Injector, computed, effect, inject, signal, viewChild, viewChildren
@@ -52,6 +53,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  hidden below 1280px, so when the bar sits at the TOP this popover is
    *  the ONLY place these live on phone and iPad (owner). */
   protected readonly designMode = inject(DesignModeService);
+  /** Desktop app: notification switches in the more menu. */
+  protected readonly desktopNotify = inject(DesktopNotifyService);
+  protected readonly desktopItems = DESKTOP_NOTIFY_ITEMS;
   protected readonly peopleDrawer = inject(PeopleDrawerService);
   /** Teams-style presence — my status dot on the account button + the
    *  status picker row in the account popover. */

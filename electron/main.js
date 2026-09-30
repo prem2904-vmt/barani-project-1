@@ -3,6 +3,8 @@ const path = require('path');
 const labelPrinter = require('./printer');
 const calls = require('./calls');
 const chatNotify = require('./chat-notify');
+// Desktop notifications: settings, bell alerts, badge, login item, wake-up.
+const notify = require('./notify');
 // Lab analyzer connector (serial / TCP / folder → LMS). Core is plain Node
 // under ./instruments/core; this host just wires it to IPC + app lifecycle.
 const instruments = require('./instruments/host-electron');
@@ -112,7 +114,8 @@ function createWindow() {
   mainWindow.loadURL(url);
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    // Auto-started at login → stay in the tray / dock until opened.
+    if (!notify.launchedHidden()) mainWindow.show();
     if (isDev) mainWindow.webContents.openDevTools();
   });
 
@@ -139,6 +142,7 @@ function createWindow() {
   });
 
   calls.attach(mainWindow);
+  notify.attach(mainWindow);
 }
 
 // ── Label printer (USB) IPC — the desktop counterpart to the iPad's BLE
@@ -146,6 +150,7 @@ function createWindow() {
 //    Detonger/Dothantech printer over USB. ────────────────────────────────
 // Chat notifications with inline Reply (macOS) — see chat-notify.js.
 chatNotify.register(() => mainWindow);
+notify.register(() => mainWindow);
 // Analyzer connectors: IPC for the Instruments page (pair / status / listen).
 instruments.register(() => mainWindow);
 
@@ -226,6 +231,7 @@ app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   createWindow();
   calls.createTray(() => mainWindow);
+  notify.start();
   // Paired analyzers start with the app and keep running in the tray.
   instruments.start();
 

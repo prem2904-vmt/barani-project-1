@@ -2,6 +2,7 @@ import { Injector } from '@angular/core';
 import { CallPushService } from './call-push.service';
 import { ElectronCallService } from './electron-call.service';
 import { WebPushService } from './web-push.service';
+import { DesktopNotifyService } from './desktop-notify.service';
 
 /**
  * Lazy entry for the OFFLINE CALLING hand-offs (kept off the initial bundle;
@@ -12,6 +13,7 @@ import { WebPushService } from './web-push.service';
  */
 export function bootOfflineCalling(injector: Injector, bootHref: string): Promise<void> {
   injector.get(ElectronCallService);
+  injector.get(DesktopNotifyService); // desktop: window state, badge, wake-up
   injector.get(WebPushService);
   return injector.get(CallPushService).init(bootHref);
 }

@@ -58,6 +58,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('chat:action', h);
     }
   },
+  // Desktop notifications (notify.js): per-user settings (avatar menu), bell
+  // alerts as native notifications, the unread badge, the main window's
+  // real state (the page always reports "visible" because background
+  // throttling is off) and sleep / wake so sockets revive at once.
+  notify: {
+    getSettings: () => ipcRenderer.invoke('notify:settings:get'),
+    setSettings: (patch) => ipcRenderer.invoke('notify:settings:set', patch),
+    alert: (info) => ipcRenderer.send('notify:alert', info),
+    badge: (counts) => ipcRenderer.send('notify:badge', counts),
+    getWindowState: () => ipcRenderer.invoke('window:state:get'),
+    onWindowState: (cb) => {
+      const h = (_e, s) => cb(s);
+      ipcRenderer.on('window:state', h);
+      return () => ipcRenderer.removeListener('window:state', h);
+    },
+    onResume: (cb) => {
+      const h = (_e, r) => cb(r);
+      ipcRenderer.on('app:resume', h);
+      return () => ipcRenderer.removeListener('app:resume', h);
+    },
+    onAction: (cb) => {
+      const h = (_e, a) => cb(a);
+      ipcRenderer.on('notify:action', h);
+      return () => ipcRenderer.removeListener('notify:action', h);
+    }
+  },
   // Lab analyzer connectors (runs in main, survives the window closing).
   // Pair = store a device key (encrypted by the OS keychain); listen mode =
   // capture what an unknown analyzer sends. No Node objects cross over.

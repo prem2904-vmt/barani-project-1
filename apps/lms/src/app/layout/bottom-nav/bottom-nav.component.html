@@ -401,6 +401,25 @@
           </div>
         }
       }
+      @if (desktopNotify.active) {
+        <!-- Desktop app: notification switches (same settings as the top
+             bar's avatar menu). -->
+        <div class="pf-more-sep"></div>
+        @for (it of desktopItems; track it.key) {
+          @if (!it.loginOnly || desktopNotify.loginSupported()) {
+            <button type="button" role="menuitemcheckbox" class="pf-more-item press"
+                    [attr.aria-checked]="desktopNotify.settings()[it.key]"
+                    (click)="desktopNotify.set(it.key, !desktopNotify.settings()[it.key])">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                @for (d of it.paths; track $index) { <path [attr.d]="d"/> }
+              </svg>
+              <span>{{ it.label }}</span>
+              <span class="pf-more-item__val">{{ desktopNotify.settings()[it.key] ? 'On' : 'Off' }}</span>
+            </button>
+          }
+        }
+      }
       <div class="pf-more-sep"></div>
       <!-- Multi-account -->
       @if (otherAccounts().length) {

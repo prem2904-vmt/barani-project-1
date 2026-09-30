@@ -16,6 +16,9 @@ import { ChatPopupService } from './chat-popup.service';
 import { ChatWindowsService } from './chat-windows.service';
 import { ChatHistoryService } from './chat-history.service';
 import { applyReaction } from './chat-local-store';
+import { DesktopNotifyService, desktopInFront, pageShown } from './desktop-notify.service';
+import { chatBadgeCount, decideBusinessAlert, decideChatAlert } from './desktop-notify.policy';
+import { PresenceService } from './presence.service';
 
 /** Kinds of surface that can be "showing" a conversation. `reader` = the
  *  messages page / people drawer (drives read state + unread); `window` =
@@ -51,6 +54,8 @@ export class ChatService implements OnDestroy {
   private readonly windows = inject(ChatWindowsService);
   private readonly hubFactory = inject(HUB_FACTORY);
   private readonly injector = inject(Injector);
+  /** Desktop app: window state, per-user notification settings, badge. */
+  private readonly desktop = inject(DesktopNotifyService);
   /** On-device history + relay sync/ack (the server only relays). */
   readonly history = inject(ChatHistoryService);
   private connection: signalR.HubConnection | null = null;
@@ -130,6 +135,13 @@ export class ChatService implements OnDestroy {
       this.viewedConversationIds();
       untracked(() => this.foreground?.poke());
     });
+    // Desktop app: unread chats (muted ones excluded) → dock / taskbar badge.
+    if (this.desktop.active) {
+      effect(() => {
+        const n = chatBadgeCount(this.conversations());
+        untracked(() => this.desktop.setChatUnread(n));
+      });
+    }
   }
 
   /** Chat identity of the signed-in user (Supabase sub, fallback app id). */
@@ -183,7 +195,7 @@ export class ChatService implements OnDestroy {
       // onBusinessNotification for why this lives here and how each platform
       // surfaces it.
       on('BusinessNotification',
-        (p: { kind: string; title: string; body?: string | null; critical?: boolean }) =>
+        (p: { kind: string; title: string; body?: string | null; critical?: boolean; referenceType?: string | null; referenceId?: string | null }) =>
           this.onBusinessNotification(p));
       on('MessageRead', (p: { conversationId: string; userId: string; readAt: string }) =>
         this.onMessageRead(p));
@@ -435,8 +447,10 @@ export class ChatService implements OnDestroy {
     return () => { this.viewers.delete(key); this.viewersVersion.update(v => v + 1); };
   }
 
+  /** The page is on screen. Desktop: the main window is shown (the page
+   *  itself always claims 'visible' there — see pageShown). */
   private static docVisible(): boolean {
-    return typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    return pageShown();
   }
 
   /** True when a surface of the given kinds shows this conversation on a
@@ -994,10 +1008,23 @@ export class ChatService implements OnDestroy {
    *    delivers the banner/toast, so anything louder here would double up
    */
   private onBusinessNotification(
-    p: { kind: string; title: string; body?: string | null; critical?: boolean }
+    p: { kind: string; title: string; body?: string | null; critical?: boolean; referenceType?: string | null; referenceId?: string | null }
   ): void {
     window.dispatchEvent(new CustomEvent('pf-notification-received'));
     if (this.platform.isCapacitor()) return;
+    if (this.desktop.active) {
+      // Desktop app: in front → toast; otherwise a native notification (per
+      // the user's Alerts switch / Do-not-disturb; critical always shows).
+      const how = decideBusinessAlert({
+        inFront: desktopInFront() ?? false,
+        settings: this.desktop.settings(),
+        dnd: this.myDnd(),
+        critical: !!p.critical,
+      });
+      if (how === 'toast') this.toasts.info(p.body ? `${p.title} — ${p.body}` : p.title);
+      else if (how === 'native') this.desktop.alert(p);
+      return;
+    }
     const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
     if (hidden) {
       this.notify.notifyBusiness(p.title, p.body ?? '');
@@ -1087,6 +1114,8 @@ export class ChatService implements OnDestroy {
     const mentioned = !!m.mentions && m.mentions.includes(me);
     if (conv?.isMuted && !mentioned) return;
 
+    if (this.desktop.active) { this.alertDesktop(m, conv, mentioned); return; }
+
     if (this.isViewing(m.conversationId)) { this.ringtone.playSoft(); return; }
     if (this.isNativeIos()) return;
 
@@ -1106,6 +1135,40 @@ export class ChatService implements OnDestroy {
         sentAt: m.sentAt,
       });
     }
+  }
+
+  /** Desktop app: who sees what is decided by decideChatAlert (window in
+   *  front? thread on screen? Messages / Sound switches, Do-not-disturb). */
+  private alertDesktop(m: ChatMessage, conv: Conversation | undefined, mentioned: boolean): void {
+    const d = decideChatAlert({
+      mutedForMe: !!conv?.isMuted && !mentioned,
+      onScreen: this.isViewing(m.conversationId),
+      inFront: desktopInFront() ?? false,
+      settings: this.desktop.settings(),
+      dnd: this.myDnd(),
+    });
+    if (d.sound === 'soft') this.ringtone.playSoft();
+    else if (d.sound === 'ping') this.ringtone.playPing();
+    if (d.show === 'none') return;
+    const sender = conv?.participants.find(p => p.userId === m.fromUserId)?.displayName ?? 'New message';
+    const title = conv?.isGroup && conv.name ? `${sender} · ${conv.name}` : sender;
+    const preview = messagePreview(m);
+    if (d.show === 'native' && this.notify.notifyDesktop(title, preview, m.conversationId)) return;
+    this.popups.push({
+      conversationId: m.conversationId,
+      messageId: m.id,
+      senderId: m.fromUserId,
+      senderName: sender,
+      groupName: conv?.isGroup ? (conv.name ?? null) : null,
+      preview,
+      sentAt: m.sentAt,
+    });
+  }
+
+  /** My presence is Do-not-disturb / In surgery (the server already mutes
+   *  device pushes for these; the desktop mirrors it). Resolved lazily. */
+  private myDnd(): boolean {
+    try { return this.injector.get(PresenceService).myStatusIsDnd(); } catch { return false; }
   }
 
   private isNativeIos(): boolean {
