@@ -1884,7 +1884,10 @@ Mixins   nd.card · nd.btn-primary · nd.btn-secondary · nd.neutral-selected ·
 A **Chart** is a block of the Printed report print-order list
 (`pf-report-structure` → `pf-report-chart-editor`), available on ANY test or
 profile — see `docs/REPORT-CHARTS.md`. The block body is the editor (kit
-fields, `.nd-seg` for Type / Across / Size, `pf-select` for a line's unit,
+fields, a grid of `.nd-tile-sel` type cards (live marks-only thumbnail on a
+paper surface, name, and — when the type does not fit the test's data — a
+dashed, greyed thumbnail with a one-line reason; fitting types first, the
+chosen one with a neutral check), `.nd-seg` for Across / Size, `pf-select` for a line's unit,
 violet `.nd-toggle` switches, kit tick rows for chosen values) with a live
 preview drawn from sample values by the SAME geometry the PDF paints
 (`pf-report-chart`, inline SVG on a white paper surface in light and dark).

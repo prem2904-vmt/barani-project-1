@@ -21,8 +21,11 @@ export const LIPID_SPEC: ReportChartSpec = {
 };
 
 type Val = { value: unknown; flag?: string; unit?: string; range?: string; low?: number | null; high?: number | null };
-const v = (value: unknown, low: number | null, high: number | null, flag = 'N'): Val =>
-  ({ value, flag, unit: 'mg/dL', range: high != null && low != null ? `${low}–${high} mg/dL` : high != null ? `< ${high} mg/dL` : '', low, high });
+const v = (value: unknown, low: number | null, high: number | null, flag = 'N', unit = 'mg/dL'): Val =>
+  ({ value, flag, unit, range: high != null && low != null ? `${low}–${high} ${unit}` : high != null ? `< ${high} ${unit}` : '', low, high });
+/** A value flagged against its band the way mw saves it (H / L / N). */
+const fv = (value: number, low: number | null, high: number | null, unit: string): Val =>
+  v(value, low, high, high != null && value > high ? 'H' : low != null && value < low ? 'L' : 'N', unit);
 
 /** The five OGTT draws (offset → [test id, name, band, value]); `null` value = missed. */
 export function ogttTests(values: Array<number | null>, opts: { secondLine?: Array<number | null> } = {}) {
@@ -62,6 +65,59 @@ export function lipidTest(vals: { tc: number; hdl: number; ldl: number; vldl: nu
   };
 }
 
+/** WBC differential: % (parts of a whole) and absolute counts. */
+export function wbcDiffTest(pct: { neu: number; lym: number; mono: number; eos: number; baso: number },
+  abs?: { neu: number; lym: number; mono: number; eos: number; baso: number }) {
+  const values: Record<string, Val> = {
+    neutrophils_pct: fv(pct.neu, 40, 75, '%'), lymphocytes_pct: fv(pct.lym, 20, 40, '%'), monocytes_pct: fv(pct.mono, 2, 10, '%'),
+    eosinophils_pct: fv(pct.eos, 1, 6, '%'), basophils_pct: fv(pct.baso, 0, 2, '%'),
+  };
+  if (abs) Object.assign(values, {
+    neutrophils_abs: fv(abs.neu, 2, 7, '10³/µL'), lymphocytes_abs: fv(abs.lym, 1, 3, '10³/µL'), monocytes_abs: fv(abs.mono, 0.2, 1, '10³/µL'),
+    eosinophils_abs: fv(abs.eos, 0.02, 0.5, '10³/µL'), basophils_abs: fv(abs.baso, 0.02, 0.1, '10³/µL'),
+  });
+  return { testId: 'zdiff', name: 'Zdifferential Count', department: 'Haematology', sampleType: 'EDTA whole blood', packageTestId: null, result: { values } };
+}
+export const WBC_TITLES: Record<string, string> = {
+  neutrophils_pct: 'Neutrophils', lymphocytes_pct: 'Lymphocytes', monocytes_pct: 'Monocytes', eosinophils_pct: 'Eosinophils', basophils_pct: 'Basophils',
+  neutrophils_abs: 'Absolute Neutrophils', lymphocytes_abs: 'Absolute Lymphocytes', monocytes_abs: 'Absolute Monocytes',
+  eosinophils_abs: 'Absolute Eosinophils', basophils_abs: 'Absolute Basophils',
+};
+export const WBC_PCT = ['neutrophils_pct', 'lymphocytes_pct', 'monocytes_pct', 'eosinophils_pct', 'basophils_pct'];
+export const WBC_ABS = ['neutrophils_abs', 'lymphocytes_abs', 'monocytes_abs', 'eosinophils_abs', 'basophils_abs'];
+
+/** HbA1c: one value against its band. */
+export function hba1cTest(value: number) {
+  return { testId: 'zhba1c', name: 'Zglycated Haemoglobin', department: 'Biochemistry', sampleType: 'EDTA whole blood', packageTestId: null,
+    result: { values: { hba1c: fv(value, 4, 5.6, '%') } } };
+}
+export const HBA1C_TITLES: Record<string, string> = { hba1c: 'HbA1c' };
+
+/** Liver function panel: values in different units. */
+export function liverTest(x: { alt: number; ast: number; alp: number; ggt: number; bil: number; alb: number }) {
+  return { testId: 'zlft', name: 'Zliver Function Test', department: 'Biochemistry', sampleType: 'Serum', packageTestId: null,
+    result: { values: {
+      alt: fv(x.alt, 0, 40, 'U/L'), ast: fv(x.ast, 0, 40, 'U/L'), alp: fv(x.alp, 44, 147, 'U/L'), ggt: fv(x.ggt, 8, 61, 'U/L'),
+      bilirubin_total: fv(x.bil, 0.3, 1.2, 'mg/dL'), albumin: fv(x.alb, 3.5, 5, 'g/dL'),
+    } } };
+}
+export const LFT_TITLES: Record<string, string> = {
+  alt: 'ALT (SGPT)', ast: 'AST (SGOT)', alp: 'Alkaline Phosphatase', ggt: 'GGT', bilirubin_total: 'Total Bilirubin', albumin: 'Albumin',
+};
+
+/** Timed urine collection (a repetitive profile): albumin + other protein
+ *  excreted per collection period, both in mg — parts that stack. */
+const PERIODS = ['0–4 h', '4–8 h', '8–12 h', '12–24 h'];
+export function urineProteinTests(alb: number[], other: number[]) {
+  const offs = [0, 240, 480, 720];
+  return offs.map((off, i) => ({
+    testId: 'zup' + off, name: `Zurine Protein ${off / 60} h`, department: 'Biochemistry', sampleType: 'Timed urine',
+    packageTestId: 'zupro', profileTestId: 'zupro', packageType: 'profile', packageName: 'ZSPLIT URINE PROTEIN', profileName: 'ZSPLIT URINE PROTEIN',
+    repeatOffsetMin: off, status: 'validated',
+    result: { values: { [`Urine albumin (${PERIODS[i]})`]: v(alb[i], null, null, 'N', 'mg'), [`Other urine protein (${PERIODS[i]})`]: v(other[i], null, null, 'N', 'mg') } },
+  }));
+}
+
 export const LIPID_TITLES: Record<string, string> = {
   total_cholesterol: 'Total Cholesterol', hdl: 'HDL Cholesterol', ldl: 'LDL Cholesterol',
   vldl: 'VLDL Cholesterol', triglycerides: 'Triglycerides',
@@ -73,15 +129,18 @@ const COLS = [
   { id: 'c-range', name: 'range', label: 'Reference Range', order: 3, width: 30, type: 'range', locked: false },
 ];
 
-const gridFor = (id: string, name: string, rows: Array<[string, string, string, string?]>) => ({
+const gridFor = (id: string, name: string, rows: Array<[string, string, string, string?, string?]>) => ({
   testId: id, testName: name, departmentName: 'Biochemistry', columns: COLS, configured: true,
-  sections: [{ id: 'g-' + id, type: 'grid', order: 1, isVisible: true, rows: rows.map(([p, title, result, range]) => ({
-    id: 'r-' + p, parameterName: p, title, isMerged: false, cells: { result, unit: 'mg/dL', range: range ?? '' } })) }],
+  sections: [{ id: 'g-' + id, type: 'grid', order: 1, isVisible: true, rows: rows.map(([p, title, result, range, unit]) => ({
+    id: 'r-' + p, parameterName: p, title, isMerged: false, cells: { result, unit: unit ?? 'mg/dL', range: (range ?? '').replace(/ \S+$/, '') } })) }],
 });
 
 export function buildChartReport(opts: {
   tests: Array<Record<string, unknown>>;
-  chartOwner: 'zogtt' | 'zlipid';
+  chartOwner: string;
+  /** Row titles for the grid (value name → title). */
+  titles?: Record<string, string>;
+  template?: Record<string, unknown>;
   spec: ReportChartSpec;
   title?: string;
   /** Tall filler tests before the chart (pushes it near a page foot). */
@@ -100,14 +159,15 @@ export function buildChartReport(opts: {
   for (const t of opts.tests) {
     const vals = ((t['result'] as { values?: Record<string, Val> } | null)?.values) ?? {};
     layouts[t['testId'] as string] = gridFor(t['testId'] as string, t['name'] as string,
-      Object.entries(vals).map(([k, x]) => [k, LIPID_TITLES[k] ?? k, String(x.value), x.range ?? ''])) as never;
+      Object.entries(vals).map(([k, x]) => [k, opts.titles?.[k] ?? LIPID_TITLES[k] ?? k, String(x.value), x.range ?? '', x.unit])) as never;
   }
   const chartSec = { id: 'chart1', type: 'chart', label: opts.title ?? 'Zglucose curve', isVisible: true, trend: opts.spec };
-  if (opts.chartOwner === 'zogtt') {
-    layouts['zogtt'] = { testId: 'zogtt', testName: 'ZORAL GLUCOSE TOLERANCE', departmentName: 'Biochemistry', columns: COLS,
-      sections: opts.hidden ? [] : [chartSec] } as never;
+  if (!opts.tests.some(t => t['testId'] === opts.chartOwner)) {
+    const member = opts.tests.find(t => t['profileTestId'] === opts.chartOwner);
+    layouts[opts.chartOwner] = { testId: opts.chartOwner, testName: (member?.['profileName'] as string) ?? 'ZORAL GLUCOSE TOLERANCE',
+      departmentName: 'Biochemistry', columns: COLS, sections: opts.hidden ? [] : [chartSec] } as never;
   } else {
-    const l = layouts['zlipid'] as unknown as { sections: unknown[] };
+    const l = layouts[opts.chartOwner] as unknown as { sections: unknown[] };
     if (!opts.hidden) l.sections.push(chartSec);
   }
   const snap = {
@@ -118,7 +178,7 @@ export function buildChartReport(opts: {
   };
   return buildReportPdf({
     report: { id: 'r1', type: 'final', createdAt: '2026-09-30T09:10:00Z', data: JSON.stringify(snap) },
-    template: opts.flagStyle ? { flagStyle: opts.flagStyle } as never : null,
+    template: opts.flagStyle || opts.template ? { ...(opts.flagStyle ? { flagStyle: opts.flagStyle } : {}), ...(opts.template ?? {}) } as never : null,
     resolvedLayouts: layouts,
   } as never);
 }
@@ -143,3 +203,12 @@ export function textRuns(doc: ReturnType<typeof buildReportPdf>): Run[] {
   });
   return out;
 }
+
+/** FNV-1a over the laid-out drawing operations (numbers rounded to 0.001). */
+export function fingerprint(ops: unknown): string {
+  const s = JSON.stringify(ops, (_k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0');
+}
+

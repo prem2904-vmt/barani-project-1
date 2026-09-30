@@ -12,6 +12,7 @@ import { flagAgainst, selectReferenceRange, type RangeLike } from '../reference-
 import { resolveParamEntryKind } from '../param-entry-kind';
 import { parseParametersBlob, readParameters } from '../test-parameters';
 import type { ChartTestLike } from './report-chart.data';
+import { isPercentUnit, type ChartLineSpec, type ChartSetSpec, type ChartShape, type ChartXSource } from './report-chart.model';
 
 export interface ChartParamInfo {
   name: string;
@@ -108,4 +109,90 @@ export function sampleSeriesValues(ownerId: string,
     out.set(`${t.testId}@${t.repeatOffsetMin}`, vals);
   }
   return out;
+}
+
+// ── Chart-type gating (which kinds make sense for this test's data) ──
+
+function unitKey(u: string | null | undefined): string { return (u ?? '').trim().toLowerCase(); }
+
+/** The shape of the test's data the chart-type picker gates on. */
+export function chartShape(ctx: ChartEditorContext, x: ChartXSource): ChartShape {
+  let multi = false, same = false;
+  for (const tp of ctx.timepoints) {
+    const ps = tp.members.flatMap(m => m.params);
+    if (ps.length >= 2) multi = true;
+    const units = ps.map(p => unitKey(p.unit));
+    if (units.some((u, i) => units.indexOf(u) !== i)) same = true;
+  }
+  return {
+    x, series: ctx.series && ctx.timepoints.length > 0,
+    multiPerPoint: multi, sameUnitPerPoint: same,
+    available: ctx.params.length,
+    percent: ctx.params.filter(p => isPercentUnit(p.unit)).length,
+    partMax: Math.max(0, ...partGroups(ctx.params).map(g => g.names.length)),
+  };
+}
+
+/** A value that can be a part of a whole: it has a unit and its normal
+ *  bands never go below zero. */
+export function isPartValue(p: ChartParamInfo): boolean {
+  return !!unitKey(p.unit) && !(p.referenceRanges ?? []).some(r => typeof r?.min === 'number' && r.min < 0);
+}
+
+/** The test's values that can be parts of one whole, grouped by unit: the %
+ *  group first (the values ARE the shares), then the largest count group. */
+export function partGroups(params: readonly ChartParamInfo[]): Array<{ unit: string; percent: boolean; names: string[] }> {
+  const groups: Array<{ unit: string; percent: boolean; names: string[] }> = [];
+  for (const p of params) {
+    if (!isPartValue(p)) continue;
+    const g = groups.find(x => unitKey(x.unit) === unitKey(p.unit));
+    if (g) g.names.push(p.name); else groups.push({ unit: (p.unit ?? '').trim(), percent: isPercentUnit(p.unit), names: [p.name] });
+  }
+  return groups.sort((a, b) => Number(b.percent) - Number(a.percent) || b.names.length - a.names.length);
+}
+
+const QUALIFIERS = new Set(['pct', 'percent', 'percentage', 'abs', 'absolute', 'count', 'counts', 'no', 'num', 'number', 'value']);
+/** "neutrophils_pct" / "Absolute Neutrophil Count" → "neutrophil". */
+function baseName(name: string): string {
+  return name.toLowerCase().split(/[^a-z0-9]+/).filter(w => w && !QUALIFIERS.has(w))
+    .map(w => w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w).join(' ');
+}
+
+/** A second set of values to compare with `parameters`: for each chosen
+ *  value, another value of the test with the same base name (the WBC
+ *  differential's absolute count next to its %), else nothing there. */
+export function autoCompareSet(ctx: ChartEditorContext, parameters: readonly string[]): ChartSetSpec {
+  const taken = new Set(parameters.map(p => p.toLowerCase()));
+  const out = parameters.map(n => {
+    const b = baseName(n);
+    const hit = ctx.params.find(p => !taken.has(p.name.toLowerCase()) && baseName(p.name) === b);
+    if (hit) taken.add(hit.name.toLowerCase());
+    return hit?.name ?? null;
+  });
+  const unit = ctx.params.find(p => p.name === out.find(Boolean))?.unit ?? null;
+  return { label: unit, parameters: out };
+}
+
+/** Lines for a two-series chart over time points: for a stack, two values in
+ *  ONE unit (told apart by a word of their names); else the second unit. */
+export function autoSecondLine(ctx: ChartEditorContext, lines: readonly ChartLineSpec[], sameUnit: boolean): ChartLineSpec[] {
+  if (lines.length >= 2 && (!sameUnit || lines.every(l => unitKey(l.unit) === unitKey(lines[0].unit)))) return [...lines];
+  if (!sameUnit) {
+    const units = seriesUnits(ctx);
+    const first = lines[0]?.unit ?? units[0] ?? null;
+    const other = units.find(u => unitKey(u) !== unitKey(first));
+    return [{ ...(lines[0] ?? {}), unit: first }, { unit: other ?? first }];
+  }
+  for (const tp of ctx.timepoints) {
+    const ps = tp.members.flatMap(m => m.params);
+    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
+      if (unitKey(ps[i].unit) !== unitKey(ps[j].unit)) continue;
+      const wa = ps[i].name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      const wb = ps[j].name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      const a = wa.find(w => !wb.includes(w)) ?? ps[i].name.toLowerCase();
+      const b = wb.find(w => !wa.includes(w)) ?? ps[j].name.toLowerCase();
+      return [{ unit: ps[i].unit ?? null, match: a, label: ps[i].title || null }, { unit: ps[j].unit ?? null, match: b, label: ps[j].title || null }];
+    }
+  }
+  return [...lines];
 }

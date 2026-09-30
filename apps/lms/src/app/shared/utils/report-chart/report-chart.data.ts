@@ -32,6 +32,8 @@ export interface ChartPoint {
   abnormal: boolean;
   low: number | null;
   high: number | null;
+  /** The saved value's unit (radar spokes / pie keys print it). */
+  unit?: string | null;
 }
 
 export interface ChartSeries {
@@ -101,7 +103,7 @@ function pointOf(raw: unknown, fallbackUnit?: string | null): { point: ChartPoin
   return {
     point: {
       value: v, display: String(e.value).trim(), flag: f.flag, isLow: f.isLow, abnormal: f.abnormal,
-      low: e.low, high: e.high,
+      low: e.low, high: e.high, unit: e.unit ?? fallbackUnit ?? null,
     },
     unit: e.unit ?? fallbackUnit ?? null,
   };
@@ -162,6 +164,7 @@ function seriesData(spec: ReportChartSpec, ownerId: string, tests: readonly Char
     return null;
   })();
   const series: ChartSeries[] = [];
+  let rightUnit: string | null = null;
   lines.forEach((line, li) => {
     const unit = (line.unit ?? '').trim() || (li === 0 ? firstUnit : null);
     const match = (line.match ?? '').trim().toLowerCase();
@@ -176,7 +179,11 @@ function seriesData(spec: ReportChartSpec, ownerId: string, tests: readonly Char
       return hit ? pointOf(hit.raw, unit).point : gap();
     });
     const label = (line.label ?? '').trim() || (line.match ?? '').trim() || unit || `Line ${li + 1}`;
-    series.push({ label, unit: unit ?? null, secondary: li > 0 && !!unit && !sameUnit(unit, series[0]?.unit), points });
+    const secondary = li > 0 && !!unit && !sameUnit(unit, series[0]?.unit);
+    // Two axes at most: a line in a THIRD unit has no axis to sit on.
+    if (secondary && rightUnit !== null && !sameUnit(unit, rightUnit)) return;
+    if (secondary) rightUnit = unit ?? null;
+    series.push({ label, unit: unit ?? null, secondary, points });
   });
   return { xLabels: offsets.map(o => offsetTickLabel(o, spec.xLabels)), series };
 }
@@ -189,16 +196,31 @@ function parameterData(spec: ReportChartSpec, ownerId: string, tests: readonly C
   };
   const pool = tests.filter(t => t.testId === ownerId || isMember(t, ownerId)).flatMap(entriesOf);
   const names = spec.parameters ?? [];
-  let unit: string | null = null;
-  const points = names.map(n => {
-    const k = n.trim().toLowerCase();
-    const e = pool.find(x => x.name.trim().toLowerCase() === k);
-    if (!e) return gap();
-    const p = pointOf(e.raw);
-    unit ??= p.unit;
-    return p.point;
+  const read = (list: ReadonlyArray<string | null>) => {
+    let unit: string | null = null;
+    const points = list.map(n => {
+      if (!n) return gap();
+      const k = n.trim().toLowerCase();
+      const e = pool.find(x => x.name.trim().toLowerCase() === k);
+      if (!e) return gap();
+      const p = pointOf(e.raw);
+      unit ??= p.unit;
+      return p.point;
+    });
+    return { unit, points };
+  };
+  const main = read(names);
+  const series: ChartSeries[] = [{ label: main.unit ?? '', unit: main.unit, secondary: false, points: main.points }];
+  let rightUnit: string | null = null;
+  (spec.sets ?? []).forEach((set, si) => {
+    const r = read(set.parameters);
+    const secondary = !!r.unit && !sameUnit(r.unit, main.unit);
+    if (secondary && rightUnit !== null && !sameUnit(r.unit, rightUnit)) return;   // no third axis
+    if (secondary) rightUnit = r.unit;
+    series.push({ label: (set.label ?? '').trim() || r.unit || `Set ${si + 2}`, unit: r.unit, secondary, points: r.points });
   });
-  return { xLabels: names.map(titleOf), series: [{ label: unit ?? '', unit, secondary: false, points }] };
+  if (series.length > 1) series[0].label = (spec.mainLabel ?? '').trim() || main.unit || 'Values';
+  return { xLabels: names.map(titleOf), series };
 }
 
 /** "total_cholesterol" → "Total cholesterol"; a human name stays as typed. */
