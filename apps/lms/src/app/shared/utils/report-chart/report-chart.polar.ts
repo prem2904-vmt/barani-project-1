@@ -9,6 +9,7 @@
  * value on its own.
  */
 import type { ChartData, ChartPoint } from './report-chart.data';
+import { partsOfWhole, shareText } from './report-chart.model';
 import {
   approxMeasure, chipped, DARK_FILLS, drawHeader, fmt, niceScale, PART_COLOR, polar, sectorSegs, valueText,
   type ChartColor, type ChartLayout, type ChartOp, type LayoutOptions, type LegendItem, type PathSeg, type TextOp,
@@ -47,11 +48,18 @@ function missingNote(ops: ChartOp[], data: ChartData, h: number, TINY: number): 
 // ── Pie / donut ─────────────────────────────────────────────────────
 
 /**
- * Parts of a whole (e.g. a WBC differential in %): slices in the author's
+ * Parts of a whole (e.g. a WBC differential in %, or its absolute counts):
+ * slices in the author's
  * order from 12 o'clock, clockwise, in shades of the report accent (they
  * stay distinct in black-and-white print), white separators, and a key
  * beside the pie that prints each value with its flag and normal range. An
  * abnormal part is outlined in the template's abnormal style.
+ *
+ * Values in % ARE the shares. Values in any other unit (counts) are parts of
+ * their total: each slice shows its computed share, and the key prints the
+ * share next to the actual value + unit, its saved flag and normal range.
+ * Values in different units, or a negative value, are not parts of one
+ * whole: no slices, a note says why (the key still prints every value).
  */
 export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): ChartLayout {
   const { m, fs, TITLE, SMALL, TINY } = sizes(opts);
@@ -66,25 +74,32 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
   const R = D / 2;
   const ri = donut ? R * 0.56 : 0;
 
-  // The key: swatch · name · value (+ unit, flag) · normal range.
-  const unit = s?.unit ?? '';
+  const whole = partsOfWhole(pts);
+  const unit = whole.unit ?? s?.unit ?? '';
+  const total = whole.ok ? whole.total : 0;
+  // Counts (not %): each part's share of the total is computed and printed.
+  const counts = whole.ok && !whole.percent && total > 0;
+
+  // The key: swatch · name · [share] · value (+ unit, flag) · normal range.
   const rows = data.xLabels.map((label, i) => {
     const p = pts[i];
     const v = p?.value != null ? p.display + (unit ? ` ${unit}` : '') : 'not measured';
-    return { label, p, v, flag: p?.flag === 'H' || p?.flag === 'L' ? p.flag : '', range: p ? rangeText(p) : '' };
+    const share = counts && p?.value != null ? shareText(p.value, total) : '';
+    return { label, p, v, share, flag: p?.flag === 'H' || p?.flag === 'L' ? p.flag : '', range: p ? rangeText(p) : '' };
   });
   const rowH = SMALL + 6;
   const nameW = Math.max(0, ...rows.map(r => m(r.label, SMALL, false)));
   const valW = Math.max(0, ...rows.map(r => m(r.v, SMALL, true)));
+  const shareW = counts ? Math.max(m('Share', TINY, false), ...rows.map(r => m(r.share, SMALL, true))) + 12 : 0;
   const flagW = rows.some(r => r.flag) ? m('H', SMALL, true) + 4 : 0;
   const hasRange = rows.some(r => r.range);
   const rangeW = hasRange ? Math.max(m('Normal', TINY, false), ...rows.map(r => m(r.range, TINY, false))) : 0;
-  const keyW = 12 + nameW + 12 + valW + flagW + (hasRange ? 14 + rangeW : 0);
+  const keyW = 12 + nameW + shareW + 12 + valW + flagW + (hasRange ? 14 + rangeW : 0);
+  const keyHead = hasRange || counts;
   const beside = !opts.thumb && width - D - 24 >= keyW;
 
   const top = y;
   const cx = R + 2, cy = top + R;
-  const total = pts.reduce((a, p) => a + (p.value != null && p.value > 0 ? p.value : 0), 0);
 
   // Slices.
   const slices: Array<{ i: number; a0: number; a1: number; color: ChartColor; p: ChartPoint }> = [];
@@ -118,7 +133,8 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
     if (sl.a1 - sl.a0 < 0.42) continue;
     const mid = (sl.a0 + sl.a1) / 2;
     const [lx, ly] = polar(cx, cy, donut ? (R + ri) / 2 : R * 0.62, mid);
-    const op: TextOp = { t: 'text', x: lx, y: ly + SMALL * 0.35, text: valueText(sl.p), size: SMALL, bold: sl.p.abnormal,
+    // Counts: the slice carries its share (the count + its flag are in the key).
+    const op: TextOp = { t: 'text', x: lx, y: ly + SMALL * 0.35, text: counts ? shareText(sl.p.value!, total) : valueText(sl.p), size: SMALL, bold: sl.p.abnormal,
       color: sl.p.abnormal ? markColor(sl.p, 'text') : DARK_FILLS.has(sl.color) ? 'paper' : 'ink', align: 'center', role: 'value' };
     ops.push(...(sl.p.abnormal ? chipped(m, op) : [op]));
   }
@@ -128,7 +144,7 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
     if (i0 >= 0) {
       const p = pts[i0];
       const big = TITLE * 1.25;
-      ops.push({ t: 'text', x: cx, y: cy + big * 0.3, text: withUnit(p, unit), size: big, bold: true,
+      ops.push({ t: 'text', x: cx, y: cy + big * 0.3, text: counts ? shareText(p.value!, total) : withUnit(p, unit), size: big, bold: true,
         color: p.abnormal ? markColor(p, 'text') : 'ink', align: 'center', role: 'value' });
       ops.push({ t: 'text', x: cx, y: cy + big * 0.3 + TINY + 4, text: data.xLabels[i0], size: TINY, color: 'dim', align: 'center', role: 'legend' });
     }
@@ -138,9 +154,10 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
   let h = top + D;
   if (!opts.thumb) {
     const kx = beside ? D + 24 : 0;
-    let ky = beside ? Math.max(top + 2, cy - (rows.length * rowH + (hasRange ? rowH : 0)) / 2) : top + D + 12;
-    if (hasRange) {
-      ops.push({ t: 'text', x: kx + keyW, y: ky + TINY, text: 'Normal', size: TINY, color: 'dim', align: 'right', role: 'legend' });
+    let ky = beside ? Math.max(top + 2, cy - (rows.length * rowH + (keyHead ? rowH : 0)) / 2) : top + D + 12;
+    if (keyHead) {
+      if (hasRange) ops.push({ t: 'text', x: kx + keyW, y: ky + TINY, text: 'Normal', size: TINY, color: 'dim', align: 'right', role: 'legend' });
+      if (counts) ops.push({ t: 'text', x: kx + 12 + nameW + shareW - 12, y: ky + TINY, text: 'Share', size: TINY, color: 'dim', align: 'right', role: 'legend' });
       ky += rowH;
     }
     rows.forEach((r, i) => {
@@ -149,7 +166,8 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
       const color = PART_COLOR[i % PART_COLOR.length];
       ops.push({ t: 'rect', x: kx, y: base - SMALL * 0.8, w: 8, h: 8, fill: r.p?.value != null ? color : 'grid' });
       ops.push({ t: 'text', x: kx + 12, y: base, text: r.label, size: SMALL, color: 'text', align: 'left', role: 'xlabel' });
-      const vx = kx + 12 + nameW + 12 + valW;
+      if (r.share) ops.push({ t: 'text', x: kx + 12 + nameW + shareW - 12, y: base, text: r.share, size: SMALL, bold: true, color: 'ink', align: 'right', role: 'value' });
+      const vx = kx + 12 + nameW + shareW + 12 + valW;
       const ab = !!r.p?.abnormal;
       ops.push({ t: 'text', x: vx, y: base, text: r.v, size: SMALL, bold: ab, italic: r.p?.value == null,
         color: ab ? markColor(r.p!, 'text') : r.p?.value == null ? 'dim' : 'ink', align: 'right', role: 'value' });
@@ -161,6 +179,18 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
   }
   if (data.empty && !opts.thumb) {
     ops.push({ t: 'text', x: cx, y: cy, text: 'No values to plot yet', size: SMALL, italic: true, color: 'dim', align: 'center', role: 'note' });
+  }
+  if (!opts.thumb && counts) {
+    const dec = Math.min(2, Math.max(0, ...pts.map(p => p.value != null ? (p.display.split('.')[1] ?? '').replace(/\D.*$/, '').length : 0)));
+    h += TINY + 2;
+    ops.push({ t: 'text', x: 0, y: h, text: `Each slice is its share of the total (${fmt(total, dec)}${unit ? ' ' + unit : ''}).`,
+      size: TINY, italic: true, color: 'dim', align: 'left', role: 'note' });
+    h += 3;
+  }
+  if (!opts.thumb && !whole.ok && !data.empty) {
+    h += TINY + 2;
+    ops.push({ t: 'text', x: 0, y: h, text: `Not drawn as parts of a whole: ${whole.reason}.`, size: TINY, italic: true, color: 'dim', align: 'left', role: 'note' });
+    h += 3;
   }
   h = missingNote(ops, data, h, TINY);
   return { width, height: Math.ceil(h + 2), ops };

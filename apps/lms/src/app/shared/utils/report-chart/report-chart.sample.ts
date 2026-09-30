@@ -129,7 +129,26 @@ export function chartShape(ctx: ChartEditorContext, x: ChartXSource): ChartShape
     multiPerPoint: multi, sameUnitPerPoint: same,
     available: ctx.params.length,
     percent: ctx.params.filter(p => isPercentUnit(p.unit)).length,
+    partMax: Math.max(0, ...partGroups(ctx.params).map(g => g.names.length)),
   };
+}
+
+/** A value that can be a part of a whole: it has a unit and its normal
+ *  bands never go below zero. */
+export function isPartValue(p: ChartParamInfo): boolean {
+  return !!unitKey(p.unit) && !(p.referenceRanges ?? []).some(r => typeof r?.min === 'number' && r.min < 0);
+}
+
+/** The test's values that can be parts of one whole, grouped by unit: the %
+ *  group first (the values ARE the shares), then the largest count group. */
+export function partGroups(params: readonly ChartParamInfo[]): Array<{ unit: string; percent: boolean; names: string[] }> {
+  const groups: Array<{ unit: string; percent: boolean; names: string[] }> = [];
+  for (const p of params) {
+    if (!isPartValue(p)) continue;
+    const g = groups.find(x => unitKey(x.unit) === unitKey(p.unit));
+    if (g) g.names.push(p.name); else groups.push({ unit: (p.unit ?? '').trim(), percent: isPercentUnit(p.unit), names: [p.name] });
+  }
+  return groups.sort((a, b) => Number(b.percent) - Number(a.percent) || b.names.length - a.names.length);
 }
 
 const QUALIFIERS = new Set(['pct', 'percent', 'percentage', 'abs', 'absolute', 'count', 'counts', 'no', 'num', 'number', 'value']);

@@ -27,7 +27,7 @@ sample values:
 | X axis | **Time points** (only for a repetitive profile) · **Chosen values** | Time points when the profile is repetitive |
 | Time-point labels | per offset, e.g. 0 → "Fasting" | 0 = "Fasting", else "30 min" |
 | Lines (time points) | up to 6; each plots the values in one unit (optionally only names containing a word). A line in a different unit gets the right-hand axis; a THIRD unit is not drawn (the editor says so) | one line: the first unit |
-| Values (chosen) | tick list of the test's / members' numeric values, in print order (a gauge: pick one; a pie / donut: % values only) | the first 6 numeric values |
+| Values (chosen) | tick list of the test's / members' numeric values, in print order (a gauge: pick one; a pie / donut: values in ONE unit — % or counts) | the first 6 numeric values |
 | Compare with (chosen) | grouped / stacked bar, bar + line: up to 5 further sets, each value paired by position with a chosen value (auto-paired by name: `neutrophils_pct` ↔ `neutrophils_abs`); a set in another unit gets the right axis | none |
 | Normal band | shade each point's normal band | on |
 | Threshold lines | up to 4: value + label ("Diabetes ≥ 200 at 2 h") | none |
@@ -45,7 +45,8 @@ prints. Only the types that make sense for the test's data are enabled; the
 others are listed after them, greyed, with a one-line reason
 (`kindAvailability` in `report-chart.model.ts`, shape from `chartShape`).
 Choosing a card fills in the data it needs (`specFor` in the editor: a gauge
-keeps one value, a pie only the % values, a radar at least three, a
+keeps one value, a pie values in one unit — the % group first, else the
+largest count group — a radar at least three, a
 two-series type its second line / set).
 
 | Type | Across time points | Across chosen values | Normal band | Thresholds | Example |
@@ -61,8 +62,8 @@ two-series type its second line / set).
 | Stacked bar | 2+ values in one unit | 2+ sets | — (totals) | lines | split urine protein |
 | Bar + line (combination, dual axis) | 2+ values per time point | 2+ sets | slot per bar | lines | OGTT glucose bars + insulin line |
 | Dots | yes | yes | per point | lines | any |
-| Pie | no | 2+ values in % | the key prints each normal range | — | WBC differential % |
-| Donut | no | 2+ values in % | the key prints each normal range | — | WBC differential % |
+| Pie | no | 2+ values in ONE unit (% or counts), none negative | the key prints each normal range | — | WBC differential % or absolute counts |
+| Donut | no | 2+ values in ONE unit (% or counts), none negative | the key prints each normal range | — | WBC differential % or absolute counts |
 | Radar | no | 3+ values (any units) | inside the 1× ring (+ low-limit ticks) | — | liver panel |
 | Gauge | no | one value | arc on the dial | marks on the dial | HbA1c |
 
@@ -72,7 +73,14 @@ value, unit and flag. A value with no saved upper limit sits on the 1× ring
 and is starred. Pie / donut slices are shades of the report accent + slate
 (distinct in black-and-white print) in the author's order from 12 o'clock;
 an abnormal part is outlined in the abnormal style and its key row prints the
-value bold with its H / L. With more than two series only the abnormal
+value bold with its H / L. Values in % ARE the shares; values in any other
+unit are COUNTS (e.g. absolute differential counts): each slice is sized by
+its share of the total, the slice / donut centre prints that share, and the
+key prints Share · value + unit (+ saved H / L) · Normal, with a note giving
+the total. Gate (`partsOfWhole` / `partGroups`): 2+ values sharing one unit,
+a unit is required, a value whose normal band can go below zero is never a
+part, and a snapshot whose values are in different units or negative draws
+no slices (a note says why; the key still prints every value). With more than two series only the abnormal
 values are labelled (the table prints every value).
 
 Old saved charts: `line` / `bar` / `dots` keep their names and draw exactly

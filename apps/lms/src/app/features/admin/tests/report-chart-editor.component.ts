@@ -3,11 +3,11 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { ReportChartComponent } from '../../../shared/components/report-chart/report-chart.component';
 import { buildChartData, prettyName } from '../../../shared/utils/report-chart/report-chart.data';
 import {
-  CHART_KINDS, isPercentUnit, kindAvailability, kindSupports, MAX_LINES, MAX_PARAMETERS, MAX_THRESHOLDS, normalizeChartSpec, offsetTickLabel,
+  CHART_KINDS, kindAvailability, kindSupports, MAX_LINES, MAX_PARAMETERS, MAX_THRESHOLDS, normalizeChartSpec, offsetTickLabel,
   type ChartKind, type ChartLineSpec, type ChartSetSpec, type ReportChartSpec,
 } from '../../../shared/utils/report-chart/report-chart.model';
 import {
-  autoCompareSet, autoSecondLine, chartShape, sampleChartTests, seriesUnits, type ChartEditorContext,
+  autoCompareSet, autoSecondLine, chartShape, isPartValue, partGroups, sampleChartTests, seriesUnits, type ChartEditorContext,
 } from '../../../shared/utils/report-chart/report-chart.sample';
 
 /**
@@ -112,7 +112,7 @@ import {
               <p class="nd-field__hint">This test has no numeric values to chart yet.</p>
             }
             @if (s.kind === 'gauge') { <p class="nd-field__hint">A gauge shows one value against its normal range — pick it.</p> }
-            @if (s.kind === 'pie' || s.kind === 'donut') { <p class="nd-field__hint">Parts of a whole: only values in % can be ticked.</p> }
+            @if (s.kind === 'pie' || s.kind === 'donut') { <p class="nd-field__hint">Parts of a whole: tick values in one unit — % or counts (each slice then shows its share of the total).</p> }
             @if (s.kind === 'radar') { <p class="nd-field__hint">Pick 3 or more. Each spoke is scaled to its own upper normal limit.</p> }
             <div class="rce__params">
               @for (p of context().params; track p.name) {
@@ -379,7 +379,7 @@ export class ReportChartEditorComponent {
   }
 
   /** The spec choosing `kind` saves: the data it needs is filled in (a gauge
-   *  keeps one value, a pie only the % values, a radar at least three, a
+   *  keeps one value, a pie values in one unit (% first, else counts), a radar at least three, a
    *  grouped / stacked / combination chart a second series). */
   specFor(kind: ChartKind): ReportChartSpec {
     const cur = this.spec();
@@ -394,9 +394,12 @@ export class ReportChartEditorComponent {
     const all = ctx.params.map(p => p.name);
     if (kind === 'gauge') { next.parameters = [chosen[0] ?? all[0]].filter(Boolean) as string[]; next.sets = []; }
     else if (kind === 'pie' || kind === 'donut') {
-      const pct = ctx.params.filter(p => isPercentUnit(p.unit)).map(p => p.name);
-      const keep = chosen.filter(c => pct.some(p => p.toLowerCase() === c.toLowerCase()));
-      next.parameters = (keep.length >= 2 ? keep : pct).slice(0, MAX_PARAMETERS);
+      // % first (unchanged), then counts in one unit: keep what was chosen
+      // from a group when 2+ of it were, else the whole first group.
+      const groups = partGroups(ctx.params);
+      const keep = groups.map(g => chosen.filter(c => g.names.some(p => p.toLowerCase() === c.toLowerCase())))
+        .find(k => k.length >= 2);
+      next.parameters = (keep ?? groups.find(g => g.names.length >= 2)?.names ?? []).slice(0, MAX_PARAMETERS);
       next.sets = [];
     } else if (kind === 'radar') {
       const list = [...chosen];
@@ -420,7 +423,14 @@ export class ReportChartEditorComponent {
   canPick(p: { name: string; unit?: string | null }): boolean {
     const s = this.spec();
     if (this.isPicked(p.name)) return true;
-    if ((s.kind === 'pie' || s.kind === 'donut') && !isPercentUnit(p.unit)) return false;
+    if (s.kind === 'pie' || s.kind === 'donut') {
+      // Parts of ONE whole: a value with a unit, never negative, in the unit
+      // of the values already ticked.
+      const info = this.context().params.find(x => x.name.toLowerCase() === p.name.toLowerCase()) ?? p;
+      if (!isPartValue(info)) return false;
+      const picked = this.context().params.find(x => (s.parameters ?? []).some(n => n.toLowerCase() === x.name.toLowerCase()));
+      if (picked && (picked.unit ?? '').trim().toLowerCase() !== (p.unit ?? '').trim().toLowerCase()) return false;
+    }
     if (s.kind === 'gauge') return true;
     return (s.parameters ?? []).length < MAX_PARAMETERS;
   }

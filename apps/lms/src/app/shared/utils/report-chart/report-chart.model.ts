@@ -127,6 +127,10 @@ export interface ChartShape {
   available: number;
   /** …of which are percentages (parts of a whole). */
   percent: number;
+  /** The largest group of values sharing ONE unit that can never be
+   *  negative (parts of a whole given as counts, e.g. absolute differential
+   *  counts). Missing = 0 (a shape from before counts were allowed). */
+  partMax?: number;
   /** The test is a timed series (time points exist). */
   series: boolean;
 }
@@ -142,7 +146,7 @@ export function kindAvailability(kind: ChartKind, shape: ChartShape): { ok: bool
       case 'stackedArea': case 'stackedBar':
         return shape.sameUnitPerPoint ? yes : no('Needs 2 values in one unit per time point');
       case 'hbar': return no('Time runs left to right — use Bar');
-      case 'pie': case 'donut': return no('Parts of a whole — needs values in %');
+      case 'pie': case 'donut': return no('Parts of a whole — needs Chosen values');
       case 'radar': return no('Needs Chosen values (3+)');
       case 'gauge': return no('Shows one value — needs Chosen values');
       default: return yes;
@@ -152,7 +156,7 @@ export function kindAvailability(kind: ChartKind, shape: ChartShape): { ok: bool
     case 'line': case 'smooth': case 'step': case 'area': case 'stackedArea':
       return no(shape.series ? 'Joins time points — pick Time points' : 'Joins time points — not a timed series');
     case 'pie': case 'donut':
-      return shape.percent >= 2 ? yes : no('Parts of a whole — needs 2+ values in %');
+      return shape.percent >= 2 || (shape.partMax ?? 0) >= 2 ? yes : no('Parts of a whole — 2+ values in one unit');
     case 'radar': return shape.available >= 3 ? yes : no('Needs 3 or more numeric values');
     case 'groupedBar': case 'stackedBar': case 'combo':
       return shape.available >= 2 ? yes : no('Needs 2 sets of values');
@@ -173,6 +177,32 @@ export function normalizeKind(raw: unknown): ChartKind {
 /** Is `unit` a percentage (a part of a whole)? */
 export function isPercentUnit(unit: string | null | undefined): boolean {
   return /^\s*%\s*$|^\s*(percent|per ?cent|pct)\s*$/i.test(unit ?? '');
+}
+
+/**
+ * Can these values print as parts of a whole (pie / donut)? Two or more
+ * values sharing ONE unit — % (the values are the shares) or any other unit
+ * (counts: each slice's share is computed from the total) — none negative.
+ * A value with no saved unit takes the others' unit; missing values are
+ * skipped. Fewer than two present values still draw (one part = the whole).
+ */
+export function partsOfWhole(points: ReadonlyArray<{ value: number | null; unit?: string | null }>):
+  { ok: boolean; reason: string | null; percent: boolean; unit: string | null; total: number } {
+  const present = points.filter(p => p.value != null);
+  const units = [...new Set(present.map(p => (p.unit ?? '').trim()).filter(Boolean).map(u => u.toLowerCase()))];
+  const unit = present.map(p => (p.unit ?? '').trim()).find(Boolean) ?? null;
+  const total = present.reduce((a, p) => a + Math.max(0, p.value as number), 0);
+  const percent = isPercentUnit(unit);
+  if (units.length > 1) return { ok: false, reason: 'the values are in different units', percent, unit, total };
+  if (present.some(p => (p.value as number) < 0)) return { ok: false, reason: 'a value is negative', percent, unit, total };
+  return { ok: true, reason: null, percent, unit, total };
+}
+
+/** A part's share of the whole, as it prints ("62 %", "8.4 %", "0.6 %"). */
+export function shareText(value: number, total: number): string {
+  if (!(total > 0) || value < 0) return '';
+  const pc = (value / total) * 100;
+  return `${pc >= 10 || pc === 0 ? pc.toFixed(0) : pc.toFixed(1)} %`;
 }
 
 /** A fresh chart for a test: time points on a repetitive profile (a line),

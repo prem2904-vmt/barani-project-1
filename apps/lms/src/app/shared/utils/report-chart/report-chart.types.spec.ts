@@ -1,9 +1,9 @@
 import { buildChartData } from './report-chart.data';
 import { layoutChart } from './report-chart.layout';
-import { CHART_KINDS, kindAvailability, normalizeChartSpec, type ChartKind, type ChartShape } from './report-chart.model';
+import { CHART_KINDS, kindAvailability, normalizeChartSpec, partsOfWhole, shareText, type ChartKind, type ChartShape } from './report-chart.model';
 import { CATALOGUE_SAMPLES, type CatalogueSample } from './report-chart.catalogue.spec-helpers';
-import { OGTT_SPEC, buildChartReport, fingerprint, ogttTests, textRuns, wbcDiffTest, WBC_PCT, WBC_TITLES, type Run } from './report-chart.spec-helpers';
-import { autoCompareSet, autoSecondLine, chartShape, type ChartEditorContext } from './report-chart.sample';
+import { OGTT_SPEC, buildChartReport, fingerprint, liverTest, LFT_TITLES, ogttTests, textRuns, wbcDiffTest, WBC_ABS, WBC_PCT, WBC_TITLES, type Run } from './report-chart.spec-helpers';
+import { autoCompareSet, autoSecondLine, chartShape, partGroups, type ChartEditorContext } from './report-chart.sample';
 
 /**
  * The chart-type catalogue (docs/REPORT-CHARTS.md §1): every type prints as
@@ -131,6 +131,40 @@ describe('report chart types — only the types that fit the data', () => {
   it('pie / donut need parts of a whole (2+ values in %)', () => {
     expect(kindAvailability('pie', shape({ percent: 0 }))).toEqual({ ok: false, reason: expect.stringMatching(/Parts of a whole/) });
     expect(kindAvailability('donut', shape({ percent: 5 })).ok).toBe(true);
+  });
+
+  it('pie / donut also take parts of a whole given as COUNTS: 2+ values in one unit (any unit)', () => {
+    expect(kindAvailability('pie', shape({ percent: 0, partMax: 2 })).ok).toBe(true);
+    expect(kindAvailability('donut', shape({ percent: 0, partMax: 5 })).ok).toBe(true);
+    expect(kindAvailability('pie', shape({ percent: 1, partMax: 1 }))).toEqual({ ok: false, reason: 'Parts of a whole — 2+ values in one unit' });
+    expect(kindAvailability('donut', shape({ percent: 0 })).ok).toBe(false);          // an old shape (no partMax)
+    expect(kindAvailability('pie', shape({ x: 'series', series: true, partMax: 5 })).ok).toBe(false);
+  });
+
+  it('parts-of-a-whole groups: one unit, never negative; % first, then the largest count group', () => {
+    const ctx = [
+      { name: 'a_abs', unit: '10³/µL' }, { name: 'b_abs', unit: '10³/µL ' }, { name: 'c_abs', unit: '10³/µl' },
+      { name: 'a_pct', unit: '%' }, { name: 'b_pct', unit: '%' },
+      { name: 'base_excess', unit: 'mmol/L', referenceRanges: [{ sex: 'any' as const, min: -2, max: 2 }] },
+      { name: 'bicarb', unit: 'mmol/L', referenceRanges: [{ sex: 'any' as const, min: 22, max: 28 }] },
+      { name: 'ratio', unit: '' }, { name: 'index', unit: null },
+    ];
+    expect(partGroups(ctx).map(g => [g.unit, g.percent, g.names])).toEqual([
+      ['%', true, ['a_pct', 'b_pct']], ['10³/µL', false, ['a_abs', 'b_abs', 'c_abs']], ['mmol/L', false, ['bicarb']]]);
+    expect(chartShape({ ownerId: 'x', series: false, timepoints: [], params: ctx }, 'parameters')).toMatchObject({ percent: 2, partMax: 3 });
+    // Different units everywhere (a liver panel): no pie.
+    const lft = { ownerId: 'x', series: false, timepoints: [], params: [{ name: 'alt', unit: 'U/L' }, { name: 'bil', unit: 'mg/dL' }, { name: 'alb', unit: 'g/dL' }] };
+    expect(kindAvailability('pie', chartShape(lft, 'parameters')).ok).toBe(false);
+  });
+
+  it('the snapshot gate: one unit and no negative value, else no slices', () => {
+    const P = (value: number | null, unit: string | null) => ({ value, unit });
+    expect(partsOfWhole([P(8.6, '10³/µL'), P(1.65, '10³/µL'), P(null, null)])).toMatchObject({ ok: true, percent: false, unit: '10³/µL' });
+    expect(partsOfWhole([P(8.6, '10³/µL'), P(1.65, null)]).ok).toBe(true);          // no saved unit: takes the others'
+    expect(partsOfWhole([P(60, '%'), P(40, '%')])).toMatchObject({ ok: true, percent: true, total: 100 });
+    expect(partsOfWhole([P(8.6, '10³/µL'), P(60, '%')])).toMatchObject({ ok: false, reason: 'the values are in different units' });
+    expect(partsOfWhole([P(3, 'mmol/L'), P(-1, 'mmol/L')])).toMatchObject({ ok: false, reason: 'a value is negative' });
+    expect([shareText(8.6, 11.03), shareText(0.06, 11.03), shareText(0, 5), shareText(1, 0)]).toEqual(['78 %', '0.5 %', '0 %', '']);
   });
 
   it('a gauge shows one value; a radar needs three', () => {
@@ -268,6 +302,40 @@ describe('report chart types — round charts', () => {
     expect(l.ops.filter(o => o.t === 'path' && !o.fill && (o.stroke === 'high' || o.stroke === 'low')).map(o => (o as { stroke: string }).stroke))
       .toEqual(['high', 'low']);
     expect(texts(l.ops)).toEqual(expect.arrayContaining(['not measured', 'Not measured: Basophils.', '78 % H']));
+  });
+
+  it('pie / donut from COUNTS: slices sized by each count\'s share; the key prints share + value + unit + flag + normal range', () => {
+    const t = wbcDiffTest({ neu: 78, lym: 15, mono: 5, eos: 1.5, baso: 0.5 }, { neu: 8.6, lym: 1.65, mono: 0.55, eos: 0.17, baso: 0.06 });
+    for (const kind of ['pie', 'donut'] as ChartKind[]) {
+      const d = buildChartData(normalizeChartSpec({ kind, x: 'parameters', parameters: WBC_ABS }), 'W', 'zdiff', [t], WBC_TITLES)!;
+      const l = layoutChart(d, 535);
+      const tx = texts(l.ops);
+      // total 11.03: 8.6 → 78 %, 1.65 → 15 %, 0.55 → 5.0 %, 0.17 → 1.5 %, 0.06 → 0.5 %
+      expect(tx, kind).toEqual(expect.arrayContaining(['Share', 'Normal', 'Absolute Neutrophils', '78 %', '15 %', '5.0 %', '1.5 %', '0.5 %',
+        '8.6 10³/µL', 'H', '2–7', '0.06 10³/µL', '0.02–0.1', 'Each slice is its share of the total (11.03 10³/µL).']));
+      expect(l.ops.filter(o => o.t === 'path' && o.fill?.startsWith('p')), kind).toHaveLength(5);
+      // The abnormal count (8.6 H) is outlined like any abnormal part.
+      expect(l.ops.some(o => o.t === 'path' && !o.fill && o.stroke === 'high'), kind).toBe(true);
+    }
+    // The donut's centre is the lead part's share.
+    const dn = layoutChart(buildChartData(normalizeChartSpec({ kind: 'donut', x: 'parameters', parameters: WBC_ABS }), 'W', 'zdiff', [t], WBC_TITLES)!, 535);
+    const big = dn.ops.filter(o => o.t === 'text' && o.role === 'value').sort((a, b) => (b as { size: number }).size - (a as { size: number }).size)[0];
+    expect((big as { text: string }).text).toBe('78 %');
+  });
+
+  it('the % path is unchanged: no share column, no total note', () => {
+    const d = buildChartData(normalizeChartSpec({ kind: 'pie', x: 'parameters', parameters: WBC_PCT }), 'W', 'zdiff', diff({ neu: 60, lym: 30, mono: 6, eos: 3, baso: 1 }), WBC_TITLES)!;
+    const tx = texts(layoutChart(d, 535).ops);
+    expect(tx).not.toContain('Share');
+    expect(tx.some(x => /share of the total/.test(x))).toBe(false);
+  });
+
+  it('values in different units (or a negative value) are not drawn as a pie: a note says why, the key keeps every value', () => {
+    const t = liverTest({ alt: 96, ast: 71, alp: 128, ggt: 88, bil: 1.6, alb: 3.8 });
+    const d = buildChartData(normalizeChartSpec({ kind: 'pie', x: 'parameters', parameters: ['alt', 'bilirubin_total'] }), 'L', 'zlft', [t], LFT_TITLES)!;
+    const l = layoutChart(d, 535);
+    expect(l.ops.filter(o => o.t === 'path' && o.fill?.startsWith('p'))).toHaveLength(0);
+    expect(texts(l.ops)).toEqual(expect.arrayContaining(['Not drawn as parts of a whole: the values are in different units.', 'ALT (SGPT)', '96 U/L']));
   });
 
   it('gauge: one value, its band on the dial, thresholds as marks, the value + flag under the hub', () => {
