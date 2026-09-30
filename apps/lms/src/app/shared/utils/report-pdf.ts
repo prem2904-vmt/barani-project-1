@@ -29,6 +29,7 @@ import { AgeStyle, formatAge } from './patient-age';
 import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
 import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
 import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
+import { applyReportSequencing, readReportSequencing } from './report-sequencing';
 
 /**
  * Render an A4 lab report PDF in the Classic template style — blue
@@ -252,8 +253,13 @@ interface ReportSnapshot {
     name?: string;
     department?: string;
     departmentCode?: string;
+    /** The line's department id (mw snapshots from 2026-09-30) — the
+     *  Sequencing match key; older snapshots match by code / name. */
+    departmentId?: string | null;
     /** The tube's sample ID — shown on the department band. */
     sampleId?: string | null;
+    /** The report profile's own test number (Sequencing → test number). */
+    profileCode?: string | null;
     /** Profile linkage: tests ordered through a profile carry the profile's
      *  test id + name and are compiled into ONE panel under that name. */
     packageTestId?: string | null;
@@ -675,7 +681,10 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   const { report, practice: rawPractice = {}, template = null, imageCache = {} } = input;
   // Calculated values print like any other value — no "(Calculated)"
   // marker on a test / profile name (see report-name.ts).
-  const snap = cleanSnapshotNames(parseSnapshot(report.data));
+  // Report Sequencing (designer → Sequencing): the lab's department / test
+  // order, applied to the snapshot BEFORE anything reads it — a no-op (same
+  // array) for labs that never set it (report-sequencing.ts).
+  const snap = sequenceSnapshot(cleanSnapshotNames(parseSnapshot(report.data)), template);
   IMG_CACHE = imageCache;
 
   // Merge template identity fields into the practice shape. The drawing
@@ -4921,6 +4930,14 @@ function cleanSnapshotNames(snap: ReportSnapshot): ReportSnapshot {
       profileName: reportDisplayName(t.profileName),
     } : t),
   };
+}
+
+/** The snapshot with its tests in the lab's print sequence. Untouched (the
+ *  same object) when the template sets no sequencing. */
+function sequenceSnapshot(snap: ReportSnapshot, template: ReportTemplate | null): ReportSnapshot {
+  if (!Array.isArray(snap.tests)) return snap;
+  const tests = applyReportSequencing(snap.tests, readReportSequencing(template));
+  return tests === snap.tests ? snap : { ...snap, tests };
 }
 
 function parseSnapshot(raw: string | null | undefined): ReportSnapshot {
