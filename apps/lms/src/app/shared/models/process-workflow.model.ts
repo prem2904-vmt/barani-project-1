@@ -100,7 +100,7 @@ export const ACTION_CATALOG: ActionCatalogEntry[] = [
  *  fetches live roles from the API; this is the fallback list. */
 export const KNOWN_ROLES = [
   'Receptionist', 'Billing Counter', 'Sample Collector', 'Lab Technician',
-  'Pathologist', 'Home Collection Agent', 'Branch Manager', 'Lab Admin',
+  'Pathologist', 'Home Collection Agent', 'Branch Manager', 'Lab Admin', 'Lab Admin (Technical)',
 ];
 
 export function catalogFor(type: string): ActionCatalogEntry | undefined {

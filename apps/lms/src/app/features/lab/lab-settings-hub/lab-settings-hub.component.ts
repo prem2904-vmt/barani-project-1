@@ -4,6 +4,8 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
+import { AuthService } from '../../../core/auth/auth.service';
+import { canOpenRoute } from '../../../core/auth/route-access';
 
 interface LabTile {
   title: string;
@@ -99,7 +101,18 @@ export class LabSettingsHubComponent {
   protected readonly theme = inject(ThemeService);
   /** Band pill search over the tiles (title + subtitle). */
   readonly q = signal('');
-  readonly visibleTiles = computed(() => bandFilter(this.tiles, this.q(), (t) => [t.title, t.subtitle]));
+  private readonly auth = inject(AuthService);
+  /** Only tiles whose destination the user can open (the same ROUTE_ACCESS
+   *  table the guards use): a Lab Admin (Technical) sees Tests, Report
+   *  Template, Referral Labs, Lab settings and Microbiology — never a tile that
+   *  lands on /403 (Referring Network, Notifications, KPI cards…). */
+  readonly openableTiles = computed(() => {
+    // hasAnyPermission reads the session signal, so this re-evaluates on change.
+    if (typeof this.auth?.hasAnyPermission !== 'function') return this.tiles;
+    const ctx = { hasAny: (p: string[]) => this.auth.hasAnyPermission(p) };
+    return this.tiles.filter(t => canOpenRoute(t.href, ctx));
+  });
+  readonly visibleTiles = computed(() => bandFilter(this.openableTiles(), this.q(), (t) => [t.title, t.subtitle]));
 
   readonly tiles: LabTile[] = [
     { title: 'Tests & Packages', href: '/admin/tests',

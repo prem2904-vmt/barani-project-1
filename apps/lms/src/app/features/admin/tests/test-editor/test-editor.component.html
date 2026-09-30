@@ -362,13 +362,14 @@
           <div class="pf-te2-grid">
             <div class="pf-uf">
               <label class="pf-uf__lbl">Price</label>
-              <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹"
+              <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹" [disabled]="!canEditPrices()"
                                (valueChange)="patch({ price: $event ?? 0 })"></pf-number-input>
+              @if (!canEditPrices()) { <p class="pf-uf__hint">Prices are set by someone with the “Change test prices” permission.</p> }
               @if (fieldError('price')) { <p class="pf-field-err">{{ fieldError('price') }}</p> }
             </div>
             <div class="pf-uf">
               <label class="pf-uf__lbl">Tax slab</label>
-              <pf-number-input [value]="d.taxSlab" [min]="0" [max]="50" [step]="0.5" suffix="%"
+              <pf-number-input [value]="d.taxSlab" [min]="0" [max]="50" [step]="0.5" suffix="%" [disabled]="!canEditPrices()"
                                (valueChange)="patch({ taxSlab: $event ?? 0 })"></pf-number-input>
             </div>
             <div class="pf-uf">

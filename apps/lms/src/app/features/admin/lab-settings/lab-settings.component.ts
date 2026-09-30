@@ -3,6 +3,7 @@ import { MonoTypeOperatorFunction, defer, finalize } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
+import { PAYMENT_RULE_PERMS, WA_BILLING_VIEW_PERMS } from '../../../core/auth/route-access';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
@@ -360,8 +361,10 @@ interface AutoAssignConfig {
       }
       }
 
-      @if (showSec('rules')) {
-      <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow. -->
+      @if (showSec('rules') && canManagePayments()) {
+      <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow.
+           Revenue policy — billing / organisation admins only (never the
+           Lab Admin (Technical) role); the server refuses it the same way. -->
       <section class="nd-card pf-ls__card">
         <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><h3 class="nd-card__label pf-ls__title">Require full payment to progress</h3></div>
         <div class="pf-ls__cardbody">
@@ -432,8 +435,8 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('rules')) {
-      <!-- Front-desk Payments-due tab visibility -->
+      @if (showSec('rules') && canManagePayments()) {
+      <!-- Front-desk Payments-due tab visibility (billing admins only). -->
       <section class="nd-card pf-ls__card">
         <div class="nd-card__head"><span class="nd-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3 class="nd-card__label pf-ls__title">Show "Payments due" tab</h3><span class="nd-card__spacer"></span>
           <button type="button" class="nd-toggle pf-ls__switch" role="switch" [attr.aria-checked]="showPaymentsDue()" aria-label="Show &quot;Payments due&quot; tab"
@@ -528,7 +531,9 @@ interface AutoAssignConfig {
       <pf-wa-connect-card [settings]="waSettings()!" (changed)="applyWa($event)"></pf-wa-connect-card>
       <!-- Usage, spend, Meta payment health, the prepaid balance (estimated)
            and the shared-number credits. -->
+      @if (canSeeWaBilling()) {
       <pf-wa-billing-card [settings]="waSettings()!"></pf-wa-billing-card>
+      }
       }
 
       @if (showSec('queues')) {
@@ -1024,6 +1029,12 @@ export class LabSettingsComponent implements OnInit {
   readonly waSender = computed(() => waSenderLine(this.waSettings()?.sender));
   readonly canManageWa = computed(() =>
     this.auth.hasPermission('manage_lab_settings') || this.auth.hasPermission('manage_notifications'));
+  /** WhatsApp spend / credits — money: organisation / notification admins only
+   *  (GET api/whatsapp/billing refuses manage_lab_settings alone). */
+  readonly canSeeWaBilling = computed(() => this.auth.hasAnyPermission(WA_BILLING_VIEW_PERMS));
+  /** Payment gate + Payments-due tab — revenue policy (PATCH branch-lab-config
+   *  refuses those fields without manage_tenant / manage_billing_config). */
+  readonly canManagePayments = computed(() => this.auth.hasAnyPermission(PAYMENT_RULE_PERMS));
 
   protected applyWa(s: WaSettings) {
     this.waSettings.set(s);
@@ -1097,10 +1108,13 @@ export class LabSettingsComponent implements OnInit {
     this.api.get<Department[]>(bid ? `/api/tenants/departments?branchId=${bid}` : '/api/tenants/departments').subscribe({
       next: l => this._departments.set(l ?? [])
     });
-    this.api.get<Role[]>('/api/roles/').subscribe({
+    // Name-only pickers (GET api/roles/picker, api/users/picker): readable with
+    // manage_lab_settings, so the auto-assign editor works for a Lab Admin
+    // (Technical) without the user-admin lists (manage_users).
+    this.api.get<Role[]>('/api/roles/picker').subscribe({
       next: l => this._roles.set(l ?? [])
     });
-    this.api.get<User[]>('/api/users/').subscribe({
+    this.api.get<User[]>('/api/users/picker').subscribe({
       next: l => this._users.set((l ?? []).filter(u => u.isActive !== false))
     });
     this.api.get<AutoAssignConfig[]>('/api/tenants/auto-assign-configs').subscribe({

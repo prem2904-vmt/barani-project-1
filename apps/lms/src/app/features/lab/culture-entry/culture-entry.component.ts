@@ -11,6 +11,7 @@ import { TouchButtonComponent } from '../../../shared/primitives/touch-button.co
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 import { NumpadDirective, NumpadScopeDirective } from '../../../shared/components/numpad/numpad.directive';
+import { TEST_MASTER_PERMS } from '../../../core/auth/route-access';
 
 interface Breakpoint {
   organismGroup: string; antibiotic: string;
@@ -1157,7 +1158,7 @@ export class CultureEntryComponent implements OnInit {
     return this.outsidePanel(org, ab) && (ab.sMin != null || ab.rMax != null);
   }
   /** Saving to the breakpoint master = the Test Master permission. */
-  canSaveBreakpoints(): boolean { return !!this.auth?.hasPermission('manage_tests'); }
+  canSaveBreakpoints(): boolean { return TEST_MASTER_PERMS.some(p => !!this.auth?.hasPermission(p)); }
   readonly bpSaving = signal<string | null>(null);
   readonly bpSaved = signal<Set<string>>(new Set());
   /** "Save to CLSI for <organism>": an organism-pinned lab breakpoint, so

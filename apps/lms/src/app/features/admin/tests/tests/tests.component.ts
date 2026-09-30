@@ -22,6 +22,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { TEST_PRICING_PERMS } from '../../../../core/auth/route-access';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import { Test } from '../../../../shared/models/test.model';
 import { summarizeRanges } from '../../../../shared/utils/reference-range';
@@ -298,6 +299,14 @@ export class TestsComponent implements OnInit {
   // per user — and on narrow widths it is a bottom sheet opened from the
   // band pill's "Departments" button.
   private readonly auth = inject(AuthService, { optional: true });
+  /** Price cells + the Pricing view are editable only with a pricing grant
+   *  (manage_tests / manage_test_pricing — the server enforces the same on
+   *  PATCH api/tests/prices/bulk). No session / no permission list (unit
+   *  hosts) = unrestricted. */
+  readonly canEditPrices = computed(() => {
+    const a = this.auth;
+    return !a || typeof a.hasAnyPermission !== 'function' || a.hasAnyPermission(TEST_PRICING_PERMS);
+  });
   private readonly destroyRef = inject(DestroyRef);
   /** ≤900px: no room for a side column — the card becomes a sheet. */
   readonly narrow = signal(mq('(max-width: 900px)', this.destroyRef, m => this.narrow?.set(m)));
@@ -612,7 +621,7 @@ export class TestsComponent implements OnInit {
           headerName: 'TAT (h)', field: 'tatHours', editable: true, minWidth: 100, maxWidth: 120,
           cellEditor: 'agNumberCellEditor',
         },
-        this.priceColDef(true),
+        this.priceColDef(this.canEditPrices()),
         this.statusColDef(),
         this.actionsColDef(),
       ];
@@ -644,7 +653,7 @@ export class TestsComponent implements OnInit {
       },
       { ...this.derivedRangeColDef(), minWidth: 180, sortable: false, filter: false },
       { ...this.derivedUnitColDef(), sortable: false, filter: false },
-      { ...this.priceColDef(true), sortable: false, filter: false },
+      { ...this.priceColDef(this.canEditPrices()), sortable: false, filter: false },
       this.statusColDef(),
       this.actionsColDef(),
     ];
@@ -915,7 +924,7 @@ export class TestsComponent implements OnInit {
       // Deep link from the test editor's "Edit group…" prompt.
       if (params['view'] === 'option-groups') this.ogView.set(true);
       if (params['view'] === 'microbiology') this.microView.set(true);
-      if (params['view'] === 'pricing') this.pricingView.set(true);
+      if (params['view'] === 'pricing' && this.canEditPrices()) this.pricingView.set(true);
     });
     this.destroyRef.onDestroy(() => this.listHold.cancel());
     this.loadTests();
@@ -935,7 +944,7 @@ export class TestsComponent implements OnInit {
   // ── Band pill (owner, "band pill everywhere") ──────────────────────────
   /** The ONE view switch in the pill: the three catalogue types plus the
    *  side views that replace the grid. */
-  readonly viewOptions: SegmentedOption<TmView>[] = [
+  private readonly allViewOptions: SegmentedOption<TmView>[] = [
     { value: 'individual', label: 'Individual' },
     { value: 'profile', label: 'Profiles' },
     { value: 'package', label: 'Packages' },
@@ -943,6 +952,9 @@ export class TestsComponent implements OnInit {
     { value: 'micro', label: 'Microbiology' },
     { value: 'pricing', label: 'Pricing' },
   ];
+  /** Pricing (the view) only for someone who may change prices. */
+  readonly viewOptions = computed<SegmentedOption<TmView>[]>(() =>
+    this.canEditPrices() ? this.allViewOptions : this.allViewOptions.filter(o => o.value !== 'pricing'));
   readonly view = computed<TmView>(() =>
     this.ogView() ? 'og' : this.microView() ? 'micro' : this.pricingView() ? 'pricing' : this._type());
   /** True while the tests/profiles/packages grid (not a side view) shows. */
