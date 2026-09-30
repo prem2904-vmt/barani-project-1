@@ -29,7 +29,9 @@
     "cap:open:android": "npx cap open android",
     "cap:run:ios": "npx cap run ios",
     "cap:run:android": "npx cap run android",
-    "build:stage": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms --configuration=stage && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist"
+    "build:stage": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms --configuration=stage && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
+    "test:instruments": "node --test electron/instruments/test/*.test.js",
+    "sim:cbc": "node electron/instruments/sim/cbc-sim.js"
   },
   "build": {
     "appId": "in.prefrontal.app",
@@ -44,7 +46,9 @@
     ],
     "asarUnpack": [
       "**/node_modules/usb/**",
-      "**/node_modules/@types/w3c-web-usb/**"
+      "**/node_modules/@types/w3c-web-usb/**",
+      "**/node_modules/serialport/**",
+      "**/node_modules/@serialport/**"
     ],
     "win": {
       "target": [
@@ -180,6 +184,7 @@
     "preact": "^10.29.1",
     "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
+    "serialport": "^13.0.0",
     "tailwindcss": "^4.2.2",
     "temporal-polyfill": "^0.3.0",
     "usb": "^2.18.0",
