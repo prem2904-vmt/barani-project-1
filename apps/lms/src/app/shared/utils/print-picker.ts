@@ -66,3 +66,17 @@ export function effectiveHidden(
   }
   return start === 'none' ? [...allNames] : [];
 }
+
+/**
+ * Does a result input hold a value? (owner 2026-09-30: entering a value ticks
+ * its print box, clearing an auto-ticked one unticks it.) Numbers count
+ * (0 included), text counts when not blank, a multi-select counts when at
+ * least one non-blank pick is left; null / undefined / '' / [] do not.
+ */
+export function hasEnteredValue(v: unknown): boolean {
+  if (v == null) return false;
+  if (Array.isArray(v)) return v.some((x) => hasEnteredValue(x));
+  if (typeof v === 'number') return !Number.isNaN(v);
+  if (typeof v === 'boolean') return true;
+  return String(v).trim() !== '';
+}

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { signal } from '@angular/core';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, Subject, of } from 'rxjs';
 import { vi } from 'vitest';
 import { SampleResultEntryComponent } from './sample-result-entry.component';
 import { ApiService } from '../../../core/services/api.service';
@@ -19,7 +19,8 @@ import { DraftShelfService } from '../../../core/services/draft-shelf.service';
  *  1. "Tech picks what prints" gets a "Start with": None ticked → every value
  *     starts UNTICKED until the tech ticks it; a SAVED pick always wins (never
  *     reset on reload); the stamped (ordered-as) value wins over the test's
- *     own; a test with nothing ticked is warned before submit.
+ *     own. No per-row nag; ONE dialog before submit / validate only when
+ *     nothing at all would print. Entering a value ticks its row.
  *  2. A "B" toggle beside every result (and Ctrl/Cmd+B inside the field)
  *     marks that value "print in bold"; it rides every draft / submit.
  */
@@ -97,10 +98,12 @@ const field = (el: HTMLElement, name: string) =>
 describe('Result entry — print picker "Start with: None ticked"', () => {
   afterEach(() => { TestBed.resetTestingModule(); try { localStorage.clear(); } catch { /* */ } });
 
-  it('never picked + none → every value starts UNTICKED, with the nothing-prints note', async () => {
+  it('never picked + none → every value starts UNTICKED, and no inline warning is rendered', async () => {
     const { el } = await render(sampleFixture());
     expect(picks(el)).toEqual([false, false]);
-    expect(el.querySelector('.pf-sre__nothing-prints')?.textContent).toContain('Nothing from Haemogram will print');
+    expect(el.querySelector('.pf-sre__nothing-prints')).toBeNull();
+    expect(el.querySelector('.pf-sre__grow-warn')).toBeNull();
+    expect(el.textContent).not.toContain('will print');
   });
 
   it('ticking one saves hidden = the rest (the tech ticks what prints)', async () => {
@@ -130,9 +133,14 @@ describe('Result entry — print picker "Start with: None ticked"', () => {
     expect(picks(el)).toEqual([false, false]);
   });
 
-  it('submitting a test with nothing ticked asks first (DialogService); Go back sends nothing', async () => {
-    const { c, api, dialog } = await render(sampleFixture());
+  it('submitting when NOTHING at all prints asks once (DialogService); Go back sends nothing', async () => {
+    const { el, f, c, api, dialog } = await render(sampleFixture());
     c.setValue('ot1', 'Hb', 13);
+    f.detectChanges();
+    expect(picks(el)).toEqual([true, false]);            // auto-ticked
+    el.querySelector<HTMLInputElement>('input.pf-sre__printpick')!.dispatchEvent(new Event('change'));
+    f.detectChanges();
+    expect(picks(el)).toEqual([false, false]);           // the tech unticked it
     await c.submitAll();
     expect(dialog.confirm).toHaveBeenCalledTimes(1);
     const req = dialog.confirm.mock.calls[0][0];
@@ -147,6 +155,129 @@ describe('Result entry — print picker "Start with: None ticked"', () => {
     await c.submitAll();
     expect(dialog.confirm).not.toHaveBeenCalled();
     expect(api.post.mock.calls.some(([u]) => u === '/api/samples/smp-1/results')).toBe(true);
+  });
+});
+
+const hiddenPuts = (api: any) => api.put.mock.calls
+  .filter(([u]: [string]) => u === '/api/results/ot1/report-hidden')
+  .map(([, b]: [string, any]) => b.hidden);
+const typeInto = (f: any, el: HTMLElement, name: string, v: string) => {
+  const i = field(el, name);
+  i.value = v;
+  i.dispatchEvent(new Event('input'));
+  f.detectChanges();
+};
+
+describe('Result entry — entering a value ticks its print box (owner 2026-09-30)', () => {
+  afterEach(() => { TestBed.resetTestingModule(); try { localStorage.clear(); } catch { /* */ } });
+
+  it('typing a value ticks that row (and saves it); more keystrokes send nothing new', async () => {
+    const { el, f, api } = await render(sampleFixture());
+    typeInto(f, el, 'Hb', '1');
+    expect(picks(el)).toEqual([true, false]);
+    expect(hiddenPuts(api)).toEqual([['PCV']]);
+    typeInto(f, el, 'Hb', '13');
+    typeInto(f, el, 'Hb', '13.5');
+    expect(hiddenPuts(api)).toEqual([['PCV']]);
+    expect(el.querySelector('.pf-sre__nothing-prints, .pf-sre__grow-warn')).toBeNull();
+  });
+
+  it('a dropdown / option-table pick and a multi-select pick tick too', async () => {
+    const { el, f, c } = await render(sampleFixture());
+    c.onSelectChange('ot1', 'Hb', 'Positive');
+    c.onMultiSelectChange('ot1', 'PCV', ['Pus cells', 'RBC']);
+    f.detectChanges();
+    expect(picks(el)).toEqual([true, true]);
+  });
+
+  it('a hand untick on a row with a value is respected — later keystrokes never re-tick it', async () => {
+    const { el, f, api } = await render(sampleFixture());
+    typeInto(f, el, 'Hb', '12');
+    el.querySelector<HTMLInputElement>('input.pf-sre__printpick')!.dispatchEvent(new Event('change'));
+    f.detectChanges();
+    expect(picks(el)).toEqual([false, false]);
+    typeInto(f, el, 'Hb', '12.4');
+    typeInto(f, el, 'Hb', '12.45');
+    expect(picks(el)).toEqual([false, false]);
+    expect(hiddenPuts(api).at(-1)).toEqual(['PCV', 'Hb']);
+    // …until the value is cleared and entered again.
+    typeInto(f, el, 'Hb', '');
+    expect(picks(el)).toEqual([false, false]);
+    typeInto(f, el, 'Hb', '9');
+    expect(picks(el)).toEqual([true, false]);
+  });
+
+  it('clearing an AUTO-ticked row unticks it; clearing a HAND-ticked row keeps it ticked', async () => {
+    const { el, f, api } = await render(sampleFixture());
+    typeInto(f, el, 'Hb', '12');
+    typeInto(f, el, 'Hb', '');
+    expect(picks(el)).toEqual([false, false]);
+    expect(hiddenPuts(api).at(-1)).toEqual(['PCV', 'Hb']);
+    // PCV ticked by hand first, then a value typed and cleared.
+    el.querySelectorAll<HTMLInputElement>('input.pf-sre__printpick')[1].dispatchEvent(new Event('change'));
+    f.detectChanges();
+    typeInto(f, el, 'PCV', '40');
+    typeInto(f, el, 'PCV', '');
+    expect(picks(el)).toEqual([false, true]);
+  });
+
+  it('"All ticked": entering / clearing values is a no-op (no request)', async () => {
+    const { el, f, api } = await render(sampleFixture({ printPickerDefault: 'all' }));
+    typeInto(f, el, 'Hb', '12');
+    typeInto(f, el, 'Hb', '');
+    expect(picks(el)).toEqual([true, true]);
+    expect(hiddenPuts(api)).toEqual([]);
+  });
+
+  it('a SAVED pick wins on reload: loading values never moves a tick, and editing a saved value does not re-tick it', async () => {
+    const cur = JSON.stringify({ values: { Hb: 13, PCV: 40 } });
+    const { el, f, api } = await render(sampleFixture({ reportHiddenJson: '["Hb"]', currentResult: cur }));
+    expect(picks(el)).toEqual([false, true]);
+    expect(hiddenPuts(api)).toEqual([]);
+    typeInto(f, el, 'Hb', '13.2');
+    expect(picks(el)).toEqual([false, true]);
+    expect(hiddenPuts(api)).toEqual([]);
+  });
+
+  it('the picker off → entering values never touches report-hidden', async () => {
+    const { el, f, api } = await render(sampleFixture({ printPicker: false }, PARAMS({ printPicker: false })));
+    expect(picks(el)).toEqual([]);
+    typeInto(f, el, 'Hb', '12');
+    expect(hiddenPuts(api)).toEqual([]);
+  });
+
+  it('quick ticks save in order: one request per line in flight, then the LATEST list', async () => {
+    const { el, f, api } = await render(sampleFixture());
+    const pending: Subject<{}>[] = [];
+    api.put.mockImplementation(() => { const s = new Subject<{}>(); pending.push(s); return s; });
+    typeInto(f, el, 'Hb', '12');
+    typeInto(f, el, 'PCV', '40');
+    expect(hiddenPuts(api)).toEqual([['PCV']]);          // second waits
+    pending[0].next({}); pending[0].complete();
+    expect(hiddenPuts(api)).toEqual([['PCV'], []]);      // latest state follows
+  });
+
+  it('one ticked value anywhere → Submit asks nothing', async () => {
+    const { c, api, dialog } = await render(sampleFixture());
+    c.setValue('ot1', 'Hb', 13);
+    await c.submitAll();
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(api.post.mock.calls.some(([u]) => u === '/api/samples/smp-1/results')).toBe(true);
+  });
+
+  it('a tube line WITHOUT the picker prints → no dialog even when the picker line prints nothing', async () => {
+    const smp = sampleFixture();
+    smp.tests.push({
+      id: 'ot2', subOrderId: 'smp-1', testId: 't2', name: 'ESR', status: 'in_progress', printPicker: false,
+      test: { id: 't2', name: 'ESR', parameters: JSON.stringify({ parameters: [{ name: 'ESR', type: 'numeric' }] }) },
+    });
+    const { el, f, c, dialog } = await render(smp);
+    typeInto(f, el, 'Hb', '12');
+    el.querySelector<HTMLInputElement>('input.pf-sre__printpick')!.dispatchEvent(new Event('change'));
+    c.setValue('ot2', 'ESR', 10);
+    f.detectChanges();
+    await c.submitAll();
+    expect(dialog.confirm).not.toHaveBeenCalled();
   });
 });
 

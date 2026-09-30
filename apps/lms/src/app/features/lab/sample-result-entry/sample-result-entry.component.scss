@@ -361,15 +361,6 @@
 .pf-sre__attach-record { font-size: 10.5px; color: var(--text-tertiary); font-style: italic; }
 .pf-sre__printpick { margin-right: 8px; vertical-align: middle; accent-color: var(--color-violet-600, #7c3aed); flex-shrink: 0; }
 
-/* Nothing from a test will print (picker on, every value unticked). */
-.pf-sre__grow-warn td { padding: 6px 12px 10px; border-bottom: 1px solid var(--nd-line); }
-.pf-sre__nothing-prints {
-  display: flex; align-items: flex-start; gap: 8px; margin: 8px 12px 4px;
-  font-size: 12.5px; line-height: 1.4; color: var(--amber-text, #b45309);
-}
-.pf-sre__grow-warn .pf-sre__nothing-prints { margin: 0; }
-.pf-sre__nothing-prints svg { flex: none; margin-top: 2px; }
-
 /* ── The value + its "print in bold" toggle ───────────────────────────── */
 .pf-sre__rv { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .pf-sre__rv > .pf-sre__ginput, .pf-sre__rv > .pf-sre__gselect { flex: 1 1 auto; min-width: 0; }

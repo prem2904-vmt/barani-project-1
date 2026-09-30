@@ -17,7 +17,7 @@ import {
   signal,
   viewChild,
 } from "@angular/core";
-import { effectiveHidden, resolvePrintPicker, resolvePrintPickerDefault } from "../../../shared/utils/print-picker";
+import { effectiveHidden, hasEnteredValue, resolvePrintPicker, resolvePrintPickerDefault } from "../../../shared/utils/print-picker";
 import { TrendTest } from "../../../shared/utils/trend-chart";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { combineLatest } from "rxjs";
@@ -1342,6 +1342,7 @@ export class SampleResultEntryComponent {
   }
 
   setValue(testId: string, paramName: string, v: unknown) {
+    const before = this._values()[testId]?.[paramName];
     this._values.update((all) => ({
       ...all,
       [testId]: { ...(all[testId] ?? {}), [paramName]: v },
@@ -1351,6 +1352,7 @@ export class SampleResultEntryComponent {
     // Typing into anything else re-runs the dependent formulas.
     this.markCalcOverride(testId, paramName, v);
     this.recomputeCalcFields(calcKey(testId, paramName));
+    this.autoTickOnEntry(testId, paramName, before, v);
     this.scheduleDraftSave();
     this.scheduleServerAutosave();
   }
@@ -1835,6 +1837,7 @@ export class SampleResultEntryComponent {
     this._calcOverridden.set(new Set());
     this._attach.set({});
     this._reportHidden.set({});
+    this._autoTicked.clear();
     this.resetAnalyzerPrefill();
     this.draftKey = null;                // no stray debounced write under the old key
     if (!this._tubeTabs().some((t) => t.id === nextId)) {
@@ -2455,21 +2458,24 @@ export class SampleResultEntryComponent {
     return !this.reportHiddenFor(t).includes(p.name);
   }
   /** The picker is on and EVERY value is unticked: nothing from this test
-   *  reaches the report (warned inline and before submit / validate). */
+   *  reaches the report. Never shown per row (owner 2026-09-30: "no need to
+   *  tell this") — it only feeds the one whole-batch check below. */
   nothingPrints(t: OrderTest): boolean {
     if (!this.printPickerEnabled(t)) return false;
     const params = this.parametersFor(t);
     return params.length > 0 && params.every(p => !this.isValuePrinted(t, p));
   }
-  /** Ask before a submit / validate that would leave a test off the report.
-   *  True = go ahead (nothing to warn about, or the user confirmed). */
+  /** The ONE safeguard left (owner 2026-09-30): ask once, before a submit /
+   *  validate, only when NOTHING AT ALL in the batch (the tube, or every tube
+   *  on Submit all) would print — every line has the picker on with every
+   *  value unticked. One ticked value anywhere, or any line without the
+   *  picker, and there is no dialog. True = go ahead. */
   private async confirmNothingPrints(tests: readonly OrderTest[], verb: "submit" | "validate"): Promise<boolean> {
-    const empty = tests.filter(t => this.nothingPrints(t));
-    if (!empty.length) return true;
+    if (!tests.length || !tests.every(t => this.nothingPrints(t))) return true;
     return this.dialog.confirm({
-      title: "Nothing will print for " + (empty.length === 1 ? "this test" : "these tests"),
+      title: "Nothing will print on this report",
       message: "Every value is unticked, so the report will leave out:",
-      items: empty.map(t => t.test?.name ?? "Test"),
+      items: tests.map(t => t.test?.name ?? "Test"),
       question: `Tick the values that should print, or ${verb} anyway?`,
       cancelLabel: "Go back",
       confirmLabel: verb === "submit" ? "Submit anyway" : "Validate anyway",
@@ -2478,9 +2484,62 @@ export class SampleResultEntryComponent {
   toggleValuePrinted(t: OrderTest, p: { name: string }) {
     const cur = this.reportHiddenFor(t);
     const next = cur.includes(p.name) ? cur.filter(n => n !== p.name) : [...cur, p.name];
-    this._reportHidden.update(m => ({ ...m, [t.id]: next }));
-    this.api.put(`/api/results/${t.id}/report-hidden`, { hidden: next }).subscribe({
-      error: () => this.toasts.error("Could not save the print choice — retry."),
+    // A hand tick / untick makes the row the tech's own choice: clearing its
+    // value later never unticks it, and more keystrokes never re-tick it.
+    this._autoTicked.get(t.id)?.delete(p.name);
+    this.setReportHidden(t.id, next);
+  }
+
+  // ── Entering a value ticks its print box (owner 2026-09-30) ───────────
+  // Typing / picking a value into an EMPTY row ticks that row (the moment
+  // the value appears — later keystrokes are not new entries, so a row the
+  // tech unticked by hand stays unticked). Clearing the value of a row that
+  // was ticked this way unticks it again; a hand-ticked row stays ticked.
+  // In "All ticked" the row is already ticked → no-op. Only the tech's own
+  // input (setValue) counts — load, draft restore, formulas and analyzer
+  // prefill never move a tick, so a SAVED pick always wins on reload. Every
+  // change is saved like a hand tick (order_tests.ReportHiddenJson).
+  private readonly _autoTicked = new Map<string, Set<string>>();
+  private autoTickOnEntry(testId: string, paramName: string, before: unknown, after: unknown) {
+    const t = this._sample()?.tests?.find((x) => x.id === testId);
+    if (!t || !this.printPickerEnabled(t)) return;
+    const had = hasEnteredValue(before);
+    const has = hasEnteredValue(after);
+    if (had === has) return;
+    const hidden = this.reportHiddenFor(t);
+    if (has) {
+      if (!hidden.includes(paramName)) return;          // already ticked
+      let set = this._autoTicked.get(testId);
+      if (!set) this._autoTicked.set(testId, (set = new Set()));
+      set.add(paramName);
+      this.setReportHidden(testId, hidden.filter((n) => n !== paramName));
+    } else {
+      const set = this._autoTicked.get(testId);
+      if (!set?.has(paramName)) return;                 // ticked by hand / by default
+      set.delete(paramName);
+      if (!hidden.includes(paramName)) this.setReportHidden(testId, [...hidden, paramName]);
+    }
+  }
+  /** Record + save a line's hidden list. One request per line in flight; a
+   *  change made meanwhile is sent (as the LATEST list) when it returns, so
+   *  quick ticks can never land on the server out of order. */
+  private readonly _hiddenInFlight = new Set<string>();
+  private readonly _hiddenDirty = new Set<string>();
+  private setReportHidden(testId: string, next: string[]) {
+    this._reportHidden.update(m => ({ ...m, [testId]: next }));
+    this.saveReportHidden(testId);
+  }
+  private saveReportHidden(testId: string) {
+    if (this._hiddenInFlight.has(testId)) { this._hiddenDirty.add(testId); return; }
+    this._hiddenInFlight.add(testId);
+    const hidden = this._reportHidden()[testId] ?? [];
+    const done = () => {
+      this._hiddenInFlight.delete(testId);
+      if (this._hiddenDirty.delete(testId)) this.saveReportHidden(testId);
+    };
+    this.api.put(`/api/results/${testId}/report-hidden`, { hidden }).subscribe({
+      complete: done,
+      error: () => { done(); this.toasts.error("Could not save the print choice — retry."); },
     });
   }
   // ── "Print in bold" per value (owner 2026-09-30) ─────────────────────

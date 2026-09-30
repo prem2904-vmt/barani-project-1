@@ -465,11 +465,6 @@
                             <td colspan="6"><pf-report-note-slot scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'"></pf-report-note-slot></td>
                           </tr>
                         }
-                        @if (nothingPrints(t)) {
-                          <tr class="pf-sre__grow-warn" role="status">
-                            <td colspan="6"><ng-container *ngTemplateOutlet="nothingPrintsNote; context: { $implicit: t }"></ng-container></td>
-                          </tr>
-                        }
                         @if (attachmentsFor(t).length > 0) {
                           <tr class="pf-sre__grow-attach">
                             <td colspan="6"><ng-container *ngTemplateOutlet="attachStrip; context: { $implicit: t }"></ng-container></td>
@@ -504,12 +499,6 @@
       }
 
       <!-- ── Shared pieces ───────────────────────────────────────────── -->
-      <ng-template #nothingPrintsNote let-t>
-        <p class="pf-sre__nothing-prints">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
-          Nothing from {{ t.test?.name ?? "this test" }} will print — tick the values that should reach the report.
-        </p>
-      </ng-template>
       <ng-template #commentMark>
         <span class="pf-sre__param-flag" title="Pathologist commented">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
@@ -882,9 +871,6 @@
                     </tbody>
                   </table>
                 </div>
-                @if (nothingPrints(t)) {
-                  <div role="status"><ng-container *ngTemplateOutlet="nothingPrintsNote; context: { $implicit: t }"></ng-container></div>
-                }
               }
             </div>
           </section>
