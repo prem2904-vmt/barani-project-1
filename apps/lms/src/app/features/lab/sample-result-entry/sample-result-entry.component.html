@@ -342,8 +342,15 @@
                 @if (blk.title && blk.tests.length > 1) {
                   <span class="pf-sre-card__count">{{ blk.tests.length }} tests</span>
                 }
+                @if (blockProfileId(blk); as pid) {
+                  <pf-report-note-button scope="profile" [key]="pid" [label]="blk.title ?? 'Profile'" [withText]="true"></pf-report-note-button>
+                }
               </header>
               <div class="nd-card__body pf-sre-card__body">
+                @if (blockProfileId(blk); as pid) {
+                  <!-- The profile's report note (prints under the profile block). -->
+                  <pf-report-note-slot class="pf-sre__rnote" scope="profile" [key]="pid" [label]="blk.title ?? 'Profile'"></pf-report-note-slot>
+                }
                 <div class="pf-sre__grid-wrap">
                   <table class="pf-sre__grid">
                     <thead>
@@ -425,6 +432,7 @@
                                   <span class="pf-sre__gdot pf-sre__gdot--done" title="Entered"></span>
                                 }
                                 <ng-container *ngTemplateOutlet="noteBtn; context: { has: commentsFor(t.id, null).length > 0, label: 'Note on ' + (t.test?.name ?? 'this test'), tid: t.id, pname: null }"></ng-container>
+                                <pf-report-note-button scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'"></pf-report-note-button>
                                 @if (!attachEnabled(t) && attachmentsFor(t).length > 0) {
                                   <ng-container *ngTemplateOutlet="attachBtn; context: { t, param: null, count: attachmentsFor(t).length }"></ng-container>
                                 }
@@ -450,6 +458,12 @@
                               </td>
                             </tr>
                           }
+                        }
+                        @if (notes.isOpen('test', t.id) || notes.text('test', t.id)) {
+                          <!-- The line's report note (prints under this test). -->
+                          <tr class="pf-sre__grow-rnote">
+                            <td colspan="6"><pf-report-note-slot scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'"></pf-report-note-slot></td>
+                          </tr>
                         }
                         @if (nothingPrints(t)) {
                           <tr class="pf-sre__grow-warn" role="status">
@@ -484,6 +498,9 @@
             </section>
           }
         }
+        <!-- Report notes above the line level: each department section of
+             this tube, and the whole report (Lab settings switch). -->
+        <pf-report-notes-card class="pf-sre-rnotes" [lineIds]="noteLineIds()"></pf-report-notes-card>
       }
 
       <!-- ── Shared pieces ───────────────────────────────────────────── -->
@@ -736,6 +753,7 @@
               @if (attachEnabled(t) || attachmentsFor(t).length > 0) {
                 <ng-container *ngTemplateOutlet="attachBtn; context: { t, param: null, count: attachmentsFor(t).length }"></ng-container>
               }
+              <pf-report-note-button scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'" [withText]="true"></pf-report-note-button>
               <!-- "+ Note": the small secondary button; "Notes (N)" once a
                    conversation exists (it is then always visible). -->
               @if (commentsFor(t.id, null).length > 0) {
@@ -774,6 +792,8 @@
                 </div>
               }
 
+              <!-- The line's report note (prints under this test). -->
+              <pf-report-note-slot class="pf-sre__rnote" scope="test" [key]="t.id" [label]="t.test?.name ?? 'Test'"></pf-report-note-slot>
               @if (isCultureTest(t)) {
                 <!-- Culture & Sensitivity is worked (and signed out) on the
                      Culture case page — one culture screen (owner). -->
