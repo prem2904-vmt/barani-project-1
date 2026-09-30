@@ -95,6 +95,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/pathologist':        { perms: ['validate_result'], workflow: ['validate'] },
   // The critical-result acknowledgement register (NABL): bench, validators and the audit reader.
   '/lab/critical-results': { perms: ['enter_result', 'validate_result', 'view_audit_log'], module: 'lab' },
+  // Analyzer runs that matched no tube (+ QC runs): the bench attaches them — result-entry perms.
+  '/lab/analyzer-results': { perms: ['enter_result', 'edit_result'], module: 'lab' },
   // Results. deliver_report = the delivery desk (Share / WhatsApp / Print as a
   // recorded delivery / Generate). view_report alone (Lab Tech, Branch
   // Manager, Quality Manager) opens the SAME branch-scoped list VIEW-ONLY:
@@ -119,6 +121,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/setup':                   { perms: ADMIN_PERMS },
   '/lab/settings':            { perms: LAB_SETTINGS_HUB_PERMS, module: 'lab' },
   '/admin/microbiology':      { perms: ['manage_lab_settings'], module: 'lab' },
+  // Lab analyzers (instrument connector) — the same lab-admin perm as Lab settings / Microbiology.
+  '/admin/instruments':       { perms: ['manage_lab_settings'], module: 'lab' },
   '/admin/users':             { perms: ['manage_users'] },
   '/admin/users/invite':      { perms: ['manage_users'] },
   '/admin/roles/new':         { perms: ['manage_users'] },

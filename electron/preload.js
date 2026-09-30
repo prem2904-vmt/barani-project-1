@@ -58,6 +58,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('chat:action', h);
     }
   },
+  // Lab analyzer connectors (runs in main, survives the window closing).
+  // Pair = store a device key (encrypted by the OS keychain); listen mode =
+  // capture what an unknown analyzer sends. No Node objects cross over.
+  instruments: {
+    list: () => ipcRenderer.invoke('instruments:list'),
+    pair: (p) => ipcRenderer.invoke('instruments:pair', p),
+    unpair: (instrumentId) => ipcRenderer.invoke('instruments:unpair', instrumentId),
+    reload: (instrumentId) => ipcRenderer.invoke('instruments:reload', instrumentId),
+    status: () => ipcRenderer.invoke('instruments:status'),
+    onStatus: (cb) => {
+      const h = (_e, s) => cb(s);
+      ipcRenderer.on('instruments:status', h);
+      return () => ipcRenderer.removeListener('instruments:status', h);
+    },
+    rawLog: (instrumentId, limit) => ipcRenderer.invoke('instruments:rawLog', instrumentId, limit),
+    listSerialPorts: () => ipcRenderer.invoke('instruments:listSerialPorts'),
+    listenStart: (opts) => ipcRenderer.invoke('instruments:listenStart', opts),
+    listenStop: (sessionId) => ipcRenderer.invoke('instruments:listenStop', sessionId),
+    onListen: (cb) => {
+      const h = (_e, ev) => cb(ev);
+      ipcRenderer.on('instruments:listen', h);
+      return () => ipcRenderer.removeListener('instruments:listen', h);
+    },
+    preview: (raw, config) => ipcRenderer.invoke('instruments:preview', raw, config)
+  },
   // Document/invoice printers = the OS-installed printers (for A4 output).
   doc: {
     listPrinters: () => ipcRenderer.invoke('doc:listPrinters'),

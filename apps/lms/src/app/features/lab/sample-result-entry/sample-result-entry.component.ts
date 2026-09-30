@@ -93,6 +93,19 @@ import {
   type BoldMap,
 } from "./submit-all";
 import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
+import { formatDate } from "@angular/common";
+import { LAB_TIME_ZONE } from "../../../shared/utils/lab-clock";
+import { InstrumentsApiService } from "../../../shared/instruments/instruments-api.service";
+import type { RunDto } from "../../../shared/instruments/instrument.models";
+import {
+  AnalyzerBadge,
+  AppliedMap,
+  PrefillLine,
+  analyzerBadge,
+  defaultRun,
+  planPrefill,
+  runOptions,
+} from "../../../shared/instruments/instrument-prefill";
 
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -167,6 +180,7 @@ export class SampleResultEntryComponent {
   private readonly injector = inject(Injector);
   private readonly draftShelf = inject(DraftShelfService);
   private readonly criticalSvc = inject(CriticalResultsService);
+  private readonly instrumentsApi = inject(InstrumentsApiService);
 
   // ── New-design frame (docs/ND-PATTERN.md → "Result entry") ──────────
   /** The route's sample id, known before the tube loads — the RESULTS
@@ -1593,6 +1607,84 @@ export class SampleResultEntryComponent {
 
   private readonly prestore = inject(ReportPrestoreService);
 
+  // ── Analyzer prefill (instrument connector) ─────────────────────────
+  // GET /api/instruments/results/by-sample/{id} → runs (newest first). The
+  // selected run PREFILLS empty fields only (pure rules: shared/instruments/
+  // instrument-prefill.ts): never overwrites typed values, never submits,
+  // never validates, never saves a draft by itself. Errors / 404 → silent.
+  readonly analyzerRuns = signal<RunDto[]>([]);
+  readonly analyzerRunId = signal<string | null>(null);
+  private readonly _analyzerApplied = signal<AppliedMap>({});
+  readonly analyzerRunOptions = computed(() => runOptions(this.analyzerRuns(), (iso) => this.analyzerTime(iso)));
+
+  private analyzerTime(iso: string | null): string {
+    if (!iso) return "";
+    try { return formatDate(iso, "h:mm a", "en-US", LAB_TIME_ZONE); } catch { return ""; }
+  }
+
+  private resetAnalyzerPrefill() {
+    this.analyzerRuns.set([]);
+    this.analyzerRunId.set(null);
+    this._analyzerApplied.set({});
+  }
+
+  /** The writable lines on screen and the fields an analyzer value may take. */
+  private analyzerLines(): PrefillLine[] {
+    const out: PrefillLine[] = [];
+    const s = this._sample();
+    const skip = new Set(["boolean", "checkbox", "toggle", "yesno"]);
+    for (const t of splitOutsourced(s?.tests ?? [], s?.outsourcedVendorId).inHouse) {
+      if (!isWritableTest(t)) continue;
+      const params = this.parametersFor(t).filter((p) => !this.isMultiSelect(p) && !skip.has(String(p.type)));
+      if (params.length) out.push({ orderTestId: t.id, params: params.map((p) => ({ name: p.name, title: p.title ?? null })) });
+    }
+    return out;
+  }
+
+  private async loadAnalyzerPrefill(seq: number, sampleId: string) {
+    if (this.validateMode() || this.viewOnly()) return;
+    try {
+      const dto = await firstValueFrom(this.instrumentsApi.prefillForSample(sampleId));
+      if (seq !== this.loadSeq || this.validateMode() || this.viewOnly()) return;
+      const runs = Array.isArray(dto?.runs) ? dto.runs.filter((r) => !!r?.messageId) : [];
+      this.analyzerRuns.set(runs);
+      const first = defaultRun(runs);
+      if (first) this.applyAnalyzerRun(first.messageId);
+    } catch {
+      /* no analyzer / endpoint not there yet — result entry works as before */
+    }
+  }
+
+  /** Apply one run (the picker): fills empty fields and fields still equal to
+   *  the previous run's prefill; typed values are never touched. */
+  applyAnalyzerRun(messageId: string | null) {
+    const run = this.analyzerRuns().find((r) => r.messageId === messageId) ?? null;
+    if (!run) return;
+    const plan = planPrefill({
+      run,
+      lines: this.analyzerLines(),
+      current: (ot, p) => this._values()[ot]?.[p],
+      previous: this._analyzerApplied(),
+    });
+    if (plan.writes.length) {
+      this._values.update((all) => {
+        const next = { ...all };
+        for (const w of plan.writes) next[w.orderTestId] = { ...(next[w.orderTestId] ?? {}), [w.paramName]: w.value };
+        return next;
+      });
+      this.recomputeCalcFields();
+    }
+    this._analyzerApplied.set(plan.applied);
+    this.analyzerRunId.set(run.messageId);
+  }
+
+  /** The small "From Sysmex · 10:42 am" badge (+ analyzer H/L chips). */
+  analyzerBadgeFor(t: { id: string }, p: { name: string }): AnalyzerBadge | null {
+    const applied = this._analyzerApplied();
+    if (!Object.keys(applied).length) return null;
+    return analyzerBadge(applied, t.id, p.name, this._values()[t.id]?.[p.name], (iso) => this.analyzerTime(iso));
+  }
+
   async validateTube() {
     const targets = this.enteredTests();
     if (!targets.length || this.submitting()) return;
@@ -1711,6 +1803,7 @@ export class SampleResultEntryComponent {
     this._calcOverridden.set(new Set());
     this._attach.set({});
     this._reportHidden.set({});
+    this.resetAnalyzerPrefill();
     this.draftKey = null;                // no stray debounced write under the old key
     if (!this._tubeTabs().some((t) => t.id === nextId)) {
       // A different ORDER, not a sibling tube: order-level UI resets too.
@@ -1762,6 +1855,9 @@ export class SampleResultEntryComponent {
       }
       await this.loadComments();
       this.loadCritical();
+      // Analyzer results (instrument connector): PREFILL only, after the
+      // tube + drafts are on screen; never blocks or fails the load.
+      void this.loadAnalyzerPrefill(seq, id);
     } catch (e) {
       if (seq === this.loadSeq) this.toasts.error("Could not load sample");
     } finally {

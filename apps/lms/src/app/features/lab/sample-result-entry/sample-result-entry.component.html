@@ -234,8 +234,14 @@
           <pf-critical-ack-strip class="pf-sre-critical" [events]="critical()" [via]="criticalVia()"
                                  (changed)="onCriticalChanged($event)"></pf-critical-ack-strip>
         }
-        @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0 || submitReport().length > 0) {
+        @if (validateMode() || (trendEligible().length > 0 && !viewOnly()) || lastFlags().length > 0 || submitReport().length > 0 || analyzerRuns().length > 1) {
           <div class="pf-sre-strip">
+            @if (analyzerRuns().length > 1 && !validateMode() && !viewOnly()) {
+              <!-- Analyzer re-runs: which run PREFILLS (never overwrites typed values). -->
+              <pf-select class="pf-sre-run" size="sm" aria-label="Analyzer run"
+                         [options]="analyzerRunOptions()" [value]="analyzerRunId() ?? ''"
+                         (valueChange)="applyAnalyzerRun($event)"></pf-select>
+            }
             @if (validateMode()) {
               <span class="nd-chip nd-chip--static pf-sre-strip__meta nd-num">Submitted{{ submittedAtLabel() ? " " + submittedAtLabel() : "" }}</span>
               <!-- The validator signs this report: no registration number
@@ -389,6 +395,7 @@
                               @if (calcChip(t, p); as c) {
                                 <span class="pf-sre__calc-chip" [attr.data-kind]="c.kind">{{ c.label }}</span>
                               }
+                              <ng-container *ngTemplateOutlet="analyzerMark; context: { t, p }"></ng-container>
                               @if (flagFor(t, p); as f) {
                                 <span class="pf-sre__flag-chip" [attr.data-tone]="f.tone" [attr.title]="flagChipTitle(f)">{{ f.label }}</span>
                               }
@@ -490,6 +497,21 @@
         <span class="pf-sre__param-flag" title="Pathologist commented">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
         </span>
+      </ng-template>
+
+      <!-- Analyzer prefill mark: where the value came from (neutral), the
+           analyzer's own H/L flags, or — once the tech changed it — what
+           the analyzer sent. A prefill only: nothing is submitted by it. -->
+      <ng-template #analyzerMark let-t="t" let-p="p">
+        @if (analyzerBadgeFor(t, p); as ab) {
+          <span class="pf-sre__an-chip" [attr.data-kind]="ab.kind" [attr.title]="ab.title">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4M7 10h2l1.5-3 3 6 1.5-3h2"/></svg>
+            <span>{{ ab.label }}</span>
+          </span>
+          @for (fl of ab.flags; track $index) {
+            <span class="pf-sre__an-flag nd-num" [attr.data-flag]="fl" [attr.title]="'Analyzer flag ' + fl">{{ fl }}</span>
+          }
+        }
       </ng-template>
 
       <!-- ONE-step note: opens focused; Enter or blur saves, Shift+Enter is
@@ -789,6 +811,7 @@
                             @if (calcChip(t, p); as c) {
                               <span class="pf-sre__calc-chip" [attr.data-kind]="c.kind">{{ c.label }}</span>
                             }
+                            <ng-container *ngTemplateOutlet="analyzerMark; context: { t, p }"></ng-container>
                             @if (flagFor(t, p); as f) {
                               <span class="pf-sre__flag-chip" [attr.data-tone]="f.tone" [attr.title]="flagChipTitle(f)">{{ f.label }}</span>
                             }

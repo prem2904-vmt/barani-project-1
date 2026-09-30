@@ -114,6 +114,19 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
       },
       {
+        // Lab analyzers (instrument connector): list + setup wizard / status.
+        // `new` opens the wizard for a new instrument.
+        path: 'admin/instruments',
+        canActivate: [...routeGuards('/admin/instruments')],
+        loadComponent: () => import('./features/lab/instruments/instruments-list.component').then(m => m.InstrumentsListComponent)
+      },
+      {
+        path: 'admin/instruments/:id',
+        data: { recreateOn: ['id'] },
+        canActivate: [...routeGuards('/admin/instruments')],
+        loadComponent: () => import('./features/lab/instruments/instrument-editor.component').then(m => m.InstrumentEditorComponent)
+      },
+      {
         // Microbiology / Culture bench settings (lock timeout, TAT).
         path: 'admin/microbiology',
         canActivate: [...routeGuards('/admin/microbiology')],
@@ -511,6 +524,12 @@ export const appRoutes: Route[] = [
 
       // Critical results — the NABL acknowledgement register (lab + pathologist
       // + quality). Reads: enter_result / validate_result / view_audit_log.
+      {
+        // Analyzer runs that matched no tube (attach to a sample) + QC runs.
+        path: 'lab/analyzer-results',
+        canActivate: [...routeGuards('/lab/analyzer-results')],
+        loadComponent: () => import('./features/lab/analyzer-results/analyzer-results.component').then(m => m.AnalyzerResultsComponent)
+      },
       {
         path: 'lab/critical-results',
         canActivate: [...routeGuards('/lab/critical-results')],

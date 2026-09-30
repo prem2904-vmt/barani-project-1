@@ -3,6 +3,9 @@ const path = require('path');
 const labelPrinter = require('./printer');
 const calls = require('./calls');
 const chatNotify = require('./chat-notify');
+// Lab analyzer connector (serial / TCP / folder → LMS). Core is plain Node
+// under ./instruments/core; this host just wires it to IPC + app lifecycle.
+const instruments = require('./instruments/host-electron');
 // Don't pull in electron-is-dev — it isn't bundled into the packaged
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
@@ -12,6 +15,18 @@ const isDev = !app.isPackaged;
 // electron falls back to package.json `name` which is the npm slug;
 // this forces the human-friendly name everywhere regardless of host.
 app.setName('Prefrontal');
+// Optional isolated data profile for side-by-side test builds: a build made
+// with `-c.extraMetadata.pfDataProfile=<name>` (or PF_DATA_PROFILE=<name> at
+// launch) keeps its session, connector pairing and single-instance lock in
+// "<appData>/Prefrontal (<name>)" instead of the real app's folder. Absent in
+// the normal build → userData is untouched. Must run before the lock / ready.
+{
+  let profile = process.env.PF_DATA_PROFILE;
+  if (!profile) { try { profile = require('../package.json').pfDataProfile; } catch { profile = undefined; } }
+  if (typeof profile === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(profile)) {
+    app.setPath('userData', path.join(app.getPath('appData'), `Prefrontal (${profile})`));
+  }
+}
 // Windows toasts are attributed by AppUserModelID and are silently DROPPED
 // when it doesn't match the installed app's identity. Must equal
 // electron-builder's build.appId in package.json. No-op on macOS/Linux.
@@ -131,6 +146,8 @@ function createWindow() {
 //    Detonger/Dothantech printer over USB. ────────────────────────────────
 // Chat notifications with inline Reply (macOS) — see chat-notify.js.
 chatNotify.register(() => mainWindow);
+// Analyzer connectors: IPC for the Instruments page (pair / status / listen).
+instruments.register(() => mainWindow);
 
 ipcMain.handle('printer:status', async () => labelPrinter.status());
 ipcMain.handle('printer:print', async (_e, payload) => labelPrinter.print(payload));
@@ -209,6 +226,8 @@ app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   createWindow();
   calls.createTray(() => mainWindow);
+  // Paired analyzers start with the app and keep running in the tray.
+  instruments.start();
 
   // macOS: re-open / re-show the window when the dock icon is clicked.
   app.on('activate', () => {
@@ -223,7 +242,10 @@ app.on('second-instance', () => {
   if (mainWindow) calls.restore(mainWindow);
 });
 
-app.on('before-quit', () => calls.setQuitting());
+app.on('before-quit', () => {
+  calls.setQuitting();
+  instruments.stop();
+});
 
 app.on('window-all-closed', () => {
   // Only reached on a real quit (close hides the window). macOS keeps the app
