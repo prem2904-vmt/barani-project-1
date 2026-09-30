@@ -49,6 +49,13 @@ type Section = 'allergies' | 'conditions' | 'meds' | 'results' | 'last' | 'follo
         }
       </div>
 
+      @if (pregnancy(); as p) {
+        <div class="gl__preg" [class.gl__preg--lact]="p.status === 'lactating'" role="status">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5c0 2.5 2 4.5 5 8 3-3.5 5-5.5 5-8a5 5 0 0 0-5-5Z"/><path d="M8 18c-2 1-3 2-3 3M16 18c2 1 3 2 3 3"/></svg>
+          <span>{{ p.status === 'pregnant' ? 'Pregnant' : 'Lactating' }}@if (p.since) { · since {{ p.since | date:'MMM d, y' }}}@if (p.source) { <em>(from {{ p.source }})</em>}</span>
+        </div>
+      }
+
       <!-- Allergies -->
       <section class="gl__s">
         <button type="button" class="gl__sh" (click)="toggle('allergies')" [attr.aria-expanded]="isOpen('allergies')">
@@ -206,6 +213,12 @@ type Section = 'allergies' | 'conditions' | 'meds' | 'results' | 'last' | 'follo
     .gl__chev { margin-left: auto; color: var(--text-tertiary); transition: transform 160ms ease; }
     .gl__chev.up { transform: rotate(180deg); }
     .gl__b { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 14px; }
+    .gl__preg { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; font-weight: 500; line-height: 1.4;
+      background: color-mix(in srgb, var(--red-text, #dc2626) 9%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent); color: var(--text-primary); }
+    .gl__preg svg { color: var(--red-text, #dc2626); flex: none; }
+    .gl__preg--lact { background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, var(--nd-card-bg)); border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 28%, transparent); }
+    .gl__preg--lact svg { color: var(--violet-text, #6d28d9); }
+    .gl__preg em { font-style: normal; color: var(--text-tertiary); }
     .gl__allergy { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px;
       background: color-mix(in srgb, var(--red-text, #dc2626) 10%, var(--nd-card-bg)); border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 28%, transparent);
       color: var(--red-text, #dc2626); font-size: 13.5px; font-weight: 500; }
@@ -258,6 +271,9 @@ export class ConsultGlanceComponent {
   readonly severityOpts: PfSelectOption[] = [
     { value: 'mild', label: 'Mild' }, { value: 'moderate', label: 'Moderate' }, { value: 'severe', label: 'Severe' },
   ];
+
+  /** Pregnancy-safety guard (night/safety, critic P0 #1c) — the banner. */
+  readonly pregnancy = computed(() => this.ws()?.pregnancy ?? null);
 
   readonly conflicts = computed(() => this.lines()
     .map(l => ({ line: l, hit: l.allergyAck ? null : allergyHit(l.drug, this.allergies()) }))

@@ -1,14 +1,14 @@
 import {
   ChangeDetectionStrategy, Component, ElementRef, computed, inject, input, model, output, signal,
 } from '@angular/core';
-import type { OpdPatientAllergy } from '../../shared/opd.models';
+import type { OpdPatientAllergy, OpdPregnancy } from '../../shared/opd.models';
 import {
   DURATIONS, FORMS, RxLine, RxSchedule, RxUsual, STEP_DURATIONS, doseShort, formOf, lineShort, newRxLine, parseRx, qtyWords,
   sayRx, segsOf, stripDays, whenShort,
 } from '../../shared/rx-schedule';
 import {
   ALL_TIMINGS, ConsultDrugRef, ConsultRxLine, THEN_PRESETS, TIMING_GRID, TIMING_MORE, addThen, allergyHit, freeDrug, lineKey,
-  removeStep, sitesFor, swapCandidate, timingIdOf,
+  pregnancyHit, removeStep, sitesFor, swapCandidate, timingIdOf,
 } from './rx-model';
 import { RxPopClose, RxPopOption, RxPopoverComponent } from './rx-popover.component';
 
@@ -46,14 +46,16 @@ export function durLabel(n: number): string {
           </div>
           @for (l of lines(); track l.key; let i = $index) {
             @let hit = hitOf(l);
-            <div class="rxe__line" [class.rxe__line--warn]="hit && !l.allergyAck" [attr.data-key]="l.key">
+            @let pregHit = pregHitOf(l);
+            <div class="rxe__line" [class.rxe__line--warn]="(hit && !l.allergyAck) || (pregHit && !l.pregnancyAck)" [attr.data-key]="l.key">
               @for (sg of segs(l); track sg.k; let k = $index) {
                 <div class="rxe__row" [class.rxe__row--then]="k > 0">
                   @if (k === 0) {
                     <span class="rxe__n">{{ i + 1 }}</span>
                     <span class="rxe__drug">
-                      <span class="rxe__name" [class.rxe__name--warn]="hit && !l.allergyAck">{{ l.drug.name }}</span>
+                      <span class="rxe__name" [class.rxe__name--warn]="(hit && !l.allergyAck) || (pregHit && !l.pregnancyAck)">{{ l.drug.name }}</span>
                       @if (schedBadge(l.drug); as b) { <span class="rxe__sch" [class.rxe__sch--h]="b !== 'OTC'">{{ b }}</span> }
+                      @if (pregnant() && l.drug.pregnancyRisk === 'caution') { <span class="rxe__preg-caution" title="Use with caution in pregnancy">Caution in pregnancy</span> }
                       @if (l.drug.generic || l.drug.strength) { <span class="rxe__gen">{{ l.drug.generic }}{{ l.drug.generic && l.drug.strength ? ' ' : '' }}{{ l.drug.strength }}</span> }
                       @if (l.drug.free) { <span class="rxe__gen">Not in the drug master · dispensed by name</span> }
                     </span>
@@ -129,6 +131,26 @@ export function durLabel(n: number): string {
                     @if (!readonly()) { <button type="button" class="rxe__undo-ack" (click)="unkeep(l)">Undo</button> }</p>
                 }
               }
+              @if (pregHit) {
+                @if (!l.pregnancyAck) {
+                  <div class="rxe__allergy rxe__preg" role="alert">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                    <span class="rxe__allergy-t"><b>{{ pregHit.risk === 'contraindicated' ? 'Contraindicated in pregnancy' : 'Avoid in pregnancy' }}</b>. {{ pregHit.reason }}</span>
+                    @if (!readonly()) {
+                      @if (swapFor(l); as alt) {
+                        <button type="button" class="rxe__swap" (click)="swap(l, alt)">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>
+                          Swap to {{ alt.name }}
+                        </button>
+                      }
+                      <button type="button" class="rxe__keep" (click)="keepPregnancy(l)">Keep, reviewed</button>
+                    }
+                  </div>
+                } @else {
+                  <p class="rxe__acked">Pregnancy risk reviewed — kept on purpose ({{ l.drug.name }}).
+                    @if (!readonly()) { <button type="button" class="rxe__undo-ack" (click)="unkeepPregnancy(l)">Undo</button> }</p>
+                }
+              }
             </div>
           }
         </div>
@@ -159,6 +181,7 @@ export function durLabel(n: number): string {
                     <span class="rxe__pl"><b>{{ d.name }}</b>@if (schedBadge(d); as b) { <span class="rxe__sch" [class.rxe__sch--h]="b !== 'OTC'">{{ b }}</span> }</span>
                     <span class="rxe__ps">{{ d.generic }} · {{ lineShortOf(usualLine(d), d) }}</span>
                     @if (hitOfDrug(d)) { <span class="rxe__warnchip">Allergy</span> }
+                    @else if (pregHitOfDrug(d)) { <span class="rxe__warnchip">{{ pregHitOfDrug(d)!.risk === 'contraindicated' ? 'Contraindicated' : 'Avoid — pregnancy' }}</span> }
                   </button>
                 }
               } @else if (!preview()) {
@@ -216,6 +239,8 @@ export function durLabel(n: number): string {
     .rxe__gen { flex-basis: 100%; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
     .rxe__sch { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--nd-line); color: var(--text-tertiary); }
     .rxe__sch--h { color: var(--red-text, #dc2626); border-color: color-mix(in srgb, var(--red-text, #dc2626) 45%, transparent); }
+    .rxe__preg-caution { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, #d97706 45%, transparent); color: #b45309; }
+    :host-context(html.dark) .rxe__preg-caution { color: #fbbf24; border-color: color-mix(in srgb, #fbbf24 45%, transparent); }
     .rxe__then-lbl { display: inline-flex; align-items: center; gap: 6px; padding-left: 12px; font-size: 13px; color: var(--text-tertiary); }
     .rxe__c { min-width: 0; display: flex; align-items: center; gap: 4px; min-height: 30px; }
     .rxe__static { font-size: 14px; color: var(--text-primary); }
@@ -299,6 +324,8 @@ export class RxEditorComponent {
   readonly lines = model<ConsultRxLine[]>([]);
   readonly drugs = input<ConsultDrugRef[]>([]);
   readonly allergies = input<OpdPatientAllergy[]>([]);
+  /** Pregnancy-safety guard (night/safety, critic P0 #1c) — the patient's resolved status. */
+  readonly pregnant = input<OpdPregnancy | null>(null);
   readonly readonly = input(false);
   /** Day 0 of the course (the visit day). */
   readonly start = input<Date>(new Date());
@@ -344,6 +371,8 @@ export class RxEditorComponent {
   dots(n: number) { return Array.from({ length: Math.min(n, 8) }); }
   hitOf(l: ConsultRxLine) { return allergyHit(l.drug, this.allergies()); }
   hitOfDrug(d: ConsultDrugRef) { return allergyHit(d, this.allergies()); }
+  pregHitOf(l: ConsultRxLine) { return pregnancyHit(l.drug, this.pregnant()); }
+  pregHitOfDrug(d: ConsultDrugRef) { return pregnancyHit(d, this.pregnant()); }
   swapFor(l: ConsultRxLine) { return swapCandidate(l, this.drugs(), this.allergies(), this.preferIds()); }
   usualLine(d: ConsultDrugRef) { return newRxLine(d.id, this.usualOf(d.id)); }
   lineByKey(key: string) { return this.lines().find(l => l.key === key) ?? null; }
@@ -369,9 +398,11 @@ export class RxEditorComponent {
   dropStep(l: ConsultRxLine, k: number) { this.patch(l.key, x => ({ ...x, line: removeStep(x.line, k) })); }
   keep(l: ConsultRxLine) { this.patch(l.key, x => ({ ...x, allergyAck: true, allergyAckNote: 'Kept after review' })); }
   unkeep(l: ConsultRxLine) { this.patch(l.key, x => ({ ...x, allergyAck: false, allergyAckNote: null })); }
+  keepPregnancy(l: ConsultRxLine) { this.patch(l.key, x => ({ ...x, pregnancyAck: true, pregnancyAckNote: 'Kept after review' })); }
+  unkeepPregnancy(l: ConsultRxLine) { this.patch(l.key, x => ({ ...x, pregnancyAck: false, pregnancyAckNote: null })); }
   swap(l: ConsultRxLine, alt: ConsultDrugRef) {
     const line = newRxLine(alt.id, this.usualOf(alt.id));
-    this.patch(l.key, x => ({ ...x, id: undefined, drug: alt, line, allergyAck: false, allergyAckNote: null }));
+    this.patch(l.key, x => ({ ...x, id: undefined, drug: alt, line, allergyAck: false, allergyAckNote: null, pregnancyAck: false, pregnancyAckNote: null }));
     this.notice.emit(`${l.drug.name} swapped for ${alt.name} · ${lineShort(line, alt)}`);
   }
 
