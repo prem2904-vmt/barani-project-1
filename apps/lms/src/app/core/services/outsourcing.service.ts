@@ -68,11 +68,22 @@ export class OutsourcingService {
 
   /** Attach (or replace) the partner report and mark the lines Completed.
    *  `file` = null re-completes with the file already attached. */
-  async complete(orderTestIds: string[], file: { url: string; name: string; type: string } | null): Promise<void> {
+  async complete(orderTestIds: string[], file: { url: string; name: string; type: string } | null,
+                 attachToReport?: boolean): Promise<OutsourcedTube[]> {
     const updated = await firstValueFrom(this.api.post<OutsourcedTube[]>('/api/samples/outsourced/complete', {
       orderTestIds, fileUrl: file?.url ?? null, fileName: file?.name ?? null, contentType: file?.type ?? null,
+      ...(attachToReport === undefined ? {} : { attachToReport }),
     }));
     this.merge(updated);
+    return updated ?? [];
+  }
+
+  /** "Attach to our report" on / off later — the patient's combined PDF
+   *  follows at once (it is derived on the server). */
+  async setAttachToReport(orderTestIds: string[], attach: boolean): Promise<OutsourcedTube[]> {
+    const updated = await firstValueFrom(this.api.post<OutsourcedTube[]>('/api/samples/outsourced/attach', { orderTestIds, attach }));
+    this.merge(updated);
+    return updated ?? [];
   }
 
   /** Undo Completed (caller confirms first). The file stays attached. */

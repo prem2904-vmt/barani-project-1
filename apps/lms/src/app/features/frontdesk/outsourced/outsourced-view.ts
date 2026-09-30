@@ -21,6 +21,14 @@ export interface PartnerReport {
   contentType?: string | null;
   uploadedAt?: string | null;
   uploadedByName?: string | null;
+  /** "Attach to our report" — the patient gets ONE PDF (ours + these pages).
+   *  Absent on files uploaded before the feature = not attached. */
+  attachToReport?: boolean;
+  /** Why an attached file can't be joined (password-protected / unreadable);
+   *  it then stays a separate file. */
+  attachProblem?: string | null;
+  /** Attached AND joinable = inside the patient's combined PDF. */
+  inReport?: boolean;
 }
 
 export interface OutsourcedLine {
@@ -103,6 +111,34 @@ export function rowReport(r: OutsourcedTube): PartnerReport | null {
   return null;
 }
 
+/** How a row's partner report reaches the patient. */
+export type AttachState = 'none' | 'in-report' | 'separate' | 'problem';
+
+export function attachState(r: OutsourcedTube): AttachState {
+  const rep = rowReport(r);
+  if (!rep) return 'none';
+  if (rep.attachToReport && rep.attachProblem) return 'problem';
+  return rep.attachToReport ? 'in-report' : 'separate';
+}
+
+/** The chip text for {@link attachState} (null = no chip). */
+export const ATTACH_LABEL: Record<AttachState, string | null> = {
+  'none': null,
+  'in-report': 'In our report',
+  'separate': 'Separate file',
+  'problem': 'Separate file',
+};
+
+/** Default of the "Attach to our report" choice at upload: ON for every
+ *  accepted type (PDF and images) — the patient should get one document. */
+export const ATTACH_DEFAULT = true;
+
+/** The first "can't join" problem among the tubes' reports, if any (to warn). */
+export function firstAttachProblem(rows: readonly OutsourcedTube[] | null | undefined): string | null {
+  for (const r of rows ?? []) for (const t of r.tests) if (t.report?.attachToReport && t.report.attachProblem) return t.report.attachProblem;
+  return null;
+}
+
 /** Files the partner-report upload accepts (mirrors the backend). */
 export const PARTNER_REPORT_ACCEPT = 'application/pdf,image/png,image/jpeg,image/webp';
 export const PARTNER_REPORT_MAX_MB = 15;
@@ -125,6 +161,11 @@ export function absoluteFileUrl(url: string, apiBase: string): string {
  *  on the same (verified) link; null when there are none. */
 export function partnerReportShareLine(reports: readonly PartnerReport[]): string | null {
   if (!reports.length) return null;
-  const parts = reports.map(r => r.partnerLabName ? `${r.testName} (tested at ${r.partnerLabName})` : r.testName);
-  return `Also included on the same link: the partner lab report for ${parts.join(', ')}.`;
+  const name = (r: PartnerReport) => r.partnerLabName ? `${r.testName} (tested at ${r.partnerLabName})` : r.testName;
+  const inside = reports.filter(r => r.inReport).map(name);
+  const separate = reports.filter(r => !r.inReport).map(name);
+  const lines: string[] = [];
+  if (inside.length) lines.push(`Your report PDF also includes the partner lab report for ${inside.join(', ')}.`);
+  if (separate.length) lines.push(`Also included on the same link: the partner lab report for ${separate.join(', ')}.`);
+  return lines.join('\n');
 }

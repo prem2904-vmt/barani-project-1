@@ -22,6 +22,10 @@ import { firstValueFrom, type Observable } from 'rxjs';
  *    shown and the next view tries again.
  * 3. Any other read failure is an error — never a silent re-render.
  *
+ * Partner reports the front desk attached ("Attach to our report") are
+ * joined server-side: the GET returns ONE combined PDF (our stored pages
+ * first, untouched) — so after a first store we read it back once.
+ *
  * Variants: `full` (with the letterhead — view, download, share, WhatsApp,
  * the patient link) and `letterpad` (the letterhead-paper print: header &
  * footer blank). Each is stored once.
@@ -102,6 +106,12 @@ export function ensureStoredReportPdf(
       if (stored) return stored;
       const rendered = await render();
       const outcome = await storeReportPdf(api, reportId, rendered, variant);
+      if (outcome === 'stored') {
+        // What the server serves now — our report, plus any attached partner
+        // pages. Our own render if that read fails.
+        const served = await fetchStoredReportPdf(api, reportId, variant).catch(() => null);
+        if (served) return served;
+      }
       if (outcome === 'exists') {
         // Another screen stored it first — that file is the report.
         const winner = await fetchStoredReportPdf(api, reportId, variant).catch(() => null);

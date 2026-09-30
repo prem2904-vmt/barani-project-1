@@ -11,15 +11,19 @@ import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.c
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import {
-  OutsourcedStatusFilter, OutsourcedTube, PARTNER_REPORT_ACCEPT, STATUS_LABEL, actionLines,
-  filterOutsourced, partnerFileProblem, rowReport,
+  ATTACH_DEFAULT, ATTACH_LABEL, OutsourcedStatusFilter, OutsourcedTube, PARTNER_REPORT_ACCEPT, STATUS_LABEL, actionLines,
+  attachState, filterOutsourced, firstAttachProblem, partnerFileProblem, rowReport,
 } from './outsourced-view';
 
 /**
  * Frontdesk "Outsourced" tab body. One row per outsourced tube: sample ID,
  * patient (full name), order ID, tests, partner lab, dispatched date and a
  * neutral status chip (Completed carries a violet check — never green).
- * Row actions (text on web, icon on touch): Upload report · View · Undo.
+ * Row actions (text on web, icon on touch): Upload report · View · Undo ·
+ * Attach to / Detach from report. At upload the desk chooses "Attach to our
+ * report" (default ON): the patient then gets ONE PDF — our report followed
+ * by the partner pages. A file that can't be joined (password-protected /
+ * unreadable) is flagged with a warning dialog and stays a separate file.
  * The search lives in the work card's header (it sets `svc.query`). Classic
  * design (`showFilters`) keeps the status / partner filters above the list;
  * the new design has NO filter bar (owner) — every tube is listed, still
@@ -71,6 +75,10 @@ import {
                 }
                 {{ statusLabel[r.status] }}
               </span>
+              @if (attachLabel[attachState(r)]; as al) {
+                <span class="nd-chip nd-chip--static pf-out__attach" [attr.data-attach]="attachState(r)"
+                      [attr.title]="attachState(r) === 'problem' ? rowReport(r)?.attachProblem : null">{{ al }}</span>
+              }
             </div>
             <div class="pf-out__acts">
               @if (rowReport(r); as rep) {
@@ -81,6 +89,18 @@ import {
                     <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>
                   </svg>
                   <span class="nd-rowact__t">View</span>
+                </button>
+              }
+              @if (rowReport(r)) {
+                <button type="button" class="nd-rowact pf-out__attach-btn" [class.nd-rowact--icon]="!web()" [disabled]="busy() === r.sampleId"
+                        [pfBusy]="busy() === r.sampleId && busyAct() === 'attach'" pfBusyLabel="Saving…"
+                        [attr.aria-label]="(attachState(r) === 'separate' ? 'Attach partner report to our report for ' : 'Detach partner report from our report for ') + (r.barcode ?? 'this tube')"
+                        (click)="toggleAttach(r)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m21.4 11.1-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/>
+                  </svg>
+                  <span class="nd-rowact__t">{{ attachState(r) === 'separate' ? 'Attach to report' : 'Detach from report' }}</span>
                 </button>
               }
               @if (r.status === 'completed') {
@@ -133,7 +153,8 @@ import {
     .pf-out__who { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
     .pf-out__tests { font-size: 12px; color: var(--text-muted); }
     .pf-out__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-    .pf-out__partner, .pf-out__status { height: 26px; }
+    .pf-out__partner, .pf-out__status, .pf-out__attach { height: 26px; }
+    .pf-out__attach[data-attach='problem'] { color: var(--warning-text, #b45309); }
     .pf-out__date { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
     .pf-out__check { color: var(--violet-text, #6d28d9); }
     .pf-out__row[data-status='completed'] { background: var(--nd-done-tint); border-color: var(--nd-sel-border); }
@@ -162,8 +183,10 @@ export class OutsourcedListComponent implements OnInit {
   readonly web = webPointerSignal();
   readonly busy = signal<string | null>(null);
   /** Which row action holds `busy` (only that button shows the dots). */
-  readonly busyAct = signal<'upload' | 'complete' | 'undo'>('upload');
+  readonly busyAct = signal<'upload' | 'complete' | 'undo' | 'attach'>('upload');
   readonly statusLabel = STATUS_LABEL;
+  readonly attachLabel = ATTACH_LABEL;
+  readonly attachState = attachState;
   readonly accept = PARTNER_REPORT_ACCEPT;
   readonly rowReport = rowReport;
 
@@ -196,19 +219,37 @@ export class OutsourcedListComponent implements OnInit {
     const r = this.target;
     this.target = null;
     if (!file || !r) return;
-    await this.uploadAndComplete(r, file);
+    const problem = partnerFileProblem(file);
+    if (problem) { this.toasts.error(problem); return; }
+    const attach = await this.askAttach(r, file);
+    if (attach === null) return;
+    await this.uploadAndComplete(r, file, attach);
+  }
+
+  /** The upload step's one question: join the partner report to ours (one
+   *  PDF for the patient — default ON) or keep it a separate file. Null =
+   *  cancelled. */
+  async askAttach(r: OutsourcedTube, file: File): Promise<boolean | null> {
+    const res = await this.dialog.actions({
+      title: r.hasReport ? 'Replace partner report' : 'Upload partner report',
+      message: `${file.name} — ${this.testNames(r)}${r.partnerLabName ? ` (${r.partnerLabName})` : ''}.`,
+      checkbox: { label: 'Attach to our report — the patient gets one PDF (our report, then these pages)', initial: ATTACH_DEFAULT },
+      actions: [{ value: 'upload', label: r.hasReport ? 'Replace & complete' : 'Upload & complete', variant: 'primary' }],
+    });
+    return res.action === 'upload' ? res.checked : null;
   }
 
   /** Upload the partner report and mark the tube's outsourced tests Completed. */
-  async uploadAndComplete(r: OutsourcedTube, file: File) {
+  async uploadAndComplete(r: OutsourcedTube, file: File, attachToReport = ATTACH_DEFAULT) {
     const problem = partnerFileProblem(file);
     if (problem) { this.toasts.error(problem); return; }
     this.busyAct.set('upload');
     this.busy.set(r.sampleId);
     try {
       const url = await this.svc.upload(file);
-      await this.svc.complete(actionLines(r), { url, name: file.name, type: file.type });
+      const updated = await this.svc.complete(actionLines(r), { url, name: file.name, type: file.type }, attachToReport);
       this.toasts.success(`${r.hasReport ? 'Report replaced' : 'Report uploaded'} — ${this.testNames(r)} completed`);
+      await this.warnIfNotJoinable(updated);
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
     } finally {
@@ -227,6 +268,37 @@ export class OutsourcedListComponent implements OnInit {
     } finally {
       this.busy.set(null);
     }
+  }
+
+  /** Attach to / detach from our report, later. */
+  async toggleAttach(r: OutsourcedTube) {
+    const attach = attachState(r) === 'separate';
+    this.busyAct.set('attach');
+    this.busy.set(r.sampleId);
+    try {
+      const updated = await this.svc.setAttachToReport(r.tests.filter(t => t.report).map(t => t.orderTestId), attach);
+      if (attach && firstAttachProblem(updated)) await this.warnIfNotJoinable(updated);
+      else this.toasts.success(attach
+        ? 'Attached — the patient gets one PDF with the partner report'
+        : 'Detached — the partner report is sent as a separate file');
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.busy.set(null);
+    }
+  }
+
+  /** A partner file that can't be joined (password-protected / unreadable):
+   *  say so — it goes to the patient as a separate file instead. */
+  private async warnIfNotJoinable(updated: OutsourcedTube[] | null | undefined) {
+    const problem = firstAttachProblem(updated);
+    if (!problem) return;
+    await this.dialog.actions({
+      title: 'Partner report kept as a separate file',
+      message: problem,
+      actions: [],
+      cancelLabel: 'OK',
+    });
   }
 
   async undo(r: OutsourcedTube) {
