@@ -27,6 +27,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Technician report notes (all four levels — line, profile, department, order):** `orders.ReportNotesJson`, written only through `ReportNotesService` (row-locked, audited); the report snapshot copies them; the Lab-settings switch (`techReportNotes`, per branch) gates new text only — saved notes always print.
 - Never match by name or code when an ID / key exists.
 - User files live only in Spaces via the storage service — never on the container disk (wiped on every deploy).
+- Patient files (reports, partner PDFs, attachments, plate photos, chat / voice, documents, bills, signature scans) are served ONLY through the authenticated, tenant-checked API — never a bearer / presigned URL that works without the session (the verified public report link keeps its own model). Make that path fast instead: stream from storage (never buffer the whole file first), ETag + `Cache-Control: private` (+ `Vary: Authorization`) so a revalidation is a 304 with no storage trip, remember a missing file, and fetch each file ONCE per session in the UI (no HEAD pre-check, no refetch per render, no read-back when nothing changed).
 - A tenant's storage folder has ONE home: `tenants.StoragePrefix`, set once by `TenantStorageKeys` (handle, else `<name>-<id8>`) — every storage key is built through it; authorization is always by tenant ID, never by folder name.
 - A feature switch has ONE resolver (UI lab-features / server LabFeatureGate); never gate a surface on the workflow or the entitlement alone.
 

@@ -101,29 +101,33 @@ describe('UploadsService', () => {
     expect(map[PATH]).toBe(`https://api.test${PATH}?exp=1&sig=s`);
   });
 
-  it('open(): opens the tab inside the click, then points it at the signed URL', async () => {
+  it('open(): opens the tab inside the click, then shows the bytes from the AUTHENTICATED fetch — no signed link, no HEAD probe', async () => {
     const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
     const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-    const head = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:file');
     try {
-      const { svc } = setup();
+      const { svc, get, post } = setup();
       expect(await svc.open(PATH)).toBe('opened');
       expect(open).toHaveBeenCalledWith('', '_blank');
+      expect(get).toHaveBeenCalledWith('https://api.test/api/uploads/file', { params: { path: PATH }, responseType: 'blob' });
+      expect(post).not.toHaveBeenCalled();        // no bearer (signed) URL for patient files
+      expect(fetchSpy).not.toHaveBeenCalled();    // no HEAD pre-check
       expect(tab.opener).toBeNull();
-      expect(tab.location.href).toBe(`https://api.test${PATH}?exp=1&sig=s`);
-      expect(head).toHaveBeenCalledWith(`https://api.test${PATH}?exp=1&sig=s`, { method: 'HEAD', mode: 'cors' });
+      expect(tab.location.href).toBe('blob:file');
     } finally {
       open.mockRestore();
-      head.mockRestore();
+      fetchSpy.mockRestore();
+      createUrl.mockRestore();
     }
   });
 
   it('open(): a file the server no longer has (410) closes the tab and asks for a re-upload', async () => {
     const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
     const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-    const head = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 410 }));
+    const gone = new HttpErrorResponse({ status: 410, error: { error: 'file_missing' } });
     try {
-      const { svc } = setup();
+      const { svc, get } = setup(vi.fn(() => throwError(() => gone)));
       const toasts = TestBed.inject(ToastService);
       const err = vi.spyOn(toasts, 'error');
       expect(await svc.open(PATH)).toBe('missing');
@@ -132,25 +136,52 @@ describe('UploadsService', () => {
       expect(err).toHaveBeenCalledWith(FILE_MISSING_MESSAGE, 6000);
       expect(svc.isMissing(PATH)).toBe(true);
       expect(svc.isMissing(`https://api.test${PATH}`)).toBe(true);
+      // Known gone: a second click answers at once, without a request or a tab.
+      open.mockClear();
+      expect(await svc.open(PATH)).toBe('missing');
+      expect(open).not.toHaveBeenCalled();
+      expect(get).toHaveBeenCalledTimes(1);
     } finally {
       open.mockRestore();
-      head.mockRestore();
     }
   });
 
-  it('open(): a network / CORS problem on the probe still opens the file (the tab shows the outcome)', async () => {
+  it('open(): a network failure closes the tab and says so (the file is not marked missing)', async () => {
     const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
     const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-    const head = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
     try {
-      const { svc } = setup();
-      expect(await svc.open(PATH)).toBe('opened');
-      expect(tab.location.href).toBe(`https://api.test${PATH}?exp=1&sig=s`);
+      const { svc } = setup(vi.fn(() => throwError(() => new HttpErrorResponse({ status: 0 }))));
+      expect(await svc.open(PATH)).toBe('failed');
+      expect(tab.close).toHaveBeenCalled();
       expect(svc.isMissing(PATH)).toBe(false);
     } finally {
       open.mockRestore();
-      head.mockRestore();
     }
+  });
+
+  it('blob(): one request per file per session — concurrent and later callers share it (PDF renders re-use logos / signatures)', async () => {
+    const { svc, get } = setup();
+    const [a, b] = await Promise.all([svc.blob(PATH), svc.blob(PATH)]);
+    const c = await svc.blob(`https://api.test${PATH}`);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(a).toBe(b);
+    expect(c).toBe(a);
+  });
+
+  it('blob(): a 410 is never re-requested; a failure is not retried on every re-render', async () => {
+    const gone = new HttpErrorResponse({ status: 410, error: { error: 'file_missing' } });
+    const { svc, get } = setup(vi.fn(() => throwError(() => gone)));
+    await svc.blob(PATH);
+    await svc.blob(PATH);
+    expect(svc.src(PATH)).toBe('');
+    expect(get).toHaveBeenCalledTimes(1);
+
+    TestBed.resetTestingModule();
+    const flaky = setup(vi.fn(() => throwError(() => new HttpErrorResponse({ status: 503 }))));
+    await flaky.svc.blob(PATH);
+    await flaky.svc.blob(PATH);
+    expect(flaky.svc.src(PATH)).toBe('');
+    expect(flaky.get).toHaveBeenCalledTimes(1);
   });
 
   it('blob(): 410 file_missing marks the file missing; other errors do not', async () => {

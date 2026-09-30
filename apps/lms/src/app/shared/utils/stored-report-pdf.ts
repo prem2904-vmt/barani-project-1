@@ -24,7 +24,9 @@ import { firstValueFrom, type Observable } from 'rxjs';
  *
  * Partner reports the front desk attached ("Attach to our report") are
  * joined server-side: the GET returns ONE combined PDF (our stored pages
- * first, untouched) — so after a first store we read it back once.
+ * first, untouched) — so after a first store we read it back once, but only
+ * when the server says partner files are attached (otherwise the served file
+ * is byte-for-byte the one just uploaded).
  *
  * Variants: `full` (with the letterhead — view, download, share, WhatsApp,
  * the patient link) and `letterpad` (the letterhead-paper print: header &
@@ -70,15 +72,18 @@ export async function fetchStoredReportPdf(api: StoredPdfApi, reportId: string, 
   }
 }
 
-/** Store a rendered PDF — first write wins. */
+/** Store a rendered PDF — first write wins. `'stored-alone'`: the server
+ *  said nothing is joined to it (no attached partner files), so what GET
+ *  serves is exactly the bytes just uploaded — no read-back needed. */
 export async function storeReportPdf(
   api: StoredPdfApi, reportId: string, blob: Blob, variant: StoredPdfVariant = 'full',
-): Promise<'stored' | 'exists' | 'failed'> {
+): Promise<'stored' | 'stored-alone' | 'exists' | 'failed'> {
   try {
     const fd = new FormData();
     fd.append('file', blob, `${reportId}.pdf`);
-    await firstValueFrom(api.post(storedReportPdfPath(reportId, variant), fd));
-    return 'stored';
+    const res = await firstValueFrom(api.post(storedReportPdfPath(reportId, variant), fd)) as { attached?: unknown } | null | undefined;
+    // An older server answers without `attached`: read back to be safe.
+    return res && res.attached === false ? 'stored-alone' : 'stored';
   } catch (e) {
     const code = (e as { code?: string } | null)?.code;
     return statusOf(e) === 409 || code === 'already_stored' ? 'exists' : 'failed';
@@ -106,6 +111,8 @@ export function ensureStoredReportPdf(
       if (stored) return stored;
       const rendered = await render();
       const outcome = await storeReportPdf(api, reportId, rendered, variant);
+      // Nothing joined to it: the stored file IS our render — skip the second download.
+      if (outcome === 'stored-alone') return rendered;
       if (outcome === 'stored') {
         // What the server serves now — our report, plus any attached partner
         // pages. One retry: our own render has NO partner pages, so it is only
