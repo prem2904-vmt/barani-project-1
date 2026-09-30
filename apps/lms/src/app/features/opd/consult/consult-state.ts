@@ -66,7 +66,7 @@ export function draftBody(s: ConsultEditState, followUpDate: string | null, star
     privateNotesVisibility: s.privateNotesVisibility,
     followUpDate,
     rx: s.lines.map(l => toDto(l, start)),
-    investigationItems: s.tests.map(t => ({ testId: t.testId, name: t.name })),
+    investigationItems: s.tests.map(t => ({ testId: t.testId, name: t.name, ...(t.specimen ? { specimen: t.specimen } : {}) })),
   };
 }
 

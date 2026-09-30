@@ -44,7 +44,7 @@ export interface ConsultRecordDto {
   startedAt?: string | null; completedAt?: string | null; updatedAt?: string | null;
 }
 
-export interface ConsultInvestigationItem { testId: string; name: string; price?: number | null; }
+export interface ConsultInvestigationItem { testId: string; name: string; price?: number | null; /** Chosen specimen for a Test Master "choose" test (see shared/opd-specimen.ts). */ specimen?: string | null; }
 export interface ConsultInvestigation { id?: string; items: ConsultInvestigationItem[]; labOrderId?: string | null; status: 'draft' | 'ordered' | 'cancelled'; }
 
 export interface ConsultCurrentMedicine {
@@ -120,7 +120,7 @@ export interface ConsultPastConsult {
 }
 
 /** A lab test as the order screen's catalogue lists it (/api/tests/?view=summary). */
-export interface LabTestRow { id: string; name: string; testCode?: string | null; shortName?: string | null; price?: number | null; type?: string | null; isActive?: boolean; }
+export interface LabTestRow { id: string; name: string; testCode?: string | null; shortName?: string | null; price?: number | null; type?: string | null; isActive?: boolean; /** Trimmed Test Master parameters (carries specimenMode / askSpecimen). */ parameters?: string | null; }
 
 @Injectable({ providedIn: 'root' })
 export class ConsultApi {

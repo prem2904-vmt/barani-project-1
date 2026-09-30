@@ -26,6 +26,8 @@ import { RxEditorComponent } from './rx/rx-editor.component';
 import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies } from './rx/rx-model';
 import { newRxLine } from '../shared/rx-schedule';
 import { buildRxPdf } from './rx-print';
+import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
+import { missingSpecimens, type OpdTestLookup } from '../shared/opd-specimen';
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
@@ -49,7 +51,7 @@ const EMPTY: ConsultEditState = {
 @Component({
   selector: 'pf-opd-consult-workspace',
   standalone: true,
-  imports: [
+  imports: [OpdSpecimenPickerComponent, 
     DatePipe, ConsultVitalsComponent, ConsultGlanceComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
     RxEditorComponent, PatientTimelineComponent,
   ],
@@ -279,6 +281,10 @@ const EMPTY: ConsultEditState = {
                       @for (t of st().tests; track t.testId) {
                         <div class="nd-row cw__ordered">
                           <span class="nd-row__name">{{ t.name }}</span>
+                          @if (editable()) {
+                            <pf-opd-specimen-picker [test]="testForPicker(t.testId)" [value]="t.specimen ?? null" [invalid]="specimenInvalid(t.testId)"
+                                                    (valueChange)="setSpecimen(t.testId, $event)"></pf-opd-specimen-picker>
+                          } @else if (t.specimen) { <span class="cw__muted">{{ t.specimen }}</span> }
                           @if (t.price) { <span class="nd-row__value">₹{{ t.price }}</span> }
                           @if (editable()) { <button type="button" class="cw__x" (click)="toggleTest(t)" [attr.aria-label]="'Remove ' + t.name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button> }
                         </div>
@@ -653,6 +659,25 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   // ── Tests ──────────────────────────────────────────────────────────
   hasTest(id: string) { return this.st().tests.some(t => t.testId === id); }
+
+  // ── Specimen for a Test Master "choose" test (shared/opd-specimen.ts) ──
+  readonly specimenErr = signal<Record<string, boolean>>({});
+  testForPicker(id: string): { id: string; name: string; parameters?: string | null } {
+    const t = this.testCatalog().find(x => x.id === id);
+    return { id, name: t?.name ?? '', parameters: t?.parameters ?? null };
+  }
+  specimenInvalid(id: string): boolean { return !!this.specimenErr()[id]; }
+  setSpecimen(id: string, v: string): void {
+    this.patch({ tests: this.st().tests.map(t => (t.testId === id ? { ...t, specimen: v || null } : t)) });
+    if (v) this.specimenErr.update(m => { if (!m[id]) return m; const n = { ...m }; delete n[id]; return n; });
+  }
+  /** Tests still needing a specimen; flags their rows. Empty = Complete may go. */
+  private missingSpecimenTests(): string[] {
+    const byId: OpdTestLookup = Object.fromEntries(this.testCatalog().map(t => [t.id, t]));
+    const miss = missingSpecimens(this.st().tests, byId);
+    this.specimenErr.set(Object.fromEntries(miss.map(m => [m.testId, true])));
+    return miss.map(m => m.name);
+  }
   toggleTest(t: ConsultInvestigationItem) {
     if (!this.editable()) return;
     this.patch({ tests: this.hasTest(t.testId) ? this.st().tests.filter(x => x.testId !== t.testId) : [...this.st().tests, t] });
@@ -688,6 +713,13 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   complete() {
     const w = this.ws();
     if (!w || this.completing() || this.unresolved().length) return;
+    const noSpecimen = this.missingSpecimenTests();
+    if (noSpecimen.length) {
+      this.completeOpen.set(false);
+      this.step.set(3);
+      this.toast.error(`Choose the specimen for: ${noSpecimen.join(', ')}.`);
+      return;
+    }
     this.completing.set(true);
     this.consultApi.complete(w.visit.id, draftBody(this.st(), this.followUpIso(), this.visitDay())).subscribe({
       next: done => {

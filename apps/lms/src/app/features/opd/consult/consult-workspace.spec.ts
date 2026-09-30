@@ -47,6 +47,11 @@ describe('Consult stepper summaries + ticks', () => {
 });
 
 describe('Consult draft body + usual set', () => {
+  it('draftBody carries a chosen specimen for a "choose" test, and none for the rest', () => {
+    const b = draftBody({ ...BASE, tests: [{ testId: 'k1', name: 'KOH Mount', specimen: 'SKIN' }, { testId: 't2', name: 'CBC' }] }, '2026-10-07');
+    expect(b.investigationItems).toEqual([{ testId: 'k1', name: 'KOH Mount', specimen: 'SKIN' }, { testId: 't2', name: 'CBC' }]);
+  });
+
   it('draftBody sends the Rx in the shared schedule model and the tests as ids', () => {
     const b = draftBody({ ...BASE, lines: [LINE], tests: [{ testId: 't1', name: 'AEC', price: 150 }], chiefComplaint: '  x ' }, '2026-10-07');
     expect(b.rx[0]).toMatchObject({ drugId: 'd-clav', schedule: { type: 'times', pat: [1, 0, 1] }, durationDays: 5 });
