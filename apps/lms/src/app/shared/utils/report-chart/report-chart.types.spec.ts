@@ -1,5 +1,6 @@
 import { buildChartData } from './report-chart.data';
 import { layoutChart } from './report-chart.layout';
+import { approxMeasure } from './report-chart.geom';
 import { CHART_KINDS, kindAvailability, normalizeChartSpec, partsOfWhole, shareText, type ChartKind, type ChartShape } from './report-chart.model';
 import { CATALOGUE_SAMPLES, type CatalogueSample } from './report-chart.catalogue.spec-helpers';
 import { OGTT_SPEC, buildChartReport, fingerprint, liverTest, LFT_TITLES, ogttTests, textRuns, wbcDiffTest, WBC_ABS, WBC_PCT, WBC_TITLES, type Run } from './report-chart.spec-helpers';
@@ -314,6 +315,11 @@ describe('report chart types — round charts', () => {
       expect(tx, kind).toEqual(expect.arrayContaining(['Share', 'Normal', 'Absolute Neutrophils', '78 %', '15 %', '5.0 %', '1.5 %', '0.5 %',
         '8.6 10³/µL', 'H', '2–7', '0.06 10³/µL', '0.02–0.1', 'Each slice is its share of the total (11.03 10³/µL).']));
       expect(l.ops.filter(o => o.t === 'path' && o.fill?.startsWith('p')), kind).toHaveLength(5);
+      // The share column never touches the longest name.
+      const TX = l.ops.filter((o): o is Extract<typeof o, { t: 'text' }> => o.t === 'text');
+      const name = TX.find(o => o.text === 'Absolute Lymphocytes')!;
+      const share = TX.find(o => o.text === '15 %' && o.align === 'right' && Math.abs(o.y - name.y) < 0.5)!;
+      expect(share.x - approxMeasure(share.text, share.size, true) - (name.x + approxMeasure(name.text, name.size, false)), kind).toBeGreaterThanOrEqual(8);
       // The abnormal count (8.6 H) is outlined like any abnormal part.
       expect(l.ops.some(o => o.t === 'path' && !o.fill && o.stroke === 'high'), kind).toBe(true);
     }

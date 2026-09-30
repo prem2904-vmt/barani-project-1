@@ -90,7 +90,8 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
   const rowH = SMALL + 6;
   const nameW = Math.max(0, ...rows.map(r => m(r.label, SMALL, false)));
   const valW = Math.max(0, ...rows.map(r => m(r.v, SMALL, true)));
-  const shareW = counts ? Math.max(m('Share', TINY, false), ...rows.map(r => m(r.share, SMALL, true))) + 12 : 0;
+  // The share column: 12 pt after the name, right-aligned at `shareX`.
+  const shareW = counts ? 12 + Math.max(m('Share', TINY, false), ...rows.map(r => m(r.share, SMALL, true))) : 0;
   const flagW = rows.some(r => r.flag) ? m('H', SMALL, true) + 4 : 0;
   const hasRange = rows.some(r => r.range);
   const rangeW = hasRange ? Math.max(m('Normal', TINY, false), ...rows.map(r => m(r.range, TINY, false))) : 0;
@@ -157,7 +158,7 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
     let ky = beside ? Math.max(top + 2, cy - (rows.length * rowH + (keyHead ? rowH : 0)) / 2) : top + D + 12;
     if (keyHead) {
       if (hasRange) ops.push({ t: 'text', x: kx + keyW, y: ky + TINY, text: 'Normal', size: TINY, color: 'dim', align: 'right', role: 'legend' });
-      if (counts) ops.push({ t: 'text', x: kx + 12 + nameW + shareW - 12, y: ky + TINY, text: 'Share', size: TINY, color: 'dim', align: 'right', role: 'legend' });
+      if (counts) ops.push({ t: 'text', x: kx + 12 + nameW + shareW, y: ky + TINY, text: 'Share', size: TINY, color: 'dim', align: 'right', role: 'legend' });
       ky += rowH;
     }
     rows.forEach((r, i) => {
@@ -166,7 +167,7 @@ export function layoutPie(data: ChartData, width: number, opts: LayoutOptions): 
       const color = PART_COLOR[i % PART_COLOR.length];
       ops.push({ t: 'rect', x: kx, y: base - SMALL * 0.8, w: 8, h: 8, fill: r.p?.value != null ? color : 'grid' });
       ops.push({ t: 'text', x: kx + 12, y: base, text: r.label, size: SMALL, color: 'text', align: 'left', role: 'xlabel' });
-      if (r.share) ops.push({ t: 'text', x: kx + 12 + nameW + shareW - 12, y: base, text: r.share, size: SMALL, bold: true, color: 'ink', align: 'right', role: 'value' });
+      if (r.share) ops.push({ t: 'text', x: kx + 12 + nameW + shareW, y: base, text: r.share, size: SMALL, bold: true, color: 'ink', align: 'right', role: 'value' });
       const vx = kx + 12 + nameW + shareW + 12 + valW;
       const ab = !!r.p?.abnormal;
       ops.push({ t: 'text', x: vx, y: base, text: r.v, size: SMALL, bold: ab, italic: r.p?.value == null,
