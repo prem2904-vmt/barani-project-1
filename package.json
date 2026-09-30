@@ -18,6 +18,7 @@
     "electron:dev": "concurrently \"npx nx serve lms\" \"wait-on http://localhost:4200 && electron .\"",
     "electron:build": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-stage && electron-builder",
     "electron:build:devapi": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron && electron-builder",
+    "electron:build:dev:mac": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-dev && electron-builder --mac -c.extraMetadata.pfDataProfile=dev",
     "electron:build:win": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-stage && electron-builder --win",
     "electron:build:mac": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-stage && electron-builder --mac",
     "electron:build:linux": "NX_DAEMON=false NX_NO_CLOUD=true npx nx build lms --configuration=electron-stage && electron-builder --linux",

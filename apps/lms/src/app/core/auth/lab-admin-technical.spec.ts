@@ -163,7 +163,7 @@ describe('Lab settings hub — tiles filtered by what the user can open', () => 
 
   it('Lab Admin (Technical) sees only openable tiles', () => {
     const hrefs = hubFor(LAB_ADMIN_TECH).visibleTiles().map(t => t.href);
-    expect(hrefs).toEqual(['/admin/tests', '/admin/reports', '/admin/referral-labs', '/admin/lab-settings', '/admin/microbiology']);
+    expect(hrefs).toEqual(['/admin/tests', '/admin/reports', '/admin/referral-labs', '/admin/lab-settings', '/admin/microbiology', '/admin/instruments']);
   });
 
   it('super-admin sees every tile', () => {
