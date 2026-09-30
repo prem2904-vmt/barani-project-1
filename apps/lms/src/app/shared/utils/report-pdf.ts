@@ -26,6 +26,8 @@ import {
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
   readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption } from './report-header-layout';
 import { AgeStyle, formatAge } from './patient-age';
+import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
+import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
 
 /**
  * Render an A4 lab report PDF in the Classic template style — blue
@@ -390,6 +392,51 @@ let STRIP_QR: { base: string; trackToken: string | null } = { base: '', trackTok
  *  Functions read from these closure-captured vars at draw time. */
 let theme: ResolvedTheme = defaultTheme();
 
+// ── Typography — the report theme's token table (report-theme.ts) ──────
+// EVERY text draw below names its element and takes font / size / weight
+// from TYPE; no draw site carries a literal font size. Classic's table holds
+// the sizes this renderer always used (byte-identical paper); the Modern
+// theme embeds Source Sans 3 (report-fonts.ts) when it is loaded.
+let TYPE: ReportTypeTheme = CLASSIC_THEME;
+/** The theme's embedded family is registered on the current document. */
+let EMBEDDED = false;
+
+/** [font name, jsPDF style] for a weight in the current theme. The built-in
+ *  PDF fonts have no semibold (it draws bold); Source Sans has no bold
+ *  italic (it draws bold). */
+function faceOf(weight: TypeWeight): [string, string] {
+  if (EMBEDDED) return [SOURCE_SANS_FAMILY, weight === 'bolditalic' ? 'bold' : weight];
+  return [PDF_FONT, weight === 'semibold' ? 'bold' : weight];
+}
+function setFace(doc: jsPDF, weight: TypeWeight): void {
+  const [f, st] = faceOf(weight);
+  doc.setFont(f, st);
+}
+/** An element's size (pt) under the template's font scale. */
+function tsz(el: TypeEl): number {
+  return tokenSize(TYPE.tokens[el], theme.fontScale);
+}
+/** An element's weight. */
+function twt(el: TypeEl): TypeWeight {
+  return TYPE.tokens[el].weight;
+}
+/** Set the font + size an element prints in; returns the size. */
+function typeset(doc: jsPDF, el: TypeEl): number {
+  setFace(doc, twt(el));
+  const size = tsz(el);
+  doc.setFontSize(size);
+  return size;
+}
+/** An element's jsPDF style name (autotable `fontStyle`). */
+function styleOf(el: TypeEl): string {
+  return faceOf(twt(el))[1];
+}
+/** autotable cell styles for an element: font, style and size. */
+function cellType(el: TypeEl): { font: string; fontStyle: string; fontSize: number } {
+  const [font, fontStyle] = faceOf(twt(el));
+  return { font, fontStyle, fontSize: tsz(el) };
+}
+
 function defaultTheme(): ResolvedTheme {
   return {
     accent: '#0066CC', primary: '#1B3A6B', body: '#1a1a1a', divider: '#cccccc',
@@ -572,15 +619,14 @@ function drawCustomPatientFields(doc: jsPDF, snap: ReportSnapshot, startY: numbe
 
   let y = startY + 12;
   const colW = (A4.w - 2 * MARGIN_X) / 2;
-  doc.setFontSize(8.5 * theme.fontScale);
   rows.forEach((r, i) => {
     if (i % 2 === 0 && i > 0) y += 13;
     const x = MARGIN_X + (i % 2) * colW;
     const label = `${r.title}: `;
-    doc.setFont(PDF_FONT, 'bold');
+    typeset(doc, 'customFieldLabel');
     doc.setTextColor(BLACK);
     doc.text(label, x, y);
-    doc.setFont(PDF_FONT, 'normal');
+    typeset(doc, 'customFieldValue');
     doc.setTextColor(TEXT_DIM);
     doc.text(String(r.value), x + doc.getTextWidth(label), y);
   });
@@ -606,10 +652,21 @@ export function buildReportPdf(input: ReportPdfInput): jsPDF {
  *  would place it — the report designer outlines these boxes over the
  *  rendered page. Same theme resolution, same seeds, same overrides. */
 export function computeReportPageLayout(input: ReportPdfInput): ReportLayoutResult {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  installPdfTextSanitizer(doc);   // it also widens symbol glyphs — measure like the real render
   const { practice, template } = prepareRender({ ...input, blankLetterhead: false });
+  const doc = newReportDoc();
+  installPdfTextSanitizer(doc);   // it also widens symbol glyphs — measure like the real render
+  EMBEDDED = !!TYPE.embedded && installReportFonts(doc);
   return computeReportLayout(doc, practice, template?.logoUrl ?? null, template);
+}
+
+/** A fresh A4 document. An embedded-font theme writes only the fonts it
+ *  used and deflates its streams (the embedded font subsets are ~80 KB a
+ *  face uncompressed — compressed, the Modern report stays close to a
+ *  Classic one); Classic keeps jsPDF's defaults (byte-identical output). */
+function newReportDoc(): jsPDF {
+  return TYPE.embedded
+    ? new jsPDF({ unit: 'pt', format: 'a4', putOnlyUsedFonts: true, compress: true })
+    : new jsPDF({ unit: 'pt', format: 'a4' });
 }
 
 /** Theme + images + practice merge + margins for one render (module state). */
@@ -636,6 +693,8 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   } : rawPractice;
 
   applyTheme(resolveTheme(template, practice));
+  TYPE = reportTypeTheme(template);
+  EMBEDDED = false;
   // Per-report signatories (who validated / entered results) take precedence
   // over the admin template signature slots. Their signatureUrls are embedded
   // data URLs, so no prefetch is required.
@@ -668,12 +727,16 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
 /** Build the PDF and hand back the letterhead/footer layout it drew with. */
 export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; layout: ReportLayoutResult } {
   const report = input.report;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const { practice, template, snap } = prepareRender(input);
+  const doc = newReportDoc();
   // Built-in PDF fonts are cp1252-only: superscripts (×10⁹/L), subscripts
   // (CO₂) and Greek (β-hCG) would otherwise print as garbage. One wrapper on
-  // doc.text covers every draw here AND inside jspdf-autotable.
+  // doc.text covers every draw here AND inside jspdf-autotable. (An embedded
+  // theme font prints them natively — the wrapper then passes text through.)
   installPdfTextSanitizer(doc);
-  const { practice, template, snap } = prepareRender(input);
+  // The Modern theme's Source Sans 3 — when not loaded (preloadReportImages
+  // loads it), the theme's sizes print in Helvetica rather than failing.
+  EMBEDDED = !!TYPE.embedded && installReportFonts(doc);
   // Safety net (RCA 2026-09-27): a standalone test with values whose layout
   // has no results table gets the default one — every caller (report viewer,
   // queue, public link, test-editor live preview) prints the RESULT, never a
@@ -1000,7 +1063,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     ]);
     if (sheet.length > 0) {
       renderAbnormalSummary(doc, sheet, cursorY, {
-        font: PDF_FONT, fontScale: theme.fontScale, primary: theme.primary, black: BLACK, text: TEXT,
+        typeset, cellType, primary: theme.primary, black: BLACK, text: TEXT,
         dim: TEXT_DIM, hair: HAIR, flagStyle: theme.flagStyle, flagIndicator: theme.flagIndicator,
         abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor,
         pageW: A4.w, marginX: MARGIN_X, marginBottom: MARGIN_BOTTOM,
@@ -1214,12 +1277,25 @@ export async function preloadReportImages(
   const bgUrls = new Set((readHeaderLayout(tpl)?.backgrounds ?? []).map(b => b.url).filter(Boolean));
 
   const cache: Record<string, string> = {};
-  await Promise.all(Array.from(new Set([...urls, ...bgUrls])).map(async u => {
-    if (!u) return;
-    const data = await fetchAsDataUrl(u, baseUrl, signed, bgUrls.has(u) ? { maxEdge: BG_MAX_EDGE, keepJpeg: true } : undefined);
-    if (data) cache[u] = data; // key by original (relative) URL — what the template stores
-  }));
+  await Promise.all([
+    // The report theme's embedded fonts ride the same async step: every
+    // entry point (viewer, download, print, public link, designer preview)
+    // already awaits this before its sync render.
+    prepareReportTheme(tpl),
+    ...Array.from(new Set([...urls, ...bgUrls])).map(async u => {
+      if (!u) return;
+      const data = await fetchAsDataUrl(u, baseUrl, signed, bgUrls.has(u) ? { maxEdge: BG_MAX_EDGE, keepJpeg: true } : undefined);
+      if (data) cache[u] = data; // key by original (relative) URL — what the template stores
+    }),
+  ]);
   return cache;
+}
+
+/** Load what the template's report theme needs before a (sync) render — the
+ *  Modern theme's Source Sans 3 files, fetched once per session. Classic
+ *  needs nothing and fetches nothing. Never throws. */
+export async function prepareReportTheme(tpl: ReportTemplate | null | undefined): Promise<void> {
+  if (reportTypeTheme(tpl).embedded) await loadReportFonts();
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1229,8 +1305,8 @@ export async function preloadReportImages(
 /** Renders the tagline by splitting on '|' and colouring each separator
  *  pipe with the accent colour (classic style). For taglines without
  *  pipes ("Accurate. On time.") it just renders as a single black line. */
-function drawTagline(doc: jsPDF, tagline: string, x: number, y: number, size = 9, style: 'normal' | 'bold' | 'italic' = 'bold') {
-  doc.setFont(PDF_FONT, style);
+function drawTagline(doc: jsPDF, tagline: string, x: number, y: number, size: number, style: TypeWeight) {
+  setFace(doc, style);
   doc.setFontSize(size);
   const parts = tagline.split('|');
   let cx = x;
@@ -1287,7 +1363,7 @@ interface Seed {
   defY?: (h: number) => number;
   text?: string;
   fields?: HeaderField[];
-  style?: 'normal' | 'bold' | 'italic';
+  style?: 'normal' | 'bold' | 'italic' | 'semibold';
   size?: number;
   color?: string;
   tone?: LayoutItem['tone'];
@@ -1298,7 +1374,7 @@ interface Seed {
   /** y is the LAST line's baseline (footer lines stack upward). */
   anchorBottom?: boolean;
   /** Legacy measuring quirks (centred tagline / website pill measured at another size). */
-  measure?: { style: 'normal' | 'bold' | 'italic'; size: number };
+  measure?: { style: 'normal' | 'bold' | 'italic' | 'semibold'; size: number };
   /** Wrapping is the design (disclaimer) — not worth a note. */
   expectWrap?: boolean;
   w?: number;
@@ -1357,6 +1433,9 @@ function finalizeBox(doc: jsPDF, s: Seed, o: ItemOverride, customized: boolean):
 }
 
 function finalizeText(doc: jsPDF, s: Seed, o: ItemOverride, active: boolean, customized: boolean): Resolved {
+  // A flowing theme (Modern) lays text out like an edited layout: wrapped
+  // lines, the looser line height. Classic keeps the old per-style layout.
+  active = active || TYPE.flowHeader;
   const align = o.align ?? s.align;
   const size = o.size ?? s.size ?? 9;
   const baseStyle = s.style ?? 'normal';
@@ -1365,7 +1444,7 @@ function finalizeText(doc: jsPDF, s: Seed, o: ItemOverride, active: boolean, cus
   const x = o.x != null ? o.x * MM : (o.align && o.align !== s.align) ? anchorX(align) : s.x;
   const raw = s.text ?? '';
   const gw = (t: string) => doc.getTextWidth(t);
-  doc.setFont(PDF_FONT, style);
+  setFace(doc, style);
   doc.setFontSize(size);
 
   let lines: string[];
@@ -1424,14 +1503,14 @@ function finalizeText(doc: jsPDF, s: Seed, o: ItemOverride, active: boolean, cus
   } else if (s.tone === 'pipes') {
     w = gw(raw.replace(/\|/g, ' | '));
     if (quirk && align === 'center') {
-      doc.setFont(PDF_FONT, quirk.style); doc.setFontSize(quirk.size);
+      setFace(doc, quirk.style); doc.setFontSize(quirk.size);
       startX = x - gw(raw.replace(/\|/g, ' | ')) / 2;
-      doc.setFont(PDF_FONT, style); doc.setFontSize(size);
+      setFace(doc, style); doc.setFontSize(size);
     } else startX = align === 'left' ? x : boxLeft(x, align, w);
   } else if (s.tone === 'pill') {
     w = gw(raw);
     let tw = w;
-    if (quirk) { doc.setFont(PDF_FONT, quirk.style); doc.setFontSize(quirk.size); tw = gw(raw); }
+    if (quirk) { setFace(doc, quirk.style); doc.setFontSize(quirk.size); tw = gw(raw); }
     pillW = tw + 12;
     const k = size / 8;
     // Untouched: the old expression, so the rectangle lands on the same point.
@@ -1463,6 +1542,9 @@ function computeReportLayout(
 ): ReportLayoutResult {
   const cfg = readHeaderLayout(tpl);
   const active = !!cfg;
+  // A flowing theme (Modern): the accent bar and the patient block clear the
+  // tallest letterhead text, as in an edited layout (see ReportTypeTheme).
+  const flow = active || TYPE.flowHeader;
   const ov = (id: string): ItemOverride => cfg?.items[id] ?? {};
   const items: Resolved[] = [];
   const add = (s: Seed): Resolved => {
@@ -1475,6 +1557,34 @@ function computeReportLayout(
   };
   const fs = theme.fontScale;
   const preset = theme.headerPreset;
+  /** A letterhead element's weight, as a seed style. */
+  const tstyle = (el: TypeEl) => twt(el) as NonNullable<Seed['style']>;
+  /** The lab name in a flowing theme: the theme's size, shrunk (0.5pt steps,
+   *  never below 16pt) to fit `maxW`; a name still too wide WRAPS onto more
+   *  lines at 16pt (`wrapW`), pushing the rows under it down by `extra`.
+   *  Where it cannot wrap (inside the Banner's band) it shrinks to 11pt.
+   *  Classic never changes — its paper is pinned. A size the lab set in the
+   *  designer always wins. */
+  const fitName = (el: 'labName' | 'labNameMinimal', text: string, maxW: number, canWrap = true):
+      { size: number; wrapW?: number; extra: number } => {
+    let size = tsz(el);
+    if (!TYPE.flowHeader || ov('name').size !== undefined) return { size, extra: 0 };
+    setFace(doc, twt(el));
+    doc.setFontSize(size);
+    const floor = canWrap ? 16 : 11;
+    while (size > floor && doc.getTextWidth(text) > maxW) { size -= 0.5; doc.setFontSize(size); }
+    if (!canWrap || doc.getTextWidth(text) <= maxW) return { size, extra: 0 };
+    const n = (doc.splitTextToSize(text, maxW) as string[]).length;
+    return { size, wrapW: maxW, extra: (n - 1) * size * 1.2 };
+  };
+  const nablW = theme.nablAccredited && !ov('nabl').hidden ? 40 : 0;
+  /** How much further down a taller lab name pushes the rows under it (the
+   *  cap-height difference against the style's Classic size); 0 in Classic. */
+  const nameGrow = (size: number, classicSize: number): number =>
+    TYPE.flowHeader ? Math.max(0, Math.round((size - classicSize) * 0.7 * 2) / 2) : 0;
+  /** Extra baseline drop for a line whose theme size exceeds Classic's. */
+  const lead = (el: TypeEl, classicSize: number): number =>
+    TYPE.flowHeader ? Math.max(0, tsz(el) - classicSize) : 0;
   const fullName = (practice.name ?? 'Prefrontal Pathology Lab').toUpperCase();
   const rightX = A4.w - MARGIN_X;
   const val = (f: HeaderField) => practice[f] ?? '';
@@ -1482,12 +1592,14 @@ function computeReportLayout(
     id: 'nabl', kind: 'nabl', label: 'NABL badge', x: rightX - 30, y: LH_TOP - 2, align: 'right',
     defX: w => rightX - w, w: 30, h: 30, url: theme.nablLogoUrl || null, sub: theme.nablNumber || undefined,
   } : null;
-  const joined = (id: string, def: HeaderField[], x: number, y: number, align: Align, size = 8 * fs): void => {
+  const joined = (id: string, def: HeaderField[], x: number, y: number, align: Align, size = tsz('labContactLine'),
+                  wrapDefault?: number): void => {
     const fields = ov(id).fields ?? def;
     const text = fields.map(val).filter(Boolean).join('  ·  ');
     if (!text) return;
     const label = fields.filter(f => val(f)).map(f => FIELD_LABEL[f]).join(' · ');
-    add({ id, kind: 'text', label, text, fields, x, y, align, style: 'normal', size, color: TEXT_DIM, tone: 'plain' });
+    add({ id, kind: 'text', label, text, fields, x, y, align, style: twt('labContactLine') as Seed['style'], size, color: TEXT_DIM, tone: 'plain',
+          wrapDefault, expectWrap: wrapDefault != null });
   };
   const bar = (): Resolved | null => {
     if (!theme.topAccentBar) return null;
@@ -1496,7 +1608,7 @@ function computeReportLayout(
     // Text the lab placed BELOW the bar's spot stays below it (dragging a
     // line under the bar is allowed); text above it pushes the bar down.
     let y = LH_TOP + 54;
-    if (active) {
+    if (flow) {
       const texts = items
         .filter(i => i.kind === 'text' && !i.hidden)
         .map(i => (ov(i.id).x !== undefined || ov(i.id).y !== undefined ? { b: i.box, moved: true } : { b: i.defBox, moved: false }))
@@ -1509,7 +1621,8 @@ function computeReportLayout(
   const pill = (b: Resolved | null) => {
     if (!b || !practice.website) return;
     add({ id: 'website', kind: 'text', label: 'Website', text: practice.website, x: A4.w - MARGIN_X - 6, y: b.y + 5.5,
-          align: 'right', style: 'bold', size: 8, color: BLUE, tone: 'pill', measure: { style: 'normal', size: 8 * fs } });
+          align: 'right', style: tstyle('website'), size: tsz('website'), color: BLUE, tone: 'pill',
+          measure: { style: 'normal', size: TYPE.tokens.website.size * fs } });
   };
 
   if (preset === 'centered') {
@@ -1518,19 +1631,24 @@ function computeReportLayout(
     const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: (A4.w - size) / 2, y: LH_TOP, align: 'center',
                        defX: w => (A4.w - w) / 2, w: size, h: size, url: logoUrl });
     const lh = logo.defBox.h;
-    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: A4.w / 2, y: LH_TOP + lh + 14, align: 'center',
-          style: 'bold', size: 18 * fs, color: BLACK, tone: 'plain' });
-    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: A4.w / 2, y: LH_TOP + lh + 28, align: 'center',
-          style: 'bold', size: 9, color: BLACK, tone: 'pipes', measure: { style: 'bold', size: 9 * fs } });
-    joined('contact', ['phone', 'email', 'website'], A4.w / 2, LH_TOP + lh + 40, 'center');
+    const nm = fitName('labName', fullName, A4.w - 2 * MARGIN_X - 2 * nablW);
+    // (+4: air between the logo and a taller name's cap line.)
+    const g = nameGrow(nm.size, 18 * fs) + nm.extra + (TYPE.flowHeader ? 4 : 0);
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: A4.w / 2, y: LH_TOP + lh + 14 + g - nm.extra, align: 'center',
+          style: tstyle('labName'), size: nm.size, color: BLACK, tone: 'plain', wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: A4.w / 2, y: LH_TOP + lh + 28 + g, align: 'center',
+          style: tstyle('taglinePipes'), size: tsz('taglinePipes'), color: BLACK, tone: 'pipes',
+          measure: { style: tstyle('taglinePipes'), size: TYPE.tokens.taglinePipes.size * fs } });
+    joined('contact', ['phone', 'email', 'website'], A4.w / 2, LH_TOP + lh + 40 + g, 'center');
     if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: A4.w / 2,
-          y: LH_TOP + lh + 50, align: 'center', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
+          y: LH_TOP + lh + 50 + g + lead('labAddress', 8 * fs), align: 'center', style: tstyle('labAddress'), size: tsz('labAddress'),
+          color: TEXT_DIM, tone: 'plain' });
     pill(bar());
   } else if (preset === 'banner') {
     const n = nablSeed();
     // The old banner painted the NABL badge BEFORE the blue band, so the band
     // hid it. Untouched templates keep that; an edited layout draws it on top.
-    if (n && !active) add(n);
+    if (n && !flow) add(n);
     const band = add({ id: 'banner', kind: 'banner', label: 'Banner', x: 0, y: 0, w: A4.w, h: 54, align: 'left' });
     // The lab can switch the band OFF (a hidden override, like any element):
     // the header then reads like a normal letterhead — logo and name from
@@ -1548,25 +1666,34 @@ function computeReportLayout(
     const wmAlign: Align = lp === 'center' ? 'center' : 'left';
     // Band off: centred → the name sits UNDER the logo (Centered's rhythm);
     // left / right → beside it, on the Classic baselines.
-    const nameY = bandOn ? 24 : lp === 'center' ? LH_TOP + logo.defBox.h + 14 : LH_TOP + 18;
-    const tagY = bandOn ? 40 : nameY + 14;
-    const contactY = bandOn ? bh + 10 : Math.max(LH_TOP + 48, tagY + 12, logo.defBox.y + logo.defBox.h + 10);
+    const nm = fitName('labName', fullName,
+      (lp === 'center' ? A4.w - 2 * MARGIN_X - 2 * nablW : A4.w - MARGIN_X - wmX - nablW), !bandOn);
+    const g = nameGrow(nm.size, 18 * fs);
+    const nameY = bandOn ? 24 + g / 2 : lp === 'center' ? LH_TOP + logo.defBox.h + 14 + g : LH_TOP + 18 + g;
+    const tagY = bandOn ? 40 + g / 2 : nameY + 14 + nm.extra;
+    const contactY = bandOn ? bh + 10 + lead('labContactLine', 8 * fs)
+      : Math.max(LH_TOP + 48, tagY + 12 + lead('labContactLine', 8 * fs), logo.defBox.y + logo.defBox.h + 10);
     add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wmX, y: nameY, align: wmAlign,
-          style: 'bold', size: 18 * fs, color: bandOn ? '#ffffff' : BLACK, tone: 'plain' });
+          style: tstyle('labName'), size: nm.size, color: bandOn ? '#ffffff' : BLACK, tone: 'plain',
+          wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
     add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wmX, y: tagY, align: wmAlign,
-          style: 'normal', size: 9 * fs, color: bandOn ? '#ffffff' : TEXT_DIM, tone: 'plain' });
-    joined('contact', ['address', 'phone', 'email'], MARGIN_X, contactY, 'left');
-    if (n && active) add(n);
+          style: tstyle('taglinePlain'), size: tsz('taglinePlain'), color: bandOn ? '#ffffff' : TEXT_DIM, tone: 'plain' });
+    // A flowing theme wraps the contact line clear of the NABL badge.
+    joined('contact', ['address', 'phone', 'email'], MARGIN_X, contactY, 'left', undefined,
+           TYPE.flowHeader && nablW ? A4.w - 2 * MARGIN_X - nablW : undefined);
+    if (n && flow) add(n);
   } else if (preset === 'minimal') {
     const n = nablSeed(); if (n) add(n);
     const align: Align = theme.logoPosition === 'center' ? 'center' : theme.logoPosition === 'right' ? 'right' : 'left';
     const x = align === 'center' ? A4.w / 2 : align === 'right' ? A4.w - MARGIN_X : MARGIN_X;
-    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x, y: LH_TOP + 14, align,
-          style: 'bold', size: 16 * fs, color: BLACK, tone: 'plain' });
-    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x, y: LH_TOP + 26, align,
-          style: 'normal', size: 9 * fs, color: TEXT_DIM, tone: 'plain' });
+    const nm = fitName('labNameMinimal', fullName, A4.w - 2 * MARGIN_X - (align === 'center' ? 2 * nablW : nablW));
+    const g = nameGrow(nm.size, 16 * fs) + nm.extra;
+    add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x, y: LH_TOP + 14 + g - nm.extra, align,
+          style: tstyle('labNameMinimal'), size: nm.size, color: BLACK, tone: 'plain', wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x, y: LH_TOP + 26 + g, align,
+          style: tstyle('taglinePlain'), size: tsz('taglinePlain'), color: TEXT_DIM, tone: 'plain' });
     // (Minimal's contact line inherits the tagline's 9pt — as it always did.)
-    joined('contact', ['address', 'phone', 'email', 'website'], x, LH_TOP + 38, align, 9 * fs);
+    joined('contact', ['address', 'phone', 'email', 'website'], x, LH_TOP + 38 + g, align, tsz('labContactMinimal'));
   } else {
     // Classic: logo + two-tone wordmark left, phone/email right,
     // the address on its own line under the logo row, the accent bar.
@@ -1574,21 +1701,33 @@ function computeReportLayout(
     const logo = add({ id: 'logo', kind: 'logo', label: 'Logo', x: logoXFor(size), y: LH_TOP, align: theme.logoPosition,
                        defX: w => logoXFor(w), w: size, h: size, url: logoUrl });
     const wx = logo.hidden ? logo.defBox.x : logo.defBox.x + logo.defBox.w + 6;
-    const wy = LH_TOP + 18;
+    // The contact column (phone / email, right) is measured first so a long
+    // lab name in a flowing theme shrinks before it runs into it.
+    const nablOn = theme.nablAccredited && !ov('nabl').hidden && ov('nabl').x === undefined && ov('nabl').align === undefined;
+    const contactRight = nablOn ? rightX - (30 + 8) : rightX;
+    typeset(doc, 'labContact');
+    const contactW = Math.max(0, ...[practice.phone, practice.email].filter(Boolean).map(v => doc.getTextWidth(v!)));
+    const nm = fitName('labName', fullName, contactRight - (contactW ? contactW + 14 : 0) - wx);
+    const g0 = nameGrow(nm.size, 18 * fs);
+    const g = g0 + nm.extra;
+    const wy = LH_TOP + 18 + g0;
+    // A wrapped name prints in one ink (the two-tone split is a one-line look).
     add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wx, y: wy, align: 'left',
-          style: 'bold', size: 18 * fs, color: BLACK, tone: 'twoTone' });
-    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wx, y: wy + 14, align: 'left',
-          style: 'bold', size: 9, color: BLACK, tone: 'pipes' });
+          style: tstyle('labName'), size: nm.size, color: BLACK, tone: nm.wrapW ? 'plain' : 'twoTone',
+          wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
+    add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: wx, y: wy + 14 + nm.extra, align: 'left',
+          style: tstyle('taglinePipes'), size: tsz('taglinePipes'), color: BLACK, tone: 'pipes' });
     const n = nablSeed();
     const nabl = n ? add(n) : null;
     const nablHolds = !!nabl && !nabl.hidden && ov('nabl').x === undefined && ov('nabl').align === undefined;
     const contactX = nablHolds ? rightX - (nabl!.defBox.w + 8) : rightX;
     if (practice.phone) add({ id: 'phone', kind: 'text', label: 'Phone', text: practice.phone, x: contactX, y: LH_TOP + 14,
-          align: 'right', style: 'normal', size: 9 * fs, color: BLACK, tone: 'plain' });
+          align: 'right', style: tstyle('labContact'), size: tsz('labContact'), color: BLACK, tone: 'plain' });
     if (practice.email) add({ id: 'email', kind: 'text', label: 'Email', text: practice.email, x: contactX, y: LH_TOP + 28,
-          align: 'right', style: 'normal', size: 9 * fs, color: BLACK, tone: 'plain' });
+          align: 'right', style: tstyle('labContact'), size: tsz('labContact'), color: BLACK, tone: 'plain' });
     if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: MARGIN_X,
-          y: LH_TOP + 46, align: 'left', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
+          y: LH_TOP + 46 + g + lead('labAddress', 8 * fs), align: 'left', style: tstyle('labAddress'), size: tsz('labAddress'),
+          color: TEXT_DIM, tone: 'plain' });
     pill(bar());
   }
 
@@ -1601,8 +1740,9 @@ function computeReportLayout(
     let bottom = Math.max(LH_TOP, ...items.filter(i => i.kind !== 'banner').map(i => i.defBox.y + i.defBox.h));
     const stack = (id: string, label: string, text: string) => {
       const base = bottom + 10;
-      add({ id, kind: 'text', label, text, x: MARGIN_X, y: base, align: 'left', style: 'normal', size: 8 * fs, color: TEXT_DIM, tone: 'plain' });
-      bottom = base + Math.max(3, (text.split('\n').length - 1) * 8 * fs * 1.2 + 3);
+      add({ id, kind: 'text', label, text, x: MARGIN_X, y: base, align: 'left', style: tstyle('headerExtraLine'),
+            size: tsz('headerExtraLine'), color: TEXT_DIM, tone: 'plain' });
+      bottom = base + Math.max(3, (text.split('\n').length - 1) * tsz('headerExtraLine') * 1.2 + 3);
     };
     for (const f of Object.keys(FIELD_LABEL) as HeaderField[]) {
       if (ov(f).added && !placed.has(f) && val(f)) stack(f, FIELD_LABEL[f], val(f));
@@ -1613,25 +1753,26 @@ function computeReportLayout(
   // ── Footer lines (last page), stacked up from just above the date strip.
   let extraY = A4.h - 40;
   if (theme.disclaimer) {
+    const dlh = TYPE.tokens.disclaimer.lineHeight ?? tsz('disclaimer') * 1.2;
     const d = add({ id: 'disclaimer', region: 'footer', kind: 'text', label: 'Disclaimer', text: theme.disclaimer, x: MARGIN_X,
-                    y: extraY, align: 'left', style: 'italic', size: 7, color: TEXT_DIM, tone: 'plain', lineH: 8.5,
+                    y: extraY, align: 'left', style: tstyle('disclaimer'), size: tsz('disclaimer'), color: TEXT_DIM, tone: 'plain', lineH: dlh,
                     reverse: true, wrapDefault: A4.w - 2 * MARGIN_X, anchorBottom: true, expectWrap: true });
     if (!d.hidden) {
-      for (let i = 0; i < (d.lines?.length ?? 1); i++) extraY -= 8.5;
+      for (let i = 0; i < (d.lines?.length ?? 1); i++) extraY -= dlh;
       extraY -= 2;
     }
   }
   if (theme.footerText) {
     add({ id: 'footerText', region: 'footer', kind: 'text', label: 'Footer text', text: theme.footerText, x: MARGIN_X,
-          y: extraY, align: 'left', style: 'normal', size: 7.5, color: TEXT_DIM, tone: 'plain', anchorBottom: true });
+          y: extraY, align: 'left', style: tstyle('footerText'), size: tsz('footerText'), color: TEXT_DIM, tone: 'plain', anchorBottom: true });
   }
 
   const header = items.filter(i => i.region === 'header' && !i.hidden);
   const headerBottom = Math.max(LH_TOP, ...header.map(i => i.box.y + i.box.h));
   const legacyTop = LH_TOP + 70;
-  const bodyTopAuto = !active || cfg!.bodyTop == null;
-  const bodyTop = !active ? legacyTop
-    : cfg!.bodyTop != null ? cfg!.bodyTop * MM
+  const bodyTopAuto = !cfg || cfg.bodyTop == null;
+  const bodyTop = !flow ? legacyTop
+    : cfg?.bodyTop != null ? cfg.bodyTop * MM
     : Math.max(legacyTop, headerBottom + BODY_GAP);
   const lp = tpl?.letterpadMode
     ? { top: Math.max(0, tpl.letterpadHeaderMm ?? 45) * MM, bottom: A4.h - Math.max(20, Math.max(0, tpl.letterpadFooterMm ?? 30) * MM) }
@@ -1721,7 +1862,7 @@ function drawTextItem(doc: jsPDF, it: LayoutItem) {
     doc.setFillColor('#ffffff');
     doc.rect(it.box.x, it.box.y, it.pillW ?? it.box.w, it.box.h, 'F');
   }
-  doc.setFont(PDF_FONT, style);
+  setFace(doc, style);
   doc.setFontSize(size);
   doc.setTextColor(it.color ?? BLACK);
   if (it.tone === 'twoTone') {
@@ -1799,14 +1940,13 @@ function drawNablBadge(doc: jsPDF, x: number, topY: number, size: number, url: s
     doc.setDrawColor('#10b981');
     doc.setFillColor('#ecfdf5');
     doc.roundedRect(x, topY + 5 * k, size, 15 * k, 3 * k, 3 * k, 'FD');
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(8 * k);
+    setFace(doc, twt('nablChip'));
+    doc.setFontSize(tsz('nablChip') * k);
     doc.setTextColor('#059669');
     doc.text('NABL', x + size / 2, topY + 15.5 * k, { align: 'center' });
   }
   if (number) {
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(6.5);
+    typeset(doc, 'nablNumber');
     doc.setTextColor(TEXT_DIM);
     doc.text(number, x + size / 2, topY + size + 6, { align: 'center' });
   }
@@ -1883,34 +2023,29 @@ function drawPatientBlockThreeCol(
   // separator into the Specimen(s) column (was overlapping at 13pt).
   const patientName = snap.patient?.displayName ?? '—';
   const nameMaxW = col1W - 16;
-  doc.setFont(PDF_FONT, 'bold');
-  let nameSize = 13;
-  doc.setFontSize(nameSize);
+  let nameSize = typeset(doc, 'patientName');
   while (nameSize > 8 && doc.getTextWidth(patientName) > nameMaxW) { nameSize -= 0.5; doc.setFontSize(nameSize); }
   doc.setTextColor(BLACK);
   doc.text(patientName, x1, y);
   y += 16;
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9);
   doc.setTextColor(BLACK);
   if (snapAge(snap, 'Years')) {
-    doc.text(`Age : ${snapAge(snap, 'Years')}`, x1, y);
+    drawPair(doc, 'Age : ', snapAge(snap, 'Years'), x1, y, 'demoLabel', 'demoValue');
     y += 12;
   }
   if (snap.patient?.sex) {
-    doc.text(`Sex : ${snap.patient.sex}`, x1, y);
+    drawPair(doc, 'Sex : ', snap.patient.sex, x1, y, 'demoLabel', 'demoValue');
     y += 12;
   }
   const mrn = (snap.patient?.mrn ?? '').trim();
   if (mrn) {
-    doc.text(`MRN : ${mrn}`, x1, y);
+    drawPair(doc, 'MRN : ', mrn, x1, y, 'mrnLabel', 'mrnValue');
   }
 
   // ── Col 2 — Specimens collected + Ref doctor ──
   const x2 = MARGIN_X + col1W + 10;
   y = top + 18;
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(9.5);
+  typeset(doc, 'patientCaption');
   doc.setTextColor(BLUE);
   doc.text('Specimen(s) :', x2, y);
   y += 13;
@@ -1924,8 +2059,7 @@ function drawPatientBlockThreeCol(
       .map(t => (t.sampleType ?? '').trim())
       .filter(isConcreteSpecimen)
   ));
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9);
+  typeset(doc, 'patientList');
   doc.setTextColor(BLACK);
   if (specimens.length > 0) {
     const text = specimens.join(', ');
@@ -1933,17 +2067,16 @@ function drawPatientBlockThreeCol(
     doc.text(lines, x2, y);
     y += lines.length * 11 + 6;
   } else if (snap.patient?.phone) {
-    doc.text(`Phone: ${snap.patient.phone}`, x2, y);
+    drawPair(doc, 'Phone: ', snap.patient.phone, x2, y, 'demoLabel', 'demoValue');
     y += 14;
   }
 
   if (snap.order?.refDoctorName) {
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(9);
+    typeset(doc, 'demoLabel');
     doc.setTextColor(BLACK);
     doc.text('Ref. By: ', x2, y);
     const refW = doc.getTextWidth('Ref. By: ');
-    doc.setFont(PDF_FONT, 'bold');
+    typeset(doc, 'demoValue');
     doc.text(snap.order.refDoctorName, x2 + refW, y);
   }
 
@@ -1961,15 +2094,13 @@ function drawPatientBlockThreeCol(
     y += 6;
   }
 
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8.5);
   doc.setTextColor(BLACK);
   const drawTimeLine = (label: string, value: string) => {
     if (!value) return;
-    doc.setFont(PDF_FONT, 'normal');
+    typeset(doc, 'regLabel');
     doc.text(label, x3, y);
     const labelW = doc.getTextWidth(label);
-    doc.setFont(PDF_FONT, 'bold');
+    typeset(doc, 'regValue');
     doc.text(value, x3 + labelW + 2, y);
     y += 11;
   };
@@ -2038,12 +2169,24 @@ function drawPatientLabelled(
 ): number {
   const v = (value ?? '').trim();
   if (!v) return y;
-  doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+  typeset(doc, 'demoLabel'); doc.setTextColor(BLACK);
   doc.text(label, x, y);
   const lw = doc.getTextWidth(label);
-  doc.setFont(PDF_FONT, 'bold');
+  typeset(doc, 'demoValue');
   doc.text(v, x + lw, y);
   return y + 12;
+}
+
+/** A patient "Label : value" line. Classic prints it as ONE plain string in
+ *  the label's style (as it always did); a theme with `splitLabels` prints
+ *  the label regular and the value in the value's (semibold) style. */
+function drawPair(doc: jsPDF, label: string, value: string, x: number, y: number, labelEl: TypeEl, valueEl: TypeEl): void {
+  typeset(doc, labelEl);
+  if (!TYPE.splitLabels) { doc.text(`${label}${value}`, x, y); return; }
+  doc.text(label, x, y);
+  const lw = doc.getTextWidth(label);
+  typeset(doc, valueEl);
+  doc.text(value, x + lw, y);
 }
 
 function drawPatientItem(
@@ -2052,40 +2195,40 @@ function drawPatientItem(
 ): number {
   switch (key) {
     case 'name':
-      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(12); doc.setTextColor(BLACK);
+      typeset(doc, 'patientNameColumn'); doc.setTextColor(BLACK);
       doc.text(snap.patient?.displayName ?? '—', x, y);
       return y + 16;
     case 'age':
       if (!snapAge(snap, 'Years')) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Age : ${snapAge(snap, 'Years')}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'Age : ', snapAge(snap, 'Years'), x, y, 'demoLabel', 'demoValue'); return y + 12;
     case 'sex':
       if (!snap.patient?.sex) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Sex : ${snap.patient.sex}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'Sex : ', snap.patient.sex, x, y, 'demoLabel', 'demoValue'); return y + 12;
     case 'mrn': {
       const mrn = (snap.patient?.mrn ?? '').trim(); if (!mrn) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`MRN : ${mrn}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'MRN : ', mrn, x, y, 'mrnLabel', 'mrnValue'); return y + 12;
     }
     case 'phone':
       if (!snap.patient?.phone) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Phone : ${snap.patient.phone}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'Phone : ', snap.patient.phone, x, y, 'demoLabel', 'demoValue'); return y + 12;
     case 'orderid': {
       // The human order number (LAB-2608-000049) — not a slice of the GUID,
       // which is what staff were being asked to read out loud.
       const oid = snap.order?.orderNumber?.trim() || (snap.order?.id ?? '').slice(0, 8);
       if (!oid) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
-      doc.text(`Order : ${oid}`, x, y); return y + 12;
+      doc.setTextColor(BLACK);
+      drawPair(doc, 'Order : ', oid, x, y, 'mrnLabel', 'mrnValue'); return y + 12;
     }
     case 'refdoctor': {
       if (!snap.order?.refDoctorName) return y;
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      typeset(doc, 'demoLabel'); doc.setTextColor(BLACK);
       doc.text('Ref. By: ', x, y);
       const rw = doc.getTextWidth('Ref. By: ');
-      doc.setFont(PDF_FONT, 'bold'); doc.text(snap.order.refDoctorName, x + rw, y);
+      typeset(doc, 'demoValue'); doc.text(snap.order.refDoctorName, x + rw, y);
       return y + 12;
     }
     case 'refhospital':
@@ -2098,10 +2241,10 @@ function drawPatientItem(
       return drawPatientLabelled(doc, 'Centre: ', snap.order?.branchName, x, y);
     case 'specimen': {
       const specimens = Array.from(new Set((snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)));
-      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(BLUE);
+      typeset(doc, 'patientCaptionColumn'); doc.setTextColor(BLUE);
       doc.text('Specimen(s) :', x, y); y += 12;
       if (specimens.length) {
-        doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+        typeset(doc, 'patientList'); doc.setTextColor(BLACK);
         const lines = doc.splitTextToSize(specimens.join(', '), colW);
         doc.text(lines, x, y); y += lines.length * 11 + 2;
       }
@@ -2125,9 +2268,9 @@ function drawPatientItem(
       const val = parsePatientAttributes(snap)[key];
       if (val == null || String(val).trim() === '') return y;
       const label = `${fld?.title ?? key}: `;
-      doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(9); doc.setTextColor(BLACK);
+      typeset(doc, 'fieldLabel'); doc.setTextColor(BLACK);
       doc.text(label, x, y);
-      doc.setFont(PDF_FONT, 'normal'); doc.setTextColor(TEXT_DIM);
+      typeset(doc, 'fieldValue'); doc.setTextColor(TEXT_DIM);
       doc.text(String(val), x + doc.getTextWidth(label), y);
       return y + 12;
     }
@@ -2162,7 +2305,7 @@ function drawPatientQrPair(doc: jsPDF, keys: string[], x: number, colW: number, 
     items.slice(i, i + perRow).forEach((it, j) => {
       const qx = x + j * (size + STRIP_QR_GAP);
       paintQr(doc, it.v, qx, rowTop, size);
-      doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(6.5); doc.setTextColor(BLACK);
+      typeset(doc, 'qrCaption'); doc.setTextColor(BLACK);
       doc.text(PATIENT_STRIP_QR_CAPTIONS[it.k] ?? '', qx + size / 2, rowTop + size + 7, { align: 'center' });
     });
     rowTop += size + 12;
@@ -2172,10 +2315,10 @@ function drawPatientQrPair(doc: jsPDF, keys: string[], x: number, colW: number, 
 
 function drawPatientTimeItem(doc: jsPDF, label: string, value: string, x: number, y: number): number {
   if (!value) return y;
-  doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(8.5); doc.setTextColor(BLACK);
+  typeset(doc, 'regLabel'); doc.setTextColor(BLACK);
   doc.text(label, x, y);
   const lw = doc.getTextWidth(label);
-  doc.setFont(PDF_FONT, 'bold'); doc.text(value, x + lw, y);
+  typeset(doc, 'regValue'); doc.text(value, x + lw, y);
   return y + 11;
 }
 
@@ -2225,12 +2368,10 @@ function drawPatientBlockFourCol(
     for (let c = 0; c < 4; c++) {
       const x = MARGIN_X + c * colW + 10;
       const y = top + r * (blockH / 2) + 13;
-      doc.setFont(PDF_FONT, 'bold');
-      doc.setFontSize(6.5);
+      typeset(doc, 'gridLabel');
       doc.setTextColor(TEXT_DIM);
       doc.text(cells[r][c].label, x, y);
-      doc.setFont(PDF_FONT, 'normal');
-      doc.setFontSize(9.5);
+      typeset(doc, 'gridValue');
       doc.setTextColor(TEXT);
       const fit = doc.splitTextToSize(cells[r][c].value, colW - 20)[0] ?? cells[r][c].value;
       doc.text(fit, x, y + 12);
@@ -2284,12 +2425,10 @@ function drawPatientBlockStacked(
   let y = top + 16;
   const labelW = 110;
   rows.forEach(row => {
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(9);
+    typeset(doc, 'stackLabel');
     doc.setTextColor(TEXT_DIM);
     doc.text(`${row.label} :`, MARGIN_X, y);
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(9.5);
+    typeset(doc, 'stackValue');
     doc.setTextColor(TEXT);
     doc.text(row.value, MARGIN_X + labelW, y);
     y += 14;
@@ -2357,7 +2496,7 @@ const cellKey = (d: CellHookArg): string => `${d.section}:${d.row.index}:${d.col
 
 function stashSuperscriptCell(store: Map<string, SupCell>, d: CellHookArg): void {
   const raw = Array.isArray(d.cell.text) ? d.cell.text.join(' ') : String(d.cell.text ?? '');
-  const safe = pdfSafeText(raw, { keepSymbols: true });
+  const safe = pdfSafeText(raw, { keepSymbols: true, native: EMBEDDED });
   if (!hasSuperscript(safe)) return;
   store.set(cellKey(d), { text: safe, styles: d.cell.styles ?? {} });
   d.cell.text = [''];
@@ -2381,7 +2520,7 @@ function stashQualifiedRangeCell(
 ): void {
   if (d.section !== 'body' || d.column.index !== rangeColIdx) return;
   const lines = (Array.isArray(d.cell.text) ? d.cell.text : [String(d.cell.text ?? '')])
-    .map(l => pdfSafeText(l, { keepSymbols: true }));
+    .map(l => pdfSafeText(l, { keepSymbols: true, native: EMBEDDED }));
   if (lines.length < 2) return;                       // plain single-band cell
   store.set(cellKey(d), { lines, styles: d.cell.styles ?? {} });
   d.cell.text = [''];
@@ -2408,7 +2547,7 @@ function drawQualifiedRangeCell(
   // same left edge, uniformly dim. The old first-line-bigger treatment was
   // for "matched value + qualifier" pairs, which no longer print.
   q.lines.forEach(line => {
-    doc.setFont(PDF_FONT, 'normal');
+    setFace(doc, twt('range'));
     doc.setFontSize(fs);
     doc.setTextColor(TEXT_DIM);
     if (hasSuperscript(line)) {
@@ -2428,7 +2567,10 @@ function drawSuperscriptCell(doc: jsPDF, store: Map<string, SupCell>, d: CellHoo
   store.delete(cellKey(d));
   const st = sup.styles as { fontSize?: number; fontStyle?: string; textColor?: unknown; cellPadding?: number };
   const fs = typeof st.fontSize === 'number' ? st.fontSize : 9;
-  doc.setFont(PDF_FONT, st.fontStyle === 'bold' ? 'bold' : 'normal');
+  // Classic redraws in its regular / bold face; an embedded theme in the
+  // cell's own style (semibold, italic …).
+  if (EMBEDDED) doc.setFont(SOURCE_SANS_FAMILY, String(st.fontStyle ?? 'normal'));
+  else doc.setFont(PDF_FONT, st.fontStyle === 'bold' ? 'bold' : 'normal');
   doc.setFontSize(fs);
   const tc = st.textColor;
   doc.setTextColor(typeof tc === 'string' ? tc
@@ -2841,21 +2983,21 @@ function renderScopeHeading(
   if (y > A4.h - MARGIN_BOTTOM - 60) { y = newPage(doc, practice); }
   // Department band — the strongest heading inside the body (classic pattern:
   // clear department separation carries the whole multi-department report).
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(10.5);
+  // A taller department name (Modern) sits lower on the same rule rhythm.
+  const grow = TYPE.flowHeader ? Math.max(0, Math.round((tsz('deptName') - 10.5) * 0.7)) : 0;
+  typeset(doc, 'deptName');
   doc.setTextColor(theme.primary);
-  doc.text(text, MARGIN_X, y + 12);
+  doc.text(text, MARGIN_X, y + 12 + grow);
   if (rightText) {
     // e.g. "Sample ID: 26001" — ties the department block to its tube(s).
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(8.5);
+    typeset(doc, 'deptMeta');
     doc.setTextColor(TEXT_DIM);
-    doc.text(rightText, A4.w - MARGIN_X, y + 12, { align: 'right' });
+    doc.text(rightText, A4.w - MARGIN_X, y + 12 + grow, { align: 'right' });
   }
   doc.setDrawColor(theme.primary);
-  doc.setLineWidth(1);
-  doc.line(MARGIN_X, y + 17, A4.w - MARGIN_X, y + 17);
-  return y + 23;
+  doc.setLineWidth(TYPE.deptRule);
+  doc.line(MARGIN_X, y + 17 + grow, A4.w - MARGIN_X, y + 17 + grow);
+  return y + 23 + grow;
 }
 
 /** Distinct sample IDs a department block prints on its band, in first-seen
@@ -3001,9 +3143,8 @@ function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): numbe
 
 /** Draw `text` centred on `cx`, shrinking the font (down to 6.5pt) until it
  *  fits the slot — never truncated, never spilling into the next signatory. */
-function drawFittedCentre(doc: jsPDF, text: string, cx: number, y: number, size: number, maxW: number): void {
-  let fs = size;
-  doc.setFontSize(fs);
+function drawFittedCentre(doc: jsPDF, text: string, cx: number, y: number, el: TypeEl, maxW: number): void {
+  let fs = typeset(doc, el);
   while (fs > 6.5 && doc.getTextWidth(text) > maxW) { fs -= 0.5; doc.setFontSize(fs); }
   doc.text(text, cx, y, { align: 'center' });
 }
@@ -3043,19 +3184,16 @@ function drawInlineSignatures(
         drawSigScribble(doc, px, baseY + 4);
       }
       if ((s.name ?? '').trim()) {
-        doc.setFont(PDF_FONT, 'bold');
         doc.setTextColor(BLACK);
-        drawFittedCentre(doc, s.name!.trim(), px, baseY + SIG_ROW.name, 9.5, textW);
+        drawFittedCentre(doc, s.name!.trim(), px, baseY + SIG_ROW.name, 'signatureName', textW);
       }
       if ((s.title ?? '').trim()) {
-        doc.setFont(PDF_FONT, 'normal');
         doc.setTextColor(TEXT_DIM);
-        drawFittedCentre(doc, `(${s.title!.trim()})`, px, titleY, 8, textW);
+        drawFittedCentre(doc, `(${s.title!.trim()})`, px, titleY, 'signatureTitle', textW);
       }
       if ((s.regNo ?? '').trim()) {
-        doc.setFont(PDF_FONT, 'normal');
         doc.setTextColor(TEXT_DIM);
-        drawFittedCentre(doc, `Reg. ${s.regNo!.trim()}`, px, regY, 7.5, textW);
+        drawFittedCentre(doc, `Reg. ${s.regNo!.trim()}`, px, regY, 'signatureReg', textW);
       }
     }
   }
@@ -3124,17 +3262,17 @@ function drawSentenceCell(doc: jsPDF, store: Map<number, SentenceCell>, d: Sente
   c.lines.forEach((line, i) => {
     const y = c.y + i * c.lh;
     if (i === 0 && line.startsWith(c.label)) {
-      doc.setFont(PDF_FONT, 'bold');
+      setFace(doc, twt('interpretationLabel'));
       doc.setTextColor(BLACK);
       doc.text(c.label, c.x, y);
       const lw = doc.getTextWidth(c.label);
-      doc.setFont(PDF_FONT, 'normal');
+      setFace(doc, twt('interpretation'));
       doc.setTextColor(color);
       const rest = line.slice(c.label.length).replace(/^\s+/, '');
       if (rest) doc.text(rest, c.x + lw + doc.getTextWidth(' '), y);
       return;
     }
-    doc.setFont(PDF_FONT, 'normal');
+    setFace(doc, twt('interpretation'));
     doc.setTextColor(color);
     doc.text(line, c.x, y);
   });
@@ -3191,6 +3329,21 @@ function keepRowsTogether(doc: jsPDF, d: KeepHookArg, keepWithNext: Set<number>)
   next.height = h;
   cells.forEach(c => { c.height = h; });
   d.table.settings.rowPageBreak = 'avoid';
+}
+
+/** The theme element a results-table column prints in (by its first member's
+ *  type). Classic: the Method / Specimen columns print as body text. */
+function columnElement(m: ReportColumn): TypeEl {
+  switch (m.type) {
+    case 'name': return 'testName';
+    case 'result': return 'result';
+    case 'unit': return 'unit';
+    case 'range': return 'range';
+    case 'method': return 'methodColumn';
+    case 'specimen': return 'specimenColumn';
+    case 'text': return m.name === 'specimen' ? 'specimenColumn' : 'tableBody';
+    default: return 'tableBody';
+  }
 }
 
 /** Render panel groups as ONE columnar autoTable against the column config
@@ -3313,7 +3466,7 @@ function renderColumnarTable(
       body.push([{
         content: g.testName.toUpperCase(),
         colSpan: COLSPAN,
-        styles: { fillColor: '#eef2f7', textColor: theme.primary, fontStyle: 'bold', fontSize: 9.5, halign: 'left' },
+        styles: { fillColor: '#eef2f7', textColor: theme.primary, ...cellType('panelName'), halign: 'left' },
       }]);
       bodyMeta.push(null);
       bodyKind.push('other');
@@ -3321,17 +3474,21 @@ function renderColumnarTable(
       // Method / Specimen / referral-lab sub-lines (ISO 15189 7.4.1.6 for
       // referrals) — one per line, in that order (owner, 2026-09-28: with both
       // switches on, Method then Specimen, never run together on one line).
-      const sub: string[] = [];
+      const sub: Array<{ text: string; el: TypeEl }> = [];
       const methodText = g.hideMethodLine ? undefined : (g.methodLine ?? g.method);
-      if (methodText) sub.push(`Method: ${methodText}`);
+      if (methodText) sub.push({ text: `Method: ${methodText}`, el: 'methodology' });
       const specimenText = g.showSpecimenLine ? (g.specimen ?? '').trim() : '';
-      if (specimenText) sub.push(`Specimen: ${specimenText}`);
-      if (g.referralLab) sub.push(`Tested at: ${g.referralLab}`);
-      if (sub.length > 0) {
+      if (specimenText) sub.push({ text: `Specimen: ${specimenText}`, el: 'specimen' });
+      if (g.referralLab) sub.push({ text: `Tested at: ${g.referralLab}`, el: 'referral' });
+      // Classic: one italic cell, a line each. A theme that styles them
+      // apart (Modern: method regular, specimen italic) gives each its row.
+      const subRows = !sub.length ? [] : TYPE.splitSubLines ? sub : [{ text: sub.map(l => l.text).join('\n'), el: 'methodology' as TypeEl }];
+      for (const line of subRows) {
         body.push([{
-          content: sub.join('\n'),
+          content: line.text,
           colSpan: COLSPAN,
-          styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
+          styles: { ...cellType(line.el), textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left',
+                    ...(TYPE.splitSubLines ? { cellPadding: { top: 2, right: 6, bottom: 2, left: 6 } } : {}) },
         }]);
         bodyMeta.push(null);
         bodyKind.push('other');
@@ -3355,8 +3512,7 @@ function renderColumnarTable(
         body.push([{
           content: label ? `${label}: ${r.note ?? ''}` : (r.note ?? ''),
           colSpan: COLSPAN,
-          styles: { fillColor: '#ffffff', textColor: TEXT, fontStyle: 'normal', halign: 'left', valign: 'top',
-                    fontSize: 8.5 * theme.fontScale },
+          styles: { fillColor: '#ffffff', textColor: TEXT, ...cellType('interpretation'), halign: 'left', valign: 'top' },
         }]);
         bodyMeta.push(null);
         bodyKind.push('sentence');
@@ -3366,7 +3522,7 @@ function renderColumnarTable(
         body.push([{
           content: r.note ?? '',
           colSpan: COLSPAN,
-          styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'left', fontSize: 8.5 },
+          styles: { fillColor: '#f8fafc', textColor: TEXT, ...cellType('note'), halign: 'left' },
         }]);
         bodyMeta.push(null);
         bodyKind.push('other');
@@ -3427,27 +3583,32 @@ function renderColumnarTable(
 
       const cells: Cell[] = vcols.map(vc => {
         let txt = vc.members.map(valueOf).filter(Boolean).join(' ');
-        const styles: Record<string, unknown> = { halign: 'left', textColor: TEXT_DIM };
-        if (vc.nameOnly) { styles['fontStyle'] = 'bold'; styles['textColor'] = BLACK; }
-        else if (vc.textOnly) { styles['fontSize'] = 8; }
+        const styles: Record<string, unknown> = { halign: 'left', textColor: TEXT_DIM, ...cellType(columnElement(vc.members[0])) };
+        if (vc.nameOnly) { Object.assign(styles, cellType('testName')); styles['textColor'] = BLACK; }
+        else if (vc.textOnly) { Object.assign(styles, cellType('cellText')); }
         if (vc.hasResult) {
           if (glyph) txt = txt ? `${txt}  ${glyph}` : glyph;
           styles['textColor'] = BLACK;
+          // The value's emphasis: regular (Modern: semibold) → the SAME
+          // bold for an abnormal value, a non-Normal option, an admin row
+          // colour and the tech's "print in bold" pick.
+          let emphasised = false;
           if (!isNormal && theme.flagIndicator !== 'none') {
-            styles['fontStyle'] = 'bold';
+            emphasised = true;
             if (theme.flagStyle === 'bold_color') styles['textColor'] = abnColor;
           }
           // A chosen option that is NOT ticked Normal (mw saves 'A' — only
           // when its option list has at least one Normal) always prints bold,
           // whatever the indicator setting (owner 2026-09-26).
-          if (r.flag === 'A') styles['fontStyle'] = 'bold';
-          if (adminColor) { styles['textColor'] = adminColor; styles['fontStyle'] = 'bold'; }
+          if (r.flag === 'A') emphasised = true;
+          if (adminColor) { styles['textColor'] = adminColor; emphasised = true; }
           // The tech's "print in bold" pick: the SAME value-cell bold as an
           // abnormal value (colour untouched — it adds emphasis, not a flag).
-          if (r.printBold) styles['fontStyle'] = 'bold';
+          if (r.printBold) emphasised = true;
+          Object.assign(styles, cellType(emphasised || r.bold ? 'resultAbnormal' : 'result'));
         }
         // Conditional bold (condition `then.bold`) — bolds name + result.
-        if (r.bold && (vc.nameOnly || vc.hasResult)) styles['fontStyle'] = 'bold';
+        if (r.bold && vc.nameOnly) styles['fontStyle'] = faceOf('bold')[1];
         return { content: txt, styles };
       });
       body.push(cells);
@@ -3471,8 +3632,7 @@ function renderColumnarTable(
         body.push([{
           content: desc,
           colSpan: COLSPAN,
-          styles: { fillColor: '#ffffff', textColor: TEXT, fontStyle: 'normal', halign: 'left', valign: 'top',
-                    fontSize: 8.5 * theme.fontScale },
+          styles: { fillColor: '#ffffff', textColor: TEXT, ...cellType('description'), halign: 'left', valign: 'top' },
         }]);
         bodyMeta.push(null);
         bodyKind.push('desc');
@@ -3488,7 +3648,7 @@ function renderColumnarTable(
         body.push([{
           content: `Method: ${compactMethod}`,
           colSpan: COLSPAN,
-          styles: { fontStyle: 'italic', fontSize: 8, textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
+          styles: { ...cellType('methodology'), textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left' },
         }]);
         bodyMeta.push(null);
         // 'desc' = a row that belongs to the value above: kept on its page.
@@ -3528,7 +3688,7 @@ function renderColumnarTable(
   head.push([{
     content: '',
     colSpan: COLSPAN,
-    styles: { fillColor: false, lineWidth: 0, fontSize: 9.5, fontStyle: 'bold', halign: 'left',
+    styles: { fillColor: false, lineWidth: 0, ...cellType('panelContinued'), halign: 'left',
               cellPadding: { top: 4, right: 6, bottom: 4, left: 6 } },
   }]);
   let contH = 0;
@@ -3549,11 +3709,10 @@ function renderColumnarTable(
       const fill = doc.getFillColor(), font = doc.getFont(), size = doc.getFontSize(), color = doc.getTextColor();
       doc.setFillColor('#eef2f7');
       doc.rect(MARGIN_X, top, usable, contH, 'F');
-      doc.setFont(PDF_FONT, 'bold');
-      doc.setFontSize(9.5);
+      const bandSize = typeset(doc, 'panelContinued');
       doc.setTextColor(theme.primary);
       // autotable's own top-aligned first baseline for the band's font.
-      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, MARGIN_X + 6, top + 4 + 9.5 * 0.85);
+      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, MARGIN_X + 6, top + 4 + bandSize * 0.85);
       doc.setFillColor(fill);
       doc.setFont(font.fontName, font.fontStyle);
       doc.setFontSize(size);
@@ -3580,8 +3739,7 @@ function renderColumnarTable(
     didDrawPage: () => {
       tablePagesSeen++;
       if (tablePagesSeen > 1 && deptLabel) {
-        doc.setFont(PDF_FONT, 'bold');
-        doc.setFontSize(9);
+        typeset(doc, 'deptContinued');
         doc.setTextColor(theme.primary);
         doc.text(`${deptLabel.toUpperCase()} — CONTINUED`, MARGIN_X, margin.top - 14);
         doc.setDrawColor(HAIR);
@@ -3626,14 +3784,12 @@ function renderColumnarTable(
       const s = 3.2;
       // Place the glyph just after the printed value (measured in the same
       // font the cell used), clamped inside the cell.
-      doc.setFont(PDF_FONT, m.bold ? 'bold' : 'normal');
-      doc.setFontSize(9 * theme.fontScale);
+      const fs = typeset(doc, m.bold ? 'resultAbnormal' : 'result');
       const tw = doc.getTextWidth(m.text);
       const cx = Math.min(d.cell.x + 6 + tw + 8, d.cell.x + d.cell.width - 9);
       // Align to the FIRST text line, not the cell middle — a multi-band
       // reference stack makes the row tall, and a centred glyph floated
       // below "500 mg/dL" instead of sitting beside it.
-      const fs = 9 * theme.fontScale;
       const cy = d.cell.y + 4 + fs * 0.42;
       doc.setFillColor(m.color);
       if (m.arrow === 'up') doc.triangle(cx - s, cy + s, cx + s, cy + s, cx, cy - s, 'F');
@@ -3726,8 +3882,7 @@ function renderResolvedTest(
 
 /** Classic-style centered uppercase test name. */
 function drawTestHeading(doc: jsPDF, name: string, y: number) {
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(13);
+  typeset(doc, 'testHeading');
   doc.setTextColor(BLACK);
   doc.text(name.toUpperCase(), A4.w / 2, y + 14, { align: 'center' });
   doc.setDrawColor(HAIR);
@@ -3764,8 +3919,7 @@ function renderGridSection(
   // "Differential count"…); the preview shows it, so the PDF must too.
   const secLabel = (sec.label ?? '').trim();
   if (secLabel) {
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(8.5);
+    typeset(doc, 'sectionLabel');
     doc.setTextColor(TEXT_DIM);
     doc.text(secLabel.toUpperCase(), MARGIN_X, y + 8);
     y += 12;
@@ -3825,7 +3979,7 @@ function renderGridSection(
       return [{
         content: r.mergeContent ?? '',
         colSpan: totalCols,
-        styles: { fillColor: '#f8fafc', textColor: TEXT, fontStyle: 'italic', halign: 'center', fontSize: 8.5 },
+        styles: { fillColor: '#f8fafc', textColor: TEXT, ...cellType('narrativeMerged'), halign: 'center' },
       }];
     }
     const isFirstBodyRow = bodyRows.length > 0 && bodyRows[0].id === r.id;
@@ -3860,9 +4014,9 @@ function renderGridSection(
     return vcols.map(vc => {
       const txt = vc.members.map(cellValue).filter(Boolean).join(' ');
       const styles: Record<string, unknown> = { halign: alignFor(vc.members[0].type) };
-      if (vc.isName) { styles['fontStyle'] = 'bold'; styles['textColor'] = rowColor ?? BLACK; styles['fontSize'] = 9; }
+      if (vc.isName) { Object.assign(styles, cellType('narrativeName')); styles['textColor'] = rowColor ?? BLACK; }
       else if (vc.hasResult) {
-        styles['fontStyle'] = 'bold';
+        Object.assign(styles, cellType(rowColor || r.isBold ? 'resultAbnormal' : 'narrativeResult'));
         styles['textColor'] = rowColor ?? BLACK;
         if (rowColor) {
           const tag = flagLabel(r);
@@ -3873,7 +4027,7 @@ function renderGridSection(
         // abnormal row's colour carries across the whole row.
         styles['textColor'] = rowColor ?? TEXT_DIM;
       }
-      if (r.isBold) styles['fontStyle'] = 'bold';
+      if (r.isBold) styles['fontStyle'] = faceOf('bold')[1];
       return { content: txt, styles };
     });
   });
@@ -3929,8 +4083,8 @@ function tablePageMargins(): { left: number; right: number; top: number; bottom:
 function tableBodyStyles() {
   const bordered = theme.tableStyle === 'bordered';
   return {
-    font: PDF_FONT,
-    fontSize: 9 * theme.fontScale,
+    font: faceOf(twt('tableBody'))[0],
+    fontSize: tsz('tableBody'),
     // Tighter rows than the old 6/6 padding — a 20-row department block
     // should read as one dense professional table, not a spaced-out list.
     cellPadding: { top: 4, right: 6, bottom: 4, left: 6 },
@@ -3947,10 +4101,10 @@ function tableHeadStyles() {
   return {
     fillColor: theme.tableHeaderBg,
     textColor: theme.tableHeaderText,
-    fontStyle: 'bold' as const,
+    fontStyle: styleOf('columnHead') as 'bold',
     // Column headers sit BELOW the data in the visual hierarchy — smaller
     // than the body values, with a firm rule underneath (classic pattern).
-    fontSize: 8.5 * theme.fontScale,
+    fontSize: tsz('columnHead'),
     halign: 'left' as const,
     cellPadding: { top: 3, right: 6, bottom: 6, left: 6 },
     lineColor: HAIR,
@@ -3970,8 +4124,7 @@ function showsFlagColumn(cols: ReportColumn[]): boolean {
 function renderParagraphSection(doc: jsPDF, sec: ResolvedSection, startY: number): number {
   const text = sec.content ?? '';
   if (!text.trim()) return startY;
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9);
+  typeset(doc, 'narrative');
   doc.setTextColor(TEXT);
   const usable = A4.w - 2 * MARGIN_X;
   const lines = doc.splitTextToSize(text, usable);
@@ -4003,15 +4156,13 @@ function drawImagesBlock(
   const usable = urls.filter(u => IMG_CACHE[u]);
   let y = startY;
   if (heading) {
-    doc.setFont(PDF_FONT, 'bolditalic');
-    doc.setFontSize(8.5);
+    typeset(doc, 'imagesHeading');
     doc.setTextColor(TEXT_DIM);
     doc.text(heading.toUpperCase(), MARGIN_X, y + 10);
     y += 16;
   }
   if (usable.length === 0) {
-    doc.setFont(PDF_FONT, 'italic');
-    doc.setFontSize(8.5);
+    typeset(doc, 'imagesPlaceholder');
     doc.setTextColor(TEXT_DIM);
     doc.text(`[ ${urls.length} attached image${urls.length === 1 ? '' : 's'} ]`, MARGIN_X, y + 11);
     return y + 18;
@@ -4071,8 +4222,7 @@ function renderChartSection(doc: jsPDF, sec: ResolvedSection, startY: number): n
     doc.rect(mx - 1.5, barY - 3, 3, barH + 6, 'F');
   }
 
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8);
+  typeset(doc, 'chartAxis');
   doc.setTextColor(TEXT_DIM);
   doc.text(String(chart.min), barX, barY + barH + 12);
   if (chart.value !== null && chart.value !== undefined) {
@@ -4117,18 +4267,18 @@ function renderLegacyTest(
         ? `${humanize(paramName)}\n${sampleTypeLine}`
         : humanize(paramName);
       const resultStyles: Record<string, unknown> = {
-        fontStyle: 'bold',
+        ...cellType('narrativeResult'),
         textColor: flagText === 'Low' ? FLAG_BLUE : (flagText || rf.abnormal) ? FLAG_RED : BLACK,
       };
       tableRows.push([
-        { content: investContent, styles: { fontStyle: 'bold', textColor: BLACK } },
+        { content: investContent, styles: { ...cellType('testName'), textColor: BLACK } },
         { content: flagText ? `${valueText}    ${flagText}` : valueText, styles: resultStyles },
         { content: rangeCellText(v?.range, v?.unit) || '—' },
         { content: v?.unit ?? '—' },
       ]);
     });
   } else {
-    tableRows.push([{ content: 'No parameters recorded.', styles: { halign: 'center', fontStyle: 'italic', textColor: TEXT_DIM } }]);
+    tableRows.push([{ content: 'No parameters recorded.', styles: { halign: 'center', fontStyle: styleOf('note'), textColor: TEXT_DIM } }]);
   }
 
   const legacySup = new Map<string, SupCell>();
@@ -4145,7 +4295,7 @@ function renderLegacyTest(
     alternateRowStyles: theme.zebraRows ? { fillColor: '#f8fafc' } : undefined,
     columnStyles: {
       0: { cellWidth: 180 },
-      1: { cellWidth: 130, fontStyle: 'bold' },
+      1: { cellWidth: 130, fontStyle: styleOf('narrativeResult') },
       2: { cellWidth: 130 },
       3: { cellWidth: 'auto' as unknown as number },
     },
@@ -4188,8 +4338,7 @@ function renderCultureSection(
   // Sample ID rides the heading line right-aligned — the same tie-back every
   // other department block prints, which the culture section was missing.
   if ((t.sampleId ?? '').trim()) {
-    doc.setFont(PDF_FONT, 'normal');
-    doc.setFontSize(8.5);
+    typeset(doc, 'deptMeta');
     doc.setTextColor(TEXT_DIM);
     doc.text(`Sample ID: ${t.sampleId}`, A4.w - MARGIN_X, y + 14, { align: 'right' });
   }
@@ -4205,9 +4354,9 @@ function renderCultureSection(
 
   const line = (label: string, value?: string): void => {
     if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
-    doc.setFont(PDF_FONT, 'bold'); doc.setFontSize(8.5); doc.setTextColor(BLACK);
+    typeset(doc, 'cultureLabel'); doc.setTextColor(BLACK);
     doc.text(`${label.toUpperCase()}:`, MARGIN_X, y);
-    doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9);
+    typeset(doc, 'cultureValue');
     const lines = doc.splitTextToSize(value && value.trim() ? value : '—', A4.w - 2 * MARGIN_X - 4);
     doc.text(lines, MARGIN_X, y + 11);
     y += 11 + lines.length * 11 + 4;
@@ -4296,8 +4445,8 @@ function renderCultureSection(
         .map(a => {
           const w = interpWord(a.interpretation);
           return [
-            { content: a.name ?? '', styles: {} },
-            { content: w.txt, styles: { fontStyle: 'bold', textColor: w.color, halign: 'center' } },
+            { content: a.name ?? '', styles: { ...cellType('astDrug') } },
+            { content: w.txt, styles: { ...cellType('astResult'), textColor: w.color, halign: 'center' } },
           ];
         });
       if (rows.length === 0) continue;
@@ -4318,7 +4467,7 @@ function renderCultureSection(
 
     // Legend.
     if (y > A4.h - MARGIN_BOTTOM - 40) { y = newPage(doc, practice); }
-    doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(7.5); doc.setTextColor(TEXT_DIM);
+    typeset(doc, 'astLegend'); doc.setTextColor(TEXT_DIM);
     const legend = [
       'S - Sensitive (clinically effective at standard therapeutic dose)',
       'R - Resistant (clinically ineffective at standard or increased dose)',
@@ -4352,7 +4501,7 @@ function renderCultureSection(
         astBlock();
       } else if (sec.type === 'paragraph' && (sec.content ?? '').trim()) {
         if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
-        doc.setFont(PDF_FONT, 'normal'); doc.setFontSize(9); doc.setTextColor(BLACK);
+        typeset(doc, 'narrative'); doc.setTextColor(BLACK);
         const lines = doc.splitTextToSize((sec.content ?? '').trim(), A4.w - 2 * MARGIN_X) as string[];
         doc.text(lines, MARGIN_X, y);
         y += lines.length * 11 + 6;
@@ -4415,8 +4564,7 @@ function renderTrendogramSection(
 
   // Section heading (centered uppercase + hairline, matching the report style).
   let y = startY + 12;
-  doc.setFont(PDF_FONT, 'bold');
-  doc.setFontSize(10);
+  typeset(doc, 'trendHeading');
   doc.setTextColor('#334155');
   doc.text('TRENDOGRAM — SERIAL RESULT TRENDS', A4.w / 2, y, { align: 'center' });
   y += 8;
@@ -4444,8 +4592,7 @@ function renderTrendogramSection(
 
 function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number): number {
   const y = startY + 12;
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(9);
+  typeset(doc, 'endMarker');
   doc.setTextColor(BLACK);
   // No "Thanks for Reference" line (owner, 2026-09-28) — only the marker.
   // Admin-configurable marker — defaults to "****End of Report****".
@@ -4497,11 +4644,11 @@ function drawSigFooterPage(
   doc.setLineWidth(0.4);
   doc.line(MARGIN_X, A4.h - 30, A4.w - MARGIN_X, A4.h - 30);
 
-  doc.setFont(PDF_FONT, 'normal');
-  doc.setFontSize(8);
+  typeset(doc, 'generated');
   doc.setTextColor(BLACK);
   doc.text(`Generated on :  ${formatShort(new Date().toISOString())}`, MARGIN_X, A4.h - 18);
   // Plain page number ("1", "2", "3" …).
+  typeset(doc, 'pageNumber');
   doc.text(String(pageNo), A4.w - MARGIN_X, A4.h - 18, { align: 'right' });
 
   // Blue band at the bottom (classic "Sample Collection" strip) — the LAB's
@@ -4511,8 +4658,7 @@ function drawSigFooterPage(
   if (theme.showSampleBand && collectPhone) {
     doc.setFillColor(BLUE);
     doc.rect(0, A4.h - 12, A4.w, 12, 'F');
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(8.5);
+    typeset(doc, 'sampleBand');
     doc.setTextColor('#ffffff');
     doc.text(`Sample Collection  ${collectPhone}`, A4.w / 2, A4.h - 3.5, { align: 'center' });
   }
@@ -4521,8 +4667,7 @@ function drawSigFooterPage(
   // Collection band on, it sits centred on the date/page-number strip
   // instead of the very edge (which the band occupies).
   if (theme.showPoweredBy && pageNo === pageTotal) {
-    doc.setFont(PDF_FONT, 'italic');
-    doc.setFontSize(7);
+    typeset(doc, 'poweredBy');
     doc.setTextColor(TEXT_DIM);
     const bandOn = theme.showSampleBand && (practice.phone ?? '').trim();
     doc.text('Powered by Prefrontal', A4.w / 2, bandOn ? A4.h - 18 : A4.h - 4, { align: 'center' });
@@ -4563,8 +4708,7 @@ function drawSigFooterPage(
     const lighten = (1 - op) * 255;
     const grey = Math.round(lighten).toString(16).padStart(2, '0');
     const wmColor = `#${grey}${grey}${grey}`;
-    doc.setFont(PDF_FONT, 'bold');
-    doc.setFontSize(48);
+    typeset(doc, 'watermark');
     doc.setTextColor(wmColor);
     doc.text(wm, cx, cy, { align: 'center', angle: 30 });
   }

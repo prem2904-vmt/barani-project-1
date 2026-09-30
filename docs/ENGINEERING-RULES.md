@@ -71,6 +71,7 @@ If a rule blocks you, ask the owner. Don't work around it.
 - Reuse the existing components (AG-Grid, pf-tile, pf-select). Never hand-roll bespoke UI.
 - Report PDF tables (jspdf-autotable): a blank-then-repaint cell stash is keyed `section:row:col` and deleted when painted (the repeated head is row 0 too); rows never split across pages (`rowPageBreak: 'avoid'`); a panel band is glued to its first row and repeated as "— CONTINUED" on the next page.
 - Touch devices: the keyboard must never cover the focused field; inputs are ≥ 16px.
+- Report PDF typography: every text draw takes font / size / weight from the report-theme token table (`report-theme.ts`), never a literal size; the Classic table is pinned byte-for-byte by golden hashes (`report-theme-classic.spec.ts`, `report-header-legacy.spec.ts`). An embedded theme font loads lazily in `preloadReportImages`, never in the bundle.
 
 ## 7. Process: definition of done
 1. Fetch and merge the latest remote before starting.
