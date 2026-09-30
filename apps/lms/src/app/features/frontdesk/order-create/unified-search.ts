@@ -41,4 +41,30 @@ export interface ScopeRow {
   title: string;
   meta: string;
   kind: 'match' | 'new';
+  /** Doctor rows: the doctor's name (the title may read "Dr X · Hospital Y"). */
+  value?: string;
+  /** Doctor rows: the affiliated hospital this row stands for, if any. */
+  hospital?: string | null;
+}
+
+/** One referring-doctor match from GET /api/test-picker/doctors/options — one
+ *  row per (doctor, hospital) affiliation, or one hospital-less row for an
+ *  independent doctor. */
+export interface DoctorOption {
+  doctorId?: string | null;
+  name: string;
+  hospitalName?: string | null;
+}
+
+/** Normalise the picker payload (older servers answer plain names). */
+export function toDoctorOptions(list: ReadonlyArray<DoctorOption | string> | null | undefined): DoctorOption[] {
+  return (list ?? [])
+    .map(x => (typeof x === 'string' ? { name: x, hospitalName: null } : x))
+    .filter(x => !!x?.name?.trim());
+}
+
+/** "Dr X · Hospital Y" when the doctor is linked, else just "Dr X". */
+export function doctorOptionLabel(o: DoctorOption): string {
+  const h = o.hospitalName?.trim();
+  return h ? `${o.name} · ${h}` : o.name;
 }
