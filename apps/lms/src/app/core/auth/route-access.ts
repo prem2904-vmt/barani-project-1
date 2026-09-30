@@ -54,6 +54,8 @@ export const LAB_SETTINGS_HUB_PERMS = ['manage_tests', 'manage_lab_settings', 'm
 // inventory_transfer included: the Stores entry APIs (/api/inventory/items, /alerts) accept it.
 export const INVENTORY_WORK_PERMS = ['inventory_receive', 'inventory_issue', 'inventory_count', 'inventory_transfer', 'manage_inventory'];
 export const FINANCE_PERMS = ['collect_payment', 'create_bill', 'manage_tenant'];
+/** Finance → Expense tracker: viewer / modifier / admin (the server enforces each action). */
+export const EXPENSE_ROUTE_PERMS = ['expense_viewer', 'expense_modifier', 'expense_admin'];
 
 export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // ── Front desk (parent guard + per-child perms) ────────────────────────
@@ -94,6 +96,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/dashboard':          { perms: ['view_tat_dashboard', 'view_dashboard'], module: 'reports' },
   '/finance':            { perms: FINANCE_PERMS },
   '/finance/daily':      { perms: FINANCE_PERMS },
+  '/finance/expenses':   { perms: EXPENSE_ROUTE_PERMS },
 
   // ── Admin / settings ───────────────────────────────────────────────────
   '/admin':                   { perms: ADMIN_PERMS },

@@ -62,6 +62,7 @@ const RULES: readonly Rule[] = [
   [/^\/dashboard$/, 'dashboard', 'Dashboard'],
   [/^\/finance$/, 'tiles', 'Finance'],
   [/^\/finance\/daily$/, 'grid', 'Daily statement'],
+  [/^\/finance\/expenses$/, 'grid-side', 'Expense tracker'],
   [/^\/w\/[^/]+$/, 'tiles', 'Menu'],
   [/^\/(o|p)\/[^/]+$/, 'detail', 'Record'],
   [/^\/doctor\/consult\/[^/]+$/, 'detail', 'Consultation'],

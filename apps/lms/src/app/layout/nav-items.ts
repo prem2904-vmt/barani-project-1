@@ -402,6 +402,11 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     iconPath: ['M4 4h16v16H4z', 'M8 9h8M8 13h8M8 17h5'],
   },
   {
+    // Finance — the branch expense book (bills, day opening / closing).
+    id: 'expenses', label: 'Expenses', href: '/finance/expenses',
+    iconPath: ['M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z', 'M8 8h8M8 12h8M8 16h5'],
+  },
+  {
     id: 'inventory', label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
     module: 'inventory'
   },

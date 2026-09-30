@@ -617,6 +617,12 @@ export const appRoutes: Route[] = [
         canActivate: [...routeGuards('/finance/daily')],
         loadComponent: () => import('./features/finance/daily-statement.component').then(m => m.DailyStatementComponent)
       },
+      {
+        // Finance → Expense tracker (expense_viewer / _modifier / _admin).
+        path: 'finance/expenses',
+        canActivate: [...routeGuards('/finance/expenses')],
+        loadComponent: () => import('./features/finance/expenses/expense-tracker.component').then(m => m.ExpenseTrackerComponent)
+      },
 
       // 403
       {
