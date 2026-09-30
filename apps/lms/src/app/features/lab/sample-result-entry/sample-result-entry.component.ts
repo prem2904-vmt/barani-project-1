@@ -2503,6 +2503,10 @@ export class SampleResultEntryComponent {
   attachSrc(a: ResultAttachment): string {
     return this.uploads.src(a.url);
   }
+  /** The server answered 410 file_missing for it (it sat on a wiped disk). */
+  attachMissing(a: ResultAttachment): boolean {
+    return this.uploads.isMissing(a.url);
+  }
   /** Videos aren't pre-fetched: the link opens a signed URL on click. */
   attachHref(a: ResultAttachment): string {
     return isPrivateUploadPath(a.url) ? '#' : this.uploads.src(a.url);

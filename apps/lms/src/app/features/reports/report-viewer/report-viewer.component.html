@@ -350,6 +350,9 @@
                 <span class="pf-rv-partner__name">{{ p.testName }}
                   @if (p.partnerLabName) { <span class="pf-rv-partner__lab">Tested at {{ p.partnerLabName }}</span> }
                   <span class="pf-rv-partner__lab" [class.pf-rv-partner__lab--warn]="w.warn" data-testid="rv-partner-where">{{ w.text }}</span>
+                  @if (uploads.isMissing(p.url)) {
+                    <span class="pf-rv-partner__lab pf-rv-partner__lab--warn" data-testid="rv-partner-missing" role="status">File no longer available — upload it again from the Outsourced tab</span>
+                  }
                 </span>
                 <button type="button" class="nd-rowact" [class.nd-rowact--icon]="!web()" (click)="openPartnerReport(p)"
                         [attr.aria-label]="'Open partner report for ' + p.testName">

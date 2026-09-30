@@ -893,7 +893,7 @@ export class ReportViewerComponent implements OnInit {
     // Private upload → opened through a short-lived signed URL.
     void this.uploads.open(p.url);
   }
-  private readonly uploads = inject(UploadsService);
+  protected readonly uploads = inject(UploadsService);
 
   ngOnInit() {
     this.waSend.ensure();

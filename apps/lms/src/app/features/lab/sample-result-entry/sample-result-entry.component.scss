@@ -345,6 +345,7 @@
 .pf-sre__attach-chip--off { opacity: 0.55; }
 .pf-sre__attach-thumb { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--nd-chip-bg); color: var(--text-secondary); }
 .pf-sre__attach-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pf-sre__attach-thumb--missing { color: var(--warning-text, #b45309); }
 .pf-sre__attach-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-secondary); }
 .pf-sre__attach-param { color: var(--text-primary); font-weight: 500; }
 .pf-sre__attach-eye, .pf-sre__attach-x {

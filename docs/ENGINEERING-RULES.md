@@ -25,6 +25,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - **Partner report in the patient's PDF:** the `attachToReport` flag on the line's `external_report` attachment; the combined PDF is DERIVED on read (`CombinedReportPdf`, content-addressed cache) from the immutable stored report — never written into the stored report, never a second copy of the flag.
   - **Outsourced or in-house:** the tube's `OutsourcedVendorId`, frozen at order time from the lab's effective test; every lab surface filters through `OutsourcingRules` (`InHouseTube` for tubes, `InHouseWork` for lines), never a bare status check.
 - Never match by name or code when an ID / key exists.
+- User files live only in Spaces via the storage service — never on the container disk (wiped on every deploy).
 - A feature switch has ONE resolver (UI lab-features / server LabFeatureGate); never gate a surface on the workflow or the entitlement alone.
 
 ## 2. Tenant and branch isolation

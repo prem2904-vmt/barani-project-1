@@ -1,9 +1,10 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
-import { UploadsService, brandingSrc } from './uploads.service';
+import { FILE_MISSING_MESSAGE, UploadsService, brandingSrc } from './uploads.service';
+import { ToastService } from './toast.service';
 import { PlatformService } from './platform.service';
 import {
   absoluteApiUrl, fetchAssetBlob, isPrivateUploadPath, registerUploadFetcher, uploadPathOf,
@@ -103,15 +104,65 @@ describe('UploadsService', () => {
   it('open(): opens the tab inside the click, then points it at the signed URL', async () => {
     const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
     const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    const head = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
     try {
       const { svc } = setup();
-      await svc.open(PATH);
+      expect(await svc.open(PATH)).toBe('opened');
       expect(open).toHaveBeenCalledWith('', '_blank');
       expect(tab.opener).toBeNull();
       expect(tab.location.href).toBe(`https://api.test${PATH}?exp=1&sig=s`);
+      expect(head).toHaveBeenCalledWith(`https://api.test${PATH}?exp=1&sig=s`, { method: 'HEAD', mode: 'cors' });
     } finally {
       open.mockRestore();
+      head.mockRestore();
     }
+  });
+
+  it('open(): a file the server no longer has (410) closes the tab and asks for a re-upload', async () => {
+    const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    const head = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 410 }));
+    try {
+      const { svc } = setup();
+      const toasts = TestBed.inject(ToastService);
+      const err = vi.spyOn(toasts, 'error');
+      expect(await svc.open(PATH)).toBe('missing');
+      expect(tab.close).toHaveBeenCalled();
+      expect(tab.location.href).toBe('');
+      expect(err).toHaveBeenCalledWith(FILE_MISSING_MESSAGE, 6000);
+      expect(svc.isMissing(PATH)).toBe(true);
+      expect(svc.isMissing(`https://api.test${PATH}`)).toBe(true);
+    } finally {
+      open.mockRestore();
+      head.mockRestore();
+    }
+  });
+
+  it('open(): a network / CORS problem on the probe still opens the file (the tab shows the outcome)', async () => {
+    const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    const head = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    try {
+      const { svc } = setup();
+      expect(await svc.open(PATH)).toBe('opened');
+      expect(tab.location.href).toBe(`https://api.test${PATH}?exp=1&sig=s`);
+      expect(svc.isMissing(PATH)).toBe(false);
+    } finally {
+      open.mockRestore();
+      head.mockRestore();
+    }
+  });
+
+  it('blob(): 410 file_missing marks the file missing; other errors do not', async () => {
+    const gone = new HttpErrorResponse({ status: 410, error: { error: 'file_missing' } });
+    const { svc } = setup(vi.fn(() => throwError(() => gone)));
+    expect(await svc.blob(PATH)).toBeNull();
+    expect(svc.isMissing(PATH)).toBe(true);
+
+    TestBed.resetTestingModule();
+    const other = setup(vi.fn(() => throwError(() => new HttpErrorResponse({ status: 503 }))));
+    expect(await other.svc.blob(PATH)).toBeNull();
+    expect(other.svc.isMissing(PATH)).toBe(false);
   });
 });
 
