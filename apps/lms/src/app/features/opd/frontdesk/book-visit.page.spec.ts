@@ -11,16 +11,22 @@ import { draftKey } from './desk-rules';
  * and the one checkout. "Any doctor in <department>" is always an explicit
  * tap — never a silent auto-pick from choosing the department.
  */
-function render(opts: { query?: Record<string, string>; desk?: any; post?: (u: string, b: any) => unknown } = {}) {
+function render(opts: {
+  query?: Record<string, string>; desk?: any; post?: (u: string, b: any) => unknown;
+  tests?: any[]; specimens?: any[]; specimenMaster?: any[];
+} = {}) {
   const h = harness({
     query: opts.query,
     get: url => {
       if (url === '/api/opd/visits/desk') return opts.desk ?? DESK;
       if (url.startsWith('/api/opd/visits/quote?doctorId=d1')) return QUOTE_D1;
       if (url.startsWith('/api/opd/visits/quote')) return { doctorId: 'x', services: [{ serviceId: 's9', name: 'General consultation', category: 'consultation', priceSource: 'common', price: 500, taxSlab: 0, isFollowUp: false, quoted: 500 }] };
-      if (url.startsWith('/api/tests/')) return TESTS;
+      if (url.startsWith('/api/tests/')) return opts.tests ?? TESTS;
       if (url.startsWith('/api/patients/')) return { patient: PATIENT, history: [] };
       if (url === '/api/config/billing/visibility') return { gstEnabled: false };
+      // The specimen picker (choose-mode lab tests) — see opd-specimen-picker.component.ts.
+      if (url.startsWith('/api/microbiology/test-specimens')) return opts.specimens ?? [];
+      if (url === '/api/microbiology/specimens') return opts.specimenMaster ?? [];
       return null;
     },
     post: opts.post ?? ((u: string) => (u === '/api/opd/visits' ? VISIT : {})),
@@ -256,5 +262,75 @@ describe('New visit — vitals + draft', () => {
     expect(r2.c.patient()?.id).toBe('p1');
     r2.c.discardDraft(); r2.f.detectChanges();
     expect(localStorage.getItem(draftKey('u1', 'b1'))).toBeNull();
+  });
+});
+
+/** A choose-mode lab test (KOH Mount) — Test Master's own row carries
+ *  `specimenMode: 'choose'`, exactly what a real "KOH Mount" / "Bacterial
+ *  Culture & Sensitivity" catalogue row has. The fix under test: booking
+ *  with one of these picked, but no specimen chosen, must be BLOCKED on the
+ *  screen (never sent), and once chosen, `labTestSpecimens` rides the
+ *  checkout call the same way the server's `CreateOrderInput.Specimens`
+ *  expects it. */
+const KOH = {
+  id: 'tKoh', name: 'KOH Mount', shortName: 'KOH', testCode: 'MIC030', price: 300, taxSlab: 0, type: 'individual', isActive: true,
+  parameters: JSON.stringify({ specimenMode: 'choose' }),
+};
+const KOH_SPECIMENS = [{ testId: 'tKoh', specimens: [{ code: 'SKN', name: 'Skin scraping', isDefault: false }, { code: 'NAIL', name: 'Nail clipping', isDefault: false }] }];
+
+describe('New visit — choose-mode specimen (the KOH Mount / C&S fix)', () => {
+  async function readyWithKoh() {
+    const r = render({ query: { patientId: 'p1' }, tests: [...TESTS, KOH], specimens: KOH_SPECIMENS });
+    r.c.pickDoctor(DESK.doctors[0]);
+    r.f.detectChanges(); await flush(); r.f.detectChanges();
+    r.c.setCatalogTab('labs'); r.f.detectChanges();
+    r.c.labQuery.set('KOH'); r.f.detectChanges();
+    const res = r.el.querySelectorAll('.pf-ov-labrow');
+    (res[0] as HTMLButtonElement).click();
+    r.f.detectChanges(); await flush(); r.f.detectChanges();
+    return r;
+  }
+
+  it('shows a specimen picker (pf-select, never a native select) for the picked choose-mode test', async () => {
+    const { el } = await readyWithKoh();
+    const picker = el.querySelector('pf-opd-specimen-picker');
+    expect(picker).toBeTruthy();
+    expect(picker!.querySelector('select')).toBeNull();
+    expect(el.querySelector('pf-select')).toBeTruthy();
+  });
+
+  it('Continue to payment is BLOCKED (no server call) while the specimen is unchosen, and errors the toast', async () => {
+    const { el, f, c, api, toasts } = await readyWithKoh();
+    api.post.mockClear();
+    cta(el).click(); f.detectChanges();
+    expect(c.stage()).toBe('build'); // never advanced to pay
+    expect(toasts.error).toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalledWith('/api/opd/visits', expect.anything());
+    expect(c.specimenInvalid('tKoh')).toBe(true);
+  });
+
+  it('choosing the specimen clears the block and the booking carries labTestSpecimens', async () => {
+    const { el, f, c, api, router } = await readyWithKoh();
+    c.setSpecimen('tKoh', 'SKN');
+    f.detectChanges();
+    expect(c.specimenInvalid('tKoh')).toBe(false);
+    cta(el).click(); f.detectChanges();
+    expect(c.stage()).toBe('pay');
+    c.onPaid({ mode: 'upi' });
+    await flush();
+    const call = api.post.mock.calls.find((x: any[]) => x[0] === '/api/opd/visits');
+    expect(call[1]).toMatchObject({ labTestIds: ['tKoh'], labTestSpecimens: { tKoh: 'SKN' } });
+    expect(router.navigate).toHaveBeenCalled();
+  });
+
+  it('a "none"-mode test (no parameters, like the existing fixtures) never shows a picker and never blocks', async () => {
+    const r = render({ query: { patientId: 'p1' } });
+    r.c.pickDoctor(DESK.doctors[0]);
+    r.f.detectChanges(); await flush(); r.f.detectChanges();
+    r.c.labIds.set(['t1']); r.f.detectChanges();
+    expect(r.el.querySelector('pf-opd-specimen-picker pf-select')).toBeNull();
+    r.c.onPaid({ mode: 'upi' });
+    await flush();
+    expect(r.router.navigate).toHaveBeenCalled();
   });
 });
