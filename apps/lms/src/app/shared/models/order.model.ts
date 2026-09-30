@@ -7,6 +7,10 @@ export interface Order {
   /** Human-readable, module-prefixed order number, e.g. `LAB-2607-000042`.
    *  Generated at creation; null on legacy orders. */
   orderNumber?: string | null;
+  /** Daily patient number for this visit (per branch per IST day) and its
+   *  day, yyyy-MM-dd — on-screen only (utils/daily-no.ts). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
   /** Module that owns the order (lab/opd/ipd/…) — drives the OrderNumber prefix. */
   module?: string | null;
   patientId: string;

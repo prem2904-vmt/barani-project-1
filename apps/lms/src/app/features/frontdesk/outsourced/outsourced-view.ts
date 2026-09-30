@@ -1,3 +1,4 @@
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
 /**
  * Frontdesk "Outsourced" tab — pure view logic (unit-tested). Outsourced tests
  * never enter the lab's own queues; the front desk tracks them here and, when
@@ -49,6 +50,10 @@ export interface OutsourcedTube {
   orderNumber?: string | null;
   patientId: string;
   patientName: string;
+  /** Daily patient number for this visit (per branch per IST day) and its
+   *  day, yyyy-MM-dd — on-screen only (utils/daily-no.ts). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
   partnerLabId?: string | null;
   partnerLabName?: string | null;
   createdAt: string;
@@ -78,6 +83,7 @@ export function filterOutsourced(rows: readonly OutsourcedTube[], f: OutsourcedF
     if (f.status && f.status !== 'all' && r.status !== f.status) return false;
     if (f.partnerId && r.partnerLabId !== f.partnerId) return false;
     if (!q) return true;
+    if (matchesDailyNo(q, r)) return true;
     const hay = [r.patientName, r.orderNumber, r.barcode, r.partnerLabName, ...r.tests.map(t => t.testName)]
       .filter(Boolean).join(' ').toLowerCase();
     return hay.includes(q);

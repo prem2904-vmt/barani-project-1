@@ -23,11 +23,12 @@ import { BusyComponent, SkeletonDetailComponent, SkeletonTilesComponent } from '
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { formatAge } from '../../../shared/utils/patient-age';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 @Component({
   selector: 'pf-post-payment',
   standalone: true,
-  imports: [BusyComponent, BusyDirective, SkeletonDetailComponent, SkeletonTilesComponent,
+  imports: [DailyNoComponent, BusyComponent, BusyDirective, SkeletonDetailComponent, SkeletonTilesComponent,
     DatePipe,
     TitleCasePipe,
     CurrencyInrPipe,

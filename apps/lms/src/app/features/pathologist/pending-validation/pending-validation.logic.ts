@@ -4,6 +4,7 @@ import { lineDepartment } from '../../../shared/utils/shared-tube';
 import {
   OrderPriority, PRIORITY_RANK, TatState, formatDuration, linePriority, tatInfo, tatStateFor,
 } from '../../../shared/utils/lab-priority';
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 /**
  * Pathologist queue (/pathologist) — the pure model behind the screen, so the
@@ -161,7 +162,8 @@ export function departmentsIn(tiles: QueueTile[]): { id: string; name: string; c
 
 export function matchesQuery(t: OrderTest, q: string): boolean {
   if (!q) return true;
-  return patientDisplayName(t.subOrder?.order?.patient).toLowerCase().includes(q)
+  return matchesDailyNo(q, t.subOrder)   // "12" / "#12" = today's daily patient number
+    || patientDisplayName(t.subOrder?.order?.patient).toLowerCase().includes(q)
     || (t.subOrder?.order?.patient?.mrn ?? '').toLowerCase().includes(q)
     || (t.subOrder?.barcode ?? '').toLowerCase().includes(q)
     || (t.test?.name ?? '').toLowerCase().includes(q);

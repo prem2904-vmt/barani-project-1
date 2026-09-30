@@ -40,7 +40,7 @@
               {{ ps.amount | inr }}
               @if (order()?.patient?.displayName) {
                 <span class="pf-pp-pay__sep">·</span>
-                <span class="pf-pp-pay__patient">{{ order()!.patient!.displayName }}</span>
+                <span class="pf-pp-pay__patient"><pf-daily-no [of]="order()" />{{ order()!.patient!.displayName }}</span>
               }
             </h2>
             <p class="pf-pp-pay__meta">
@@ -188,7 +188,7 @@
               {{ initials(o.patient?.displayName) }}
             </div>
             <div class="pf-sb-patient__body">
-              <p class="pf-sb-patient__name">{{ o.patient?.displayName ?? '—' }}</p>
+              <p class="pf-sb-patient__name"><pf-daily-no [of]="o" />{{ o.patient?.displayName ?? '—' }}</p>
               <p class="pf-sb-patient__sub">{{ ageSex(o.patient) }}</p>
             </div>
           </div>

@@ -40,6 +40,8 @@ import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoic
 import { environment } from '../../../environments/environment';
 import { phoneMatches } from '../../shared/utils/indian-phone';
 import { labToday } from '../../shared/utils/lab-clock';
+import { matchesDailyNo } from '../../shared/utils/daily-no';
+import { DailyNoComponent } from '../../shared/components/daily-no/daily-no.component';
 
 /** One row of GET /api/billing/outstanding — a bill with money still moving
  *  (balance > 0 → patient owes; balance < 0 → lab owes a refund). */
@@ -92,6 +94,9 @@ export interface QueueRow {
   name: string;
   /** Order number (the token the patient carries), when known. */
   orderLabel: string | null;
+  /** The order's daily patient number (on-screen only), when known. */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
   /** Tests on the order, once the order has been read. */
   tests: number | null;
   /** What they still owe. */
@@ -190,6 +195,7 @@ export function waitingLabel(iso: string | null | undefined, now: number): strin
   selector: 'pf-billing-counter',
   standalone: true,
   imports: [
+    DailyNoComponent,
     DatePipe, NgTemplateOutlet, CurrencyInrPipe,
     HeroBandComponent, CollectBandButtonComponent, ScanIconComponent, BarcodeScannerModalComponent, NdDateComponent,
     InlinePaymentPanelComponent, ZoomSourceDirective, ZoomTargetDirective,
@@ -390,6 +396,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
         orderId: r.orderId, billId: r.billId, patientId: r.patientId,
         name: r.patientName?.trim() || patientDisplayName(o?.patient) || 'Unnamed patient',
         orderLabel: o?.orderNumber || null,
+        dailyNo: o?.dailyNo ?? null, dailyNoDay: o?.dailyNoDay ?? null,
         tests: o ? orderTestCount(o) : null,
         amount: r.balance,
         since: o?.createdAt || r.createdAt,
@@ -405,6 +412,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
         orderId: o.id, billId: null, patientId: o.patientId,
         name: patientDisplayName(o.patient) || 'Unnamed patient',
         orderLabel: o.orderNumber || null,
+        dailyNo: o.dailyNo ?? null, dailyNoDay: o.dailyNoDay ?? null,
         tests: orderTestCount(o),
         amount: o.totalAmount ?? 0,
         since: o.createdAt,
@@ -415,14 +423,16 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     return rows.sort((a, b) => new Date(a.since).getTime() - new Date(b.since).getTime());
   });
 
-  /** The pill filters the queue as you type (name, phone, MRN, order no.). */
+  /** The pill filters the queue as you type (name, phone, MRN, order no.,
+   *  today's daily number "12" / "#12"). */
   readonly filteredQueue = computed<QueueRow[]>(() => {
     const q = this.query().trim().toLowerCase();
     const all = this.queue();
     if (!q) return all;
     const digits = q.replace(/\D/g, '');
     return all.filter(r =>
-      r.name.toLowerCase().includes(q)
+      matchesDailyNo(q, r)
+      || r.name.toLowerCase().includes(q)
       || (r.orderLabel ?? '').toLowerCase().includes(q)
       || (r.mrn ?? '').toLowerCase().includes(q)
       || phoneMatches(r.phone, digits)   // last 10 digits for a full number, else partial

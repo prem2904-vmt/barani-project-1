@@ -14,6 +14,7 @@ import {
   ATTACH_DEFAULT, ATTACH_LABEL, OutsourcedStatusFilter, OutsourcedTube, PARTNER_REPORT_ACCEPT, STATUS_LABEL, actionLines,
   attachState, filterOutsourced, firstAttachProblem, partnerFileProblem, rowReport,
 } from './outsourced-view';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 /**
  * Frontdesk "Outsourced" tab body. One row per outsourced tube: sample ID,
@@ -32,7 +33,7 @@ import {
 @Component({
   selector: 'pf-outsourced-list',
   standalone: true,
-  imports: [DatePipe, SegmentedComponent, SelectComponent, BusyDirective, SkeletonRowsComponent],
+  imports: [DatePipe, SegmentedComponent, SelectComponent, BusyDirective, SkeletonRowsComponent, DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (showFilters()) {
@@ -59,7 +60,7 @@ import {
           <li class="nd-row pf-out__row" [attr.data-status]="r.status">
             <div class="pf-out__main">
               <p class="pf-out__sample nd-num">{{ r.barcode ?? '—' }}</p>
-              <p class="pf-out__who">{{ r.patientName }} · <span class="nd-num">{{ r.orderNumber ?? '' }}</span></p>
+              <p class="pf-out__who"><pf-daily-no [of]="r" />{{ r.patientName }} · <span class="nd-num">{{ r.orderNumber ?? '' }}</span></p>
               <p class="pf-out__tests">{{ testNames(r) }}</p>
             </div>
             <div class="pf-out__meta">

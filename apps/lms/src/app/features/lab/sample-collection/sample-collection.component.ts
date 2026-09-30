@@ -73,6 +73,8 @@ import { normalizePriority } from '../../../shared/utils/lab-priority';
 import { SkeletonDetailComponent, SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile, spinDelay } from '../../../shared/utils/busy';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -370,12 +372,15 @@ interface OrderGroup {
   /** FULL display name (never the 15-char cut of formatPatientInfo). */
   patientFull?: string;
   patientId?: string;
+  /** The order's daily patient number (on-screen only). */
+  dailyNo?: number | null;
+  dailyNoDay?: string | null;
 }
 
 @Component({
   selector: "pf-sample-collection",
   standalone: true,
-  imports: [SkeletonDetailComponent, SkeletonRowsComponent, BusyDirective, PfKeysDirective, SamplePresetDirective,
+  imports: [DailyNoComponent, SkeletonDetailComponent, SkeletonRowsComponent, BusyDirective, PfKeysDirective, SamplePresetDirective,
     ZoomSourceDirective,
     ZoomTargetDirective,
     FormsModule,
@@ -704,6 +709,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
           patientName: formatPatientInfo(p),
           patientFull: (p && patientDisplayName(p)) || undefined,
           patientId: p?.id,
+          dailyNo: s.order?.dailyNo ?? null,
+          dailyNoDay: s.order?.dailyNoDay ?? null,
           patientMeta: "",
           createdAt: s.createdAt,
           samples: [],
@@ -760,6 +767,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const q = this.scanValue().trim().toLowerCase();
     if (!q) return this.groups();
     return this.groups().filter((g) => {
+      if (matchesDailyNo(q, g)) return true;
       if (g.patientName.toLowerCase().includes(q)) return true;
       if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ""))) return true;
       return g.samples.some(
@@ -1567,6 +1575,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private matchGroups(query: string): OrderGroup[] {
     const q = query.toLowerCase();
     return this.groups().filter((g) => {
+      if (matchesDailyNo(q, g)) return true;
       if (g.patientName.toLowerCase().includes(q)) return true;
       if (g.orderId.toLowerCase().startsWith(q.replace(/^#/, ""))) return true;
       return g.samples.some(

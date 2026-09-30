@@ -109,6 +109,7 @@ import {
 import { ReportNotesStore } from '../../../shared/components/report-note/report-notes.store';
 import { ReportNoteButtonComponent, ReportNoteSlotComponent } from '../../../shared/components/report-note/report-note-slot.component';
 import { ReportNotesCardComponent } from '../../../shared/components/report-note/report-notes-card.component';
+import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 
 /** Live flag preview beside a numeric input — client mirror only; the
@@ -151,6 +152,7 @@ function calcKey(testId: string, paramName: string): string {
   selector: "pf-sample-result-entry",
   standalone: true,
   imports: [
+    DailyNoComponent,
     CommonModule,
     FormsModule,
     CommentThreadComponent,
