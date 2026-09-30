@@ -12,12 +12,13 @@ const NONE = { id: 'tCbc', name: 'CBC', parameters: JSON.stringify({ specimenMod
 @Component({
   standalone: true,
   imports: [OpdSpecimenPickerComponent],
-  template: `<pf-opd-specimen-picker [test]="test()" [value]="value()" [invalid]="invalid()" (valueChange)="picked.set($event)" />`,
+  template: `<pf-opd-specimen-picker [test]="test()" [value]="value()" [invalid]="invalid()" [readonly]="ro()" (valueChange)="picked.set($event)" />`,
 })
 class HostComponent {
   readonly test = signal<{ id: string; name: string; parameters?: string | null }>(CHOOSE);
   readonly value = signal<string | null>(null);
   readonly invalid = signal(false);
+  readonly ro = signal(false);
   readonly picked = signal<string | null>(null);
 }
 
@@ -25,12 +26,13 @@ class HostComponent {
  *  microtask queue — same convention as `book-visit.page.spec.ts`'s `flush`. */
 const tick = () => new Promise(r => setTimeout(r, 0));
 
-async function render(api: { get: ReturnType<typeof vi.fn> }, initial: Partial<{ test: typeof CHOOSE; value: string | null; invalid: boolean }> = {}) {
+async function render(api: { get: ReturnType<typeof vi.fn> }, initial: Partial<{ test: typeof CHOOSE; value: string | null; invalid: boolean; ro: boolean }> = {}) {
   TestBed.configureTestingModule({ imports: [HostComponent], providers: [{ provide: ApiService, useValue: api }] });
   const f = TestBed.createComponent(HostComponent);
   if (initial.test) f.componentInstance.test.set(initial.test);
   if ('value' in initial) f.componentInstance.value.set(initial.value ?? null);
   if (initial.invalid) f.componentInstance.invalid.set(true);
+  if (initial.ro) f.componentInstance.ro.set(true);
   f.detectChanges();
   await tick();
   f.detectChanges();
@@ -51,6 +53,14 @@ describe('OpdSpecimenPickerComponent', () => {
     expect(el.querySelector('pf-select')).toBeNull();
     expect(el.querySelector('.pf-opd-spec__fixed')).toBeNull();
     expect(api.get).not.toHaveBeenCalled();
+  });
+
+  it('read-only (completed consult): shows the chosen specimen NAME, never the raw code', async () => {
+    const api = apiStub([{ testId: 'tKoh', specimens: [{ code: 'SPEC017', name: 'Ear swab', isDefault: false }] }]);
+    const { el } = await render(api, { value: 'SPEC017', ro: true });
+    expect(el.querySelector('pf-select')).toBeNull();
+    expect(el.textContent).toContain('Specimen · Ear swab');
+    expect(el.textContent).not.toContain('SPEC017');
   });
 
   it('fixed mode: shows the stamped specimen as text, no picker', async () => {

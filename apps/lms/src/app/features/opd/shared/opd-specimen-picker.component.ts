@@ -35,7 +35,9 @@ import { opdAsksSpecimen, type OpdSpecimenTest } from './opd-specimen';
   imports: [SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (mode() === 'fixed') {
+    @if (readonly()) {
+      @if (value()) { <p class="pf-opd-spec__fixed">Specimen · {{ label() }}</p> }
+    } @else if (mode() === 'fixed') {
       @if (fixedName(); as name) { <p class="pf-opd-spec__fixed">Specimen · {{ name }}</p> }
     } @else if (mode() === 'choose') {
       <div class="pf-opd-spec" [class.pf-opd-spec--err]="invalid() && !value()">
@@ -63,6 +65,8 @@ export class OpdSpecimenPickerComponent {
   readonly value = input<string | null>(null);
   /** Set by the host after a blocked Complete / Checkout — shows the inline error. */
   readonly invalid = input(false);
+  /** Read-only (a completed consult): show the chosen specimen's NAME, never the raw code. */
+  readonly readonly = input(false);
   readonly valueChange = output<string>();
 
   private readonly _map = signal<TestSpecimenMap | undefined>(undefined);
