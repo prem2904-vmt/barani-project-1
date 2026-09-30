@@ -6,7 +6,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { ActionCatalogEntry, catalogFor } from '../../shared/models/process-workflow.model';
 import { SkeletonTilesComponent } from '../../shared/primitives/skeleton-kit.component';
-import { RouteProgressService } from '../../core/navigation/route-progress.service';
+import { PageOpenService } from '../../core/navigation/page-open.service';
 
 /**
  * Menu hub. Shows the ACTIONS the admin placed inside a menu (resolved from
@@ -65,7 +65,7 @@ import { RouteProgressService } from '../../core/navigation/route-progress.servi
 export class MenuHubComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly routeProgress = inject(RouteProgressService);
+  private readonly pageOpen = inject(PageOpenService);
   private readonly auth = inject(AuthService);
   private readonly process = inject(ProcessWorkflowService);
 
@@ -90,7 +90,7 @@ export class MenuHubComponent {
   /** A tile opens a lazy screen: it turns "held" the same frame, until the
    *  navigation settles (ND-PATTERN "Loading feedback"). */
   open(route: string, ev?: Event) {
-    this.routeProgress.markSource(ev?.currentTarget as HTMLElement | null);
+    this.pageOpen.markSource(ev?.currentTarget as HTMLElement | null);
     this.router.navigate([route]);
   }
 }

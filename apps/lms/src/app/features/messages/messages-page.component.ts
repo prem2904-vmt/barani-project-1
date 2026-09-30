@@ -68,6 +68,12 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  renders the locked "upgrade" screen instead of the chat UI, and never
    *  connects the chat/signaling hubs. */
   protected readonly moduleOff = computed(() => !this.entitlements.moduleEnabled('messages'));
+  /** This page's own first conversation-list request is still running. */
+  private readonly convLoading = signal(true);
+  /** First open: the conversation list is on its way → its skeleton, never
+   *  "No conversations yet" (the list has not answered once for this user
+   *  AND this page's own load has not finished). */
+  protected readonly convSkeleton = computed(() => this.convLoading() && !this.chat.conversationsLoaded());
   private readonly presenceSvc = inject(PresenceService);
   protected readonly api = inject(ApiService);
   protected readonly uploads = inject(UploadsService);
@@ -593,7 +599,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     // Module not in the plan → show the locked screen only; never open the
     // chat/signaling hubs (no presence, no incoming calls for this tenant).
-    if (this.moduleOff()) return;
+    if (this.moduleOff()) { this.convLoading.set(false); return; }
     // Both hubs must be live before the page is usable.
     await Promise.all([
       this.chat.connect().catch(() => undefined),
@@ -602,7 +608,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     // `?c=` (in-app links) and `?open=` (older native push payloads).
     const wanted = this.route.snapshot.queryParamMap.get('c') ?? this.route.snapshot.queryParamMap.get('open');
     await Promise.all([
-      this.chat.loadConversations().catch(() => undefined),
+      this.chat.loadConversations().catch(() => undefined).finally(() => this.convLoading.set(false)),
       this.signaling.getOnlineUsersWithStatus().catch(() => undefined),
       this.loadCallLog().catch(() => undefined)
     ]);

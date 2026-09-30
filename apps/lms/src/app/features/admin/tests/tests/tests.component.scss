@@ -98,7 +98,9 @@
 .pf-tm-grid-skel {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  /* Above AG Grid's own overlay (z-index 2, later in the DOM), so its
+     "No Rows To Show" never reads through the first-load skeleton. */
+  z-index: 6;
   overflow: hidden;
   background: var(--nd-card-bg, var(--bg-primary));
   border-radius: inherit;

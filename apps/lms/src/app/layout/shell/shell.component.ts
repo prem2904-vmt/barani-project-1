@@ -2,8 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
+  ElementRef,
   inject,
   signal,
+  untracked,
+  viewChild,
 } from "@angular/core";
 import {
   NavigationEnd,
@@ -46,6 +50,8 @@ import { PatientTimelineService } from "../../features/frontdesk/patient-profile
 import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 import { BranchSwitchService } from "../../core/services/branch-switch.service";
 import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-veil.component";
+import { PageFrameComponent } from "../../shared/components/page-frame/page-frame.component";
+import { PageOpenService } from "../../core/navigation/page-open.service";
 
 @Component({
   selector: "pf-shell",
@@ -66,6 +72,7 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
     SwipeBackDirective,
     DesignModeBadgeComponent,
     BranchVeilComponent,
+    PageFrameComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -91,9 +98,11 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         <pf-top-strip></pf-top-strip>
       </div>
 
-      <main class="shell-main relative" pfSwipeBack data-pf-keys-host [class.shell-main--kbd]="kbd.visible()"
+      <main #main class="shell-main relative" pfSwipeBack data-pf-keys-host [class.shell-main--kbd]="kbd.visible()"
             [attr.data-bs]="branchSwitch.busy() ? branchSwitch.phase() : null"
-            [attr.aria-busy]="branchSwitch.veil() ? 'true' : null">
+            [attr.data-po]="pageOpen.frame() ? 'frame' : null"
+            [attr.data-po-enter]="pageOpen.entering()"
+            [attr.aria-busy]="branchSwitch.veil() || pageOpen.frame() ? 'true' : null">
         <!-- Auto breadcrumb — appears on every page that isn't itself
              a top-level landing (Admin/Frontdesk/Lab/Results/etc.).
              Label switches to the matching section so admin sub-pages
@@ -111,6 +120,10 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
           </a>
         } -->
         <router-outlet></router-outlet>
+        <!-- Page open (PageOpenService): a navigation still on its way draws
+             the DESTINATION's frame — its band + a skeleton of its body —
+             easing in while the screen being left eases out. -->
+        @if (pageOpen.frame(); as frame) { <pf-page-frame [skeleton]="frame"></pf-page-frame> }
         <!-- Branch switch (BranchSwitchService): the destination skeleton
              rises over the receding screen, holds while the new branch's
              data loads, then lifts as the new screen zooms up. -->
@@ -402,6 +415,31 @@ import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-
         .shell-main[data-bs] ::ng-deep > :not(router-outlet):not(pf-branch-veil) { transition: opacity 120ms linear; transform: none !important; filter: none !important; }
         .shell-main[data-bs='in'] ::ng-deep > :not(router-outlet):not(pf-branch-veil) { animation: pf-bs-fade-in 120ms linear both; }
       }
+      /* ── Page open (PageOpenService, core/navigation) ────────────────
+         frame: the screen being left eases out under the destination's
+         frame (pf-page-frame). enter: the CSS fallback for the view-
+         transition page-open where the API is missing (older WebKit). */
+      /* !important: a screen that entered with a filled animation (nd-anim-in
+         …) would otherwise keep its animated opacity on top of this. */
+      .shell-main[data-po] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        opacity: 0 !important; transform: scale(0.985); pointer-events: none;
+        transform-origin: 50% var(--pf-po-top, 0px);
+        transition: opacity 160ms cubic-bezier(0.4, 0, 1, 1), transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+      }
+      .shell-main[data-po-enter='rise'] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        animation: pf-po-rise 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+      }
+      .shell-main[data-po-enter='settle'] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) {
+        animation: pf-bs-fade-in 200ms ease-out both;
+      }
+      @keyframes pf-po-rise {
+        from { opacity: 0; transform: translateY(10px) scale(0.992); }
+        to { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .shell-main[data-po] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) { transition: none; transform: none; }
+        .shell-main[data-po-enter] ::ng-deep > :not(router-outlet):not(pf-page-frame):not(pf-branch-veil) { animation: none; }
+      }
       .sr-only {
         position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
         overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -661,6 +699,9 @@ export class ShellComponent {
   protected readonly kbd = inject(KeyboardService);
   /** In-app branch switch: drives the veil + the content zoom out/in. */
   protected readonly branchSwitch = inject(BranchSwitchService);
+  /** Page open: the destination frame while a navigation is on its way. */
+  protected readonly pageOpen = inject(PageOpenService);
+  private readonly mainEl = viewChild<ElementRef<HTMLElement>>("main");
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
@@ -701,6 +742,18 @@ export class ShellComponent {
   /** Tracks the current URL so the back-chip reacts to navigation. */
   private readonly _url = signal<string>(this.router.url);
   constructor() {
+    // The frame covers the VISIBLE part of <main> (it may be scrolled).
+    effect(() => {
+      const on = !!this.pageOpen.frame();
+      untracked(() => {
+        const main = this.mainEl()?.nativeElement;
+        if (!main || !on) return;
+        main.style.setProperty("--pf-po-top", `${main.scrollTop}px`);
+        if (main.clientHeight > 0) main.style.setProperty("--pf-po-h", `${main.clientHeight}px`);
+        else main.style.removeProperty("--pf-po-h");
+      });
+    });
+
     this.router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),

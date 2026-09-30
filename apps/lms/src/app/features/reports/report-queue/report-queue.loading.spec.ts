@@ -37,7 +37,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function render(opts: { generate$?: Subject<unknown>; prompt?: string | null } = {}) {
+function render(opts: { generate$?: Subject<unknown>; prompt?: string | null; backfill$?: Subject<unknown> } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover'), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
   });
@@ -46,7 +46,8 @@ function render(opts: { generate$?: Subject<unknown>; prompt?: string | null } =
       if (url.startsWith('/api/reports/queue?view=summary')) return of([rep('r1'), rep('r2')]);
       return of([]);
     }),
-    post: vi.fn((url: string) => (url === '/api/reports/generate' && opts.generate$ ? opts.generate$ : of({}))),
+    post: vi.fn((url: string) => (url === '/api/reports/generate' && opts.generate$ ? opts.generate$
+      : url === '/api/reports/backfill' && opts.backfill$ ? opts.backfill$ : of({}))),
   };
   const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
   TestBed.configureTestingModule({
@@ -73,6 +74,18 @@ function render(opts: { generate$?: Subject<unknown>; prompt?: string | null } =
 const downloadBtns = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLButtonElement>('button[title="Download PDF"]'));
 
 describe('Reports list — loading feedback', () => {
+  it('first open: the list skeleton from the first frame (while the backfill runs), never "No reports here"', () => {
+    const backfill$ = new Subject<unknown>();
+    const { f, el } = render({ backfill$ });
+    expect(el.querySelector('.pf-rq-card--skel')).not.toBeNull();
+    expect(el.textContent).not.toContain('No reports here');
+    backfill$.next({ generated: 0 });
+    backfill$.complete();
+    f.detectChanges();
+    expect(el.querySelector('.pf-rq-card--skel')).toBeNull();
+    expect(downloadBtns(el).length).toBe(2);
+  });
+
   it('Download: that row\'s button is disabled + aria-busy at once, dots after 150ms, released when the PDF answers', async () => {
     vi.useFakeTimers();
     const { f, el, c } = render();

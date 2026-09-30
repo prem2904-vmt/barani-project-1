@@ -419,7 +419,9 @@ export class ReportQueueComponent implements OnInit {
   private readonly _items = signal<Report[]>([]);
   readonly items = this._items.asReadonly();
 
-  private readonly _loading = signal(false);
+  // Starts TRUE: the first page is always on its way (after the backfill
+  // call), so the first frame is the list skeleton — never "No reports here".
+  private readonly _loading = signal(true);
   readonly loading = this._loading.asReadonly();
 
   // Order IDs (lower-cased) that still carry an outstanding balance

@@ -79,6 +79,10 @@ export class ChatService implements OnDestroy {
 
   readonly isConnected = signal(false);
   readonly conversations = signal<Conversation[]>([]);
+  /** The conversation list has answered at least once for this account
+   *  (success or failure). Until then the Messages list shows its skeleton,
+   *  never "No conversations yet" (ND-PATTERN "Loading feedback"). */
+  readonly conversationsLoaded = signal(false);
   readonly activeConversationId = signal<string | null>(null);
   readonly activeMessages = signal<ChatMessage[]>([]);
   readonly typingByConversation = signal<Map<string, Set<string>>>(new Map());
@@ -396,6 +400,7 @@ export class ChatService implements OnDestroy {
     this.isConnected.set(false);
 
     this.conversations.set([]);
+    this.conversationsLoaded.set(false);
     this.activeConversationId.set(null);
     this.activeMessages.set([]);
     this.threads.set(new Map());
@@ -594,14 +599,21 @@ export class ChatService implements OnDestroy {
 
   async loadConversations(): Promise<void> {
     const asOf = this.identity();
-    const res = await firstValueFrom(this.api.get<Conversation[]>(
-      '/api/chat/conversations'
-    ));
+    let res: Conversation[] | null;
+    try {
+      res = await firstValueFrom(this.api.get<Conversation[]>(
+        '/api/chat/conversations'
+      ));
+    } catch (e) {
+      if (this.identity() === asOf) this.conversationsLoaded.set(true);
+      throw e;
+    }
     // The account changed while the request was in flight — this list
     // belongs to the previous person; drop it.
     if (this.identity() !== asOf) return;
     const list = res ?? [];
     this.conversations.set(list);
+    this.conversationsLoaded.set(true);
     this.seedReadReceipts(list);
     this.catchUpReads();
   }
