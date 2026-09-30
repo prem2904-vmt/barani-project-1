@@ -79,6 +79,20 @@ describe('stored report PDF — fetch from storage only', () => {
     expect(await text(await ensureStoredReportPdf(api2, 'rep-n', async () => pdf('ours-only')))).toContain('ours-only');
   });
 
+  it('stored with nothing attached (server says attached:false): our render IS the served file — no read-back download', async () => {
+    const api = apiDouble();
+    api.post.mockImplementation(() => of({ attached: false }) as never);
+    const blob = await ensureStoredReportPdf(api, 'rep-alone', async () => pdf('ours'));
+    expect(await text(blob)).toContain('ours');
+    expect(api.getBlob).toHaveBeenCalledTimes(1);   // the initial 404 only
+    expect(await storeReportPdf(api, 'rep-alone2', pdf('x'))).toBe('stored-alone');
+    // attached:true (or an older server with no answer) still reads the served file back.
+    api.post.mockImplementation(() => of({ attached: true }) as never);
+    expect(await storeReportPdf(api, 'rep-att', pdf('x'))).toBe('stored');
+    api.post.mockImplementation(() => of(null) as never);
+    expect(await storeReportPdf(api, 'rep-old', pdf('x'))).toBe('stored');
+  });
+
   it('lost the race (409 already_stored): shows the file the other screen stored', async () => {
     const api = apiDouble({ postError: new ApiError('stored', 'already_stored') });
     let calls = 0;
