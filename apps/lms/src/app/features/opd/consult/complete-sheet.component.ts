@@ -166,7 +166,8 @@ export function addDaysIso(start: Date, days: number): string {
 })
 export class ConsultCompleteSheetComponent {
   readonly patientName = input('');
-  readonly token = input<number | string>('');
+  /** The desk's doctor-prefixed token label ("E5") — never the bare number. */
+  readonly token = input('');
   readonly diagnoses = input<OpdDiagnosis[]>([]);
   readonly lines = input<ConsultRxLine[]>([]);
   readonly tests = input<ConsultInvestigationItem[]>([]);

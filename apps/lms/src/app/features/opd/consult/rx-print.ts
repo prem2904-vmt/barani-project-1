@@ -16,7 +16,8 @@ export interface RxPrintInput {
   practice: { name?: string; address?: string; phone?: string; email?: string };
   patient: { name: string; ageSex?: string | null; mrn?: string | null; phone?: string | null };
   doctor: { name?: string | null; regNo?: string | null; department?: string | null };
-  visit: { date: Date; token?: number | string | null; visitNumber?: string | null };
+  /** `tokenLabel` is the desk's doctor-prefixed label ("E5"), never the bare number. */
+  visit: { date: Date; tokenLabel?: string | null; visitNumber?: string | null };
   vitals?: string | null;
   chiefComplaint?: string | null;
   diagnoses: OpdDiagnosis[];
@@ -62,7 +63,7 @@ export function buildRxPdf(inp: RxPrintInput): jsPDF {
   doc.text([inp.patient.ageSex, inp.patient.mrn].filter(Boolean).join(' · ') || ' ', W / 2, y);
   y += 12;
   const when = inp.visit.date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  doc.text([when, inp.visit.token != null ? 'Token ' + inp.visit.token : null, inp.visit.visitNumber].filter(Boolean).join(' · '), W / 2, y);
+  doc.text([when, inp.visit.tokenLabel ? 'Token ' + inp.visit.tokenLabel : null, inp.visit.visitNumber].filter(Boolean).join(' · '), W / 2, y);
   y += 18;
 
   const block = (label: string, text: string | null | undefined) => {

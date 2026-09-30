@@ -25,7 +25,7 @@ describe('tabOf / nextToCall (existing — unchanged)', () => {
 
 function row(over: Partial<ConsultQueueRow> = {}): ConsultQueueRow {
   return {
-    visitId: 'v1', patientId: 'p1', patientName: 'Pat', token: 1, status: 'waiting',
+    visitId: 'v1', patientId: 'p1', patientName: 'Pat', token: 1, tokenLabel: 'A1', status: 'waiting',
     isFollowUp: false, hasVitals: true, allergyCount: 0, doctorUserId: 'd1', doctorName: 'A Doc',
     ...over,
   };

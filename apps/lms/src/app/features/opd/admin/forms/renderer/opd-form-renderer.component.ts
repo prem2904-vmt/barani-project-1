@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { NdDateComponent } from '../../../../../shared/components/nd-date/nd-date.component';
 import { PfSelectOption, SelectComponent } from '../../../../../shared/primitives/select.component';
+import { AuthedMediaDirective } from '../../../shared/authed-media.directive';
 import {
   OpdAnswers, OpdMark, OpdMediaRef, OpdQuestion, OpdSided, Side, YES_NO, allQuestions, computeCalc, conditionMet, isWide,
   normalizeQuestion, normalizeSchema, printRows, typeName,
@@ -41,7 +42,7 @@ const SHAPES: Record<string, string[]> = {
 @Component({
   selector: 'pf-opd-form-renderer',
   standalone: true,
-  imports: [NgTemplateOutlet, NdDateComponent, SelectComponent],
+  imports: [NgTemplateOutlet, NdDateComponent, SelectComponent, AuthedMediaDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (mode() === 'print') {
@@ -72,7 +73,15 @@ const SHAPES: Record<string, string[]> = {
       </div>
     } @else {
       <div class="ofr" [class.ofr--phone]="layout() === 'phone'" [class.ofr--design]="design()">
-        @for (q of shown(); track q.key; let i = $index) {
+        @for (group of sectionGroups(); track group.key) {
+          @if (showSectionHeads() && group.items.length) {
+            <button type="button" class="ofr-sec-head" [attr.aria-expanded]="!isCollapsed(group.key)" (click)="toggleSection(group.key)">
+              <svg class="ofr-sec-head__c" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              {{ group.title }}
+            </button>
+          }
+          @if (!showSectionHeads() || !isCollapsed(group.key)) {
+          @for (q of group.items; track q.key; let i = $index) {
           <div class="ofr-q" [class.ofr-q--wide]="wide(q)" [class.is-sel]="design() && selectedKey() === q.key"
                [class.is-cond]="!met(q)" [class.is-addon]="addonKeys().has(q.key)"
                [attr.data-q]="q.key" [attr.data-type]="q.sides ? 'lr' : q.type"
@@ -113,7 +122,7 @@ const SHAPES: Record<string, string[]> = {
               @if (selectedKey() === q.key) {
                 <div class="ofr-bar" role="toolbar" aria-label="Question tools" (click)="$event.stopPropagation()">
                   <button type="button" (click)="action.emit({ key: q.key, action: 'up' })" [disabled]="i === 0" aria-label="Move up" title="Move up"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
-                  <button type="button" (click)="action.emit({ key: q.key, action: 'down' })" [disabled]="i === shown().length - 1" aria-label="Move down" title="Move down"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <button type="button" (click)="action.emit({ key: q.key, action: 'down' })" [disabled]="i === group.items.length - 1" aria-label="Move down" title="Move down"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                   <button type="button" (click)="action.emit({ key: q.key, action: 'dup' })" aria-label="Duplicate" title="Duplicate"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
                   <span class="ofr-bar__sep" aria-hidden="true"></span>
                   <button type="button" class="ofr-bar__req" [attr.aria-pressed]="!!q.required" (click)="action.emit({ key: q.key, action: 'req' })">Required</button>
@@ -123,6 +132,8 @@ const SHAPES: Record<string, string[]> = {
               }
             }
           </div>
+          }
+          }
         }
       </div>
     }
@@ -191,7 +202,8 @@ const SHAPES: Record<string, string[]> = {
           <span class="ofr-media">
             @for (m of mediaOf(v); track $index) {
               <span class="ofr-shot">
-                @if (m.url && m.kind !== 'video') { <img [src]="m.url" [alt]="m.name"> }
+                @if (m.url && m.kind === 'image') { <img [pfAuthedSrc]="m.url" [alt]="m.name"> }
+                @else if (m.url && m.kind === 'video') { <video [pfAuthedSrc]="m.url" muted playsinline preload="metadata"></video> }
                 <span class="ofr-shot__n">{{ m.name }}</span>
                 @if (live()) {
                   <button type="button" class="ofr-shot__x" (click)="set(q, side, removeAt(v, $index))" [attr.aria-label]="'Remove ' + m.name">
@@ -259,6 +271,13 @@ const SHAPES: Record<string, string[]> = {
     .ofr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
     .ofr--phone { grid-template-columns: minmax(0, 1fr); }
     @media (max-width: 720px) { .ofr { grid-template-columns: minmax(0, 1fr); } }
+    .ofr-sec-head { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; padding: 4px 2px 0; margin: 0; border: 0; background: transparent; cursor: pointer;
+      font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); }
+    .ofr-sec-head:not(:first-child) { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--nd-line); }
+    .ofr-sec-head:hover { color: var(--text-secondary); }
+    .ofr-sec-head__c { flex: none; transition: transform var(--nd-dur-fast, 120ms) ease; }
+    .ofr-sec-head[aria-expanded='true'] .ofr-sec-head__c { transform: rotate(90deg); }
+    @media (prefers-reduced-motion: reduce) { .ofr-sec-head__c { transition: none; } }
     .ofr-q { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px 12px; border-radius: var(--nd-radius, 12px); border: 1px solid transparent; }
     .ofr-q--wide { grid-column: 1 / -1; }
     .ofr--design .ofr-q { cursor: pointer; transition: border-color var(--nd-dur-fast, 120ms) ease, background var(--nd-dur-fast, 120ms) ease; }
@@ -297,7 +316,7 @@ const SHAPES: Record<string, string[]> = {
     .ofr-media { display: flex; flex-wrap: wrap; gap: 8px; }
     .ofr-shot { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 112px; height: 84px;
       border-radius: 10px; border: 1px solid var(--nd-line); background: color-mix(in srgb, var(--text-primary) 5%, var(--nd-card-bg)); overflow: hidden; font-size: 11px; color: var(--text-secondary); }
-    .ofr-shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .ofr-shot img, .ofr-shot video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .ofr-shot__n { position: relative; padding: 0 6px; text-align: center; }
     .ofr-shot--add { border-style: dashed; cursor: pointer; font: inherit; font-size: 11.5px; color: var(--violet-text, #6d28d9); }
     .ofr-shot__x { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--nd-line);
@@ -388,6 +407,29 @@ export class OpdFormRendererComponent {
     return showAll ? all : all.filter((q) => conditionMet(q, this.byKey(), this.answers()));
   });
   readonly rows = computed(() => printRows(this.list(), this.answers(), this.printBlanks()));
+
+  /** Questions grouped by their section (a trailing "Doctor's own" group for
+   *  addons, when there are any), each already filtered the way `shown()` is.
+   *  Design mode is always fed a ONE-section doc per instance (the builder
+   *  edits each section in its own renderer), so headers stay off there —
+   *  they only show for the real, multi-section consult screens. */
+  readonly sectionGroups = computed(() => {
+    const d = this.doc();
+    const showAll = this.showHidden() ?? this.design();
+    const bk = this.byKey();
+    const answers = this.answers();
+    const vis = (q: OpdQuestion) => showAll || conditionMet(q, bk, answers);
+    const groups = d.sections.map((s) => ({ key: s.key, title: s.title, items: s.fields.filter(vis) }));
+    const addons = this.addonList().filter(vis);
+    if (addons.length) groups.push({ key: '__addons', title: "Doctor's own", items: addons });
+    return groups;
+  });
+  readonly showSectionHeads = computed(() => this.sectionGroups().length > 1);
+  private readonly collapsedSections = signal<ReadonlySet<string>>(new Set());
+  isCollapsed(key: string): boolean { return this.collapsedSections().has(key); }
+  toggleSection(key: string): void {
+    this.collapsedSections.update((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  }
 
   met(q: OpdQuestion): boolean { return conditionMet(q, this.byKey(), this.answers()); }
   wide(q: OpdQuestion): boolean { return isWide(q); }

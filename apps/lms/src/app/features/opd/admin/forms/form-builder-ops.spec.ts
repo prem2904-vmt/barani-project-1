@@ -1,6 +1,7 @@
 import { OpdQuestion, emptyDoc } from './form-schema';
 import {
-  applyAction, changeType, fixConditions, fromParsed, fromType, insertAt, keysOf, patchQuestion, setSides, undoDelete, versionState, withQuestions,
+  addSection, applyAction, changeType, fixConditions, fromParsed, fromType, insertAt, keysOf, moveSection, patchQuestion, removeSection,
+  renameSection, sectionIndexOfKey, setSides, undoDelete, versionState, withQuestions,
 } from './form-builder-ops';
 import { parseQuestion } from './sentence-parser';
 
@@ -80,11 +81,66 @@ describe('form builder operations', () => {
     expect(fixConditions(LIST)).toEqual(LIST);
   });
 
-  it('withQuestions rebuilds the first section and keeps the rest', () => {
-    const doc = { ...emptyDoc(), sections: [{ key: 'findings', title: 'Findings', fields: [] }, { key: 'x', title: 'X', fields: [Q({ key: 'x1' })] }] };
-    const out = withQuestions(doc, LIST);
-    expect(out.sections[0].fields).toBe(LIST);
-    expect(out.sections[1].fields[0].key).toBe('x1');
+  it('withQuestions redistributes the flat, form-wide list back across sections by their original length', () => {
+    const doc = {
+      ...emptyDoc(),
+      sections: [
+        { key: 's1', title: 'S1', fields: [Q({ key: 'a' }), Q({ key: 'b' })] },
+        { key: 's2', title: 'S2', fields: [Q({ key: 'c' })] },
+      ],
+    };
+    const flat = [Q({ key: 'a', required: true }), Q({ key: 'b' }), Q({ key: 'c', required: true })];
+    const out = withQuestions(doc, flat);
+    expect(out.sections[0].fields.map((q) => q.key)).toEqual(['a', 'b']);
+    expect(out.sections[0].fields[0].required).toBe(true);
+    expect(out.sections[1].fields.map((q) => q.key)).toEqual(['c']);
+    expect(out.sections[1].fields[0].required).toBe(true);
+  });
+});
+
+describe('sections', () => {
+  const doc = () => ({
+    ...emptyDoc(),
+    sections: [
+      { key: 's1', title: 'S1', fields: [Q({ key: 'a' })] },
+      { key: 's2', title: 'S2', fields: [Q({ key: 'b' }), Q({ key: 'c' })] },
+      { key: 's3', title: 'S3', fields: [] },
+    ],
+  });
+
+  it('finds which section a key lives in', () => {
+    expect(sectionIndexOfKey(doc(), 'a')).toBe(0);
+    expect(sectionIndexOfKey(doc(), 'c')).toBe(1);
+    expect(sectionIndexOfKey(doc(), 'nope')).toBeNull();
+    expect(sectionIndexOfKey(doc(), null)).toBeNull();
+  });
+
+  it('renames a section, keeping its questions', () => {
+    const out = renameSection(doc(), 1, '  Examination  ');
+    expect(out.sections[1]).toMatchObject({ key: 's2', title: 'Examination' });
+    expect(out.sections[1].fields.map((q) => q.key)).toEqual(['b', 'c']);
+    expect(renameSection(doc(), 1, '   ')).toEqual(doc()); // blank is a no-op
+  });
+
+  it('moves a section up / down; a no-op at either end', () => {
+    const down = moveSection(doc(), 0, 1);
+    expect(down.sections.map((s) => s.key)).toEqual(['s2', 's1', 's3']);
+    expect(moveSection(doc(), 0, -1)).toEqual(doc());
+    expect(moveSection(doc(), 2, 1)).toEqual(doc());
+  });
+
+  it('adds a new, empty section with a unique key', () => {
+    const out = addSection(doc(), 'S1'); // collides with the existing "S1" key
+    expect(out.sections.length).toBe(4);
+    expect(out.sections[3]).toMatchObject({ title: 'S1', fields: [] });
+    expect(out.sections[3].key).not.toBe('s1');
+  });
+
+  it('removes a section but never the last one', () => {
+    const out = removeSection(doc(), 2);
+    expect(out.sections.map((s) => s.key)).toEqual(['s1', 's2']);
+    const one = { ...emptyDoc(), sections: [{ key: 'x', title: 'X', fields: [] }] };
+    expect(removeSection(one, 0)).toEqual(one);
   });
 });
 

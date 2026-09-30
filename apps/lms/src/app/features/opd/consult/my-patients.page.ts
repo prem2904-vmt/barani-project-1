@@ -89,7 +89,7 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
         </div>
         <div band-actions>
           <button type="button" class="nd-btn nd-btn--primary mp__call" [disabled]="!next()" (click)="callNext()">
-            @if (next(); as n) { Call next · Token {{ n.token }} } @else { No one waiting }
+            @if (next(); as n) { Call next · Token {{ n.tokenLabel }} } @else { No one waiting }
           </button>
         </div>
       </pf-hero-band>
@@ -120,7 +120,7 @@ export function nextToCall(rows: readonly ConsultQueueRow[]): ConsultQueueRow | 
             } @else {
               @for (r of visible(); track r.visitId) {
                 <button type="button" class="nd-row mp__row" [class.nd-row--in]="r.status === 'in_consult'" (click)="open(r)">
-                  <span class="mp__token">{{ r.token }}</span>
+                  <span class="mp__token">{{ r.tokenLabel }}</span>
                   <span class="mp__main">
                     <span class="mp__name">{{ r.patientName }} @if (r.ageSex) { <em>{{ r.ageSex }}</em> } @if (r.isFollowUp) { <span class="mp__tag">Follow-up</span> }
                       @if (r.allergyCount) { <span class="mp__tag mp__tag--warn">Allergy</span> }</span>

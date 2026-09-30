@@ -3,7 +3,7 @@ import { Injectable, Injector, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PlatformService } from './platform.service';
 import { ToastService } from './toast.service';
-import { absoluteApiUrl, isPrivateUploadPath, registerUploadFetcher, uploadPathOf } from '../../shared/utils/upload-fetch';
+import { absoluteApiUrl, isAuthedApiFilePath, isOpdMediaPath, isPrivateUploadPath, registerUploadFetcher, uploadPathOf } from '../../shared/utils/upload-fetch';
 
 /**
  * Private uploads in the app. "/uploads/…" files are served only to the
@@ -82,7 +82,7 @@ export class UploadsService {
    *  file per session (shared by concurrent callers, cached when small). */
   async blob(url: string): Promise<Blob | null> {
     url = this.path(url);
-    if (!isPrivateUploadPath(url)) {
+    if (!isAuthedApiFilePath(url)) {
       try {
         const r = await fetch(absoluteApiUrl(url, this.apiBase));
         return r.ok ? await r.blob() : null;
@@ -107,8 +107,12 @@ export class UploadsService {
 
   private async fetchBlob(path: string): Promise<Blob | null> {
     try {
-      const b = await firstValueFrom(this.http.get(
-        `${this.apiBase}/api/uploads/file`, { params: { path }, responseType: 'blob' }));
+      // OPD's media endpoints ARE the path (their own query string already
+      // on it); "/uploads/…" goes through the one shared file endpoint.
+      const req$ = isOpdMediaPath(path)
+        ? this.http.get(absoluteApiUrl(path, this.apiBase), { responseType: 'blob' })
+        : this.http.get(`${this.apiBase}/api/uploads/file`, { params: { path }, responseType: 'blob' });
+      const b = await firstValueFrom(req$);
       this.failedAt.delete(path);
       return b;
     } catch (e) {
@@ -122,7 +126,7 @@ export class UploadsService {
   async objectUrl(url: string | null | undefined): Promise<string | null> {
     if (!url) return null;
     url = this.path(url);
-    if (!isPrivateUploadPath(url)) return absoluteApiUrl(url, this.apiBase);
+    if (!isAuthedApiFilePath(url)) return absoluteApiUrl(url, this.apiBase);
     const have = this.urls()[url];
     if (have) return have;
     let p = this.inflight.get(url);
@@ -143,7 +147,7 @@ export class UploadsService {
   src(url: string | null | undefined): string {
     if (!url) return '';
     url = this.path(url);
-    if (!isPrivateUploadPath(url)) return absoluteApiUrl(url, this.apiBase);
+    if (!isAuthedApiFilePath(url)) return absoluteApiUrl(url, this.apiBase);
     const have = this.urls()[url];
     if (have) return have;
     // Gone (410) or just failed: keep the placeholder, don't re-request per render.
@@ -177,7 +181,7 @@ export class UploadsService {
   async open(url: string | null | undefined): Promise<'opened' | 'missing' | 'failed'> {
     if (!url) return 'failed';
     url = this.path(url);
-    if (!isPrivateUploadPath(url)) { window.open(absoluteApiUrl(url, this.apiBase), '_blank', 'noopener'); return 'opened'; }
+    if (!isAuthedApiFilePath(url)) { window.open(absoluteApiUrl(url, this.apiBase), '_blank', 'noopener'); return 'opened'; }
     if (this.isMissing(url)) { this.toast()?.error(FILE_MISSING_MESSAGE, 6000); return 'missing'; }
     const native = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
       .Capacitor?.isNativePlatform?.();

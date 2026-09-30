@@ -21,7 +21,8 @@ export const CONSULT_API = OPD_API.consult;
 
 export interface ConsultQueueRow {
   visitId: string; patientId: string; patientName: string; ageSex?: string | null; mrn?: string | null;
-  token: number; status: OpdVisitStatus; purpose?: string | null; departmentName?: string | null; serviceName?: string | null;
+  /** Bare token NUMBER — sort/compare only. Display the doctor-prefixed `tokenLabel` (the desk's "E5"). */
+  token: number; tokenLabel: string; status: OpdVisitStatus; purpose?: string | null; departmentName?: string | null; serviceName?: string | null;
   isFollowUp: boolean; checkedInAt?: string | null; consultStartedAt?: string | null; completedAt?: string | null;
   hasVitals: boolean; allergyCount: number; doctorUserId: string; doctorName?: string | null;
 }
@@ -56,7 +57,7 @@ export interface ConsultWorkspace {
   visit: {
     id: string; patientId: string; doctorUserId: string; doctorName?: string | null;
     departmentId?: string | null; departmentName?: string | null; serviceId?: string | null; serviceName?: string | null;
-    visitNumber?: string | null; visitDate: string; token: number; status: OpdVisitStatus; purpose?: string | null;
+    visitNumber?: string | null; visitDate: string; token: number; tokenLabel: string; status: OpdVisitStatus; purpose?: string | null;
     isFollowUp: boolean; source?: string | null; checkedInAt?: string | null; consultStartedAt?: string | null;
     completedAt?: string | null; labOrderId?: string | null; canEdit: boolean;
   };
