@@ -7,7 +7,7 @@ import { filterStock } from './stock.page';
 import { poLineTotal } from './purchase-orders.page';
 import { gstinOk } from './suppliers.page';
 import { returnable } from './returns.page';
-import { waitingFor } from './rx-queue.page';
+import { waitingFor, todaySummary } from './rx-queue.page';
 import { buildPharmacyPdf, itemLabel } from './pharmacy-print';
 import { sayRx, stripDays } from '../shared/rx-schedule';
 import type { RxLineView, StockRow } from './pharmacy.api';
@@ -189,5 +189,18 @@ describe('small helpers', () => {
     expect(waitingFor('2026-09-30T09:48:00Z', now)).toBe('12 min');
     expect(waitingFor('2026-09-30T07:55:00Z', now)).toBe('2 h 5 min');
     expect(waitingFor('2026-09-27T10:00:00Z', now)).toBe('3 d');
+  });
+
+  it("today's summary never counts a \"bill later\" balance as collected (critic P2 #16)", () => {
+    const d = (status: string, total: number, paid: number) => ({ status, total, paid });
+    // One sale paid in full, one dispensed but unpaid ("Give, bill later"), one still a draft (excluded).
+    const s = todaySummary([d('completed', 500, 500), d('completed', 300, 0), d('draft', 200, 0)]);
+    expect(s).toEqual({ billed: 800, collected: 500, due: 300 });
+    // A partial payment: collected is capped at what was actually paid, never more than billed.
+    expect(todaySummary([d('completed', 100, 40)])).toEqual({ billed: 100, collected: 40, due: 60 });
+    // Nothing sold yet today.
+    expect(todaySummary([])).toEqual({ billed: 0, collected: 0, due: 0 });
+    // A cancelled sale counts toward neither billed nor collected.
+    expect(todaySummary([d('cancelled', 999, 0)])).toEqual({ billed: 0, collected: 0, due: 0 });
   });
 });

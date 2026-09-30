@@ -116,17 +116,20 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                           <div class="ph-sub">{{ brandLine(drug) }}{{ brandLine(drug) ? ' · ' : '' }}{{ sched(l) }}</div>
                           @if (drug && drug.id !== l.drug?.id) { <div class="ph-sub">Substituted for {{ l.drugName }}</div> }
                           @if (l.remaining <= 0) { <div class="ph-sub">{{ l.dispenseStatus === 'not_dispensed' ? 'Not given' : 'Already given' }}</div> }
+                          @else if (d.consultStatus !== 'completed') {
+                            <div class="ph-sub">{{ l.quantity }} {{ l.form }} prescribed — waiting on the doctor</div>
+                          }
                           @else if (subOptions(l).length > 1 && !s.skip) {
                             <div style="margin-top:6px;max-width:280px">
                               <pf-select size="sm" [options]="subOptions(l)" [value]="s.drugId ?? ''" (valueChange)="setDrug(l, $event)" placeholder="Give…"></pf-select>
                             </div>
                           }
-                          @if (!l.drug && !drug && l.remaining > 0) {
+                          @if (d.consultStatus === 'completed' && !l.drug && !drug && l.remaining > 0) {
                             <div style="margin-top:6px"><pf-pharmacy-drug-picker [down]="true" placeholder="Not in the drug master — pick the drug to give" (picked)="pickFree(l, $event)"></pf-pharmacy-drug-picker></div>
                           }
                         </td>
                         <td class="nd-num" data-l="Batch">
-                          @if (!drug || s.skip || l.remaining <= 0) { <span class="ph-muted">—</span> }
+                          @if (d.consultStatus !== 'completed' || !drug || s.skip || l.remaining <= 0) { <span class="ph-muted">—</span> }
                           @else if (pharmacistPick()) {
                             <pf-select size="sm" [options]="batchOptions(l)" [value]="s.batchId ?? ''" (valueChange)="setBatch(l, $event)" placeholder="Pick a batch"></pf-select>
                           } @else {
@@ -135,7 +138,7 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                           }
                         </td>
                         <td class="r" data-l="Qty">
-                          @if (l.remaining > 0 && !s.skip) {
+                          @if (d.consultStatus === 'completed' && l.remaining > 0 && !s.skip) {
                             <span class="ph-qty">
                               <button type="button" (click)="bump(l, -1)" [disabled]="s.qty <= 1" [attr.aria-label]="'Less ' + l.drugName"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
                               <input type="number" inputmode="numeric" [value]="s.qty" [attr.aria-label]="'Quantity of ' + l.drugName" (change)="setQty(l, $any($event.target).value)" />
@@ -146,13 +149,13 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                               <div class="ph-sub pf-exp-amber">{{ s.qty - l.remaining }} more than prescribed ({{ l.quantity }})</div>
                               <input class="nd-input" type="text" style="font-size:12.5px;padding:4px 8px;margin-top:4px;width:180px" placeholder="Reason (required)" [value]="s.overrideReason" [attr.aria-label]="'Reason for giving more of ' + l.drugName" (input)="setOverrideReason(l, $any($event.target).value)" />
                             }
-                          } @else { <span class="ph-muted nd-num">{{ l.remaining <= 0 ? l.dispensed : 0 }}</span> }
+                          } @else { <span class="ph-muted nd-num">{{ l.remaining <= 0 ? l.dispensed : (d.consultStatus === 'completed' ? 0 : l.quantity) }}</span> }
                         </td>
-                        <td class="r" data-l="Left after" [class.ph-low]="leftAfter(l) < 0">{{ drug && !s.skip && l.remaining > 0 ? units(leftAfter(l), drug) : '' }}</td>
-                        <td class="r" data-l="MRP">{{ drug && !s.skip && l.remaining > 0 ? inr(unitMrp(l)) : '' }}</td>
-                        <td class="r" data-l="Amount">{{ drug && !s.skip && l.remaining > 0 ? inr(lineAmount(l)) : '' }}</td>
+                        <td class="r" data-l="Left after" [class.ph-low]="leftAfter(l) < 0">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? units(leftAfter(l), drug) : '' }}</td>
+                        <td class="r" data-l="MRP">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? inr(unitMrp(l)) : '' }}</td>
+                        <td class="r" data-l="Amount">{{ d.consultStatus === 'completed' && drug && !s.skip && l.remaining > 0 ? inr(lineAmount(l)) : '' }}</td>
                         <td class="ph-td-act">
-                          @if (l.remaining > 0) {
+                          @if (d.consultStatus === 'completed' && l.remaining > 0) {
                             <button type="button" class="nd-btn nd-btn--tertiary" (click)="toggleSkip(l)" [attr.aria-label]="(s.skip ? 'Give ' : 'Skip ') + l.drugName">{{ s.skip ? 'Give' : 'Skip' }}</button>
                           }
                         </td>
@@ -167,7 +170,17 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
             </div>
           </section>
 
-          @if (!done()) {
+          @if (!done() && d.consultStatus !== 'completed') {
+            <aside class="nd-card" aria-labelledby="ph-w-t">
+              <header class="nd-card__head">
+                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
+                <span class="nd-card__label" id="ph-w-t">Waiting on the doctor</span>
+              </header>
+              <div class="nd-card__body">
+                <p class="ph-sub">The doctor hasn't completed this prescription yet — there's nothing to give or bill until the consult is marked complete.</p>
+              </div>
+            </aside>
+          } @else if (!done()) {
             <aside class="nd-card" aria-labelledby="ph-b-t">
               <header class="nd-card__head">
                 <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>

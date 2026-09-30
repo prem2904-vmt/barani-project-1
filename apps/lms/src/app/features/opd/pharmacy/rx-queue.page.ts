@@ -20,6 +20,16 @@ export function waitingFor(iso: string | null | undefined, now = Date.now()): st
   return `${Math.floor(m / 1440)} d`;
 }
 
+/** Today's card summary (critic P2 #16): billed never equals collected when a
+ *  sale was given "bill later" — an unpaid or partly-paid COMPLETED sale must
+ *  never be counted as money in hand. A cancelled sale counts toward neither. */
+export function todaySummary(dispenses: readonly Pick<DispenseSummary, 'status' | 'total' | 'paid'>[]): { billed: number; collected: number; due: number } {
+  const completed = dispenses.filter(d => d.status === 'completed');
+  const billed = completed.reduce((a, d) => a + d.total, 0);
+  const collected = completed.reduce((a, d) => a + Math.min(d.paid, d.total), 0);
+  return { billed, collected, due: Math.max(0, billed - collected) };
+}
+
 /**
  * Pharmacy → Prescriptions (`/opd/pharmacy`): completed consults whose Rx is
  * still to be dispensed at THIS branch, oldest first (main card), and today's
@@ -94,7 +104,7 @@ export function waitingFor(iso: string | null | undefined, now = Date.now()): st
             <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span>
             <span class="nd-card__label" id="ph-today-t">Today</span>
             <span class="nd-card__spacer"></span>
-            <span class="ph-sub nd-num">{{ inr(todayTotal(), false) }}</span>
+            <span class="ph-sub nd-num">Billed {{ inr(summary().billed, false) }} · Collected {{ inr(summary().collected, false) }}{{ summary().due > 0 ? ' · Due ' + inr(summary().due, false) : '' }}</span>
           </header>
           <div class="nd-card__body">
             @for (d of today(); track d.id) {
@@ -141,7 +151,9 @@ export class PharmacyRxQueuePage {
     return !t ? this.all() : this.all().filter(r =>
       (r.patientName + ' ' + (r.visitNumber ?? '') + ' ' + r.doctorName + ' ' + (r.patientMeta ?? '')).toLowerCase().includes(t));
   });
-  protected readonly todayTotal = computed(() => this.today().filter(d => d.status === 'completed').reduce((a, d) => a + d.total, 0));
+  /** Billed · Collected · Due (critic P2 #16) — an unpaid "bill later" sale
+   *  must never be counted as money in hand. */
+  protected readonly summary = computed(() => todaySummary(this.today()));
 
   constructor() { this.load(); }
 

@@ -278,6 +278,19 @@ describe('Pharmacy screens', () => {
     expect((f.nativeElement as HTMLElement).textContent).toContain('New sale');
   });
 
+  it('dispense: a draft consult shows "waiting on the doctor" with no editable lines (night/money #3)', async () => {
+    const api = apiMock({ rx: vi.fn(() => of({ ...RX, consultStatus: 'draft' })) });
+    const { el, f, c } = render(PharmacyDispensePage, api);
+    await f.whenStable(); f.detectChanges();
+    expect(el.textContent).toContain("hasn't completed this consult yet");
+    expect(el.textContent).toContain('Waiting on the doctor');
+    expect(el.querySelector('input[type="number"]')).toBeNull(); // no qty stepper
+    expect(el.querySelector('pf-select')).toBeNull();              // no drug / batch picker
+    expect(el.textContent).not.toContain('Billing');
+    expect(c.canGive()).toBe(false);
+    noNative(el);
+  });
+
   it('settings: switching Schedule enforcement OFF asks first; Save is the one primary once changed', async () => {
     const { el, f, c, dialog, api } = render(PharmacySettingsPage, apiMock(), false);
     await f.whenStable(); f.detectChanges();
