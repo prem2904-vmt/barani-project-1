@@ -1255,12 +1255,12 @@ export class AdminOverviewComponent implements OnInit {
       kw: "billing gst tax slab hsn sac invoice number numbering series discount cap approval upi online payment razorpay payment gateway bank account place of supply interstate",
     },
     {
-      label: "Expense tracker",
-      href: "/finance/expenses",
+      label: "Expenses",
+      href: "/expenses",
       g: "finance",
-      hint: "Daily expenses, bills, opening & closing balance",
+      hint: "Staff expenses, bills, cashier day closing",
       icon: "M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5ZM8 8h8M8 12h8M8 16h5",
-      kw: "expense expenses spend spending petty cash bill receipt voucher opening closing balance day book cash book vendor payment rent salary consumables",
+      kw: "expense expenses spend spending petty cash bill receipt voucher opening closing balance day book cash book vendor payment rent salary consumables cashier day closing counted cash variance",
     },
     {
       label: "Vendor Credit Wallets",

@@ -610,11 +610,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/finance/daily-statement.component').then(m => m.DailyStatementComponent)
       },
       {
-        // Finance → Expense tracker (expense_viewer / _modifier / _admin).
-        path: 'finance/expenses',
-        canActivate: [...routeGuards('/finance/expenses')],
+        // Expenses — a PRIMARY everyday screen (main nav): My expenses,
+        // All expenses, the cashier's Day closing (expense_viewer / _modifier / _admin).
+        path: 'expenses',
+        canActivate: [...routeGuards('/expenses')],
         loadComponent: () => import('./features/finance/expenses/expense-tracker.component').then(m => m.ExpenseTrackerComponent)
       },
+      // Old deep link (Finance → Expense tracker) keeps working.
+      { path: 'finance/expenses', redirectTo: 'expenses', pathMatch: 'full' },
 
       // 403
       {

@@ -234,6 +234,9 @@ export class ExpenseEntryDialogComponent implements OnDestroy {
   readonly isAdmin = input(false);
   readonly initialKind = input<ExpenseKind>('expense');
   readonly initialDate = input<string | null>(null);
+  /** Bills already picked before the dialog opened (the phone bar's
+   *  "Snap bill" — the camera first, then the form). New entries only. */
+  readonly initialFiles = input<File[]>([]);
 
   readonly closed = output<void>();
   /** Something changed on the server (saved / deleted) — the host reloads. */
@@ -302,6 +305,7 @@ export class ExpenseEntryDialogComponent implements OnDestroy {
     } else {
       this.kind.set(this.initialKind());
       this.date.set(this.initialDate() ?? this.today());
+      if (this.initialFiles().length) this.addFiles(this.initialFiles());
     }
   }
 
@@ -335,6 +339,11 @@ export class ExpenseEntryDialogComponent implements OnDestroy {
     const inputEl = ev.target as HTMLInputElement;
     const files = Array.from(inputEl.files ?? []);
     inputEl.value = '';
+    this.addFiles(files);
+  }
+
+  /** Queue bills (photos / PDFs) to upload after the entry saves. */
+  addFiles(files: readonly File[]) {
     const next: PendingBill[] = [];
     for (const f of files) {
       if (f.size > MAX_BILL_BYTES) { this.toasts.error(`${f.name} is over 15 MB`); continue; }

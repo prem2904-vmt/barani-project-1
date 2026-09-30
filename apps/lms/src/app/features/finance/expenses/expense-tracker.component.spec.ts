@@ -15,7 +15,8 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 
 /**
- * /finance/expenses — ND pattern: band (search pill; Filters when narrow,
+ * /expenses (primary nav; /finance/expenses redirects) — tabs My expenses ·
+ * All expenses · Day closing by permission; ND pattern: band (search pill; Filters when narrow,
  * Export CSV, ONE primary "Add expense" only for modifier / admin), FILTERS
  * companion LEFT (range, type, category, mode, category totals), the EXPENSE
  * BOOK main card (range opening · cash in · expenses · closing; Entries grid /
@@ -83,7 +84,9 @@ describe('ExpenseTrackerComponent', () => {
 
   it('opens on the last 7 IST days: filters LEFT, book MAIN, one primary, kit controls only', () => {
     const { el } = render();
-    expect(svc['book']).toHaveBeenCalledWith({ from: labDaysAgo(6), to: labToday(), categoryId: null, kind: null, mode: null });
+    // The cashier opens on MY expenses (own entries), with all three tabs.
+    expect(svc['book']).toHaveBeenCalledWith({ from: labDaysAgo(6), to: labToday(), categoryId: null, kind: null, mode: null, mine: true });
+    expect([...el.querySelectorAll('.pf-xt__tabs .nd-tabs__item')].map(t => t.textContent?.trim())).toEqual(['My expenses', 'All expenses', 'Day closing']);
     const panels = el.querySelector('.pf-xt__panels')!;
     expect(panels.children[0].classList.contains('pf-xt__side')).toBe(true);
     expect(panels.children[1].classList.contains('pf-xt__main')).toBe(true);
@@ -103,11 +106,18 @@ describe('ExpenseTrackerComponent', () => {
   it('a viewer gets no Add button and no row edit; a modifier (own scope) sees no balances or day book', () => {
     const v = render({ perms: ['expense_viewer'] });
     expect(v.el.querySelectorAll('.pf-hb-btn--primary').length).toBe(0);
+    expect(v.el.querySelector('.nd-bottombar')).toBeNull();
+    expect(v.el.querySelector('.pf-xt__tabs')).toBeNull();          // one tab: All expenses (read-only)
+    expect(v.c.tab()).toBe('all');
+    expect(svc['book']).toHaveBeenCalledWith(expect.objectContaining({ mine: false }));
     expect(v.c.entryCols().some((c: any) => c.colId === 'actions')).toBe(false);
     TestBed.resetTestingModule();
 
     const m = render({ perms: ['expense_modifier'], book: bookOf({ scope: 'own', opening: null, closing: null }) });
     expect(m.el.querySelectorAll('.pf-hb-btn--primary').length).toBe(1);
+    expect(m.c.tab()).toBe('mine');
+    expect(m.el.querySelector('.pf-xt__tabs')).toBeNull();
+    expect(m.el.querySelector('.pf-day-closing, pf-day-closing')).toBeNull();
     const stats = [...m.el.querySelectorAll('.pf-xt__statk')].map(s => s.textContent?.trim());
     expect(stats).toEqual(['Cash in', 'Expenses']);
     expect(m.el.querySelector('.pf-xt__view')).toBeNull();
@@ -119,7 +129,7 @@ describe('ExpenseTrackerComponent', () => {
     svc['book'].mockClear();
     c.kind.set('cash_in'); c.categoryId.set('c1'); c.mode.set('cash');
     f.detectChanges();
-    expect(svc['book']).toHaveBeenLastCalledWith({ from: labDaysAgo(6), to: labToday(), categoryId: 'c1', kind: 'cash_in', mode: 'cash' });
+    expect(svc['book']).toHaveBeenLastCalledWith({ from: labDaysAgo(6), to: labToday(), categoryId: 'c1', kind: 'cash_in', mode: 'cash', mine: true });
     c.setQuick('today');
     f.detectChanges();
     expect(svc['book']).toHaveBeenLastCalledWith(expect.objectContaining({ from: labToday(), to: labToday() }));
@@ -128,8 +138,10 @@ describe('ExpenseTrackerComponent', () => {
     expect(searchExpenses(bookOf().entries, 'ravi').map(e => e.id)).toEqual(['x1']);
   });
 
-  it('day book: admin actions follow the lock (close open days, reopen only the latest closed day)', async () => {
-    const { c } = render();
+  it('day book: admin actions follow the lock; close / reopen go to Day closing', async () => {
+    const { f, el, c } = render();
+    c.setTab('all');
+    f.detectChanges();
     c.view.set('days');
     const actions = c.dayCols().find((col: any) => col.colId === 'actions');
     const html = (d: any) => actions.cellRenderer({ data: d }) as string;
@@ -140,12 +152,21 @@ describe('ExpenseTrackerComponent', () => {
     expect(html(closed)).not.toContain('data-act="close"');
     expect(html(closed)).not.toContain('data-act="opening"');
 
-    await c.closeDay(today);
-    expect(dialogs.prompt).toHaveBeenCalled();
-    expect(svc['closeDay']).toHaveBeenCalledWith(today.date, 'Tallied');
-    await c.reopenDay(closed);
-    expect(dialogs.confirm).toHaveBeenCalled();
-    expect(svc['reopenDay']).toHaveBeenCalledWith(closed.date);
+    const btn = (act: string) => { const b = document.createElement('button'); b.dataset['act'] = act; return b; };
+    c.onDayClicked({ data: closed, event: { target: btn('reopen') } });
+    f.detectChanges();
+    expect(c.tab()).toBe('closing');
+    expect(c.closingDate()).toBe(closed.date);
+    expect(el.querySelector('pf-day-closing')).not.toBeNull();
+    // Day closing: no entry-only band actions and no Add bar.
+    expect(el.querySelector('.pf-xt__export')).toBeNull();
+    expect(el.querySelector('.nd-bottombar')).toBeNull();
+    expect(el.querySelector('.pf-hb-btn--primary')).toBeNull();   // Close day is the tab's one primary
+    expect(svc['closeDay']).not.toHaveBeenCalled();
+    c.setTab('all');
+    c.onDayClicked({ data: today, event: { target: btn('close') } });
+    expect(c.tab()).toBe('closing');
+    expect(c.closingDate()).toBe(today.date);
     dialogs.prompt.mockResolvedValueOnce('2500.50');
     await c.setOpening(today);
     expect(svc['setOpening']).toHaveBeenCalledWith(today.date, 2500.5);
@@ -194,7 +215,23 @@ describe('ExpenseTrackerComponent', () => {
     (URL as any).createObjectURL = vi.fn(() => 'blob:x');
     (URL as any).revokeObjectURL = vi.fn();
     c.exportCsv();
-    expect(svc['exportCsv']).toHaveBeenCalledWith({ from: labDaysAgo(6), to: labToday(), categoryId: null, kind: null, mode: null });
+    expect(svc['exportCsv']).toHaveBeenCalledWith({ from: labDaysAgo(6), to: labToday(), categoryId: null, kind: null, mode: null, mine: true });
+  });
+
+  it('tabs: All expenses reloads everyone\'s book; the phone bar carries the ONE primary + Snap bill', () => {
+    const { f, el, c } = render();
+    svc['book'].mockClear();
+    c.setTab('all');
+    f.detectChanges();
+    expect(svc['book']).toHaveBeenLastCalledWith(expect.objectContaining({ mine: false }));
+    // Phone bottom bar (ND .nd-bottombar): info + Snap bill (rear camera) + Add expense.
+    const bar = el.querySelector('.nd-bottombar')!;
+    expect(bar.querySelectorAll('.nd-btn--primary').length).toBe(1);
+    expect(bar.querySelector('input[type="file"]')?.getAttribute('capture')).toBe('environment');
+    expect(bar.textContent).toContain('7 days');
+    const file = new File(['x'], 'bill.jpg', { type: 'image/jpeg' });
+    c.snapBill({ target: { files: [file], value: 'C:/bill.jpg' } } as any);
+    expect(c.dialog()).toEqual({ entry: null, kind: 'expense', date: null, files: [file] });
   });
 
   it('labels IST days', () => {

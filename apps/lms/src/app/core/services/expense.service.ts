@@ -5,11 +5,12 @@ import { ApiService } from './api.service';
 import { PlatformService } from './platform.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import {
-  ExpenseAttachment, ExpenseBook, ExpenseCategory, ExpenseDay, ExpenseEntry, ExpenseEntryInput, ExpenseFilter,
+  DayClosing, DayClosingCloseInput, ExpenseAttachment, ExpenseBook, ExpenseCategory, ExpenseDay, ExpenseEntry, ExpenseEntryInput, ExpenseFilter,
 } from '../../shared/models/expense.model';
 
 /**
- * Finance → Expense tracker API (`/api/expenses`). The book is always the
+ * Expenses API (`/api/expenses`) — My expenses, the whole book and the
+ * cashier's Day closing. The book is always the
  * caller's ACTIVE branch (the server scopes by it). Bills go up as multipart
  * (not through ApiService's 20s JSON ceiling — a phone photo can be MBs).
  */
@@ -26,6 +27,7 @@ export class ExpenseService {
     if (f.categoryId) q.set('categoryId', f.categoryId);
     if (f.kind) q.set('kind', f.kind);
     if (f.mode) q.set('mode', f.mode);
+    if (f.mine) q.set('mine', 'true');
     return '?' + q.toString();
   }
 
@@ -90,5 +92,21 @@ export class ExpenseService {
 
   reopenDay(date: string): Observable<ExpenseDay> {
     return this.api.post<ExpenseDay>(`/api/expenses/days/${date}/reopen`, {});
+  }
+
+  // ── Day closing (the cashier, expense_admin) ─────────────────────────
+
+  /** The day's tally: opening, collections by mode, refunds, discounts,
+   *  bills / orders / tests, every staff member's expenses, expected cash. */
+  closing(date: string): Observable<DayClosing> {
+    return this.api.get<DayClosing>(`/api/expenses/closing?date=${encodeURIComponent(date)}`);
+  }
+
+  closeClosing(date: string, input: DayClosingCloseInput): Observable<DayClosing> {
+    return this.api.post<DayClosing>(`/api/expenses/closing/${date}/close`, input);
+  }
+
+  reopenClosing(date: string): Observable<DayClosing> {
+    return this.api.post<DayClosing>(`/api/expenses/closing/${date}/reopen`, {});
   }
 }

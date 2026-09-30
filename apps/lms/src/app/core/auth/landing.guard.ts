@@ -28,6 +28,9 @@ export const LANDINGS: Array<{ perm: string; path: string }> = [
   // A Test-Master / lab-settings-only role (no bench work) lands on the Lab
   // settings hub rather than /403.
   { perm: 'manage_test_master', path: '/lab/settings' },
+  // Last resort: someone whose only job here is entering expenses (or the
+  // cashier / accountant) lands on Expenses rather than /403.
+  { perm: 'expense_modifier', path: '/expenses' },
 ];
 
 /** Landing context, plus the OPD dark-build doctor rule: when set, a user who

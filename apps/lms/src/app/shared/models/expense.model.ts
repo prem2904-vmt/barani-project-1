@@ -93,6 +93,8 @@ export interface ExpenseFilter {
   categoryId?: string | null;
   kind?: ExpenseKind | null;
   mode?: ExpenseMode | null;
+  /** "My expenses": only the caller's own entries, whatever else they may see. */
+  mine?: boolean;
 }
 
 export interface ExpenseEntryInput {
@@ -147,4 +149,88 @@ export function validExpenseAmount(n: number | null | undefined): boolean {
 export function expenseHaystack(e: ExpenseEntry): Array<string | null | undefined> {
   return [e.description, e.categoryName, e.paidTo, e.notes, e.createdByName, expenseModeLabel(e.paymentMode),
     expenseKindLabel(e.kind), String(e.amount), e.date];
+}
+
+// ── Tabs: My expenses · All expenses · Day closing ─────────────────────────
+
+/** mine = the caller's own entries (every expense_modifier / cashier);
+ *  all = everyone's (viewer = read-only oversight, cashier edits);
+ *  closing = the cashier's Day closing (expense_admin). */
+export type ExpenseTab = 'mine' | 'all' | 'closing';
+
+export function expenseTabs(a: ExpenseAbilities): ExpenseTab[] {
+  const tabs: ExpenseTab[] = [];
+  if (a.canAdd) tabs.push('mine');
+  if (a.seesAll) tabs.push('all');
+  if (a.isAdmin) tabs.push('closing');
+  return tabs;
+}
+
+export const EXPENSE_TAB_LABEL: Record<ExpenseTab, string> = {
+  mine: 'My expenses', all: 'All expenses', closing: 'Day closing',
+};
+
+// ── Day closing (the cashier) — wire types of GET /api/expenses/closing ────
+
+export interface ModeTotalRow { mode: string; count: number; total: number; }
+
+export interface DayClosingFigures {
+  version: number;
+  date: string;
+  opening: number;
+  /** previous_closure | entered | none | closure */
+  openingSource: string;
+  openingFrom?: string | null;
+  collections: ModeTotalRow[];
+  collectionBuckets: Record<'cash' | 'upi' | 'card' | 'other', number>;
+  totalCollected: number;
+  cashCollected: number;
+  refunds: ModeTotalRow[];
+  totalRefunded: number;
+  cashRefunded: number;
+  billed: { bills: number; grossBilled: number; discount: number; tax: number };
+  activity: { patients: number; orders: number; tests: number };
+  expenses: {
+    count: number; expenses: number; cashIn: number; cashExpenses: number; cashTopUps: number;
+    byMode: ModeTotalRow[];
+    byPerson: Array<{ userId: string; name: string; count: number; expenses: number; cashIn: number; cashExpenses: number }>;
+  };
+  expectedCash: number;
+}
+
+export interface DayClosing {
+  date: string;
+  today: string;
+  isClosed: boolean;
+  canClose: boolean;
+  canReopen: boolean;
+  /** True when the figures are the snapshot frozen at close. */
+  fromSnapshot: boolean;
+  figures: DayClosingFigures;
+  countedCash?: number | null;
+  variance?: number | null;
+  note?: string | null;
+  closedAt?: string | null;
+  closedByName?: string | null;
+  lastClosed?: string | null;
+}
+
+export interface DayClosingCloseInput { countedCash: number; openingBalance?: number | null; note?: string | null; }
+
+/** TS mirror of the server's CashDrawer.Expected: opening + cash collections −
+ *  cash refunds − cash expenses + cash top-ups (only cash touches the drawer). */
+export function expectedCash(opening: number, cashCollected: number, cashRefunded: number, cashExpenses = 0, cashTopUps = 0): number {
+  return Math.round((opening + cashCollected - cashRefunded - cashExpenses + cashTopUps) * 100) / 100;
+}
+
+/** Counted − expected (negative = the drawer is short), to the paisa. */
+export function cashVariance(counted: number, expected: number): number {
+  return Math.round((counted - expected) * 100) / 100;
+}
+
+/** The expected cash of the figures, re-derived with an entered opening (a
+ *  fresh cash box's first close) — the server applies the same rule. */
+export function expectedWithOpening(f: DayClosingFigures, opening: number | null): number {
+  const o = f.openingSource === 'none' && opening != null ? opening : f.opening;
+  return expectedCash(o, f.cashCollected, f.cashRefunded, f.expenses.cashExpenses, f.expenses.cashTopUps);
 }

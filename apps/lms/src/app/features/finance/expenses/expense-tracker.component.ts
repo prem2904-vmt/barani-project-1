@@ -10,8 +10,8 @@ import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import {
-  EXPENSE_MODES, ExpenseBook, ExpenseCategory, ExpenseDay, ExpenseEntry, ExpenseFilter, ExpenseKind, ExpenseMode,
-  expenseAbilities, expenseHaystack, expenseKindLabel, expenseModeLabel,
+  EXPENSE_MODES, EXPENSE_TAB_LABEL, ExpenseBook, ExpenseCategory, ExpenseDay, ExpenseEntry, ExpenseFilter, ExpenseKind, ExpenseMode,
+  ExpenseTab, expenseAbilities, expenseHaystack, expenseKindLabel, expenseModeLabel, expenseTabs,
 } from '../../../shared/models/expense.model';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -27,19 +27,15 @@ import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-c
 import { plural } from '../../../shared/utils/plural';
 import { spinDelay } from '../../../shared/utils/busy';
 import { ExpenseEntryDialogComponent } from './expense-entry-dialog.component';
+import { DayClosingComponent } from './day-closing.component';
+import { dayLabel, inr } from './expense-format';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 type View = 'entries' | 'days';
 type QuickRange = 'today' | '7d' | '30d' | 'month' | 'custom';
 
-const INR = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
-export const inr = (n: number | null | undefined) => (n == null ? '—' : INR.format(n));
-
-/** yyyy-MM-dd (an IST business date) → "Tue, 29 Sep". */
-export function dayLabel(ymd: string, withWeekday = true): string {
-  try { return formatDate(ymd + 'T12:00:00Z', withWeekday ? 'EEE, d MMM' : 'd MMM', 'en-US', LAB_TIME_ZONE); } catch { return ymd; }
-}
+export { dayLabel, inr } from './expense-format';
 
 /** The loaded entries that match the band search. */
 export function searchExpenses(rows: readonly ExpenseEntry[], q: string): ExpenseEntry[] {
@@ -50,7 +46,9 @@ export function searchExpenses(rows: readonly ExpenseEntry[], q: string): Expens
 function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 
 /**
- * Finance → Expense tracker. ND pattern: band (search pill over the loaded
+ * Expenses — a PRIMARY everyday screen (main nav, /expenses; /finance/expenses
+ * redirects here), shown to anyone holding expense_viewer / _modifier / _admin.
+ * ND pattern: band (search pill over the loaded
  * entries; Filters on narrow screens, Export CSV, and the ONE primary — Add
  * expense, an icon on phones), a FILTERS companion on the LEFT (range, type,
  * category, mode + the range's category totals) and the EXPENSE BOOK as the
@@ -63,7 +61,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
   selector: 'pf-expense-tracker',
   standalone: true,
   imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, NdDateComponent, SelectComponent,
-    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent],
+    ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-xt pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -71,20 +69,23 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
         <pf-hero-band [back]="true" placeholder="Search item, category, vendor, notes…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
-            @if (narrow()) {
+            @if (narrow() && tab() !== 'closing') {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="sheetOpen.set(true)"
                       aria-haspopup="dialog" [attr.aria-expanded]="sheetOpen()" aria-label="Filters" title="Filters">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
                 Filters
               </button>
             }
+            @if (tab() !== 'closing') {
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-xt__export" [disabled]="exporting()" [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…"
                     (click)="exportCsv()" aria-label="Export CSV" title="Download the entries as CSV">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
               Export CSV
             </button>
-            @if (can().canAdd) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openAdd()" aria-label="Add expense" title="Add expense">
+            }
+            @if (can().canAdd && tab() !== 'closing') {
+              <!-- Day closing owns its primary (Close day). Phones: the ONE primary moves to the bottom bar (above the navbar). -->
+              <button type="button" class="pf-hb-btn pf-hb-btn--primary press pf-xt__addbtn" (click)="openAdd()" aria-label="Add expense" title="Add expense">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 Add expense
               </button>
@@ -92,14 +93,25 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
           </ng-container>
         </pf-hero-band>
       }
-      <pf-screen-header class="pf-classic-only" eyebrow="Finance" title="Expense tracker" subtitle="Daily expenses, bills and the day's opening / closing balance.">
+      <pf-screen-header class="pf-classic-only" eyebrow="Daily work" title="Expenses" subtitle="Enter day-to-day expenses and cash in, with the bill photo.">
         <div actions>
           <button type="button" class="nd-btn nd-btn--secondary" [disabled]="exporting()" (click)="exportCsv()">Export CSV</button>
           @if (can().canAdd) { <button type="button" class="nd-btn nd-btn--primary" (click)="openAdd()">Add expense</button> }
         </div>
       </pf-screen-header>
 
-      <div class="pf-band-body pf-band-body--fill pf-xt__body">
+      <div class="pf-band-body pf-band-body--fill pf-xt__body" [class.pf-xt__body--bar]="can().canAdd && tab() !== 'closing'">
+        @if (tabs().length > 1) {
+          <div class="nd-tabs pf-xt__tabs" role="tablist" aria-label="Expenses">
+            @for (t of tabs(); track t) {
+              <button type="button" role="tab" class="nd-tabs__item" [attr.aria-selected]="tab() === t" (click)="setTab(t)">{{ tabLabel[t] }}</button>
+            }
+          </div>
+        }
+        @if (tab() === 'closing') {
+          <pf-day-closing [date]="closingDate()" [today]="today" [narrow]="narrow()"
+                          (dateChange)="closingDate.set($event)" (changed)="load()"></pf-day-closing>
+        } @else {
         <div class="pf-xt__panels" [class.pf-xt__panels--narrow]="narrow()">
           @if (narrow()) {
             @if (sheetOpen()) {
@@ -122,7 +134,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
               <span class="nd-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
               </span>
-              <h2 class="nd-card__label">Expense book</h2>
+              <h2 class="nd-card__label">{{ tab() === 'mine' ? 'My expenses' : 'Expense book' }}</h2>
               @if (seesAll()) {
                 <span class="nd-seg pf-xt__view" role="radiogroup" aria-label="View">
                   <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="view() === 'entries'" (click)="view.set('entries')">Entries</button>
@@ -174,7 +186,22 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
             </div>
           </section>
         </div>
+        }
       </div>
+
+      @if (can().canAdd && tab() !== 'closing') {
+        <!-- Phone bottom bar (ND .nd-bottombar, above the navbar): the range's
+             spend + the ONE primary. "Snap bill" opens the rear camera first,
+             then the form with the photo attached. -->
+        <div class="nd-bottombar pf-xt__bar" role="region" aria-label="Add expense">
+          <span class="nd-bottombar__info nd-num">{{ barInfo() }}</span>
+          <label class="nd-btn nd-btn--secondary nd-btn--icon pf-xt__snap" title="Snap bill" aria-label="Snap a bill photo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <input class="pf-xt__file" type="file" accept="image/*" capture="environment" (change)="snapBill($event)" />
+          </label>
+          <button type="button" class="nd-btn nd-btn--primary" (click)="openAdd()">Add expense</button>
+        </div>
+      }
     </section>
 
     <ng-template #filterHead let-sheet="sheet">
@@ -258,7 +285,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
           @if (seesAll()) {
             Opening + cash in − expenses = closing (all payment modes). A closed day is locked for everyone until an admin reopens it.
           } @else {
-            You see the entries you added. You can change them until the day is closed.
+            Only the entries you added. You can change them until the cashier closes the day.
           }
         </p>
       </div>
@@ -266,7 +293,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 
     @if (dialog(); as d) {
       <pf-expense-entry-dialog [entry]="d.entry" [categories]="categories()" [today]="today" [closedThrough]="book()?.closedThrough ?? null"
-                               [isAdmin]="can().isAdmin" [initialKind]="d.kind" [initialDate]="d.date"
+                               [isAdmin]="can().isAdmin" [initialKind]="d.kind" [initialDate]="d.date" [initialFiles]="d.files ?? []"
                                (closed)="dialog.set(null)" (changed)="load()" (categoryCreated)="addCategory($event)"></pf-expense-entry-dialog>
     }
 
@@ -333,7 +360,8 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
   `,
   styles: [`
     :host { display: block; min-height: 0; }
-    .pf-xt__body { display: flex; flex-direction: column; min-height: 0; }
+    .pf-xt__body { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+    .pf-xt__tabs { align-self: flex-start; flex: none; }
     .pf-xt__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
     .pf-xt__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-xt__side { min-height: 0; }
@@ -397,7 +425,12 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt-modal__cats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
     .pf-xt-modal__cat { gap: 10px; }
     .pf-xt-modal__hint { margin: 0; font-size: 12px; color: var(--text-tertiary); }
+    .pf-xt__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .pf-xt__snap { position: relative; width: 44px; height: 44px; flex: none; cursor: pointer; }
+    .pf-xt__bar .nd-btn--primary { min-height: 44px; flex: none; }
     @media (max-width: 640px) {
+      .pf-xt__addbtn { display: none; }
+      .pf-xt__body--bar { padding-bottom: 76px; }
       .pf-xt__stats { grid-template-columns: 1fr 1fr; padding: 10px; gap: 8px; }
       .pf-xt__statv { font-size: 16px; }
       .pf-xt__view { margin-left: 0; order: 3; }
@@ -423,6 +456,16 @@ export class ExpenseTrackerComponent {
   readonly sheetOpen = signal(false);
 
   readonly can = computed(() => expenseAbilities(c => this.auth.hasPermission(c)));
+  /** My expenses (anyone who enters) · All expenses (viewer / cashier) · Day closing (cashier). */
+  readonly tabs = computed(() => expenseTabs(this.can()));
+  readonly tabLabel = EXPENSE_TAB_LABEL;
+  private readonly tabPick = signal<ExpenseTab | null>(null);
+  readonly tab = computed<ExpenseTab>(() => {
+    const p = this.tabPick();
+    const list = this.tabs();
+    return p && list.includes(p) ? p : (list[0] ?? 'all');
+  });
+  readonly closingDate = signal(labToday());
 
   // ── Filters ───────────────────────────────────────────────────────────
   readonly q = signal('');
@@ -442,7 +485,7 @@ export class ExpenseTrackerComponent {
   readonly listSkeleton = spinDelay(computed(() => this.loading() && !this.book()));
   readonly seesAll = computed(() => (this.book()?.scope ?? (this.can().seesAll ? 'all' : 'own')) === 'all');
   readonly visibleEntries = computed(() => searchExpenses(this.book()?.entries ?? [], this.q()));
-  readonly dialog = signal<{ entry: ExpenseEntry | null; kind: ExpenseKind; date: string | null } | null>(null);
+  readonly dialog = signal<{ entry: ExpenseEntry | null; kind: ExpenseKind; date: string | null; files?: File[] } | null>(null);
   readonly billsFor = signal<ExpenseEntry | null>(null);
   readonly catsOpen = signal(false);
   readonly newCat = signal('');
@@ -462,6 +505,13 @@ export class ExpenseTrackerComponent {
     ...this.categories().map(c => ({ value: c.id, label: c.isActive ? c.name : `${c.name} (off)` })),
   ]);
   readonly modeFilterOptions: PfSelectOption<string>[] = [{ value: '', label: 'All modes' }, ...EXPENSE_MODES.map(m => ({ value: m.value, label: m.label }))];
+  /** Phone bottom bar: what the loaded range adds up to. */
+  readonly barInfo = computed(() => {
+    const b = this.book();
+    const range = ({ today: 'Today', '7d': '7 days', '30d': '30 days', month: 'This month', custom: 'Range' } as Record<QuickRange, string>)[this.quick()];
+    if (!b) return range;
+    return `${range} · ${inr(b.totalExpenses)} ${this.seesAll() ? 'spent' : 'by you'}`;
+  });
   readonly modeSummary = computed(() => (this.book()?.byMode ?? []).map(m => `${m.label} ${inr(m.total)}`).join(' · '));
 
   // ── Grids ─────────────────────────────────────────────────────────────
@@ -551,8 +601,8 @@ export class ExpenseTrackerComponent {
         if (admin && b) {
           const locked = !!b.closedThrough && d.date <= b.closedThrough;
           if (!locked) acts.push(this.rowBtn('opening', 'Opening', '<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', 'Set opening balance — ' + dayLabel(d.date), web));
-          if (!d.isClosed && !locked && d.date <= b.today) acts.push(this.rowBtn('close', 'Close day', '<path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4"/>', 'Close ' + dayLabel(d.date), web));
-          if (d.isClosed && d.date === b.closedThrough) acts.push(this.rowBtn('reopen', 'Reopen', '<path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.9-1"/>', 'Reopen ' + dayLabel(d.date), web));
+          if (!d.isClosed && !locked && d.date <= b.today) acts.push(this.rowBtn('close', 'Day closing', '<path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4"/>', 'Close ' + dayLabel(d.date), web));
+          if (d.isClosed && d.date === b.closedThrough) acts.push(this.rowBtn('reopen', 'Day closing', '<path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.9-1"/>', 'Reopen ' + dayLabel(d.date), web));
         }
         return `<span class="pf-xt-acts">${acts.join('')}</span>`;
       },
@@ -589,6 +639,7 @@ export class ExpenseTrackerComponent {
   constructor() {
     effect(() => {
       this.from(); this.to(); this.kind(); this.categoryId(); this.mode();
+      if (this.tab() === 'closing') return;
       untracked(() => this.load());
     });
     this.loadCategories();
@@ -611,10 +662,24 @@ export class ExpenseTrackerComponent {
 
   dayShort(ymd: string) { return dayLabel(ymd, false); }
 
+  setTab(t: ExpenseTab) {
+    if (t === this.tab()) return;
+    this.sheetOpen.set(false);
+    if (t !== 'closing') this.book.set(null);   // never flash the other scope's rows
+    this.tabPick.set(t);
+  }
+
+  /** Open Day closing on a given IST day (the day book's Close / Reopen). */
+  openClosing(date: string) {
+    this.closingDate.set(date);
+    this.setTab('closing');
+  }
+
   filter(): ExpenseFilter {
     return {
       from: this.from() ?? labDaysAgo(6), to: this.to() ?? labToday(),
       categoryId: this.categoryId() || null, kind: this.kind() || null, mode: this.mode() || null,
+      mine: this.tab() === 'mine',
     };
   }
 
@@ -651,6 +716,16 @@ export class ExpenseTrackerComponent {
     this.dialog.set({ entry: null, kind, date });
   }
 
+  /** "Snap bill" (phone bar): the camera first, then the form with the photo attached. */
+  snapBill(ev: Event) {
+    const el = ev.target as HTMLInputElement;
+    const files = Array.from(el.files ?? []);
+    el.value = '';
+    if (!files.length) return;
+    this.sheetOpen.set(false);
+    this.dialog.set({ entry: null, kind: 'expense', date: null, files });
+  }
+
   onEntryClicked(ev: CellClickedEvent<ExpenseEntry>) {
     const target = (ev.event?.target as HTMLElement | null)?.closest?.('[data-act]') as HTMLElement | null;
     const e = ev.data;
@@ -668,8 +743,9 @@ export class ExpenseTrackerComponent {
     const act = target.dataset['act'];
     if (act === 'entries') { this.quick.set('custom'); this.from.set(d.date); this.to.set(d.date); this.view.set('entries'); }
     else if (act === 'opening') void this.setOpening(d);
-    else if (act === 'close') void this.closeDay(d);
-    else if (act === 'reopen') void this.reopenDay(d);
+    // Closing / reopening a day is the cashier's Day closing (collections +
+    // every staff member's expenses + counted cash) — one place to close.
+    else if (act === 'close' || act === 'reopen') this.openClosing(d.date);
   }
 
   private async dayAction(d: ExpenseDay, run: () => Promise<unknown>, ok: string) {
@@ -691,25 +767,6 @@ export class ExpenseTrackerComponent {
     const n = t === '' ? null : Number(t);
     if (n !== null && (!Number.isFinite(n) || Math.round(n * 100) / 100 !== n)) { this.toasts.error('Enter the amount in rupees (up to 2 decimals).'); return; }
     await this.dayAction(d, () => firstValueFrom(this.svc.setOpening(d.date, n)), n === null ? 'Opening carried forward' : 'Opening balance saved');
-  }
-
-  async closeDay(d: ExpenseDay) {
-    const note = await this.dialogs.prompt({
-      title: `Close ${dayLabel(d.date)}?`,
-      message: `Closing balance ${inr(d.closing)} (opening ${inr(d.opening)} + cash in ${inr(d.cashIn)} − expenses ${inr(d.expenses)}). The day and every earlier day become read-only until an admin reopens it.`,
-      placeholder: 'Note (optional) — e.g. counted and tallied', confirmLabel: 'Close day', required: false,
-    });
-    if (note === null) return;
-    await this.dayAction(d, () => firstValueFrom(this.svc.closeDay(d.date, note.trim() || null)), 'Day closed');
-  }
-
-  async reopenDay(d: ExpenseDay) {
-    const ok = await this.dialogs.confirm({
-      title: `Reopen ${dayLabel(d.date)}?`, message: 'Entries on this day can be changed again. Close it again once it is corrected.',
-      confirmLabel: 'Reopen', tone: 'danger',
-    });
-    if (!ok) return;
-    await this.dayAction(d, () => firstValueFrom(this.svc.reopenDay(d.date)), 'Day reopened');
   }
 
   async createCategory() {
