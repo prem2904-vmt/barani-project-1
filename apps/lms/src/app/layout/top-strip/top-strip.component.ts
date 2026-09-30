@@ -34,7 +34,7 @@ import { ZoomSourceDirective } from "../../core/navigation/zoom.directive";
 import { Router, RouterLink, RouterLinkActive } from "@angular/router";
 import { FormsModule } from "@angular/forms";
 import { AuthService } from "../../core/auth/auth.service";
-import { ModuleScopeService } from "../../core/services/module-scope.service";
+import { OpdGateService } from "../../features/opd/shared/opd-gate.service";
 import { StoredAccount } from "../../core/auth/accounts.service";
 import { LockService } from "../../core/auth/lock.service";
 import { BranchRef } from "../../core/auth/mock-user";
@@ -108,7 +108,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
   // Public so the template can read isOnline / initialised signals.
   protected readonly capacitor = inject(CapacitorService);
   private readonly auth = inject(AuthService);
-  private readonly moduleScope = inject(ModuleScopeService);
+  /** OPD dark build: the ONE OPD visibility rule. */
+  private readonly opdGate = inject(OpdGateService);
   private readonly lock = inject(LockService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
@@ -344,10 +345,9 @@ export class TopStripComponent implements OnInit, OnDestroy {
     // windows), never a page — drop its work area from the nav.
     if (this.themeService.isNewDesign())
       items = items.filter((i) => !TopStripComponent.isMessagesItem(i));
-    // OPD: doctors get their Consult Room — but only once the OPD module is
-    // actually usable (tenant entitlement, or the dev preview flag). Keeps the
-    // in-progress consult build invisible on shared environments.
-    return this.auth.isDoctor() && this.moduleScope.opdUsable()
+    // OPD: doctors get "Consults" — only when the OPD gate is open (tenant
+    // explicitly entitled, or the owner's pf.opd() preview). OPD dark build.
+    return this.auth.isDoctor() && this.opdGate.visible()
       ? [...items, DOCTOR_NAV]
       : items;
   });

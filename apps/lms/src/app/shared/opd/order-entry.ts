@@ -22,10 +22,11 @@ export function labOrderTarget(patientId?: string | null): NavTarget {
     : { commands: ['/frontdesk/order'] };
 }
 
+/** The OPD "book a visit" screen (OPD dark build; gated by opdGuard). */
 export function consultTarget(patientId?: string | null): NavTarget {
   return patientId
-    ? { commands: ['/frontdesk/consult'], queryParams: { patientId } }
-    : { commands: ['/frontdesk/consult'] };
+    ? { commands: ['/opd/visit/new'], queryParams: { patientId } }
+    : { commands: ['/opd/visit/new'] };
 }
 
 /**

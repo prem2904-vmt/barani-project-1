@@ -56,13 +56,14 @@ export interface NavItem {
 // button in the top-strip's right cluster (next to the bell) so it
 // reads as "configure the app" rather than "one of the modules".
 // Non-admin users (no manage_* permission) no longer see it at all.
-/** OPD Consult Room — shown only to users flagged isDoctor (DoctorProfile).
+/** OPD "Consults" — shown only to users flagged isDoctor (DoctorProfile) AND
+ *  only while the OPD gate is open (OPD dark build: OpdGateService.visible()).
  *  Appended by the nav shells rather than permission-gated: "is a doctor" is
  *  profile state, not a permission code. */
 export const DOCTOR_NAV: NavItem = {
   id: 'doctor',
   label: 'Consults',
-  href: '/doctor',
+  href: '/opd/consult',
   iconPath: ['M11 2v2', 'M5 2v2', 'M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1',
              'M8 15a6 6 0 0 0 12 0v-3', 'M20 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z']
 };
@@ -340,6 +341,8 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
   // À-la-carte clinical / ops modules. Hidden until enabled in Admin → Modules;
   // the module toggle IS the gate (no per-module roles yet). Shown here in More
   // until each ships as a first-class workflow work-area. Icons mirror the catalog.
+  // OPD (dark build): module 'opd' resolves through the OPD gate
+  // (TenantEntitlementsService.moduleOn('opd') → OpdGateService.visible()).
   {
     id: 'm-opd', label: 'OPD', href: '/opd',
     iconPath: ['M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2'],

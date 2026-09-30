@@ -5,6 +5,7 @@ import { SegmentedOption } from '../../../shared/primitives/segmented.component'
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { OpdGateService } from '../../opd/shared/opd-gate.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/module-catalog';
@@ -127,8 +128,12 @@ import { MODULE_CATALOG, ModuleDef, ModulesState } from '../../../core/modules/m
 export class AdminModulesComponent implements OnInit {
   private readonly entitlements = inject(TenantEntitlementsService);
   private readonly toasts = inject(ToastService);
+  private readonly opdGate = inject(OpdGateService);
 
-  readonly catalog: ModuleDef[] = MODULE_CATALOG;
+  /** OPD dark build: OPD is not listed (and so cannot be toggled) unless the
+   *  OPD gate is open — the server also ignores an opd change from anyone who
+   *  is not OPD-allowed. */
+  readonly catalog: ModuleDef[] = MODULE_CATALOG.filter(m => m.id !== 'opd' || this.opdGate.visible());
   private readonly state = signal<ModulesState>({});
   readonly busy = signal(false);
 

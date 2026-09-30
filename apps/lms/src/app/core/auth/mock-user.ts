@@ -26,6 +26,12 @@ export interface CurrentUser {
   registrationId?: string;
   /** Caller has a DoctorProfile — unlocks the OPD Consult Room. */
   isDoctor?: boolean;
+  /** OPD dark build (server /me): OPD calls are admitted for this user —
+   *  tenant explicitly entitled OR owner-preview allowlisted. Read ONLY via
+   *  OpdGateService (features/opd/shared/opd-gate.service.ts). */
+  opdAccess?: boolean;
+  /** The tenant EXPLICITLY has OPD on (visible without the console flag). */
+  opdEntitled?: boolean;
 }
 
 export interface BranchRef {

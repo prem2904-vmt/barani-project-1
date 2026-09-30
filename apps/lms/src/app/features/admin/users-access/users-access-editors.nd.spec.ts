@@ -39,7 +39,7 @@ const perms = [
   { id: 'p2', code: 'enter_results', name: 'Enter results', description: '' },
 ];
 
-function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (...a: any[]) => Promise<boolean> } = {}) {
+function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (...a: any[]) => Promise<boolean>; opd?: boolean } = {}) {
   // Always install the stub (never 'only if missing'): another spec in the same
   // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
   (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
@@ -63,7 +63,8 @@ function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (.
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } },
       { provide: DialogService, useValue: { confirm: opts.confirm ?? vi.fn(async () => false) } },
-      { provide: AuthService, useValue: { user: () => ({ id: 'me', tenantName: 'Micro World' }), hasPermission: () => true } },
+      // opd: the server's /me OPD flags (OPD dark build) — an explicitly OPD-entitled tenant.
+      { provide: AuthService, useValue: { user: () => ({ id: 'me', tenantName: 'Micro World', ...(opts.opd ? { opdAccess: true, opdEntitled: true } : {}) }), hasPermission: () => true } },
       { provide: TenantStateService, useValue: { tenant: () => null } },
       { provide: NavBackService, useValue: { showBack: () => true, back: vi.fn(), backTo: vi.fn(),
         registerBackInterceptor: vi.fn(), clearBackInterceptor: vi.fn() } },
@@ -190,13 +191,42 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     (el.querySelector('.nd-ctx__edit') as HTMLButtonElement).click();
     expect(document.activeElement?.classList.contains('pf-re-name')).toBe(true);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Create role');
-    expect(el.querySelectorAll('.re-type.nd-seg [role="radio"]').length).toBe(2);
+    // OPD dark build: the Doctor role type is an OPD surface — hidden while OPD is dark.
+    expect(el.querySelectorAll('.re-type.nd-seg [role="radio"]').length).toBe(0);
     const sw = el.querySelectorAll<HTMLButtonElement>('.re-perm-grid .nd-toggle[role="switch"]');
     expect(sw.length).toBe(2);
     sw[1].click();
     f.detectChanges();
     expect(c.grantedCount()).toBe(1);
     hygiene(el);
+  });
+
+  it('Create user, doctor-type role, OPD dark: registration number only (no OPD department / specialisation / procedures)', () => {
+    const { el, f, c } = render(UserInviteComponent);
+    (c as any)._roles.set([...roles, { id: 'r3', name: 'Pathologist', isPreSeeded: true, scope: 'tenant', kind: 'doctor' }]);
+    (c as any).toggleRole('r3');
+    f.detectChanges();
+    const doc = el.querySelector('.pf-doc')!;
+    expect(doc).not.toBeNull();
+    expect(doc.textContent).toContain('Medical Registration No.');
+    expect(doc.textContent).not.toContain('Department');
+    expect(doc.textContent).not.toContain('Specialisation');
+    expect(doc.textContent).not.toContain('Procedures');
+  });
+
+  it('Create user, doctor-type role, OPD tenant: the OPD doctor fields appear', () => {
+    const { el, f, c } = render(UserInviteComponent, { opd: true });
+    (c as any)._roles.set([...roles, { id: 'r3', name: 'Pathologist', isPreSeeded: true, scope: 'tenant', kind: 'doctor' }]);
+    (c as any).toggleRole('r3');
+    f.detectChanges();
+    const doc = el.querySelector('.pf-doc')!;
+    expect(doc.textContent).toContain('Department');
+    expect(doc.textContent).toContain('Specialisation');
+  });
+
+  it('New role in an OPD tenant: role type General / Doctor is a 2-item nd-seg', () => {
+    const { el } = render(RoleEditorComponent, { opd: true });
+    expect(el.querySelectorAll('.re-type.nd-seg [role="radio"]').length).toBe(2);
   });
 
   it('Edit role: the role name + ONE tiny muted badge (Pre-seeded), no pencil (the name is locked), no fact chips', () => {

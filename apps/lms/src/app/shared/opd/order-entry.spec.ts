@@ -11,8 +11,8 @@ describe('newOrderTarget', () => {
   });
 
   it('routes opd mode to the consult screen', () => {
-    expect(newOrderTarget('opd', 'p1')).toEqual({ commands: ['/frontdesk/consult'], queryParams: { patientId: 'p1' } });
-    expect(newOrderTarget('opd')).toEqual({ commands: ['/frontdesk/consult'] });
+    expect(newOrderTarget('opd', 'p1')).toEqual({ commands: ['/opd/visit/new'], queryParams: { patientId: 'p1' } });
+    expect(newOrderTarget('opd')).toEqual({ commands: ['/opd/visit/new'] });
   });
 
   it('returns choose when both modules are usable', () => {
@@ -22,5 +22,5 @@ describe('newOrderTarget', () => {
 
 describe('target builders omit queryParams when no patient', () => {
   it('lab', () => expect(labOrderTarget()).toEqual({ commands: ['/frontdesk/order'] }));
-  it('consult', () => expect(consultTarget()).toEqual({ commands: ['/frontdesk/consult'] }));
+  it('consult', () => expect(consultTarget()).toEqual({ commands: ['/opd/visit/new'] }));
 });

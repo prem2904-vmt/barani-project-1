@@ -1,7 +1,8 @@
-import { Injectable, computed, inject, isDevMode } from '@angular/core';
+import { Injectable, computed, inject } from '@angular/core';
 import { TenantEntitlementsService } from './tenant-entitlements.service';
 import { AuthService } from '../auth/auth.service';
 import { CartMode, ModuleId, canUseModule, cartMode } from '../../shared/opd/module-scope';
+import { OpdGateService } from '../../features/opd/shared/opd-gate.service';
 
 /**
  * Resolves which product modules the CURRENT USER may work in on this screen —
@@ -15,8 +16,8 @@ import { CartMode, ModuleId, canUseModule, cartMode } from '../../shared/opd/mod
  *   - opd scope DEFAULTS OFF — OPD is usable only when the user's /me modules
  *     include 'opd' (role tagged 'opd') AND the tenant has OPD entitled.
  * So for every existing user `opdUsable` is false, `mode()` is `'lab'`, and no
- * lab behaviour changes. A dev-only preview flag (below) forces OPD on locally
- * for testing, inert in production.
+ * lab behaviour changes. OPD visibility itself is the OPD gate
+ * (features/opd/shared/opd-gate.service.ts).
  */
 @Injectable({ providedIn: 'root' })
 export class ModuleScopeService {
@@ -32,24 +33,18 @@ export class ModuleScopeService {
     return new Set<ModuleId>(known.length ? known : ['lab']);
   });
 
-  /**
-   * DEV-ONLY local preview of the OPD flow. On a dev build (`isDevMode()`),
-   * `localStorage['pf.opdPreview']='1'` forces OPD usable so the front-desk fork
-   * / consult screen can be exercised WITHOUT any tenant/RBAC/DB change. Read
-   * LIVE (each call) so it takes effect without a reload. `isDevMode()` is false
-   * in every production build, so this is permanently inert for real users.
-   */
-  private opdPreview(): boolean {
-    try { return isDevMode() && localStorage.getItem('pf.opdPreview') === '1'; }
-    catch { return false; }
-  }
+  private readonly opdGate = inject(OpdGateService);
 
   labUsable(): boolean {
     return canUseModule(this.entitlements.moduleOn('lab'), this.userScopes().has('lab'));
   }
+  /** OPD dark build: usable only when the OPD gate shows OPD at all, AND the user
+   *  is OPD-scoped (role module 'opd') — or it is the owner's console preview
+   *  (pf.opd() + server allowlist), which treats the owner as OPD-scoped. The
+   *  old dev-only `pf.opdPreview` flag is gone (the gate replaces it). */
   opdUsable(): boolean {
-    return this.opdPreview()
-      || canUseModule(this.entitlements.moduleOn('opd'), this.userScopes().has('opd'));
+    if (!this.opdGate.visible()) return false;
+    return this.opdGate.consolePreview() || canUseModule(true, this.userScopes().has('opd'));
   }
 
   /** What the front-desk cart should open. `'lab'` unless OPD is truly usable.
