@@ -42,7 +42,7 @@ import { fromDto } from './rx/rx-model';
               @if (c.diagnoses.length) { <p class="ph__dx"><b>Diagnosis:</b> {{ dx(c) }}</p> }
               @if (c.chiefComplaint) { <p class="ph__t"><b>Complaint:</b> {{ c.chiefComplaint }}</p> }
               @if (c.form) {
-                <pf-opd-form-renderer [schema]="c.form.schema" [addons]="c.form.addonFields" [answers]="c.answers ?? {}" mode="readonly" [layout]="'phone'"></pf-opd-form-renderer>
+                <pf-opd-form-renderer [schema]="c.form.schema" [addons]="c.form.addonFields" [answers]="c.answers ?? {}" mode="readonly" [layout]="'phone'" [visitDate]="c.visitDate"></pf-opd-form-renderer>
                 <p class="ph__muted">Form: {{ c.form.formName }} v{{ c.form.version }}</p>
               }
               @if (c.rx.length) {

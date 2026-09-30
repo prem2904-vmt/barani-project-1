@@ -126,6 +126,27 @@ describe('OpdFormRendererComponent', () => {
     expect(q('smell')!.textContent).toContain("Doctor's own");
   });
 
+  it('calc: read-only, live-updating, and persisted alongside its source (critic §1 #6)', () => {
+    const CALC_DOC: OpdFormDoc = {
+      schemaVersion: 2, allowAddons: true,
+      sections: [{ key: 'findings', title: 'Findings', fields: [
+        { key: 'lmp', label: 'LMP', type: 'date' },
+        { key: 'edd', label: 'EDD', type: 'calc', formula: 'edd', from: 'lmp' },
+      ] }],
+    };
+    const { f, q, emitted } = render('edit', {}, { schema: CALC_DOC, visitDate: '2026-09-30' });
+    expect(q('edd')!.textContent).toContain('—');             // no LMP yet ⇒ blank
+    expect(q('edd')!.querySelector('input')).toBeNull();       // never an editable control
+
+    // Answering the source (as the pf-nd-date picker's (valueChange) would) recomputes
+    // AND persists the calc value in the SAME emitted answers object.
+    const lmp = f.componentInstance.list()[0];
+    f.componentInstance.set(lmp, null, '2026-01-01');
+    expect(emitted.at(-1)).toEqual({ lmp: '2026-01-01', edd: '2026-10-08' });
+    f.detectChanges();
+    expect(q('edd')!.textContent).toContain('2026-10-08');
+  });
+
   it('reads a foundation v1 schema', () => {
     TestBed.configureTestingModule({ imports: [OpdFormRendererComponent] });
     const f = TestBed.createComponent(OpdFormRendererComponent);

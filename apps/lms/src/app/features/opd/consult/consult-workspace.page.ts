@@ -151,7 +151,7 @@ const EMPTY: ConsultEditState = {
                       @if (w.form) {
                         <!-- Agent A's ONE form renderer (schema v2); media questions upload through the consult. -->
                         <pf-opd-form-renderer [schema]="formSchema()" [addons]="w.form.addonFields" [answers]="st().answers"
-                                              [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'"
+                                              [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'" [visitDate]="w.visit.visitDate"
                                               (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
                         <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
                         @if (uploading()) { <p class="cw__upl" role="status">Uploading {{ uploading() }}…</p> }
@@ -178,7 +178,7 @@ const EMPTY: ConsultEditState = {
                             <div id="cw-dx-list" class="cw__dxlist" role="listbox">
                               @for (o of dxSuggest(); track o.label; let i = $index) {
                                 <button type="button" role="option" class="cw__dxopt" [class.act]="i === dxActive()" [attr.aria-selected]="i === dxActive()" (mousedown)="$event.preventDefault()" (click)="addDx(o)">
-                                  <span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours }</em>
+                                  <span>{{ o.label }}</span><em>{{ o.code }}@if (o.source === 'mine') { · yours } @else if (o.source === 'template') { · usual set }</em>
                                 </button>
                               }
                               @if (dxQuery().trim()) {
@@ -194,7 +194,7 @@ const EMPTY: ConsultEditState = {
                             @if (!usualApplied()) {
                               <button type="button" class="cw__usual" (click)="applyUsualSet()">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
-                                <span><b>Usual for {{ primaryDx() }}</b> — {{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}} · one tap</span>
+                                <span><b>{{ u.source === 'template' ? 'Template' : 'Usual' }} for {{ primaryDx() }}</b> — {{ u.rx.length }} medicine{{ u.rx.length === 1 ? '' : 's' }}@if (u.tests.length) { + {{ u.tests.length }} test{{ u.tests.length === 1 ? '' : 's' }}} · one tap</span>
                               </button>
                             }
                           }
@@ -235,7 +235,7 @@ const EMPTY: ConsultEditState = {
                       </div>
                     } @else if (editable() && usual() && !st().lines.length) {
                       <button type="button" class="cw__usual" (click)="applyUsualSet()">
-                        <span><b>Usual for {{ primaryDx() }}</b> — add {{ usual()!.rx.length }} medicine{{ usual()!.rx.length === 1 ? '' : 's' }} in one tap</span>
+                        <span><b>{{ usual()!.source === 'template' ? 'Template' : 'Usual' }} for {{ primaryDx() }}</b> — add {{ usual()!.rx.length }} medicine{{ usual()!.rx.length === 1 ? '' : 's' }} in one tap</span>
                       </button>
                     }
                     <pf-rx-editor [lines]="st().lines" (linesChange)="patch({ lines: $event })" [drugs]="drugList()" [allergies]="allergies()"
@@ -386,7 +386,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly drugSearch$ = new Subject<string>();
 
   readonly usual = signal<ConsultUsual | null>(null);
-  readonly usualApplied = signal<{ dx: string; keys: string[]; tests: string[] } | null>(null);
+  readonly usualApplied = signal<{ dx: string; keys: string[]; tests: string[]; advice: boolean } | null>(null);
 
   readonly testCatalog = signal<LabTestRow[]>([]);
   readonly testLoadError = signal(false);
@@ -621,15 +621,16 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
     const u = this.usual();
     if (!u || !this.editable()) return;
     const r = applyUsual(this.st(), u, this.drugList());
-    this.patch({ lines: r.next.lines, tests: r.next.tests.map(t => ({ ...t, price: t.price ?? this.priceOf(t.testId) })) });
-    this.usualApplied.set({ dx: this.primaryDx(), keys: r.addedKeys, tests: r.addedTests });
-    this.toast.info(`Usual prescription added · ${r.addedKeys.length} medicine${r.addedKeys.length === 1 ? '' : 's'}`);
+    this.patch({ lines: r.next.lines, tests: r.next.tests.map(t => ({ ...t, price: t.price ?? this.priceOf(t.testId) })), advice: r.next.advice });
+    this.usualApplied.set({ dx: this.primaryDx(), keys: r.addedKeys, tests: r.addedTests, advice: r.addedAdvice });
+    const from = u.source === 'template' ? 'Template' : 'Usual prescription';
+    this.toast.info(`${from} added · ${r.addedKeys.length} medicine${r.addedKeys.length === 1 ? '' : 's'}`);
   }
   undoUsualSet() {
     const a = this.usualApplied();
     if (!a) return;
-    const s = undoUsual(this.st(), a.keys, a.tests);
-    this.patch({ lines: s.lines, tests: s.tests });
+    const s = undoUsual(this.st(), a.keys, a.tests, a.advice);
+    this.patch({ lines: s.lines, tests: s.tests, advice: s.advice });
     this.usualApplied.set(null);
   }
   repeatLast() {
