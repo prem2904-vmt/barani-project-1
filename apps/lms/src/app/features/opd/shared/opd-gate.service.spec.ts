@@ -16,7 +16,7 @@ import { OpdGateService } from './opd-gate.service';
  * lab new-order flow is exactly today's: straight to /frontdesk/order, no fork,
  * no dialog — even for a user whose role is tagged 'opd' and even when the
  * stored module map says opd is on (only the server's explicit entitlement or
- * the owner's preview can open it).
+ * the pf.opd() console flag can open it).
  */
 let store: Record<string, string> = {};
 function memoryStorage() {
@@ -61,12 +61,12 @@ describe('OpdGateService', () => {
     setup({});
     expect(TestBed.inject(OpdGateService).visible()).toBe(false);
   });
-  it('the console flag alone shows nothing (server must confirm)', () => {
-    setup({ flag: true, opdAccess: false });
+  it('server opdAccess alone (e.g. a header-less /me quirk) shows nothing', () => {
+    setup({ opdAccess: true });
     expect(TestBed.inject(OpdGateService).visible()).toBe(false);
   });
-  it('owner: flag + server access → visible', () => {
-    setup({ flag: true, opdAccess: true });
+  it('any user: the console flag alone → visible (no allowlist, server not consulted)', () => {
+    setup({ flag: true, opdAccess: false });
     const g = TestBed.inject(OpdGateService);
     expect(g.visible()).toBe(true);
     expect(g.consolePreview()).toBe(true);
@@ -116,8 +116,8 @@ describe('New order with OPD hidden = today\'s lab flow', () => {
     expect(navigate).toHaveBeenCalledWith(['/frontdesk/order'], {});
   });
 
-  it('owner preview: lab user gets the lab / consult choice (OPD → /opd/visit/new)', async () => {
-    const { navigate, confirm } = setup({ flag: true, opdAccess: true });
+  it('console preview: lab user gets the lab / consult choice (OPD → /opd/visit/new)', async () => {
+    const { navigate, confirm } = setup({ flag: true });
     confirm.mockResolvedValueOnce(true);
     expect(TestBed.inject(ModuleScopeService).mode()).toBe('choose');
     await TestBed.inject(OrderEntryService).startNewOrder('p9');

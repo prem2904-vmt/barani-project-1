@@ -4,38 +4,44 @@
  * OPD is invisible to everyone unless:
  *   - the tenant EXPLICITLY has OPD on (server `/me.opdEntitled`, i.e. the
  *     tenant's ModulesJson opd.enabled === true — the "no module row ⇒ every
- *     module on" default never counts), OR
+ *     module on" default never counts) — the go-live path, OR
  *   - the person typed `pf.opd()` in the browser console (localStorage
- *     `pf.opd` === '1') AND the server confirms they may (`/me.opdAccess`,
- *     the owner-preview allowlist). Anyone else typing it sees nothing.
+ *     `pf.opd` === '1'). ANY signed-in user may; there is no allowlist. While
+ *     the flag is set every API call carries `X-PF-OPD: 1`
+ *     (opd-preview.interceptor.ts) and the server admits OPD calls for it.
  *
  * The server enforces the same rule (Services/Opd/OpdAccess.cs + [RequireOpd]
- * → 404), so this only decides what the UI SHOWS.
+ * → 404 without the header or entitlement), so this only decides what the UI
+ * SHOWS.
  */
 
 /** localStorage key of the console flag. Works in production builds. */
 export const OPD_FLAG_KEY = 'pf.opd';
 
+/** Request header sent on every API call while the console flag is set. */
+export const OPD_PREVIEW_HEADER = 'X-PF-OPD';
+
 export interface OpdGateInputs {
   /** localStorage[pf.opd] === '1'. */
   consoleFlag: boolean;
-  /** Server: the caller's OPD calls are admitted (entitled OR allowlisted). */
-  serverAccess: boolean;
   /** Server: the tenant explicitly has OPD on. */
   tenantEntitled: boolean;
 }
 
-/** visible = entitled OR (flag AND server access). Entitlement alone needs no
- *  flag; the flag alone (no server access) shows nothing. */
+/** visible = console flag OR explicit tenant entitlement. */
 export function opdVisible(i: OpdGateInputs): boolean {
-  if (i.tenantEntitled && i.serverAccess) return true;
-  return i.consoleFlag && i.serverAccess;
+  return i.consoleFlag || i.tenantEntitled;
 }
 
-/** Owner preview specifically (flag + server allowlist, tenant not entitled) —
- *  the preview treats the owner as OPD-scoped for the new-order fork. */
+/** Console preview (flag set) — the preview treats the user as OPD-scoped for
+ *  the new-order fork. */
 export function opdConsolePreview(i: OpdGateInputs): boolean {
-  return i.consoleFlag && i.serverAccess;
+  return i.consoleFlag;
+}
+
+/** True for requests to our API (same predicate as authInterceptor). */
+export function isApiRequest(url: string): boolean {
+  return url.startsWith('/api') || url.includes('/api/');
 }
 
 /** Minimal storage surface (localStorage in the app, a fake in specs). */
@@ -69,4 +75,15 @@ export function installPfOpd(
     reload();
   };
   win.pf = pf;
+}
+
+/** The browser's localStorage, or null when unavailable / blocked. */
+export function safeLocalStorage(): FlagStorage | null {
+  try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch { return null; }
+}
+
+/** Extra headers for a raw `fetch` to our API (the /me bootstrap bypasses the
+ *  HttpClient interceptors): `{ 'X-PF-OPD': '1' }` while the flag is set. */
+export function opdPreviewHeaders(storage: FlagStorage | null | undefined = safeLocalStorage()): Record<string, string> {
+  return readOpdFlag(storage) ? { [OPD_PREVIEW_HEADER]: '1' } : {};
 }

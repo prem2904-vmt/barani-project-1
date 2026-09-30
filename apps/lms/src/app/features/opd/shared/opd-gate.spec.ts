@@ -1,26 +1,38 @@
-import { FlagStorage, OPD_FLAG_KEY, installPfOpd, opdConsolePreview, opdVisible, readOpdFlag } from './opd-gate';
+import { FlagStorage, OPD_FLAG_KEY, OPD_PREVIEW_HEADER, installPfOpd, isApiRequest, opdConsolePreview, opdPreviewHeaders, opdVisible, readOpdFlag } from './opd-gate';
 
 /** OPD dark build — the pure visibility rule and the silent `pf.opd()` hook. */
-describe('opdVisible — the gate matrix (flag × server access × tenant entitlement)', () => {
-  const rows: Array<[boolean, boolean, boolean, boolean]> = [
-    // consoleFlag, serverAccess, tenantEntitled → visible
-    [false, false, false, false], // everyone today
-    [true, false, false, false],  // a non-owner typing pf.opd(): nothing
-    [false, true, false, false],  // owner without the flag: still dark
-    [true, true, false, true],    // owner + pf.opd(): visible
-    [false, true, true, true],    // explicitly entitled tenant: visible, no flag
-    [true, true, true, true],
-    [false, false, true, false],  // (inconsistent server data) entitlement w/o access: dark
-    [true, false, true, false],
+describe('opdVisible — the gate matrix (console flag × tenant entitlement)', () => {
+  const rows: Array<[boolean, boolean, boolean]> = [
+    // consoleFlag, tenantEntitled → visible
+    [false, false, false], // everyone today (incl. the no-row "all modules on" default)
+    [true, false, true],   // ANY signed-in user after pf.opd(): visible (no allowlist)
+    [false, true, true],   // explicitly entitled tenant: visible, no flag
+    [true, true, true],
   ];
-  it.each(rows)('flag=%s access=%s entitled=%s → %s', (consoleFlag, serverAccess, tenantEntitled, expected) => {
-    expect(opdVisible({ consoleFlag, serverAccess, tenantEntitled })).toBe(expected);
+  it.each(rows)('flag=%s entitled=%s → %s', (consoleFlag, tenantEntitled, expected) => {
+    expect(opdVisible({ consoleFlag, tenantEntitled })).toBe(expected);
   });
 
-  it('console preview is exactly flag AND server access', () => {
-    expect(opdConsolePreview({ consoleFlag: true, serverAccess: true, tenantEntitled: false })).toBe(true);
-    expect(opdConsolePreview({ consoleFlag: true, serverAccess: false, tenantEntitled: false })).toBe(false);
-    expect(opdConsolePreview({ consoleFlag: false, serverAccess: true, tenantEntitled: true })).toBe(false);
+  it('console preview is exactly the flag', () => {
+    expect(opdConsolePreview({ consoleFlag: true, tenantEntitled: false })).toBe(true);
+    expect(opdConsolePreview({ consoleFlag: true, tenantEntitled: true })).toBe(true);
+    expect(opdConsolePreview({ consoleFlag: false, tenantEntitled: true })).toBe(false);
+  });
+});
+
+describe('opdPreviewHeaders / isApiRequest', () => {
+  it('adds X-PF-OPD: 1 only while the flag is exactly "1"', () => {
+    expect(opdPreviewHeaders(fakeStorage({ [OPD_FLAG_KEY]: '1' }))).toEqual({ [OPD_PREVIEW_HEADER]: '1' });
+    expect(OPD_PREVIEW_HEADER).toBe('X-PF-OPD');
+    expect(opdPreviewHeaders(fakeStorage())).toEqual({});
+    expect(opdPreviewHeaders(fakeStorage({ [OPD_FLAG_KEY]: 'true' }))).toEqual({});
+    expect(opdPreviewHeaders(null)).toEqual({});
+  });
+  it('matches our API urls only', () => {
+    expect(isApiRequest('/api/opd/visits')).toBe(true);
+    expect(isApiRequest('https://med-fetch-dev.prefrontal.health/api/auth/me')).toBe(true);
+    expect(isApiRequest('https://x.supabase.co/auth/v1/token')).toBe(false);
+    expect(isApiRequest('https://prefrontal.sgp1.digitaloceanspaces.com/t/report.pdf')).toBe(false);
   });
 });
 

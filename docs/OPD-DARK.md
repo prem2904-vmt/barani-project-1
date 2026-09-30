@@ -63,8 +63,9 @@ superseded. Do not merge it.
 ## 2. The gate: the only source of truth for OPD visibility
 
 **Rule:** OPD is visible when **(a)** the tenant EXPLICITLY has OPD on, or **(b)**
-the person typed `pf.opd()` in the browser console **and** the server confirms
-they are allowed.
+the person typed `pf.opd()` in the browser console. **Any** signed-in user may
+type it; there is no email / user allowlist (owner decision, 2026-09-30).
+Nobody sees OPD without typing it, and `pf.opd(false)` hides it again.
 
 "Explicitly on" means the tenant's `ModulesJson` has `opd.enabled === true`.
 Having no module-config row, which means "every module on" for legacy
@@ -74,30 +75,41 @@ reasons, does not count. Neither does a row without an `opd` key or with
 ### Server: `prefrontal-mw`
 
 - `Services/Opd/OpdAccess.cs`: `ResolveAsync()` returns
-  `{ Entitled, Allowlisted }`, cached per request, and
-  `Allowed = Entitled || Allowlisted`. The pure rules live in `OpdAccessRules`.
-- Allowlist config: `OpdPreview:AllowedUserIds` (app `users.Id` GUIDs) and
-  `OpdPreview:AllowedEmails` (`users.Email` or `users.AuthEmail`,
-  case-insensitive) in `appsettings.json`. It currently lists the owner's
-  email. **TODO(owner):** add your `users.Id` if you sign in with a different
-  email or a username-only account.
+  `{ Entitled, Preview }`, cached per request, and
+  `Allowed = Entitled || Preview`. `Preview` = the request carries
+  **`X-PF-OPD: 1`** (exactly `1`; `0`, `true`, blank ⇒ off). The pure rules live
+  in `OpdAccessRules` (`IsTenantEntitled`, `IsPreviewHeader`). The old
+  `OpdPreview:AllowedEmails / AllowedUserIds` config and code are deleted.
+- CORS: the default policy uses `AllowAnyHeader()`, so the preflight admits
+  `x-pf-opd` for every configured origin (dev / stage / prod
+  `*.prefrontal.health`, localhost, Capacitor). The Electron build sends the
+  same `Authorization` header already, so the new header adds no new preflight
+  case. An integration test asserts the preflight.
 - `[RequireOpd]` together with `OpdGateMiddleware` runs **before** the
   permission check. Anyone not allowed gets an empty **404**, never a 403.
   Every controller in `Controllers/Opd/*` carries it, as do the legacy
   `OpdSettingsController`, `OpdConsultationsController` and
   `DoctorsController`. A unit test fails if an OPD controller is missing it,
   or if a lab controller has it.
-- `/api/auth/me` returns `opdAccess` (Allowed) and `opdEntitled`.
-- `PUT /api/tenants/modules` (the in-tenant Modules page): a caller who is not
-  OPD-allowed **cannot change the `opd` node**. The stored node is kept.
+- `/api/auth/me` returns `opdAccess` (Entitled OR header on that request) and
+  `opdEntitled`.
+- `PUT /api/tenants/modules` (the in-tenant Modules page): unless the tenant is
+  **already explicitly entitled**, nobody can change the `opd` node — the
+  preview header does NOT count (anyone can send it), so the stored node is
+  kept. Once entitled, the tenant's Modules page manages it.
 
 ### UI: `prefrontal-ui`
 
 - `features/opd/shared/opd-gate.ts` holds the pure rule:
-  `visible = (entitled && access) || (flag && access)`.
+  `visible = flag || entitled` (no server allowlist check).
 - `features/opd/shared/opd-gate.service.ts`: `OpdGateService.visible()` and
-  `consolePreview()`. It reads `localStorage['pf.opd']` once per page load
-  (production builds included) and the `/me` flags.
+  `consolePreview()` (= flag). It reads `localStorage['pf.opd']` once per page
+  load (production builds included) and `/me.opdEntitled`.
+- `features/opd/shared/opd-preview.interceptor.ts`: while the flag is `'1'`,
+  every request to our API (`/api/…`) carries `X-PF-OPD: 1`; third-party URLs
+  (Supabase, Spaces) never do. The two raw `fetch('/api/auth/me')` calls in
+  `AuthService` add it via `opdPreviewHeaders()`. Without the flag requests are
+  unchanged.
 - `window.pf.opd(on = true)` is installed silently at app start. It merges
   into any existing `window.pf`, prints nothing, sets or clears the flag, and
   reloads. `pf.opd(false)` hides OPD again.
@@ -120,13 +132,13 @@ reasons, does not count. Neither does a row without an `opd` key or with
 
 ### How the owner turns OPD on
 
-1. Sign in with the allowlisted account and type `pf.opd()` in the console.
-   The page reloads with OPD visible for you only. `pf.opd(false)` hides it.
-2. To show OPD to a whole tenant, switch OPD on for that tenant explicitly. The
-   allowlisted owner can flip it on the tenant's Admin → Modules page. The
-   server accepts the change only from an OPD-allowed caller, and it sets
-   `ModulesJson.opd.enabled = true`. After that the tenant's users see OPD
-   without the console flag.
+1. Sign in (any account) and type `pf.opd()` in the console. The page reloads
+   with OPD visible in that browser only. `pf.opd(false)` hides it.
+2. To show OPD to a whole tenant (go-live), set
+   `ModulesJson.opd.enabled = true` for that tenant explicitly (platform /
+   DB today; the admin-console toggle in point 3 later). The in-tenant Modules
+   page can NOT switch it on, even with `pf.opd()`. After that the tenant's
+   users see OPD without the console flag.
 3. **Open question:** the admin console (`prefrontal-admin-ui`/`-mw`) sends
    `opd` in its features map, but the LMS ignores it on purpose today. The
    admin-mw plan default is "all true", so honouring the key as-is would
@@ -134,9 +146,12 @@ reasons, does not count. Neither does a row without an `opd` key or with
    per-tenant OPD toggle that defaults to off in the admin console, and an LMS
    `SetFeatures` change that writes only an explicit `opd: true`.
 
-Unit, integration and UI specs cover the flag × server × entitlement matrix,
-the 404 matrix (no-row, `{}`, `opd:false`, explicit, allowlisted, low
-permission, Modules page), route gating, a snapshot of the non-OPD routes and
+Unit, integration and UI specs cover the flag × entitlement matrix, the
+header rule (only `1`), the interceptor (header only with the flag, only on API
+URLs), the 404 matrix (no-row, `{}`, `opd:false`, explicit, header, low
+permission, Modules page with/without header), **every** `[RequireOpd]`
+endpoint enumerated from the router answering an empty 404 without header or
+entitlement, the CORS preflight, route gating, a snapshot of the non-OPD routes and
 nav, and "new order with OPD hidden = `/frontdesk/order`, no dialog".
 
 ---
@@ -321,7 +336,8 @@ behind `OpdAccess` / `[RequireOpd]` (server) and `OpdGateService` /
 
 ### Integration additions
 
-- Migration **`20260930200000_OpdIntegration`** (additive, OPD tables only):
+- Migration **`20260930220000_OpdIntegration`** (additive, OPD tables only; renamed
+  from `20260930200000_…`, which collided with dev's `20260930200000_OrderReportNotes`):
   `opd_refunds`; `pharmacy_drugs.SiteKind`, `UsualJson`;
   `pharmacy_dispenses.PrescriptionStorageKey / FileName / ContentType`;
   `pharmacy_h1_register.Schedule`; `opd_services.FollowUpPercent`.

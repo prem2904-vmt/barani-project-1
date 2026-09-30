@@ -1,10 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { AuthService } from '../../../core/auth/auth.service';
-import { FlagStorage, installPfOpd, opdConsolePreview, opdVisible, readOpdFlag } from './opd-gate';
-
-function safeLocalStorage(): FlagStorage | null {
-  try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch { return null; }
-}
+import { installPfOpd, opdConsolePreview, opdVisible, readOpdFlag, safeLocalStorage } from './opd-gate';
 
 /**
  * THE OPD gate for the UI (OPD dark build). Every OPD surface — routes (opdGuard),
@@ -13,9 +9,11 @@ function safeLocalStorage(): FlagStorage | null {
  * row, finance / search entries — asks {@link visible}. Nothing else may decide
  * OPD visibility.
  *
- * Inputs: the console flag (localStorage `pf.opd`, set by `pf.opd()`) and the
- * server's `/api/auth/me` flags (`opdAccess`, `opdEntitled`). Rule in
- * ./opd-gate.ts (pure, unit-tested).
+ * Inputs: the console flag (localStorage `pf.opd`, set by `pf.opd()` — any
+ * signed-in user, no allowlist; while set, opd-preview.interceptor.ts sends
+ * `X-PF-OPD: 1` so the server admits OPD calls) and the tenant's explicit
+ * entitlement (`/api/auth/me` `opdEntitled`). Rule in ./opd-gate.ts (pure,
+ * unit-tested).
  */
 @Injectable({ providedIn: 'root' })
 export class OpdGateService {
@@ -28,14 +26,13 @@ export class OpdGateService {
     const u = this.auth.user();
     return {
       consoleFlag: this.flag(),
-      serverAccess: !!u?.opdAccess,
       tenantEntitled: !!u?.opdEntitled,
     };
   });
 
   /** Show OPD anywhere in the UI. */
   readonly visible = computed(() => opdVisible(this.inputs()));
-  /** Owner preview via the console flag (treated as OPD-scoped for the fork). */
+  /** Console preview via `pf.opd()` (treated as OPD-scoped for the fork). */
   readonly consolePreview = computed(() => opdConsolePreview(this.inputs()));
 
   /** Install `window.pf.opd()` silently. Called once at app start. */

@@ -39,8 +39,8 @@ export class ModuleScopeService {
     return canUseModule(this.entitlements.moduleOn('lab'), this.userScopes().has('lab'));
   }
   /** OPD dark build: usable only when the OPD gate shows OPD at all, AND the user
-   *  is OPD-scoped (role module 'opd') — or it is the owner's console preview
-   *  (pf.opd() + server allowlist), which treats the owner as OPD-scoped. The
+   *  is OPD-scoped (role module 'opd') — or it is the console preview
+   *  (pf.opd(), any signed-in user), which treats the user as OPD-scoped. The
    *  old dev-only `pf.opdPreview` flag is gone (the gate replaces it). */
   opdUsable(): boolean {
     if (!this.opdGate.visible()) return false;
