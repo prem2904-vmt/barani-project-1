@@ -185,3 +185,24 @@ test('raw log: visible control chars, ring buffer and rotation', () => {
   assert.ok(fs.existsSync(path.join(dir, 'raw.log.1')));
   assert.ok(!fs.existsSync(path.join(dir, 'raw.log.3')));
 });
+
+// ── folder transport ────────────────────────────────────────────────────
+test('folder transport: waits for a stable size, emits the file once, moves it', () => {
+  const { FolderTransport } = require('../core/transports/folder');
+  const dir = tmp();
+  const done = path.join(dir, 'done');
+  const t = new FolderTransport({ path: dir, pattern: '*.txt', moveTo: done });
+  fs.mkdirSync(done);
+  const got = [];
+  t.on('file', (text, name) => got.push([name, text]));
+  fs.writeFileSync(path.join(dir, 'run1.txt'), 'SAMPLE ID: 5\nWBC 7 10^3/uL\n');
+  fs.writeFileSync(path.join(dir, 'ignore.csv'), 'x');
+  t.poll();                      // first sighting: size recorded, not read yet
+  assert.equal(got.length, 0);
+  t.poll();                      // stable → read + moved
+  assert.deepEqual(got.map((g) => g[0]), ['run1.txt']);
+  assert.ok(fs.existsSync(path.join(done, 'run1.txt')));
+  assert.ok(fs.existsSync(path.join(dir, 'ignore.csv')));
+  t.poll();
+  assert.equal(got.length, 1);
+});
