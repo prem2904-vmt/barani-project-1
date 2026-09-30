@@ -617,6 +617,18 @@
           <span>My signature</span>
         </button>
 
+        @if (desktopWindow.available && !desktopWindow.isFullScreen()) {
+        <!-- Desktop app, windowed: back to kiosk full screen (Esc leaves it). -->
+        <button type="button" class="pf-profile-item press" (click)="enterFullScreen()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+          </svg>
+          <span class="flex-1">Full screen</span>
+          <span class="pf-kbd-hint">{{ fullScreenKey }}</span>
+        </button>
+        }
+
         @if (hasPin()) {
         <button type="button" class="pf-profile-item press" (click)="lockNow()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -642,6 +654,13 @@
       </div>
       }
     </div>
+
+    @if (desktopWindow.showClock()) {
+    <!-- Desktop app, full screen: the OS clock is hidden, so the bar ends
+         with a Windows-taskbar-style clock (time over dd/mm/yyyy, IST,
+         minute ticks). Windowed / web / iPad: never. -->
+    <pf-desktop-clock />
+    }
   </div><!-- /right cluster -->
 </div>
 

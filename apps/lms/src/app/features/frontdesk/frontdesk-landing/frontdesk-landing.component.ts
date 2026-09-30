@@ -2915,10 +2915,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   /** Esc clears the selection (when no drawer / modal is on top). */
-  @HostListener('document:keydown.escape')
-  onEscClearSelection() {
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscClearSelection(ev?: Event) {
     if (this.workSel.count() === 0) return;
     if (this.selectedOrder() || this.activePackage() || this.selectedHc() || this.selectedBill()) return;
+    // Used → preventDefault, so the desktop app's Esc-leaves-full-screen
+    // rule (desktop-fullscreen-esc.ts) knows this Esc was taken.
+    ev?.preventDefault();
     this.workSel.clear();
   }
 

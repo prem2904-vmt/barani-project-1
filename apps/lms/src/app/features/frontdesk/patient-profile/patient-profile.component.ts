@@ -264,14 +264,17 @@ export class PatientProfileComponent implements OnInit {
   };
 
   /** Esc closes the top-most layer. */
-  onEsc(): void {
-    if (this.moreOpen()) { this.closeMore(); return; }
-    if (this.abhaCardOpen()) { this.abhaCardOpen.set(false); return; }
-    if (this.qrOpen()) { this.qrOpen.set(false); return; }
-    if (this.showIdCard()) { this.showIdCard.set(false); return; }
-    if (this.chatPickerOpen()) { this.closeChatPicker(); return; }
-    if (this.mergeOpen()) { this.closeMerge(); return; }
-    if (this.detail()) this.closeDetail();
+  onEsc(ev?: Event): void {
+    // Whatever it closes / zooms out of uses the Esc → preventDefault, so the
+    // desktop app stays full screen (desktop-fullscreen-esc.ts).
+    const used = () => ev?.preventDefault();
+    if (this.moreOpen()) { used(); this.closeMore(); return; }
+    if (this.abhaCardOpen()) { used(); this.abhaCardOpen.set(false); return; }
+    if (this.qrOpen()) { used(); this.qrOpen.set(false); return; }
+    if (this.showIdCard()) { used(); this.showIdCard.set(false); return; }
+    if (this.chatPickerOpen()) { used(); this.closeChatPicker(); return; }
+    if (this.mergeOpen()) { used(); this.closeMerge(); return; }
+    if (this.detail()) { used(); this.closeDetail(); }
   }
 
   readonly showIdCard = signal(false);

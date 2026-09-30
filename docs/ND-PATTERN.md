@@ -638,6 +638,24 @@ Timing rules (`shared/utils/busy.ts`):
 - **Theme tokens only.** Light and dark must both be right; never force dark.
 - **Tests:** add specs for the pattern hooks. Examples: only one primary; kit
   classes present; no truncation; mode switching.
+- **Esc that the screen uses is taken.** The desktop app opens full screen and
+  a spare Esc leaves it (`core/services/desktop-fullscreen-esc.ts`). An
+  overlay that closes on Esc is `role="dialog"` / `alertdialog` / `menu`, a
+  floating `listbox`, an expanded `aria-haspopup` / combobox trigger, or
+  carries `data-pf-esc`; any OTHER Esc action (clear a selection, zoom out of a
+  detail, deselect) calls `preventDefault()` when it acts.
+
+### Desktop full screen + top-strip clock (Electron only)
+
+- Opens full screen on every launch (nothing remembered). Esc leaves it only
+  when the app did not use the Esc (rule above); back in with F11 (Windows /
+  Linux), ⌃⌘F or the green button (macOS), or **Full screen** in the avatar
+  menu (shown only when windowed).
+- While full screen the top strip ends (right end, after the avatar) with a
+  Windows-taskbar-style clock (`pf-desktop-clock`): two right-aligned lines,
+  time on top ("12:39 PM") and the dd/mm/yyyy date under it ("30/09/2026"),
+  IST, Indian locale (12 h), tabular numbers, minute ticks, `<time datetime>`.
+  Windowed, web and the iPad / phone apps never show it.
 
 ### The ⋮ actions menu (`pf-actions-menu`)
 

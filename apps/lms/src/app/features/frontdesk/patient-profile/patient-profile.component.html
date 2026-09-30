@@ -4,7 +4,7 @@
      over CUMULATIVE RESULTS (analyte × visit grid) ‖ the PATIENT companion
      (quick actions, timeline, details), collapsible to a strip. ≤900px: one
      stacked column; ≤640px: results as cards, New order in the bottom bar. -->
-<section class="pf-pp nd-page" (keydown.escape)="onEsc()">
+<section class="pf-pp nd-page" (keydown.escape)="onEsc($event)">
   <pf-hero-band class="pf-pp-band" [back]="true" [backAction]="goBack" [customSearch]="true" [contextBar]="true">
     <ng-container band-actions>
       @if (patient(); as p) {
