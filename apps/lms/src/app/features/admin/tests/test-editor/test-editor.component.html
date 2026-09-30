@@ -1181,6 +1181,7 @@
                 [columnsSummary]="testColumnsOverride() ? columnsLabel(testColumnsOverride()!) : (deptColumnsLabel() || '')"
                 [reloadToken]="structureReload()"
                 [paramDefs]="$any(paramDefMap())"
+                [chartContext]="chartContext()"
                 (changed)="refreshPreview()"
                 (customizeColumns)="startCustomizeColumns()">
                 <div descriptionEditor>

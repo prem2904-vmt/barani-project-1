@@ -9,6 +9,9 @@ import {
 import type { InsightParam } from '../../../shared/utils/range-insight';
 import { mergeStructureOntoLatest, type LooseSection } from '../../../shared/utils/layout-section-merge';
 import { sectionsNeedResultsTable, withResultsTableFirst } from '../../../shared/utils/results-table';
+import { defaultChartSpec, type ReportChartSpec } from '../../../shared/utils/report-chart/report-chart.model';
+import type { ChartEditorContext } from '../../../shared/utils/report-chart/report-chart.sample';
+import { ReportChartEditorComponent } from './report-chart-editor.component';
 
 /** One raw layout section as stored — kept as-is so fields this surface
  *  doesn't understand (grid rows, templates, complex conditions…) survive
@@ -17,6 +20,8 @@ import { sectionsNeedResultsTable, withResultsTableFirst } from '../../../shared
 type RawSection = Record<string, unknown> & {
   id?: string; type?: string; order?: number; label?: string | null;
   hidden?: boolean; source?: string; template?: string;
+  /** Chart block spec (docs/REPORT-CHARTS.md). */
+  trend?: unknown;
   conditions?: RawRule[];
 };
 type RawRule = {
@@ -46,7 +51,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
 @Component({
   selector: 'pf-report-structure',
   standalone: true,
-  imports: [FormsModule, SelectComponent],
+  imports: [FormsModule, SelectComponent, ReportChartEditorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rsd">
@@ -153,6 +158,14 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                     <p>Choice of antimicrobial depends on the clinical status, site of infection, and the drug pharmacokinetics/pharmacodynamics.</p>
                   </div>
                 }
+                @case ('chart') {
+                  @if (row.trend && chartContext()) {
+                    <pf-report-chart-editor [value]="row.trend" [title]="row.name" [context]="chartContext()!"
+                      (specChange)="setChart(row, $event)" (titleChange)="setChartTitle(row, $event)"></pf-report-chart-editor>
+                  } @else {
+                    <p class="rsd__note">A single-value gauge — fine-tuning lives in the advanced editor below.</p>
+                  }
+                }
                 @case ('image') {
                   <p class="rsd__note">Photos the tech marks “show” at result entry print here.
                     Hidden = they stay in the lab record only — nothing on the PDF.</p>
@@ -209,6 +222,11 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
                 <button type="button" role="menuitem" (click)="addSection('image')">
                   <strong>Images</strong><span>Attachments captured with the result</span>
                 </button>
+                @if (!culture() && chartContext()) {
+                  <button type="button" role="menuitem" (click)="addSection('chart')">
+                    <strong>Chart</strong><span>Line, bar or dots — time points or chosen values</span>
+                  </button>
+                }
                 @if (culture()) {
                   <button type="button" role="menuitem" (click)="addSection('culture_line')">
                     <strong>Report line</strong><span>Gram stain, growth, notes — any bench finding</span>
@@ -246,7 +264,7 @@ type CondKind = 'always' | 'when' | 'hide_when' | 'custom';
       border-radius: 7px; background: rgba(124,58,237,.14); color: var(--violet-text, #a78bfa);
       font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
     .rsd__title { font-size: 13.5px; font-weight: 700; color: var(--text-primary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      min-width: 0; overflow-wrap: anywhere; }
     .rsd__grow { flex: 1; }
     .rsd__rename { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary);
       background: var(--bg-secondary, rgba(0,0,0,.25)); border: 1px solid rgba(168,85,247,.5); border-radius: 8px;
@@ -362,6 +380,10 @@ export class ReportStructureComponent {
   readonly columnsSummary = input<string>('');
   /** Bumped by the host after the advanced editor closes → reload. */
   readonly reloadToken = input<number>(0);
+
+  /** What the chart editor knows about this test (time points, values,
+   *  ranges) — null hides the Chart option (culture tests). */
+  readonly chartContext = input<ChartEditorContext | null>(null);
 
   readonly changed = output<void>();
   readonly customizeColumns = output<void>();
@@ -612,10 +634,10 @@ export class ReportStructureComponent {
       name: s.label || named[t] || t || 'Block',
       hint: 'edit in the advanced editor',
       hidden: s.hidden === true,
-      canRename: t === 'culture_line' || t === 'paragraph',
+      canRename: t === 'culture_line' || t === 'paragraph' || t === 'chart',
       canDelete: t !== 'grid',
       canHide: t !== 'grid',
-      source: s.source, template: s.template,
+      source: s.source, template: s.template, trend: s.trend,
       conditions: s.conditions, implicit: false,
     };
   }
@@ -664,6 +686,13 @@ export class ReportStructureComponent {
   setTemplate(row: StructureRow, v: string) {
     this.mutate(row.key, s => { s.template = v; }, { debounce: true });
   }
+  setChart(row: StructureRow, spec: ReportChartSpec) {
+    this.mutate(row.key, s => { s.trend = spec; }, { debounce: true });
+  }
+  setChartTitle(row: StructureRow, title: string) {
+    const v = title.trim();
+    this.mutate(row.key, s => { s.label = v || 'Chart'; });
+  }
   moveRow(row: StructureRow, dir: -1 | 1) {
     const rows = this.rows();
     const idx = rows.findIndex(r => r.key === row.key);
@@ -680,6 +709,11 @@ export class ReportStructureComponent {
     const s: RawSection = { id: newSecId(), type, order: secs.length + 1, conditions: [] };
     if (type === 'culture_line') { s.source = 'clinicalNotes'; s.label = 'Clinical notes'; }
     if (type === 'paragraph') s.template = '';
+    if (type === 'chart') {
+      const ctx = this.chartContext();
+      s.label = 'Chart';
+      s.trend = defaultChartSpec({ series: !!ctx?.series, parameters: ctx?.params.map(p => p.name) ?? [] });
+    }
     secs.push(s);
     this.commit(secs);
   }
@@ -776,6 +810,8 @@ interface StructureRow {
   canHide: boolean;
   source?: string;
   template?: string;
+  /** A chart block's Test Master spec (docs/REPORT-CHARTS.md). */
+  trend?: unknown;
   conditions?: RawRule[];
   implicit: boolean;
 }

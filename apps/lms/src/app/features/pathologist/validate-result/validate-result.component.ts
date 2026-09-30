@@ -28,6 +28,10 @@ import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { pickReassignee } from '../reassign-picker';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
+import { ReportChartComponent } from '../../../shared/components/report-chart/report-chart.component';
+import { ReportLayoutService } from '../../../core/services/report-layout.service';
+import { buildChartData, type ChartData } from '../../../shared/utils/report-chart/report-chart.data';
+import { chartOwnerOf, chartTestsFromOrder, savedValues } from '../../../shared/utils/report-chart/report-chart.order';
 import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS } from '../../../core/services/report-actions.service';
 import { bandAgeYears } from '../../../shared/utils/patient-age';
 import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
@@ -84,7 +88,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent],
+  imports: [FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page">
@@ -327,6 +331,13 @@ interface ValueRow {
                       </li>
                     }
                   </ul>
+                </div>
+              }
+
+              @if (printChart(); as pc) {
+                <div class="pf-rail-card pf-printchart">
+                  <p class="pf-rail-lbl">Chart · printed on the report</p>
+                  <pf-report-chart [data]="pc"></pf-report-chart>
                 </div>
               }
 
@@ -819,6 +830,37 @@ export class ValidateResultComponent implements OnInit {
     this.ngOnInit();
   }
 
+  // ── Report chart (Test Master chart block): the chart that will print ──
+  private readonly layoutSvc = inject(ReportLayoutService);
+  readonly printChart = signal<ChartData | null>(null);
+  private printChartKey = '';
+  private async loadPrintChart(t: OrderTest | null): Promise<void> {
+    const owner = t ? chartOwnerOf(t) : '';
+    const key = t ? `${owner}|${t.id}|${t.currentResult ?? ''}` : '';
+    if (key === this.printChartKey) return;
+    this.printChartKey = key;
+    if (!t || !owner) { this.printChart.set(null); return; }
+    try {
+      const lay = await this.layoutSvc.getTestLayout(owner);
+      const sec = (lay?.sections ?? []).find(x => x.type === 'chart' && !!(x as { trend?: unknown }).trend
+        && (x as { hidden?: boolean }).hidden !== true) as { label?: string | null; trend?: unknown } | undefined;
+      if (!sec) { if (this.printChartKey === key) this.printChart.set(null); return; }
+      let tests;
+      if (owner === t.testId) {
+        tests = [{ testId: t.testId, name: t.name, result: { values: savedValues(t.currentResult) } }];
+      } else {
+        const orderId = t.subOrder?.orderId ?? t.subOrder?.order?.id;
+        const order = orderId ? await firstValueFrom(this.api.get<{ samples?: [] }>(`/api/orders/${orderId}`)) : null;
+        tests = chartTestsFromOrder(order as never);
+      }
+      const data = buildChartData(sec.trend, sec.label, owner, tests);
+      if (this.printChartKey === key) this.printChart.set(data && !data.empty ? data : null);
+    } catch {
+      // No access to the layout / order → the card simply doesn't show.
+      if (this.printChartKey === key) this.printChart.set(null);
+    }
+  }
+
   // ── Trendogram: add serial-result trend charts to this order's report ──
   readonly trendEligible = signal<TrendTest[]>([]);
   readonly trendogramOn = signal(false);
@@ -826,6 +868,7 @@ export class ValidateResultComponent implements OnInit {
   private trendPatientId: string | null = null;
 
   constructor() {
+    effect(() => { void this.loadPrintChart(this.selected()); });
     effect(() => {
       const pid = this.selected()?.subOrder?.order?.patient?.id ?? null;
       if (pid && pid !== this.trendPatientId) {

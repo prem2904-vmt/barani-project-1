@@ -280,6 +280,9 @@ export interface ResolvedSection {
   content?: string;
   imageUrls?: string[];
   chart?: ResolvedChart;
+  /** Report chart block (type 'chart' with a Test Master chart spec) — the
+   *  stored spec, passed through by mw (docs/REPORT-CHARTS.md). */
+  trend?: unknown | null;
 }
 
 export interface ResolvedRow {

@@ -26,6 +26,7 @@ import {
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
   readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption } from './report-header-layout';
 import { AgeStyle, formatAge } from './patient-age';
+import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
 
 /**
  * Render an A4 lab report PDF in the Classic template style — blue
@@ -733,6 +734,8 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // after the table. No department strips — panel headers only (NABL /
   // reference-report style); department banding is opt-in via the template.
   const tests = snap.tests ?? [];
+  // Report charts plot from the snapshot's own values (report-chart.report.ts).
+  setReportChartContext(tests, resolvedLayouts);
   const tabular: typeof tests = [];
   const special: typeof tests = [];
   for (const t of tests) {
@@ -940,7 +943,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       s.isVisible && s.type !== 'grid' && (
         (s.type === 'paragraph' && !inTable && !!s.content?.trim()) ||
         (s.type === 'image' && (s.imageUrls?.length ?? 0) > 0) ||
-        (s.type === 'chart' && !!s.chart)
+        (s.type === 'chart' && (!!s.chart || !!s.trend))
       ));
     if (!hasNarrative) continue;
     const entry = { ...member, testId: pkg, packageTestId: null, profileTestId: null,
@@ -3696,7 +3699,9 @@ function renderResolvedTest(
   practice: NonNullable<ReportPdfInput['practice']>
 ): number {
   let y = startY;
-  if (y > A4.h - MARGIN_BOTTOM - 70) { y = newPage(doc, practice); }
+  // A block that OPENS with a chart keeps its heading on the chart's page.
+  const lead = reportChartLead(doc, layout, chartTheme());
+  if (y > A4.h - MARGIN_BOTTOM - Math.max(70, lead + 30)) { y = newPage(doc, practice); }
 
   drawTestHeading(doc, t.name ?? reportDisplayName(layout.testName) ?? 'Test', y);
   y += 26;
@@ -3716,7 +3721,10 @@ function renderResolvedTest(
         y = renderImageSection(doc, sec, y, practice);
         break;
       case 'chart':
-        y = renderChartSection(doc, sec, y);
+        y = sec.trend
+          ? renderReportChart(doc, sec, t.testId ?? '', y, chartTheme(),
+              { x: MARGIN_X, contentWidth: A4.w - 2 * MARGIN_X, floor: A4.h - MARGIN_BOTTOM, newPage: () => newPage(doc, practice) })
+          : renderChartSection(doc, sec, y);
         break;
     }
     y += 4;
@@ -4044,9 +4052,18 @@ function drawImagesBlock(
   return y + rowH + 8;
 }
 
+/** The report theme values a chart block needs (report-chart.pdf.ts). */
+function chartTheme() {
+  return { font: PDF_FONT, fontScale: theme.fontScale, accent: BLUE, text: TEXT, ink: BLACK, dim: TEXT_DIM,
+    hair: HAIR, abnormalColored: theme.flagStyle === 'bold_color',
+    abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor };
+}
+
 function renderChartSection(doc: jsPDF, sec: ResolvedSection, startY: number): number {
   const chart = sec.chart;
-  if (!chart || chart.max <= chart.min) return startY;
+  // A chart with no parameter (a report-chart block read by an older server)
+  // has nothing to gauge.
+  if (!chart || chart.max <= chart.min || !chart.parameter) return startY;
 
   const barX = MARGIN_X;
   const barY = startY + 6;

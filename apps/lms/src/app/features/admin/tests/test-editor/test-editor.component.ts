@@ -31,6 +31,7 @@ import { SegmentedOption } from '../../../../shared/primitives/segmented.compone
 import { ThemeService } from '../../../../core/services/theme.service';
 import { RangeTableComponent, blankGroup, liftParamCriticals } from './range-table.component';
 import { validateRanges, type RangeIssue } from '../../../../shared/utils/range-insight';
+import { numericParamsOf, type ChartEditorContext, type ChartParamInfo } from '../../../../shared/utils/report-chart/report-chart.sample';
 import { hasLegacyFields, loadEditorFields, newFieldId, parseParametersBlob, readParameters, tidyParametersJson, writeParameters } from '../../../../shared/utils/test-parameters';
 
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
@@ -927,6 +928,16 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this._draft().type === 'individual') return [];
     const byId = this._memberById();
     const out: PreviewProfileMember[] = [];
+    if (this.repetitiveActive()) {
+      // A timed series previews one row per DRAW, with its time point — so a
+      // report chart over the time points shows in the live preview.
+      for (const r of this.normalizeRows(this._memberRows())) {
+        const t = byId.get(r.testId);
+        if (t) out.push({ id: r.testId, name: t.name, parameters: t.parameters ?? null,
+                          department: shownDepartmentName(t) || null, offsetMin: r.offsetMin });
+      }
+      return out;
+    }
     for (const id of this.packageItems()) {
       const t = byId.get(id);
       // Each member previews under ITS OWN department (a package has none).
@@ -1460,6 +1471,39 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     }
     return out;
+  });
+  /** What the report chart editor knows about this test: its time points
+   *  (repetitive profile), and every numeric value with unit + reference
+   *  groups (docs/REPORT-CHARTS.md). Culture tests get none. */
+  readonly chartContext = computed<ChartEditorContext | null>(() => {
+    const d = this._draft();
+    if (!d.id || this.cultureBench()) return null;
+    const numericOf = (t: Test | undefined): ChartParamInfo[] => numericParamsOf(t?.parameters ?? null, t?.unit ?? null);
+    if (d.type === 'individual') {
+      const params: ChartParamInfo[] = this.fields()
+        .filter(f => (f.name ?? '').trim() && this.isNumericType(f.type))
+        .map(f => ({ name: (f.name ?? '').trim(), title: f.label || null, unit: f.unit || d.unit || null,
+                     referenceRanges: (f.referenceRanges ?? []) as ChartParamInfo['referenceRanges'] }));
+      return { ownerId: d.id, series: false, timepoints: [], params };
+    }
+    const byId = this._memberById();
+    const members = this.previewProfileMembers();
+    const seen = new Set<string>();
+    const params: ChartParamInfo[] = [];
+    for (const m of members) for (const p of numericOf(byId.get(m.id))) {
+      if (seen.has(p.name.toLowerCase())) continue;
+      seen.add(p.name.toLowerCase());
+      // A single-value member reads as the member test ("OGTT – 30 Minutes").
+      params.push(numericOf(byId.get(m.id)).length === 1 ? { ...p, title: p.title || m.name } : p);
+    }
+    const timepoints = this.repetitiveActive()
+      ? this.memberGroups().map(g => ({
+          offsetMin: g.offsetMin,
+          members: g.rows.map(r => byId.get(r.testId)).filter((t): t is Test => !!t)
+            .map(t => ({ testId: t.id, name: t.name, code: t.testCode ?? null, params: numericOf(t) })),
+        }))
+      : [];
+    return { ownerId: d.id, series: timepoints.length > 1, timepoints, params };
   });
   readonly reportParamNames = computed<string[]>(() =>
     this._draft().type === 'individual' ? this.parameterNames() : this.memberReportParams().map(p => p.name));
