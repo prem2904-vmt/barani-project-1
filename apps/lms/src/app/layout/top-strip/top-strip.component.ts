@@ -65,6 +65,7 @@ import {
   PRIMARY_NAV,
   WorkflowNavCtx,
   menusFromWorkflow,
+  withExpenses,
   NavVisibilityCtx,
   navItemVisible,
   withCollectionFallback,
@@ -348,9 +349,14 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.gateModules(
       this.withCollection(
         this.withInventory(
-          this.visible(
-            menusFromWorkflow(this.process.active(), this.navCtx()) ??
-              PRIMARY_NAV,
+          // Expenses: a primary screen for anyone holding expense_* (same rule
+          // as its route guard), placed after the lab work items.
+          withExpenses(
+            this.visible(
+              menusFromWorkflow(this.process.active(), this.navCtx()) ??
+                PRIMARY_NAV,
+            ),
+            (i) => this.visible([i]).length > 0,
           ),
         ),
       ),

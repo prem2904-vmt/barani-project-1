@@ -68,6 +68,19 @@ export const DOCTOR_NAV: NavItem = {
              'M8 15a6 6 0 0 0 12 0v-3', 'M20 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z']
 };
 
+/** Expenses — a PRIMARY everyday screen (owner 2026-09-30: "not buried under
+ *  More, not an admin / finance-hub thing"): My expenses for every staff member
+ *  who enters them, All expenses (read-only oversight) and the cashier's Day
+ *  closing. Visible purely by permission — its route's own gate
+ *  (ROUTE_ACCESS['/expenses'] = expense_viewer | _modifier | _admin), so
+ *  "I see it" == "I can open it". Wallet icon (stroked SVG paths). */
+export const EXPENSES_NAV: NavItem = withRoutePerms([{
+  id: 'expenses',
+  label: 'Expenses',
+  href: '/expenses',
+  iconPath: ['M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4', 'M21 11h-5a2 2 0 0 0 0 4h5a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1Z', 'M7 8h5'],
+}])[0];
+
 export const ADMIN_NAV: NavItem = {
   id: 'admin',
   label: 'Settings',
@@ -143,6 +156,9 @@ export const PRIMARY_NAV: NavItem[] = withRoutePerms([
     // Report queue is core lab operations (delivery/dispatch) — NOT gated by the
     // reports module, which covers only the TAT/analytics dashboard.
   },
+  // Expenses — after the lab work, before Settings (the admin icon). Shown
+  // only to holders of an expense_* permission (the route's own gate).
+  EXPENSES_NAV,
   // ── Secondary / role-specific tabs (scroll right to reach) ───────────
   {
     // Live collection queue (token / walk-up / home-collection).
@@ -337,6 +353,26 @@ export function withCollectionFallback(items: NavItem[], ctx: {
   return collect ? [...items, collect] : items;
 }
 
+/**
+ * EXPENSES in the live nav. The workflow-driven nav (menusFromWorkflow) is
+ * built from process work areas and never contains Expenses, so it is placed
+ * here: right after the last lab work item (Results, else Validate / Lab …),
+ * i.e. before Stores / Messages and before Settings; appended when none of
+ * those is present. Idempotent (the PRIMARY_NAV fallback already has it) and
+ * shown ONLY when `canShow(EXPENSES_NAV)` — the shells pass their navItemVisible
+ * check, which is the route guard's own permission rule.
+ */
+export function withExpenses(items: NavItem[], canShow: (i: NavItem) => boolean): NavItem[] {
+  if (items.some(i => i.id === EXPENSES_NAV.id || i.href === EXPENSES_NAV.href)) return items;
+  if (!canShow(EXPENSES_NAV)) return items;
+  const labOrder = ['/reports', '/pathologist', '/lab/my-work', '/sample-collection', '/frontdesk'];
+  for (const href of labOrder) {
+    const at = items.findIndex(i => i.href === href);
+    if (at >= 0) return [...items.slice(0, at + 1), EXPENSES_NAV, ...items.slice(at + 1)];
+  }
+  return [...items, EXPENSES_NAV];
+}
+
 export const MORE_NAV: NavItem[] = withRoutePerms([
   // À-la-carte clinical / ops modules. Hidden until enabled in Admin → Modules;
   // the module toggle IS the gate (no per-module roles yet). Shown here in More
@@ -412,11 +448,6 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     // Finance — day-end cash reconciliation + closure.
     id: 'daily-statement', label: 'Daily statement', href: '/finance/daily',
     iconPath: ['M4 4h16v16H4z', 'M8 9h8M8 13h8M8 17h5'],
-  },
-  {
-    // Finance — the branch expense book (bills, day opening / closing).
-    id: 'expenses', label: 'Expenses', href: '/finance/expenses',
-    iconPath: ['M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z', 'M8 8h8M8 12h8M8 16h5'],
   },
   {
     id: 'inventory', label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],

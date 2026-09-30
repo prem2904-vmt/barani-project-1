@@ -47,6 +47,18 @@ describe('ExpenseService', () => {
     expect(api['delete']).toHaveBeenCalledWith('/api/expenses/e1');
   });
 
+  it('My expenses asks for mine=true; Day closing has its own endpoints', () => {
+    expect(ExpenseService.query({ from: '2026-09-01', to: '2026-09-30', mine: true })).toBe('?from=2026-09-01&to=2026-09-30&mine=true');
+    expect(ExpenseService.query({ from: '2026-09-01', to: '2026-09-30', mine: false })).toBe('?from=2026-09-01&to=2026-09-30');
+    const s = make();
+    s.closing('2026-09-30').subscribe();
+    expect(api['get']).toHaveBeenCalledWith('/api/expenses/closing?date=2026-09-30');
+    s.closeClosing('2026-09-30', { countedCash: 1500, openingBalance: null, note: 'ok' }).subscribe();
+    expect(api['post']).toHaveBeenCalledWith('/api/expenses/closing/2026-09-30/close', { countedCash: 1500, openingBalance: null, note: 'ok' });
+    s.reopenClosing('2026-09-30').subscribe();
+    expect(api['post']).toHaveBeenCalledWith('/api/expenses/closing/2026-09-30/reopen', {});
+  });
+
   it('uploads bills as multipart "files"', async () => {
     const s = make();
     const f1 = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
