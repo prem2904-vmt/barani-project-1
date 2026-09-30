@@ -5,7 +5,7 @@ import { ApiService } from './api.service';
 import { PlatformService } from './platform.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import {
-  OutsourcedStatusFilter, OutsourcedTube, PartnerReport, countByStatus, filterOutsourced, partnerOptions,
+  OutsourcedStatusFilter, OutsourcedTube, PartnerReport, PdfParts, countByStatus, filterOutsourced, partnerOptions,
 } from '../../features/frontdesk/outsourced/outsourced-view';
 
 /**
@@ -98,6 +98,12 @@ export class OutsourcingService {
   async reopen(orderTestIds: string[]): Promise<void> {
     const updated = await firstValueFrom(this.api.post<OutsourcedTube[]>('/api/samples/outsourced/reopen', { orderTestIds }));
     this.merge(updated);
+  }
+
+  /** What the report's delivered PDF actually contains, per attached
+   *  partner file (joined or not, and why). */
+  pdfParts(reportId: string): Promise<PdfParts> {
+    return firstValueFrom(this.api.get<PdfParts>(`/api/reports/${encodeURIComponent(reportId)}/pdf-parts`));
   }
 
   partnerReports(orderId: string): Promise<PartnerReport[]> {

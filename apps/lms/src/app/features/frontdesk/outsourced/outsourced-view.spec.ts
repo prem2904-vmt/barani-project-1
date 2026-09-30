@@ -1,6 +1,7 @@
 import {
   OutsourcedTube, absoluteFileUrl, actionLines, countByStatus, filterOutsourced, partnerFileProblem,
   partnerOptions, partnerReportShareLine, rowReport, attachState, firstAttachProblem, ATTACH_DEFAULT,
+  partnerWhere, PartnerReport, PdfParts,
 } from './outsourced-view';
 
 const row = (o: Partial<OutsourcedTube> = {}): OutsourcedTube => ({
@@ -94,5 +95,35 @@ describe('Outsourced tab — attach to our report', () => {
     expect(line).toContain('Also included on the same link: the partner lab report for HbA1c.');
     expect(partnerReportShareLine([{ orderTestId: 'a', testName: 'X', url: '/u', inReport: true }]))
       .not.toContain('same link');
+  });
+});
+
+describe('Report viewer — where a partner report goes (the served PDF wins over the flag)', () => {
+  const rep = (o: Partial<PartnerReport> = {}): PartnerReport =>
+    ({ orderTestId: 't1', testName: 'Testing', partnerLabName: 'ABC Lab', url: '/uploads/t/a.pdf', ...o });
+  const parts = (joined: boolean, problem: string | null = null): PdfParts =>
+    ({ stored: true, combined: joined, parts: [{ url: '/uploads/t/a.pdf', joined, problem }] });
+
+  it('a legacy upload (no flag) is a separate file the desk can still attach', () => {
+    expect(partnerWhere(rep(), null)).toEqual({ text: 'Sent as a separate file — attach it to send one PDF', warn: false, canAttach: true });
+    expect(partnerWhere(rep({ attachToReport: false }), parts(false)).canAttach).toBe(true);
+  });
+  it('attached AND joined in the served PDF: "In this PDF"', () => {
+    expect(partnerWhere(rep({ attachToReport: true, inReport: true }), parts(true)))
+      .toEqual({ text: 'In this PDF, after our report', warn: false, canAttach: false });
+  });
+  it('attached but NOT in the served PDF: says so with the reason, as a warning (LAB-2609-000154)', () => {
+    const w = partnerWhere(rep({ attachToReport: true, inReport: true }), parts(false, 'The partner file is no longer on the server.'));
+    expect(w.warn).toBe(true);
+    expect(w.text).toBe('Not in this PDF — The partner file is no longer on the server.');
+    expect(partnerWhere(rep({ attachToReport: true }), parts(false)).text).toBe('Not in this PDF — it couldn’t be joined');
+  });
+  it('a file flagged unjoinable at upload (password-protected) stays a separate file', () => {
+    const w = partnerWhere(rep({ attachToReport: true, attachProblem: 'This PDF is password-protected.' }), null);
+    expect(w).toEqual({ text: 'Sent as a separate file — This PDF is password-protected.', warn: true, canAttach: false });
+  });
+  it('no answer yet: the flag\'s wording, never "In this PDF"', () => {
+    expect(partnerWhere(rep({ attachToReport: true, inReport: true }), null).text).toBe('Attached — joined after our report');
+    expect(partnerWhere(rep({ attachToReport: true }), { stored: false, combined: false, parts: [] }).text).toBe('Attached — joined after our report');
   });
 });

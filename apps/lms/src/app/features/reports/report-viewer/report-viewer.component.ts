@@ -25,7 +25,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
 import { reportFlag } from '../../../shared/utils/report-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
-import { PartnerReport, partnerReportShareLine } from '../../frontdesk/outsourced/outsourced-view';
+import { PartnerReport, PdfParts, firstAttachProblem, partnerReportShareLine, partnerWhere } from '../../frontdesk/outsourced/outsourced-view';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { ReportWhatsAppStatusComponent } from './report-whatsapp-status.component';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
@@ -402,6 +402,7 @@ export class ReportViewerComponent implements OnInit {
         // settings and stored the moment the preview paints it (the previous
         // version is superseded; its stored PDF stays for audit).
         this._pdfBlob = null;
+        this.pdfParts.set(null);
         this._pdfReady.set(false);
         this._report.set(r2);
         void this.router.navigate(['/reports/view', r2.id], { replaceUrl: true });
@@ -836,11 +837,55 @@ export class ReportViewerComponent implements OnInit {
   // ── Partner lab reports (outsourced tests) ─────────────
   private readonly outsourcing = inject(OutsourcingService);
   readonly partnerReports = signal<PartnerReport[]>([]);
-  private loadPartnerReports(orderId: string | undefined) {
-    if (!orderId) return;
-    this.outsourcing.partnerReports(orderId).then(
+  private loadPartnerReports(orderId: string | undefined): Promise<void> {
+    if (!orderId) return Promise.resolve();
+    return this.outsourcing.partnerReports(orderId).then(
       l => this.partnerReports.set(l ?? []),
       () => this.partnerReports.set([]));
+  }
+  /** What the delivered PDF REALLY contains per attached partner file (the
+   *  server's answer, read after the preview's PDF was fetched — so it
+   *  describes the same file). Null = not known yet. */
+  readonly pdfParts = signal<PdfParts | null>(null);
+  readonly partnerWhere = partnerWhere;
+  /** The Outsourced tab's permission for "Attach to report". */
+  readonly canAttachPartner = computed(() => this.has(['deliver_report', 'dispatch_sample']));
+  readonly attachingUrl = signal<string | null>(null);
+  private refreshPdfParts(reportId: string) {
+    if (!this._report()?.orderId) return;
+    this.outsourcing.pdfParts(reportId).then(
+      p => { if (this._report()?.id === reportId) this.pdfParts.set(p ?? null); },
+      () => { /* unknown — the row keeps the flag's wording */ });
+  }
+  /** "Attach to report" from the viewer (a file uploaded before the feature,
+   *  or unticked at upload): every line sharing that partner file is
+   *  attached, then the preview reloads — the served PDF is now ours + the
+   *  partner pages, and Print / Download / WhatsApp / the link follow. */
+  async attachPartner(p: PartnerReport) {
+    const r = this._report();
+    if (!r || this.attachingUrl()) return;
+    const ids = this.partnerReports().filter(x => x.url === p.url).map(x => x.orderTestId);
+    this.attachingUrl.set(p.url);
+    try {
+      const updated = await this.outsourcing.setAttachToReport(ids, true);
+      const problem = firstAttachProblem(updated);
+      if (problem) this.toasts.warning(problem);
+      else this.toasts.success('Attached — the patient gets one PDF with the partner report');
+      await this.loadPartnerReports(r.orderId);
+      this.reloadPdf();
+    } catch (e) {
+      this.toasts.error(ApiError.from(e).message);
+    } finally {
+      this.attachingUrl.set(null);
+    }
+  }
+  /** Drop the cached blob and paint the served PDF again. */
+  private reloadPdf() {
+    this._pdfBlob = null;
+    this.pdfParts.set(null);
+    this._pdfError.set(null);
+    this._pdfReady.set(false);
+    void this.renderPdfView();
   }
   /** Opens the partner's file in a new tab — the browser's own viewer
    *  downloads / prints it as is. */
@@ -887,6 +932,7 @@ export class ReportViewerComponent implements OnInit {
       if (!r) throw new Error('not found');
       const moved = r.id !== this._report()?.id;
       this._pdfBlob = null;
+      this.pdfParts.set(null);
       this._pdfReady.set(false);
       this._report.set(r);
       this.loadPartnerReports(r.orderId);
@@ -912,6 +958,7 @@ export class ReportViewerComponent implements OnInit {
     this._pdfReady.set(false);
     try {
       this._pdfBlob ??= await this.buildPdfBlob(r);
+      this.refreshPdfParts(r.id);
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.mjs';
       const doc = await pdfjs.getDocument({ data: await this._pdfBlob.arrayBuffer() }).promise;

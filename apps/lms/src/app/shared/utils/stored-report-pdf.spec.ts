@@ -63,7 +63,16 @@ describe('stored report PDF — fetch from storage only', () => {
     const blob = await ensureStoredReportPdf(api, 'rep-m', async () => pdf('ours-only'));
     expect(await text(blob)).toContain('ours+partner');
     expect(api.post).toHaveBeenCalledTimes(1);
-    // The read-back failing falls back to our own render (never an error).
+    // A read-back that fails ONCE is retried — our render lacks the partner pages.
+    const api3 = apiDouble();
+    let c3 = 0;
+    api3.getBlob.mockImplementation(() => {
+      const n = c3++;
+      return n === 0 ? throwError(() => http(404)) : n === 1 ? throwError(() => http(502)) : of(pdf('ours+partner'));
+    });
+    expect(await text(await ensureStoredReportPdf(api3, 'rep-r', async () => pdf('ours-only')))).toContain('ours+partner');
+    expect(api3.getBlob).toHaveBeenCalledTimes(3);
+    // The read-back failing for good falls back to our own render (never an error).
     const api2 = apiDouble();
     let c2 = 0;
     api2.getBlob.mockImplementation(() => (c2++ === 0 ? throwError(() => http(404)) : throwError(() => http(500))));

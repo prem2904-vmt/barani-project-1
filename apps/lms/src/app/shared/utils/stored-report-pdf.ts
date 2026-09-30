@@ -108,9 +108,12 @@ export function ensureStoredReportPdf(
       const outcome = await storeReportPdf(api, reportId, rendered, variant);
       if (outcome === 'stored') {
         // What the server serves now — our report, plus any attached partner
-        // pages. Our own render if that read fails.
-        const served = await fetchStoredReportPdf(api, reportId, variant).catch(() => null);
-        if (served) return served;
+        // pages. One retry: our own render has NO partner pages, so it is only
+        // the last resort (LAB-2609-000154).
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const served = await fetchStoredReportPdf(api, reportId, variant).catch(() => null);
+          if (served) return served;
+        }
       }
       if (outcome === 'exists') {
         // Another screen stored it first — that file is the report.
