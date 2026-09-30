@@ -174,3 +174,7 @@
   .cw--glance .cw__scrim { position: fixed; }
   .cw__dock.open { height: 70dvh; }
 }
+
+/* Integrator: the media picker the form renderer's mediaRequest opens (visually hidden). */
+.cw__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.cw__upl { margin: 8px 0 0; font-size: 13px; color: var(--text-secondary); }

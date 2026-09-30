@@ -12,7 +12,7 @@ interface Opt<T extends string> { value: T; label: string; hint: string; }
 
 export const DEFAULT_WORKFLOW_SETTINGS: OpdWorkflowSettings = {
   workflow: { vitals: 'desk', vitalsBy: 'nurse', labTestsAtDesk: true, billing: 'before_consult',
-    prefill: { purposeToComplaint: true, vitalsToHeader: true }, pharmacy: { enabled: true }, privateNotes: 'doctor' },
+    prefill: { purposeToComplaint: true, vitalsToHeader: true }, pharmacy: { enabled: true }, privateNotesVisibility: 'doctor' },
   queue: { organise: 'per_doctor', tokenPrefix: null, doctorUnavailable: 'manual', showOnScreen: true },
   pharmacy: { batchPick: 'earliest_expiry' },
 };
@@ -163,7 +163,7 @@ export const DEFAULT_WORKFLOW_SETTINGS: OpdWorkflowSettings = {
                 <span class="nd-card__label">Who reads private notes</span></header>
               <div class="nd-card__body wf-radio" role="radiogroup" aria-label="Who reads private notes">
                 @for (o of notesOpts; track o.value) {
-                  <button type="button" class="wf-opt" role="radio" [attr.aria-checked]="s().workflow.privateNotes === o.value" (click)="put({ workflow: { privateNotes: o.value } })">
+                  <button type="button" class="wf-opt" role="radio" [attr.aria-checked]="s().workflow.privateNotesVisibility === o.value" (click)="put({ workflow: { privateNotesVisibility: o.value } })">
                     <span class="wf-dot" aria-hidden="true"></span><span class="wf-opt__t">{{ o.label }}<small>{{ o.hint }}</small></span></button>
                 }
               </div>
@@ -230,7 +230,7 @@ export class OpdWorkflowPage {
     { value: 'before_consult', label: 'Pay at booking', hint: 'The front desk collects the consultation fee before the token is issued.' },
     { value: 'after_consult', label: 'Pay after consult', hint: 'One bill at exit: consultation, procedures, lab tests and medicines.' },
   ];
-  readonly notesOpts: Opt<OpdWorkflowSettings['workflow']['privateNotes']>[] = [
+  readonly notesOpts: Opt<OpdWorkflowSettings['workflow']['privateNotesVisibility']>[] = [
     { value: 'doctor', label: 'Doctor only', hint: 'Private notes stay with the doctor who wrote them.' },
     { value: 'department', label: '+ Doctors of the department', hint: 'Doctors in the same OPD department can read them.' },
     { value: 'all_doctors', label: '+ All doctors', hint: 'Every doctor in the clinic can read them.' },

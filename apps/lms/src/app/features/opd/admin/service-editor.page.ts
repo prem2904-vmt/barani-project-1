@@ -157,6 +157,10 @@ const TAX = [0, 5, 12, 18];
                                (input)="patch({ followUpWithinDays: intOrNull($any($event.target).value) })"><span>days are billed</span></span>
                         <span class="se-unit"><input class="nd-input nd-num" inputmode="decimal" aria-label="Follow-up fee" placeholder="0 = free" [value]="d().followUpFee ?? ''"
                                (input)="patch({ followUpFee: numOrNull($any($event.target).value) })"><span>₹{{ d().priceMode === 'per_doctor' ? ' (a doctor may set their own)' : '' }}</span></span>
+                        @if (d().followUpFee == null) {
+                          <span class="se-unit"><input class="nd-input nd-num" inputmode="decimal" aria-label="Follow-up discount percent" placeholder="or % off" [value]="d().followUpPercent ?? ''"
+                                 (input)="patch({ followUpPercent: numOrNull($any($event.target).value) })"><span>% off the visit price</span></span>
+                        }
                       }
                     </div>
                     <span class="se-dec"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3"/></svg>
@@ -329,11 +333,17 @@ export class OpdServiceEditorPage {
   } as Record<Tab, string>)[this.tab()]);
   readonly preview = computed(() => {
     const d = this.d();
-    const fu = (fee: number | null | undefined) => (d.followUpWithinDays ? `Follow-up within ${plural(d.followUpWithinDays, 'day')}: ${fee ? inr(fee) : 'free'}` : '');
+    // Mirrors Admin.OpdFeeRules.FollowUpFee: doctor fee → service fee → % off the price → free.
+    const fu = (fee: number | null | undefined, price: number | null | undefined) => {
+      if (!d.followUpWithinDays) return '';
+      const pct = fee == null && d.followUpPercent != null ? Math.min(100, Math.max(0, d.followUpPercent)) : null;
+      const amount = fee ?? (pct != null && price != null ? Math.round((price * (100 - pct)) / 100) : null);
+      return `Follow-up within ${plural(d.followUpWithinDays, 'day')}: ${amount ? inr(amount) + (pct != null ? ` (${pct}% off)` : '') : 'free'}`;
+    };
     if (d.priceMode === 'common')
-      return [{ who: 'Every doctor', meta: 'Common price', price: inr(d.commonPrice), fu: fu(d.followUpFee) }];
+      return [{ who: 'Every doctor', meta: 'Common price', price: inr(d.commonPrice), fu: fu(d.followUpFee, d.commonPrice) }];
     return this.docRows().filter((r) => r.offered && r.price != null)
-      .map((r) => ({ who: r.name, meta: r.meta, price: inr(r.price), fu: fu(r.followUpFee ?? d.followUpFee) }));
+      .map((r) => ({ who: r.name, meta: r.meta, price: inr(r.price), fu: fu(r.followUpFee ?? d.followUpFee, r.price) }));
   });
 
   constructor() {

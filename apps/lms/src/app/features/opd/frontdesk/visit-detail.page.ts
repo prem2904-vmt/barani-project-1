@@ -18,6 +18,15 @@ import type { DeskDoctor, OpdVisitDetail } from './desk.models';
 import { printTokenSlip } from './token-slip';
 import { statusWord } from './visit-status';
 
+type RefundChoice = 'cash' | 'upi' | 'card' | 'keep';
+/** Cancel with a paid bill: how the money goes back (or stays). */
+export const REFUND_CHOICES: { value: RefundChoice; label: string; hint?: string }[] = [
+  { value: 'cash', label: 'Refund in cash' },
+  { value: 'upi', label: 'Refund by UPI' },
+  { value: 'card', label: 'Refund to card' },
+  { value: 'keep', label: 'No refund', hint: 'The payment stays on the bill' },
+];
+
 /**
  * OPD → Visit (`/opd/visit/:id`) — AGENT B. One visit: the token (big, with
  * "Print token slip"), the status timeline, who / what / why, the latest
@@ -106,13 +115,27 @@ export class OpdVisitDetailPage {
 
   async cancel(): Promise<void> {
     const v = this.visit(); if (!v) return;
+    const refundable = v.bill ? Math.max(0, v.bill.totalPaid - (v.bill.refunded ?? 0)) : 0;
     const reason = await this.dialog.prompt({
       title: `Cancel ${v.patient.name}'s visit?`,
-      message: v.bill && v.bill.totalPaid > 0 ? 'The paid bill stays as it is — OPD refunds are not built yet.' : undefined,
       placeholder: 'Reason', required: true, tone: 'danger', confirmLabel: 'Cancel visit', cancelLabel: 'Keep',
     });
     if (!reason) return;
-    await this.run(() => firstValueFrom(this.desk.move(v.id, 'cancelled', reason)), 'Visit cancelled');
+    // Paid? Give the money back as a credit note (the bill itself never changes), or keep it.
+    let refund: RefundChoice | null = null;
+    if (refundable > 0) {
+      const pick = await this.dialog.choose({
+        title: `Refund ₹${refundable}?`,
+        message: 'A refund is recorded as a credit note against the bill.',
+        choices: REFUND_CHOICES,
+        confirmLabel: 'Cancel visit',
+      });
+      if (!pick) return;
+      refund = pick as RefundChoice;
+    }
+    await this.run(() => firstValueFrom(this.desk.move(v.id, 'cancelled', reason,
+      refund && refund !== 'keep' ? { refund: true, refundMode: refund } : undefined)),
+      refund && refund !== 'keep' ? `Visit cancelled · ₹${refundable} refunded` : 'Visit cancelled');
   }
 
   async noShow(): Promise<void> {

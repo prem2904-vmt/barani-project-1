@@ -4,10 +4,10 @@
  * pharmacy (D) read `OpdVisitDetail` and `OpdVitalsRow`; change both sides
  * together.
  */
-import type { OpdVisitStatus } from '../shared/opd.models';
+import type { OpdRefund, OpdVisitStatus } from '../shared/opd.models';
 
 export interface DeskWorkflow { vitals: 'desk' | 'station' | 'off'; labTestsAtDesk: boolean; billing: 'before_consult' | 'after_consult'; }
-export interface DeskQueueCfg { organise: 'per_doctor' | 'per_department'; tokenPrefix?: string | null; doctorUnavailable: 'manual' | 'auto_move' | 'reschedule'; }
+export interface DeskQueueCfg { organise: 'per_doctor' | 'per_room' | 'per_department'; tokenPrefix?: string | null; doctorUnavailable: 'manual' | 'auto_move' | 'reschedule'; }
 
 export interface DeskDoctor {
   id: string; name: string; department?: string | null; departmentIds: string[];
@@ -20,6 +20,11 @@ export interface ServiceQuote {
   serviceId: string | null; name: string; code?: string | null; category: 'consultation' | 'procedure';
   priceSource: 'common' | 'per_doctor' | 'doctor_fee'; price: number; taxSlab: number;
   isFollowUp: boolean; followUpFee?: number | null; followUpWithinDays?: number | null; quoted: number;
+  /** The ONE fee resolver's rule (Admin.OpdFeeRules): new | service_follow_up | tenant_tier | assisted_ceiling. */
+  rule?: 'new' | 'service_follow_up' | 'tenant_tier' | 'assisted_ceiling';
+  /** Assisted tenant tier: the most the desk may take off (%). */
+  maxDiscountPercent?: number | null;
+  followUpOfVisitId?: string | null;
 }
 export interface LastVisit { visitId: string; visitDate: string; doctorName: string; departmentName?: string | null; }
 export interface DeskQuote { doctorId: string; services: ServiceQuote[]; lastWithDoctor?: LastVisit | null; lastVisit?: LastVisit | null; }
@@ -48,6 +53,8 @@ export interface OpdBillView {
   id: string; kind: string; invoiceNumber?: string | null; lines: OpdBillLineRow[]; subTotal: number; discount: number;
   taxable: number; tax: number; roundOff: number; totalPayable: number; totalPaid: number; balance: number; status: string;
   payments: { amount: number; mode: string; reference?: string | null; createdAt: string }[];
+  /** Credit notes (opd_refunds) — money given back; the bill never changes. */
+  refunds?: OpdRefund[] | null; refunded?: number;
 }
 export interface LabOrderBrief { id: string; orderNumber?: string | null; status: string; tests: number; billId?: string | null; invoiceNumber?: string | null; payable: number; paid: number; balance: number; }
 export interface TimelineStep { key: string; label: string; at?: string | null; state: 'done' | 'current' | 'upcoming' | 'skipped'; }

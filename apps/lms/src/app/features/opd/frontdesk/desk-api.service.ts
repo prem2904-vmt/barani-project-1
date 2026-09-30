@@ -29,8 +29,8 @@ export class OpdDeskApi {
     return this.api.get(`${OPD_API.visits}${s ? `?${s}` : ''}`);
   }
   visit(id: string): Observable<OpdVisitDetail> { return this.api.get(`${OPD_API.visits}/${id}`); }
-  move(id: string, to: string, reason?: string | null): Observable<OpdVisitDetail> {
-    return this.api.post(`${OPD_API.visits}/${id}/status`, { to, reason: reason ?? null });
+  move(id: string, to: string, reason?: string | null, refund?: { refund: boolean; refundMode: string; refundReference?: string | null }): Observable<OpdVisitDetail> {
+    return this.api.post(`${OPD_API.visits}/${id}/status`, { to, reason: reason ?? null, ...(refund ?? {}) });
   }
 
   vitalsQueue(): Observable<OpdVisitRow[]> { return this.api.get(`${OPD_API.vitals}/queue`); }

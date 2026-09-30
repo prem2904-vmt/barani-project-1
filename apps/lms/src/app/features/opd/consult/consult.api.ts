@@ -3,10 +3,14 @@ import { Observable } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { OPD_API } from '../shared/opd-api';
 import type {
-  DrugForm, DrugSchedule, OpdDiagnosis, OpdFormField, OpdFormSchema, OpdNoteVisibility, OpdPatientAllergy,
+  DrugForm, DrugSchedule, OpdDiagnosis, OpdFormDoc, OpdNoteVisibility, OpdPatientAllergy,
   OpdRxLineDto, OpdVisitStatus, OpdVitals,
 } from '../shared/opd.models';
 import type { RxSchedule } from '../shared/rx-schedule';
+import { HttpClient } from '@angular/common/http';
+import { map } from 'rxjs';
+import { environment } from '../../../../environments/environment';
+import type { OpdMediaRef } from '../admin/forms/renderer';
 
 /**
  * Agent C — the consult API (prefrontal-mw Controllers/Opd/OpdConsultController).
@@ -26,7 +30,10 @@ export interface ConsultVitals extends OpdVitals { recordedByName?: string | nul
 
 export interface ConsultFormRef {
   formId: string; formName: string; versionId: string; version: number;
-  schema: OpdFormSchema; addonFields: OpdFormField[];
+  /** Schema v2 (Agent A's OpdFormDoc; a v1 schema is normalised by the renderer). */
+  schema: OpdFormDoc | unknown;
+  /** The doctor's add-only questions → the renderer's `addons`. */
+  addonFields: unknown[];
 }
 
 export interface ConsultRecordDto {
@@ -85,6 +92,16 @@ export interface ConsultDraftBody {
 export interface ConsultDrug {
   id: string; catalogKey: string; name: string; generic?: string | null; strength?: string | null;
   form: DrugForm; unit?: string | null; schedule: DrugSchedule | string; aliases?: string | null; isMaster: boolean;
+  /** Integrator (pharmacy_drugs): topical site kind + the usual Rx for favourites. */
+  siteKind?: string | null; usual?: Record<string, unknown> | null;
+}
+
+/** A stored consult file (POST /api/opd/consult/{visitId}/media). */
+export interface ConsultStoredFile { id: string; name: string; kind: 'image' | 'video' | 'file'; contentType: string; size: number; url?: string | null; }
+
+/** The renderer's media answer entry for a stored file. */
+export function mediaRefOf(f: ConsultStoredFile): OpdMediaRef {
+  return { id: f.id, name: f.name, kind: f.kind, url: f.url ?? undefined };
 }
 
 export interface ConsultDxSuggestion { code?: string | null; label: string; source: 'mine' | 'common'; }
@@ -102,6 +119,7 @@ export interface LabTestRow { id: string; name: string; testCode?: string | null
 @Injectable({ providedIn: 'root' })
 export class ConsultApi {
   private readonly api = inject(ApiService);
+  private readonly http = inject(HttpClient);
 
   myQueue(date?: string, doctorId?: string): Observable<ConsultQueueRow[]> {
     const q = new URLSearchParams();
@@ -120,6 +138,21 @@ export class ConsultApi {
   diagnoses(q: string): Observable<ConsultDxSuggestion[]> { return this.api.get<ConsultDxSuggestion[]>(`${CONSULT_API}/diagnoses?q=${encodeURIComponent(q)}`); }
   usual(dx: string): Observable<ConsultUsual | null> { return this.api.get<ConsultUsual | null>(`${CONSULT_API}/usual?dx=${encodeURIComponent(dx)}`); }
   drugs(q = ''): Observable<ConsultDrug[]> { return this.api.get<ConsultDrug[]>(`${CONSULT_API}/drugs${q ? '?q=' + encodeURIComponent(q) : ''}`); }
+  /** Upload one file for a media question (any format). File uploads post
+   *  FormData through HttpClient (the app's convention — ApiService is JSON). */
+  uploadMedia(visitId: string, file: File): Observable<ConsultStoredFile> {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    return this.http.post<{ success: boolean; data?: ConsultStoredFile; message?: string; error?: string }>(
+      `${environment.apiUrl}${CONSULT_API}/${visitId}/media`, fd).pipe(map(r => {
+        if (!r?.success || !r.data) throw new Error(r?.message || r?.error || 'Upload failed');
+        return r.data;
+      }));
+  }
+  /** A fresh signed URL for a stored consult file. */
+  mediaUrl(visitId: string, key: string): Observable<string> {
+    return this.api.get<string>(`${CONSULT_API}/${visitId}/media?key=${encodeURIComponent(key)}`);
+  }
   history(patientId: string): Observable<ConsultPastConsult[]> { return this.api.get<ConsultPastConsult[]>(`${CONSULT_API}/patients/${patientId}/history`); }
   /** The lab catalogue the order screen uses (reuse, no second test search). */
   labTests(): Observable<LabTestRow[]> { return this.api.get<LabTestRow[]>('/api/tests/?activeOnly=true&view=summary'); }

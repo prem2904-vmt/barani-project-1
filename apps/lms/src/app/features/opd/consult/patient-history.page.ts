@@ -5,7 +5,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { lineShort, sayRx } from '../shared/rx-schedule';
 import type { OpdRxLineDto } from '../shared/opd.models';
 import { ConsultApi, ConsultPastConsult } from './consult.api';
-import { OpdFormSlotComponent } from './form-slot/opd-form-slot.component';
+import { OpdFormRendererComponent } from '../admin/forms/renderer';
 import { fromDto } from './rx/rx-model';
 
 /**
@@ -17,7 +17,7 @@ import { fromDto } from './rx/rx-model';
 @Component({
   selector: 'pf-opd-patient-history',
   standalone: true,
-  imports: [DatePipe, HeroBandComponent, OpdFormSlotComponent],
+  imports: [DatePipe, HeroBandComponent, OpdFormRendererComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page ph">
@@ -42,7 +42,7 @@ import { fromDto } from './rx/rx-model';
               @if (c.diagnoses.length) { <p class="ph__dx"><b>Diagnosis:</b> {{ dx(c) }}</p> }
               @if (c.chiefComplaint) { <p class="ph__t"><b>Complaint:</b> {{ c.chiefComplaint }}</p> }
               @if (c.form) {
-                <pf-opd-form-slot [schema]="c.form.schema" [addonFields]="c.form.addonFields" [answers]="c.answers ?? {}" mode="view"></pf-opd-form-slot>
+                <pf-opd-form-renderer [schema]="c.form.schema" [addons]="c.form.addonFields" [answers]="c.answers ?? {}" mode="readonly" [layout]="'phone'"></pf-opd-form-renderer>
                 <p class="ph__muted">Form: {{ c.form.formName }} v{{ c.form.version }}</p>
               }
               @if (c.rx.length) {

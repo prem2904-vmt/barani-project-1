@@ -9,7 +9,9 @@ import { bmiOf, vitalFlag } from './vitals-strip.component';
 import { nextToCall, tabOf } from './my-patients.page';
 import type { ConsultQueueRow } from './consult.api';
 import { ConsultDrugRef, ConsultRxLine } from './rx/rx-model';
-import { mergeAddons } from './form-slot/opd-form-slot.component';
+import { addMedia } from './consult-workspace.page';
+import { mediaRefOf } from './consult.api';
+import { allQuestions, normalizeSchema } from '../admin/forms/renderer';
 import { recentResultsOf } from './glance-panel.component';
 import { rxPrintRows } from './rx-print';
 
@@ -151,11 +153,19 @@ describe('My patients queue', () => {
   });
 });
 
-describe('Form seam + glance + print helpers', () => {
-  it('mergeAddons appends the doctor\'s add-only fields as their own section', () => {
-    const m = mergeAddons({ sections: [{ key: 's', title: 'ENT', fields: [{ key: 'a', label: 'A', type: 'text' }] }] }, [{ key: 'x', label: 'X', type: 'number' }]);
-    expect(m.sections.map(s => s.key)).toEqual(['s', '__doctor_addons']);
-    expect(mergeAddons(null, []).sections).toEqual([]);
+describe('Form renderer + media + glance + print helpers', () => {
+  it('the consult renders through A\'s renderer: a v1 form still normalises to questions', () => {
+    const doc = normalizeSchema({ sections: [{ key: 's', title: 'ENT', fields: [{ key: 'a', label: 'A', type: 'text' }] }] });
+    expect(allQuestions(doc).map(q => q.key)).toEqual(['a']);
+  });
+  it('addMedia appends a stored file to the answer, per side for a left & right question', () => {
+    const ref = mediaRefOf({ id: 'tenants/t/opd/consult/v/f.jpg', name: 'ear.jpg', kind: 'image', contentType: 'image/jpeg', size: 10, url: 'https://x' });
+    const a1 = addMedia({}, { key: 'otoscopy' }, ref);
+    expect(a1['otoscopy']).toEqual([{ id: 'tenants/t/opd/consult/v/f.jpg', name: 'ear.jpg', kind: 'image', url: 'https://x' }]);
+    const a2 = addMedia(a1, { key: 'otoscopy' }, { ...ref, name: 'ear2.jpg' });
+    expect((a2['otoscopy'] as unknown[]).length).toBe(2);
+    const s1 = addMedia({ tm: { l: [ref] } }, { key: 'tm', side: 'r' }, ref);
+    expect(s1['tm']).toEqual({ l: [ref], r: [ref] });
   });
   it('recent results = latest point per parameter, newest first', () => {
     const r = recentResultsOf({ tests: [

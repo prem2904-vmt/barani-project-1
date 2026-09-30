@@ -13,7 +13,7 @@ import { PatientTimelineComponent } from '../../frontdesk/patient-profile/patien
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import type { OpdDiagnosis, OpdNoteVisibility, OpdPatientAllergy } from '../shared/opd.models';
 import {
-  ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow,
+  ConsultApi, ConsultDrug, ConsultDxSuggestion, ConsultInvestigationItem, ConsultUsual, ConsultWorkspace, LabTestRow, mediaRefOf,
 } from './consult.api';
 import {
   ConsultEditState, ConsultStep, STEP_TITLES, applyUsual, daysBetween, draftBody, stepDone, stepSummary, undoUsual, usualsFrom,
@@ -21,7 +21,7 @@ import {
 import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
 import { ConsultGlanceComponent, RecentResult, recentResultsOf } from './glance-panel.component';
 import { ConsultCompleteSheetComponent, addDaysIso } from './complete-sheet.component';
-import { OpdFormSlotComponent } from './form-slot/opd-form-slot.component';
+import { OpdFormRendererComponent, type OpdAnswers, type OpdMediaRef, type OpdMediaRequest } from '../admin/forms/renderer';
 import { RxEditorComponent } from './rx/rx-editor.component';
 import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies } from './rx/rx-model';
 import { newRxLine } from '../shared/rx-schedule';
@@ -50,7 +50,7 @@ const EMPTY: ConsultEditState = {
   selector: 'pf-opd-consult-workspace',
   standalone: true,
   imports: [
-    DatePipe, ConsultVitalsComponent, ConsultGlanceComponent, ConsultCompleteSheetComponent, OpdFormSlotComponent,
+    DatePipe, ConsultVitalsComponent, ConsultGlanceComponent, ConsultCompleteSheetComponent, OpdFormRendererComponent,
     RxEditorComponent, PatientTimelineComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -149,9 +149,12 @@ const EMPTY: ConsultEditState = {
                                (input)="patch({ chiefComplaint: $any($event.target).value })" placeholder="What brings the patient in" />
                       </label>
                       @if (w.form) {
-                        <!-- FORM-RENDERER SEAM: swap for Agent A's <pf-opd-form-renderer> (form-slot/opd-form-slot.component.ts). -->
-                        <pf-opd-form-slot [schema]="w.form.schema" [addonFields]="w.form.addonFields" [answers]="st().answers"
-                                          [mode]="editable() ? 'edit' : 'view'" (answersChange)="patch({ answers: $event })"></pf-opd-form-slot>
+                        <!-- Agent A's ONE form renderer (schema v2); media questions upload through the consult. -->
+                        <pf-opd-form-renderer [schema]="w.form.schema" [addons]="w.form.addonFields" [answers]="st().answers"
+                                              [mode]="editable() ? 'edit' : 'readonly'" [layout]="phone() ? 'phone' : 'screen'"
+                                              (answersChange)="patch({ answers: $event })" (mediaRequest)="captureMedia($event)"></pf-opd-form-renderer>
+                        <input #mediaIn class="cw__file" type="file" tabindex="-1" aria-hidden="true" (change)="onMediaPicked(mediaIn)" />
+                        @if (uploading()) { <p class="cw__upl" role="status">Uploading {{ uploading() }}…</p> }
                       }
                     </div>
                     <div class="cw__sec">
@@ -400,6 +403,15 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
 
   private readonly save$ = new Subject<void>();
 
+  /** Phone layout for the form renderer (one column) — the renderer's own ≤760px rule. */
+  readonly phone = signal(typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches);
+  private readonly phoneMq = typeof matchMedia === 'function' ? matchMedia('(max-width: 760px)') : null;
+  private readonly onPhoneMq = (e: MediaQueryListEvent) => this.phone.set(e.matches);
+  private readonly mediaIn = viewChild<{ nativeElement: HTMLInputElement }>('mediaIn');
+  private pendingMedia: OpdMediaRequest | null = null;
+  /** The file name being uploaded (null = idle). */
+  readonly uploading = signal<string | null>(null);
+
   readonly editable = computed(() => {
     const w = this.ws();
     return !!w && w.visit.canEdit && w.visit.status === 'in_consult' && w.consult?.status !== 'completed';
@@ -447,6 +459,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.phoneMq?.addEventListener?.('change', this.onPhoneMq);
     this.doc.documentElement.classList.add('pf-opd-immersive');
     const id = this.route.snapshot.paramMap.get('visitId');
     if (!id) { this.loading.set(false); return; }
@@ -464,6 +477,7 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.phoneMq?.removeEventListener?.('change', this.onPhoneMq);
     this.doc.documentElement.classList.remove('pf-opd-immersive');
     if (this.saveState() === 'dirty') this.saveNow();
   }
@@ -504,6 +518,38 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   private priceOf(testId: string): number | null { return this.testCatalog().find(t => t.id === testId)?.price ?? null; }
 
   // ── State ──────────────────────────────────────────────────────────
+  /** The renderer asked for a file for a media question: open the picker
+   *  (camera on phones via the OS sheet; any format). */
+  captureMedia(req: OpdMediaRequest) {
+    if (!this.editable()) return;
+    this.pendingMedia = req;
+    const el = this.mediaIn()?.nativeElement;
+    if (!el) return;
+    el.value = '';
+    el.click();
+  }
+
+  /** Upload the picked file, then add its reference to the answer (or its side). */
+  onMediaPicked(el: HTMLInputElement) {
+    const file = el.files?.[0];
+    const req = this.pendingMedia;
+    const visitId = this.ws()?.visit.id;
+    this.pendingMedia = null;
+    if (!file || !req || !visitId) return;
+    this.uploading.set(file.name);
+    this.consultApi.uploadMedia(visitId, file).subscribe({
+      next: stored => {
+        this.uploading.set(null);
+        this.patch({ answers: addMedia(this.st().answers, req, mediaRefOf(stored)) });
+        this.toast.success(`${stored.name} added`);
+      },
+      error: e => {
+        this.uploading.set(null);
+        this.toast.error(e?.error?.message || e?.message || 'Could not upload the file');
+      },
+    });
+  }
+
   patch(p: Partial<ConsultEditState>) {
     if (!this.editable() && !('followUpDays' in p)) return;
     this.st.update(s => ({ ...s, ...p }));
@@ -696,4 +742,15 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   }
 
   back() { this.navBack.backTo('/opd/consult'); }
+}
+
+/** Adds a stored file to a media answer (a left / right question keeps `{ r, l }`). Pure. */
+export function addMedia(answers: OpdAnswers, req: OpdMediaRequest, ref: OpdMediaRef): OpdAnswers {
+  const cur = answers ?? {};
+  const list = (v: unknown): OpdMediaRef[] => (Array.isArray(v) ? (v as OpdMediaRef[]) : []);
+  if (req.side) {
+    const sided = (cur[req.key] ?? {}) as Record<string, unknown>;
+    return { ...cur, [req.key]: { ...sided, [req.side]: [...list(sided[req.side]), ref] } };
+  }
+  return { ...cur, [req.key]: [...list(cur[req.key]), ref] };
 }

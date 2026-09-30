@@ -62,11 +62,22 @@ describe('Visit detail (/opd/visit/:id)', () => {
     expect(primaries(el).length).toBe(1);
     expect(primaries(el)[0].textContent).toContain('Next patient');
   });
-  it('cancel asks for a reason through DialogService, then posts the status', async () => {
-    const { c, api, dialog } = render({}, { prompt: async () => 'Left' });
+  it('cancel asks for a reason through DialogService, then posts the status (paid bill kept)', async () => {
+    const { c, api, dialog } = render({}, { prompt: async () => 'Left', choose: async () => 'keep' });
     await c.cancel(); await flush();
     expect(dialog.prompt).toHaveBeenCalled();
     expect(api.post).toHaveBeenCalledWith('/api/opd/visits/v1/status', { to: 'cancelled', reason: 'Left' });
+  });
+  it('cancel of a paid visit offers a refund and posts it as a credit note (integrator)', async () => {
+    const { c, api, dialog } = render({}, { prompt: async () => 'Left', choose: async () => 'upi' });
+    await c.cancel(); await flush();
+    expect(dialog.choose.mock.calls[0][0].title).toContain('Refund ₹200');
+    expect(api.post).toHaveBeenCalledWith('/api/opd/visits/v1/status', { to: 'cancelled', reason: 'Left', refund: true, refundMode: 'upi' });
+  });
+  it('dismissing the refund choice keeps the visit (nothing posted)', async () => {
+    const { c, api } = render({}, { prompt: async () => 'Left', choose: async () => null });
+    await c.cancel(); await flush();
+    expect(api.post).not.toHaveBeenCalledWith('/api/opd/visits/v1/status', expect.anything());
   });
   it('change doctor offers the other doctors and posts the reassignment', async () => {
     const { c, api, dialog } = render({}, { choose: async () => 'd2' });

@@ -126,6 +126,7 @@
               @if (b.roundOff !== 0) { <div><span>Round-off</span><span>{{ b.roundOff | inr }}</span></div> }
               <div class="pf-vd-sums__total"><span>OPD bill</span><span>{{ b.totalPayable | inr }}</span></div>
               @for (p of b.payments; track $index) { <div><span>Paid · {{ modeWord(p.mode) }}</span><span>{{ p.amount | inr }}</span></div> }
+              @for (r of b.refunds ?? []; track r.id) { <div><span>Refunded · {{ modeWord(r.mode) }} · {{ r.creditNoteNumber }}</span><span>−{{ r.amount | inr }}</span></div> }
               <div><span>Balance</span><span>{{ b.balance | inr }}</span></div>
             </div>
           }

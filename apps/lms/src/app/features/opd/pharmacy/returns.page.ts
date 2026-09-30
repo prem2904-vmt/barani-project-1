@@ -78,7 +78,17 @@ export function returnable(l: Pick<DispenseLineView, 'qty' | 'returnedQty'>): nu
                   <div class="nd-field"><label class="nd-field__lbl" for="ph-rpq">Quantity back</label><input id="ph-rpq" class="nd-input nd-num" type="number" min="1" [max]="maxBack()" [value]="qty() || ''" (input)="qty.set(+$any($event.target).value)" /></div>
                   <div class="nd-field"><label class="nd-field__lbl" for="ph-rpr">Reason</label><input id="ph-rpr" class="nd-input" [value]="reason()" (input)="reason.set($any($event.target).value)" placeholder="e.g. Dose changed" /></div>
                 </div>
-                @if (refund() != null) { <div class="ph-note" role="status"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Back in stock. Refund due {{ inr(refund()!) }} — pay it from the counter.</span></div> }
+                <div class="nd-field"><span class="nd-field__lbl">Refund by</span>
+                  <div class="nd-seg" role="radiogroup" aria-label="Refund by">
+                    @for (m of refundModes; track m.v) {
+                      <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="refundMode() === m.v" [attr.aria-pressed]="refundMode() === m.v" (click)="refundMode.set(m.v)">{{ m.l }}</button>
+                    }
+                  </div>
+                </div>
+                @if (refund() != null) {
+                  <div class="ph-note" role="status"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    <span>Back in stock.@if (creditNote()) { Refunded {{ inr(refunded()) }} · credit note {{ creditNote() }}.} @else { Nothing was paid on this bill, so nothing is refunded.}</span></div>
+                }
               }
             } @else {
               @if (sDrug(); as d) {
@@ -122,6 +132,11 @@ export class PharmacyReturnsPage {
   protected readonly qty = signal(0);
   protected readonly reason = signal('');
   protected readonly refund = signal<number | null>(null);
+  /** Integrator: the money back is a credit note (opd_refunds). */
+  protected readonly refunded = signal(0);
+  protected readonly creditNote = signal<string | null>(null);
+  protected readonly refundMode = signal<'cash' | 'upi' | 'card'>('cash');
+  protected readonly refundModes: { v: 'cash' | 'upi' | 'card'; l: string }[] = [{ v: 'cash', l: 'Cash' }, { v: 'upi', l: 'UPI' }, { v: 'card', l: 'Card' }];
   protected readonly sDrug = signal<PharmacyDrugRow | null>(null);
   protected readonly batches = signal<BatchRow[]>([]);
   protected readonly batchId = signal('');
@@ -169,8 +184,12 @@ export class PharmacyReturnsPage {
     if (!this.ready()) return;
     this.busy.set(true);
     if (this.kind() === 'patient') {
-      this.api.patientReturn(this.lineId(), this.qty(), this.reason() || null).subscribe({
-        next: r => { this.busy.set(false); this.refund.set(r.refundDue); this.toast.success('Return recorded'); this.load(); if (this.sale()) this.openSaleById(this.sale()!.id); },
+      this.api.patientReturn(this.lineId(), this.qty(), this.reason() || null, this.refundMode()).subscribe({
+        next: r => {
+          this.busy.set(false); this.refund.set(r.refundDue); this.refunded.set(r.refunded ?? 0); this.creditNote.set(r.creditNoteNumber ?? null);
+          this.toast.success(r.creditNoteNumber ? `Return recorded · ${inr(r.refunded ?? 0)} refunded` : 'Return recorded');
+          this.load(); if (this.sale()) this.openSaleById(this.sale()!.id);
+        },
         error: e => { this.busy.set(false); this.toast.error(errText(e)); },
       });
     } else {

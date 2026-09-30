@@ -1,8 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { HttpClient } from '@angular/common/http';
+import { map } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import { OPD_API } from '../shared/opd-api';
-import type { DrugForm, DrugSchedule, PharmacyConfig } from '../shared/opd.models';
+import type { DrugForm, DrugSchedule, OpdRefund, PharmacyConfig } from '../shared/opd.models';
 import type { RxSchedule } from '../shared/rx-schedule';
 
 /**
@@ -20,6 +23,8 @@ export interface PharmacyDrugRow {
   name: string; generic?: string | null; strength?: string | null; form: DrugForm; unit?: string | null;
   packSize?: number | null; manufacturer?: string | null; schedule: DrugSchedule; hsnCode?: string | null;
   taxSlab: number; defaultMrp?: number | null; aliases: string[]; isActive: boolean; onHand?: number | null;
+  /** Integrator (pharmacy_drugs): topical site kind + the usual Rx for doctor favourites. */
+  siteKind?: string | null; usual?: Record<string, unknown> | null;
 }
 
 /** One grid row's edit (null/undefined fields are left as they are). */
@@ -27,6 +32,8 @@ export interface DrugEdit {
   id?: string | null; name?: string; generic?: string; strength?: string; form?: DrugForm; unit?: string;
   packSize?: number; manufacturer?: string; schedule?: DrugSchedule; hsnCode?: string; taxSlab?: number;
   defaultMrp?: number; isActive?: boolean; aliases?: string[]; revert?: boolean;
+  /** "" clears. */
+  siteKind?: string; usual?: Record<string, unknown> | null;
 }
 
 export interface StockRow {
@@ -102,6 +109,10 @@ export interface DispenseView {
   visitId?: string | null; patientId?: string | null; customerName?: string | null; customerPhone?: string | null;
   prescriberName?: string | null; prescriberRegNo?: string | null; notes?: string | null; createdAt: string; dispensedAt?: string | null;
   editable: boolean; lines: DispenseLineView[]; bill?: BillView | null;
+  /** Integrator: a walk-in's uploaded paper prescription (file name; URL via prescriptionUrl). */
+  prescriptionFileName?: string | null;
+  /** Integrator: credit notes on this sale's bill (patient returns). */
+  refunds?: OpdRefund[] | null;
 }
 
 export interface DispenseSummary {
@@ -144,6 +155,7 @@ const qs = (o: Record<string, string | number | boolean | null | undefined>) => 
 @Injectable({ providedIn: 'root' })
 export class PharmacyApi {
   private readonly api = inject(ApiService);
+  private readonly http = inject(HttpClient);
 
   // Drugs
   searchDrugs(q: string, take = 20): Observable<PharmacyDrugRow[]> { return this.api.get(`${P}/drugs/search${qs({ q, take })}`); }
@@ -172,8 +184,11 @@ export class PharmacyApi {
   counterCancel(id: string): Observable<DispenseView> { return this.api.post(`${P}/counter/${id}/cancel`, {}); }
 
   // Returns
-  patientReturn(dispenseLineId: string, qty: number, reason?: string | null): Observable<{ dispenseLineId: string; returnedQty: number; refundDue: number }> {
-    return this.api.post(`${P}/returns/patient`, { dispenseLineId, qty, reason });
+  /** A patient return; the money back is a credit note (refunded / creditNoteNumber), capped to what was paid. */
+  patientReturn(dispenseLineId: string, qty: number, reason?: string | null, refundMode?: string | null): Observable<{
+    dispenseLineId: string; returnedQty: number; refundDue: number; refunded?: number; creditNoteNumber?: string | null;
+  }> {
+    return this.api.post(`${P}/returns/patient`, { dispenseLineId, qty, reason, refundMode: refundMode ?? null });
   }
   supplierReturn(batchId: string, qty: number, supplierId?: string | null, reason?: string | null): Observable<BatchRow> {
     return this.api.post(`${P}/stock/return-to-supplier`, { batchId, qty, supplierId, reason });
@@ -203,6 +218,19 @@ export class PharmacyApi {
   receivePo(id: string, lines: GrnLine[]): Observable<PoView> { return this.api.post(`${P}/purchase-orders/${id}/receive`, { lines }); }
 
   // H1
-  h1(from?: string | null, to?: string | null): Observable<H1Row[]> { return this.api.get(`${P}/h1-register${qs({ from, to })}`); }
-  h1Csv(from?: string | null, to?: string | null): Observable<Blob> { return this.api.getBlob(`${P}/h1-register/export${qs({ from, to })}`); }
+  /** `schedule` 'H1' | 'X' = that register alone (the row's schedule is snapshotted at sale). */
+  h1(from?: string | null, to?: string | null, schedule?: string | null): Observable<H1Row[]> { return this.api.get(`${P}/h1-register${qs({ from, to, schedule })}`); }
+  h1Csv(from?: string | null, to?: string | null, schedule?: string | null): Observable<Blob> { return this.api.getBlob(`${P}/h1-register/export${qs({ from, to, schedule })}`); }
+
+  // Walk-in: the uploaded paper prescription (FormData through HttpClient — the app's upload convention).
+  uploadPrescription(id: string, file: File): Observable<DispenseView> {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    return this.http.post<{ success: boolean; data?: DispenseView; message?: string; error?: string }>(
+      `${environment.apiUrl}${P}/counter/${id}/prescription`, fd).pipe(map(r => {
+        if (!r?.success || !r.data) throw new Error(r?.message || r?.error || 'Upload failed');
+        return r.data;
+      }));
+  }
+  prescriptionUrl(id: string): Observable<string> { return this.api.get(`${P}/counter/${id}/prescription`); }
 }

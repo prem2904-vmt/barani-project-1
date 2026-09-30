@@ -158,3 +158,9 @@
   .ph-add__box input, .ph-search__input { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .ph-row { transition: none; } }
+
+/* Integrator: walk-in prescription upload row. */
+.ph-rxfile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ph-rxfile__btn { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+.ph-rxfile__btn.is-busy { opacity: .7; cursor: progress; }
+.ph-rxfile__in { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

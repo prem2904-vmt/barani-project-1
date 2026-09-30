@@ -38,7 +38,7 @@ function render(opts: { saveFails?: boolean; confirm?: boolean; server?: Partial
 describe('OPD workflow settings', () => {
   it('defaults: vitals at the desk, pay at booking, pharmacy on, private notes doctor only, earliest expiry', () => {
     const d = DEFAULT_WORKFLOW_SETTINGS;
-    expect(d.workflow).toMatchObject({ vitals: 'desk', billing: 'before_consult', privateNotes: 'doctor', pharmacy: { enabled: true } });
+    expect(d.workflow).toMatchObject({ vitals: 'desk', billing: 'before_consult', privateNotesVisibility: 'doctor', pharmacy: { enabled: true } });
     expect(d.pharmacy.batchPick).toBe('earliest_expiry');
     expect(d.queue).toMatchObject({ organise: 'per_doctor', doctorUnavailable: 'manual' });
   });

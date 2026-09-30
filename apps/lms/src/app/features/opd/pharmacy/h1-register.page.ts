@@ -47,7 +47,12 @@ ModuleRegistry.registerModules([AllCommunityModule]);
         <section class="nd-card" aria-labelledby="ph-h1-t">
           <header class="nd-card__head">
             <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M8 7h8M8 11h6"/></svg></span>
-            <span class="nd-card__label" id="ph-h1-t">H1 register</span>
+            <span class="nd-card__label" id="ph-h1-t">{{ reg() === 'X' ? 'Schedule X register' : reg() === 'H1' ? 'H1 register' : 'H1 & X register' }}</span>
+            <div class="nd-seg" role="radiogroup" aria-label="Which register">
+              @for (o of regs; track o.v) {
+                <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="reg() === o.v" [attr.aria-pressed]="reg() === o.v" (click)="setReg(o.v)">{{ o.l }}</button>
+              }
+            </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <pf-nd-date label="From" [value]="from()" [max]="to()" (valueChange)="setFrom($event)"></pf-nd-date>
               <span class="ph-sub">to</span>
@@ -74,6 +79,10 @@ export class PharmacyH1RegisterPage {
   protected readonly from = signal<string | null>(labDaysAgo(30));
   protected readonly to = signal<string | null>(this.today);
   protected readonly q = signal('');
+  /** Which register: both, H1 only or Schedule X only (the row's schedule is snapshotted at sale). */
+  protected readonly reg = signal<'' | 'H1' | 'X'>('');
+  protected readonly regs: { v: '' | 'H1' | 'X'; l: string }[] = [{ v: '', l: 'All' }, { v: 'H1', l: 'H1' }, { v: 'X', l: 'Schedule X' }];
+  protected setReg(v: '' | 'H1' | 'X') { this.reg.set(v); this.load(); }
   private readonly all = signal<H1Row[]>([]);
   private readonly loading = signal(true);
   protected readonly showSkeleton = heldFlag(this.loading);
@@ -100,7 +109,7 @@ export class PharmacyH1RegisterPage {
   constructor() { this.load(); }
   private load() {
     this.loading.set(true);
-    this.api.h1(this.from(), this.to()).subscribe({
+    this.api.h1(this.from(), this.to(), this.reg() || null).subscribe({
       next: r => { this.all.set(r); this.loading.set(false); },
       error: e => { this.loading.set(false); this.toast.error(errText(e)); },
     });
@@ -109,7 +118,7 @@ export class PharmacyH1RegisterPage {
   protected setTo(v: string | null) { this.to.set(v); this.load(); }
   protected export() {
     this.exporting.set(true);
-    this.api.h1Csv(this.from(), this.to()).subscribe({
+    this.api.h1Csv(this.from(), this.to(), this.reg() || null).subscribe({
       next: blob => {
         this.exporting.set(false);
         const url = URL.createObjectURL(blob);

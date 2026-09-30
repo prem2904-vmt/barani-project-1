@@ -19,6 +19,8 @@ export interface OpdDoctorPriceRow { doctorUserId: string; price: number; follow
 export interface OpdServiceRow {
   id: string; departmentId: string; name: string; code: string; category: OpdServiceCategory; priceMode: OpdPriceMode;
   commonPrice: number; taxSlab: number; hsnSacCode?: string | null; followUpWithinDays?: number | null; followUpFee?: number | null;
+  /** Integrator: % off the new-visit price when the window is set and no follow-up fee is. */
+  followUpPercent?: number | null;
   formId?: string | null; durationMinutes?: number | null; sortOrder: number; isActive: boolean; doctorPrices: OpdDoctorPriceRow[];
 }
 export type OpdServiceInput = Omit<OpdServiceRow, 'id' | 'doctorPrices'> & { id?: string | null };
@@ -61,7 +63,7 @@ export interface OpdWorkflowSettings {
   workflow: {
     vitals: 'desk' | 'station' | 'off'; vitalsBy: 'nurse' | 'front_desk'; labTestsAtDesk: boolean;
     billing: 'before_consult' | 'after_consult'; prefill: { purposeToComplaint: boolean; vitalsToHeader: boolean };
-    pharmacy: { enabled: boolean }; privateNotes: 'doctor' | 'department' | 'all_doctors';
+    pharmacy: { enabled: boolean }; privateNotesVisibility: 'doctor' | 'department' | 'all_doctors';
   };
   queue: { organise: 'per_doctor' | 'per_room' | 'per_department'; tokenPrefix?: string | null; doctorUnavailable: 'manual' | 'auto_move' | 'reschedule'; showOnScreen: boolean };
   pharmacy: { batchPick: 'earliest_expiry' | 'pharmacist' };

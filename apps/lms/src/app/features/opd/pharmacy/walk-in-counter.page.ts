@@ -110,6 +110,18 @@ export function counterGate(items: Pick<CounterItem, 'drug'>[], prescriber: stri
                     <input id="ph-rg" class="nd-input nd-num" [value]="regNo()" (input)="regNo.set($any($event.target).value)" placeholder="e.g. TNMC 12345" [disabled]="locked()" />
                   </div>
                   <p class="nd-field__hint ph-span">Check the original prescription before selling a Schedule H / H1 / X drug. It is recorded on the bill{{ h1() ? ' and in the H1 register' : '' }}.</p>
+                  <div class="ph-span ph-rxfile">
+                    @if (editingId()) {
+                      <label class="nd-btn nd-btn--quiet ph-rxfile__btn" [class.is-busy]="uploadingRx()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        {{ uploadingRx() ? 'Uploading…' : rxFile() ? 'Replace prescription photo' : 'Attach prescription photo' }}
+                        <input type="file" class="ph-rxfile__in" accept="image/*,application/pdf" [disabled]="uploadingRx()" (change)="attachRx($any($event.target))" />
+                      </label>
+                      @if (rxFile()) { <button type="button" class="nd-btn nd-btn--quiet" (click)="viewRx()">View {{ rxFile() }}</button> }
+                    } @else {
+                      <span class="nd-field__hint">Save the bill to attach a photo of the prescription.</span>
+                    }
+                  </div>
                 </div>
               }
 
@@ -253,6 +265,9 @@ export class PharmacyWalkInCounterPage {
   protected readonly editingId = signal<string | null>(null);
   protected readonly editable = signal(true);
   protected readonly paid = signal<DispenseView | null>(null);
+  /** The walk-in's uploaded paper prescription (file name) — integrator. */
+  protected readonly rxFile = signal<string | null>(null);
+  protected readonly uploadingRx = signal(false);
   protected readonly openBills = signal<DispenseSummary[]>([]);
   private readonly today = labToday();
   protected readonly modes: { v: PayMode; l: string }[] = [{ v: 'cash', l: 'Cash' }, { v: 'upi', l: 'UPI' }, { v: 'card', l: 'Card' }];
@@ -380,6 +395,7 @@ export class PharmacyWalkInCounterPage {
         this.phone.set(v.customerPhone ?? '');
         this.prescriber.set(v.prescriberName ?? '');
         this.regNo.set(v.prescriberRegNo ?? '');
+        this.rxFile.set(v.prescriptionFileName ?? null);
         this.patient.set(v.patientId ? { id: v.patientId, name: v.customerName ?? 'Patient', meta: '' } : null);
         this.discount.set(v.bill?.discount ?? 0);
         const merged = new Map<string, CounterItem>();
@@ -419,6 +435,29 @@ export class PharmacyWalkInCounterPage {
   protected reset(): void {
     this.items.set([]); this.name.set(''); this.phone.set(''); this.prescriber.set(''); this.regNo.set('');
     this.patient.set(null); this.discount.set(0); this.editingId.set(null); this.editable.set(true); this.paid.set(null);
+    this.rxFile.set(null);
+  }
+
+  /** Upload a photo / PDF of the walk-in's paper prescription to this sale. */
+  protected attachRx(el: HTMLInputElement): void {
+    const id = this.editingId();
+    const file = el.files?.[0];
+    el.value = '';
+    if (!id || !file) return;
+    this.uploadingRx.set(true);
+    this.api.uploadPrescription(id, file).subscribe({
+      next: v => { this.uploadingRx.set(false); this.rxFile.set(v.prescriptionFileName ?? file.name); this.toast.success('Prescription attached'); },
+      error: e => { this.uploadingRx.set(false); this.toast.error(e?.message || errText(e)); },
+    });
+  }
+
+  protected viewRx(): void {
+    const id = this.editingId();
+    if (!id) return;
+    this.api.prescriptionUrl(id).subscribe({
+      next: url => window.open(url, '_blank', 'noopener'),
+      error: e => this.toast.error(errText(e)),
+    });
   }
 
   // ── Receipt ───────────────────────────────────────────────────────────────

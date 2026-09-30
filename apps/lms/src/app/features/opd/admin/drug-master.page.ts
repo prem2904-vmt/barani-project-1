@@ -1,20 +1,24 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { OpdStubPageComponent } from '../shared/opd-stub-page.component';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Router } from '@angular/router';
+
+/** Where the ONE drug master lives (Agent D): the pharmacy settings' Drug master tab. */
+export const DRUG_MASTER_URL = { path: ['/admin/opd/pharmacy'], queryParams: { tab: 'drugs' } } as const;
 
 /**
- * OPD FOUNDATION STUB — owned by Agent A (OPD Master). Routed and gated already
- * (features/opd/opd.routes.ts); replace this component's body, keep the
- * class name + file path (the route imports them).
+ * `/admin/opd/drugs` (OPD Master hub → "Drug master & stock"). Integrator: the
+ * drug master is Agent D's copy-on-write grid (`<pf-pharmacy-drug-master>` in
+ * `/admin/opd/pharmacy?tab=drugs`, whose band carries the one Save) — this
+ * gated route keeps its path and forwards there, so there is never a second
+ * drug-master screen.
  */
 @Component({
   selector: 'pf-opd-drug-master',
   standalone: true,
-  imports: [OpdStubPageComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<pf-opd-stub-page [title]="title" [subtitle]="subtitle" [plan]="plan"></pf-opd-stub-page>`,
+  template: ``,
 })
 export class OpdDrugMasterPage {
-  readonly title = "Drug master";
-  readonly subtitle = "The drug catalogue from the Prefrontal master.";
-  readonly plan: string[] = ["Referenced copy-on-write (never cloned)", "Local additions and overrides", "Schedule H, H1 and X flags"];
+  constructor() {
+    void inject(Router).navigate([...DRUG_MASTER_URL.path], { queryParams: { ...DRUG_MASTER_URL.queryParams }, replaceUrl: true });
+  }
 }

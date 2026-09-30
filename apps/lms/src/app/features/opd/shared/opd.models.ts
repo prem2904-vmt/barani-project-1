@@ -5,6 +5,14 @@
  * integrator (and change the C# side in the same PR).
  */
 import type { RxSchedule } from './rx-schedule';
+import type { OpdFormDoc } from '../admin/forms/form-schema';
+
+// Form schema v2 (Agent A) is THE consult-form contract — it superseded the
+// foundation's v1 OpdFormSchema / OpdFormField (integrator). Types + pure
+// helpers live in admin/forms/form-schema.ts; the renderer reads v1 too.
+export type {
+  OpdFormDoc, OpdFormDocSection, OpdQuestion, OpdQType, OpdAnswers, OpdMediaRef,
+} from '../admin/forms/form-schema';
 
 // ── Vocabularies (mirror Models/Opd/OpdConstants.cs) ─────────────────────
 export type OpdVisitStatus = 'booked' | 'vitals' | 'waiting' | 'in_consult' | 'completed' | 'cancelled' | 'no_show';
@@ -36,21 +44,16 @@ export interface OpdService {
   category: OpdServiceCategory; priceMode: OpdPriceMode; commonPrice: number;
   taxSlab: number; hsnSacCode?: string | null;
   followUpWithinDays?: number | null; followUpFee?: number | null;
+  /** Integrator: % off the new-visit price as the follow-up fee (window set, no fee). */
+  followUpPercent?: number | null;
   formId?: string | null; durationMinutes?: number | null; sortOrder: number; isActive: boolean;
 }
 export interface OpdServiceDoctorPrice { id: string; serviceId: string; doctorUserId: string; price: number; followUpFee?: number | null; isActive: boolean; }
 
-/** A form version's schema (opd_form_versions.SchemaJson). Built-in consult
- *  sections (vitals, diagnosis, Rx, investigations, follow-up) are NEVER fields. */
-export interface OpdFormSchema { sections: OpdFormSection[]; }
-export interface OpdFormSection { key: string; title: string; fields: OpdFormField[]; }
-export type OpdFieldType = 'text' | 'textarea' | 'number' | 'select' | 'multiselect' | 'boolean' | 'date' | 'scale';
-export interface OpdFormField {
-  key: string; label: string; type: OpdFieldType;
-  required?: boolean; unit?: string; options?: string[]; min?: number; max?: number; hint?: string;
-}
 export interface OpdFormDefinition { id: string; name: string; code: string; description?: string | null; currentVersionId?: string | null; isActive: boolean; }
-export interface OpdFormVersion { id: string; formId: string; version: number; status: 'draft' | 'published'; schema: OpdFormSchema; publishedAt?: string | null; }
+/** A form version (opd_form_versions.SchemaJson = schema v2). Built-in consult
+ *  sections (vitals, diagnosis, Rx, investigations, follow-up) are NEVER questions. */
+export interface OpdFormVersion { id: string; formId: string; version: number; status: 'draft' | 'published'; schema: OpdFormDoc; publishedAt?: string | null; }
 
 /** opd_settings.WorkflowJson — which steps run and where (owner: configurable
  *  like the lab Process Builder; every step opt-in/out per lab). */
@@ -63,16 +66,30 @@ export interface OpdWorkflowConfig {
   billing: 'before_consult' | 'after_consult';
   /** What the consult pre-fills from the desk (purpose → chief complaint, …). */
   prefill: { purposeToComplaint: boolean; vitalsToHeader: boolean };
+  /** Who reads a doctor's private notes by default (the consult can narrow it per record). */
+  privateNotesVisibility: OpdNoteVisibility;
+  /** Who takes vitals (Agent A). */
+  vitalsBy?: 'nurse' | 'front_desk';
+  /** Prescriptions go to the in-house pharmacy (Agent A). */
+  pharmacy?: { enabled: boolean };
+  /** Internal run marker of the starter set (Agent A) — never edited. */
+  starterSeededAt?: string | null;
 }
 export const DEFAULT_OPD_WORKFLOW: OpdWorkflowConfig = {
   vitals: 'desk', labTestsAtDesk: true, billing: 'before_consult',
   prefill: { purposeToComplaint: true, vitalsToHeader: true },
+  privateNotesVisibility: 'doctor', vitalsBy: 'nurse', pharmacy: { enabled: true },
 };
 
 /** opd_settings.QueueJson — token / queue organisation. */
 export interface OpdQueueConfig {
-  organise: 'per_doctor' | 'per_department';
+  /** per_room counts like per_doctor (each doctor sits in a room). */
+  organise: 'per_doctor' | 'per_room' | 'per_department';
   tokenPrefix?: string;
+  /** Show the token board on the waiting-room screen (Agent A). */
+  showOnScreen?: boolean;
+  /** Per doctor: room, own token prefix (wins over tokenPrefix), availability days (Agent A). */
+  doctors?: Record<string, { room?: string | null; tokenPrefix?: string | null; days?: string[] }>;
   /** Doctor unavailable: move patients manually, auto-move to another doctor of
    *  the department, or reschedule. */
   doctorUnavailable: 'manual' | 'auto_move' | 'reschedule';
@@ -101,6 +118,12 @@ export interface OpdVitals {
   grbs?: number | null; painScore?: number | null; extra?: Record<string, unknown>; recordedAt?: string;
 }
 export interface OpdBillLine { sourceType: 'service' | 'drug' | 'misc'; sourceId?: string | null; description: string; qty: number; unitPrice: number; discount: number; taxSlab: number; total?: number; }
+/** A credit note (opd_refunds) — money given back; the bill itself never changes. */
+export type OpdRefundKind = 'visit_cancel' | 'pharmacy_return';
+export interface OpdRefund {
+  id: string; billId: string; kind: OpdRefundKind; sourceId?: string | null; creditNoteNumber: string;
+  amount: number; mode: string; reference?: string | null; reason?: string | null; createdAt: string;
+}
 export interface OpdBill { id: string; kind: OpdBillKind; invoiceNumber?: string | null; lines: OpdBillLine[]; discount: number; totalPayable: number; totalPaid: number; balance: number; status: OpdBillStatus; }
 
 // ── Consult (Agent C) ────────────────────────────────────────────────────
@@ -127,5 +150,9 @@ export interface PharmacyDrug {
   id: string; catalogKey: string; name: string; generic?: string | null; strength?: string | null; form: DrugForm;
   unit?: string | null; packSize?: number | null; manufacturer?: string | null; schedule: DrugSchedule;
   hsnCode?: string | null; taxSlab: number; defaultMrp?: number | null; isMaster: boolean; isActive: boolean;
+  /** Topical / local site kind (eye, ear, nose, skin …) — integrator. */
+  siteKind?: string | null;
+  /** The usual prescription (doctor favourites): { dose, schedule, durationDays, food } — integrator. */
+  usual?: Record<string, unknown> | null;
 }
 export interface PharmacyBatch { id: string; drugId: string; batchNo: string; expiryDate: string; mrp: number; purchasePrice: number; qtyOnHand: number; }
