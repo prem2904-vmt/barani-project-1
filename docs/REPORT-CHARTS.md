@@ -117,9 +117,11 @@ So what the author previews is what prints. Style:
 
 ## 6. Report placement
 
-- A **profile's** chart prints in the profile's narrative block after the
-  results table (the table itself is one continuous autotable). A **test's**
-  chart prints among its blocks in print order.
+- A chart prints after the results table, under the test's / profile's name
+  (the table itself is one continuous autotable). Adding a chart never moves
+  a test's values out of that table, so each value keeps its saved H / L
+  there — the table and the chart print the SAME saved flag (the chart never
+  judges a value itself; `report-chart.agree.spec.ts`).
 - `report-pdf.ts` hook: `case 'chart'` → `renderReportChart()` when the section
   has `trend`. It measures the chart first; if it does not fit above the page
   floor it moves to a new page **whole** (never split), and a block whose FIRST

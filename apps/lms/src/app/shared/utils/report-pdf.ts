@@ -749,8 +749,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
     // numeric test out of the columnar table.
     // Sentences alone don't either: next to a results table they print as
     // full-width rows INSIDE it (owner 2026-09-28, like the Method line).
+    // A report chart doesn't either: the test's values stay in the table
+    // (with their saved H / L flags) and the chart prints after it (below).
     const narrative = !t.packageTestId
-      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid' && s.type !== 'image')
+      && !!layout && layout.sections.some(s => s.isVisible && s.type !== 'grid' && s.type !== 'image' && !isReportChart(s))
       && !sentencesFitTable(layout);
     if ((t.result as { microFormat?: string } | null)?.microFormat === 'culture_sensitivity') {
       special.push(t);
@@ -950,6 +952,19 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
                    name: (member.profileTestId === pkg ? member.profileName : member.packageName)
                          || pl.testName || '' };
     if (inTable) specialLayout.set(entry, { ...pl, sections: pl.sections.filter(s => s.type !== 'paragraph') });
+    special.push(entry);
+  }
+
+  // A standalone tabular test's report CHARTS print after the table, under
+  // its name — its values stay in the table with their saved flags, so the
+  // table and the chart show the same verdicts (docs/REPORT-CHARTS.md).
+  for (const t of tabular) {
+    if (t.packageTestId || !t.testId) continue;
+    const lay = resolvedLayouts[t.testId];
+    const charts = lay?.sections.filter(s => s.isVisible && isReportChart(s)) ?? [];
+    if (!lay || charts.length === 0) continue;
+    const entry = { ...t, images: null };            // a copy: not re-listed / re-imaged
+    specialLayout.set(entry, { ...lay, sections: charts });
     special.push(entry);
   }
 
@@ -4050,6 +4065,11 @@ function drawImagesBlock(
     rowH = Math.max(rowH, h);
   }
   return y + rowH + 8;
+}
+
+/** A Test Master report-chart block (not the legacy single-value gauge). */
+function isReportChart(s: ResolvedSection): boolean {
+  return s.type === 'chart' && !!s.trend;
 }
 
 /** The report theme values a chart block needs (report-chart.pdf.ts). */
