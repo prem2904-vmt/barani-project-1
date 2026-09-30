@@ -1,0 +1,80 @@
+/* OPD Master screens (Agent A) — the Test Master two-card layout (filter side
+   card LEFT + main grid card), the kit sheet on narrow widths, and the small
+   bits every OPD admin screen shares. Kit classes (.nd-card, .nd-input, …)
+   come from shared/styles/_nd-kit.scss; this only arranges them. */
+
+.oa-panels {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: stretch;
+  transition: grid-template-columns var(--nd-dur, 320ms) var(--nd-spring, ease);
+}
+.oa-panels--collapsed { grid-template-columns: 52px minmax(0, 1fr); }
+.oa-panels--narrow { grid-template-columns: minmax(0, 1fr); }
+.oa-panels--right { grid-template-columns: minmax(0, 1fr) 400px; }
+.oa-panels--right.oa-panels--narrow { grid-template-columns: minmax(0, 1fr); }
+:host-context(.design-classic) .oa-panels { min-height: 560px; }
+
+.oa-main { min-width: 0; min-height: 0; }
+.oa-main__head { flex-wrap: wrap; }
+.oa-main__body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.oa-main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
+.oa-grid { display: block; flex: 1 1 auto; width: 100%; min-height: 320px; height: 100%; }
+.oa-grid-skel { position: absolute; inset: 0; z-index: 6; overflow: hidden; background: var(--nd-card-bg, var(--bg-primary)); }
+.oa-count { flex: none; margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
+.oa-hint { color: var(--text-tertiary); }
+
+.oa-side { min-width: 0; min-height: 0; }
+.oa-side__collapse { width: 32px !important; height: 32px; min-height: 32px; }
+.oa-strip { min-height: 220px; }
+.oa-strip__btn { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 10px 0 14px;
+  border: 0; background: transparent; cursor: pointer; color: var(--text-secondary); font: inherit; }
+.oa-strip__label { writing-mode: vertical-rl; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.oa-strip__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+
+/* Side card as a sheet (≤900px), above the navbar. */
+.oa-sheet-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .38); }
+.oa-side--sheet { position: fixed; left: 0; right: 0; bottom: calc(var(--nd-nav-h, 64px) + env(safe-area-inset-bottom, 0px)); z-index: 61;
+  max-height: min(78dvh, 640px); border-radius: 18px 18px 0 0; animation: oa-sheet-in var(--nd-dur-sheet, 280ms) var(--nd-spring, ease) both; }
+@keyframes oa-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Whole-row list targets (departments, library …) — neutral selected state. */
+.oa-list { list-style: none; margin: 0; padding: 8px; gap: 2px; }
+.oa-li { display: flex; align-items: center; gap: 4px; }
+.oa-li--off .oa-li__name { color: var(--text-tertiary); }
+.oa-li__btn { flex: 1 1 auto; min-width: 0; min-height: 52px; display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.oa-li__btn:hover { background: var(--nd-chip-bg); }
+.oa-li__btn[aria-pressed='true'] { background: var(--nd-sel-bg); border-color: var(--nd-sel-border); }
+.oa-li__btn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+.oa-li__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.oa-li__name { font-size: 13.5px; font-weight: 600; }
+.oa-li__meta { font-size: 12px; color: var(--text-tertiary); line-height: 1.4; }
+.oa-li__n { font-size: 12.5px; color: var(--text-tertiary); }
+.oa-li__off { font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--nd-line); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
+.oa-li__gap { width: 36px; flex: none; }
+
+.oa-sec { margin: 6px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+.oa-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
+.oa-note svg { flex: none; margin-top: 2px; color: var(--violet-text, #6d28d9); }
+.oa-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.oa-btn { min-height: 40px; }
+.oa-field { display: flex; flex-direction: column; gap: 6px; }
+.oa-field__lbl { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.oa-field__hint { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
+.oa-empty { padding: 28px 16px; text-align: center; font-size: 13px; color: var(--text-tertiary); }
+.oa-chip-ov { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  color: var(--violet-text, #6d28d9); background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); }
+
+@media (max-width: 640px) {
+  .nd-input { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .oa-panels, .oa-side--sheet { transition: none; animation: none; }
+}
+.oa-main ::ng-deep .pf-row-off { opacity: .55; }
+
+/* Grid cells wrap, never crop (ND §5) — Test Master's cell rules. */
+.oa-main ::ng-deep .ag-row .ag-cell { display: flex; align-items: center; line-height: 1.4; }
+.oa-main ::ng-deep .ag-row .ag-cell.ag-cell-wrap-text { padding-top: 6px; padding-bottom: 6px; }
+.oa-main ::ng-deep .ag-row .ag-cell.ag-right-aligned-cell { justify-content: flex-end; }
+.oa-main ::ng-deep .ag-row .ag-cell > .ag-cell-wrapper { flex: 1 1 auto; min-width: 0; }
