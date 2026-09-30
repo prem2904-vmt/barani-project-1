@@ -41,6 +41,7 @@ If a rule blocks you, ask the owner. Don't work around it.
   - Counters / numbers (MRN, sample ID, invoice) use atomic `INSERT … ON CONFLICT … RETURNING`, never `MAX+1`.
   - Check-then-insert needs a unique index. Money / stock changes run in one transaction under a row lock.
   - A money helper called from inside a caller's transaction JOINS it (`CurrentTransaction != null`), never nests one; the caller's totals and the helper's rows commit together, and the bells go out after the commit.
+  - Never fire side effects inside a batch transaction (auto-report / anything that opens its own transaction, bells, device pushes): the batch runs through `AfterCommit.InTransactionAsync` and side effects go through `AfterCommit.RunOrDeferAsync` — they run after the commit, never on a rollback or a retried attempt, keyed so one batch fires them once (a nested report transaction threw, was swallowed, and a submitted tube got no final report).
   - `ExecuteUpdate` / `ExecuteDelete` bypass the audit interceptor: an audited entity written set-based writes its own rows (`Auditing.AuditTrail`) in the same transaction.
   - Money, clinical results / reports, outboxes (WhatsApp, chat, notifications), idempotency keys, attempt limits and the audit log live only in Postgres — never in Redis, a static dictionary or any cache.
   - Background services take a Postgres advisory leader lock per tick (`LeaderGate`) AND are idempotent on their own (once-ever unique keys, stamp-then-send, conditional updates); a tick never runs unguarded.
