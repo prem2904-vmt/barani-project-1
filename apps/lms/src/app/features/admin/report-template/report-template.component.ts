@@ -20,6 +20,8 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
+import { readReportTheme, REPORT_THEME_OPTIONS, ReportThemeId, writeReportTheme } from '../../../shared/utils/report-theme';
+import { SOURCE_SANS_DIR, SOURCE_SANS_FACES } from '../../../shared/utils/report-fonts';
 import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-strip-qr';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -280,6 +282,35 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
             @case ('table') {
               <div class="pf-rt-flat">
                 <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Report theme</h4>
+                  <p class="pf-rtb-s">The typeface and size scale of the whole report — letterhead, patient strip, results, sign-off and footer. Colours stay yours.</p>
+                  <div class="pf-rtheme" role="radiogroup" aria-label="Report theme">
+                    @for (o of reportThemeOptions; track o.value) {
+                      <button type="button" class="pf-rtheme__card press" role="radio"
+                              [attr.aria-checked]="reportTheme() === o.value" (click)="setReportTheme(o.value)">
+                        <span class="pf-rtheme__spec" aria-hidden="true"
+                              [style.fontFamily]="o.value === 'source-sans' ? sourceSansCss : fontCss(tpl().fontFamily ?? 'helvetica')">
+                          <span class="pf-rtheme__lab" [style.fontWeight]="700">LAB NAME</span>
+                          <span class="pf-rtheme__dept" [style.fontWeight]="700">HAEMATOLOGY</span>
+                          <span class="pf-rtheme__row">
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 700">Haemoglobin</span>
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 400">13.8</span>
+                            <span class="pf-rtheme__dim">13.0 – 17.0</span>
+                          </span>
+                          <span class="pf-rtheme__row">
+                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 700">MCV</span>
+                            <span [style.fontWeight]="700">101.7 H</span>
+                            <span class="pf-rtheme__dim">83 – 101</span>
+                          </span>
+                        </span>
+                        <span class="pf-rtheme__name">{{ o.label }}</span>
+                        <span class="pf-rtheme__desc">{{ o.desc }}</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Table colours</h4>
                   <p class="pf-rtb-s">Header row, body text and hairlines of the results table.</p>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -300,8 +331,11 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Typography &amp; table</h4>
                   <p class="pf-rtb-s">Font, table lines and department behaviour.</p>
+                @if (reportTheme() !== 'classic') {
+                  <p class="pf-rtb-s pf-rtheme__note">Font family and size are set by the {{ reportThemeLabel() }} theme — switch to Classic to choose them.</p>
+                }
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
+                  <div [class.pf-rtheme__off]="reportTheme() !== 'classic'" [attr.inert]="reportTheme() !== 'classic' ? '' : null">
                     <label class="pf-label">Font family</label>
                     <div class="pf-wys-fonts">
                       @for (o of fontOptions; track o.value) {
@@ -315,7 +349,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
                       }
                     </div>
                   </div>
-                  <div>
+                  <div [class.pf-rtheme__off]="reportTheme() !== 'classic'" [attr.inert]="reportTheme() !== 'classic' ? '' : null">
                     <label class="pf-label">Font size</label>
                     <pf-segmented
                       [options]="sizeOptions"
@@ -540,6 +574,25 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'footer';
     .pf-wys-font[aria-pressed='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
     .pf-wys-font__sample { font-size: 15px; }
     .pf-wys-font__name { font-size: 10.5px; color: var(--text-tertiary, #94a3b8); font-family: system-ui, sans-serif; }
+
+    /* Report theme cards — a paper specimen set in the theme's own face. */
+    .pf-rtheme { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 520px) { .pf-rtheme { grid-template-columns: 1fr; } }
+    .pf-rtheme__card { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: left;
+      min-height: 44px; padding: 10px; border-radius: 12px; cursor: pointer; font: inherit; background: transparent;
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.25)); color: var(--text-primary, #e2e8f0); }
+    .pf-rtheme__card[aria-checked='true'] { border-color: var(--nd-sel-border); background: var(--nd-sel-bg); }
+    .pf-rtheme__card:focus-visible { outline: 2px solid var(--nd-sel-border); outline-offset: 2px; }
+    .pf-rtheme__spec { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 8px;
+      background: #fff; color: #1B3A6B; border: 1px solid rgba(0,0,0,0.08); }
+    .pf-rtheme__lab { font-size: 17px; line-height: 1.1; }
+    .pf-rtheme__dept { font-size: 11.5px; border-bottom: 1.5px solid #1B3A6B; padding-bottom: 2px; margin-bottom: 2px; }
+    .pf-rtheme__row { display: grid; grid-template-columns: 1.3fr 0.9fr 1fr; gap: 6px; font-size: 10.5px; color: #1a1a1a; }
+    .pf-rtheme__dim { color: #666; font-weight: 400; }
+    .pf-rtheme__name { font-size: 13px; font-weight: 600; }
+    .pf-rtheme__desc { font-size: 12px; line-height: 1.4; color: var(--text-secondary, #94a3b8); }
+    .pf-rtheme__note { margin: 0 0 8px; }
+    .pf-rtheme__off { opacity: 0.4; pointer-events: none; }
 
     .pf-wys-mini { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 7px;
       background: #fff; border-radius: 6px; border: 1px solid rgba(0,0,0,0.1); }
@@ -816,7 +869,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'letterhead', label: 'Letterhead',    desc: 'Name, tagline, logo, brand colours, NABL — everything at the top of the page' },
     { value: 'patient',    label: 'Patient strip', desc: 'Which patient fields print, arranged how, with the date format' },
     { value: 'columns',    label: 'Table columns', desc: 'Per-department table columns & widths' },
-    { value: 'table',      label: 'Results table', desc: 'Font, table colours, zebra rows, abnormal marking, departments' },
+    { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments' },
     { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
   ];
   /** The same sections as the band pill's tabs (new design). The
@@ -835,6 +888,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 
   setTab(t: Tab) {
     this._tab.set(t);
+    if (t === 'table') this.loadSourceSansFace();
     // Re-pull the form-flow fields when entering the Patient tab so the list
     // reflects the latest saved Patient Registration flow (not a stale copy).
     if (t === 'patient') this.loadCustomPatientFields();
@@ -1033,6 +1087,30 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       message: 'Your report design changes are not saved yet. Save first to keep them.',
       confirmLabel: 'Leave without saving', cancelLabel: 'Stay', tone: 'danger',
     });
+  }
+
+  // ── Report theme (report-theme.ts) — stored in the template metadata ──
+  readonly reportThemeOptions = REPORT_THEME_OPTIONS;
+  readonly reportTheme = computed<ReportThemeId>(() => readReportTheme(this.tpl()));
+  readonly reportThemeLabel = computed(() => REPORT_THEME_OPTIONS.find(o => o.value === this.reportTheme())?.label ?? '');
+  setReportTheme(id: ReportThemeId) {
+    if (this.reportTheme() === id) return;
+    this.patch({ metadata: writeReportTheme(this.tpl(), id) });
+  }
+  /** The theme card's specimen font: the report's own Source Sans 3 files,
+   *  registered once as a web font when the card is shown. */
+  readonly sourceSansCss = "'PF Source Sans 3', 'Source Sans 3', system-ui, sans-serif";
+  private sourceSansFaceLoaded = false;
+  private loadSourceSansFace() {
+    if (this.sourceSansFaceLoaded || typeof FontFace === 'undefined' || typeof document === 'undefined') return;
+    this.sourceSansFaceLoaded = true;
+    const faces: Array<[keyof typeof SOURCE_SANS_FACES, string, string]> =
+      [['normal', '400', 'normal'], ['semibold', '600', 'normal'], ['bold', '700', 'normal']];
+    for (const [f, weight, style] of faces) {
+      const url = new URL(SOURCE_SANS_DIR + SOURCE_SANS_FACES[f].file, document.baseURI).toString();
+      const face = new FontFace('PF Source Sans 3', `url(${url})`, { weight, style });
+      face.load().then(ff => document.fonts.add(ff)).catch(() => { /* card falls back to system sans */ });
+    }
   }
 
   /** Browser stand-ins for the PDF font families, so the picker cards render
@@ -1277,6 +1355,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
     }
+    if (this._tab() === 'table') this.loadSourceSansFace();
     this.destroyRef.onDestroy(() => this.tplHold.cancel());
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => {

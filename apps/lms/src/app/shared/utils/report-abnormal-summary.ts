@@ -1,5 +1,6 @@
 import type { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import type { TypeEl } from './report-theme';
 
 /**
  * CONSOLIDATED SHEET — "Summary of abnormal results" (owner, 2026-09-27).
@@ -145,8 +146,10 @@ export function summaryCount(depts: AbnormalSummaryDept[]): number {
 
 /** Page theme + geometry + table hooks, handed over by report-pdf. */
 export interface SummaryRenderContext {
-  font: 'helvetica' | 'times' | 'courier';
-  fontScale: number;
+  /** Set the font + size of a report-theme element (report-theme.ts); returns the size. */
+  typeset: (doc: jsPDF, el: TypeEl) => number;
+  /** autotable cell styles (font, style, size) of a report-theme element. */
+  cellType: (el: TypeEl) => { font: string; fontStyle: string; fontSize: number };
   primary: string;
   black: string;
   text: string;
@@ -186,19 +189,16 @@ export function renderAbnormalSummary(doc: jsPDF, depts: AbnormalSummaryDept[], 
   let y = startY;
 
   // Heading band — the department-band look of the report body.
-  doc.setFont(ctx.font, 'bold');
-  doc.setFontSize(11);
+  ctx.typeset(doc, 'summaryTitle');
   doc.setTextColor(ctx.primary);
   doc.text(SUMMARY_TITLE, x0, y + 12);
-  doc.setFont(ctx.font, 'normal');
-  doc.setFontSize(8.5);
+  ctx.typeset(doc, 'summaryText');
   doc.setTextColor(ctx.dim);
   doc.text(`${count} ${count === 1 ? 'result' : 'results'} outside the reference range`, x1, y + 12, { align: 'right' });
   doc.setDrawColor(ctx.primary);
   doc.setLineWidth(1);
   doc.line(x0, y + 17, x1, y + 17);
-  doc.setFont(ctx.font, 'italic');
-  doc.setFontSize(8);
+  ctx.typeset(doc, 'summaryIntro');
   doc.setTextColor(ctx.dim);
   doc.text(SUMMARY_INTRO, x0, y + 29);
   y += 36;
@@ -213,14 +213,14 @@ export function renderAbnormalSummary(doc: jsPDF, depts: AbnormalSummaryDept[], 
     // Every department with a value gets its band — the reader scans by department.
     if (d.department) {
       body.push([{ content: d.department.toUpperCase(), colSpan: 3,
-        styles: { fontStyle: 'bold', fontSize: 9.5 * ctx.fontScale, textColor: ctx.primary, fillColor: '#ffffff',
+        styles: { ...ctx.cellType('summaryDept'), textColor: ctx.primary, fillColor: '#ffffff',
                   cellPadding: { top: 8, right: 6, bottom: 3, left: 6 } } }]);
       meta.push(null);
     }
     for (const t of d.tests) {
       if (!t.compact) {
         body.push([{ content: t.testName.toUpperCase(), colSpan: 3,
-          styles: { fillColor: '#eef2f7', textColor: ctx.primary, fontStyle: 'bold', fontSize: 9 * ctx.fontScale } }]);
+          styles: { fillColor: '#eef2f7', textColor: ctx.primary, ...ctx.cellType('summaryPanel') } }]);
         meta.push(null);
       }
       for (const r of t.rows) {
@@ -232,9 +232,9 @@ export function renderAbnormalSummary(doc: jsPDF, depts: AbnormalSummaryDept[], 
         const glyph = r.flag && ctx.flagIndicator === 'letter' ? r.flag : '';
         if (glyph) value = `${value}  ${glyph}`;
         body.push([
-          { content: t.compact ? (r.name || t.testName) : r.name, styles: { fontStyle: 'bold', textColor: ctx.black } },
-          { content: value, styles: { fontStyle: marked ? 'bold' : 'normal', textColor: colour } },
-          { content: r.range, styles: { textColor: ctx.dim } },
+          { content: t.compact ? (r.name || t.testName) : r.name, styles: { ...ctx.cellType('testName'), textColor: ctx.black } },
+          { content: value, styles: { ...ctx.cellType(marked ? 'resultAbnormal' : 'result'), textColor: colour } },
+          { content: r.range, styles: { ...ctx.cellType('range'), textColor: ctx.dim } },
         ]);
         meta.push(useArrow && r.flag ? { arrow: r.isLow ? 'down' : 'up', color: colour, text: value, bold: marked } : null);
       }
@@ -259,8 +259,7 @@ export function renderAbnormalSummary(doc: jsPDF, depts: AbnormalSummaryDept[], 
     didDrawPage: (p: { pageNumber: number }) => {
       // A long sheet: say so on the continuation page's top line.
       if (p.pageNumber > 1) {
-        doc.setFont(ctx.font, 'bold');
-        doc.setFontSize(9);
+        ctx.typeset(doc, 'deptContinued');
         doc.setTextColor(ctx.primary);
         doc.text(`${SUMMARY_TITLE} — CONTINUED`, x0, ctx.continueTop - 14);
         doc.setDrawColor(ctx.hair);
@@ -276,9 +275,8 @@ export function renderAbnormalSummary(doc: jsPDF, depts: AbnormalSummaryDept[], 
       if (!m) return;
       // The report's arrow: a small filled triangle right after the value
       // (standard PDF fonts have no ↑ / ↓ glyphs).
-      const fs = 9 * ctx.fontScale, s = 3.2;
-      doc.setFont(ctx.font, m.bold ? 'bold' : 'normal');
-      doc.setFontSize(fs);
+      const s = 3.2;
+      const fs = ctx.typeset(doc, m.bold ? 'resultAbnormal' : 'result');
       const cx = Math.min(d.cell.x + 6 + doc.getTextWidth(m.text) + 8, d.cell.x + d.cell.width - 9);
       const cy = d.cell.y + 4 + fs * 0.42;
       doc.setFillColor(m.color);
