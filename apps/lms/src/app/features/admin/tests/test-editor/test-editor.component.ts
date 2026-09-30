@@ -220,8 +220,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     `/admin/tests?type=${this._draft().type || this.route.snapshot.queryParamMap.get('type') || 'individual'}`);
   /** Below 1024px the live preview is a sheet behind the Preview button. */
   readonly previewOpen = signal(false);
-  @HostListener('document:keydown.escape')
-  onEscape(): void { if (this.previewOpen()) this.previewOpen.set(false); }
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(ev?: Event): void {
+    if (!this.previewOpen()) return;
+    ev?.preventDefault(); // used → the desktop app stays full screen
+    this.previewOpen.set(false);
+  }
   /** Origin as a NEUTRAL context chip (label + glyph + hint). */
   readonly originChip = computed(() => {
     const o = this.origin();

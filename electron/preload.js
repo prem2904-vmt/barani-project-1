@@ -19,6 +19,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   theme: {
     set: (t) => ipcRenderer.send('theme:set', { theme: t && t.theme, background: t && t.background })
   },
+  // Kiosk full screen (fullscreen.js). The app opens full screen; the
+  // renderer leaves it on an Esc nothing else used, re-enters from the
+  // avatar menu, and follows every change (incl. F11 / the green button).
+  window: {
+    isFullScreen: () => ipcRenderer.invoke('window:isFullScreen'),
+    setFullScreen: (on) => ipcRenderer.invoke('window:setFullScreen', on === true),
+    onFullScreenChange: (cb) => {
+      const h = (_e, on) => cb(on === true);
+      ipcRenderer.on('window:fullscreen', h);
+      return () => ipcRenderer.removeListener('window:fullscreen', h);
+    }
+  },
   // USB label printer (Detonger/Dothantech). The renderer builds a packed
   // 1-bpp bitmap and hands it here; main encodes + streams it over USB.
   printer: {

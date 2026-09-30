@@ -3,6 +3,9 @@ const path = require('path');
 const labelPrinter = require('./printer');
 const calls = require('./calls');
 const chatNotify = require('./chat-notify');
+// Kiosk-style full screen: opens full screen, Esc (renderer-decided) leaves,
+// F11 / Ctrl+Cmd+F / avatar menu re-enter. See fullscreen.js.
+const fullscreen = require('./fullscreen');
 // Lab analyzer connector (serial / TCP / folder → LMS). Core is plain Node
 // under ./instruments/core; this host just wires it to IPC + app lifecycle.
 const instruments = require('./instruments/host-electron');
@@ -60,6 +63,8 @@ function createWindow() {
     height: 800,
     minWidth: 768,
     minHeight: 600,
+    // Opens full screen on every launch (owner) — see fullscreen.js.
+    ...fullscreen.windowOptions(),
     webPreferences: {
       // Sandbox the renderer — Angular code never gets Node access.
       nodeIntegration: false,
@@ -115,6 +120,7 @@ function createWindow() {
     mainWindow.show();
     if (isDev) mainWindow.webContents.openDevTools();
   });
+  fullscreen.attach(mainWindow);
 
   // External links open in the user's default browser, not in
   // the Electron window — keeps OAuth / docs / nudges out of
@@ -135,7 +141,8 @@ function createWindow() {
   mainWindow.on('close', (e) => {
     if (calls.isQuitting()) return;
     e.preventDefault();
-    mainWindow.hide();
+    // macOS: leaves native full screen first (no black Space left behind).
+    fullscreen.hide(mainWindow);
   });
 
   calls.attach(mainWindow);
@@ -148,6 +155,8 @@ function createWindow() {
 chatNotify.register(() => mainWindow);
 // Analyzer connectors: IPC for the Instruments page (pair / status / listen).
 instruments.register(() => mainWindow);
+// Full screen: query / set from the main window only; changes pushed back.
+fullscreen.register(() => mainWindow);
 
 ipcMain.handle('printer:status', async () => labelPrinter.status());
 ipcMain.handle('printer:print', async (_e, payload) => labelPrinter.print(payload));

@@ -13,6 +13,7 @@ import { SwitchScreenComponent } from './shared/components/switch-screen.compone
 import { isPublicPatientPath } from './core/navigation/public-paths';
 import { SessionService } from './core/auth/session.service';
 import { BusyComponent } from './shared/primitives/skeleton-kit.component';
+import { DesktopWindowService } from './core/services/desktop-window.service';
 
 @Component({
   selector: 'app-root',
@@ -183,6 +184,9 @@ export class App implements OnInit {
    *  so a ring always stops on a terminal call state or account switch. */
   private readonly _ring = inject(CallRingService);
   private readonly _injector = inject(Injector);
+  /** Desktop kiosk full screen: Esc (when the app didn't use it) leaves it,
+   *  on every screen incl. /login. No-op off Electron. */
+  private readonly _desktopWindow = inject(DesktopWindowService);
   /** The URL the app was opened with, captured before the router's first
    *  navigation can rewrite it — carries a web push's ?pfCall=action:id. */
   private readonly _bootHref = typeof window !== 'undefined' ? window.location.href : '';

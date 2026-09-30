@@ -176,6 +176,12 @@
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
   <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
 
+    @if (desktopWindow.showClock()) {
+    <!-- Desktop app, full screen: the OS clock is hidden, so the bar shows
+         the date + time (IST, minute ticks). Windowed / web / iPad: never. -->
+    <pf-desktop-clock />
+    }
+
     @if (!themeService.isNewDesign()) {
     <!-- CLASSIC primary nav — icon-first hybrid on the right: the active
            item shows its label, the others slide theirs out on hover. -->
@@ -616,6 +622,18 @@
           </svg>
           <span>My signature</span>
         </button>
+
+        @if (desktopWindow.available && !desktopWindow.isFullScreen()) {
+        <!-- Desktop app, windowed: back to kiosk full screen (Esc leaves it). -->
+        <button type="button" class="pf-profile-item press" (click)="enterFullScreen()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+          </svg>
+          <span class="flex-1">Full screen</span>
+          <span class="pf-kbd-hint">{{ fullScreenKey }}</span>
+        </button>
+        }
 
         @if (hasPin()) {
         <button type="button" class="pf-profile-item press" (click)="lockNow()">

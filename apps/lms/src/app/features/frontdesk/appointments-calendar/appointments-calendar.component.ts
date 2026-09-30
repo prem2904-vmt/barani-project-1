@@ -1661,8 +1661,9 @@ export class AppointmentsCalendarComponent {
     // An open dropdown (pf-select panel) owns its own Esc.
     const t = e?.target as HTMLElement | null;
     if (t?.closest?.('#pf-overlay-host, .pf-dd')) return;
-    if (this.rescheduleOpen()) this.closeReschedule();
-    else if (this.selectedAppt()) this.closeAppt();
+    // Used → preventDefault (desktop full screen stays — desktop-fullscreen-esc.ts).
+    if (this.rescheduleOpen()) { e?.preventDefault(); this.closeReschedule(); }
+    else if (this.selectedAppt()) { e?.preventDefault(); this.closeAppt(); }
   }
   /** The DAY card's week strip picks the day without changing the view. */
   protected pickDay(iso: string) { this.cursor.set(new Date(`${iso}T12:00:00`)); }

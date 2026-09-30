@@ -32,6 +32,8 @@
     "cap:run:android": "npx cap run android",
     "build:stage": "NX_DAEMON=false NX_NO_CLOUD=true nx build lms --configuration=stage && rm -rf public && cp -r dist/apps/lms/browser public && cp public/index.html public/404.html && rm -rf dist",
     "test:instruments": "node --test electron/instruments/test/*.test.js",
+    "test:electron": "node --test electron/test/*.test.js",
+    "smoke:fullscreen": "electron electron/test/fullscreen-smoke.js",
     "sim:cbc": "node electron/instruments/sim/cbc-sim.js"
   },
   "build": {
