@@ -229,3 +229,54 @@ describe('Pharmacy screens', () => {
     noNative(el);
   });
 });
+
+// ── Pregnancy-safety guard (night/safety, critic P0 #1d) ───────────────────
+const DRUG_CONTRA = { ...DRUG_AMC, id: 'contra', name: 'Itrazole 100', pregnancyRisk: 'contraindicated' as const };
+const RX_PREGNANT: RxDetail = {
+  ...RX,
+  pregnancy: { status: 'pregnant', source: 'form answer', since: '2026-08-01' },
+  lines: [{ ...RX.lines[0], drugId: 'contra', drugName: 'Itrazole 100', drug: DRUG_CONTRA as never, substitutes: [] }],
+};
+
+describe('Pharmacy screens — pregnancy-safety guard', () => {
+  it('dispense: a contraindicated drug on a pregnant patient shows the chip', async () => {
+    const api = apiMock({ rx: vi.fn(() => of(RX_PREGNANT)) });
+    const { el, f } = render(PharmacyDispensePage, api);
+    await f.whenStable(); f.detectChanges();
+    expect(el.querySelector('.ph-preg')).toBeTruthy();
+    expect(el.querySelector('.ph-preg')!.textContent).toContain('Contraindicated');
+  });
+
+  it('dispensing a contraindicated drug to a pregnant patient asks the pharmacist first — accepted proceeds', async () => {
+    const api = apiMock({ rx: vi.fn(() => of(RX_PREGNANT)) });
+    const { f, c, dialog } = render(PharmacyDispensePage, api, true);
+    await f.whenStable(); f.detectChanges();
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
+    await c.give(true);
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contraindicated in pregnancy', tone: 'danger' }));
+    expect(api.dispenseRx).toHaveBeenCalled();
+  });
+
+  it('declining the confirmation never dispenses', async () => {
+    const api = apiMock({ rx: vi.fn(() => of(RX_PREGNANT)) });
+    const { f, c, dialog } = render(PharmacyDispensePage, api, false);
+    await f.whenStable(); f.detectChanges();
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
+    await c.give(true);
+    expect(dialog.confirm).toHaveBeenCalled();
+    expect(api.dispenseRx).not.toHaveBeenCalled();
+  });
+
+  it('a non-pregnant patient never asks, even for a contraindicated-tagged drug', async () => {
+    const api = apiMock({ rx: vi.fn(() => of({ ...RX_PREGNANT, pregnancy: undefined })) });
+    const { f, c, dialog } = render(PharmacyDispensePage, api, true);
+    await f.whenStable(); f.detectChanges();
+    c.patientAddress.set('12 MG Road, Chennai');
+    f.detectChanges();
+    await c.give(true);
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(api.dispenseRx).toHaveBeenCalled();
+  });
+});
