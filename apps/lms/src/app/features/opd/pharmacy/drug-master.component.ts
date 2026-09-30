@@ -12,14 +12,24 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
 import { FORMS } from '../shared/rx-schedule';
 import type { DrugForm, DrugSchedule } from '../shared/opd.models';
-import { PharmacyApi, type DrugEdit, type PharmacyDrugRow } from './pharmacy.api';
+import { PharmacyApi, type DrugEdit, type PharmacyDrugRow, type PregnancyRisk } from './pharmacy.api';
 import { errText, inr, scheduleLabel } from './pharmacy-math';
+import { PregnancyRiskEditorComponent } from './pregnancy-risk-editor.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export const SCHEDULES: DrugSchedule[] = ['none', 'G', 'H', 'H1', 'X'];
 export const GST_SLABS = [0, 5, 12, 18, 28];
-const EDITABLE: (keyof DrugEdit)[] = ['name', 'generic', 'strength', 'form', 'unit', 'packSize', 'schedule', 'hsnCode', 'taxSlab', 'defaultMrp', 'isActive'];
+const EDITABLE: (keyof DrugEdit)[] = [
+  'name', 'generic', 'strength', 'form', 'unit', 'packSize', 'schedule', 'hsnCode', 'taxSlab', 'defaultMrp', 'isActive',
+  // Pregnancy-safety guard (night/safety, critic P0 #1a).
+  'pregnancyRisk',
+];
+
+/** Pregnancy-safety guard chip word + tone (night/safety, critic P0 #1a). */
+export function pregnancyRiskLabel(r: PregnancyRisk | '' | null | undefined): string {
+  return r === 'safe' ? 'Safe' : r === 'caution' ? 'Caution' : r === 'avoid' ? 'Avoid' : r === 'contraindicated' ? 'Contraindicated' : '';
+}
 
 /** Grid row: a drug plus a client key (new rows have no server id yet). */
 export interface DrugGridRow extends PharmacyDrugRow { key: string; isNew?: boolean }
@@ -130,6 +140,16 @@ export class PharmacyDrugMasterComponent {
     { field: 'taxSlab', headerName: 'GST', width: 85, editable: true, type: 'rightAligned', cellEditor: 'agSelectCellEditor', cellEditorParams: { values: GST_SLABS }, valueFormatter: p => `${p.value ?? 0}%` },
     { field: 'defaultMrp', headerName: 'MRP', width: 100, editable: true, type: 'rightAligned', cellEditor: 'agNumberCellEditor', cellEditorParams: { min: 0, precision: 2 }, valueFormatter: p => (p.value == null ? '' : inr(p.value)) },
     { field: 'unit', headerName: 'Per', width: 85, editable: true },
+    {
+      field: 'pregnancyRisk', headerName: 'Pregnancy', width: 140, editable: true, cellEditor: PregnancyRiskEditorComponent,
+      cellRenderer: (p: { value?: PregnancyRisk | '' | null }) => {
+        const r = p.value;
+        const label = pregnancyRiskLabel(r);
+        if (!label) return '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
+        const tone = r === 'avoid' || r === 'contraindicated' ? 'color:var(--red-text,#dc2626)' : r === 'caution' ? 'color:#b45309' : 'color:var(--text-tertiary)';
+        return `<span style="${tone};font-size:12.5px;font-weight:600">${label}</span>`;
+      },
+    },
     { field: 'onHand', headerName: 'In stock', width: 100, type: 'rightAligned', valueFormatter: p => (p.value ? String(p.value) : '') },
     { field: 'isActive', headerName: 'On', width: 75, editable: true, cellEditor: 'agCheckboxCellEditor', cellRenderer: 'agCheckboxCellRenderer' },
     {

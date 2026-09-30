@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import type { OpdPatientAllergy } from '../../shared/opd.models';
+import type { OpdPatientAllergy, OpdPregnancy } from '../../shared/opd.models';
 import { timesSched } from '../../shared/rx-schedule';
 import { RxEditorComponent, durLabel } from './rx-editor.component';
 import { ConsultDrugRef, ConsultRxLine } from './rx-model';
@@ -7,15 +7,18 @@ import { ConsultDrugRef, ConsultRxLine } from './rx-model';
 const CLAV: ConsultDrugRef = { id: 'd-clav', name: 'Clavumox 625', form: 'tab', generic: 'Amoxicillin + Clavulanic acid', aliases: 'co-amoxiclav clav', schedule: 'H1' };
 const AZI: ConsultDrugRef = { id: 'd-azi', name: 'Azimax 500', form: 'tab', generic: 'Azithromycin', schedule: 'H' };
 const SAL: ConsultDrugRef = { id: 'd-sal', name: 'Salinex Nasal Drops', form: 'drops', generic: 'Sodium chloride 0.65%', siteKind: 'nose', schedule: 'none' };
-const DRUGS = [CLAV, AZI, SAL];
+const DOXY: ConsultDrugRef = { id: 'd-doxy', name: 'Doxyt 100', form: 'cap', generic: 'Doxycycline', schedule: 'H', pregnancyRisk: 'avoid' };
+const DRUGS = [CLAV, AZI, SAL, DOXY];
 const PEN: OpdPatientAllergy = { id: 'a1', patientId: 'p', allergen: 'Penicillin', reaction: 'rash (2019)', status: 'active' };
+const PREGNANT: OpdPregnancy = { status: 'pregnant', source: 'form answer', since: '2026-08-01' };
 
-function mount(lines: ConsultRxLine[] = [], allergies: OpdPatientAllergy[] = []) {
+function mount(lines: ConsultRxLine[] = [], allergies: OpdPatientAllergy[] = [], pregnant: OpdPregnancy | null = null) {
   TestBed.configureTestingModule({ imports: [RxEditorComponent] });
   const f = TestBed.createComponent(RxEditorComponent);
   f.componentRef.setInput('lines', lines);
   f.componentRef.setInput('drugs', DRUGS);
   f.componentRef.setInput('allergies', allergies);
+  f.componentRef.setInput('pregnant', pregnant);
   f.componentRef.setInput('start', new Date(2026, 8, 30));
   f.detectChanges();
   return f;
@@ -152,6 +155,39 @@ describe('RxEditorComponent — inline allergy', () => {
     expect(f.componentInstance.lines()[0].drug.id).toBe('d-azi');
     expect(el.querySelector('.rxe__allergy')).toBeNull();
     expect(notes[0]).toContain('Clavumox 625 swapped for Azimax 500');
+  });
+});
+
+describe('RxEditorComponent — pregnancy-safety guard', () => {
+  const doxyLine = (): ConsultRxLine => ({ key: 'k2', drug: DOXY, line: { drugId: DOXY.id, dose: 1, sched: timesSched([1, 0, 1]), dur: 5, food: 'After' } });
+
+  it('shows the avoid-in-pregnancy banner with a swap + "Keep, reviewed" (stores the ack)', () => {
+    const f = mount([doxyLine()], [], PREGNANT);
+    const el: HTMLElement = f.nativeElement;
+    expect(el.querySelector('.rxe__preg')!.textContent).toContain('Avoid in pregnancy');
+    (el.querySelector('.rxe__preg .rxe__keep') as HTMLButtonElement).click(); f.detectChanges();
+    expect(f.componentInstance.lines()[0].pregnancyAck).toBe(true);
+    expect(el.querySelector('.rxe__preg')).toBeNull();
+    expect(el.querySelector('.rxe__acked')!.textContent).toContain('Pregnancy risk reviewed');
+  });
+
+  it('never shows the banner when the patient is not pregnant, even for an avoid drug', () => {
+    const f = mount([doxyLine()], [], null);
+    expect((f.nativeElement as HTMLElement).querySelector('.rxe__preg')).toBeNull();
+  });
+
+  it('a contraindicated drug reads "Contraindicated in pregnancy"', () => {
+    const contra: ConsultDrugRef = { ...DOXY, id: 'd-itra', name: 'Itrazole 100', pregnancyRisk: 'contraindicated' };
+    const f = mount([{ key: 'k3', drug: contra, line: { drugId: contra.id, dose: 1, sched: timesSched([1, 0, 0]), dur: 5 } }], [], PREGNANT);
+    expect((f.nativeElement as HTMLElement).querySelector('.rxe__preg')!.textContent).toContain('Contraindicated in pregnancy');
+  });
+
+  it('a caution drug shows a quiet amber chip and never blocks', () => {
+    const caution: ConsultDrugRef = { ...DOXY, id: 'd-metf', name: 'Metfor 500', pregnancyRisk: 'caution' };
+    const f = mount([{ key: 'k4', drug: caution, line: { drugId: caution.id, dose: 1, sched: timesSched([1, 0, 0]), dur: 5 } }], [], PREGNANT);
+    const el: HTMLElement = f.nativeElement;
+    expect(el.querySelector('.rxe__preg-caution')!.textContent).toContain('Caution in pregnancy');
+    expect(el.querySelector('.rxe__preg')).toBeNull();
   });
 });
 

@@ -145,9 +145,16 @@ export interface OpdRxLineDto {
   schedule: RxSchedule; durationDays: number; food?: 'Before' | 'After' | null;
   quantity?: number; allergyAck?: boolean; allergyAckNote?: string | null; notes?: string | null;
   dispenseStatus?: 'pending' | 'partial' | 'dispensed' | 'not_dispensed';
+  /** Pregnancy-safety guard (night/safety, critic P0 #1c) — mirrors allergyAck/allergyAckNote. */
+  pregnancyAck?: boolean; pregnancyAckNote?: string | null;
 }
 export interface OpdInvestigation { id?: string; items: { testId: string; name: string }[]; labOrderId?: string | null; status: 'draft' | 'ordered' | 'cancelled'; }
 export interface OpdPatientAllergy { id?: string; patientId: string; allergen: string; drugId?: string | null; generic?: string | null; reaction?: string | null; severity?: 'mild' | 'moderate' | 'severe' | null; status: 'active' | 'inactive'; }
+
+/** Pregnancy-safety guard (night/safety, critic P0 #1b) — the resolved status
+ *  the server computes (Services/Opd/Consult/PregnancyStatus.cs). `source` is
+ *  a short human label ("form answer", "diagnosis O80", "today's consult"…). */
+export interface OpdPregnancy { status: 'pregnant' | 'lactating'; source?: string | null; since?: string | null; }
 
 // ── Pharmacy (Agent D) ───────────────────────────────────────────────────
 export interface PharmacyDrug {
@@ -158,5 +165,7 @@ export interface PharmacyDrug {
   siteKind?: string | null;
   /** The usual prescription (doctor favourites): { dose, schedule, durationDays, food } — integrator. */
   usual?: Record<string, unknown> | null;
+  /** Pregnancy-safety guard (night/safety, critic P0 #1a). */
+  pregnancyRisk?: 'safe' | 'caution' | 'avoid' | 'contraindicated' | null; pregnancyNote?: string | null;
 }
 export interface PharmacyBatch { id: string; drugId: string; batchNo: string; expiryDate: string; mrp: number; purchasePrice: number; qtyOnHand: number; }

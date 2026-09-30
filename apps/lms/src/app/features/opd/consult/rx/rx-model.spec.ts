@@ -1,8 +1,8 @@
-import type { OpdPatientAllergy } from '../../shared/opd.models';
+import type { OpdPatientAllergy, OpdPregnancy } from '../../shared/opd.models';
 import { rxQty, timesSched, totalDays } from '../../shared/rx-schedule';
 import {
-  ConsultDrugRef, ConsultRxLine, THEN_PRESETS, addThen, allergyHit, drugRefOf, freeDrug, fromDto, removeStep, siteKindOf,
-  swapCandidate, timingIdOf, toDto, unresolvedAllergies,
+  ConsultDrugRef, ConsultRxLine, THEN_PRESETS, addThen, allergyHit, drugRefOf, freeDrug, fromDto, pregnancyHit, removeStep,
+  siteKindOf, swapCandidate, timingIdOf, toDto, unresolvedAllergies, unresolvedPregnancyRisks,
 } from './rx-model';
 
 const CLAV: ConsultDrugRef = { id: 'd-clav', name: 'Clavumox 625', form: 'tab', generic: 'Amoxicillin 500 mg + Clavulanic acid 125 mg', schedule: 'H1' };
@@ -38,6 +38,43 @@ describe('rx-model — allergy check (TS mirror of server AllergyCheck)', () => 
   it('swap suggests a same-form antibiotic outside the allergic family', () => {
     expect(swapCandidate(line(CLAV), [CLAV, PCM, AZI], [PEN])?.id).toBe('d-azi');
     expect(swapCandidate(line(CLAV), [CLAV, PCM], [PEN])).toBeNull(); // paracetamol is no antibiotic swap
+  });
+});
+
+describe('rx-model — pregnancy-safety guard (TS mirror of server PregnancyStatus + the Complete gate)', () => {
+  const PREGNANT: OpdPregnancy = { status: 'pregnant', source: 'form answer', since: '2026-08-01' };
+  const LACTATING: OpdPregnancy = { status: 'lactating', source: 'diagnosis Z39.1' };
+  const AVOID: ConsultDrugRef = { ...CLAV, id: 'd-doxy', name: 'Doxyt 100', pregnancyRisk: 'avoid' };
+  const CONTRA: ConsultDrugRef = { ...CLAV, id: 'd-itra', name: 'Itrazole 100', pregnancyRisk: 'contraindicated' };
+  const CAUTION: ConsultDrugRef = { ...CLAV, id: 'd-metf', name: 'Metfor 500', pregnancyRisk: 'caution' };
+  const SAFE: ConsultDrugRef = { ...CLAV, id: 'd-pcm2', name: 'Paracet 650', pregnancyRisk: 'safe' };
+
+  it('flags avoid / contraindicated drugs only when the patient is pregnant', () => {
+    expect(pregnancyHit(AVOID, PREGNANT)?.risk).toBe('avoid');
+    expect(pregnancyHit(CONTRA, PREGNANT)?.risk).toBe('contraindicated');
+    expect(pregnancyHit(AVOID, null)).toBeNull();
+    expect(pregnancyHit(AVOID, LACTATING)).toBeNull(); // lactating never blocks today
+  });
+  it('never flags caution or safe drugs — caution is a non-blocking chip, not a hit', () => {
+    expect(pregnancyHit(CAUTION, PREGNANT)).toBeNull();
+    expect(pregnancyHit(SAFE, PREGNANT)).toBeNull();
+  });
+  it('uses the drug master note when present, else a generic sentence', () => {
+    expect(pregnancyHit({ ...AVOID, pregnancyNote: 'ARB — fetal renal toxicity' }, PREGNANT)?.reason).toBe('ARB — fetal renal toxicity');
+    expect(pregnancyHit(CONTRA, PREGNANT)?.reason).toContain('contraindicated');
+  });
+  it('an acknowledged line is no longer unresolved', () => {
+    const l = line(AVOID);
+    expect(unresolvedPregnancyRisks([l], PREGNANT).length).toBe(1);
+    expect(unresolvedPregnancyRisks([{ ...l, pregnancyAck: true }], PREGNANT).length).toBe(0);
+  });
+  it('a safe line on a pregnant patient is never unresolved', () => {
+    expect(unresolvedPregnancyRisks([line(SAFE)], PREGNANT).length).toBe(0);
+  });
+  it('pregnancyAck round-trips through toDto/fromDto like allergyAck', () => {
+    const dto = toDto(line(AVOID, { pregnancyAck: true, pregnancyAckNote: 'Benefit outweighs risk' }));
+    expect(dto).toMatchObject({ pregnancyAck: true, pregnancyAckNote: 'Benefit outweighs risk' });
+    expect(fromDto(dto, [AVOID]).pregnancyAck).toBe(true);
   });
 });
 

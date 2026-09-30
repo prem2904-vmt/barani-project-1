@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { map } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { OPD_API } from '../shared/opd-api';
-import type { DrugForm, DrugSchedule, OpdRefund, PharmacyConfig } from '../shared/opd.models';
+import type { DrugForm, DrugSchedule, OpdPregnancy, OpdRefund, PharmacyConfig } from '../shared/opd.models';
 import type { RxSchedule } from '../shared/rx-schedule';
 
 /**
@@ -16,6 +16,9 @@ import type { RxSchedule } from '../shared/rx-schedule';
 
 export type DrugOrigin = 'master' | 'override' | 'local';
 
+/** Pregnancy-safety guard (night/safety, critic P0 #1a) — the ONE vocabulary. */
+export type PregnancyRisk = 'safe' | 'caution' | 'avoid' | 'contraindicated';
+
 /** A drug as this tenant sees it (copy-on-write). `id` is the STABLE id (the
  *  master row's when one exists) — stock, bills and Rx lines use it. */
 export interface PharmacyDrugRow {
@@ -25,6 +28,8 @@ export interface PharmacyDrugRow {
   taxSlab: number; defaultMrp?: number | null; aliases: string[]; isActive: boolean; onHand?: number | null;
   /** Integrator (pharmacy_drugs): topical site kind + the usual Rx for doctor favourites. */
   siteKind?: string | null; usual?: Record<string, unknown> | null;
+  /** Pregnancy-safety guard — null = not assessed. */
+  pregnancyRisk?: PregnancyRisk | null; pregnancyNote?: string | null;
 }
 
 /** One grid row's edit (null/undefined fields are left as they are). */
@@ -34,6 +39,8 @@ export interface DrugEdit {
   defaultMrp?: number; isActive?: boolean; aliases?: string[]; revert?: boolean;
   /** "" clears. */
   siteKind?: string; usual?: Record<string, unknown> | null;
+  /** "" clears. */
+  pregnancyRisk?: PregnancyRisk | ''; pregnancyNote?: string;
 }
 
 export interface StockRow {
@@ -68,6 +75,8 @@ export interface RxQueueRow {
 export interface DrugBrief {
   id: string; name: string; generic?: string | null; strength?: string | null; form: DrugForm; unit?: string | null;
   schedule: DrugSchedule; hsnCode?: string | null; taxSlab: number; defaultMrp?: number | null; onHand: number;
+  /** Pregnancy-safety guard (night/safety, critic P0 #1d). */
+  pregnancyRisk?: PregnancyRisk | null; pregnancyNote?: string | null;
 }
 
 export interface PickBatch { id: string; batchNo: string; expiryDate: string; mrp: number; qtyOnHand: number }
@@ -82,6 +91,8 @@ export interface RxLineView {
 export interface RxDetail {
   visitId: string; visitNumber?: string | null; token: number; patient: PersonRef; doctor: PersonRef; doctorRegNo?: string | null;
   completedAt?: string | null; consultStatus: string; lines: RxLineView[]; settings: PharmacyConfig; dispenses: DispenseSummary[];
+  /** Pregnancy-safety guard (night/safety, critic P0 #1d) — appended at the END. */
+  pregnancy?: OpdPregnancy | null;
 }
 
 /** `overrideReason` is required when `qty` is more than the Rx line's

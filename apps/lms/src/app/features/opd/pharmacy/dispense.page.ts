@@ -7,6 +7,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { heldFlag } from '../../../shared/utils/min-duration';
 import { waLink } from '../../../shared/utils/whatsapp';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { labToday } from '../../../shared/utils/lab-clock';
@@ -112,6 +113,7 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
                         <td style="min-width:220px">
                           <div class="ph-row__name" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{{ drug?.generic || drug?.name || l.drugName }}
                             @if (drug) { <span class="ph-sch" [attr.data-rx]="isRx(drug.schedule)">{{ schLabel(drug.schedule) }}</span> }
+                            @if (pregChip(drug); as pc) { <span class="ph-preg" [attr.data-tone]="pc.tone">{{ pc.label }}</span> }
                           </div>
                           <div class="ph-sub">{{ brandLine(drug) }}{{ brandLine(drug) ? ' · ' : '' }}{{ sched(l) }}</div>
                           @if (drug && drug.id !== l.drug?.id) { <div class="ph-sub">Substituted for {{ l.drugName }}</div> }
@@ -297,6 +299,7 @@ export class PharmacyDispensePage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   private readonly auth = inject(AuthService);
   private readonly tenant = inject(TenantStateService);
 
@@ -391,6 +394,15 @@ export class PharmacyDispensePage {
     return Math.min(ceiling, stock || l.remaining || ceiling);
   }
   protected isRx(s: string) { return needsPrescription(s); }
+  /** Pregnancy-safety guard chip (night/safety, critic P0 #1d) — only shown
+   *  when the patient is pregnant; avoid/contraindicated = red, caution = amber. */
+  protected pregChip(drug: DrugBrief | null): { label: string; tone: 'avoid' | 'caution' } | null {
+    if (this.rx()?.pregnancy?.status !== 'pregnant' || !drug?.pregnancyRisk) return null;
+    if (drug.pregnancyRisk === 'avoid') return { label: 'Avoid — pregnancy', tone: 'avoid' };
+    if (drug.pregnancyRisk === 'contraindicated') return { label: 'Contraindicated', tone: 'avoid' };
+    if (drug.pregnancyRisk === 'caution') return { label: 'Caution — pregnancy', tone: 'caution' };
+    return null;
+  }
   protected schLabel(s: string) { return scheduleLabel(s); }
   protected time(iso: string) { return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }); }
   protected wd(i: number) { return 'SMTWTFS'[i]; }
@@ -462,9 +474,24 @@ export class PharmacyDispensePage {
   });
 
   // ── Give ──────────────────────────────────────────────────────────────────
-  protected give(pay: boolean): void {
+  protected async give(pay: boolean): Promise<void> {
     const d = this.rx();
     if (!d || !this.canGive()) return;
+    // Pregnancy-safety guard (night/safety, critic P0 #1d): dispensing a
+    // CONTRAINDICATED drug to a pregnant patient needs the pharmacist's
+    // explicit confirmation — UI-only gate, never silently allowed.
+    if (d.pregnancy?.status === 'pregnant') {
+      const risky = this.giving().filter(l => this.given(l)?.pregnancyRisk === 'contraindicated');
+      if (risky.length) {
+        const names = risky.map(l => this.given(l)?.name).filter(Boolean).join(', ');
+        const ok = await this.dialog.confirm({
+          title: 'Contraindicated in pregnancy',
+          message: `${names} ${risky.length === 1 ? 'is' : 'are'} contraindicated in pregnancy. Dispense anyway?`,
+          confirmLabel: 'Dispense anyway', tone: 'danger',
+        });
+        if (!ok) return;
+      }
+    }
     const lines: DispenseLineInput[] = [];
     for (const l of d.lines) {
       if (l.remaining <= 0) continue;

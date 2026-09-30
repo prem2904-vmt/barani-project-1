@@ -21,9 +21,12 @@ import {
 import { ConsultVitalsComponent, bmiOf } from './vitals-strip.component';
 import { ConsultGlanceComponent, RecentResult, recentResultsOf } from './glance-panel.component';
 import { ConsultCompleteSheetComponent, addDaysIso } from './complete-sheet.component';
-import { OpdFormRendererComponent, normalizeSchema, type OpdAnswers, type OpdFormDoc, type OpdMediaRef, type OpdMediaRequest } from '../admin/forms/renderer';
+import {
+  OpdFormRendererComponent, allQuestions, missingRequired, normalizeSchema,
+  type OpdAnswers, type OpdFormDoc, type OpdMediaRef, type OpdMediaRequest,
+} from '../admin/forms/renderer';
 import { RxEditorComponent } from './rx/rx-editor.component';
-import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies } from './rx/rx-model';
+import { ConsultDrugRef, ConsultRxLine, drugRefOf, fromDto, unresolvedAllergies, unresolvedPregnancyRisks } from './rx/rx-model';
 import { newRxLine } from '../shared/rx-schedule';
 import { buildRxPdf } from './rx-print';
 import { OpdSpecimenPickerComponent } from '../shared/opd-specimen-picker.component';
@@ -241,6 +244,7 @@ const EMPTY: ConsultEditState = {
                       </button>
                     }
                     <pf-rx-editor [lines]="st().lines" (linesChange)="patch({ lines: $event })" [drugs]="drugList()" [allergies]="allergies()"
+                                  [pregnant]="ws()?.pregnancy ?? null"
                                   [readonly]="!editable()" [start]="visitDay()" [usuals]="usuals()" [preferIds]="preferIds()"
                                   (search)="drugSearch$.next($event)" (notice)="toast.info($event)"></pf-rx-editor>
                   }
@@ -344,7 +348,7 @@ const EMPTY: ConsultEditState = {
         @if (completeOpen()) {
           <pf-consult-complete-sheet [patientName]="w.patient.name" [token]="w.visit.tokenLabel" [diagnoses]="st().diagnoses" [lines]="st().lines"
                                      [tests]="st().tests" [followUpDays]="st().followUpDays" [followUpRule]="w.followUpRule ?? null" [visitDate]="visitDay()"
-                                     [unresolved]="unresolved().length" [busy]="completing()"
+                                     [unresolved]="unresolved().length" [pregnancyUnresolved]="pregnancyUnresolved().length" [missingRequired]="requiredMissing()" [busy]="completing()"
                                      (followUpDaysChange)="patch({ followUpDays: $event })" (cancel)="completeOpen.set(false)" (confirm)="complete()"></pf-consult-complete-sheet>
         }
       </div>
@@ -428,6 +432,10 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   readonly visitDay = computed(() => { const d = this.ws()?.visit.visitDate; return d ? new Date(d.slice(0, 10) + 'T00:00:00') : new Date(); });
   readonly primaryDx = computed(() => this.st().diagnoses[0]?.label ?? '');
   readonly unresolved = computed(() => unresolvedAllergies(this.st().lines, this.allergies()));
+  /** Pregnancy-safety guard (night/safety, critic P0 #1c) — blocks Complete like unresolved allergies. */
+  readonly pregnancyUnresolved = computed(() => unresolvedPregnancyRisks(this.st().lines, this.ws()?.pregnancy ?? null));
+  /** Required fields (night/safety, critic P1 #2) — visible, required consult-form questions with no answer. */
+  readonly requiredMissing = computed(() => missingRequired(allQuestions(this.formSchema()), this.st().answers));
   readonly usuals = computed(() => usualsFrom(this.usual()?.rx, this.ws()?.lastVisit?.rx, this.ws()?.rx));
   readonly preferIds = computed(() => (this.usual()?.rx ?? []).map(r => r.drugId).filter((x): x is string => !!x));
   readonly suggested = computed<ConsultInvestigationItem[]>(() => (this.usual()?.tests ?? []).map(t => ({ ...t, price: this.priceOf(t.testId) })));
@@ -712,7 +720,11 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
   openComplete() { if (this.editable()) this.completeOpen.set(true); }
   complete() {
     const w = this.ws();
-    if (!w || this.completing() || this.unresolved().length) return;
+    if (!w || this.completing() || this.unresolved().length || this.pregnancyUnresolved().length) return;
+    if (this.requiredMissing().length) {
+      this.toast.error(`Please answer: ${this.requiredMissing().join(', ')}.`);
+      return;
+    }
     const noSpecimen = this.missingSpecimenTests();
     if (noSpecimen.length) {
       this.completeOpen.set(false);
@@ -731,7 +743,11 @@ export class OpdConsultWorkspacePage implements OnInit, OnDestroy {
       },
       error: e => {
         this.completing.set(false);
-        this.toast.error(e?.code === 'allergy_unacknowledged' ? 'A medicine conflicts with an allergy — review it first.' : (e?.message || 'Could not complete the consult'));
+        const msg = e?.code === 'allergy_unacknowledged' ? 'A medicine conflicts with an allergy — review it first.'
+          : e?.code === 'pregnancy_unacknowledged' ? 'A medicine should be avoided in pregnancy — review it first.'
+          : e?.code === 'required_missing' ? (e?.message || 'Please answer the required questions first.')
+          : (e?.message || 'Could not complete the consult');
+        this.toast.error(msg);
       },
     });
   }
