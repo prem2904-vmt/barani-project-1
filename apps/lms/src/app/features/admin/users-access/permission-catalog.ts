@@ -50,6 +50,8 @@ export const PERMISSION_GROUPS: PermissionGroupInfo[] = [
     blurb: 'Reagents and consumables — stock in, stock out.' },
   { key: 'oversight',  label: 'Management & oversight',
     blurb: 'Dashboards, audit trail and branch administration.' },
+  { key: 'testmaster', label: 'Test Master & prices',
+    blurb: 'The test catalogue — what the lab offers, how results are reported, and what each test costs.' },
   { key: 'setup',      label: 'Setup & configuration',
     blurb: 'Changing how the lab itself works — admin territory.' },
   { key: 'alerts',     label: 'Alerts this role receives',
@@ -158,8 +160,12 @@ export const PERMISSION_INFO: Record<string, PermissionInfo> = {
     what: 'Manage home-collection agents and their pickup runs.' },
 
   // ── Setup & configuration ──────────────────────────────────
-  manage_tests: { group: 'setup', title: 'Test Master', sensitive: true,
-    what: 'Edit tests, prices, reference ranges and report layouts.' },
+  manage_tests: { group: 'testmaster', title: 'Test Master — everything', sensitive: true,
+    what: 'Full Test Master: edit tests and change prices (includes the two grants below), plus the admin settings area.' },
+  manage_test_master: { group: 'testmaster', title: 'Edit Test Master',
+    what: 'Add and edit tests, profiles and packages — parameters, reference ranges, report layouts, specimens and department on/off. No prices.' },
+  manage_test_pricing: { group: 'testmaster', title: 'Change test prices', sensitive: true,
+    what: 'Set test prices, tax slab and which tests each branch offers. Nothing else about billing.' },
   manage_departments: { group: 'setup', title: 'Departments',
     what: 'Manage lab departments and their option tables.' },
   manage_users: { group: 'setup', title: 'Users', sensitive: true,
@@ -227,4 +233,6 @@ export const ROLE_INFO: Record<string, string> = {
     'Owns inventory — everything a store keeper does, plus item setup and transfers between branches.',
   'Lab Admin':
     'The owner’s seat. Everything — front desk, bench, sign-out, billing, and all configuration.',
+  'Lab Admin (Technical)':
+    'Runs the lab’s setup — Test Master (tests, ranges, layouts and prices), lab settings and report design — and works the bench. No billing, payments, discounts, refunds, finance, users or organisation settings.',
 };

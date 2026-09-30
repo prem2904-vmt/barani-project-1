@@ -534,7 +534,7 @@ export class ReportColumnsEditorComponent implements OnInit {
 
   ngOnInit() {
     if (this.hostManaged()) return;   // host seeds columns; no dept/users fetches
-    this.api.get<Array<{ id: string; displayName: string }>>('/api/users/').subscribe({
+    this.api.get<Array<{ id: string; displayName: string }>>('/api/users/picker').subscribe({
       next: l => this.users.set((l ?? []).map(u => ({ id: u.id, displayName: u.displayName }))),
       error: () => { /* users list optional */ },
     });

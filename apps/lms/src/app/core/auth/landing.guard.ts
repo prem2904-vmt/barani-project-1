@@ -24,6 +24,9 @@ export const LANDINGS: Array<{ perm: string; path: string }> = [
   { perm: 'deliver_report', path: '/reports' },
   { perm: 'view_audit_log', path: '/admin/audit' },
   { perm: 'manage_branches', path: '/admin/branches' },
+  // A Test-Master / lab-settings-only role (no bench work) lands on the Lab
+  // settings hub rather than /403.
+  { perm: 'manage_test_master', path: '/lab/settings' },
 ];
 
 /** First landing the user can open, else '/403'. Pure — shared by the guard,

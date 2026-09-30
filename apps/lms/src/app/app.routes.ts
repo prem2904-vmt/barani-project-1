@@ -7,7 +7,7 @@ import { landingGuard } from './core/auth/landing.guard';
 import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
-import { ADMIN_PERMS } from './core/auth/route-access';
+import { ADMIN_PERMS, TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 
@@ -202,7 +202,7 @@ export const appRoutes: Route[] = [
       },
       {
         path: 'admin/tests/:id/edit',
-        canActivate: [permissionGuard('manage_tests')],
+        canActivate: [permissionGuard(TEST_MASTER_PERMS)],
         loadComponent: loadTestEditor
       },
       {

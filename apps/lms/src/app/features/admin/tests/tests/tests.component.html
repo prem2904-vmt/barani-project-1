@@ -19,7 +19,7 @@
             <span class="pf-tm-deptchip__t">Departments</span>
           </button>
         }
-        <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions" [value]="view()"
+        <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions()" [value]="view()"
                       (valueChange)="setView($event)"></pf-segmented>
       </ng-container>
       <ng-container band-actions>

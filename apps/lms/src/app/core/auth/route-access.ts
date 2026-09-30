@@ -50,12 +50,25 @@ export const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows'];
  *  create actions, so the landing would only surface controls that 403. */
 export const FRONTDESK_PERMS = ['register_patient', 'create_order', 'create_bill', 'collect_payment'];
 
-export const LAB_SETTINGS_HUB_PERMS = ['manage_tests', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments'];
+/** Test Master editing. `manage_tests` is the full switch (the tenant admin) and
+ *  IMPLIES both finer codes on the server (PermissionImplications.cs → /me);
+ *  `manage_test_master` alone is the Lab Admin (Technical) grant — tests,
+ *  profiles, packages, ranges, layouts, specimens, masters. Listed together so
+ *  the guard reads right even against an older /me. */
+export const TEST_MASTER_PERMS = ['manage_tests', 'manage_test_master'];
+/** Changing prices / tax slab / "offered here" (the pricing table). */
+export const TEST_PRICING_PERMS = ['manage_tests', 'manage_test_pricing'];
+
+export const LAB_SETTINGS_HUB_PERMS = ['manage_tests', 'manage_test_master', 'manage_test_pricing', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments'];
 // inventory_transfer included: the Stores entry APIs (/api/inventory/items, /alerts) accept it.
 export const INVENTORY_WORK_PERMS = ['inventory_receive', 'inventory_issue', 'inventory_count', 'inventory_transfer', 'manage_inventory'];
 export const FINANCE_PERMS = ['collect_payment', 'create_bill', 'manage_tenant'];
 /** Finance → Expense tracker: viewer / modifier / admin (the server enforces each action). */
 export const EXPENSE_ROUTE_PERMS = ['expense_viewer', 'expense_modifier', 'expense_admin'];
+/** WhatsApp spend / credits (the billing card) — never manage_lab_settings alone. */
+export const WA_BILLING_VIEW_PERMS = ['manage_tenant', 'manage_notifications'];
+/** Payment rules on the branch lab config (payment gate, payments-due tab). */
+export const PAYMENT_RULE_PERMS = ['manage_tenant', 'manage_billing_config'];
 
 export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // ── Front desk (parent guard + per-child perms) ────────────────────────
@@ -109,17 +122,18 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/users':             { perms: ['manage_users'] },
   '/admin/users/invite':      { perms: ['manage_users'] },
   '/admin/roles/new':         { perms: ['manage_users'] },
-  '/admin/tests':             { perms: ['manage_tests'] },
-  '/admin/tests/new':         { perms: ['manage_tests'] },
+  '/admin/tests':             { perms: [...TEST_MASTER_PERMS, 'manage_test_pricing'] },
+  '/admin/tests/new':         { perms: TEST_MASTER_PERMS },
   '/admin/branches':          { perms: ['manage_branches'] },
   '/admin/vendors':           { perms: ['manage_tenant'] },
-  '/admin/referral-labs':     { perms: ['manage_tests'] },
+  '/admin/referral-labs':     { perms: TEST_MASTER_PERMS },
   '/admin/lab-settings':      { perms: ['manage_lab_settings'] },
   '/admin/organization':      { perms: ['manage_tenant'] },
   // Billing config APIs accept manage_billing_config as well as manage_tenant.
   '/admin/billing':           { perms: ['manage_tenant', 'manage_billing_config'] },
   '/admin/inventory':         { perms: ['manage_inventory'], module: 'inventory' },
-  '/admin/reports':           { perms: ['manage_tenant', 'manage_tests'] },
+  // Report design saves on manage_report_template (ConfigController / ReportLayoutController).
+  '/admin/reports':           { perms: ['manage_tenant', 'manage_tests', 'manage_report_template'] },
   '/admin/referring-network': { perms: ['manage_tenant', 'manage_admin'] },
   '/admin/partners':          { perms: ['manage_tenant', 'manage_tests', 'manage_admin'] },
   '/admin/notifications':     { perms: ['manage_tenant', 'manage_notifications'] },

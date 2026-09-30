@@ -47,6 +47,7 @@ import { ReportStructureComponent } from '../report-structure.component';
 import { TestNotesEditorComponent } from '../../report-template/test-notes-editor.component';
 import { TestConsumablesComponent } from '../test-consumables.component';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { TEST_PRICING_PERMS } from '../../../../core/auth/route-access';
 
 /** A shared option-group vocabulary as served by /api/option-groups. */
 interface OgGroupLite {
@@ -190,6 +191,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   protected canManageInventory() { return this.auth.hasPermission('manage_inventory'); }
+  /** Price + tax slab are editable only with a pricing grant (manage_tests /
+   *  manage_test_pricing); the server enforces the same on the bulk price call. */
+  protected canEditPrices() {
+    return typeof this.auth?.hasAnyPermission !== 'function' || this.auth.hasAnyPermission(TEST_PRICING_PERMS);
+  }
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
   private readonly pricing = inject(TestPricingService);
