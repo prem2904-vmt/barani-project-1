@@ -19,6 +19,16 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
  */
 const schema = (keys: string[]): OpdFormDoc => ({ schemaVersion: 2, allowAddons: true, sections: [{ key: 'findings', title: 'Findings',
   fields: keys.map((k) => ({ key: k, label: k === 'discharge' ? 'Ear discharge?' : k, type: k === 'discharge' ? 'yn' : 'short', print: true })) }] });
+const q = (k: string): { key: string; label: string; type: 'short'; print: true } => ({ key: k, label: k, type: 'short', print: true });
+/** A 3-section doc, the seeded ENT/Derm/Gynae shape (§ admin/forms/form-builder.page.ts task 1). */
+const multiSchema = (): OpdFormDoc => ({
+  schemaVersion: 2, allowAddons: true,
+  sections: [
+    { key: 'history', title: 'History', fields: [q('chief'), q('duration')] },
+    { key: 'exam', title: 'Examination', fields: [q('bp')] },
+    { key: 'invest', title: 'Investigations', fields: [q('cbc'), q('esr')] },
+  ],
+});
 const detail = (o: Partial<OpdFormDetail> = {}): OpdFormDetail => ({
   id: 'f1', name: 'ENT assessment', code: 'ent', isActive: true, currentVersionId: 'v3',
   published: { id: 'v3', formId: 'f1', version: 3, status: 'published', schema: schema(['complaint']), createdAt: '' },
@@ -166,5 +176,82 @@ describe('Form builder page', () => {
     expect(dialog.confirm).toHaveBeenCalled();
     expect(api.discardDraft).toHaveBeenCalledWith('f1');
     expect(c.list().map((q) => q.key)).toEqual(['complaint']);
+  });
+});
+
+/**
+ * Multi-section forms (seeded ENT/Derm/Gynae docs have 6–8 sections) — the
+ * builder must render, edit and round-trip EVERY section, never only the
+ * first one.
+ */
+describe('Form builder page — multi-section forms', () => {
+  it('a 3-section doc loads with every section intact and ALL questions counted', () => {
+    const { c } = render('f1', {}, detail({ published: { id: 'v3', formId: 'f1', version: 3, status: 'published', schema: multiSchema(), createdAt: '' } }));
+    expect(c.doc().sections.map((s) => s.title)).toEqual(['History', 'Examination', 'Investigations']);
+    expect(c.list().map((q) => q.key)).toEqual(['chief', 'duration', 'bp', 'cbc', 'esr']); // list() = every question, form-wide
+  });
+
+  it('adding a question to section 3 leaves sections 1 and 2 untouched (never drops a section)', async () => {
+    vi.useFakeTimers();
+    const { c, api } = render('f1', {}, detail({ published: { id: 'v3', formId: 'f1', version: 3, status: 'published', schema: multiSchema(), createdAt: '' } }));
+    c.addText.set('Fasting sugar in mg/dl');
+    c.addFromSentence(2); // the third section, "Investigations"
+    expect(c.doc().sections[0].fields.map((q) => q.key)).toEqual(['chief', 'duration']);
+    expect(c.doc().sections[1].fields.map((q) => q.key)).toEqual(['bp']);
+    expect(c.doc().sections[2].fields.map((q) => q.key)).toEqual(['cbc', 'esr', 'fasting_sugar']);
+    await vi.advanceTimersByTimeAsync(1000);
+    const sent = api.saveDraft.mock.calls[0][1] as OpdFormDoc;
+    expect(sent.sections.length).toBe(3);
+    expect(sent.sections[0].fields.map((q) => q.key)).toEqual(['chief', 'duration']);
+    expect(sent.sections[1].fields.map((q) => q.key)).toEqual(['bp']);
+    expect(sent.sections[2].fields.map((q) => q.key)).toEqual(['cbc', 'esr', 'fasting_sugar']);
+  });
+
+  it('deleting / moving a question stays inside its own section', () => {
+    const { c } = render('f1', {}, detail({ published: { id: 'v3', formId: 'f1', version: 3, status: 'published', schema: multiSchema(), createdAt: '' } }));
+    c.onAction('esr', 'up'); // "esr" is the 2nd field of section 2 (Investigations)
+    expect(c.doc().sections[2].fields.map((q) => q.key)).toEqual(['esr', 'cbc']);
+    expect(c.doc().sections[0].fields.map((q) => q.key)).toEqual(['chief', 'duration']); // section 0 untouched
+    c.onAction('bp', 'del');
+    expect(c.doc().sections[1].fields).toEqual([]);
+    expect(c.doc().sections[0].fields.length).toBe(2);
+    expect(c.doc().sections[2].fields.length).toBe(2);
+    c.undoDelete();
+    expect(c.doc().sections[1].fields.map((q) => q.key)).toEqual(['bp']);
+  });
+
+  it('renames, reorders and removes a section; the inspector still counts every question', () => {
+    const { c, dialog } = render('f1', {}, detail({ published: { id: 'v3', formId: 'f1', version: 3, status: 'published', schema: multiSchema(), createdAt: '' } }));
+    c.renameSection(1, 'Vitals & exam');
+    expect(c.doc().sections[1].title).toBe('Vitals & exam');
+    expect(c.doc().sections[1].fields.map((q) => q.key)).toEqual(['bp']); // rename never touches questions
+
+    c.moveSection(0, 1); // History ↔ Vitals & exam
+    expect(c.doc().sections.map((s) => s.key)).toEqual(['exam', 'history', 'invest']);
+    expect(c.doc().sections[1].fields.map((q) => q.key)).toEqual(['chief', 'duration']); // "History"'s own fields moved WITH it
+
+    expect(c.list().length).toBe(5); // 2 + 1 + 2, still every question across the (reordered) sections
+
+    return c.removeSection(2).then(() => {
+      expect(dialog.confirm).toHaveBeenCalled();
+      expect(c.doc().sections.map((s) => s.key)).toEqual(['exam', 'history']);
+      expect(c.list().length).toBe(3);
+    });
+  });
+
+  it('a question edited through the inspector (attribute-only) stays in its own section after the round-trip', () => {
+    const { c } = render('f1', {}, detail({ published: { id: 'v3', formId: 'f1', version: 3, status: 'published', schema: multiSchema(), createdAt: '' } }));
+    const flat = c.list().map((x) => (x.key === 'bp' ? { ...x, required: true } : x)); // section 1's only question
+    c.setList(flat);
+    expect(c.doc().sections[0].fields.map((q) => q.key)).toEqual(['chief', 'duration']);
+    expect(c.doc().sections[1].fields).toMatchObject([{ key: 'bp', required: true }]);
+    expect(c.doc().sections[2].fields.map((q) => q.key)).toEqual(['cbc', 'esr']);
+  });
+
+  it("a form needs at least one section — can't remove the last one", async () => {
+    const { c, toasts } = render(); // single-section fixture
+    await c.removeSection(0);
+    expect(toasts.error).toHaveBeenCalledWith('A form needs at least one section');
+    expect(c.doc().sections.length).toBe(1);
   });
 });

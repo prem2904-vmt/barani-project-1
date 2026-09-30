@@ -147,6 +147,43 @@ describe('OpdFormRendererComponent', () => {
     expect(q('edd')!.textContent).toContain('2026-10-08');
   });
 
+  it('groups a multi-section doc under a heading per section; a single-section doc (the builder) shows none', () => {
+    const MULTI: OpdFormDoc = {
+      schemaVersion: 2, allowAddons: true,
+      sections: [
+        { key: 'hist', title: 'History', fields: [{ key: 'chief', label: 'Chief complaint', type: 'short', print: true }] },
+        { key: 'exam', title: 'Examination', fields: [{ key: 'bp', label: 'BP', type: 'short', print: true }] },
+      ],
+    };
+    const { el } = render('edit', {}, { schema: MULTI });
+    const heads = Array.from(el.querySelectorAll('.ofr-sec-head')).map((h) => h.textContent?.trim());
+    expect(heads).toEqual(['History', 'Examination']);
+    expect(el.querySelector('[data-q="chief"]')).toBeTruthy();
+    expect(el.querySelector('[data-q="bp"]')).toBeTruthy();
+
+    // Single section (the builder passes one section per renderer instance) — no headers.
+    TestBed.resetTestingModule();
+    expect(render('design', {}, { schema: DOC }).el.querySelectorAll('.ofr-sec-head').length).toBe(0);
+  });
+
+  it('a section heading collapses its own questions, not the others', () => {
+    const MULTI: OpdFormDoc = {
+      schemaVersion: 2, allowAddons: true,
+      sections: [
+        { key: 'hist', title: 'History', fields: [{ key: 'chief', label: 'Chief complaint', type: 'short', print: true }] },
+        { key: 'exam', title: 'Examination', fields: [{ key: 'bp', label: 'BP', type: 'short', print: true }] },
+      ],
+    };
+    const { el, f } = render('edit', {}, { schema: MULTI });
+    const head = Array.from(el.querySelectorAll<HTMLButtonElement>('.ofr-sec-head')).find((h) => h.textContent?.includes('History'))!;
+    expect(head.getAttribute('aria-expanded')).toBe('true');
+    head.click();
+    f.detectChanges();
+    expect(head.getAttribute('aria-expanded')).toBe('false');
+    expect(el.querySelector('[data-q="chief"]')).toBeNull();
+    expect(el.querySelector('[data-q="bp"]')).toBeTruthy();   // the OTHER section stays open
+  });
+
   it('reads a foundation v1 schema', () => {
     TestBed.configureTestingModule({ imports: [OpdFormRendererComponent] });
     const f = TestBed.createComponent(OpdFormRendererComponent);

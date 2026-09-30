@@ -14,11 +14,13 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { OpdAdminApi, OpdFormDetail, OpdFormListRow, OpdStarter } from './opd-admin.api';
 import { mq } from './opd-admin.util';
 import {
-  BUILT_INS, OpdAnswers, OpdFormDoc, OpdMediaRef, OpdQType, OpdQuestion, allQuestions, clone, emptyDoc, normalizeSchema,
+  BUILT_INS, OpdAnswers, OpdFormDoc, OpdFormDocSection, OpdMediaRef, OpdQType, OpdQuestion, allQuestions, clone, emptyDoc, normalizeSchema,
   sampleAnswers, typeName,
 } from './forms/form-schema';
 import {
-  BuilderAction, DeleteUndo, applyAction, changeType, fromParsed, fromType, insertAt, keysOf, undoDelete, versionState, withQuestions,
+  BuilderAction, DeleteUndo, applyAction, changeType, fromParsed, fromType, insertAt, keysOf, replaceSectionFields, sectionIndexOfKey, undoDelete,
+  versionState, withQuestions,
+  addSection as addSectionOp, moveSection as moveSectionOp, removeSection as removeSectionOp, renameSection as renameSectionOp,
 } from './forms/form-builder-ops';
 import { SENTENCE_EXAMPLES, parseQuestion } from './forms/sentence-parser';
 import { OpdFormRendererComponent } from './forms/renderer';
@@ -27,7 +29,9 @@ import { InspectorMode, OpdFormInspectorComponent } from './forms/form-inspector
 
 type View = 'doctor' | 'phone' | 'print';
 type Fill = 'sample' | 'empty';
-type Gallery = null | { kind: 'starters' } | { kind: 'types'; change: boolean; at: number | null };
+/** `si` is the target SECTION for an insert (ignored when `change` is true —
+ *  the selected question's own section is used instead). */
+type Gallery = null | { kind: 'starters' } | { kind: 'types'; change: boolean; at: number | null; si?: number };
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 
 const AUTOSAVE_MS = 900;
@@ -84,9 +88,18 @@ const AUTOSAVE_MS = 900;
     .fb-pane__step { font-size: 11.5px; color: var(--text-tertiary); }
     .fb-pane__h h2 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
     .fb-own { margin-left: auto; font-size: 12px; color: var(--violet-text, #6d28d9); border: 1px dashed var(--nd-sel-border); border-radius: 999px; padding: 4px 10px; }
-    .fb-sec__h { display: flex; align-items: baseline; gap: 10px; }
+    .fb-sec__h { display: flex; align-items: center; gap: 10px; }
     .fb-sec__h h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); }
     .fb-sec__n { font-size: 12px; color: var(--text-tertiary); }
+    .fb-section { display: flex; flex-direction: column; gap: 10px; }
+    .fb-section + .fb-section { margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--nd-line); }
+    .fb-sec-title { flex: 0 1 auto; min-width: 100px; height: 30px; border: 1px solid transparent; border-radius: 8px; padding: 0 8px; font: inherit; font-size: 13px; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); background: transparent; }
+    .fb-sec-title:hover { border-color: var(--nd-line); }
+    .fb-sec-title:focus { outline: 0; border-color: var(--color-violet-600, #7c3aed); background: var(--nd-card-bg); text-transform: none; }
+    .fb-sec-tools { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+    .fb-sec-tools .nd-btn--icon { width: 28px !important; height: 28px; min-height: 28px; }
+    .fb-add-section { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
     .fb-undo { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--nd-chip-bg); font-size: 12.5px; color: var(--text-secondary); }
     .fb-add { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; border: 1px dashed var(--nd-sel-border); }
     .fb-add__row { display: flex; gap: 8px; align-items: center; }
@@ -221,31 +234,59 @@ const AUTOSAVE_MS = 900;
                     <div class="fb-pane">
                       <div class="fb-pane__h"><span class="fb-pane__step nd-num">Step 1 of 4</span><h2>Assessment &amp; diagnosis</h2>
                         @if (doc().allowAddons !== false) { <span class="fb-own" title="Doctors can add their own questions on top of yours">+ Add my own field</span> }</div>
-                      <div class="fb-sec__h"><h3>Findings</h3><span class="fb-sec__n">{{ name() }} · {{ plural(list().length, 'question') }}</span></div>
                       @if (undo() && !trying()) {
                         <div class="fb-undo"><span>Deleted “{{ undo()!.q.label }}” — past consults keep it.</span><button type="button" class="nd-btn nd-btn--tertiary press" (click)="undoDelete()">Undo</button></div>
                       }
-                      <pf-opd-form-renderer [schema]="doc()" [answers]="answers()" [mode]="trying() ? 'edit' : 'design'" [layout]="view() === 'phone' ? 'phone' : 'screen'"
-                                            [selectedKey]="trying() ? null : selected()" (questionSelect)="select($event)" (action)="onAction($event.key, $event.action)"
-                                            (insertAt)="insertHere($event)" (answersChange)="tryAnswers.set($event)" (mediaRequest)="fakeMedia($event.key, $event.side)"></pf-opd-form-renderer>
-                      @if (!list().length) { <p class="fb-add__k">No questions yet — type one below, or browse the answer types.</p> }
-                      @if (!trying()) {
-                        <div class="fb-add">
-                          <span class="fb-add__row">
-                            <input class="nd-input" id="fb-add" [value]="addText()" autocomplete="off" placeholder="Add a question — type it the way you'd say it"
-                                   aria-label="Add a question: type it as a sentence" aria-describedby="fb-add-pv"
-                                   (input)="addText.set($any($event.target).value)" (keydown.enter)="addFromSentence()">
-                            <button type="button" class="nd-btn nd-btn--secondary press" (click)="openTypes(false, null)">Browse answer types</button>
-                          </span>
-                          <span class="fb-add__pv" id="fb-add-pv" aria-live="polite">
-                            @if (parsed(); as p) {
-                              <b>{{ parsedType() }}</b><span>“{{ p.label }}”@if (p.choices.length) { · {{ p.choices.join(', ') }} }</span><span class="fb-add__enter">Enter to add</span>
-                            } @else {
-                              <span class="fb-add__k">Try</span>
-                              @for (e of examples; track e) { <button type="button" class="nd-chip fb-ex press" (click)="addText.set(e); focusAdd()">{{ e }}</button> }
+                      @for (section of doc().sections; track section.key; let si = $index) {
+                        <div class="fb-section">
+                          <div class="fb-sec__h">
+                            @if (!trying()) {
+                              <input class="fb-sec-title" [value]="section.title" maxlength="80" autocomplete="off" aria-label="Section title"
+                                     (change)="renameSection(si, $any($event.target).value)">
+                            } @else { <h3>{{ section.title }}</h3> }
+                            <span class="fb-sec__n">{{ plural(section.fields.length, 'question') }}</span>
+                            @if (!trying()) {
+                              <span class="fb-sec-tools">
+                                <button type="button" class="nd-btn nd-btn--icon" (click)="moveSection(si, -1)" [disabled]="si === 0" aria-label="Move section up" title="Move section up">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+                                </button>
+                                <button type="button" class="nd-btn nd-btn--icon" (click)="moveSection(si, 1)" [disabled]="si === doc().sections.length - 1" aria-label="Move section down" title="Move section down">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                                </button>
+                                <button type="button" class="nd-btn nd-btn--icon" (click)="removeSection(si)" [disabled]="doc().sections.length <= 1" aria-label="Remove section" title="Remove section">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                                </button>
+                              </span>
                             }
-                          </span>
+                          </div>
+                          <pf-opd-form-renderer [schema]="sectionDoc(section)" [answers]="answers()" [mode]="trying() ? 'edit' : 'design'" [layout]="view() === 'phone' ? 'phone' : 'screen'"
+                                                [selectedKey]="trying() ? null : selected()" (questionSelect)="select($event)" (action)="onAction($event.key, $event.action)"
+                                                (insertAt)="insertHere($event, si)" (answersChange)="tryAnswers.set($event)" (mediaRequest)="fakeMedia($event.key, $event.side)"></pf-opd-form-renderer>
+                          @if (!section.fields.length) { <p class="fb-add__k">No questions yet — type one below, or browse the answer types.</p> }
+                          @if (!trying()) {
+                            <div class="fb-add">
+                              <span class="fb-add__row">
+                                <input class="nd-input" [id]="'fb-add-' + section.key" [value]="addText()" autocomplete="off" placeholder="Add a question — type it the way you'd say it"
+                                       [attr.aria-label]="'Add a question to ' + section.title + ': type it as a sentence'" [attr.aria-describedby]="'fb-add-pv-' + section.key"
+                                       (input)="addText.set($any($event.target).value)" (keydown.enter)="addFromSentence(si)">
+                                <button type="button" class="nd-btn nd-btn--secondary press" (click)="openTypes(false, null, si)">Browse answer types</button>
+                              </span>
+                              <span class="fb-add__pv" [id]="'fb-add-pv-' + section.key" aria-live="polite">
+                                @if (parsed(); as p) {
+                                  <b>{{ parsedType() }}</b><span>“{{ p.label }}”@if (p.choices.length) { · {{ p.choices.join(', ') }} }</span><span class="fb-add__enter">Enter to add</span>
+                                } @else {
+                                  <span class="fb-add__k">Try</span>
+                                  @for (e of examples; track e) { <button type="button" class="nd-chip fb-ex press" (click)="addText.set(e); focusAdd(section.key)">{{ e }}</button> }
+                                }
+                              </span>
+                            </div>
+                          }
                         </div>
+                      }
+                      @if (!trying()) {
+                        <button type="button" class="nd-btn nd-btn--secondary fb-add-section press" (click)="addSection()">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                          Add section</button>
                       }
                       <div class="fb-blk" aria-label="Diagnosis — built into every consult">
                         <div class="fb-sec__h"><h3>Diagnosis</h3><span class="fb-lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Built into every consult</span></div>
@@ -264,7 +305,7 @@ const AUTOSAVE_MS = 900;
             @if (narrow()) { <div class="oa-sheet-backdrop" (click)="sheetOpen.set(false)"></div> }
             <aside class="nd-card fb-side" [class.oa-side--sheet]="narrow()" aria-label="Question settings" [attr.role]="narrow() ? 'dialog' : null">
               <pf-opd-form-inspector [list]="list()" [selectedKey]="selected()" [mode]="inspectorMode()" [allowAddons]="doc().allowAddons !== false"
-                                     (listChange)="setList($event)" (closed)="select(null)" (browse)="openTypes(false, null)" (changeType)="openTypes(true, null)"
+                                     (listChange)="setList($event)" (closed)="select(null)" (browse)="openTypes(false, null, doc().sections.length - 1)" (changeType)="openTypes(true, null)"
                                      (allowAddonsChange)="setAllowAddons($event)" (resetTry)="resetTry()" (stopTry)="setTry(false)"></pf-opd-form-inspector>
             </aside>
           }
@@ -299,7 +340,9 @@ export class OpdFormBuilderPage {
   readonly isNew = computed(() => !this.formId());
   readonly detail = signal<OpdFormDetail | null>(null);
   readonly doc = signal<OpdFormDoc>(emptyDoc());
-  readonly list = computed(() => this.doc().sections[0]?.fields ?? []);
+  /** Every question, form-wide, in section order — what the inspector counts
+   *  and edits (attribute edits only; structural ops are section-scoped). */
+  readonly list = computed(() => allQuestions(this.doc()));
   readonly name = signal('');
   readonly selected = signal<string | null>(null);
   readonly selectedQ = computed(() => this.list().find((q) => q.key === this.selected()) ?? null);
@@ -307,7 +350,7 @@ export class OpdFormBuilderPage {
   readonly fill = signal<Fill>('sample');
   readonly trying = signal(false);
   readonly tryAnswers = signal<OpdAnswers>({});
-  readonly undo = signal<DeleteUndo | null>(null);
+  readonly undo = signal<(DeleteUndo & { sectionIndex: number }) | null>(null);
   readonly saveState = signal<SaveState>('saved');
   readonly publishing = signal(false);
   readonly gallery = signal<Gallery>(null);
@@ -372,9 +415,10 @@ export class OpdFormBuilderPage {
   }
 
   // ── Editing ──
-  setList(list: OpdQuestion[], keepUndo = false): void {
+  /** Attribute-only edits from the inspector: same length + order as `list()`
+   *  (allQuestions(doc)) — redistributed back into each section untouched. */
+  setList(list: OpdQuestion[]): void {
     this.doc.update((d) => withQuestions(d, list));
-    if (!keepUndo) this.undo.set(null);
     this.markDirty();
   }
   setAllowAddons(on: boolean): void { this.doc.update((d) => ({ ...d, allowAddons: on })); this.markDirty(); }
@@ -390,53 +434,108 @@ export class OpdFormBuilderPage {
     if (!t.closest('.ofr-q, .fb-add, button, input, textarea')) this.select(null);
   }
 
+  /** Which section a question key lives in (null if not found). */
+  sectionIndexOf(key: string | null): number | null { return sectionIndexOfKey(this.doc(), key); }
+
+  /** up / down / dup / req / del — scoped to the question's OWN section. */
   onAction(key: string, a: BuilderAction): void {
-    const r = applyAction(this.list(), key, a);
-    this.setList(r.list, a === 'del');
-    if (a === 'del' && r.undo) { this.undo.set(r.undo); this.toasts.info(`Deleted “${r.undo.q.label}” — past consults keep it`); }
+    const si = this.sectionIndexOf(key);
+    if (si == null) return;
+    const section = this.doc().sections[si];
+    const r = applyAction(section.fields, key, a);
+    this.doc.update((d) => replaceSectionFields(d, si, r.list));
+    if (a === 'del' && r.undo) {
+      this.undo.set({ ...r.undo, sectionIndex: si });
+      this.toasts.info(`Deleted “${r.undo.q.label}” — past consults keep it`);
+    } else {
+      this.undo.set(null);
+    }
     this.selected.set(r.selected);
+    this.markDirty();
   }
   undoDelete(): void {
     const u = this.undo();
     if (!u) return;
-    this.setList(undoDelete(this.list(), u));
+    const section = this.doc().sections[u.sectionIndex];
+    if (!section) return;
+    this.doc.update((d) => replaceSectionFields(d, u.sectionIndex, undoDelete(section.fields, u)));
     this.selected.set(u.q.key);
+    this.markDirty();
   }
 
-  addFromSentence(at: number | null = null): void {
+  /** Types the shared "Add a question" box and adds it to section `si`
+   *  (defaults to the first section — one section is the common case). */
+  addFromSentence(si = 0): void {
     const p = this.parsed();
-    if (!p) return;
+    const section = this.doc().sections[si];
+    if (!p || !section) return;
     const q = fromParsed(p, keysOf(this.list()));
-    this.setList(insertAt(this.list(), q, at));
+    this.doc.update((d) => replaceSectionFields(d, si, insertAt(section.fields, q, null)));
     this.addText.set('');
     if (!this.narrow()) this.selected.set(q.key);
     this.toasts.success(`Added “${q.label}” · ${typeName(q)}`);
+    this.markDirty();
   }
-  async insertHere(index: number): Promise<void> {
+  async insertHere(index: number, si = 0): Promise<void> {
     const text = await this.dialog.prompt({ title: 'Add a question here', message: "Type it the way you'd say it.", placeholder: 'e.g. Ear discharge? yes/no', required: true });
     const p = parseQuestion(text);
-    if (!p) return;
+    const section = this.doc().sections[si];
+    if (!p || !section) return;
     const q = fromParsed(p, keysOf(this.list()));
-    this.setList(insertAt(this.list(), q, index));
+    this.doc.update((d) => replaceSectionFields(d, si, insertAt(section.fields, q, index)));
     this.selected.set(q.key);
+    this.markDirty();
   }
-  focusAdd(): void { setTimeout(() => (document.getElementById('fb-add') as HTMLInputElement | null)?.focus(), 0); }
+  focusAdd(sectionKey = 'findings'): void { setTimeout(() => (document.getElementById('fb-add-' + sectionKey) as HTMLInputElement | null)?.focus(), 0); }
 
-  openTypes(change: boolean, at: number | null): void { this.gallery.set({ kind: 'types', change, at }); }
+  openTypes(change: boolean, at: number | null, si?: number): void { this.gallery.set({ kind: 'types', change, at, si }); }
   pickType(t: OpdQType | 'lr'): void {
     const g = this.gallery();
     this.gallery.set(null);
     if (g?.kind !== 'types') return;
     const q = this.selectedQ();
     if (g.change && q) {
+      const si = this.sectionIndexOf(q.key);
+      if (si == null) return;
       const next = changeType(q, t);
-      this.setList(this.list().map((x) => (x.key === q.key ? next : x)));
+      const section = this.doc().sections[si];
+      this.doc.update((d) => replaceSectionFields(d, si, section.fields.map((x) => (x.key === q.key ? next : x))));
       this.toasts.info(`“${q.label}” is now ${typeName(next)}`);
+      this.markDirty();
       return;
     }
+    const si = g.si ?? 0;
+    const section = this.doc().sections[si];
+    if (!section) return;
     const nq = fromType(t, keysOf(this.list()));
-    this.setList(insertAt(this.list(), nq, g.at));
+    this.doc.update((d) => replaceSectionFields(d, si, insertAt(section.fields, nq, g.at)));
     if (!this.narrow()) this.selected.set(nq.key);
+    this.markDirty();
+  }
+
+  // ── Sections ──
+  sectionDoc(section: OpdFormDocSection): OpdFormDoc { return { schemaVersion: 2, allowAddons: this.doc().allowAddons, sections: [section] }; }
+  renameSection(si: number, title: string): void { this.doc.update((d) => renameSectionOp(d, si, title)); this.markDirty(); }
+  moveSection(si: number, dir: -1 | 1): void { this.doc.update((d) => moveSectionOp(d, si, dir)); this.markDirty(); }
+  async addSection(): Promise<void> {
+    const title = await this.dialog.prompt({ title: 'Add a section', message: 'What is this group of questions called?', placeholder: 'e.g. Examination', required: true });
+    if (!title) return;
+    this.doc.update((d) => addSectionOp(d, title));
+    this.markDirty();
+  }
+  async removeSection(si: number): Promise<void> {
+    const section = this.doc().sections[si];
+    if (!section) return;
+    if (this.doc().sections.length <= 1) { this.toasts.error('A form needs at least one section'); return; }
+    const ok = await this.dialog.confirm({
+      title: `Remove “${section.title}”?`,
+      message: section.fields.length ? `${plural(section.fields.length, 'question')} in it are removed too — past consults keep their answers.` : 'This section has no questions.',
+      confirmLabel: 'Remove section', tone: 'danger',
+    });
+    if (!ok) return;
+    if (this.selected() && section.fields.some((q) => q.key === this.selected())) this.selected.set(null);
+    this.doc.update((d) => removeSectionOp(d, si));
+    this.markDirty();
   }
   closeGallery(): void {
     const g = this.gallery();
